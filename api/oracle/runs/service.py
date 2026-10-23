@@ -6578,6 +6578,11 @@ async def decide_checkpoint(
             .select_from(CheckpointAction)
             .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
         )
+        if not staged and cp.kind == "feature_set":
+            # C7: the rows a person changed are what is sent back.
+            from oracle.runs import scope_review
+
+            staged = await scope_review.edits_count(db, cp)
         if not staged:
             raise Invalid(NOTHING_TO_SEND)
     segments = await _segments(db, run.id)
@@ -7997,6 +8002,15 @@ async def _scope_decided(
     if scope is None:
         return
     if cp.status == "approved":
+        # C7 Approve with edits: what people added or reworded becomes the approver's
+        # own baseline writes, in this transaction (no agent round).
+        from oracle.runs import scope_review
+
+        edits = (
+            await scope_review.approved(db, principal, run, cp, scope)
+            if scope.status == "proposed"
+            else {}
+        )
         await feature_set.approve(db, scope, cp.decided_by, run.document_id)
         await audit.record(
             db,
@@ -8004,8 +8018,9 @@ async def _scope_decided(
             "prd_scope.approved",
             "prd_scope",
             scope.id,
-            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by)},
-        )
+            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by),
+             **edits},
+        )  # fmt: skip
     elif cp.status == "changes_requested" and scope.status == "proposed":
         scope.status = "superseded"
         scope.lock_version += 1

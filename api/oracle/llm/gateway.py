@@ -71,6 +71,8 @@ JOBS = (
     "refinement_batch",
     "intake_analysis",
     "decision_options",
+    # C7: Enhance on a requirement at the feature-set review.
+    "scope_enhance",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
     # G2 Live replies: what a person waits for in a discussion.

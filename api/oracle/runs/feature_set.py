@@ -861,9 +861,24 @@ async def write_scope(
                 entity_id=ref.entity_id if ref else None,
                 proposal_id=ref.proposal_id if ref else None,
             )
+        # C7: the agent's values, for Undo and History.
+        item.original = original_of(item)
         db.add(item)
     await db.flush()
     return scope
+
+
+def original_of(item: PrdScopeItem) -> dict[str, Any]:
+    """A row's values as the agents wrote them (C7 Scope review keeps them for Undo)."""
+    return {
+        "decision": item.decision,
+        "decision_reason": item.decision_reason,
+        "text": item.text,
+        "acceptance": list(item.acceptance or []),
+        "goals": [dict(g) for g in item.goals or []],
+        "depends_on": list(item.depends_on or []),
+        "blocker_keys": list(item.blocker_keys or []),
+    }
 
 
 async def scope_items(db: AsyncSession, scope_id: uuid.UUID) -> list[PrdScopeItem]:
@@ -916,6 +931,11 @@ async def check_scope(db: AsyncSession, scope: PrdScope) -> FeatureSetCheck:
         return FeatureSetCheck(problems=carried)
     items = await scope_items(db, scope.id)
     known = await known_for_run(db, scope.run_id)
+    # C7: a requirement a person added is the approver's, written to the baseline when
+    # the scope is approved: known here.
+    for i in items:
+        if i.kind == "requirement" and i.origin == "person" and not i.original:
+            known.requirements.setdefault(i.key, Ref(title=i.title))
     # On the parse pool, at most PARSE_SECONDS: a scope near the cap against a large
     # baseline never holds the event loop on an approve.
     try:

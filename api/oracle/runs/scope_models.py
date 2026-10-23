@@ -136,6 +136,10 @@ class PrdScopeItem(TenantScoped, Base):
         ARRAY(Text), nullable=False, default=list, server_default="{}"
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The agent's values (C7), for Undo and History; {} for a row a person added.
+    original: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(

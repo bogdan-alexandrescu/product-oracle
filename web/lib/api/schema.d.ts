@@ -4880,6 +4880,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/prd-scopes/{scope_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Prd Scope Review
+         * @description A PRD scope as its review screen reads it, any member: each feature with its
+         *     requirements, reasons (blocking and to confirm, answered by D8 waivers and accepts)
+         *     and history, the tally, and the previous attempt's decisions for the Changed filter.
+         */
+        get: operations["get_prd_scope_review"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Scope Item
+         * @description Remove a requirement a person added (approver role or above); 409 for a row the
+         *     agents wrote (cut it instead).
+         */
+        delete: operations["delete_scope_item"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Scope Item
+         * @description Decide or edit one row (approver role or above): a feature's decision (a left-out
+         *     one with its reason), goals (confirmed goals only), dependencies and blockers; a
+         *     requirement's decision, text and acceptance; ``revert`` puts the agent's values back.
+         *     The scope is re-checked: the answer carries the new tally.
+         */
+        patch: operations["patch_scope_item"];
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Scope Requirement
+         * @description Add a requirement to a feature (approver role or above): ``origin: person``; its
+         *     goals default to the feature's. Approving writes it to the baseline as the approver's.
+         */
+        post: operations["add_scope_requirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enhance Scope Requirement
+         * @description Ask Oracle to deepen a requirement (approver role or above): a queued
+         *     ``scope_enhance`` job on Oracle's own model; poll ``GET /v1/llm-jobs/{job_id}``. Its
+         *     output is a suggestion: nothing changes until it is accepted.
+         */
+        post: operations["enhance_scope_requirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Scope Enhancement
+         * @description Accept an enhancement (approver role or above), as Oracle wrote it or edited: the
+         *     requirement's text and acceptance become the person's.
+         */
+        post: operations["accept_scope_enhancement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/modules": {
         parameters: {
             query?: never;
@@ -18176,13 +18290,15 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
             intake_id?: string | null;
             /** Decision Id */
             decision_id?: string | null;
+            /** Scope Id */
+            scope_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -20040,6 +20156,68 @@ export interface components {
             approved_at?: string | null;
             /** Lock Version */
             lock_version: number;
+        };
+        /**
+         * PrdScopeReview
+         * @description A PRD scope as its review screen reads it (C7): each feature's reasons and
+         *     history, the tally, the previous attempt's decisions (key -> decision) and kept
+         *     requirements (key -> requirement keys) for the Changed filter, and the confirmed goals
+         *     a person may pick. Suggestions, waivers and accepts come from the D8 review read.
+         */
+        PrdScopeReview: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Segment Seq */
+            segment_seq: number;
+            /** Attempt */
+            attempt: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "superseded";
+            check: components["schemas"]["FeatureSetCheck"];
+            /** Features */
+            features: components["schemas"]["ScopeReviewFeature"][];
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Title */
+            title?: string | null;
+            summary: components["schemas"]["ScopeSummary"];
+            /** Previous */
+            previous?: {
+                [key: string]: string;
+            } | null;
+            /** Previous Requirements */
+            previous_requirements?: {
+                [key: string]: string[];
+            } | null;
+            /**
+             * Goals Available
+             * @default []
+             */
+            goals_available: components["schemas"]["ScopeGoalChoice"][];
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
         };
         /**
          * Prediction
@@ -23395,6 +23573,22 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * ScopeEnhanceAccept
+         * @description The enhanced text and acceptance as the approver accepts them (edited, or the
+         *     job's own when absent).
+         */
+        ScopeEnhanceAccept: {
+            /** Text */
+            text?: string | null;
+            /** Acceptance */
+            acceptance?: string[] | null;
+        };
+        /** ScopeEnhanceIn */
+        ScopeEnhanceIn: {
+            /** Instruction */
+            instruction?: string | null;
+        };
         /** ScopeFeatureOut */
         ScopeFeatureOut: {
             /**
@@ -23459,12 +23653,216 @@ export interface components {
             /** Contribution */
             contribution?: number | null;
         };
+        /** ScopeGoalChoice */
+        ScopeGoalChoice: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** ScopeGoalIn */
+        ScopeGoalIn: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /**
+             * Contribution
+             * @default 1
+             */
+            contribution: number;
+        };
+        /**
+         * ScopeHistory
+         * @description The agent's value of a row and who changed it last.
+         */
+        ScopeHistory: {
+            /**
+             * Original
+             * @default {}
+             */
+            original: {
+                [key: string]: unknown;
+            };
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+        };
+        /**
+         * ScopeItemOut
+         * @description One scope row after a write (C7), with the scope's new tally and the checkpoint's
+         *     draft revision (D8) to decide with.
+         */
+        ScopeItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "feature" | "requirement";
+            /** Key */
+            key: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Title */
+            title: string;
+            /** Text */
+            text?: string | null;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "defer" | "keep" | "cut";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["ScopeGoal"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Blocker Keys
+             * @default []
+             */
+            blocker_keys: string[];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /**
+             * Original
+             * @default {}
+             */
+            original: {
+                [key: string]: unknown;
+            };
+            summary: components["schemas"]["ScopeSummary"];
+            /** Revision */
+            revision: number;
+            /** Scope Lock Version */
+            scope_lock_version: number;
+        };
+        /**
+         * ScopeItemPatch
+         * @description One person's change to one scope row (C7); every field optional. ``revert`` puts
+         *     the row back to the agent's values. ``decision_reason`` of a left-out feature:
+         *     no_goal | not_now | out_of_scope | duplicate | other:<text>.
+         */
+        ScopeItemPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Decision */
+            decision?: ("include" | "exclude" | "defer" | "keep" | "cut") | null;
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Acceptance */
+            acceptance?: string[] | null;
+            /** Goals */
+            goals?: components["schemas"]["ScopeGoalIn"][] | null;
+            /** Depends On */
+            depends_on?: string[] | null;
+            /** Blocker Keys */
+            blocker_keys?: string[] | null;
+            /**
+             * Revert
+             * @default false
+             */
+            revert: boolean;
+        };
         /** ScopeOut */
         ScopeOut: {
             /** Name */
             name: string;
             /** Description */
             description: string;
+        };
+        /**
+         * ScopeReason
+         * @description Why a feature needs a person (C7): a blocking problem of the scope's check, or a
+         *     flag to confirm. ``answered``: a staged D8 waiver (blocking) or accept (to confirm)
+         *     answers it.
+         */
+        ScopeReason: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "to_confirm";
+            /** Label */
+            label: string;
+            /** Requirement */
+            requirement?: string | null;
+            /**
+             * Waivable
+             * @default false
+             */
+            waivable: boolean;
+            /**
+             * Answered
+             * @default false
+             */
+            answered: boolean;
+        };
+        /**
+         * ScopeRequirementIn
+         * @description A requirement a person adds to a feature (C7); its goals default to the
+         *     feature's.
+         */
+        ScopeRequirementIn: {
+            /**
+             * Parent Id
+             * Format: uuid
+             */
+            parent_id: string;
+            /** Text */
+            text: string;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /** Goals */
+            goals?: components["schemas"]["ScopeGoalIn"][] | null;
         };
         /** ScopeRequirementOut */
         ScopeRequirementOut: {
@@ -23500,6 +23898,195 @@ export interface components {
             entity_id?: string | null;
             /** Proposal Id */
             proposal_id?: string | null;
+        };
+        /** ScopeReviewFeature */
+        ScopeReviewFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "defer";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["ScopeGoal"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Blocker Keys
+             * @default []
+             */
+            blocker_keys: string[];
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["ScopeReviewRequirement"][];
+            /** Text */
+            text?: string | null;
+            /** Position */
+            position: number;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ScopeReason"][];
+            /**
+             * Needs You
+             * @default false
+             */
+            needs_you: boolean;
+            /**
+             * @default {
+             *       "original": {}
+             *     }
+             */
+            history: components["schemas"]["ScopeHistory"];
+        };
+        /** ScopeReviewRequirement */
+        ScopeReviewRequirement: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Text */
+            text?: string | null;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "keep" | "cut";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /**
+             * Parent Id
+             * Format: uuid
+             */
+            parent_id: string;
+            /** Position */
+            position: number;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /**
+             * @default {
+             *       "original": {}
+             *     }
+             */
+            history: components["schemas"]["ScopeHistory"];
+        };
+        /**
+         * ScopeSummary
+         * @description The scope's tally (C7): features, those that need a person, open blocking and
+         *     to-confirm reasons, those handled, rows a person changed and suggestions waiting.
+         */
+        ScopeSummary: {
+            /**
+             * Features
+             * @default 0
+             */
+            features: number;
+            /**
+             * Needs You
+             * @default 0
+             */
+            needs_you: number;
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
+            /**
+             * To Confirm
+             * @default 0
+             */
+            to_confirm: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Edits
+             * @default 0
+             */
+            edits: number;
+            /**
+             * Suggestions Open
+             * @default 0
+             */
+            suggestions_open: number;
         };
         /** SearchHit */
         SearchHit: {
@@ -37930,6 +38517,211 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickOut"];
+                };
+            };
+        };
+    };
+    get_prd_scope_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrdScopeReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_scope_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_scope_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_scope_requirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeRequirementIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enhance_scope_requirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeEnhanceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_scope_enhancement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeEnhanceAccept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

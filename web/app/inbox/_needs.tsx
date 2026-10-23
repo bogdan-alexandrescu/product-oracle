@@ -15,6 +15,7 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
+  reviewHref,
   RETRY_CONFIRM,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
@@ -675,11 +676,11 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     at: c.created_at,
     action: held(c) ? (
       // The run page's checkpoint row, until the kind's review screen ships (D1).
-      <LinkButton href={`/runs/${c.run_id}#decide`}>Review</LinkButton>
+      <LinkButton href={reviewHref(c) ?? `/runs/${c.run_id}#decide`}>Review</LinkButton>
     ) : (
       // The same verb as the runs list: the run page opens at the decision; a priority stop
       // opens its order next to the live ranking (C8), where it is decided too.
-      <LinkButton href={orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
+      <LinkButton href={reviewHref(c) ?? orderHref(c) ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
     ),
   }));
 

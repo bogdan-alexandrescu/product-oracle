@@ -57,6 +57,7 @@ from oracle.llm.transports import (
     NoClaudeAccount,
     get_llm_settings,
 )
+from oracle.runs.scope_models import PrdScope
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.models import ProductIntake
 
@@ -162,22 +163,31 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
         await reclaim_stale(s)
         candidates = (
             await s.execute(
-                select(LlmJob.id, LlmJob.document_id, LlmJob.intake_id, LlmJob.decision_id)
+                select(
+                    LlmJob.id,
+                    LlmJob.document_id,
+                    LlmJob.intake_id,
+                    LlmJob.decision_id,
+                    LlmJob.scope_id,
+                )
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
                 .limit(50)
             )
         ).all()
         busy: set[uuid.UUID] = set()
-        for job_id, document_id, intake_id, decision_id in candidates:
+        for job_id, document_id, intake_id, decision_id, scope_id in candidates:
             # A document's jobs run one at a time; so do an intake's and a decision's
             # (they have no document).
             if document_id is not None:
                 owner, model, column = document_id, Document, LlmJob.document_id
             elif intake_id is not None:
                 owner, model, column = intake_id, ProductIntake, LlmJob.intake_id
-            else:
+            elif decision_id is not None:
                 owner, model, column = decision_id, Decision, LlmJob.decision_id
+            else:
+                # C7: a scope's enhancements, under its prd_scopes row's lock.
+                owner, model, column = scope_id, PrdScope, LlmJob.scope_id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.

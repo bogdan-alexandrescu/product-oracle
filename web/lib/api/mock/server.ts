@@ -25,7 +25,8 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, seedScopeReviewRuns, type RunsContext, type RunsDb } from "./runs";
+import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -295,6 +296,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * a draft whose items moved, added and dropped one each since the approved v1 (E3);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
+ * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
+ * with three rows that need a person, attempt 2, and a held console approval);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
@@ -746,6 +749,45 @@ function seedFeatureSet(): Db {
   const db = seed();
   seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
   return db;
+}
+
+/** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
+function seedScopeReview(): Db {
+  const db = seed();
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * C7 Approve with edits: each requirement a person added becomes a locked, confirmed
+ * `requirement` entity of the approver's, part of its feature (the feature's entity, else a
+ * proposed one as the agents' proposal would make); an edited one gets the same direct edit.
+ */
+function scopeToBaseline(db: Db, scope: StoredScope, by: string) {
+  const at = new Date().toISOString();
+  const s = db.baseline;
+  const base = { origin: "user" as const, locked: true, locked_by: by, locked_at: at, confidence: null, run_id: scope.run_id, created_at: at, updated_at: at };
+  for (const { feature, requirement, added } of personRequirements(scope)) {
+    let f = s.entities.find((e) => e.type === "feature" && (e.id === feature.entity_id || e.key === feature.key || e.key === `f.${feature.key}`));
+    if (!f) {
+      f = { id: uuid(), type: "feature", key: feature.key, title: feature.title, body: feature.text ?? null, attrs: {}, status: "proposed", origin: "agent", locked: false, locked_by: null, locked_at: null, confidence: feature.confidence ?? null, run_id: scope.run_id, created_at: at, updated_at: at };
+      s.entities.push(f);
+    }
+    const text = requirement.text ?? requirement.title;
+    const attrs = { feature: feature.key, goals: feature.goals.map((g) => g.key), acceptance: requirement.acceptance, from_scope: scope.id };
+    const existing = !added && requirement.entity_id ? s.entities.find((e) => e.id === requirement.entity_id) : undefined;
+    if (existing) {
+      Object.assign(existing, { body: text, attrs: { ...existing.attrs, acceptance: requirement.acceptance }, locked: true, locked_by: by, locked_at: at, updated_at: at });
+      continue;
+    }
+    const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "requirement";
+    let key = `r.${slug}`;
+    for (let n = 2; s.entities.some((e) => e.key === key); n++) key = `r.${slug}-${n}`;
+    const entity = { ...base, id: uuid(), type: "requirement" as const, key, title: text.slice(0, 80), body: text, attrs, status: "confirmed" as const };
+    s.entities.push(entity);
+    requirement.entity_id = entity.id;
+    s.edges.push({ ...base, id: uuid(), src_id: entity.id, dst_id: f.id, type: "part_of", attrs: {}, status: "confirmed" });
+  }
 }
 
 /**
@@ -1312,6 +1354,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     },
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
+    scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     reviewChange: () => {
       const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
       localStorage.removeItem(MOCK_REVIEW_CHANGE_KEY);
@@ -1446,6 +1489,8 @@ function load(): Db {
           ? seedBigPrd
           : scenario === "feature-set"
             ? seedFeatureSet
+          : scenario === "scope-review"
+            ? seedScopeReview
           : scenario === "eng-review"
             ? seedEngReview
           : scenario === "priority-order"
@@ -2513,6 +2558,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
+  // C7: a scope_enhance job lives with the run's scope (./scope.ts).
+  const scopeJob = scopeJobRoute(db.runs, p, now);
+  if (scopeJob) return scopeJob;
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
   // G4 One staging list (./staging.ts) checks roles itself.

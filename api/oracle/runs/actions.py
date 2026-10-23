@@ -212,24 +212,28 @@ def _roadmap_items(body: ActionIn, ctx: ValidationContext) -> None:
         if body.kind == "merge":
             _known(ids, ctx, "merge")
     elif body.kind == "question":
-        v = body.value if isinstance(body.value, dict) else {}
-        text = v.get("text")
-        try:
-            uuid.UUID(str(v.get("asked_to")))
-        except ValueError:
-            text = None
-        if (
-            body.field is not None
-            or not isinstance(text, str)
-            or not text.strip()
-            or len(text) > QUESTION_TEXT
-            or set(v) != {"asked_to", "text"}
-        ):
-            raise InvalidAction(
-                f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
-            )
+        _question(body)
     elif body.kind == "waive":
         _waive_reason(body)
+
+
+def _question(body: ActionIn) -> None:
+    v = body.value if isinstance(body.value, dict) else {}
+    text = v.get("text")
+    try:
+        uuid.UUID(str(v.get("asked_to")))
+    except ValueError:
+        text = None
+    if (
+        body.field is not None
+        or not isinstance(text, str)
+        or not text.strip()
+        or len(text) > QUESTION_TEXT
+        or set(v) != {"asked_to", "text"}
+    ):
+        raise InvalidAction(
+            f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
+        )
 
 
 def _waive_reason(body: ActionIn) -> None:
@@ -238,14 +242,43 @@ def _waive_reason(body: ActionIn) -> None:
         raise InvalidAction("waive needs a reason")
 
 
+# C7 Scope review: the fields an edit of a scope row may change.
+SCOPE_FIELDS = ("decision", "text", "acceptance", "goals", "depends_on", "blocker_keys")
+SCOPE_DECISIONS = ("include", "exclude", "defer", "keep", "cut")
+
+
 def _feature_set(body: ActionIn, ctx: ValidationContext) -> None:
-    """C6 Feature set: until C7 Scope review adds its edits, a waiver of a feature's
-    blocking problem (D3) is the one action."""
-    if body.kind != "waive":
-        raise InvalidAction("a feature set checkpoint takes only waivers")
+    """C7 Scope review on the scope's rows (keys of its features and requirements): an
+    ``edit`` of one field, an ``add`` of a requirement (``{parent, text, acceptance}``),
+    an ``accept`` of a reason to confirm, a ``waive`` of a blocking one (D3), a
+    ``question``. A commenter's is a suggestion; an approver's Accept applies an edit or
+    an add to the row (oracle.runs.scope_review.apply_action)."""
+    if body.kind not in ("edit", "add", "accept", "waive", "question"):
+        raise InvalidAction(f"{body.kind} does not apply to a feature set")
     if body.item_key not in ctx.item_keys | {WHOLE_FILE}:
-        raise InvalidAction(f"{body.item_key} has no problem in the feature set")
-    _waive_reason(body)
+        raise InvalidAction(f"{body.item_key} is not a row of the feature set")
+    v = body.value
+    if body.kind == "waive":
+        _waive_reason(body)
+    elif body.kind == "edit":
+        if body.field not in SCOPE_FIELDS:
+            raise InvalidAction("edit changes one of " + ", ".join(SCOPE_FIELDS))
+        if body.field == "decision":
+            d = v.get("decision") if isinstance(v, dict) else v
+            if d not in SCOPE_DECISIONS:
+                raise InvalidAction('decision is {"decision": include|exclude|defer|keep|cut}')
+        elif body.field == "text" and (not isinstance(v, str) or not v.strip() or len(v) > 1000):
+            raise InvalidAction("text is a string of 1 to 1000 characters")
+        elif body.field in ("acceptance", "depends_on", "blocker_keys") and _ids(v) is None:
+            raise InvalidAction(f"{body.field} is a list of strings")
+        elif body.field == "goals" and not isinstance(v, list):
+            raise InvalidAction('goals is [{"goal_id": id, "contribution": 0-3}]')
+    elif body.kind == "add":
+        text = v.get("text") if isinstance(v, dict) else None
+        if not isinstance(text, str) or not text.strip() or len(text) > 1000:
+            raise InvalidAction('add is {"parent": feature key, "text": 1 to 1000 characters}')
+    elif body.kind == "question":
+        _question(body)
 
 
 # The spec owning each checkpoint kind registers its vocabulary here.
@@ -310,6 +343,18 @@ def _gate_context(cp: Checkpoint) -> ValidationContext:
     source = gate.BLOCKING_SOURCES.get(cp.kind)
     reasons = source.read(cp)[0] if source is not None else []
     return ValidationContext(item_keys=frozenset(r["item"] for r in reasons))
+
+
+async def _scope_context(db: AsyncSession, cp: Checkpoint) -> ValidationContext:
+    """C7: a feature-set checkpoint's items are its scope's rows (and what its stored
+    check names, for a run from before scopes)."""
+    from oracle.runs import feature_set
+
+    keys = set(_gate_context(cp).item_keys)
+    scope = await service._scope_of(db, cp)
+    if scope is not None:
+        keys |= {i.key for i in await feature_set.scope_items(db, scope.id)}
+    return ValidationContext(item_keys=frozenset(keys))
 
 
 # --------------------------------------------------------------------------- writes
@@ -472,7 +517,12 @@ async def put_action(
 
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     found = await _file(db, run, cp) if cp.kind in VOCABULARY else None
-    ctx = _context(found) if cp.kind in ITEM_FILES else _gate_context(cp)
+    if cp.kind in ITEM_FILES:
+        ctx = _context(found)
+    elif cp.kind == "feature_set":
+        ctx = await _scope_context(db, cp)
+    else:
+        ctx = _gate_context(cp)
     try:
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
@@ -555,6 +605,19 @@ async def stage_action(
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=True)
     action = await _action(db, cp, action_id)
     if action.state == "staged":
+        return
+    from oracle.runs import scope_review
+
+    snapshot = _snapshot(action)
+    try:
+        applied = await scope_review.apply_action(db, principal, cp, action)
+    except service.RunError:
+        await db.rollback()
+        raise
+    if applied:
+        # C7: a suggested edit or add is now the row's, as the approver's; the action goes.
+        await _bump(db, principal, run, cp, STAGED, action.item_key, snapshot)
+        await db.commit()
         return
     action.state = "staged"
     action.updated_by = principal.id
