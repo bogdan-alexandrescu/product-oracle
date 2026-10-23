@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, safe_yaml, wording
+from oracle import audit, company_time, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -486,6 +486,7 @@ async def _inputs(
         run_id=str(run.id) if run else None,
         feature=feature,
         dropped=dropped,
+        zone=await company_time.company_time_zone(db),
     )
     return inputs, prd, version
 

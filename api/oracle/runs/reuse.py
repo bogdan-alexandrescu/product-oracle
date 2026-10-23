@@ -27,6 +27,7 @@ from typing import Any
 from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint, Run
 
@@ -73,12 +74,9 @@ def segment_usd(knobs: flows.Knobs, sdef: flows.SegmentDef | None = None) -> Dec
     return flows.segment_estimate(sdef or flows.FLOWS["baseline_to_prd"].segment("baseline"), knobs)
 
 
-def short_date(at: datetime | str) -> str:
-    """'Oct 12' (UTC)."""
-    if isinstance(at, str):
-        at = datetime.fromisoformat(at)
-    at = at.astimezone(UTC) if at.tzinfo else at
-    return f"{at:%b} {at.day}"
+def short_date(at: datetime | str, zone: str) -> str:
+    """'Oct 12', the Company time zone's day (#463)."""
+    return company_time.day_in_words(at, zone)
 
 
 async def build_under_way(db: AsyncSession) -> bool:

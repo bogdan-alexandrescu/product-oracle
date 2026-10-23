@@ -7,6 +7,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { companyDayInWords } from "./connections";
+
 type Role = Schemas["MemberOut"]["role"];
 type Member = { id: string; email: string; role: Role; status?: string | null };
 type Kind = Schemas["DiscussionCreate"]["subject_kind"];
@@ -142,7 +144,6 @@ const json = (status: number, body: unknown) =>
   new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const refuse = (status: number, detail: string) => json(status, { detail });
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /**
  * The "discussions" scenario: one private discussion the commenter started with the
@@ -550,11 +551,10 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       if (!patch.exposes || patch.exposes.messages !== now.messages || patch.exposes.people !== now.people)
         return json(409, { detail: "Confirm what this exposes", ...now });
       d.visibility = "open";
-      const day = new Date(ctx.now());
       push(d, {
         author_kind: "system",
         author_id: null,
-        body: `${displayName(member(me.id)!.email)} made this discussion open on ${MONTHS[day.getUTCMonth()]} ${day.getUTCDate()}`,
+        body: `${displayName(member(me.id)!.email)} made this discussion open on ${companyDayInWords(ctx.now())}`,
         mentions: [],
         mentions_oracle: false,
         reply_to: null,

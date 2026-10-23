@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, confidence, safe_yaml, wording
+from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -1966,6 +1966,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     await _recheck_reuse(db, run)
     flow, knobs = _flow(run), _knobs(run)
     reused = (run.knobs or {}).get("reuse_baseline")
+    zone = await company_time.company_time_zone(db) if reused else company_time.DEFAULT_ZONE
     segments = {s.name: s for s in await _segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
@@ -1982,7 +1983,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 roles=knobs.roles[sdef.name],
                 estimate_usd=float(amount),
                 reused=skip,
-                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
+                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'], zone)}"
                 if skip
                 else None,
             )
@@ -2112,7 +2113,8 @@ async def _skip_reused_baseline(
 ) -> None:
     """C4: the run uses the current baseline. Its baseline segment is recorded skipped at
     no cost and its Confirm the baseline stop skipped; nothing runs for them."""
-    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'])}"
+    zone = await company_time.company_time_zone(db)
+    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'], zone)}"
     now = _now()
     art = _art(segment)
     art["reused"] = reused
@@ -2316,7 +2318,9 @@ async def _prompt_context(
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
         target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
-        baseline_reused=reuse.short_date(reused["approved_at"])
+        baseline_reused=reuse.short_date(
+            reused["approved_at"], await company_time.company_time_zone(db)
+        )
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
@@ -2378,14 +2382,16 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
     )
     if stored is not None:
         at = stored.decided_at or stored.created_at
-        method = f"{stored.method}, this PRD's approved order of {at.day} {at:%b}"
+        on = company_time.day_first_in_words(at, await company_time.company_time_zone(db))
+        method = f"{stored.method}, this PRD's approved order of {on}"
         ranking = list(stored.ranking or [])
     elif (
         stored := await db.scalar(
             saved.where(PrioritySnapshot.run_id.is_(None)).order_by(newest).limit(1)
         )
     ) is not None:
-        method = f"{stored.method}, priority snapshot of {stored.created_at:%Y-%m-%d}"
+        on = company_time.day(stored.created_at, await company_time.company_time_zone(db))
+        method = f"{stored.method}, priority snapshot of {on.isoformat()}"
         ranking = list(stored.ranking or [])
     else:
         live = await priorities_service.compute(db, "goal_weighted")
@@ -7087,7 +7093,8 @@ async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
         raise NotFound(f"checkpoint {checkpoint_id} not found")
     if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         raise NotFound("no review was sent back at this checkpoint")
-    return review_file.render_yaml(cp.review, cp.decided_at)
+    zone = await company_time.company_time_zone(db)
+    return review_file.render_yaml(cp.review, cp.decided_at, zone)
 
 
 async def _continue_decided(
@@ -7127,7 +7134,8 @@ async def _continue_decided(
     if decision != "approved" and cp.review:
         from oracle.runs import review_file
 
-        review = review_file.change_request(cp.review, cp.decided_at)
+        zone = await company_time.company_time_zone(db)
+        review = review_file.change_request(cp.review, cp.decided_at, zone)
     await _submit(db, run, target, segments, change_request=note, review=review)
 
 

@@ -5,6 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline.models import Entity, Proposal
 from oracle.main import app
@@ -612,7 +613,7 @@ async def test_proposals_carry_summary_and_proposer(client, ctx):
     assert listed["by-run"]["proposer"]["kind"] == "run"
     assert listed["by-run"]["proposer"]["run_id"] == str(run_id)
     assert listed["by-run"]["proposer"]["label"] == (
-        f"Baseline to PRD · {started.strftime('%b')} {started.day}"
+        f"Baseline to PRD · {company_time.day_in_words(started)}"
     )
     assert all(p["summary"].startswith("Add feature “") for p in listed.values())
 

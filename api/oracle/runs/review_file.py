@@ -19,7 +19,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Protocol
 
-from oracle import safe_yaml
+from oracle import company_time, safe_yaml
 from oracle.runs.schemas import ReviewAction
 
 VERSION = 1
@@ -234,13 +234,16 @@ def _what(review: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------- render
 
 
-def render_yaml(review: dict[str, Any], sent_on: datetime | None = None) -> str:
-    """``review.yaml``: the two header comments, then the keys in their fixed order."""
+def render_yaml(
+    review: dict[str, Any], sent_on: datetime | None = None, zone: str = company_time.DEFAULT_ZONE
+) -> str:
+    """``review.yaml``: the two header comments, then the keys in their fixed order. The
+    header names the Company day (``zone``) it was sent back on (#463)."""
     from oracle.runs.actions import KIND_WORDS
 
     words = KIND_WORDS.get(review["checkpoint"], review["checkpoint"].replace("_", " "))
     attempt = f", attempt {review['attempt']}" if review.get("attempt") else ""
-    on = f" on {sent_on.date().isoformat()}" if sent_on else ""
+    on = f" on {company_time.day(sent_on, zone).isoformat()}" if sent_on else ""
     header = (
         f"# Review of {_what(review)}{attempt}, at the {words[:1].upper()}{words[1:]} "
         "checkpoint.\n"
@@ -261,15 +264,18 @@ def resolutions_instruction(file: str) -> str:
     )
 
 
-def change_request(review: dict[str, Any], sent_on: datetime | None = None) -> str:
-    """What a segment re-run gets as its change request: the instructions, then the YAML."""
+def change_request(
+    review: dict[str, Any], sent_on: datetime | None = None, zone: str = company_time.DEFAULT_ZONE
+) -> str:
+    """What a segment re-run gets as its change request: the instructions, then the YAML
+    (the same file the run page serves)."""
     what = _what(review)
     answer = f" {resolutions_instruction(review['file'])}" if review.get("file") else ""
     return (
         f"The reviewer sent {what} back with a structured review (review.yaml, below). "
         f"Start from your previous {what}. Apply every entry; do not change items under "
         "`unchanged` unless an entry forces it, and say so. Answer every entry under "
-        f"`resolutions`.{answer}\n\n" + render_yaml(review, sent_on)
+        f"`resolutions`.{answer}\n\n" + render_yaml(review, sent_on, zone)
     )
 
 

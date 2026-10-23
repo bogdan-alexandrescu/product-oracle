@@ -2,11 +2,13 @@
 
 The company's zone is the Company time zone (Settings › Company, ``company_timezone``),
 which the weekly alignment report also runs in.
-Times a person reads are worded, "Sun Oct 25, 2:59 PM PDT", never ISO.
+Times a person reads are worded, "Sun Oct 25, 2:59 PM PDT", never ISO; days, "Oct 25"
+(#463). Text the API writes for a person names its days and times through these
+helpers; machine fields (ISO timestamps, ids) stay UTC.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,13 +30,45 @@ async def company_time_zone(db: AsyncSession) -> str:
         return DEFAULT_ZONE
 
 
-def in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:
-    """``moment`` in ``zone`` as "Sun Oct 25, 2:59 PM PDT"."""
+def _local(moment: datetime | str, zone: str) -> datetime:
+    """``moment`` (an ISO string too; naive reads as UTC) in ``zone``, else the default."""
+    if isinstance(moment, str):
+        moment = datetime.fromisoformat(moment)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
     try:
         tz = ZoneInfo(zone)
     except (ValueError, ZoneInfoNotFoundError):
         tz = ZoneInfo(DEFAULT_ZONE)
-    local = moment.astimezone(tz)
+    return moment.astimezone(tz)
+
+
+def day(moment: datetime | str, zone: str = DEFAULT_ZONE) -> date:
+    """The company's day at ``moment``."""
+    return _local(moment, zone).date()
+
+
+def day_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """The company's day at ``moment`` as "Oct 25"."""
+    local = _local(moment, zone)
+    return f"{local:%b} {local.day}"
+
+
+def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """The company's day at ``moment`` as "25 Oct"."""
+    local = _local(moment, zone)
+    return f"{local.day} {local:%b}"
+
+
+def stamp(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """``moment`` in ``zone`` as "2026-10-25 14:59 PDT" (exports, pre-reads)."""
+    local = _local(moment, zone)
+    return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
+
+
+def in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:
+    """``moment`` in ``zone`` as "Sun Oct 25, 2:59 PM PDT"."""
+    local = _local(moment, zone)
     hour = local.hour % 12 or 12
     return (
         f"{local:%a %b} {local.day}, {hour}:{local:%M} {'AM' if local.hour < 12 else 'PM'} "

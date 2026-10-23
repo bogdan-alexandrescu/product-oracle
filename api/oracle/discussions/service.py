@@ -17,7 +17,7 @@ from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
 from oracle.discussions import access, kinds, replies
@@ -1160,8 +1160,8 @@ async def _make_open(
     users = await users_by_id(db, {principal.user_id}) if principal.user_id else {}
     starter = users.get(principal.user_id)  # type: ignore[arg-type]
     name = display_name(starter.email) if starter else "The starter"
-    today = datetime.now(UTC)
-    await _system_line(db, d, f"{name} made this discussion open on {today:%b} {today.day}")
+    today = company_time.day_in_words(datetime.now(UTC), await company_time.company_time_zone(db))
+    await _system_line(db, d, f"{name} made this discussion open on {today}")
     await _record(
         db, principal, "visibility", d, **{"from": "private", "to": "open"},
         messages=messages, people=people,
