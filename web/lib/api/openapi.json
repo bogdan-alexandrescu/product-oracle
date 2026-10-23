@@ -1627,6 +1627,66 @@
         }
       }
     },
+    "/v1/documents/{doc}/versions/{n}/run-review": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "Get Run Review",
+        "description": "The run checkpoint this version's review decides (D10), any member: the latest\n``prd_review``/``roadmap_review`` whose import made the version, its section and\nfeedback counts, the SwarmCloud wait and whether I may decide it. 404 when no run\ncheckpoint points at this version.",
+        "operationId": "get_run_review",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunReviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/discussions": {
       "post": {
         "tags": [
@@ -42269,6 +42329,17 @@
             "type": "array",
             "title": "Needs Agents",
             "default": []
+          },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
           }
         },
         "type": "object",
@@ -56583,6 +56654,17 @@
             "type": "array",
             "title": "Needs Agents",
             "default": []
+          },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
           },
           "flow": {
             "type": "string",
@@ -78888,6 +78970,17 @@
             ],
             "title": "Waiting On"
           },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
+          },
           "error": {
             "anyOf": [
               {
@@ -79251,6 +79344,158 @@
         "title": "RunProgress",
         "description": "Segments done of the run's total, and what it does now: Home's In flight row."
       },
+      "RunReviewFeedback": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open"
+          },
+          "staged": {
+            "type": "integer",
+            "title": "Staged"
+          },
+          "verdicts": {
+            "type": "integer",
+            "title": "Verdicts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open",
+          "staged",
+          "verdicts"
+        ],
+        "title": "RunReviewFeedback"
+      },
+      "RunReviewOut": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_confirm",
+              "feature_set",
+              "priority_order",
+              "prd_review",
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review",
+              "request_triage",
+              "strategy_review",
+              "launch_review",
+              "update_review"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "changes_requested",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "approver_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Approver Role"
+          },
+          "sections": {
+            "$ref": "#/components/schemas/RunReviewSections"
+          },
+          "feedback": {
+            "$ref": "#/components/schemas/RunReviewFeedback"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/WaitInfo"
+          },
+          "decider_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Id"
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "run_id",
+          "kind",
+          "status",
+          "flow_title",
+          "approver_role",
+          "sections",
+          "feedback",
+          "wait"
+        ],
+        "title": "RunReviewOut",
+        "description": "D10: the run checkpoint a version's review decides (the version view's run review\nbar): the latest ``prd_review``/``roadmap_review`` whose import made the version."
+      },
+      "RunReviewSections": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "reviewed": {
+            "type": "integer",
+            "title": "Reviewed"
+          },
+          "approved": {
+            "type": "integer",
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "reviewed",
+          "approved"
+        ],
+        "title": "RunReviewSections"
+      },
       "RunSummary": {
         "properties": {
           "id": {
@@ -79447,6 +79692,17 @@
               }
             ],
             "title": "Waiting On"
+          },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
           },
           "error": {
             "anyOf": [

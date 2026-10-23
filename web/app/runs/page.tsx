@@ -106,7 +106,8 @@ export default function RunsPage() {
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              router.push(`/runs/${r.id}`);
+              // D10: a PRD or roadmap review opens its version, where it is decided.
+              router.push(r.status === "awaiting_checkpoint" && r.review_link ? r.review_link : `/runs/${r.id}`);
             }}
           >
             {ACTION[r.status]}

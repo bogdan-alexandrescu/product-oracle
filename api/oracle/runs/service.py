@@ -176,6 +176,7 @@ from oracle.runs import (
     reasons,
     rejection,
     reuse,
+    review_link,
     roadmap,
     workflow,
 )
@@ -538,6 +539,7 @@ def _summary(
         started_at=run.started_at,
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
+        review_link=review_link.link(waiting) if waiting else None,
         error=run.error,
         stuck=_stuck(run),
         can_retry=_can_retry(run),
@@ -841,6 +843,7 @@ def _checkpoint_out(
         delivery=delivery,
         approve_label=apply_edits.label(apply_edits.edit_count(mine) if edits else 0),
         needs_agents=[NeedsAgents(action_id=a.id, item=a.item_key, kind=a.kind) for a in blocked],
+        review_link=review_link.link(cp),
     )
 
 
@@ -6671,7 +6674,9 @@ async def decide_checkpoint(
     decision: str,
     note: str | None,
     expected_revision: int | None = None,
+    audit_via: str | None = None,
 ) -> None:
+    """``audit_via``: ``document_review`` when the version's review decided it (D10)."""
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
@@ -6699,6 +6704,13 @@ async def decide_checkpoint(
     )
     if refusal is not None:
         raise Forbidden(refusal)
+    if (
+        audit_via is None
+        and cp.kind in review_link.KINDS
+        and not review_link.is_decider(principal, await review_link.decider_of(db, cp))
+    ):
+        # D10: Approve draft and Send back are the designated decider's, as approve_version.
+        raise Forbidden(review_link.DECIDER_ONLY)
     if cp.status in DECIDED:
         # A recorded decision is final (owner, 2026-10-20), delivered to the run or not
         # yet: the same decision again, or the other one, changes nothing. A different
@@ -6780,7 +6792,12 @@ async def decide_checkpoint(
         if decision == "approved" and via == "swarmcloud_console"
         else 0
     )
-    if decision == "changes_requested" and not note:
+    # D10: a PRD or roadmap review sends back D4's review of the document's own feedback,
+    # the note optional (cp.note stays the person's).
+    document_review = (
+        await review_link.review_file(db, cp, note) if decision == "changes_requested" else None
+    )
+    if decision == "changes_requested" and not note and document_review is None:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
         staged = await db.scalar(
@@ -6804,7 +6821,9 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
-    if send_back:
+    if document_review is not None:
+        cp.review = document_review
+    elif send_back:
         from oracle.runs import review_file
 
         cp.review = await review_file.sent_review(db, principal, run, cp, note)
@@ -6816,6 +6835,8 @@ async def decide_checkpoint(
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if edited is not None:
         data.update(edited.audit)
+    if audit_via is not None:
+        data["via"] = audit_via
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)

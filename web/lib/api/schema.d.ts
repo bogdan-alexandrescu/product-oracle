@@ -469,6 +469,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/run-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run Review
+         * @description The run checkpoint this version's review decides (D10), any member: the latest
+         *     ``prd_review``/``roadmap_review`` whose import made the version, its section and
+         *     feedback counts, the SwarmCloud wait and whether I may decide it. 404 when no run
+         *     checkpoint points at this version.
+         */
+        get: operations["get_run_review"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions": {
         parameters: {
             query?: never;
@@ -12569,6 +12592,8 @@ export interface components {
              * @default []
              */
             needs_agents: components["schemas"]["NeedsAgents"][];
+            /** Review Link */
+            review_link?: string | null;
         };
         /**
          * CheckpointReview
@@ -17815,6 +17840,8 @@ export interface components {
              * @default []
              */
             needs_agents: components["schemas"]["NeedsAgents"][];
+            /** Review Link */
+            review_link?: string | null;
             /**
              * Flow
              * @enum {string}
@@ -25959,6 +25986,8 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            /** Review Link */
+            review_link?: string | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -26066,6 +26095,70 @@ export interface components {
             /** Now */
             now?: string | null;
         };
+        /** RunReviewFeedback */
+        RunReviewFeedback: {
+            /** Open */
+            open: number;
+            /** Staged */
+            staged: number;
+            /** Verdicts */
+            verdicts: number;
+        };
+        /**
+         * RunReviewOut
+         * @description D10: the run checkpoint a version's review decides (the version view's run review
+         *     bar): the latest ``prd_review``/``roadmap_review`` whose import made the version.
+         */
+        RunReviewOut: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /** Flow Title */
+            flow_title: string;
+            /**
+             * Approver Role
+             * @enum {string}
+             */
+            approver_role: "viewer" | "commenter" | "approver" | "owner";
+            sections: components["schemas"]["RunReviewSections"];
+            feedback: components["schemas"]["RunReviewFeedback"];
+            wait: components["schemas"]["WaitInfo"];
+            /** Decider Id */
+            decider_id?: string | null;
+            /** Decider Name */
+            decider_name?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+        };
+        /** RunReviewSections */
+        RunReviewSections: {
+            /** Total */
+            total: number;
+            /** Reviewed */
+            reviewed: number;
+            /** Approved */
+            approved: number;
+        };
         /** RunSummary */
         RunSummary: {
             /**
@@ -26113,6 +26206,8 @@ export interface components {
             finished_at?: string | null;
             /** Waiting On */
             waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            /** Review Link */
+            review_link?: string | null;
             /** Error */
             error?: string | null;
             /** Stuck */
@@ -32298,6 +32393,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublishBlockedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunReviewOut"];
                 };
             };
             /** @description Validation Error */
