@@ -1,5 +1,6 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { shownDay } from "@/lib/dates";
 import type { Role } from "@/lib/me";
 
 export type Stack = Schemas["StrategyStackOut"];
@@ -47,8 +48,7 @@ export function canWaive(f: Finding, role: Role | null | undefined): boolean {
 /** "1 Oct 2027" from an ISO date or time. */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";
-  const d = new Date(value.length === 10 ? `${value}T12:00:00` : value);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return shownDay(value, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

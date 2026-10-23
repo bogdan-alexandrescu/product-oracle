@@ -143,7 +143,7 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
                   <b className="font-semibold">{r.external_ref}</b>
                 )}
                 <span className="text-text2">
-                  {` · ${RECORD_STATE[r.state]} · ${r.target_date ? formatDay(`${r.target_date}T12:00:00Z`) : "no date"}`}
+                  {` · ${RECORD_STATE[r.state]} · ${r.target_date ? formatDay(r.target_date) : "no date"}`}
                 </span>
               </span>
               {links && r.tracker === "github" && r.id && (

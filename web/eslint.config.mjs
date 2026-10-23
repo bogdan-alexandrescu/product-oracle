@@ -19,12 +19,27 @@ const eslintConfig = defineConfig([
           selector: "Property[key.name='timeZone'][value.value=/^(UTC|Etc\\/UTC|GMT)$/i]",
           message: "Show dates in the Company time zone: use lib/dates.ts, not timeZone \"UTC\".",
         },
+        // #447: nor in the browser's zone. A number's toLocaleString("en-US") stays allowed.
+        {
+          selector: "CallExpression[callee.property.name=/^toLocale(Date|Time)String$/]",
+          message: "Show dates in the Company time zone: use lib/dates.ts or lib/format.ts, not toLocaleDateString/toLocaleTimeString.",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='toLocaleString']:matches([arguments.length=0], [callee.object.type='NewExpression'], :has(Property[key.name=/^(year|month|day|weekday|hour|minute|second|dateStyle|timeStyle|timeZone|timeZoneName)$/]))",
+          message: "Show dates in the Company time zone: use lib/dates.ts or lib/format.ts, not toLocaleString.",
+        },
+        {
+          selector: ":matches(NewExpression, CallExpression)[callee.object.name='Intl'][callee.property.name='DateTimeFormat']",
+          message: "Show dates in the Company time zone: use lib/dates.ts or lib/format.ts, not new Intl.DateTimeFormat.",
+        },
       ],
     },
   },
   {
-    // The shared formatter (plain calendar days) and the mock API (it stands in for the server).
-    files: ["lib/dates.ts", "lib/api/mock/**"],
+    // The shared formatter, the mock API (it stands in for the server) and the tests (they
+    // work out the strings a screen should show).
+    files: ["lib/dates.ts", "lib/api/mock/**", "e2e/**"],
     rules: { "no-restricted-syntax": "off" },
   },
   // Override default ignores of eslint-config-next.

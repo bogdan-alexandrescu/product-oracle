@@ -1,5 +1,6 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { shownDay } from "@/lib/dates";
 
 export type Decision = Schemas["DecisionOut"];
 export type DecisionSummary = Schemas["DecisionSummary"];
@@ -103,8 +104,7 @@ export function isoDay(days = 0): string {
 /** "18 Jan 2027" from a date or a timestamp; "—" for none. */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";
-  const d = new Date(value.length === 10 ? `${value}T12:00:00` : value);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return shownDay(value, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
 }
 
 /** A slug key from an option's label, unique among `taken`. */

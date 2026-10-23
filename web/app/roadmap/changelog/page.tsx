@@ -129,7 +129,7 @@ export default function ChangelogPage() {
         <Panel testId="changelog">
           {q.data && entries.length === 0 && <Empty>No changelog entries yet</Empty>}
           {grouped(entries).map(([day, groups]) => (
-            <section key={day} aria-label={formatDate(`${day}T12:00:00Z`)} data-testid="changelog-day" className="border-b border-line px-4 py-3 last:border-b-0 max-[600px]:px-3">
+            <section key={day} aria-label={formatDate(day)} data-testid="changelog-day" className="border-b border-line px-4 py-3 last:border-b-0 max-[600px]:px-3">
               <h2 className="font-display text-lg font-bold tracking-heading">
                 <time dateTime={day}>{day}</time>
               </h2>

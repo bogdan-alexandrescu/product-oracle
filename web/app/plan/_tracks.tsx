@@ -17,7 +17,8 @@ import {
 } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDayUtc } from "@/lib/format";
+import { calendarDay } from "@/lib/dates";
+import { formatDay } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 import { HORIZON_LABEL, HORIZONS, type Horizon } from "./_lib";
@@ -70,7 +71,7 @@ export function useTracks(): Query<Track[]> {
   });
 }
 
-const day = (d: string) => formatDayUtc(`${d}T12:00:00Z`);
+const day = (d: string) => calendarDay(d);
 
 /** A track's milestones in the API's order: dated first by date, then by when they were added. */
 export function sortedMilestones(t: Track): Milestone[] {
@@ -94,7 +95,7 @@ export function milestoneTitle(t: Track, id: string): string {
     .slice(0, at)
     .filter((x) => x.target_date)
     .pop()?.target_date;
-  return `${n} · ${prev ? day(prev) : formatDayUtc(t.created_at)} – ${day(m.target_date)}`;
+  return `${n} · ${prev ? day(prev) : formatDay(t.created_at)} – ${day(m.target_date)}`;
 }
 
 /** A PRD's track (#339): title, owner and status edited in place, its milestones, and its actions. */

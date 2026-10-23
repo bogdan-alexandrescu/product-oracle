@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { api, type Me } from "@/lib/api/client";
+import { DEFAULT_ZONE, setDisplayZone } from "@/lib/zone";
 
 export type Role = Me["role"];
 
@@ -30,6 +31,12 @@ type MeState = {
 };
 
 const MeContext = createContext<MeState | null>(null);
+
+/**
+ * The Company time zone (#447). useQuery reads it, so a screen showing loaded data draws
+ * its dates again when GET /v1/me answers with a zone other than the default.
+ */
+export const CompanyZoneContext = createContext<string>(DEFAULT_ZONE);
 
 /**
  * Loads GET /v1/me for the whole app. Pair it with <MeSync /> (inside a Suspense
@@ -63,7 +70,14 @@ export function MeProvider({ children }: { children: ReactNode }) {
     }),
     [state, refresh, clear],
   );
-  return <MeContext.Provider value={value}>{children}</MeContext.Provider>;
+  const zone = state.me?.company_timezone || DEFAULT_ZONE;
+  // Before the children render, so lib/format.ts formats in this zone.
+  setDisplayZone(zone);
+  return (
+    <MeContext.Provider value={value}>
+      <CompanyZoneContext.Provider value={zone}>{children}</CompanyZoneContext.Provider>
+    </MeContext.Provider>
+  );
 }
 
 /**

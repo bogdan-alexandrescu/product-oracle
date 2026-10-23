@@ -38,10 +38,10 @@ export function engineeringLine(i: PlanItem): string {
   else if (i.origin === "approved" && i.horizon !== "later") issue = "Untracked";
   let day = "";
   if (e.slip_days != null) day = `slipped ${e.slip_days} d`;
-  else if (e.date_status === "verified" && e.date) day = `${formatDay(`${e.date}T12:00:00Z`)} ✓`;
+  else if (e.date_status === "verified" && e.date) day = `${formatDay(e.date)} ✓`;
   else if (e.date_status === "unverified") day = "unverified";
   else if (e.date_status === "withdrawn") day = "date withdrawn";
-  else if (target(i)) day = `${formatDay(`${target(i)}T12:00:00Z`)} ✓`;
+  else if (target(i)) day = `${formatDay(target(i)!)} ✓`;
   else if (keys.length && !e.date) day = "no date";
   return [issue, day].filter(Boolean).join(" · ") || "—";
 }

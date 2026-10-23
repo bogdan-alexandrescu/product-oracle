@@ -28,7 +28,8 @@ import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDayUtc } from "@/lib/format";
+import { displayZone, formatInZone } from "@/lib/dates";
+import { formatDateTime, formatDay } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -413,7 +414,7 @@ export function RunDetail({ id }: { id: string }) {
 
 /** #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished." */
 function tickResult(out: Schemas["TickOut"]): string {
-  const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const at = formatInZone(new Date().toISOString(), displayZone(), { hour: "numeric", minute: "2-digit" });
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (out.runs_checked === 0 && out.errors.length === 0) return `Checked at ${at}: no run is active.`;
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
@@ -802,7 +803,7 @@ function SegmentItem({
             // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
             <Chip kind="na" className={WRAP_CHIP}>
               <span data-testid="segment-state">
-                Reused (approved {formatDayUtc(s.reused.approved_at)})
+                Reused (approved {formatDay(s.reused.approved_at)})
               </span>
             </Chip>
           ) : (
