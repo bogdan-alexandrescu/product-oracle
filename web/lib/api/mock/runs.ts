@@ -147,6 +147,7 @@ const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
   outputs: ["baseline.yaml", "summary.md"],
   checkpoint: "baseline_confirm",
   approver_role: "approver",
+  decider: "role",
 };
 
 export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
@@ -164,9 +165,9 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       writes_document: true,
       segments: [
         BASELINE_SEGMENT,
-        { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver" },
-        { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver" },
-        { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
+        { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver", decider: "role" },
+        { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver", decider: "role" },
+        { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -181,7 +182,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       starts_from: { label: "Build next draft · open a PRD or roadmap and use Build next draft", href: null },
       writes_document: true,
       segments: [
-        { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
+        { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -195,8 +196,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       starts_from: { label: "PRD to roadmap · Plan › Roadmap documents", href: "/plan/documents" },
       writes_document: true,
       segments: [
-        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
-        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
+        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver", decider: "role" },
+        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -211,7 +212,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       in_new_run_dialog: false,
       starts_from: { label: "Vision or strategy · Company › Strategy, New vision or Draft next version", href: "/company/strategy" },
       segments: [
-        { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner" },
+        { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner", decider: "role" },
       ],
     },
     {
@@ -240,7 +241,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       // Started from New update on Company › Updates only (owners); the New run dialog does not point at it.
       starts_from: null,
       segments: [
-        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner" },
+        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner", decider: "role" },
       ],
     },
   ],
