@@ -19,7 +19,6 @@ import pytest
 from oracle import company_time
 from oracle.baseline import describe
 from oracle.discussions import service as discussions
-from oracle.review import collab
 from oracle.runs import reuse
 from oracle.runs import service as runs
 from oracle.runs.models import Checkpoint, Run
@@ -145,12 +144,13 @@ async def test_a_runs_proposals_are_labelled_with_the_company_day(client):
 # --------------------------------------------------------------------------- every builder
 
 # Each API text builder that names a day or a time for a person to read. A new one joins
-# this list and words its day through ``company_time``.
+# this list and words its day through ``company_time``. Not here: a section's due day
+# (review/collab.py), a picked calendar day the web stores at 17:00 UTC, so its UTC date
+# is the day picked.
 DAY_TEXT_BUILDERS = [
     (reuse.short_date, "day_in_words"),  # run notes, the reuse banner, the run prompt
     (describe.run_label, "day_in_words"),  # proposal sources
     (discussions._make_open, "day_in_words"),  # "… made this discussion open on Oct 13"
-    (collab.set_assignment, "day("),  # the assignment Inbox line's due day
     (runs._source_context, "day_in_words"),  # "this PRD's approved order of …"
 ]
 

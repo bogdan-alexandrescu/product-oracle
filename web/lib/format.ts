@@ -14,7 +14,7 @@ const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" })
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 /** "Oct 16". */
 export const formatDay = (iso: string) => dayFmt.format(new Date(iso));
-/** "Oct 12": the UTC day, to match the date the API's notes give (runs/reuse.py short_date). */
+/** "Oct 12": the UTC day of a picked calendar day stored as a moment (a due date at 17:00 UTC). */
 export const formatDayUtc = (iso: string) => calendarDay(new Date(iso).toISOString());
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 

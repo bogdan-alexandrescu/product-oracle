@@ -42,3 +42,40 @@ test("proposals: the run that made them is named with the Company day", async ({
   await expect(link).toHaveAttribute("href", `/runs/${AGENT_RUN}`);
   await expect(page.getByText("Baseline to PRD · Oct 16")).toHaveCount(0);
 });
+
+const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
+
+/** The mock's last baseline review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
+function aucklandApprovalDay(): string {
+  const at = new Date(Date.now() - 9 * 86_400_000);
+  at.setUTCHours(16, 40, 0, 0);
+  const next = new Date(at.getTime() + 86_400_000);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[next.getUTCMonth()]} ${next.getUTCDate()}`;
+}
+
+// protects: the reused baseline's approval day, in the Draft with Oracle sheet and on the
+// run page, is the Company day the API's notes name.
+// fails_when: either still shows the UTC day of the approval.
+// no_claim: the API's note text (pytest test_company_day_text.py).
+test("reuse: the baseline's approval day is the Company day in the sheet and on the run", async ({ page }) => {
+  await login(page);
+  await setZone(page, "Pacific/Auckland");
+  const day = aucklandApprovalDay();
+
+  await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await page.getByRole("link", { name: "New PRD" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for late shoppers");
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
+  await expect(sheet.getByRole("radio", { name: `Use the current baseline (approved ${day})` })).toBeChecked();
+  await sheet.getByRole("button", { name: "Estimate" }).click();
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $19.50");
+  await sheet.getByRole("button", { name: "Start drafting" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(`Reused (approved ${day})`);
+});

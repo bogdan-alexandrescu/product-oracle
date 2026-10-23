@@ -8,7 +8,7 @@ import { GoalPicker, TemplateThemePicker, useConfirmedGoals, useDraftChoice } fr
 import { ErrorNote, Loading } from "@/components/ui";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDayUtc } from "@/lib/format";
+import { useCompanyZone, zoneDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -69,6 +69,7 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
 function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run | null; onClose: () => void }) {
   const router = useRouter();
   const { role } = useMe();
+  const zone = useCompanyZone();
   const id = useId();
   const intake = summary.intake;
   const prd = useMemo(() => intake.prd_answers ?? {}, [intake.prd_answers]);
@@ -258,7 +259,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
                   checked={reusing}
                   onChange={() => setReuse(true)}
                 />
-                Use the current baseline (approved {status.last_approved_at ? formatDayUtc(status.last_approved_at) : "recently"})
+                Use the current baseline (approved {status.last_approved_at ? zoneDay(status.last_approved_at, zone) : "recently"})
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-text">
                 <input

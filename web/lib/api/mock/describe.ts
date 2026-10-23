@@ -6,6 +6,8 @@
 import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
+import { companyDayInWords } from "./connections";
+
 type Entity = Pick<Schemas["EntityOut"], "id" | "type" | "title" | "body" | "status" | "attrs">;
 type Edge = Pick<Schemas["EdgeOut"], "id" | "src_id" | "dst_id" | "type" | "status" | "attrs">;
 type Proposal = Pick<Schemas["ProposalOut"], "id" | "entity_id" | "edge_id" | "payload" | "run_id" | "actor">;
@@ -214,12 +216,9 @@ export function describe(p: Proposal, entities: Entity[], edges: Edge[], awaitin
   return entitySentence(op, fields, id ? byId.get(id.toLowerCase()) : undefined, byId);
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "Baseline to PRD · Oct 16", the run's date as the API writes it (UTC). */
+/** "Baseline to PRD · Oct 16", the day the run started in the Company time zone, as the API writes it. */
 export function runLabel(run: Schemas["ProposalRun"]): string {
-  const at = new Date(run.created_at);
-  return `${run.flow_title} · ${MONTHS[at.getUTCMonth()]} ${at.getUTCDate()}`;
+  return `${run.flow_title} · ${companyDayInWords(run.created_at)}`;
 }
 
 function fromIntake(payload: Fields): boolean {

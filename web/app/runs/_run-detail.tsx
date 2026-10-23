@@ -28,7 +28,8 @@ import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDayUtc } from "@/lib/format";
+import { useCompanyZone, zoneDay } from "@/lib/dates";
+import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -657,6 +658,7 @@ function SegmentItem({
   /** D7: the shared draft changed, so the checkpoint's Approve words may have (the run re-read). */
   onDraftChanged: () => void;
 }) {
+  const zone = useCompanyZone();
   const kind = s.checkpoint;
   const { me } = useMe();
   // D8: the waiting checkpoint's shared draft, for every member who can see the run.
@@ -802,7 +804,7 @@ function SegmentItem({
             // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
             <Chip kind="na" className={WRAP_CHIP}>
               <span data-testid="segment-state">
-                Reused (approved {formatDayUtc(s.reused.approved_at)})
+                Reused (approved {zoneDay(s.reused.approved_at, zone)})
               </span>
             </Chip>
           ) : (

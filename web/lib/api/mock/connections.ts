@@ -102,6 +102,17 @@ export function mockSettingValue(key: string): unknown {
   return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
+/** "Oct 12": the Company time zone's day at `at`, as the API words a day in text it writes (#463). */
+export function companyDayInWords(at: string | Date): string {
+  const options = { month: "short", day: "numeric" } as const;
+  try {
+    const timeZone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
+    return new Date(at).toLocaleDateString("en-US", { ...options, timeZone });
+  } catch {
+    return new Date(at).toLocaleDateString("en-US", { ...options, timeZone: "America/Los_Angeles" });
+  }
+}
+
 /** Stores a company setting's value, as PUT /v1/settings/{key} would. */
 export function setMockSetting(key: string, value: unknown) {
   const db = load();

@@ -8,6 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
+import { companyDayInWords } from "./connections";
 import { ranking } from "./lane-f";
 
 type RunOut = Schemas["RunOut"];
@@ -298,7 +299,8 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
   return first ? fail(409, `A baseline build is already under way (run ${first.id})`) : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const monthDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+// The Company time zone's day, as the API words it in notes (#463).
+const monthDay = (iso: string) => companyDayInWords(iso);
 
 /**
  * The "new-run-prd" scenario keeps Baseline to PRD in the New run dialog, as a catalog from
