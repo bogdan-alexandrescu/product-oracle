@@ -7,7 +7,7 @@ import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicke
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
+import { formatDayUtc } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -342,7 +342,7 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
                     Reviewer {people.get(id)?.name ?? "…"}
                   </Chip>
                 ))}
-                {s.due_at && <Chip kind={s.overdue ? "warn" : "line"}>{`${s.overdue ? "Overdue" : "Due"} ${formatDay(s.due_at)}`}</Chip>}
+                {s.due_at && <Chip kind={s.overdue ? "warn" : "line"}>{`${s.overdue ? "Overdue" : "Due"} ${formatDayUtc(s.due_at)}`}</Chip>}
               </div>
             )}
           </li>
@@ -434,7 +434,7 @@ function AssignmentForm({
 /** What someone else changed on a section's owner, reviewers and due date, each as now (was). */
 function ChangedNote({ was, now, people }: { was: SectionState; now: SectionState; people: Map<string, Person> }) {
   const names = (ids: readonly string[]) => (ids.length ? ids.map((id) => people.get(id)?.name ?? "Someone").join(", ") : null);
-  const day = (at: string | null | undefined) => (at ? formatDay(at) : null);
+  const day = (at: string | null | undefined) => (at ? formatDayUtc(at) : null);
   const same = (a: readonly string[], b: readonly string[]) => [...a].sort().join(",") === [...b].sort().join(",");
   const lines: string[] = [];
   if (was.owner_id !== now.owner_id) {
@@ -516,7 +516,7 @@ export function Campaigns({ doc }: { doc: string }) {
             <Chip kind={c.status === "open" ? "now" : "na"}>{c.status === "open" ? "Open" : "Closed"}</Chip>
             <span className="tnum text-sm text-text2">
               v{c.version_number} · {c.comments} comment{c.comments === 1 ? "" : "s"} · {c.participants} of {c.invited} took part
-              {c.due_at ? ` · due ${formatDay(c.due_at)}` : ""}
+              {c.due_at ? ` · due ${formatDayUtc(c.due_at)}` : ""}
             </span>
             <span className="flex-1" />
             {canEdit && (

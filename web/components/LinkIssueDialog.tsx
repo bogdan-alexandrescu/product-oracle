@@ -23,7 +23,7 @@ function linkedName(l: Linked, items: PlanItem[]): { item: string; prd: string }
 
 /** "acme/app#412 · Saved cards checkout · Open · milestone Beta (Nov 30)" */
 function issueLine(i: TrackerIssue): string {
-  const ms = i.milestone ? `milestone ${i.milestone.title}${i.milestone.due ? ` (${formatDay(i.milestone.due)})` : ""}` : "";
+  const ms = i.milestone ? `milestone ${i.milestone.title}${i.milestone.due ? ` (${formatDay(`${i.milestone.due}T12:00:00Z`)})` : ""}` : "";
   return [i.external_ref, i.title, STATE[i.state] ?? i.raw_status ?? i.state, ms].filter(Boolean).join(" · ");
 }
 

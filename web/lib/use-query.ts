@@ -1,10 +1,9 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api/client";
-import { CompanyZoneContext } from "@/lib/me";
 
 export type Query<T> = {
   data: T | undefined;
@@ -48,8 +47,6 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
     loading: true,
   });
   const onAuth = useAuthRedirect();
-  // Re-render when the Company time zone arrives: the data's dates are shown in it (#447).
-  useContext(CompanyZoneContext);
   const loadRef = useRef(load);
   // The key on screen: a reload begun under an older key never lands over a newer one.
   const keyRef = useRef(key);

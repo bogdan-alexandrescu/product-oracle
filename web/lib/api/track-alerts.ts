@@ -2,7 +2,7 @@
  * F2 Track health: the track alert routes (api/oracle/roadmap/router.py), the Inbox's
  * track group, and the words the Inbox rows and Plan cards share.
  */
-import { calendarDay } from "@/lib/dates";
+import { formatDayUtc } from "@/lib/format";
 
 import { api, unwrap } from "./client";
 import type { components } from "./schema";
@@ -40,7 +40,7 @@ export const HEALTH_WORD: Record<string, string> = { at_risk: "At risk", off_tra
 /** "Dec 9": a tracker or milestone date (a day, no time), as the Plan writes them. */
 export const alertDay = (day: unknown): string | null => {
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(day)) return null;
-  return calendarDay(day.slice(0, 10));
+  return formatDayUtc(`${day.slice(0, 10)}T12:00:00Z`);
 };
 
 /** The alert in one sentence: a slip in the Plan's date words, the rest as the API words them. */

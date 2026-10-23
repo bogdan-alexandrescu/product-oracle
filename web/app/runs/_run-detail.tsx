@@ -28,8 +28,7 @@ import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { displayZone, formatInZone } from "@/lib/dates";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { formatDateTime, formatDayUtc } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -414,7 +413,7 @@ export function RunDetail({ id }: { id: string }) {
 
 /** #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished." */
 function tickResult(out: Schemas["TickOut"]): string {
-  const at = formatInZone(new Date().toISOString(), displayZone(), { hour: "numeric", minute: "2-digit" });
+  const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (out.runs_checked === 0 && out.errors.length === 0) return `Checked at ${at}: no run is active.`;
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
@@ -803,7 +802,7 @@ function SegmentItem({
             // C4 (B1 "Reuse base"): the run used the current baseline; this segment ran no step.
             <Chip kind="na" className={WRAP_CHIP}>
               <span data-testid="segment-state">
-                Reused (approved {formatDay(s.reused.approved_at)})
+                Reused (approved {formatDayUtc(s.reused.approved_at)})
               </span>
             </Chip>
           ) : (
@@ -913,12 +912,7 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
-          {deciding.map((cp, i) =>
-            // D10: a PRD or roadmap review with its draft imported is decided in the version;
-            // a refused draft and a console answer stay here.
-            cp.review_link && !cp.console && !cp.cannot_approve ? (
-              <RunReviewSummary key={cp.id} cp={cp} anchor={i === 0} />
-            ) : (
+          {deciding.map((cp, i) => (
             <CheckpointRow
               key={cp.id}
               cp={cp}
@@ -936,47 +930,10 @@ function SegmentItem({
                 noteFields.current[cp.id] = el;
               }}
             />
-            ),
-          )}
+          ))}
         </div>
       )}
     </li>
-  );
-}
-
-/** D10: a run review decided in its version: how far the review got, and a link to it. */
-function RunReviewSummary({ cp, anchor }: { cp: CheckpointOut; anchor?: boolean }) {
-  const imp = (cp.payload as { import?: { slug?: string; version?: number } }).import ?? {};
-  const doc = imp.slug ?? "";
-  const n = imp.version ?? 0;
-  const q = useQuery(`run-review|${doc}|${n}|${cp.id}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/run-review", { params: { path: { doc, n } } })),
-  );
-  const sections = q.data?.sections;
-  return (
-    <div
-      id={anchor ? "decide" : undefined}
-      tabIndex={anchor ? -1 : undefined}
-      role="group"
-      aria-label={`Decide: ${CHECKPOINT_LABEL[cp.kind]}`}
-      className="flex scroll-mt-24 flex-wrap items-center gap-2 rounded-button border border-line bg-surface p-3"
-      data-testid={`checkpoint-${cp.kind}`}
-    >
-      <Icon name="flag" size={16} className="text-accent-ink" />
-      <span className="font-semibold">{CHECKPOINT_LABEL[cp.kind]}</span>
-      <span className="min-w-0 flex-1 text-text2" data-testid="run-review-summary">
-        Waiting for review of v{n}
-        {sections && (
-          <>
-            {" "}
-            · {sections.reviewed}/{sections.total} sections reviewed
-          </>
-        )}
-      </span>
-      <LinkButton href={cp.review_link!} icon="arrow">
-        Open review
-      </LinkButton>
-    </div>
   );
 }
 

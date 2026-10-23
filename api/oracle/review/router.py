@@ -10,7 +10,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle import wording
+from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role, require_role_now
 from oracle.docs.schemas import VersionSummary
 from oracle.jobs import service as jobs_service
@@ -32,8 +33,6 @@ from oracle.review.schemas import (
     SectionReviewIn,
     SectionReviewOut,
 )
-from oracle.runs import review_link
-from oracle.runs.schemas import RunReviewOut
 from oracle.specs import service as spec_service
 
 # Viewers read everything; commenters comment, reply and resolve their own threads;
@@ -56,6 +55,8 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except service.ReviewError as e:
+        if e.refs:
+            raise wording.Refused(_STATUS[e.kind], e.message, e.refs) from e
         raise HTTPException(_STATUS[e.kind], e.message) from e
 
 
@@ -145,8 +146,6 @@ async def review_section(
     out = SectionReviewOut.model_validate(review)
     out.feedback_item_id = item.id if item else None
     out.layer = await service.section_layer(db, review.version_id, review.section_key)
-    # D10: the last section approved approves the run review of this version.
-    await review_link.on_document_review(db, principal, await service.get_version(db, doc, n))
     return out
 
 
@@ -222,27 +221,8 @@ async def approve_version(
         out = PublishBlockedOut(detail=e.message, blocking=e.blocking, dates=e.dates)
         return JSONResponse(out.model_dump(mode="json"), status_code=status.HTTP_409_CONFLICT)
     await db.commit()
-    out = ApproveOut(
+    return ApproveOut(
         document_id=document.id,
         document_status=document.status,
         version=VersionSummary.model_validate(version),
     )
-    # D10: publishing the version approves its run review.
-    await review_link.on_document_review(db, principal, version, published=True)
-    return out
-
-
-@router.get(VERSION + "/run-review", response_model=RunReviewOut, operation_id="get_run_review")
-async def get_run_review(
-    doc: str, n: int, principal: CurrentPrincipal, db: TenantDB
-) -> RunReviewOut:
-    """The run checkpoint this version's review decides (D10), any member: the latest
-    ``prd_review``/``roadmap_review`` whose import made the version, its section and
-    feedback counts, the SwarmCloud wait and whether I may decide it. 404 when no run
-    checkpoint points at this version."""
-    version = await _call(service.get_version(db, doc, n))
-    document = await _call(service.get_document(db, doc))
-    out = await review_link.run_review(db, principal, document, version)
-    if out is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no run review for this version")
-    return out

@@ -64,8 +64,8 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await expect(baseline).toContainText("attempt 2");
   await expect(status(page)).toHaveText("Running");
 
-  const segments = ["baseline", "feature_set", "priority"];
-  const checkpoints = ["baseline_confirm", "feature_set", "priority_order"];
+  const segments = ["baseline", "feature_set", "priority", "prd_draft"];
+  const checkpoints = ["baseline_confirm", "feature_set", "priority_order", "prd_review"];
   for (const [i, kind] of checkpoints.entries()) {
     await page.getByRole("button", { name: "Check agents now" }).click();
     const row = page.getByTestId(`segment-${segments[i]}`).getByTestId(`checkpoint-${kind}`).filter({ hasText: "Waiting" });
@@ -73,16 +73,6 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
     await row.getByRole("button", { name: "Approve and continue" }).click();
     await expect(row).toHaveCount(0);
   }
-  // D10: the PRD review is decided in the version the draft made.
-  await page.getByRole("button", { name: "Check agents now" }).click();
-  const runUrl = page.url();
-  await page.getByTestId("segment-prd_draft").getByTestId("checkpoint-prd_review").getByRole("link", { name: "Open review" }).click();
-  await expect(page).toHaveURL(/\/documents\/team-onboarding\/v\/1\?run_review=/);
-  const bar = page.getByTestId("run-review-bar").filter({ visible: true });
-  await bar.getByRole("button", { name: "Approve draft" }).click();
-  await bar.getByRole("group", { name: "Confirm Approve draft" }).getByRole("button", { name: "Approve draft" }).click();
-  await expect(bar).toContainText("Approved");
-  await page.goto(runUrl);
   await expect(status(page)).toHaveText("Succeeded");
   const prd = page.getByTestId("segment-prd_draft");
   await expect(prd).toContainText("Imported as team-onboarding v1");
@@ -256,8 +246,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   // Nothing is decided: the review still waits for a person, who may approve it now.
   await expect(prd.getByTestId("checkpoint-waiting")).toBeVisible();
   await expect(status(page)).toHaveText("Waiting for review");
-  // D10: imported, the review is decided in the version: the run page links there.
-  await expect(review.getByRole("link", { name: "Open review" })).toBeVisible();
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeEnabled();
   await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
   await prd.getByRole("link", { name: "guest-checkout v1" }).click();

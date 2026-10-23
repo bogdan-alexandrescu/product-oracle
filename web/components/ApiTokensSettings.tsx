@@ -20,7 +20,7 @@ import {
   Split,
 } from "@/components/ds";
 import { api, unwrap, type ApiToken, type TokenKind } from "@/lib/api/client";
-import { formatDate, formatDateTime, formatDay } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -38,8 +38,9 @@ const KIND_TIP: Record<TokenKind, string> = {
 };
 const KINDS: TokenKind[] = ["personal", "service", "run", "mcp_client"];
 
+const shortFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 /** "Oct 18": a chip's date; the full one is in its title. */
-export const shortDate = (iso: string) => formatDay(iso);
+export const shortDate = (iso: string) => shortFmt.format(new Date(iso));
 
 export type TokenState = "active" | "revoked" | "expired";
 export function tokenState(t: Pick<ApiToken, "revoked_at" | "expires_at">): TokenState {

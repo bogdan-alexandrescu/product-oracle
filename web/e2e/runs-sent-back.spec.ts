@@ -93,8 +93,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
   await expect(status(page)).toHaveText("Waiting for review");
   const review = prd.getByTestId("checkpoint-prd_review");
   await expect(prd.getByTestId("checkpoint-waiting")).toBeVisible();
-  // D10: the imported draft's review is decided in its version; the run page links there.
-  await expect(review.getByRole("link", { name: "Open review" })).toHaveAttribute("href", /^\/documents\/guest-checkout\/v\/1\?run_review=/);
+  await expect(review.getByRole("button", { name: "Approve and continue" })).toBeEnabled();
   await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
   // The Inbox: the review is a decision now, counted; the Revising row is gone.

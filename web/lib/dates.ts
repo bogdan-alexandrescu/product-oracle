@@ -1,16 +1,13 @@
 import { useMe } from "@/lib/me";
-import { DEFAULT_ZONE, displayZone } from "@/lib/zone";
-
-export { DEFAULT_ZONE, displayZone };
 
 /**
  * Display dates and times (#401): every one a person sees is in the Company time zone
  * (Settings › Company, America/Los_Angeles until an owner sets one), labelled with the
  * zone's short name ("PDT") where a time shows. Machine values sent to the API stay
  * ISO/UTC; a picked day is sent as the day, or as an instant made with `zoneInstant`.
- * #447: lib/format.ts's formatters come here too, in `displayZone()`; nothing else in
- * display code formats a date (npm run lint).
  */
+
+export const DEFAULT_ZONE = "America/Los_Angeles";
 
 /** The Company time zone, as GET /v1/me gives it to every member. */
 export function useCompanyZone(): string {
@@ -102,33 +99,4 @@ function offset(at: number, zone: string): number {
 export function calendarDay(day: string, opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }, locale = "en-US"): string {
   const d = new Date(`${day.slice(0, 10)}T00:00:00Z`);
   return Number.isNaN(d.getTime()) ? day : fmt(locale, "UTC", opts).format(d);
-}
-
-/** A calendar day with no zone: "2026-10-14", or a wall time such as "2026-10-14T12:00:00". */
-const NAIVE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+)?$/;
-
-/**
- * The day of `value` in the Company time zone: an instant's day there, or a calendar day
- * (no zone given) as written.
- */
-export function shownDay(value: string, opts: Intl.DateTimeFormatOptions, locale = "en-US"): string {
-  return NAIVE.test(value) ? calendarDay(value, opts, locale) : formatInZone(value, displayZone(), opts, locale);
-}
-
-/** "Sun Oct 25, 2:59 PM PDT": a moment in `zone` with its weekday, as the API words a refusal (api/oracle/company_time.py in_words). */
-export function inWords(iso: string, zone: string): string {
-  try {
-    const parts = fmt("en-US", zone, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZoneName: "short",
-    }).formatToParts(new Date(iso));
-    const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
-    return `${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`;
-  } catch {
-    return zoneDateTime(iso, zone);
-  }
 }

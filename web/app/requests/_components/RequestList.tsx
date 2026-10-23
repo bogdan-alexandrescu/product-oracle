@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 
 import { Chip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
 
 type Request = Schemas["RequestOut"];
 
@@ -75,7 +74,7 @@ export function RequestList({
               {r.theme && <span className="truncate font-medium text-text">{r.theme.title}</span>}
               {r.requester_name && <span className="truncate">{r.requester_name}</span>}
               <Chip kind="line">{CHANNEL_LABEL[r.channel]}</Chip>
-              <span data-testid="request-age" className="tnum" title={formatDateTime(r.created_at)}>
+              <span data-testid="request-age" className="tnum" title={new Date(r.created_at).toLocaleString()}>
                 {age(r.created_at)}
               </span>
             </span>

@@ -1,16 +1,52 @@
-import { displayZone, shownDay, zoneDateTime } from "@/lib/dates";
+import { calendarDay } from "@/lib/dates";
 import type { CitationOut, FeedbackStatus, JobSettings, LlmJob, LlmJobKind, Suggestion, Verdict } from "@/lib/api/client";
 
-// #447: display dates in the Company time zone (lib/dates.ts), not the browser's.
+const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
+const dateTimeFmt = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
-/** "Oct 16, 2026". */
-export const formatDate = (iso: string) => shownDay(iso, { month: "short", day: "numeric", year: "numeric" });
+const dayFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
+
+export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 /** "Oct 16". */
-export const formatDay = (iso: string) => shownDay(iso, { month: "short", day: "numeric" });
-/** "Oct 19, 8:00 AM PDT". */
-export const formatDateTime = (iso: string) => zoneDateTime(iso, displayZone());
+export const formatDay = (iso: string) => dayFmt.format(new Date(iso));
+/** "Oct 12": the UTC day, to match the date the API's notes give (runs/reuse.py short_date). */
+export const formatDayUtc = (iso: string) => calendarDay(new Date(iso).toISOString());
+export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 
-export { inWords } from "@/lib/dates";
+/** "Oct 19, 8:00 AM PDT": a moment in the company's time zone, as Settings > Notifications sets it. */
+export function inZone(iso: string, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone, timeZoneName: "short" })
+      .format(new Date(iso))
+      .replace(/ at /, ", ");
+  } catch {
+    return new Date(iso).toISOString();
+  }
+}
+
+/** "Sun Oct 25, 2:59 PM PDT": a moment in the company's time zone with its weekday, as a refusal words it (api/oracle/company_time.py). */
+export function inWords(iso: string, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+      timeZoneName: "short",
+    }).formatToParts(new Date(iso));
+    const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
+    return `${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`;
+  } catch {
+    return inZone(iso, timeZone);
+  }
+}
 
 export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   slack: "Slack",

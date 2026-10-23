@@ -664,9 +664,6 @@ class CheckpointOut(BaseModel):
     # Oracle to apply them), and the staged actions that need the agents instead.
     approve_label: str = "Approve"
     needs_agents: list[NeedsAgents] = []
-    # D10: a PRD or roadmap review whose draft was imported is decided in its version:
-    # "/documents/{slug}/v/{n}?run_review={id}", the same place for every client.
-    review_link: str | None = None
 
 
 class RunDecision(BaseModel):
@@ -728,8 +725,6 @@ class RunSummary(BaseModel):
     finished_at: datetime | None = None
     # The kind of the checkpoint the run waits on, if any.
     waiting_on: CheckpointKind | None = None
-    # D10: where that checkpoint is decided when it is a run review (its version).
-    review_link: str | None = None
     error: str | None = None
     # What the Inbox says of a run waiting for its owner or creator: a lost submission
     # Oracle could neither find nor rule out past the lookup cap (Retry and Cancel;
@@ -814,21 +809,6 @@ class CheckpointDecision(BaseModel):
     # D8: the draft revision the decider saw (``GET .../review``). When given and the draft
     # changed since, the decision is refused (409 ``review_changed``) and nothing changes.
     expected_revision: int | None = None
-
-
-class RunReviewSections(BaseModel):
-    total: int
-    # A section with a verdict of any kind (the outline's "N of M reviewed").
-    reviewed: int
-    # Approved on its current revision.
-    approved: int
-
-
-class RunReviewFeedback(BaseModel):
-    # Open feedback items, staged changes, sections with Request changes or Reject.
-    open: int
-    staged: int
-    verdicts: int
 
 
 class ClaudeSweepSummary(BaseModel):
@@ -1368,26 +1348,6 @@ class CheckpointReview(BaseModel):
     # D6: the attempt's changes since the previous one (added and removed ids); None on a
     # first attempt.
     diff: ItemsAttemptDiff | None = None
-
-
-class RunReviewOut(BaseModel):
-    """D10: the run checkpoint a version's review decides (the version view's run review
-    bar): the latest ``prd_review``/``roadmap_review`` whose import made the version."""
-
-    checkpoint_id: uuid.UUID
-    run_id: uuid.UUID
-    kind: CheckpointKind
-    status: CheckpointStatus
-    flow_title: str
-    approver_role: Role
-    sections: RunReviewSections
-    feedback: RunReviewFeedback
-    wait: WaitInfo
-    # The review policy's designated decider, when it names one: only they decide.
-    decider_id: uuid.UUID | None = None
-    decider_name: str | None = None
-    # The caller may Approve draft or Send back now.
-    can_decide: bool = False
 
 
 InboxChild.model_rebuild()

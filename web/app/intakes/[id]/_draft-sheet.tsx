@@ -8,7 +8,7 @@ import { GoalPicker, TemplateThemePicker, useConfirmedGoals, useDraftChoice } fr
 import { ErrorNote, Loading } from "@/components/ui";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
+import { formatDayUtc } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -258,7 +258,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
                   checked={reusing}
                   onChange={() => setReuse(true)}
                 />
-                Use the current baseline (approved {status.last_approved_at ? formatDay(status.last_approved_at) : "recently"})
+                Use the current baseline (approved {status.last_approved_at ? formatDayUtc(status.last_approved_at) : "recently"})
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-text">
                 <input

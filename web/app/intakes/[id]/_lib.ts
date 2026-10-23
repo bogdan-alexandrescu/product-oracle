@@ -1,7 +1,5 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { shownDay } from "@/lib/dates";
-import { formatDateTime } from "@/lib/format";
 
 export type Summary = Schemas["IntakeSummary"];
 export type Batch = Schemas["QuestionBatch"];
@@ -70,11 +68,13 @@ export const NON_ANSWER: Record<Exclude<Answer["kind"], "answer">, string> = {
 
 /** "20 Oct". */
 export function dayMonth(iso: string): string {
-  return shownDay(iso, { day: "numeric", month: "short" }, "en-GB");
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-/** "Oct 20, 11:00 AM PDT". */
-export const when = formatDateTime;
+/** "20 Oct, 11:00". */
+export function when(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
 
 /** "1 critical question" / "2 critical questions". */
 export function criticalCount(n: number): string {

@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, confidence, safe_yaml
+from oracle import audit, autonomy, confidence, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -176,7 +176,6 @@ from oracle.runs import (
     reasons,
     rejection,
     reuse,
-    review_link,
     roadmap,
     workflow,
 )
@@ -302,6 +301,11 @@ ITEMS_FILE = "roadmap_items.yaml"
 
 class RunError(Exception):
     status = 409
+
+    def __init__(self, *args: object, refs: wording.Refs | None = None) -> None:
+        super().__init__(*args)
+        # #396: the ids agents need beside a message a person reads (oracle.wording).
+        self.refs = refs
 
 
 class NotFound(RunError):
@@ -539,7 +543,6 @@ def _summary(
         started_at=run.started_at,
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
-        review_link=review_link.link(waiting) if waiting else None,
         error=run.error,
         stuck=_stuck(run),
         can_retry=_can_retry(run),
@@ -843,7 +846,6 @@ def _checkpoint_out(
         delivery=delivery,
         approve_label=apply_edits.label(apply_edits.edit_count(mine) if edits else 0),
         needs_agents=[NeedsAgents(action_id=a.id, item=a.item_key, kind=a.kind) for a in blocked],
-        review_link=review_link.link(cp),
     )
 
 
@@ -1805,8 +1807,8 @@ async def create_run(
         raise Invalid(f"start a {flow.title} run from {flow.entry}")
     if flow.key == "launch_kit" and not (oracle_knobs or {}).get("launch_id"):
         raise Invalid(
-            "the Launch kit flow starts from a launch: Draft on the launch "
-            "(POST /v1/launches/{id}/draft)"
+            "the Launch kit flow starts from a launch: open it on Roadmap › Launches and "
+            "choose Draft with Oracle"
         )
     if flow.key == "update_draft" and not has_role(principal.role, "owner"):
         # H8: the CEO decides what is said to the board and investors.
@@ -2006,7 +2008,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     if run.status != "draft":
         raise RunError(f"run is {run.status}, not a draft")
     if run.estimate_usd is None:
-        raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
+        raise RunError("estimate the run first: press Estimate, then Start run")
     await _recheck_reuse(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
@@ -6674,9 +6676,7 @@ async def decide_checkpoint(
     decision: str,
     note: str | None,
     expected_revision: int | None = None,
-    audit_via: str | None = None,
 ) -> None:
-    """``audit_via``: ``document_review`` when the version's review decided it (D10)."""
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
@@ -6704,13 +6704,6 @@ async def decide_checkpoint(
     )
     if refusal is not None:
         raise Forbidden(refusal)
-    if (
-        audit_via is None
-        and cp.kind in review_link.KINDS
-        and not review_link.is_decider(principal, await review_link.decider_of(db, cp))
-    ):
-        # D10: Approve draft and Send back are the designated decider's, as approve_version.
-        raise Forbidden(review_link.DECIDER_ONLY)
     if cp.status in DECIDED:
         # A recorded decision is final (owner, 2026-10-20), delivered to the run or not
         # yet: the same decision again, or the other one, changes nothing. A different
@@ -6792,12 +6785,7 @@ async def decide_checkpoint(
         if decision == "approved" and via == "swarmcloud_console"
         else 0
     )
-    # D10: a PRD or roadmap review sends back D4's review of the document's own feedback,
-    # the note optional (cp.note stays the person's).
-    document_review = (
-        await review_link.review_file(db, cp, note) if decision == "changes_requested" else None
-    )
-    if decision == "changes_requested" and not note and document_review is None:
+    if decision == "changes_requested" and not note:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
         staged = await db.scalar(
@@ -6821,9 +6809,7 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
-    if document_review is not None:
-        cp.review = document_review
-    elif send_back:
+    if send_back:
         from oracle.runs import review_file
 
         cp.review = await review_file.sent_review(db, principal, run, cp, note)
@@ -6835,8 +6821,6 @@ async def decide_checkpoint(
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if edited is not None:
         data.update(edited.audit)
-    if audit_via is not None:
-        data["via"] = audit_via
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
@@ -8719,8 +8703,9 @@ async def cancel_again(
     e = next((x for x in entries if x.get("id") == workflow_id and x.get("cancel") is False), None)
     if e is None or workflow_id not in _cancel_again_ids(run):
         raise RunError(
-            f"nothing to cancel again: workflow {workflow_id} is not one Oracle stopped "
-            "cancelling for this run"
+            "nothing to cancel again: that workflow is not one Oracle stopped cancelling for "
+            "this run",
+            refs={"workflow": workflow_id},
         )
     for key in ("cancel", "cancel_tried_at", "cancelled"):
         e.pop(key, None)
@@ -8731,8 +8716,8 @@ async def cancel_again(
     if target is not None:
         _note(
             target,
-            f"Cancel again: Oracle cancels workflow {workflow_id} again (its cancel calls were "
-            "stopped), and keeps reading its status and cost until it ends.",
+            "Cancel again: Oracle cancels the workflow again (its cancel calls were stopped), "
+            "and keeps reading its status and cost until it ends.",
         )
     await audit.record(
         db, principal, "run.cancel_again", "run", run.id, {"workflow_id": workflow_id}
