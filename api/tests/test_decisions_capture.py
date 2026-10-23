@@ -6,6 +6,7 @@ Each test states its card (protects / fails_when / no_claim). Synthetic placehol
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select, text
@@ -22,7 +23,14 @@ from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import add_option, approve_compliance, create_blocker
-from tests.decision_helpers import TODAY, decide_body, propose, rows
+from tests.decision_helpers import (  # noqa: F401 - clock: autouse
+    COMPANY_ZONE,
+    clock,
+    decide_body,
+    propose,
+    rows,
+    today,
+)
 from tests.intake_helpers import gaps_by_category, intake_with_source, summary
 from tests.test_mcp import mcp_client, run_token, text_of, user_with_role
 from tests.test_review import add_version
@@ -71,7 +79,7 @@ async def test_first_version_approval_is_captured_once(client):
         admin = await s.scalar(select(User.id).where(User.email == "admin@example.com"))
     assert d.approver_id == admin
     assert d.expected_outcome == "See the document's success metrics"
-    assert d.review_at == TODAY + timedelta(days=90)
+    assert d.review_at == today() + timedelta(days=90)
     assert {"kind": "document_version", "id": str(version_id)}.items() <= d.subjects[0].items()
 
 
@@ -99,7 +107,8 @@ async def test_accepted_gap_risk_is_captured_with_its_review_date(client):
     assert d.source_kind == "assumption_decision"
     assert str(d.source_id) == resp.json()["decision"]["id"]
     assert d.rationale == "Roll out to one region first."
-    assert d.review_at == review_at.date()
+    # The review day is the company's (#336): the date in the Company time zone.
+    assert d.review_at == review_at.astimezone(ZoneInfo(COMPANY_ZONE)).date()
     assert d.approver_id == ctx.users["owner"].id
     other = gaps["evaluation_criteria"]
     resp = await client.post(
@@ -199,7 +208,8 @@ async def test_blocker_decisions_are_captured(client):
     decisions = await rows(ctx.tenant_id)
     assert len(decisions) == 2
     risk = decisions[1]
-    assert risk.chosen_option == "accept_risk" and risk.review_at.isoformat() == LATER[:10]
+    later = datetime.fromisoformat(LATER).astimezone(ZoneInfo(COMPANY_ZONE)).date()
+    assert risk.chosen_option == "accept_risk" and risk.review_at == later
     assert risk.approver_id == ctx.users["owner"].id
 
     exp = await client.post(

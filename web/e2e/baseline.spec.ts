@@ -22,16 +22,16 @@ test("baseline: goals with weight, metric, target and horizon", async ({ page })
   await expect(activation).toContainText("Raise activation");
   await expect(activation.locator('[data-attr="weight"]')).toHaveText("0.5");
   await expect(activation.locator('[data-attr="metric"]')).toHaveText("Accounts that finish setup within 7 days");
-  await expect(activation.locator('[data-attr="target"]')).toHaveText("45%");
-  await expect(activation.locator('[data-attr="horizon"]')).toHaveText("2026-Q4");
+  await expect(activation.locator('[data-attr="target"]')).toHaveText("≥ 45%");
+  await expect(activation.locator('[data-attr="horizon"]')).toHaveText("Short · Dec 31");
   await expect(activation).toContainText("Confirmed");
   // Confidence is a ring, 0-100.
   await expect(activation.getByTestId("confidence")).toHaveText("78");
   await expect(activation.getByTestId("confidence")).toHaveAttribute("data-tone", "green");
 
   const paid = page.getByTestId("goal-g.paid-conversion");
-  await expect(paid.locator('[data-attr="target"]')).toHaveText("12%");
-  await expect(paid.locator('[data-attr="horizon"]')).toHaveText("2027-H1");
+  await expect(paid.locator('[data-attr="target"]')).toHaveText("≥ 12%");
+  await expect(paid.locator('[data-attr="horizon"]')).toHaveText("Medium · Jun 30");
 
   // Only the proposed goal offers Confirm.
   await expect(page.getByTestId("goal-g.early-churn")).toContainText("Proposed");
@@ -545,9 +545,9 @@ test("baseline: proposal sentences wrap on a phone", async ({ page }) => {
 // The strings are the API's (api/tests/test_baseline_describe.py writes the same rules).
 const NOISY = {
   "Cut early churn":
-    "Change Cut early churn: weight to 0.25 (was 0.2), target to below 7% (was below 8%), horizon to 2026-Q4 (was 2027-H1) and 1 more",
+    "Change Cut early churn: weight to 0.25 (was 0.2), target text to below 7% (was below 8%), horizon text to 2026-Q4 and 1 more",
   "Raise activation":
-    "Change Raise activation: description to …the first two weeks. (was …the first week.), target to 50% (was 45%)",
+    "Change Raise activation: description to …the first two weeks. (was …the first week.), target to 50 (was 45)",
   "Grow paid conversion": "No change to Grow paid conversion",
 };
 

@@ -19,6 +19,8 @@ from oracle.baseline import (
     conflicts,
     describe,
     evidence,
+    goals,
+    measurements,
     public_links,
     scoring,
     service,
@@ -46,10 +48,13 @@ from oracle.baseline.schemas import (
     EvidenceCreate,
     EvidenceLinkCreate,
     EvidenceOut,
+    FillFromTextResult,
     GraphOut,
     LinkErrorOut,
     LinkPreviewOut,
     LinkTarget,
+    MeasurementCreate,
+    MeasurementOut,
     NodeStatus,
     OriginIn,
     ProposalCreate,
@@ -83,7 +88,10 @@ async def _fresh(db, *rows):
             await db.refresh(row)
 
 
-def _fail(exc: service.BaselineError) -> HTTPException:
+def _fail(exc: service.BaselineError) -> Exception:
+    if isinstance(exc, service.GoalFieldsInvalid):
+        # The app renders it: {"detail", "errors": [{code, message, where}]} (B5).
+        return service.GoalFieldsInvalid(exc.problems)
     return HTTPException(exc.status_code, str(exc))
 
 
@@ -136,9 +144,23 @@ async def _entities_out(
     await _fresh(db, *rows)
     counts = await service.evidence_counts(db, entity_ids=[e.id for e in rows])
     view = await evidence.run_view(db, principal, entity_ids=[e.id for e in rows])
+    # B5: a goal's check reads the company's day and its planning horizons.
+    checked = {}
+    if any(e.type == "goal" for e in rows):
+        on, horizons = await goals.company_today(db), await goals.company_horizons(db)
+        checked = {
+            e.id: goals.GoalCheck(
+                **goals.goal_check(e.attrs or {}, status=e.status, on=on, horizons=horizons),
+                horizons=horizons,
+            )
+            for e in rows
+            if e.type == "goal"
+        }
     out = []
     for e in rows:
-        o = EntityOut.model_validate(e).model_copy(update={"evidence_count": counts.get(e.id, 0)})
+        o = EntityOut.model_validate(e).model_copy(
+            update={"evidence_count": counts.get(e.id, 0), "goal_check": checked.get(e.id)}
+        )
         if view is not None:
             o = o.model_copy(update={"confidence": view.confidence("entity", e.id)})
         out.append(o)
@@ -183,6 +205,10 @@ async def _edge_write(db, result: service.WriteResult, created: bool = False) ->
 
 
 _WRITE_RESPONSES = {202: {"description": "The item is locked: the change became a proposal"}}
+_ENTITY_WRITE_RESPONSES = {
+    **_WRITE_RESPONSES,
+    422: {"model": YamlImportError, "description": "Goal fields rejected (B5), every problem"},
+}
 
 
 # --- graph ---------------------------------------------------------------------------------
@@ -234,7 +260,7 @@ async def list_entities(
     "/entities",
     response_model=EntityWriteOut,
     status_code=status.HTTP_201_CREATED,
-    responses=_WRITE_RESPONSES,
+    responses=_ENTITY_WRITE_RESPONSES,
 )
 async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB) -> JSONResponse:
     try:
@@ -273,7 +299,9 @@ async def get_entity(entity_id: uuid.UUID, principal: Reader, db: TenantDB) -> E
     )
 
 
-@router.patch("/entities/{entity_id}", response_model=EntityWriteOut, responses=_WRITE_RESPONSES)
+@router.patch(
+    "/entities/{entity_id}", response_model=EntityWriteOut, responses=_ENTITY_WRITE_RESPONSES
+)
 async def update_entity(
     entity_id: uuid.UUID, body: EntityPatch, principal: ApproverNow, db: TenantDB
 ) -> JSONResponse:
@@ -347,6 +375,73 @@ async def unlock_entity(entity_id: uuid.UUID, principal: ApproverNow, db: Tenant
     await service.unlock(db, principal, entity)
     await db.commit()
     return (await _entities_out(db, [entity]))[0]
+
+
+# --- goal measurements and Fill from text (B5) ------------------------------------------
+
+
+@router.get("/entities/{entity_id}/measurements", response_model=list[MeasurementOut])
+async def list_goal_measurements(
+    entity_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> list[MeasurementOut]:
+    """A goal's dated values, latest day first."""
+    try:
+        rows = await measurements.list_for(db, entity_id)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    return [MeasurementOut.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/entities/{entity_id}/measurements",
+    response_model=MeasurementOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def record_goal_measurement(
+    entity_id: uuid.UUID, body: MeasurementCreate, principal: ApproverNow, db: TenantDB
+) -> MeasurementOut:
+    """Record a goal's value on a day (a second on the same day replaces it); the latest
+    by day becomes the goal's ``current``. 422 when the entity is not a goal, the goal has
+    no unit yet, or the day is in the future."""
+    try:
+        row = await measurements.record(
+            db,
+            principal,
+            entity_id,
+            value=body.value,
+            measured_on=body.measured_on,
+            note=body.note,
+            evidence_id=body.evidence_id,
+        )
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    await db.refresh(row)
+    return MeasurementOut.model_validate(row)
+
+
+@router.delete("/measurements/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_goal_measurement(
+    measurement_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> Response:
+    try:
+        await measurements.delete(db, principal, measurement_id)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/goals/fill-from-text", response_model=FillFromTextResult)
+async def fill_goals_from_text(principal: ApproverNow, db: TenantDB) -> FillFromTextResult:
+    """Read each goal's ``*_text`` values (Home's rules, no model call) and write what they
+    say as an Oracle write: applied to an unlocked goal, a proposal on a locked one."""
+    try:
+        result = await measurements.fill_from_text(db, principal)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    return FillFromTextResult(**result)
 
 
 @router.get("/entities/{entity_id}/revisions", response_model=list[RevisionOut])

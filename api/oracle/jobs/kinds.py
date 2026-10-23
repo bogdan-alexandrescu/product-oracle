@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence as confidence_rules
 from oracle.baseline import scoring
+from oracle.baseline.goals import target_words
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs.diff import diff_sections, word_diff
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -146,7 +147,9 @@ async def baseline_context(s: AsyncSession) -> tuple[list[dict], list[dict], dic
                 "title": g.title,
                 "body": _short(g.body),
                 "metric": g.attrs.get("metric"),
-                "target": g.attrs.get("target"),
+                "target": target_words(g.attrs)
+                or g.attrs.get("target")
+                or g.attrs.get("target_text"),
             }
         )
         refs[ref] = {"ref": ref, "kind": "goal", "title": g.title, "excerpt": _short(g.body, 300)}

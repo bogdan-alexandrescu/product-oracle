@@ -163,7 +163,7 @@ function makeReport(input: {
     week_start: input.week,
     title: title(input.kind, input.week),
     period: { from: input.from, to: input.to },
-    timezone: "America/Los_Angeles",
+    timezone: String(mockSettingValue("company_timezone")),
     generated_at: input.at,
     headline: headline(summary),
     summary,
@@ -222,7 +222,7 @@ function seedReports(ownerId: string): ReportsDb {
   });
 }
 
-type ReportSetting = { enabled: boolean; weekday: string; time: string; timezone: string; slack_channel: { id: string; name: string } | null };
+type ReportSetting = { enabled: boolean; weekday: string; time: string; slack_channel: { id: string; name: string } | null };
 
 function reportSetting(): ReportSetting {
   return mockSettingValue(SETTING) as ReportSetting;

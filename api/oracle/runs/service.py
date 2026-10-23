@@ -136,6 +136,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
+from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
@@ -2363,6 +2364,8 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
             "key": e.key,
             "title": e.title,
             **{k: (e.attrs or {}).get(k) for k in ("metric", "target", "horizon")},
+            # B5: the typed target in words ("at least 45% (...), short horizon").
+            "target_words": target_words(e.attrs or {}),
         }
         for e in sorted(entities.values(), key=lambda e: e.key)
         if e.type == "goal" and e.status == "confirmed"
@@ -8996,6 +8999,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.launches import service as launches_service
 
     launch_rows = await launches_service.inbox_rows(db, principal)
+    from oracle.rituals.service import inbox_rows as ritual_rows
+
+    rituals = await ritual_rows(db, principal)
+    counted += sum(1 for r in rituals if r.counts)
+    from oracle.quality.outcomes import inbox_rows as outcome_rows
+
+    outcome_inbox = await outcome_rows(db, principal)
     # H11: what Oracle did on its own, for those it notified (open ones count).
     from oracle.autonomy_router import inbox_actions
 
@@ -9035,9 +9045,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         # Strategy drift: one row, however many findings.
         + (1 if strategy else 0)
         + sum(1 for r in launch_rows if r.counted)
+        + sum(1 for r in outcome_inbox if r.counts)
         + sum(a.counts for a in oracle_actions)
         + counted,
         launches=launch_rows,
+        rituals=rituals,
+        outcomes=outcome_inbox,
         items=states,
         counts=counts,
         staged=staged,

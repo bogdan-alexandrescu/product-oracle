@@ -8,13 +8,13 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addNoisyProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { claudeAccountsRoute } from "./claude-accounts";
-import { connectionsRoute, setupFacts } from "./connections";
+import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
@@ -31,9 +31,20 @@ import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
-import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
+import {
+  calibration,
+  outcomeInboxRows,
+  publishRefusal,
+  routeQuality,
+  seedOracleRecorded,
+  seedOutcomes,
+  seedQuality,
+  type QualityContext,
+  type QualityDb,
+} from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
@@ -113,6 +124,8 @@ export interface Db {
   requests?: RequestsDb;
   /** The decision log (./decisions.ts, H1); absent in data saved before it. */
   decisions?: DecisionsDb;
+  /** Rituals, their occurrences and the summaries mode (./rituals.ts, H2); seeded on first use. */
+  rituals?: RitualsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -236,6 +249,12 @@ function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Respo
   return notFound("Route");
 }
 
+/** The track record over the mock's outcomes (H3), goals named from the baseline. */
+export function trackRecord(db: Db): Schemas["CalibrationOut"] {
+  const titles = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]));
+  return calibration(db.quality, titles);
+}
+
 /** The launches' context: the signed-in member, the commenter who asked, the first track. */
 function launchesContext(db: Db, me: MemberRow): LaunchesContext {
   return {
@@ -289,6 +308,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * checklists, notes and changelog entries (./launches.ts);
  * "oracle-did" as the default company plus one thing Oracle did on its own, told to the
  * signed-in owner (./autonomy.ts);
+ * "rituals" as the default company plus a Monthly roadmap refresh pre-read prepared early
+ * (the owner and the approver attend) and last week's goals check-in, held, whose summary
+ * failed (H2, ./rituals.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
@@ -929,6 +951,8 @@ function seed(): Db {
   }));
   // The seeded commenter proposal is the commenter's (B4 names who made it).
   attributeCommenterProposal(db.baseline, db.members.find((m) => m.email === "commenter@example.com")!.id);
+  // B5: activation's owner is the approver.
+  attributeGoalOwner(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
   db.members.push({
     ...REMOVED_MEMBER,
@@ -1243,6 +1267,17 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
   };
 }
 
+/** What the rituals mock reads: the signed-in member and the members. */
+function ritualsContext(db: Db, me: MemberRow): RitualsContext {
+  return {
+    me: { id: me.id, email: me.email, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
+    uuid,
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    decisions: () => db.decisions?.decisions ?? [],
+  };
+}
+
 /** The next version: the base with some sections replaced, and the resolutions recorded. */
 function importSections(
   db: Db,
@@ -1483,6 +1518,14 @@ function load(): Db {
       v1.approved_at = "2026-10-05T09:00:00Z";
       roadmap.status = "approved";
     }
+  }
+  // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
+  // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
+  if (scenario === "outcomes" || scenario === "outcomes-recorded") {
+    const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
+    const outcomes = goal ? seedOutcomes(db.user_id, goal.id, null) : [];
+    if (goal && scenario === "outcomes-recorded") outcomes.push(seedOracleRecorded(db.user_id, goal.id));
+    if (goal) db.quality = { outcomes, learnings: [] };
   }
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
@@ -1937,8 +1980,13 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     },
     { key: "eng_lead", done: engineeringLeads(db).length > 0, count: engineeringLeads(db).length, detail: null },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
+    { key: "timezone", done: facts.timezone != null, count: null, detail: facts.timezone },
     { key: "build_baseline", done: built != null, count: null, detail: built },
   ];
+  // The "setup-new-step" scenario: an API with a step this web build has no words for.
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "setup-new-step") {
+    owner.push({ key: "calendar" as Schemas["SetupStep"]["key"], done: false, count: null, detail: null });
+  }
   const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
   return {
     steps,
@@ -2481,7 +2529,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
     };
     const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail }, req, p.slice(2), q);
+    const isMember = (userId: string) => db.members.some((m) => m.id === userId && m.status !== "disabled");
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, isMember }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
@@ -2728,6 +2777,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
     if (input?.kind === "update") return startUpdate(db, me, input);
   }
+  if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
   const handled = await laneF(db, req, p, m, me.role);
   if (handled) return handled;
 
@@ -2744,6 +2794,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   });
   const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
   if (decided) return decided;
+  // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
+  const ritualsCtx = ritualsContext(db, me);
+  db.rituals ??= seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
+  const ritual = await routeRituals(ritualsCtx, db.rituals, req, p, q);
+  if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
@@ -2759,6 +2814,16 @@ async function route(db: Db, req: Request): Promise<Response> {
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
+    // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
+    const ritualRows = ritualInbox(ritualsCtx, db.rituals);
+    const ritualCounted = ritualRows.filter((r) => r.counts).length;
+    inbox.rituals = ritualRows;
+    inbox.total += ritualCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + ritualCounted;
+    // Outcome rows (H3): Add predictions and Outcome check due count; Oracle recorded is shown.
+    const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
+    inbox.outcomes = outcomeRows;
+    inbox.total += outcomeRows.filter((r) => r.counts).length;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

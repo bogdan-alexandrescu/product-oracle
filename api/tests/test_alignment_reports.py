@@ -27,8 +27,12 @@ from oracle.models import AuditEvent
 from oracle.reports import alignment, clock
 from oracle.reports import slack as report_slack
 from oracle.reports.models import AlignmentReport
+from oracle.rituals import clock as ritual_clock
+from oracle.rituals import service as rituals
+from oracle.rituals.models import Ritual, RitualOccurrence
 from oracle.roadmap.models import ProductTrack
 from oracle.tenancy import tenant_session
+from oracle.tenant_settings_api import DEFAULTS
 from oracle.ticker import router as ticker
 from tests.roadmap_helpers import other_company
 from tests.test_mcp import mcp_client, run_token, text_of
@@ -50,6 +54,18 @@ CHANNEL = {"id": "C0PLAN", "name": "plan"}
 
 def la(*args: int) -> datetime:
     return datetime(*args, tzinfo=LA).astimezone(UTC)
+
+
+@pytest.fixture(autouse=True)
+def company_in_los_angeles(monkeypatch):
+    """These tests' company works in Los Angeles: its Company time zone, which the weekly
+    report reads (it has no zone of its own)."""
+    monkeypatch.setitem(DEFAULTS, "company_timezone", "America/Los_Angeles")
+
+
+async def company_zone(client, auth, zone: str) -> None:
+    resp = await client.put("/v1/settings/company_timezone", json={"value": zone}, headers=auth)
+    assert resp.status_code == 200, resp.text
 
 
 class FakeSlack:
@@ -134,9 +150,11 @@ def no_model_calls():
 
 @pytest.fixture
 def at(monkeypatch):
-    """Sets Oracle's report clock: ``at(datetime)``."""
+    """Sets Oracle's report and ritual clocks: ``at(datetime)``. The weekly report is the
+    ``alignment_report`` ritual (H2), so the rituals' clock moves with the report's."""
     state = {"now": datetime.now(UTC)}
     monkeypatch.setattr(clock, "now", lambda: state["now"])
+    monkeypatch.setattr(ritual_clock, "now", lambda: state["now"])
 
     def set_(when: datetime) -> datetime:
         state["now"] = when
@@ -185,18 +203,23 @@ async def install(client, auth) -> dict:
 
 
 async def set_report(client, auth, **value) -> dict:
-    body = {"enabled": True, "weekday": "mon", "time": "08:00",
-            "timezone": "America/Los_Angeles", "slack_channel": None, **value}  # fmt: skip
+    body = {"enabled": True, "weekday": "mon", "time": "08:00", "slack_channel": None,
+            **value}  # fmt: skip
     resp = await client.put(SETTING, json={"value": body}, headers=auth)
     assert resp.status_code == 200, resp.text
     return resp.json()["value"]
 
 
 async def due(tenant_id) -> list[AlignmentReport]:
+    """One ticker pass of the ritual engine (H2), which owns the weekly report's clock."""
     async with tenant_session(tenant_id) as db:
-        await alignment.due(db)
-        await db.commit()
+        await rituals.tick_due(db)
     return await reports_of(tenant_id)
+
+
+async def report_ritual(tenant_id) -> Ritual:
+    async with tenant_session(tenant_id) as db:
+        return await db.scalar(select(Ritual).where(Ritual.kind == "alignment_report"))
 
 
 async def reports_of(tenant_id) -> list[AlignmentReport]:
@@ -355,9 +378,9 @@ async def test_the_setting_is_validated(client, owner):
     channel is stored, or a commenter can change it; no_claim=the schedule itself."""
     tenant_id, auth = owner
     resp = await client.get(SETTING, headers=auth)
+    # No zone of its own: the report reads the Company time zone.
     assert resp.json()["value"] == {
-        "enabled": True, "weekday": "mon", "time": "08:00",
-        "timezone": "America/Los_Angeles", "slack_channel": None,
+        "enabled": True, "weekday": "mon", "time": "08:00", "slack_channel": None,
     }  # fmt: skip
     for bad in ({"weekday": "monday"}, {"time": "8am"}, {"time": "24:00"},
                 {"timezone": "Mars/Olympus"}, {"enabled": "yes"},
@@ -446,6 +469,85 @@ async def test_disabled_or_no_active_track_builds_nothing(client, owner, runtime
     assert [t["status"] for t in report.content["tracks"]] == ["paused"]
 
 
+async def test_the_weekly_report_is_the_alignment_report_ritual(client, owner, runtime, at):
+    """H2 criterion 15. protects=one clock: the first tick seeds a built-in
+    alignment_report ritual with F6's stored day, time and time zone, a change to the
+    setting moves it, and pausing the ritual stops the weekly report through the run
+    ticker; fails_when=the ritual is missing or on other times, or F6's own ticker check
+    still builds the report; no_claim=Slack delivery (the tests below)."""
+    tenant_id, auth = owner
+    await a_track(client, auth, runtime)
+    await company_zone(client, auth, "Europe/Paris")
+    await set_report(client, auth, weekday="fri", time="16:30")
+    at(la(2026, 10, 26, 9))
+    assert await due(tenant_id) == []
+    ritual = await report_ritual(tenant_id)
+    assert ritual is not None and ritual.builtin and ritual.status == "active"
+    assert ritual.title == "Weekly alignment report"
+    s = ritual.schedule
+    assert (s["freq"], s["weekday"], s["time"]) == ("weekly", 4, "16:30")
+    assert s["timezone"] == "Europe/Paris"
+    paris = ZoneInfo("Europe/Paris")
+    assert ritual.next_due_at == datetime(2026, 10, 30, 16, 30, tzinfo=paris)
+    # Company › Rituals lists it.
+    listed = (await client.get("/v1/rituals", headers=auth)).json()
+    assert "alignment_report" in {r["kind"] for r in listed}
+    # The setting moves the ritual: Mondays 08:00; the Company time zone moves it back to
+    # Los Angeles.
+    await set_report(client, auth)
+    assert (await report_ritual(tenant_id)).schedule["timezone"] == "Europe/Paris"
+    await company_zone(client, auth, "America/Los_Angeles")
+    ritual = await report_ritual(tenant_id)
+    assert (ritual.schedule["weekday"], ritual.schedule["time"]) == (0, "08:00")
+    assert ritual.schedule["timezone"] == "America/Los_Angeles"
+    # Monday 08:00 has passed this week and last week is not reported yet: F6's catch-up,
+    # the next tick reports it.
+    assert ritual.next_due_at == la(2026, 10, 26, 8)
+    # Paused on Company › Rituals, the run ticker builds no report at its moment: F6's
+    # own check no longer runs.
+    resp = await client.post(f"/v1/rituals/{ritual.id}/pause", headers=auth)
+    assert resp.status_code == 200, resp.text
+    at(la(2026, 11, 2, 8, 5))
+    out = ticker.TickerOut()
+    await ticker._tick_company(tenant_id, out, ticker._Failures(out))
+    assert await reports_of(tenant_id) == [] and out.companies.failed == 0
+    # Disabling the report pauses the ritual; enabling it resumes it.
+    await client.post(f"/v1/rituals/{ritual.id}/resume", headers=auth)
+    await set_report(client, auth, enabled=False)
+    assert (await report_ritual(tenant_id)).status == "paused"
+    await set_report(client, auth)
+    assert (await report_ritual(tenant_id)).status == "active"
+
+
+async def test_over_a_simulated_week_one_clock_builds_one_report(client, owner, runtime, at):
+    """H2 criterion 15. protects=one clock: the run ticker, every hour for a week and
+    twice in the same minute at the report's moment, builds exactly one weekly report,
+    through exactly one alignment_report occurrence, and F6's own ticker check is gone;
+    fails_when=no report, a second report or occurrence that week, or a report built
+    before Monday 08:00 local; no_claim=the report's content (the tests below)."""
+    tenant_id, auth = owner
+    await a_track(client, auth, runtime)
+    assert not hasattr(alignment, "due")
+    out = ticker.TickerOut()
+    moments = [la(2026, 10, 26, 0) + timedelta(hours=h) for h in range(7 * 24)]
+    moments += [la(2026, 10, 26, 8), la(2026, 10, 26, 8, 0, 30)]
+    built_at = None
+    for moment in sorted(moments):
+        at(moment)
+        await ticker._tick_company(tenant_id, out, ticker._Failures(out))
+        if built_at is None and await reports_of(tenant_id):
+            built_at = moment
+    (report,) = await reports_of(tenant_id)
+    assert report.week_start == date(2026, 10, 19) and built_at == la(2026, 10, 26, 8)
+    ritual = await report_ritual(tenant_id)
+    async with tenant_session(tenant_id) as db:
+        mine = RitualOccurrence.ritual_id == ritual.id
+        occurrences = list(await db.scalars(select(RitualOccurrence).where(mine)))
+    assert [o.due_at for o in occurrences] == [la(2026, 10, 26, 8)]
+    assert occurrences[0].pre_read["blocks"][0]["rows"][0]["report_id"] == str(report.id)
+    assert out.companies.failed == 0
+
+
 # --------------------------------------------------------------------------- content
 
 
@@ -518,7 +620,8 @@ async def test_dates_verified_and_withdrawn_in_the_week(client, owner, runtime, 
         )  # fmt: skip
         await db.commit()
     # The week that just ended holds every event of this week: build it as the ticker would.
-    at(alignment.scheduled_moment(this_monday(now) + timedelta(days=7), alignment.ReportSettings()))
+    week = this_monday(now) + timedelta(days=7)
+    at(alignment.scheduled_moment(week, alignment.ReportSettings(timezone="America/Los_Angeles")))
     (report,) = await due(tenant_id)
     assert report.week_start == this_monday(now)
     (t,) = report.content["tracks"]
@@ -936,7 +1039,9 @@ async def test_owners_inbox_lists_the_unread_report(client, owner, runtime, at):
     assert row["id"] == str(report.id) and row["week_start"] == "2026-10-19"
     assert row["read"] is False and row["title"] == "Weekly alignment · week of Oct 19"
     assert row["summary"]["tracks"] == 1
-    assert inbox["total"] == before + 1
+    # The Weekly goals check-in's pre-read (H2) falls due in the same week.
+    rituals = sum(r["counts"] for r in inbox["rituals"])
+    assert inbox["total"] == before + 1 + rituals
     second_owner = await as_user(tenant_id, "owner")
     viewer = await as_user(tenant_id, "viewer")
     assert (await client.get("/v1/inbox", headers=viewer)).json()["reports"] == []
@@ -948,7 +1053,7 @@ async def test_owners_inbox_lists_the_unread_report(client, owner, runtime, at):
     resp = await client.post(f"/v1/alignment-reports/{report.id}/read", headers=auth)
     assert resp.status_code == 200 and resp.json()["read"] is True
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
-    assert inbox["reports"][0]["read"] is True and inbox["total"] == before
+    assert inbox["reports"][0]["read"] is True and inbox["total"] == before + rituals
     other = (await client.get("/v1/inbox", headers=second_owner)).json()
     assert other["reports"][0]["read"] is False
     assert (await client.get(f"/v1/alignment-reports/{report.id}", headers=second_owner)).json()[
@@ -1054,3 +1159,66 @@ async def test_a_track_that_cannot_be_read_does_not_stop_the_report(
     assert [t["prd"]["slug"] for t in report.content["tracks"]] == [PRD]
     assert report.content["unreadable_tracks"] == [{"track_id": str(bad_id), "title": "Billing"}]
     assert "could not read 1 track(s) this time: Billing" in report.markdown
+
+
+async def _report_occurrence(tenant_id) -> RitualOccurrence:
+    ritual = await report_ritual(tenant_id)
+    async with tenant_session(tenant_id) as db:
+        (occ,) = await db.scalars(
+            select(RitualOccurrence).where(RitualOccurrence.ritual_id == ritual.id)
+        )
+        return occ
+
+
+async def _summary_runs(tenant_id) -> list:
+    from oracle.runs.models import Run
+
+    async with tenant_session(tenant_id) as db:
+        return list(await db.scalars(select(Run.id).where(Run.flow == "ritual_summary")))
+
+
+async def test_failing_catch_ups_keep_the_ready_pre_read(client, owner, runtime, at, monkeypatch):
+    """protects=H2 review (minor): F6's catch-up rebuilds an occurrence that is already
+    ready; when the rebuild fails, however often, the occurrence stays ready with the
+    pre-read it has; fails_when=three failed catch-ups turn a ready occurrence into
+    failed (an owners' Inbox row for a pre-read people can read); no_claim=the first
+    build's retries (test_rituals_ticker)."""
+    from oracle.rituals import blocks
+
+    tenant_id, auth = owner
+    at(la(2026, 10, 26, 9))
+    assert await due(tenant_id) == []
+    built = await _report_occurrence(tenant_id)
+    assert built.status == "ready"
+    await a_track(client, auth, runtime)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("report unavailable")
+
+    monkeypatch.setitem(blocks.BUILDERS, "alignment_report", broken)
+    for _ in range(rituals.MAX_ATTEMPTS + 1):
+        await due(tenant_id)
+    occ = await _report_occurrence(tenant_id)
+    assert occ.status == "ready"
+    assert occ.pre_read == built.pre_read and occ.attempts == 0
+
+
+async def test_a_catch_up_rebuild_restarts_the_summary(client, owner, runtime, at):
+    """protects=H2 review (minor): with Every pre-read, the catch-up that rebuilds this
+    week's pre-read (now with the week's report) starts a new summary of it, and the
+    summary of the empty pre-read is gone; fails_when=the occurrence keeps the summary
+    of the pre-read it no longer has; no_claim=the run's content."""
+    tenant_id, auth = owner
+    resp = await client.put("/v1/rituals/summaries", json={"mode": "always"}, headers=auth)
+    assert resp.status_code == 200, resp.text
+    at(la(2026, 10, 26, 9))
+    assert await due(tenant_id) == []
+    first = await _report_occurrence(tenant_id)
+    assert first.status == "ready" and first.summary_run_id is not None
+    await a_track(client, auth, runtime)
+    (report,) = await due(tenant_id)
+    occ = await _report_occurrence(tenant_id)
+    assert occ.pre_read["blocks"][0]["rows"][0]["report_id"] == str(report.id)
+    assert occ.summary_run_id not in (None, first.summary_run_id)
+    assert occ.summary_state == "running"
+    assert len(await _summary_runs(tenant_id)) == 2

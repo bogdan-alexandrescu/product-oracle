@@ -1115,6 +1115,11 @@ async def approve_version(
         from oracle.launches import service as launches_service
 
         await launches_service.plan_roadmap(session, version, actor=principal, owner_id=who)
+        if not already:
+            # H3: the first approval records each item's prediction against its goal.
+            from oracle.quality import capture
+
+            await capture.predictions_for_roadmap(session, principal, version, owner_id=who)
     if document.kind in ("strategy", "vision", "roadmap") and (
         not already or previous_approver != who
     ):

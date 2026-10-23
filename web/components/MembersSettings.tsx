@@ -278,6 +278,17 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const [busy, setBusy] = useState<string | null>(null);
   const polls = useRef(0);
 
+  // B5: the goal owner picker's "Invite them first" opens here with ?invite=1: the invite
+  // form ready (its role starts at Commenter).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("invite") !== "1") return;
+    const at = requestAnimationFrame(() => {
+      emailRef.current?.scrollIntoView({ block: "center" });
+      emailRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(at);
+  }, []);
+
   const members = membersQ.data;
   const activeOwners = members?.filter((m) => m.role === "owner" && !removed(m)).length ?? 0;
   const replace = (updated: Member) => membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));

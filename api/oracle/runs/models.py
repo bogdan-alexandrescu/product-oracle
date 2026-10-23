@@ -38,6 +38,8 @@ FLOWS = (
     # F5-2 (migration 0022_code_maps): one repo's code capability map.
     "code_map",
     "update_draft",
+    # H2 Cadence engine (migration 0031_rituals): a ritual pre-read's written summary.
+    "ritual_summary",
 )
 RUN_STATUSES = (
     "draft",

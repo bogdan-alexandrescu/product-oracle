@@ -94,6 +94,7 @@ from oracle.review.models import (  # noqa: E402
     SectionReview,
     SectionReviewState,
 )
+from oracle.rituals.models import Ritual, RitualOccurrence, RitualRead  # noqa: E402
 from oracle.roadmap.models import (  # noqa: E402
     ProductTrack,
     RoadmapItem,
@@ -143,6 +144,9 @@ from oracle.v2.models import (  # noqa: E402
 __all__ = [
     "NextDraftChange",
     "AlignmentReport",
+    "Ritual",
+    "RitualOccurrence",
+    "RitualRead",
     "AlignmentReportRead",
     "ApiToken",
     "ArtifactDependency",

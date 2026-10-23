@@ -7,7 +7,7 @@ Synthetic placeholders only.
 
 import asyncio
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import select, text
@@ -25,13 +25,17 @@ from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import make_entity, make_evidence
 from tests.claude_account_helpers import add_account, window
 from tests.decision_helpers import (
-    TODAY,
+    COMPANY_ZONE,
+    clock,  # noqa: F401 (autouse: one clock for the test and the API)
     decide,
     decide_body,
+    freeze,
     in_days,
     proposal,
     propose,
     rows,
+    set_company_zone,
+    today,
     two_options,
 )
 from tests.test_llm_jobs import FakeClaude
@@ -177,11 +181,44 @@ async def test_state_reads_review_due_once_the_date_arrives(client, ctx):
     review_due in the list and the record; fails_when=it stays plain decided; no_claim=the
     date is today's, not a moved clock."""
     d = await propose(client, ctx)
-    out = await decide(client, ctx, d["number"], review_at=TODAY.isoformat())
+    out = await decide(client, ctx, d["number"], review_at=today().isoformat())
     assert out["state"] == "review_due" and out["status"] == "decided"
     listed = (await client.get("/v1/decisions?due=true", headers=ctx.as_("viewer"))).json()
     assert [x["number"] for x in listed] == [d["number"]]
     assert listed[0]["state"] == "review_due"
+
+
+# 23:30 and 00:30 in UTC and in America/Los_Angeles (PDT, UTC-7) around 2026-10-23.
+CLOCKS = (
+    "2026-10-22T23:30:00+00:00",
+    "2026-10-23T00:30:00+00:00",
+    "2026-10-22T23:30:00-07:00",
+    "2026-10-23T00:30:00-07:00",
+)
+
+
+@pytest.mark.parametrize("zone", ["UTC", "America/Los_Angeles"])
+@pytest.mark.parametrize("at", CLOCKS)
+async def test_today_is_the_company_day_at_any_hour(client, ctx, monkeypatch, zone, at):
+    """protects=the default review date (+90 days), the "not in the past" bound and
+    review_due read today in the Company time zone, at any hour; fails_when=the API takes
+    UTC's date for a Pacific company (from 5 PM PDT it refuses the company's today) or the
+    test and the API read different clocks (#336); no_claim=the clock is frozen in the
+    process, not the machine's. America/Los_Angeles is the default zone (never stored)."""
+    freeze(monkeypatch, datetime.fromisoformat(at))
+    if zone != COMPANY_ZONE:
+        await set_company_zone(ctx.tenant_id, zone)
+    d = await propose(client, ctx)
+    resp = await client.post(
+        f"/v1/decisions/{d['number']}/decide",
+        json=decide_body(review_at=in_days(-1, zone)),
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 422 and "cannot be in the past" in resp.text
+    out = await decide(client, ctx, d["number"], review_at=in_days(0, zone))
+    assert out["state"] == "review_due"
+    later = await decide(client, ctx, (await propose(client, ctx))["number"])
+    assert (later["review_at"], later["state"]) == (in_days(90, zone), "decided")
 
 
 # --- API: create, decide, reassign, withdraw, edit, review --------------------------------
@@ -483,13 +520,13 @@ async def test_inbox_rows_and_counts(client, ctx):
     viewer_before = await _inbox(client, ctx, "viewer")
     proposed = await propose(client, ctx)
     due = await propose(client, ctx, informed_ids=[str(ctx.users["viewer"].id)])
-    await decide(client, ctx, due["number"], review_at=TODAY.isoformat())
+    await decide(client, ctx, due["number"], review_at=today().isoformat())
 
     inbox = await _inbox(client, ctx, "approver")
     by = {(r["number"], r["reason"]): r for r in inbox["decisions"]}
     assert by[(proposed["number"], "needs_decision")]["counts"] is True
     assert by[(due["number"], "review_due")]["counts"] is True
-    assert by[(due["number"], "review_due")]["review_at"] == TODAY.isoformat()
+    assert by[(due["number"], "review_due")]["review_at"] == today().isoformat()
     assert inbox["needs_me"] == before["needs_me"] + 2
     assert inbox["total"] == before["total"] + 2
 
@@ -852,7 +889,7 @@ async def test_review_at_after_365_days_is_refused_on_reaffirm(client, ctx):
     assert resp.status_code == 422
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.scalar(select(Decision))
-        assert row.review_at == TODAY + timedelta(days=90)
+        assert row.review_at == today() + timedelta(days=90)
 
 
 async def test_people_lists_active_members_for_the_pickers(client, ctx):
@@ -902,13 +939,13 @@ async def test_list_filters_reach_decisions_older_than_the_newest_200(client, ct
         )
 
     async with tenant_session(ctx.tenant_id) as s:
-        due = TODAY - timedelta(days=3)
+        due = today() - timedelta(days=3)
         s.add(row(1, status="decided", approver_id=approver, review_at=due, **done))
         s.add(row(2, status="proposed", approver_id=approver))
         for number, chosen in ((3, "approve"), (4, "request_changes")):
             stop = {**done, "chosen_option": chosen}
             s.add(row(number, status="decided", origin="checkpoint", **stop))
-        s.add(row(5, status="decided", review_at=TODAY + timedelta(days=30), **done))
+        s.add(row(5, status="decided", review_at=today() + timedelta(days=30), **done))
         for n in range(6, 261):
             s.add(row(n))
         await s.commit()
@@ -922,7 +959,7 @@ async def test_list_filters_reach_decisions_older_than_the_newest_200(client, ct
                 driver="oracle",
                 origin="manual",
                 status="decided",
-                review_at=TODAY - timedelta(days=1),
+                review_at=today() - timedelta(days=1),
                 **done,
             )
         )
