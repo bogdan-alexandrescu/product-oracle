@@ -491,6 +491,11 @@ export interface paths {
          *     it) or private (only the people picked). ``title`` defaults to the subject's label;
          *     ``participants`` is the starter's pick for a private discussion and mentions on an
          *     open one; ``message`` is optional.
+         *
+         *     Oracle replies to the first message as to any other (``POST …/messages``): while only
+         *     the starter is in it, and after that when addressed. ``reply`` is its ``pending``
+         *     reply; ``wait`` runs it here, as there. When Oracle has answered a lot in a short time
+         *     the discussion still starts, without a reply.
          */
         post: operations["create_discussion"];
         delete?: never;
@@ -13662,6 +13667,86 @@ export interface components {
              * Format: uuid
              */
             message_id: string;
+        };
+        /**
+         * DiscussionStarted
+         * @description A new discussion, and Oracle's ``pending`` reply to its first message when the rule
+         *     calls for one (``complete`` or ``failed`` with ``wait``).
+         */
+        DiscussionStarted: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "document" | "section" | "checkpoint" | "checkpoint_item" | "roadmap_item" | "entity" | "conflict" | "intake" | "gap" | "track" | "priorities" | "screen";
+            /** Subject Key */
+            subject_key: string;
+            /** Subject Label */
+            subject_label: string;
+            /** Subject Url */
+            subject_url: string;
+            /** Title */
+            title: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Author Only */
+            author_only: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "discuss" | "panel" | "slack";
+            started_by: components["schemas"]["DiscussionStarter"];
+            /** Started On Version */
+            started_on_version?: number | null;
+            /** Message Count */
+            message_count: number;
+            /** Last Message At */
+            last_message_at: string | null;
+            /** Summary */
+            summary: string | null;
+            /**
+             * Summary Status
+             * @enum {string}
+             */
+            summary_status: "none" | "draft" | "confirmed";
+            /** Summary Shared */
+            summary_shared: boolean;
+            changes: components["schemas"]["DiscussionChangeCounts"];
+            me: components["schemas"]["DiscussionMe"];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Subject */
+            subject: {
+                [key: string]: unknown;
+            };
+            /** Participants */
+            participants: components["schemas"]["DiscussionParticipantOut"][];
+            exposure?: components["schemas"]["DiscussionExposure"] | null;
+            reply?: components["schemas"]["DiscussionMessageOut"] | null;
         };
         /** DiscussionStarter */
         DiscussionStarter: {
@@ -29037,7 +29122,9 @@ export interface operations {
     };
     create_discussion: {
         parameters: {
-            query?: never;
+            query?: {
+                wait?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29054,7 +29141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DiscussionOut"];
+                    "application/json": components["schemas"]["DiscussionStarted"];
                 };
             };
             /** @description The subject is not in this company */

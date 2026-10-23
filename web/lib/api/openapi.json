@@ -1633,7 +1633,7 @@
           "discussions"
         ],
         "summary": "Create Discussion",
-        "description": "Start a discussion about one subject: open (everyone who can see the subject reads\nit) or private (only the people picked). ``title`` defaults to the subject's label;\n``participants`` is the starter's pick for a private discussion and mentions on an\nopen one; ``message`` is optional.",
+        "description": "Start a discussion about one subject: open (everyone who can see the subject reads\nit) or private (only the people picked). ``title`` defaults to the subject's label;\n``participants`` is the starter's pick for a private discussion and mentions on an\nopen one; ``message`` is optional.\n\nOracle replies to the first message as to any other (``POST \u2026/messages``): while only\nthe starter is in it, and after that when addressed. ``reply`` is its ``pending``\nreply; ``wait`` runs it here, as there. When Oracle has answered a lot in a short time\nthe discussion still starts, without a reply.",
         "operationId": "create_discussion",
         "security": [
           {
@@ -1641,6 +1641,18 @@
           },
           {
             "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Wait"
+            }
           }
         ],
         "requestBody": {
@@ -1659,7 +1671,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DiscussionOut"
+                  "$ref": "#/components/schemas/DiscussionStarted"
                 }
               }
             }
@@ -44228,6 +44240,212 @@
           "message_id"
         ],
         "title": "DiscussionReadIn"
+      },
+      "DiscussionStarted": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "subject_kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "section",
+              "checkpoint",
+              "checkpoint_item",
+              "roadmap_item",
+              "entity",
+              "conflict",
+              "intake",
+              "gap",
+              "track",
+              "priorities",
+              "screen"
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_key": {
+            "type": "string",
+            "title": "Subject Key"
+          },
+          "subject_label": {
+            "type": "string",
+            "title": "Subject Label"
+          },
+          "subject_url": {
+            "type": "string",
+            "title": "Subject Url"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility"
+          },
+          "author_only": {
+            "type": "boolean",
+            "title": "Author Only"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "discuss",
+              "panel",
+              "slack"
+            ],
+            "title": "Origin"
+          },
+          "started_by": {
+            "$ref": "#/components/schemas/DiscussionStarter"
+          },
+          "started_on_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started On Version"
+          },
+          "message_count": {
+            "type": "integer",
+            "title": "Message Count"
+          },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "draft",
+              "confirmed"
+            ],
+            "title": "Summary Status"
+          },
+          "summary_shared": {
+            "type": "boolean",
+            "title": "Summary Shared"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/DiscussionChangeCounts"
+          },
+          "me": {
+            "$ref": "#/components/schemas/DiscussionMe"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "subject": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Subject"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/DiscussionParticipantOut"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "exposure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionExposure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionMessageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subject_kind",
+          "subject_key",
+          "subject_label",
+          "subject_url",
+          "title",
+          "visibility",
+          "author_only",
+          "status",
+          "origin",
+          "started_by",
+          "message_count",
+          "last_message_at",
+          "summary",
+          "summary_status",
+          "summary_shared",
+          "changes",
+          "me",
+          "lock_version",
+          "created_at",
+          "updated_at",
+          "subject",
+          "participants"
+        ],
+        "title": "DiscussionStarted",
+        "description": "A new discussion, and Oracle's ``pending`` reply to its first message when the rule\ncalls for one (``complete`` or ``failed`` with ``wait``)."
       },
       "DiscussionStarter": {
         "properties": {

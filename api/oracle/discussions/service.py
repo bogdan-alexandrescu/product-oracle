@@ -968,7 +968,10 @@ def _via(principal: "Principal") -> str:
     return "mcp" if principal.grant_id is not None else "web"
 
 
-async def start(db: AsyncSession, principal: "Principal", body: DiscussionCreate) -> Discussion:
+async def start(
+    db: AsyncSession, principal: "Principal", body: DiscussionCreate
+) -> tuple[Discussion, DiscussionMessage | None]:
+    """The discussion, and its first message when ``body`` has one."""
     await recheck_caller(db, principal, "commenter")
     me = _person(principal)
     subject = parse_subject(body.subject_kind, body.subject)
@@ -1010,11 +1013,12 @@ async def start(db: AsyncSession, principal: "Principal", body: DiscussionCreate
     )  # fmt: skip
     for u in picked:
         await _record(db, principal, "participant_add", d, user_id=str(u), via=via)
+    first = None
     if body.message is not None:
         seat = await _seat(db, principal, d, parts)
-        await _post(db, principal, d, parts, seat, body.message, _via(principal))
+        first = await _post(db, principal, d, parts, seat, body.message, _via(principal))
     await db.flush()
-    return d
+    return d, first
 
 
 async def post_message(

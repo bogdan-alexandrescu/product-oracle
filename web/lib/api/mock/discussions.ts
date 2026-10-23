@@ -467,11 +467,13 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       db.discussions.push(d);
       add(d, me.id, "started");
       for (const id of picked) add(d, id, visibility === "private" ? "added" : "mention");
+      let reply: Schemas["DiscussionMessageOut"] | null = null;
       if (input.message) {
-        const res = post(d, input.message);
+        const res = await postWithReply(d, input.message);
         if (!res.ok) return res;
+        reply = ((await res.json()) as Schemas["DiscussionMessagePosted"]).reply ?? null;
       }
-      return json(201, out(d));
+      return json(201, { ...out(d), reply });
     }
     return null;
   }
