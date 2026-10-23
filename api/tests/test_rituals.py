@@ -139,6 +139,67 @@ async def test_the_pre_read_has_the_kinds_blocks_and_markdown(client, ctx, at):
     assert "# Monthly roadmap refresh" in md.text and "## Date slips" in md.text
 
 
+async def test_the_feature_gated_kinds_have_their_blocks(client, ctx, at):
+    """protects=criterion 2: the kinds gated on H1, H4, H6 and H8 fire with their own
+    blocks on today's data: decisions due for review and made in the window, the open
+    strategy findings and the approved strategy's age, the changelog drafts, the latest
+    update draft; fails_when=a kind is not listed, or a block is missing or empty with
+    data present; no_claim=starting the update draft run (not built yet)."""
+    from datetime import UTC, date, datetime
+
+    from oracle.decisions.models import Decision
+    from oracle.launches.models import ChangelogEntry
+    from oracle.strategy.models import StrategyFinding
+
+    owner = ctx.users["owner"].id
+    async with tenant_session(ctx.tenant_id) as db:
+        db.add(Decision(
+            number=1, title="Price the starter plan monthly", status="decided",
+            approver_id=owner, driver="Ada Example", origin="manual", chosen_option="a",
+            rationale="Simpler", decided_at=datetime(2026, 10, 20, tzinfo=UTC),
+            review_at=date(2026, 10, 21),
+        ))
+        db.add(StrategyFinding(
+            kind="goal_without_strategy", severity="warning", subject_kind="entity",
+            subject_ref="goal:activation",
+        ))
+        db.add(ChangelogEntry(
+            category="added", audience="public", title="Bulk export", released_on=date(2026, 10, 20),
+            created_actor="oracle",
+        ))
+        await db.commit()  # fmt: skip
+    await tick(ctx.tenant_id)
+    listed = {r["kind"] for r in (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()}
+    assert {"decision_review", "strategy_review", "changelog", "investor_update",
+            "board_meeting"} <= listed  # fmt: skip
+
+    def rows(occ: dict) -> dict[str, list]:
+        return {b["key"]: b["rows"] for b in occ["pre_read"]["blocks"]}
+
+    occ = await ready_occurrence(client, ctx, at, "decision_review")
+    got = rows(occ)
+    assert list(got) == ["decisions_due", "decisions_made"]
+    assert [r["title"] for r in got["decisions_due"]] == ["Price the starter plan monthly"]
+    assert [r["title"] for r in got["decisions_made"]] == ["Price the starter plan monthly"]
+    assert got["decisions_due"][0]["href"] == "/company/decisions/1"
+
+    occ = await ready_occurrence(client, ctx, at, "changelog")
+    assert [r["title"] for r in rows(occ)["changelog_drafts"]] == ["Bulk export"]
+
+    occ = await ready_occurrence(client, ctx, at, "strategy_review")
+    got = rows(occ)
+    assert list(got) == ["strategy_drift", "strategy_age"]
+    assert [r["subject_ref"] for r in got["strategy_drift"]] == ["goal:activation"]
+    assert got["strategy_age"][0]["text"] == "No approved strategy yet"
+
+    # Investor update is off by default; Prepare now builds its pre-read all the same.
+    ritual = (await rituals_of(ctx.tenant_id))["investor_update"]
+    resp = await client.post(f"/v1/rituals/{ritual.id}/prepare", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    assert list(rows(resp.json())) == ["update_draft"]
+    assert rows(resp.json())["update_draft"][0]["text"] == "No update draft yet"
+
+
 async def test_the_goals_block_shows_homes_distance(client, ctx, at):
     """protects=criterion 5: goals_checkin's goals block reports "7 pts to go" for a
     confirmed goal at 38% against 45%; goals without a value say so; fails_when=another
