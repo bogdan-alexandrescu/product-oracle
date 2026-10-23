@@ -21,6 +21,14 @@ from tests.test_prd_scope import CLEAN, DOC, propose_feature
 from tests.test_priority_run_order import BLOCKED, BLOCKING, seed_baseline, snapshots
 from tests.test_runs import decide, get, pending, started, tick
 
+# The Engineering check (on by default) briefs CLEAN's features; decide stages verdicts.
+BRIEFS = "version: 1\ncode_map: {used: false, repos: []}\nfeatures:\n" + "".join(
+    f"  - feature: {key}\n    title: {key}\n    approach: Reuse the address book\n"
+    "    touches: []\n    reuse: []\n    risks: []\n    questions: []\n"
+    "    size: m\n    depends_on: []\n    assumptions: [An address book exists]\n"
+    for key in ("saved-addresses", "address-lookup", "bulk-edit")
+)
+
 
 async def test_console_approval_with_blocking_is_held(client, owner, monkeypatch):  # noqa: F811
     tenant_id, auth = owner
@@ -29,6 +37,7 @@ async def test_console_approval_with_blocking_is_held(client, owner, monkeypatch
     set_runtime(swarm.runtime())
     try:
         swarm.step_files["feature_set-2-architect"] = {"feature_set.yaml": CLEAN}
+        swarm.step_files["eng_review-1-architect"] = {"tech_briefs.yaml": BRIEFS}
         swarm.step_files["priority-1-prioritizer"] = {"priority.yaml": BLOCKING}
         await _member(tenant_id, "lead@example.com")
         run = await started(client, auth, document=DOC)

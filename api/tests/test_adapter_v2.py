@@ -284,8 +284,8 @@ async def test_one_workflow_credential_map_and_step_inputs(client, owner):
         assert all(isinstance(v, str) for v in s["metadata"].values())
     agents = [s for s in body["steps"] if s["runner_profile"] == "claude-code"]
     waits = [s for s in body["steps"] if s["runner_profile"] == "await-input"]
-    # 7 agent steps and 2 revisions; 4 checkpoints, the last in 2 rounds.
-    assert len(agents) == 7 + 2 and len(waits) == 5
+    # 8 agent steps and 2 revisions; 5 checkpoints, the last in 2 rounds.
+    assert len(agents) == 8 + 2 and len(waits) == 6
     for s in agents:
         assert set(s["input"]) == {"prompt", "mcp_servers"}
         assert s["input"]["mcp_servers"] == ["oracle"]
@@ -486,7 +486,7 @@ async def test_multi_segment_run_is_one_workflow(client, owner):
     swarm = on()
     use(swarm)
     run = await started(client, auth)
-    expected = ["baseline_confirm", "feature_set", "priority_order", "prd_review"]
+    expected = ["baseline_confirm", "feature_set", "eng_review", "priority_order", "prd_review"]
     for i, kind in enumerate(expected):
         await tick(client, auth)
         run = await get(client, auth, run["id"])
@@ -499,12 +499,13 @@ async def test_multi_segment_run_is_one_workflow(client, owner):
     assert [a["step_id"] for a in swarm.answers] == [
         "baseline-review1",
         "feature_set-review1",
+        "eng_review-review1",
         "priority-review1",
         "prd_draft-review1",
     ]
     # The last checkpoint approved in round 1: the pass-through rest was cancelled.
     assert swarm.workflows["wf_1"].state == "CANCELLED"
-    assert run["segments"][3]["draft_import"]["version"] == 1
+    assert run["segments"][4]["draft_import"]["version"] == 1
     assert run["spent_usd"] > 0
     # Each segment's files are in Oracle for get_run_output.
     art = await client.get(f"/v1/runs/{run['id']}/segments/2/artifacts/design.md", headers=auth)
@@ -927,7 +928,7 @@ async def test_a_lost_submit_is_found_by_its_key(client, owner):
     # The token the lost submission carried is the run's live one.
     assert await verify_run_token(token_of(swarm)) is not None
     # Played to the end: one workflow ran, and the run was charged for it once.
-    for _ in range(4):
+    for _ in range(5):
         await tick(client, auth)
         run = await get(client, auth, run["id"])
         if run["status"] == "awaiting_checkpoint":
@@ -1358,7 +1359,12 @@ async def test_checkpoint_off_segments_stop_spending_when_paused(client, owner):
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
-    off = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
+    off = {
+        "baseline_confirm": False,
+        "feature_set": False,
+        "eng_review": False,
+        "priority_order": False,
+    }
     run = await started(client, auth, checkpoints=off)
     [body] = swarm.submissions()
     assert [s["step_id"] for s in body["steps"] if s["runner_profile"] == "await-input"] == [
@@ -1666,7 +1672,12 @@ async def test_a_console_merge_with_later_checkpoints_off_completes_from_the_har
     swarm = on()
     use(swarm)
     await as_user(tenant_id, "approver", "lead@example.com")  # an Oracle approver (W5)
-    off = {"feature_set": False, "priority_order": False, "prd_review": False}
+    off = {
+        "feature_set": False,
+        "eng_review": False,
+        "priority_order": False,
+        "prd_review": False,
+    }
     run = await started(client, auth, checkpoints=off)
     await tick(client, auth)
     run = await get(client, auth, run["id"])
@@ -1678,8 +1689,11 @@ async def test_a_console_merge_with_later_checkpoints_off_completes_from_the_har
     run = await get(client, auth, run["id"])
     assert run["status"] == "succeeded", run
     assert len(swarm.submissions()) == 1 and swarm.answers == []
-    assert all(s["status"] == "succeeded" and s["workflow_id"] == "wf_1" for s in run["segments"])
-    assert run["segments"][3]["draft_import"]["version"] == 1
+    # The Engineering check, off, ran no step: skipped, every other segment from wf_1.
+    ran = [s for s in run["segments"] if s["name"] != "eng_review"]
+    assert all(s["status"] == "succeeded" and s["workflow_id"] == "wf_1" for s in ran)
+    assert run["segments"][2]["status"] == "skipped"
+    assert run["segments"][4]["draft_import"]["version"] == 1
     decided = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
     assert decided["status"] == "approved"
     assert decided["payload"]["wait"]["recorded"]["answered_by"] == "lead@example.com"
@@ -2221,7 +2235,12 @@ async def test_a_failed_registration_patch_sends_no_run_token(client, owner, mon
 async def test_a_refused_wait_read_on_an_answered_step_is_not_unanswered(client, owner):
     tenant_id, auth = owner
     swarm = on()
-    off = {"feature_set": False, "priority_order": False, "prd_review": False}
+    off = {
+        "feature_set": False,
+        "eng_review": False,
+        "priority_order": False,
+        "prd_review": False,
+    }
     run = await _at_baseline(client, auth, swarm, checkpoints=off)
     cp = pending(run)
     swarm.console_answer("wf_1", "baseline-review1", "MERGE", by="stranger@example.com")

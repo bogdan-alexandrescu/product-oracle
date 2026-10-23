@@ -9,7 +9,7 @@ import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -37,6 +37,7 @@ import {
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
   routeRuns,
+  seedEngCheckRun,
   seedEngReviewRun,
   seedFeatureSetRun,
   seedPriorityRuns,
@@ -804,6 +805,24 @@ function seedEngReview(): Db {
 }
 
 /**
+ * F4 "eng-check" scenario: the default company with commenter@example.com named engineering
+ * lead, and a Baseline to PRD run waiting at its Engineering check (./runs.ts).
+ */
+function seedEngCheck(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
+function seedEngCheckNoLead(): Db {
+  const db = seed();
+  seeded("eng-check-no-lead", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
  * D3 "roadmap-items-console-held" scenario: the default company plus the roadmap review run
  * (usage-alerts-roadmap at its Roadmap items checkpoint) approved in SwarmCloud's console
  * while blocking reasons are open, so the approval is held (./runs.ts ROADMAP_REVIEW_HELD_RUN).
@@ -1439,6 +1458,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       if (flow !== "prd_to_spec" && leads.length) return role === "owner" || (leads.includes(member.id) && atLeast(role, "commenter"));
       return atLeast(role, c.approver_role);
     },
+    leadStop: (c, flow) => ENGINEERING_KINDS.includes(c.kind) && flow !== "prd_to_spec" && engineeringLeads(db).length > 0,
+    setEffort: (key, size, runId) => setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
@@ -1587,6 +1608,10 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
+          : scenario === "eng-check"
+            ? seedEngCheck
+          : scenario === "eng-check-no-lead"
+            ? seedEngCheckNoLead
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
           : scenario === "run-review"
@@ -3054,7 +3079,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The API's role checks: viewers read, commenters comment, approvers decide. A checkpoint's
   // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
   // the decision log (./decisions.ts): commenters propose, edit and withdraw.
-  const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note");
+  // A decision checks who decides itself (A3: an engineering lead below the approver role).
+  const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   const need: Role | null =
     m === "GET" || draftWrite || p[1] === "decisions"
       ? null

@@ -6,7 +6,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button, InfoTip, Notice, SegmentedControl, Sheet } from "@/components/ds";
 import { GoalPicker, TemplateThemePicker, useConfirmedGoals, useDraftChoice } from "@/components/NewDraft";
 import { ErrorNote, Loading } from "@/components/ui";
-import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
+import { STOP_HELP, stopLabel } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -108,7 +108,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
   const reusing = reusable && (reuse ?? true);
 
   const checkpoints = useMemo(
-    () => (flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [{ kind: s.checkpoint, segment: s.name }] : [])),
+    () => (flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [{ kind: s.checkpoint, segment: s.name, label: stopLabel(s) }] : [])),
     [flow],
   );
   // With "Use the current baseline" its segment does not run, so its stop is not listed.
@@ -295,7 +295,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
           {!flow && flows.loading && <Loading />}
           <ul className="flex flex-col gap-1.5">
             {listed.map((c) => {
-              const label = CHECKPOINT_LABEL[c.kind as keyof typeof CHECKPOINT_LABEL] ?? c.kind;
+              const help = STOP_HELP[c.segment];
               return (
                 <li key={c.kind}>
                   <label className="inline-flex cursor-pointer items-center gap-2 text-text">
@@ -305,10 +305,16 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
                       className="size-4 accent-[var(--accent)]"
                       checked={stops[c.kind] ?? true}
                       onChange={(e) => setStops((all) => ({ ...all, [c.kind]: e.target.checked }))}
-                      aria-label={label}
+                      aria-label={c.label}
+                      aria-describedby={help ? `${id}-help-${c.segment}` : undefined}
                     />
-                    {label}
+                    {c.label}
                   </label>
+                  {help && (
+                    <p id={`${id}-help-${c.segment}`} className="ml-6 text-sm text-text2" data-testid="stop-help">
+                      {help}
+                    </p>
+                  )}
                 </li>
               );
             })}

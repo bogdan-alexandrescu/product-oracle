@@ -78,8 +78,24 @@ def pending(run):
     return next(c for c in run["checkpoints"] if c["status"] == "pending")
 
 
+async def stage_verdicts(client, headers, run, verdict="feasible"):
+    """F4: at the Engineering check (on by default), stage a verdict on each feature of its
+    briefs, what Approve there needs (the gate's no_verdict)."""
+    cp = pending(run)
+    for f in cp["payload"]["briefs_check"]["features"]:
+        resp = await client.post(
+            f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/actions",
+            json={"item_key": f["key"], "kind": "edit", "field": "verdict",
+                  "value": {"verdict": verdict, "note": None}},
+            headers=headers,
+        )  # fmt: skip
+        assert resp.status_code in (200, 201), resp.text
+
+
 async def decide(client, headers, run, decision="approved", note=None):
     cp = pending(run)
+    if cp["kind"] == "eng_review" and decision == "approved":
+        await stage_verdicts(client, headers, run)
     resp = await client.post(
         f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
         json={"decision": decision, "note": note},
@@ -101,6 +117,7 @@ async def test_flow_catalog(client, owner, runtime):
     assert [s["checkpoint"] for s in b2p["segments"]] == [
         "baseline_confirm",
         "feature_set",
+        "eng_review",
         "priority_order",
         "prd_review",
     ]
@@ -148,12 +165,12 @@ async def test_full_flow_through_every_checkpoint(client, owner, runtime):
     tenant_id, auth = owner
     run = await started(client, auth)
     assert run["status"] == "running"
-    assert run["estimate_usd"] == 26.5
+    assert run["estimate_usd"] == 31.5
     assert run["snapshot_id"] and run["snapshot_as_of"]
-    assert run["overrun_ceiling_usd"] == pytest.approx(39.75)
-    assert [s["status"] for s in run["segments"]] == ["running", "pending", "pending", "pending"]
+    assert run["overrun_ceiling_usd"] == pytest.approx(47.25)
+    assert [s["status"] for s in run["segments"]] == ["running"] + ["pending"] * 4
 
-    expected = ["baseline_confirm", "feature_set", "priority_order", "prd_review"]
+    expected = ["baseline_confirm", "feature_set", "eng_review", "priority_order", "prd_review"]
     for i, kind in enumerate(expected):
         result = await tick(client, auth)
         assert result["segments_finished"] == 1
@@ -168,28 +185,28 @@ async def test_full_flow_through_every_checkpoint(client, owner, runtime):
 
     assert run["status"] == "succeeded"
     assert run["finished_at"]
-    assert [c["status"] for c in run["checkpoints"]] == ["approved"] * 4
+    assert [c["status"] for c in run["checkpoints"]] == ["approved"] * 5
     # Spend is the fake's 90% of each segment's estimate.
-    assert run["spent_usd"] == pytest.approx(26.5 * 0.9)
-    assert len(runtime.submitted) == 4
+    assert run["spent_usd"] == pytest.approx(31.5 * 0.9)
+    assert len(runtime.submitted) == 5
 
     # prd.md became version 1 of the new document.
     assert run["document_slug"] == "example-prd"
-    prd = run["segments"][3]
+    prd = run["segments"][4]
     assert prd["draft_import"]["version"] == 1 and prd["draft_import"]["created"]
     async with tenant_session(tenant_id) as s:
         doc = await s.scalar(select(Document).where(Document.slug == "example-prd"))
         assert doc is not None and str(doc.id) == run["document_id"]
         assert await s.scalar(select(DocumentVersion.number)) == 1
         tokens = list(await s.scalars(select(RunToken)))
-        assert len(tokens) == 4 and all(t.revoked_at for t in tokens)
+        assert len(tokens) == 5 and all(t.revoked_at for t in tokens)
         snap = await s.get(Snapshot, uuid.UUID(run["snapshot_id"]))
         assert snap.created_by == uuid.UUID(run["created_by"])
         actions = set(await s.scalars(select(AuditEvent.action)))
     assert {"run.created", "run.started", "checkpoint.approved"} <= actions
 
     # Earlier outputs and approval notes reach later segments' prompts.
-    last_prompt = runtime.submitted[3].steps[-1].prompt
+    last_prompt = runtime.submitted[4].steps[-1].prompt
     assert "baseline.yaml" in last_prompt and "ok baseline_confirm" in last_prompt
 
     art = await client.get(f"/v1/runs/{run['id']}/segments/1/artifacts/baseline.yaml", headers=auth)
@@ -206,7 +223,7 @@ async def test_run_token_scopes_per_segment(client, owner, runtime):
     _, auth = owner
     run = await started(client, auth)
     raws = []
-    for _ in range(4):
+    for _ in range(5):
         await tick(client, auth)
         run = await decide(client, auth, await get(client, auth, run["id"]))
         raws.append(runtime.submitted[len(raws)].mcp.token)
@@ -238,15 +255,19 @@ async def test_skipped_checkpoints(client, owner, runtime):
     assert run["knobs"]["checkpoints"] == {
         "baseline_confirm": True,
         "feature_set": False,
+        "eng_review": True,
         "priority_order": False,
         "prd_review": True,
     }
     await tick(client, auth)
     run = await decide(client, auth, await get(client, auth, run["id"]))
-    await tick(client, auth)  # feature set done, its checkpoint skipped, priority submitted
+    await tick(client, auth)  # feature set done, its checkpoint skipped, the check submitted
     run = await get(client, auth, run["id"])
     assert run["status"] == "running"
     assert run["segments"][2]["status"] == "running"
+    await tick(client, auth)  # the Engineering check done, waiting on its stop (on)
+    run = await decide(client, auth, await get(client, auth, run["id"]))
+    assert run["segments"][3]["status"] == "running"
     await tick(client, auth)  # priority done, skipped, PRD draft submitted
     await tick(client, auth)  # PRD draft done
     run = await get(client, auth, run["id"])
@@ -254,6 +275,7 @@ async def test_skipped_checkpoints(client, owner, runtime):
     assert [(c["kind"], c["status"]) for c in run["checkpoints"]] == [
         ("baseline_confirm", "approved"),
         ("feature_set", "skipped"),
+        ("eng_review", "approved"),
         ("priority_order", "skipped"),
         ("prd_review", "pending"),
     ]
@@ -280,9 +302,9 @@ async def test_estimate_over_50_waits_for_an_owner(client, owner, runtime):
     approver = await as_user(tenant_id, "approver")
     run = await create(client, approver, depth="deep")
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=approver)).json()
-    assert est["total_usd"] == 53.0
+    assert est["total_usd"] == 63.0
     assert est["needs_approval"] is True
-    assert [s["estimate_usd"] for s in est["segments"]] == [14.0, 16.0, 5.0, 18.0]
+    assert [s["estimate_usd"] for s in est["segments"]] == [14.0, 16.0, 10.0, 5.0, 18.0]
 
     resp = await client.post(f"/v1/runs/{run['id']}/start", headers=approver)
     assert resp.json()["status"] == "awaiting_approval"
@@ -311,8 +333,9 @@ async def test_estimate_at_50_starts_without_approval(client, owner, runtime):
     roles = {
         "baseline": ["researcher"],  # 4
         "feature_set": ["researcher"],  # 4
-        "priority": ["prioritizer", "analyst"],  # 5.5
-        "prd_draft": ["writer", "critic", "prioritizer"],  # 11.5
+        # eng_review: the architect, 5 (the Engineering check is on by default)
+        "priority": ["analyst"],  # 3
+        "prd_draft": ["writer", "critic"],  # 9
     }
     run = await started(client, auth, depth="deep", roles=roles)
     assert run["estimate_usd"] == 50.0
@@ -341,7 +364,7 @@ async def test_start_needs_an_estimate(client, owner, runtime):
 async def test_overrun_pauses_and_an_owner_resumes(client, owner, runtime):
     tenant_id, auth = owner
     approver = await as_user(tenant_id, "approver")
-    # Estimate 26.50, ceiling 39.75: halfway the baseline has spent 25, then 50.
+    # Estimate 31.50, ceiling 47.25: halfway the baseline has spent 25, then 50.
     runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
     run = await started(client, auth)
 
@@ -369,7 +392,7 @@ async def test_overrun_pauses_and_an_owner_resumes(client, owner, runtime):
     assert resp.status_code == 200, resp.text
     run = resp.json()
     # Resuming accepts the spend so far plus half the estimate.
-    assert run["overrun_ceiling_usd"] == pytest.approx(50 + 26.5 * 0.5)
+    assert run["overrun_ceiling_usd"] == pytest.approx(50 + 31.5 * 0.5)
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "baseline_confirm"
 
 
@@ -406,7 +429,7 @@ async def test_cancel_a_running_run(client, owner, runtime):
     assert resp.status_code == 200
     run = resp.json()
     assert run["status"] == "cancelled" and run["finished_at"]
-    assert [s["status"] for s in run["segments"]] == ["cancelled"] * 4
+    assert [s["status"] for s in run["segments"]] == ["cancelled"] * 5
     assert runtime.cancelled == [workflow_id]
     assert await verify_run_token(runtime.submitted[0].mcp.token) is None
     assert (await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)).status_code == 409
@@ -445,9 +468,9 @@ async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
 
     run = await get(client, auth, run["id"])
     first = run["segments"][0]
-    assert run["estimate_usd"] == 26.5
-    assert sum(s["estimate_usd"] for s in run["segments"]) == pytest.approx(26.5)
-    assert run["overrun_ceiling_usd"] == pytest.approx(39.75)
+    assert run["estimate_usd"] == 31.5
+    assert sum(s["estimate_usd"] for s in run["segments"]) == pytest.approx(31.5)
+    assert run["overrun_ceiling_usd"] == pytest.approx(47.25)
     assert all("cost_usd" in s for s in run["segments"])
     assert first["cost_usd"] == pytest.approx(first["estimate_usd"] * 0.9)
     assert first["attempts"][0]["cost_usd"] == pytest.approx(first["cost_usd"])
@@ -456,7 +479,7 @@ async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
     listed = await client.get("/v1/runs", headers=auth)
     assert listed.status_code == 200, listed.text
     row = next(r for r in listed.json() if r["id"] == run["id"])
-    assert row["estimate_usd"] == 26.5
+    assert row["estimate_usd"] == 31.5
     assert row["spent_usd"] == pytest.approx(run["spent_usd"])
 
 
@@ -600,7 +623,11 @@ async def test_knob_and_document_validation(client, owner, runtime):
         {"flow": "baseline_to_prd", "document": "x", "knobs": {"roles": {"baseline": ["ghost"]}}},
         {"flow": "baseline_to_prd", "document": "x", "knobs": {"roles": {"nope": ["writer"]}}},
         {"flow": "baseline_to_prd", "document": "x", "knobs": {"roles": {"baseline": []}}},
-        {"flow": "baseline_to_prd", "document": "x", "knobs": {"checkpoints": {"eng_review": 1}}},
+        {
+            "flow": "baseline_to_prd",
+            "document": "x",
+            "knobs": {"checkpoints": {"roadmap_items": 1}},
+        },
         {"flow": "baseline_to_prd", "document": "x", "knobs": {"depth": "extreme"}},
         {"flow": "baseline_to_prd"},
         {"flow": "feedback_loop", "document": "missing-doc"},
@@ -627,7 +654,7 @@ async def test_patch_a_draft_clears_its_estimate(client, owner, runtime):
     assert body["knobs"]["depth"] == "quick"
     assert body["document_slug"] == "renamed-prd"
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=auth)).json()
-    assert est["total_usd"] == 13.25
+    assert est["total_usd"] == 15.75
     await client.post(f"/v1/runs/{run['id']}/start", headers=auth)
     resp = await client.patch(f"/v1/runs/{run['id']}", json={}, headers=auth)
     assert resp.status_code == 409
@@ -742,16 +769,19 @@ async def test_a_rejected_draft_waits_at_review_and_reruns(client, owner, runtim
     runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": BAD_PRD})]
     off = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
     run = await started(client, auth, checkpoints=off)
-    for _ in range(4):
+    for _ in range(3):
+        await tick(client, auth)
+    run = await decide(client, auth, await get(client, auth, run["id"]))  # Engineering check
+    for _ in range(2):
         await tick(client, auth)
     run = await get(client, auth, run["id"])
-    assert run["status"] == "awaiting_checkpoint"
-    imp = run["segments"][3]["draft_import"]
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
+    imp = run["segments"][4]["draft_import"]
     assert "rejected" in imp["error"] and imp["version"] is None
     run = await decide(client, auth, run, "changes_requested", "Add the front matter")
     await tick(client, auth)
     run = await get(client, auth, run["id"])
-    assert run["segments"][3]["draft_import"]["version"] == 1
+    assert run["segments"][4]["draft_import"]["version"] == 1
 
 
 async def test_a_rejected_draft_with_review_off_fails_the_run(client, owner, runtime):
@@ -807,11 +837,12 @@ async def test_rows_written(client, owner, runtime):
     run = await started(client, auth)
     async with tenant_session(tenant_id) as s:
         row = await s.get(Run, uuid.UUID(run["id"]))
-        assert row.knobs["spend_ceiling_usd"] == "39.7500"
+        assert row.knobs["spend_ceiling_usd"] == "47.2500"
         segs = list(await s.scalars(select(RunSegment).order_by(RunSegment.seq)))
         assert [s_.estimate_usd for s_ in segs] == [
             Decimal("7.00"),
             Decimal("8.00"),
+            Decimal("5.00"),
             Decimal("2.50"),
             Decimal("9.00"),
         ]
@@ -998,7 +1029,7 @@ async def test_the_runs_list_carries_each_runs_progress(client, owner, runtime):
     for run_id in (first["id"], second["id"]):
         run = await get(client, auth, run_id)
         progress = listed[run_id]["progress"]
-        assert progress == {"done": 1, "total": 4, "now": run["segments"][1]["title"]}
+        assert progress == {"done": 1, "total": 5, "now": run["segments"][1]["title"]}
         assert run["progress"] == progress
     run = await decide(client, auth, await get(client, auth, first["id"]))
     listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
@@ -1028,7 +1059,7 @@ async def test_the_runs_list_carries_progress_with_what_the_inbox_says_of_a_stuc
         await s.commit()
     listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
     summary = listed[run["id"]]
-    assert summary["progress"] == {"done": 1, "total": 4, "now": run["segments"][1]["title"]}
+    assert summary["progress"] == {"done": 1, "total": 5, "now": run["segments"][1]["title"]}
     assert summary["stuck"].startswith("Submission seg-1-a2 was lost")
     assert summary["can_retry"] is True
     assert "DataError on 5 tries" in summary["import_failed"]

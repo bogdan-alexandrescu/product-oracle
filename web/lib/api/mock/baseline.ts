@@ -775,6 +775,14 @@ function updateEntity(
   return null;
 }
 
+/** F4: Approve at the Engineering check sets a feature's effort, as the deciding person's edit (locked). */
+export function setEntityEffort(s: BaselineState, key: string, size: string, userId: string, runId: string) {
+  const e = s.entities.find((x) => x.type === "feature" && x.key === key);
+  const effort = size.toUpperCase();
+  if (!e || String(e.attrs?.effort ?? "").toUpperCase() === effort) return;
+  updateEntity(s, e, { attrs: { effort } }, { origin: "user", userId, reason: `Engineering check of run ${runId}` });
+}
+
 const KEY_RE = /^[a-z0-9][a-z0-9._-]*$/;
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */

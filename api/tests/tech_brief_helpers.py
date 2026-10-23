@@ -8,6 +8,8 @@ import uuid
 
 from oracle.baseline.models import Edge, Entity
 from oracle.runs import flows
+from oracle.swarm import FakeRuntime
+from oracle.swarm.fake import document_of
 from oracle.tenancy import tenant_session
 
 SAMPLE = """\
@@ -119,9 +121,32 @@ ENG_CHECK = flows.SegmentDef(
 
 
 def flow_with_eng_check() -> flows.FlowDef:
-    """baseline_to_prd with the Engineering check after the feature set."""
+    """baseline_to_prd with the Engineering check after the feature set: the stand-in in
+    place of F4's segment, which runs with its stop off too (F4 skips its own whole)."""
     base = flows.FLOWS["baseline_to_prd"]
-    segments = list(base.segments)
+    segments = [s for s in base.segments if s.name != "eng_review"]
     at = next(i for i, s in enumerate(segments) if s.name == "feature_set") + 1
     segments.insert(at, ENG_CHECK)
     return dataclasses.replace(base, segments=tuple(segments))
+
+
+class BriefsRuntime(FakeRuntime):
+    """The fake runtime whose feature set is the briefs' two features (C6's format, for
+    the run's document): F4's Engineering check checks the briefs against the run's
+    approved scope."""
+
+    async def artifacts(self, workflow_id: str, steps=None) -> dict[str, str]:
+        files = await super().artifacts(workflow_id, steps)
+        record = self._record(workflow_id)
+        if record.segment != "feature_set" or record.outcome.artifacts is not None:
+            return files
+        document = document_of(record.spec.steps[-1].prompt)
+        files["feature_set.yaml"] = (
+            "version: 1\n" + (f"document: {document}\n" if document else "") + "features:\n"
+            "  - {key: feature-a, title: Feature A, summary: Invoices by email, goals: [],\n"
+            "     depends_on: [feature-b], confidence: 0.8, requirements: []}\n"
+            "  - {key: feature-b, title: Feature B, summary: A notifications digest, goals: [],\n"
+            "     depends_on: [], confidence: 0.8, requirements: []}\n"
+            "excluded: []\n"
+        )
+        return files
