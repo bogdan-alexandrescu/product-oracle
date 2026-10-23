@@ -281,6 +281,17 @@ export function queueDraftRoadmap(
   });
 }
 
+/**
+ * E1 part B ("Reuse items"), as the API's `draft_items.reusable`: a Build roadmap run reuses
+ * the version's draft items when they are ready, with at least one item and no `wrong_prd`.
+ */
+export function reusableDraftItems(db: DraftRoadmapDb, documentId: string, n: number): { version: number; ready_at: string | null } | null {
+  const r = rowOf(db, documentId, n);
+  if (!r || r.status !== "ready" || !r.items.length) return null;
+  if (r.check?.problems.some((p) => p.code === "wrong_prd")) return null;
+  return { version: n, ready_at: r.ready_at };
+}
+
 /** VersionOut.draft_roadmap: PRD versions only. */
 export function draftRoadmapSummary(db: DraftRoadmapDb | undefined, doc: Doc | undefined, n: number): DraftRoadmapSummary | null {
   if (!doc || doc.kind !== "prd") return null;

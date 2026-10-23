@@ -63159,6 +63159,17 @@
               }
             ],
             "title": "Goals"
+          },
+          "reuse_draft_items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reuse Draft Items"
           }
         },
         "type": "object",
@@ -63220,6 +63231,17 @@
             "type": "array",
             "title": "Goals",
             "default": []
+          },
+          "reuse_draft_items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reuse Draft Items"
           }
         },
         "type": "object",
@@ -83986,6 +84008,17 @@
             "type": "boolean",
             "title": "Reused",
             "default": false
+          },
+          "reused_from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From Version"
           },
           "note": {
             "anyOf": [
