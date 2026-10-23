@@ -500,7 +500,9 @@ async def test_the_weekly_report_is_the_alignment_report_ritual(client, owner, r
     ritual = await report_ritual(tenant_id)
     assert (ritual.schedule["weekday"], ritual.schedule["time"]) == (0, "08:00")
     assert ritual.schedule["timezone"] == "America/Los_Angeles"
-    assert ritual.next_due_at == la(2026, 11, 2, 8)
+    # Monday 08:00 has passed this week and last week is not reported yet: F6's catch-up,
+    # the next tick reports it.
+    assert ritual.next_due_at == la(2026, 10, 26, 8)
     # Paused on Company › Rituals, the run ticker builds no report at its moment: F6's
     # own check no longer runs.
     resp = await client.post(f"/v1/rituals/{ritual.id}/pause", headers=auth)

@@ -19652,6 +19652,23 @@ export interface components {
             /** Error Description */
             error_description?: string | null;
         };
+        /**
+         * OccurrenceDecision
+         * @description A decision recorded with an occurrence; ``href`` opens it on Company › Decisions.
+         */
+        OccurrenceDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Href */
+            href: string;
+        };
         /** OccurrenceOut */
         OccurrenceOut: {
             /**
@@ -19706,6 +19723,11 @@ export interface components {
             skip_reason: string | null;
             /** Decision Ids */
             decision_ids: string[];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["OccurrenceDecision"][];
             /** Summary Run Id */
             summary_run_id: string | null;
             /** Summary */

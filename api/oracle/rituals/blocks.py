@@ -253,7 +253,7 @@ async def outcomes_due(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
         by = (o.prediction or {}).get("by")
         if isinstance(by, str) and by[:10] <= today:
             rows.append({"outcome_id": str(o.id), "title": o.title, "by": by[:10],
-                         "href": f"/baseline/outcomes?outcome={o.id}",
+                         "href": f"/plan/outcomes?outcome={o.id}",
                          "text": f"{o.title} (due {by[:10]})"})  # fmt: skip
     return rows
 
@@ -274,7 +274,7 @@ async def needs_decision(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
         .order_by(Decision.number)
     ):
         rows.append({"kind": "decision", "id": str(d.id), "title": d.title,
-                     "href": f"/company/decisions/{d.number}",
+                     "href": f"/company/decisions?d={d.number}",
                      "text": f"D-{d.number} {d.title}"})  # fmt: skip
     for r in await db.scalars(
         select(Run).where(Run.status == "awaiting_approval").order_by(Run.created_at)
@@ -444,7 +444,7 @@ async def outcomes_assessed(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, A
     ):
         held = o.status in ("held", "partially_held")
         rows.append({"outcome_id": str(o.id), "title": o.title, "status": o.status, "held": held,
-                     "href": f"/baseline/outcomes?outcome={o.id}",
+                     "href": f"/plan/outcomes?outcome={o.id}",
                      "text": f"{o.title}: {o.status.replace('_', ' ')}"})  # fmt: skip
     if rows:
         share = round(100 * sum(r["held"] for r in rows) / len(rows))
@@ -518,7 +518,7 @@ async def alignment_report(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, An
 def _decision_row(d: Any) -> dict[str, Any]:
     return {"decision_id": str(d.id), "number": d.number, "title": d.title,
             "review_at": d.review_at.isoformat() if d.review_at else None,
-            "href": f"/company/decisions/{d.number}",
+            "href": f"/company/decisions?d={d.number}",
             "text": f"D-{d.number} {d.title}"}  # fmt: skip
 
 
@@ -597,7 +597,7 @@ async def changelog_drafts(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, An
     return [
         {"entry_id": str(e.id), "title": e.title, "category": e.category,
          "audience": e.audience, "released_on": e.released_on.isoformat(),
-         "href": "/plan/changelog", "text": f"{e.category.capitalize()}: {e.title}"}
+         "href": "/roadmap/changelog", "text": f"{e.category.capitalize()}: {e.title}"}
         for e in await db.scalars(
             select(ChangelogEntry).where(ChangelogEntry.status == "draft")
             .order_by(ChangelogEntry.released_on, ChangelogEntry.title)

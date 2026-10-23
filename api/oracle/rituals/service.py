@@ -11,6 +11,8 @@ own ``try``), per company and per tick:
 3. build each scheduled occurrence's pre-read in a savepoint (the ``monitor_due``
    pattern): ready, or ``attempts`` + 1 and ``failed`` after :data:`MAX_ATTEMPTS`; then,
    with summaries on Every pre-read, start its summary run (oracle.rituals.summaries);
+3b. F6's catch-up: this week's alignment report occurrence, built while there was no
+   track to report, is built again once there is (:func:`_alignment_catch_up`);
 4. mark ready occurrences ``missed`` :data:`MISSED_AFTER` after their end when nothing
    was recorded;
 5. send the weekly alignment report's Slack posts that are due (F6: its report is the
@@ -25,7 +27,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +42,7 @@ from oracle.rituals.schedule import Schedule, lookback_days, next_occurrence
 from oracle.rituals.schemas import (
     HeldIn,
     InboxRitual,
+    OccurrenceDecision,
     OccurrenceOut,
     OccurrenceSummary,
     Period,
@@ -167,8 +170,37 @@ async def follow_alignment_setting(db: AsyncSession) -> None:
         return
     ritual.schedule = schedule.model_dump()
     ritual.status = "active" if enabled else "paused"
-    ritual.next_due_at = next_occurrence(schedule, clock.now()) if enabled else None
+    ritual.next_due_at = _first_alignment_due(schedule, clock.now()) if enabled else None
     ritual.lock_version += 1
+
+
+async def _store_alignment_schedule(
+    db: AsyncSession, principal: Principal, schedule: Schedule
+) -> None:
+    """A new schedule for the weekly alignment report's ritual: weekly, in the Company
+    time zone (the report counts its weeks there), and stored as the report's own day
+    and time (F6's ``alignment_report`` setting), so the two never disagree."""
+    from oracle.reports import alignment
+    from oracle.tenant_settings import TenantSetting
+    from oracle.tenant_settings_api import get_setting
+
+    if schedule.freq != "weekly":
+        raise RitualError(422, "schedule.freq: the weekly alignment report is weekly")
+    if schedule.timezone != await company_timezone(db):
+        raise RitualError(
+            422,
+            "schedule.timezone: the weekly alignment report runs in the Company time zone "
+            "(Settings › Company)",
+        )
+    value = alignment.validate_setting(
+        {**alignment.validate_setting(await get_setting(db, alignment.SETTING_KEY)),
+         "weekday": alignment.WEEKDAYS[schedule.weekday], "time": schedule.time}
+    )  # fmt: skip
+    row = await db.scalar(select(TenantSetting).where(TenantSetting.key == alignment.SETTING_KEY))
+    if row is None:
+        db.add(TenantSetting(key=alignment.SETTING_KEY, value=value, updated_by=principal.id))
+    else:
+        row.value, row.updated_by = value, principal.id
 
 
 async def follow_company_timezone(db: AsyncSession, old: str) -> None:
@@ -254,6 +286,47 @@ async def _build(db: AsyncSession, occ: RitualOccurrence, ritual: Ritual) -> boo
     return True
 
 
+async def _alignment_catch_up(db: AsyncSession, now: datetime) -> bool:
+    """F6's catch-up within the week, kept by its ritual: this week's occurrence of the
+    weekly alignment report, built when there was nothing to report (no active or paused
+    track), is built again on a later tick of the same local week once there is, so the
+    week that just ended is still reported. One cheap check per tick otherwise."""
+    from oracle.reports import alignment
+    from oracle.reports.models import AlignmentReport
+    from oracle.roadmap.models import ProductTrack
+
+    ritual = await db.scalar(
+        select(Ritual).where(
+            Ritual.kind == "alignment_report", Ritual.builtin, Ritual.status == "active"
+        )
+    )
+    if ritual is None:
+        return False
+    schedule = Schedule(**ritual.schedule)
+    due = _first_alignment_due(schedule, now)
+    if due > now:
+        return False
+    occ = await db.scalar(
+        select(RitualOccurrence)
+        .where(RitualOccurrence.ritual_id == ritual.id, RitualOccurrence.due_at == due,
+               RitualOccurrence.status == "ready")
+        .with_for_update(skip_locked=True)
+    )  # fmt: skip
+    if occ is None:
+        return False
+    week = alignment.week_start_of(due, schedule.timezone) - timedelta(days=7)
+    if await db.scalar(
+        select(AlignmentReport.id).where(
+            AlignmentReport.kind == "weekly", AlignmentReport.week_start == week
+        )
+    ):
+        return False
+    reportable = select(ProductTrack.id).where(ProductTrack.status.in_(alignment.REPORTED_STATUSES))
+    if await db.scalar(reportable.limit(1)) is None:
+        return False
+    return await _build(db, occ, ritual)
+
+
 async def tick_due(db: AsyncSession) -> dict[str, int]:
     """One company's ritual work for this tick (see the module docstring); commits."""
     from oracle.rituals import summaries
@@ -306,6 +379,10 @@ async def tick_due(db: AsyncSession) -> dict[str, int]:
     await db.commit()
     for occ_id, ritual_id in built:
         await summaries.after_ready(db, occ_id, ritual_id)
+
+    if await _alignment_catch_up(db, now):
+        out["ready"] += 1
+    await db.commit()
 
     for occ in await db.scalars(
         select(RitualOccurrence).where(
@@ -416,6 +493,8 @@ async def update(
     if body.prep_hours is not None:
         ritual.prep_hours = body.prep_hours
     if body.schedule is not None:
+        if ritual.kind == "alignment_report" and ritual.builtin:
+            await _store_alignment_schedule(db, principal, body.schedule)
         ritual.schedule = body.schedule.model_dump()
         if ritual.status == "active":
             ritual.next_due_at = next_occurrence(body.schedule, clock.now())
@@ -433,9 +512,13 @@ async def set_status(
     ritual = await get_ritual(db, ritual_id, lock=True)
     if ritual.status != status:
         ritual.status = status
-        ritual.next_due_at = (
-            next_occurrence(ritual.schedule, clock.now()) if status == "active" else None
-        )
+        ritual.next_due_at = None
+        if status == "active":
+            ritual.next_due_at = (
+                _first_alignment_due(Schedule(**ritual.schedule), clock.now())
+                if ritual.kind == "alignment_report" and ritual.builtin
+                else next_occurrence(ritual.schedule, clock.now())
+            )
         ritual.lock_version += 1
         if status == "paused":
             # A paused ritual's failed preparation leaves the owners' Inbox.
@@ -549,7 +632,23 @@ async def occurrence_out(
         decision_ids=list(occ.decision_ids), summary_run_id=occ.summary_run_id,
         summary=occ.summary, summary_state=occ.summary_state,  # type: ignore[arg-type]
         summary_note=occ.summary_note, read_by_me=read is not None,
+        decisions=[
+            OccurrenceDecision(id=d.id, number=d.number, title=d.title,
+                               href=f"/company/decisions?d={d.number}")
+            for d in await _decisions_of(db, occ)
+        ],
     )  # fmt: skip
+
+
+async def _decisions_of(db: AsyncSession, occ: RitualOccurrence, extra=()) -> list[Any]:
+    """The decisions recorded with ``occ``: those it names (and ``extra``), and those
+    whose subject it is (Record decision), in number order."""
+    from oracle.decisions.models import Decision
+
+    subject = Decision.subjects.contains([{"kind": "ritual_occurrence", "id": str(occ.id)}])
+    named = [*occ.decision_ids, *extra]
+    where = or_(subject, Decision.id.in_(named)) if named else subject
+    return list(await db.scalars(select(Decision).where(where).order_by(Decision.number)))
 
 
 def pre_read_markdown(occ: RitualOccurrence, ritual: Ritual) -> str:
@@ -584,8 +683,12 @@ async def hold(db: AsyncSession, principal: Principal, occ_id: uuid.UUID, body: 
     occ, ritual = await get_occurrence(db, occ_id, lock=True)
     _owner_only(principal, ritual)
     _recordable(occ)
+    decisions = await _decisions_of(db, occ, body.decision_ids)
+    unknown = set(body.decision_ids) - {d.id for d in decisions}
+    if unknown:
+        raise RitualError(422, f"decision_ids: no such decision: {', '.join(map(str, unknown))}")
     occ.status, occ.notes = "held", body.notes or None
-    occ.decision_ids = body.decision_ids
+    occ.decision_ids = [d.id for d in decisions]
     occ.held_by, occ.held_at = principal.id, clock.now()
     await audit.record(db, principal, "ritual.held", "ritual_occurrence", occ.id)
     await db.commit()
