@@ -9,6 +9,7 @@ from fastapi.routing import APIRoute
 
 from oracle.auth.deps import get_principal
 from oracle.auth.models import ROLES
+from oracle.authz import require_role, require_role_now
 from oracle.capabilities import DECIDED_PER_ITEM, EVERY_MEMBER, operation_roles
 from oracle.main import app
 from tests.test_members import MATRIX, _template, token_with_role
@@ -183,10 +184,19 @@ async def test_the_engineering_lead_flag_gates_engineering_stops(client):
     assert (await _caps(client, auth))["decide_engineering_stops"] is True
 
 
-# A role check in a handler (or what it calls) that can refuse: has_role or the lead helpers
-# next to a 403 in the same function.
+# A role check in a handler (or what it calls) that can refuse: a 403 raised in a function
+# that checks a role itself (has_role, the lead helpers) or through what it calls (a helper
+# such as is_decider or may_edit_task), or a call to a function that does.
 _ROLE_CHECKS = ("has_role(", "may_decide(", "may_verify_dates(", "lead_refusal(")
-_REFUSALS = ("HTTP_403_FORBIDDEN", "Forbidden(", "(403", "403,")
+_REFUSALS = ("HTTP_403_FORBIDDEN", "Forbidden(", "ForbiddenError(", "(403", "403,")
+_ROUTE_ROLE = (require_role, require_role_now)
+# Found by the search but not a refusal of the caller's role above the route's.
+NOT_PER_ITEM = {
+    # The starter adds the people they pick; only a viewer is refused, as the route does.
+    "create_discussion",
+    # The 403 refuses a run's token; the role check picks whom the daily run acts as.
+    "set_request_triage_daily",
+}
 
 
 def _handler_role_checks() -> set[str]:
@@ -196,45 +206,74 @@ def _handler_role_checks() -> set[str]:
     import textwrap
     import types
 
-    memo: dict = {}
+    sources: dict = {}
 
-    def refuses(fn, depth=0) -> bool:
+    def source(fn) -> str | None:
+        if fn not in sources:
+            sources[fn] = None
+            if (getattr(fn, "__module__", "") or "").startswith("oracle"):
+                try:
+                    sources[fn] = textwrap.dedent(inspect.getsource(fn))
+                except (OSError, TypeError):
+                    pass
+        return sources[fn]
+
+    def callees(fn) -> list:
+        """The oracle functions ``fn`` calls by name or as ``module.name``."""
+        src = source(fn)
+        if src is None:
+            return []
+        names = getattr(fn, "__globals__", {})
+        out = []
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.Call):
+                continue
+            f, obj = node.func, None
+            if isinstance(f, ast.Name):
+                obj = names.get(f.id)
+            elif isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+                mod = names.get(f.value.id)
+                if isinstance(mod, types.ModuleType):
+                    obj = getattr(mod, f.attr, None)
+            # A route's own role dependency (``Depends(require_role(...))`` in a helper such
+            # as plan's _person) is the route's role, counted by operation_roles already.
+            if isinstance(obj, types.FunctionType) and obj not in _ROUTE_ROLE:
+                out.append(inspect.unwrap(obj))
+        return out
+
+    def walk(fn, test, memo, depth=0) -> bool:
+        """``test`` holds for ``fn`` or for a function it calls (to depth 6)."""
         fn = inspect.unwrap(fn)
         if fn in memo:
             return memo[fn]
         memo[fn] = False
-        if not (getattr(fn, "__module__", "") or "").startswith("oracle"):
+        src = source(fn)
+        if src is None:
             return False
-        try:
-            src = textwrap.dedent(inspect.getsource(fn))
-        except (OSError, TypeError):
-            return False
-        found = any(p in src for p in _ROLE_CHECKS) and any(p in src for p in _REFUSALS)
-        if not found and depth < 6:
-            names = getattr(fn, "__globals__", {})
-            for node in ast.walk(ast.parse(src)):
-                if not isinstance(node, ast.Call):
-                    continue
-                f, obj = node.func, None
-                if isinstance(f, ast.Name):
-                    obj = names.get(f.id)
-                elif isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
-                    mod = names.get(f.value.id)
-                    if isinstance(mod, types.ModuleType):
-                        obj = getattr(mod, f.attr, None)
-                if isinstance(obj, types.FunctionType) and refuses(obj, depth + 1):
-                    found = True
-                    break
+        found = test(fn, src) or (
+            depth < 6 and any(walk(c, test, memo, depth + 1) for c in callees(fn))
+        )
         memo[fn] = found
         return found
 
+    checked: dict = {}
+
+    def checks_role(fn, src) -> bool:
+        return any(p in src for p in _ROLE_CHECKS)
+
+    def refuses_here(fn, src) -> bool:
+        # The check may sit in a helper the function calls (``if not await is_decider(...):
+        # raise ForbiddenError(...)``), so the role is looked for through its calls too.
+        return any(p in src for p in _REFUSALS) and walk(fn, checks_role, checked)
+
+    refused: dict = {}
     out = set()
     for _, r in _routes():
         calls = list(_calls(r.dependant))
         if get_principal not in calls:
             continue
         own = [c for c in calls if c is not get_principal and not getattr(c, "min_role", None)]
-        if any(refuses(c) for c in own):
+        if any(walk(c, refuses_here, refused) for c in own):
             out.add(r.name)
     return out
 
@@ -245,7 +284,7 @@ def test_every_check_made_in_a_handler_is_marked_per_item():
     import oracle.capabilities as caps
 
     per_item = getattr(caps, "PER_ITEM", {})
-    missing = _handler_role_checks() - set(per_item)
+    missing = _handler_role_checks() - set(per_item) - NOT_PER_ITEM
     assert not missing, f"handler role checks not in PER_ITEM: {sorted(missing)}"
     assert DECIDED_PER_ITEM <= set(per_item)
     assert set(per_item.values()) <= set(ROLES) | {None}
@@ -261,3 +300,54 @@ async def test_capabilities_mark_the_per_item_operations(client, members_world, 
     body = await _caps(client, await token_with_role(members_world.tenant_id, role))
     assert body.get("per_item") == getattr(caps, "PER_ITEM", None)
     assert body["per_item"]["update_question"] == "approver"
+
+
+# #370 fixes 6: checks split across functions (a helper checks the role, the caller raises)
+# or raised as a service's ForbiddenError.
+SPLIT_CHECKS = {
+    "start_draft": "owner",
+    "update_launch_task": "approver",
+    "update_blocker": "owner",
+    "set_blocker_status": "owner",
+    "accept_blocker_risk": "owner",
+}
+
+
+def test_split_and_service_checks_are_found():
+    """The search finds a 403 whose role check sits in a helper (is_decider, may_edit_task)
+    or that a service raises as ForbiddenError, and not a route's own require_role."""
+    found = _handler_role_checks()
+    assert set(SPLIT_CHECKS) <= found, sorted(set(SPLIT_CHECKS) - found)
+    assert not {"get_plan", "get_plan_item_history"} & found
+
+
+def test_per_item_says_what_the_api_enforces():
+    """A vision, strategy or update is an owner's to start or approve; a task its owner's or
+    an approver's to edit; a gating blocker the company's acceptance role's (owner at most).
+    The route's own role is no per-item rule (the Plan reads)."""
+    import oracle.capabilities as caps
+
+    for op, role in SPLIT_CHECKS.items():
+        assert caps.PER_ITEM.get(op, "missing") == role, op
+    assert caps.PER_ITEM.get("approve_version", "missing") == "owner"
+    assert "get_plan" not in caps.PER_ITEM
+    assert "get_plan_item_history" not in caps.PER_ITEM
+
+
+async def test_an_approver_is_told_the_owner_starts_strategy_drafts(client):
+    """The capabilities an approver reads say start_draft is the owner's below it, which
+    is what POST /v1/drafts answers them for a vision (403)."""
+    from tests.fixtures import seed_auth
+    from tests.review_v2_helpers import person
+
+    tenant_id, _ = await seed_auth()
+    approver = await person(tenant_id, "approver")
+    body = await _caps(client, approver.headers)
+    assert body["operations"]["start_draft"] is True
+    assert body["per_item"]["start_draft"] == "owner"
+    resp = await client.post(
+        "/v1/drafts",
+        json={"kind": "vision", "title": "Vision", "template": "vision-narrative"},
+        headers=approver.headers,
+    )
+    assert resp.status_code == 403, resp.text
