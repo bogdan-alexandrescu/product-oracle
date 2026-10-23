@@ -9,6 +9,8 @@ import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from 
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
+import { BlockerInspector } from "./_components/BlockerInspector";
+import { BlockersTab } from "./_components/BlockersTab";
 import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
 import { goalTags, KPI_PHONE } from "./_components/common";
 import { ConflictsTab } from "./_components/ConflictsTab";
@@ -18,8 +20,8 @@ import { GraphTab } from "./_components/GraphTab";
 import { noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
-type Tab = "graph" | "flagged" | "conflicts" | "proposals";
-const TABS: readonly Tab[] = ["graph", "flagged", "conflicts", "proposals"];
+type Tab = "graph" | "flagged" | "conflicts" | "proposals" | "blockers";
+const TABS: readonly Tab[] = ["graph", "flagged", "conflicts", "proposals", "blockers"];
 
 /** ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review links here). */
 function TabFromUrl({ onTab, onFrom }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void }) {
@@ -42,12 +44,17 @@ function BuildFromUrl({ onBuild }: { onBuild: () => void }) {
   return null;
 }
 
-/** ?entity=<id> opens that item (Publish's Resolve links here). */
-function OpenFromUrl({ onOpen }: { onOpen: (id: string) => void }) {
-  const id = useSearchParams().get("entity");
+/** ?entity=<id> opens that item (Publish's Resolve links here); ?blocker=<id> that blocker (its Open blocker). */
+function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBlocker: (id: string) => void }) {
+  const params = useSearchParams();
+  const id = params.get("entity");
+  const blocker = params.get("blocker");
   useEffect(() => {
     if (id) onOpen(id);
   }, [id, onOpen]);
+  useEffect(() => {
+    if (blocker) onBlocker(blocker);
+  }, [blocker, onBlocker]);
   return null;
 }
 
@@ -60,6 +67,7 @@ export default function BaselinePage() {
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
   const trace = useQuery("baseline-trace", () => unwrap(api.GET("/v1/baseline/trace")));
   const conflicts = useQuery("baseline-conflicts", () => unwrap(api.GET("/v1/baseline/conflicts")));
+  const blockers = useQuery("baseline-blockers", () => unwrap(api.GET("/v1/blockers")));
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("graph");
   const [from, setFrom] = useState<FromFilter>("");
@@ -82,6 +90,8 @@ export default function BaselinePage() {
   const shown = from ? (filtered.data ?? undefined) : proposals.data;
 
   const [openId, setOpenId] = useState<string | null>(null);
+  // The blocker inspector (#340) takes the drawer's place while a blocker is open.
+  const [blockerId, setBlockerId] = useState<string | null>(null);
   // A suggested blocker opened from its Promote button opens on the blocker form (B4).
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -107,15 +117,28 @@ export default function BaselinePage() {
   const { reload: reloadConflicts } = conflicts;
   const { reload: reloadProposals } = proposals;
   const { reload: reloadFiltered } = filtered;
+  const { reload: reloadBlockers } = blockers;
   const refresh = useCallback(() => {
-    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered()]);
-  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered]);
+    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers()]);
+  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers]);
   const close = useCallback(() => {
     setOpenId(null);
     setPromoteId(null);
   }, []);
+  const openItem = useCallback((id: string) => {
+    setBlockerId(null);
+    setOpenId(id);
+  }, []);
+  const openBlocker = useCallback((id: string) => {
+    setOpenId(null);
+    setPromoteId(null);
+    setTab("blockers");
+    setBlockerId(id);
+  }, []);
+  const closeBlocker = useCallback(() => setBlockerId(null), []);
   const promote = useCallback((id: string) => {
     setPromoteId(id);
+    setBlockerId(null);
     setOpenId(id);
   }, []);
 
@@ -165,6 +188,7 @@ export default function BaselinePage() {
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
     { id: "conflicts", label: "Conflicts", count: openConflicts, kind: "warn" },
     { id: "proposals", label: "Proposals", count: proposals.data?.length, kind: "acc" },
+    { id: "blockers", label: "Blockers", count: blockers.data?.length, kind: "warn" },
   ];
   const openEntity = openId ? graph.data?.entities.find((e) => e.id === openId) : undefined;
   const low = trace.data?.low;
@@ -202,7 +226,7 @@ export default function BaselinePage() {
   return (
     <Page>
       <Suspense fallback={null}>
-        <OpenFromUrl onOpen={setOpenId} />
+        <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
         <TabFromUrl onTab={setTab} onFrom={setFrom} />
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
@@ -244,7 +268,10 @@ export default function BaselinePage() {
 
       <Split
         inspector={
-          openEntity && (
+          blockerId ? (
+            <BlockerInspector key={blockerId} blockerId={blockerId} onClose={closeBlocker} onChanged={refresh} />
+          ) : (
+            openEntity && (
             <EntityDrawer
               key={openEntity.id}
               entity={openEntity}
@@ -255,10 +282,12 @@ export default function BaselinePage() {
               meId={me?.user_id}
               tags={tags}
               onClose={close}
-              onOpen={setOpenId}
+              onOpen={openItem}
               onChanged={refresh}
               promote={promoteId === openEntity.id}
+              onOpenBlocker={blockers.data?.some((b) => b.id === openEntity.id) ? () => openBlocker(openEntity.id) : undefined}
             />
+            )
           )
         }
       >
@@ -287,7 +316,7 @@ export default function BaselinePage() {
                   busy={busy}
                   selectedId={openId}
                   tags={tags}
-                  onOpen={setOpenId}
+                  onOpen={openItem}
                   onConfirm={confirmGoal}
                 />
               )}
@@ -297,7 +326,7 @@ export default function BaselinePage() {
             <>
               {trace.error && <Notice tone="error">{trace.error}</Notice>}
               {trace.loading && !trace.data && <Loading />}
-              {trace.data && <FlaggedTab trace={trace.data} tags={tags} selectedId={openId} onOpen={setOpenId} />}
+              {trace.data && <FlaggedTab trace={trace.data} tags={tags} selectedId={openId} onOpen={openItem} />}
             </>
           )}
           {tab === "conflicts" && (
@@ -311,10 +340,17 @@ export default function BaselinePage() {
                   low={low}
                   canWrite={canWrite}
                   busy={busy}
-                  onOpen={setOpenId}
+                  onOpen={openItem}
                   onPick={pick}
                 />
               )}
+            </>
+          )}
+          {tab === "blockers" && (
+            <>
+              {blockers.error && <Notice tone="error">{blockers.error}</Notice>}
+              {blockers.loading && !blockers.data && <Loading />}
+              {blockers.data && <BlockersTab blockers={blockers.data} selectedId={blockerId} onOpen={openBlocker} />}
             </>
           )}
           {tab === "proposals" && (
@@ -331,7 +367,7 @@ export default function BaselinePage() {
                   meId={me?.user_id}
                   canWrite={canWrite}
                   busy={busy}
-                  onOpen={setOpenId}
+                  onOpen={openItem}
                   onDecide={decide}
                   onPromote={promote}
                 />

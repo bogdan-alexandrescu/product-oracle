@@ -497,9 +497,13 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     }
     if (p[3] === "feasibility-scope" && m === "POST") {
       const input = await body<Schemas["FeasibilityScopeIn"]>();
+      if (!input.reason?.trim()) return json(422, { detail: "Say why the blocker may proceed as a feasibility experiment" });
       const x = ctx.v2.feasibility_experiments.find((e) => e.id === input.experiment_id && e.blocker_id === b.id);
       if (!x) return json(422, { detail: "No such feasibility experiment on this blocker" });
-      const missing = [!x.owner_id && "an owner", !x.success_threshold?.trim() && "a success threshold", !x.decision_gate_at && "a decision gate date"].filter(Boolean);
+      if (b.status === "resolved") return json(409, { detail: "The blocker is resolved; it needs no feasibility scope" });
+      const gateAt = x.decision_gate_at && new Date(x.decision_gate_at) <= new Date() ? "a decision gate date in the future" : !x.decision_gate_at && "a decision gate date";
+      const live = !["planned", "running"].includes(x.status) && "a planned or running experiment";
+      const missing = [!x.owner_id && "an owner", !x.success_threshold?.trim() && "a success threshold", gateAt, live].filter(Boolean);
       if (missing.length) return json(422, { detail: `A feasibility scope needs ${missing.join(", ")}` });
       event(ctx, b, "feasibility_scope_approved", "feasibility_only", { reason: input.reason, experiment_id: x.id, data: { by_decider: can("owner") } });
       return json(200, strategy(ctx, db, b));
@@ -554,6 +558,10 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
       Object.assign(o, next, f.length ? { compliance: "non_compliant", status: "rejected", policy_feasibility: "low" } : {});
       return view();
     }
+    // As the API's BlockerOptionDecision: selecting or rejecting needs a reason.
+    if ((p[3] === "select" || p[3] === "reject") && !(input as unknown as Schemas["BlockerOptionDecision"]).reason?.trim()) {
+      return (o.lock_version -= 1, json(422, { detail: `Say why you ${p[3]} this option` }));
+    }
     if (p[3] === "select") {
       const refused = choosable("selected option");
       if (refused) return (o.lock_version -= 1, refused);
@@ -587,6 +595,11 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     const input = await body<Schemas["FeasibilityExperimentPatch"]>();
     if (input.lock_version !== x.lock_version) return json(409, { detail: "Someone else changed this since you loaded it; reload and try again" });
     const from = x.status;
+    const to = input.status ?? from;
+    if (to !== from && ["succeeded", "failed", "inconclusive", "cancelled"].includes(from)) return json(409, { detail: `The experiment already concluded (${from})` });
+    if (["succeeded", "failed", "inconclusive"].includes(to) && !(input.result ?? x.result ?? "").trim()) {
+      return json(422, { detail: "Record the result when an experiment concludes" });
+    }
     Object.assign(x, given(input, ["lock_version"]), { lock_version: x.lock_version + 1, updated_at: now() });
     if (x.status !== from) {
       event(ctx, b, x.status === "running" ? "experiment_started" : "experiment_concluded", null, { experiment_id: x.id });
