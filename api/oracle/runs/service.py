@@ -286,6 +286,14 @@ ORACLE_KNOBS = (
     "reuse_baseline",
     # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
     "target_goals",
+    # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
+    "draft_roadmap_id",
+    # E1 part B ("Reuse items"): false on a Build roadmap run that derives its items
+    # again ("Derive the items again"); absent: it reuses the source version's draft items.
+    "reuse_draft_items",
+    # E1 part B: the draft items its estimate reuses, {"draft_roadmap_id", "version",
+    # "ready_at"}; the start re-checks them (oracle.roadmap.draft_items.reusable).
+    "draft_items_reused",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -900,7 +908,7 @@ def _segment_out(
         draft_import=DraftImport(**imp) if imp else None,
         sent_back=_sent_back(run, segment),
         reused=art.get("reused") if segment.status == "skipped" else None,
-        note=art.get("note") if segment.status == "skipped" else None,
+        note=art.get("note") if segment.status == "skipped" or art.get("reused_items") else None,
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         previous_attempt=PreviousAttempt(
@@ -1060,6 +1068,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             budget_usd=_usd(knobs.budget_usd),
             reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
             goals=[TargetGoal(**g) for g in (run.knobs or {}).get("target_goals") or []],
+            reuse_draft_items=(run.knobs or {}).get("reuse_draft_items") is not False
+            if run.flow == REUSES_DRAFT_ITEMS
+            else None,
         ),
         snapshot_id=run.snapshot_id,
         snapshot_as_of=snapshot.as_of if snapshot else None,
@@ -1509,11 +1520,13 @@ async def _resolve_source(
             f"not a {name}"
         )
     stmt = select(DocumentVersion).where(DocumentVersion.document_id == document.id)
+    if number is None and not flow.source_approved:
+        raise Invalid(f"name the version of the {name} to read")
     if number is not None:
         version = await db.scalar(stmt.where(DocumentVersion.number == number))
         if version is None:
             raise Invalid(f"version {number} of '{document.slug}' not found")
-        if version.approved_at is None:
+        if version.approved_at is None and flow.source_approved:
             target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
             raise Invalid(
                 f"version {number} of '{document.slug}' is not approved: a {target} is built "
@@ -1643,6 +1656,12 @@ async def _resolve_inputs(
     if flow.target_kind not in TEMPLATED_KINDS and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
+    if flow.stores_draft_items:
+        # E1: the run's document is its source PRD; it writes no document of its own.
+        if inputs.document is not None:
+            raise Invalid(f"the {flow.title} flow writes no document")
+        assert source is not None
+        return source[0].id, {"source_version_id": str(source[1].id)}
     default_slug = None
     if source is not None and inputs.document is None:
         # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
@@ -1778,6 +1797,10 @@ async def create_run(
     extra.pop("target_goals", None)
     if goals := await _target_goals(db, flow, body.knobs.goals):
         extra["target_goals"] = goals
+    extra.pop("reuse_draft_items", None)
+    extra.pop("draft_items_reused", None)
+    if body.knobs.reuse_draft_items is False and flow.key == REUSES_DRAFT_ITEMS:
+        extra["reuse_draft_items"] = False
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
             raise Invalid("only a Vision or strategy draft run takes a brief")
@@ -1880,7 +1903,8 @@ async def update_run(
         intake = {
             k: v
             for k, v in oracle.items()
-            if k.startswith("intake_") or k in ("reuse_baseline", "target_goals")
+            if k.startswith("intake_")
+            or k in ("reuse_baseline", "target_goals", "reuse_draft_items")
         }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
@@ -1892,6 +1916,12 @@ async def update_run(
         oracle.pop("target_goals", None)
         if goals := await _target_goals(db, flow, body.knobs.goals):
             oracle["target_goals"] = goals
+    # E1 part B: what the run reuses is decided again by its next estimate.
+    oracle.pop("draft_items_reused", None)
+    if body.knobs is not None and body.knobs.reuse_draft_items is not None:
+        oracle.pop("reuse_draft_items", None)
+        if body.knobs.reuse_draft_items is False and flow.key == REUSES_DRAFT_ITEMS:
+            oracle["reuse_draft_items"] = False
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -1905,14 +1935,22 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     await _recheck_reuse(db, run)
     flow, knobs = _flow(run), _knobs(run)
     reused = (run.knobs or {}).get("reuse_baseline")
+    items_reused = await _draft_items_to_reuse(db, run)
+    _set_knob(run, "draft_items_reused", items_reused)
     segments = {s.name: s for s in await _segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
         amount = flows.segment_estimate(sdef, knobs)
         skip = bool(reused) and sdef.name == "baseline"
-        if skip:
+        skip_items = items_reused is not None and sdef.name == "roadmap_items"
+        if skip or skip_items:
             amount = Decimal("0.00")
         segments[sdef.name].estimate_usd = amount
+        note = None
+        if skip:
+            note = f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
+        elif items_reused is not None and skip_items:
+            note = _items_reused_note(items_reused)
         rows.append(
             SegmentEstimate(
                 seq=i,
@@ -1920,10 +1958,11 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 title=sdef.title,
                 roles=knobs.roles[sdef.name],
                 estimate_usd=float(amount),
-                reused=skip,
-                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'])}"
-                if skip
+                reused=skip or skip_items,
+                reused_from_version=items_reused["version"]
+                if items_reused is not None and skip_items
                 else None,
+                note=note,
             )
         )
     total = sum((Decimal(str(r.estimate_usd)) for r in rows), Decimal(0))
@@ -1952,6 +1991,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     if run.estimate_usd is None:
         raise RunError("estimate the run first: POST /v1/runs/{id}/estimate")
     await _recheck_reuse(db, run)
+    await _recheck_draft_items(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
     source_id = _source_id(run)
@@ -2020,6 +2060,7 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
         raise RunError(f"run is {run.status}, not awaiting approval")
     # A run reusing the baseline: still reusable now (else 409, nothing changed, C4).
     await _recheck_reuse(db, run)
+    await _recheck_draft_items(db, run)
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
@@ -2038,8 +2079,115 @@ async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None 
     if reused and first.name == "baseline" and len(segments) > 1:
         await _skip_reused_baseline(db, run, first, reused, principal)
         first = segments[1]
+    items_reused = (run.knobs or {}).get("draft_items_reused")
+    if items_reused and first.name == "roadmap_items":
+        if await _reuse_draft_items(db, run, first, segments, items_reused, principal):
+            return
     # Workflow mode covers the segments from ``first`` on: no baseline step is submitted.
     await _submit(db, run, first, segments)
+
+
+# E1 part B (decided 2026-10-21, "Reuse items"): the flow whose items step reuses the
+# approved source version's draft items.
+REUSES_DRAFT_ITEMS = "prd_to_roadmap"
+
+
+async def _draft_items_to_reuse(db: AsyncSession, run: Run) -> dict[str, Any] | None:
+    """The ``draft_items_reused`` knob of a Build roadmap run: the source version's draft
+    items when they may be reused and the run does not derive them again; else None."""
+    if run.flow != REUSES_DRAFT_ITEMS or (run.knobs or {}).get("reuse_draft_items") is False:
+        return None
+    source_id = _source_id(run)
+    if source_id is None:
+        return None
+    from oracle.roadmap import draft_items
+
+    found = await draft_items.reusable(db, source_id)
+    version = await db.get(DocumentVersion, source_id)
+    if found is None or version is None:
+        return None
+    row = found[0]
+    return {
+        "draft_roadmap_id": str(row.id),
+        "version": version.number,
+        "ready_at": row.ready_at.isoformat() if row.ready_at else None,
+    }
+
+
+def _items_reused_note(knob: dict[str, Any]) -> str:
+    """'Reused: the roadmap items of v3, derived 20 Oct' (UTC)."""
+    note = f"Reused: the roadmap items of v{knob['version']}"
+    if knob.get("ready_at"):
+        at = datetime.fromisoformat(knob["ready_at"]).astimezone(UTC)
+        note += f", derived {at.day} {at:%b}"
+    return note
+
+
+async def _recheck_draft_items(db: AsyncSession, run: Run) -> None:
+    """A run estimated with reused draft items: still the same items (else 409, nothing
+    changed): a Derive again or a new derivation since makes the estimate stale."""
+    knob = (run.knobs or {}).get("draft_items_reused")
+    if knob and await _draft_items_to_reuse(db, run) != knob:
+        raise RunError(
+            "the PRD version's draft roadmap items changed since the estimate: "
+            "estimate the run again"
+        )
+
+
+async def _reuse_draft_items(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    knob: dict[str, Any],
+    principal: Principal | str | None,
+) -> bool:
+    """E1 part B: the run's roadmap_items segment reuses the source version's draft items.
+    Their roadmap_items.yaml is written from the stored rows, the segment succeeds at no
+    cost with nothing submitted, and it is advanced: its stop opens on those items (or,
+    with the stop off, the roadmap draft is queued). False when they are gone."""
+    from oracle.roadmap import draft_items
+
+    source_id = _source_id(run)
+    found = await draft_items.reusable(db, source_id) if source_id else None
+    version = await db.get(DocumentVersion, source_id) if source_id else None
+    prd = await db.get(Document, version.document_id) if version is not None else None
+    if found is None or version is None or prd is None:
+        return False
+    row, rows = found
+    now = _now()
+    note = _items_reused_note(knob)
+    art = _art(segment)
+    art["files"] = {ITEMS_FILE: draft_items.items_yaml(prd.slug, version.number, rows)}
+    art["attempts"].append(
+        {
+            "attempt": len(art["attempts"]) + 1,
+            "workflow_id": None,
+            "submitted_at": now.isoformat(),
+            "cost_usd": 0,
+            "note": None,
+            "state": "succeeded",
+        }
+    )
+    art["reused_items"] = knob
+    art["note"] = note
+    _set_art(segment, art)
+    segment.status = "succeeded"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.started_at = segment.started_at or now
+    segment.finished_at = now
+    segment.error = None
+    await audit.record(
+        db,
+        principal if principal is not None else audit.ORACLE,
+        "run.items_reused",
+        "run",
+        run.id,
+        {"draft_roadmap_id": str(row.id), "version": version.number, "items": len(rows)},
+    )
+    await _advance(db, run, segment, segments)
+    return True
 
 
 async def _skip_reused_baseline(
@@ -2368,8 +2516,14 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         if e.type == "goal" and e.status == "confirmed"
     ]
     bases = await schedule.verified_bases(db, version.document_id)
-    known_from, known = await _known_roadmap_items(db, run)
+    if _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        known_from, known = await draft_items.known_items(db, version)
+    else:
+        known_from, known = await _known_roadmap_items(db, run)
     return flows.SourceContext(
+        approved=version.approved_at is not None or not _flow(run).stores_draft_items,
         known_items=known,
         known_from=known_from,
         horizons=await _run_horizons(db, run),
@@ -3645,6 +3799,10 @@ async def _finish(
     await _detach(db, run, cancel=status != "succeeded", state=state, done=done)
     _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     await revoke_run_tokens(db, run.id)
+    if status in ("failed", "cancelled") and _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        await draft_items.run_ended(db, run, run.error or "Cancelled")
 
 
 async def _next(
@@ -4050,6 +4208,22 @@ async def _advance(
                 None,
             )
         art["items_check"] = items_check
+    draft_error: str | None = None
+    if flow.stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        try:
+            # In a savepoint, as the check: a failed store fails the run, never the tick.
+            async with db.begin_nested():
+                stored, draft_error = await draft_items.store(
+                    db, run, art["files"].get(ITEMS_FILE), items_check or {}
+                )
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # noqa: BLE001
+            log.exception("storing the draft items of run %s failed", run.id)
+            draft_error = f"the roadmap items could not be stored ({type(exc).__name__})"
+        art["draft_items"] = {"error": draft_error} if draft_error else {"stored": stored}
     fs_check: dict[str, Any] | None = None
     scope_id: uuid.UUID | None = None
     if feature_set.FILE in sdef.outputs:
@@ -4255,7 +4429,13 @@ async def _advance(
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
-    if items_check is not None and items_check["problems"]:
+    if flow.stores_draft_items:
+        # E1: the items are stored with their problems; the review is on the Roadmap
+        # tab. The run fails only when nothing could be stored.
+        if draft_error:
+            await _finish(db, run, "failed", draft_error)
+            return True
+    elif items_check is not None and items_check["problems"]:
         problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
         await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
@@ -6378,6 +6558,10 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
     of runtime calls per run, and never with a run's row lock held across one."""
     stats = _TickStats()
     errors: list[str] = []
+    # E1: queued derivations of PRD drafts start first, so this pass submits them.
+    from oracle.roadmap import draft_items
+
+    errors += await draft_items.start_due(db)
     # Runs with a live workflow are watched whatever their state: a wait may be answered
     # outside Oracle or expire, the workflow may end in SwarmCloud, and one Oracle is
     # cancelling (even for a run that ended) has its cost read until the cancel holds.

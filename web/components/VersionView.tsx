@@ -28,6 +28,7 @@ import { DateMarker, type ExpandCtx, type Highlight } from "@/components/Markdow
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
 import { BuildDraftButton } from "@/components/NextDraft";
+import { DraftRoadmapPane } from "@/components/roadmap/DraftRoadmapPane";
 import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
 import { VersionTabs } from "@/components/roadmap/VersionTabs";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
@@ -35,6 +36,7 @@ import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
 import { api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
+import { draftRoadmapOf } from "@/lib/api/draft-roadmap";
 import { feedbackEntries, openBySection } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
@@ -100,7 +102,8 @@ const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", st
  *
  * A roadmap version has two page tabs under its header (E2): Document (this view) and Items
  * (`pane="items"`, its items as rows). The header, toolbar, warnings and Approve are the same
- * on both, so approval and date marks never differ between tabs.
+ * on both, so approval and date marks never differ between tabs. A PRD version has Document
+ * and Roadmap (E1, `pane="roadmap"`: the draft's items-only roadmap).
  */
 export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" }) {
   const router = useRouter();
@@ -239,12 +242,21 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   );
   // The pane's own URL for another version: the switcher keeps the tab.
   const paneHref = useCallback(
-    (v: number) => (pane === "items" && isRoadmap ? `/documents/${doc}/v/${v}/items` : `/documents/${doc}/v/${v}`),
-    [pane, isRoadmap, doc],
+    (v: number) =>
+      pane === "items" && isRoadmap
+        ? `/documents/${doc}/v/${v}/items`
+        : pane === "roadmap" && document_?.kind === "prd"
+          ? `/documents/${doc}/v/${v}/roadmap`
+          : `/documents/${doc}/v/${v}`,
+    [pane, isRoadmap, document_?.kind, doc],
   );
   // Only a roadmap has an Items tab: a PRD's /items opens the version.
   useEffect(() => {
     if (pane === "items" && document_ && document_.kind !== "roadmap") router.replace(`/documents/${doc}/v/${n}`);
+    // E1: only a PRD has a Roadmap tab; a roadmap's /roadmap opens its Items tab.
+    if (pane === "roadmap" && document_ && document_.kind !== "prd") {
+      router.replace(document_.kind === "roadmap" ? `/documents/${doc}/v/${n}/items` : `/documents/${doc}/v/${n}`);
+    }
   }, [pane, document_, doc, n, router]);
   const versions = useMemo(() => document_?.versions ?? [], [document_]);
   const readOnly = !!version?.approved_at;
@@ -974,7 +986,14 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             </>
           }
         />
-        <VersionTabs doc={doc} n={n} kind={document_?.kind} active={pane} count={itemCountQ.data ?? undefined} />
+        <VersionTabs
+          doc={doc}
+          n={n}
+          kind={document_?.kind}
+          active={pane}
+          count={itemCountQ.data ?? undefined}
+          draft={draftRoadmapOf(version)}
+        />
 
         <div className="mb-3 flex flex-wrap items-center gap-2 max-[600px]:gap-y-2.5">
           {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} variant="segments" hrefFor={paneHref} />}
@@ -1103,8 +1122,19 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         {pane === "items" && isRoadmap && (
           <RoadmapItemsPane doc={doc} n={n} sections={sections} canDecide={canDecide} />
         )}
-        {pane === "items" && !document_ && !error && <Loading label="Loading version…" />}
-        {pane === "items" && error && <ErrorNote>{error}</ErrorNote>}
+        {pane === "roadmap" && document_?.kind === "prd" && (
+          <DraftRoadmapPane
+            doc={doc}
+            n={n}
+            latest={latest ?? n}
+            sections={sections}
+            canDerive={canDecide}
+            isOwner={hasRole(role, "owner")}
+            onStatus={verQ.reload}
+          />
+        )}
+        {pane !== "document" && !document_ && !error && <Loading label="Loading version…" />}
+        {pane !== "document" && error && <ErrorNote>{error}</ErrorNote>}
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}

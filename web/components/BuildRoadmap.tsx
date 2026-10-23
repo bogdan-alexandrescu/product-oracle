@@ -75,6 +75,8 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
   const { rec, templateKey, themeKey } = choice;
   const [target, setTarget] = useState("");
   const [slug, setSlug] = useState("");
+  // E1 part B: the run reuses the approved version's draft items unless asked to derive them again.
+  const [deriveAgain, setDeriveAgain] = useState(false);
   // The draft run and its estimate, for the inputs they were made with.
   const [draft, setDraft] = useState<{ id: string; inputs: string; estimate: EstimateOut } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +93,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
   const existing = roadmaps.data?.find((d) => d.slug === defaultSlug);
   const others = (roadmaps.data ?? []).filter((d) => d.slug !== defaultSlug);
   const document = target === NEW ? slug.trim() : target;
-  const inputs = JSON.stringify([document, templateKey, themeKey]);
+  const inputs = JSON.stringify([document, templateKey, themeKey, deriveAgain]);
   // Any change makes the estimate stale: estimate again before starting.
   const estimate = draft?.inputs === inputs ? draft.estimate : null;
 
@@ -108,7 +110,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
             document: document || null,
             template: templateKey,
             theme: themeKey,
-            knobs: { depth: "standard", roles: {}, checkpoints: {} },
+            knobs: { depth: "standard", roles: {}, checkpoints: {}, reuse_draft_items: !deriveAgain },
           },
         }),
       );
@@ -221,6 +223,20 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
             </p>
           )}
           <TemplateThemePicker choice={choice} />
+
+          <details className="text-[15px]" data-testid="build-roadmap-advanced">
+            <summary className="cursor-pointer text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Advanced options</summary>
+            <div className="mt-2 flex items-center gap-2">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={deriveAgain} onChange={(e) => setDeriveAgain(e.target.checked)} />
+                Derive the items again
+              </label>
+              <InfoTip label="Derive the items again" align="start">
+                Oracle reuses the roadmap items already derived for this PRD version, so the Roadmap items step costs
+                nothing. Tick this to derive them again, for example after the baseline changed.
+              </InfoTip>
+            </div>
+          </details>
 
           {estimate && <EstimateSummary estimate={estimate} />}
           {error && <Notice tone="error">{error}</Notice>}

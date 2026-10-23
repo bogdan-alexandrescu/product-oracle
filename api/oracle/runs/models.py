@@ -38,6 +38,8 @@ FLOWS = (
     # F5-2 (migration 0022_code_maps): one repo's code capability map.
     "code_map",
     "update_draft",
+    # E1 (migration 0030_draft_roadmaps): one PRD draft's items-only roadmap.
+    "prd_draft_items",
 )
 RUN_STATUSES = (
     "draft",

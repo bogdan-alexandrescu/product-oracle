@@ -278,7 +278,10 @@ async def withdraw(
     when = now()
     reason_text = f"the schedule basis {basis.reference} was withdrawn"
     for item in await db.scalars(
-        select(RoadmapItem).where(RoadmapItem.milestone["basis_ids"].astext.contains(str(basis.id)))
+        select(RoadmapItem).where(
+            RoadmapItem.milestone["basis_ids"].astext.contains(str(basis.id)),
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
     ):
         if item.freshness != "potentially_stale" or item.stale_since is None:
             item.stale_since = when

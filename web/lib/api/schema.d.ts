@@ -7533,6 +7533,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/roadmap-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Draft Roadmap Items
+         * @description A PRD version's items-only roadmap (E1): its derivation's status (queued,
+         *     running, ready, failed, superseded, off, skipped, or none) and its items, which are
+         *     proposals until a roadmap is approved.
+         */
+        get: operations["get_draft_roadmap_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/versions/{n}/roadmap-items/derive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Derive Draft Roadmap Items
+         * @description Derive the version's roadmap items again (or for the first time): queued for the
+         *     caller; the tick starts it within a minute. The current items stay until the new
+         *     ones are stored.
+         */
+        post: operations["derive_draft_roadmap_items"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/roadmap-items/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Draft Roadmap Settings
+         * @description Whether Oracle derives roadmap items for each new draft of this PRD.
+         */
+        get: operations["get_draft_roadmap_settings"];
+        /**
+         * Put Draft Roadmap Settings
+         * @description Turn "Derive for each new draft" off or on for this PRD (owners).
+         */
+        put: operations["put_draft_roadmap_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmap-items/diff": {
         parameters: {
             query?: never;
@@ -13200,6 +13268,15 @@ export interface components {
             /** Upstream */
             upstream: components["schemas"]["TraceUpstreamRef"][];
         };
+        /** DeriveIn */
+        DeriveIn: {
+            /**
+             * Depth
+             * @default standard
+             * @enum {string}
+             */
+            depth: "quick" | "standard" | "deep";
+        };
         /** DesignArtifactOut */
         DesignArtifactOut: {
             /**
@@ -14053,6 +14130,92 @@ export interface components {
         DraftNoteIn: {
             /** Note */
             note?: string | null;
+        };
+        /**
+         * DraftRoadmapOut
+         * @description A PRD version's items-only roadmap: its derivation's status and its items. Items
+         *     have no track, are always fresh and carry no engineering records.
+         */
+        DraftRoadmapOut: {
+            prd: components["schemas"]["DraftRoadmapPrd"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "ready" | "failed" | "superseded" | "off" | "skipped" | "none";
+            /** Run Id */
+            run_id: string | null;
+            /** Requested At */
+            requested_at: string | null;
+            /** Ready At */
+            ready_at: string | null;
+            /** Error */
+            error: string | null;
+            /** Check */
+            check: {
+                [key: string]: unknown;
+            } | null;
+            previous: components["schemas"]["DraftRoadmapPrevious"] | null;
+            /** Auto */
+            auto: boolean;
+            /**
+             * View
+             * @enum {string}
+             */
+            view: "brief" | "full";
+            /** Items */
+            items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /** DraftRoadmapPrd */
+        DraftRoadmapPrd: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+            /** Approved */
+            approved: boolean;
+        };
+        /**
+         * DraftRoadmapPrevious
+         * @description The nearest earlier version of the PRD with ready items.
+         */
+        DraftRoadmapPrevious: {
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "ready" | "failed" | "superseded" | "off" | "skipped" | "none";
+            /** Items */
+            items: number;
+        };
+        /** DraftRoadmapSettings */
+        DraftRoadmapSettings: {
+            /** Each Draft */
+            each_draft: boolean;
+        };
+        /**
+         * DraftRoadmapSummary
+         * @description A PRD version's derivation on its version read (the Roadmap tab's label).
+         */
+        DraftRoadmapSummary: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "ready" | "failed" | "superseded" | "off" | "skipped" | "none";
+            /** Items */
+            items: number;
+            /** Problems */
+            problems: number;
         };
         /** DriftEntry */
         DriftEntry: {
@@ -15514,7 +15677,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
             /** Title */
             title: string;
             /** Description */
@@ -16125,7 +16288,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -17671,6 +17834,8 @@ export interface components {
             reuse_baseline?: boolean | null;
             /** Goals */
             goals?: string[] | null;
+            /** Reuse Draft Items */
+            reuse_draft_items?: boolean | null;
         };
         /** KnobsOut */
         KnobsOut: {
@@ -17695,6 +17860,8 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["TargetGoal"][];
+            /** Reuse Draft Items */
+            reuse_draft_items?: boolean | null;
         };
         /** KnowledgeGapOut */
         KnowledgeGapOut: {
@@ -22918,7 +23085,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
             /** Document */
             document?: string | null;
             /** Source */
@@ -23007,7 +23174,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
             /** Flow Title */
             flow_title: string;
             /**
@@ -23161,7 +23328,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
             /** Flow Title */
             flow_title: string;
             /**
@@ -24235,6 +24402,8 @@ export interface components {
              * @default false
              */
             reused: boolean;
+            /** Reused From Version */
+            reused_from_version?: number | null;
             /** Note */
             note?: string | null;
         };
@@ -27851,6 +28020,7 @@ export interface components {
              * @default []
              */
             date_marks: components["schemas"]["DateMarkOut"][];
+            draft_roadmap?: components["schemas"]["DraftRoadmapSummary"] | null;
         };
         /** VersionPublishIn */
         VersionPublishIn: {
@@ -42539,6 +42709,149 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemStalenessOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_roadmap_items: {
+        parameters: {
+            query?: {
+                view?: "brief" | "full";
+            };
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftRoadmapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    derive_draft_roadmap_items: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DeriveIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftRoadmapOut"];
+                };
+            };
+            /** @description Already being derived */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_roadmap_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftRoadmapSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_draft_roadmap_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftRoadmapSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftRoadmapSettings"];
                 };
             };
             /** @description Validation Error */
