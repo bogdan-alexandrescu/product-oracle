@@ -12,7 +12,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await openHome(page);
   const goals = page.getByTestId("home-goals");
   await expect(goals.getByText("2 confirmed")).toBeVisible();
-  await expect(goals.getByTestId("goals-proposed")).toHaveText("G3 proposed");
+  await expect(goals.getByTestId("goals-proposed")).toHaveText("Cut early churn proposed");
 
   const g1 = page.getByTestId("home-goal-G1");
   await expect(g1).toContainText("Raise activation");

@@ -8,7 +8,7 @@ import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 
 import { mockUuid, seeded } from "./ids";
-import { addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addGoalCodes, addNoisyProposals, attributeCommenterProposal, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
@@ -1438,6 +1438,7 @@ function load(): Db {
   db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  if (scenario === "named-codes") addGoalCodes(db.baseline);
   save(db);
   return db;
 }
