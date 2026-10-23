@@ -547,6 +547,15 @@ class Gate(BaseModel):
     left: list[GateLeft] = []
 
 
+class NeedsAgents(BaseModel):
+    """A staged action only the agents can carry out (D7): Approve waits until it is
+    removed, or the checkpoint is sent back."""
+
+    action_id: uuid.UUID
+    item: str
+    kind: str
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -574,6 +583,10 @@ class CheckpointOut(BaseModel):
     console: ConsoleAnswer | None = None
     # A decided checkpoint whose decision Oracle has not delivered to the run yet.
     delivery: CheckpointDelivery | None = None
+    # D7: the approve button's words ("Approve with 3 edits" while staged edits wait for
+    # Oracle to apply them), and the staged actions that need the agents instead.
+    approve_label: str = "Approve"
+    needs_agents: list[NeedsAgents] = []
 
 
 class RunDecision(BaseModel):

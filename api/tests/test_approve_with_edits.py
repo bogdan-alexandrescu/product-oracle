@@ -134,7 +134,7 @@ async def test_approve_applies_the_staged_edits_and_continues(edits, runtime):  
     assert cp["approve_label"] == "Approve with 3 edits" and cp["needs_agents"] == []
     spent, jobs = await counts(rv)
     submitted = len(runtime.submitted)
-    revision = (await rv.get())["revision"]
+    revision = (await rv.get("approver"))["revision"]
     run = await rv.decide("approver", decision="approved", expected_revision=revision)
     cp = cp_of(run, rv)
     assert cp["status"] == "approved"
@@ -144,9 +144,7 @@ async def test_approve_applies_the_staged_edits_and_continues(edits, runtime):  
                                                           "mobile-push"}  # fmt: skip
 
     edited = await artifact(rv)
-    assert edited.startswith(
-        "# roadmap_items.yaml, edited at the Roadmap items checkpoint on "
-    )
+    assert edited.startswith("# roadmap_items.yaml, edited at the Roadmap items checkpoint on ")
     assert "(abe" in edited.splitlines()[1].lower() and "3 edits applied by Oracle" in edited
     got = {i["id"]: i for i in safe_yaml.load(edited)["items"]}
     assert set(got) == {"slack-alerts", "budget-caps"}
@@ -225,7 +223,7 @@ async def test_edits_that_leave_a_blocking_problem_change_nothing(edits):  # noq
     assert ("mobile-push", "unknown_prd_section") in {
         (r["item"], r["code"]) for r in cp["payload"]["items_check"]["reasons"]
     }
-    draft = await rv.get()
+    draft = await rv.get("approver")
     assert sum(len(i["actions"]) for i in draft["items"]) == 2
 
 
@@ -328,7 +326,7 @@ async def test_a_console_approval_leaves_staged_edits_unapplied(client, owner, m
             check = {**row.payload["items_check"], "reasons": [], "blocking": 0}
             row.payload = {**row.payload, "items_check": check}
             await s.commit()
-        revision = (await rv.get())["revision"]
+        revision = (await rv.get("approver"))["revision"]
         run = await rv.decide("owner", decision="confirm", expected_revision=revision)
         assert cp_of(run, rv)["status"] == "approved"
         assert cp_of(run, rv)["review"] is None

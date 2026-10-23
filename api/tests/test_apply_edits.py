@@ -140,7 +140,10 @@ def test_restore_copies_the_base_item_in_its_place():
             "mobile-push": {"id": "mobile-push"}}  # fmt: skip
     out, applied = apply_edits.apply(FILE, [act("csv-export", "restore")], base)
     assert [i["id"] for i in items(out)] == [
-        "slack-alerts", "csv-export", "mobile-push", "budget-caps"
+        "slack-alerts",
+        "csv-export",
+        "mobile-push",
+        "budget-caps",
     ]
     assert by_id(out)["csv-export"]["title"] == "CSV export"
     assert applied[0]["text"] == "csv-export restored"
@@ -177,10 +180,22 @@ def test_key_order_is_kept_and_new_keys_come_last():
     out, _ = apply_edits.apply(FILE, [act("mobile-push", "edit", "milestone_name", "GA")], {})
     assert list(safe_yaml.load(out)) == ["version", "prd", "items"]
     assert list(by_id(out)["mobile-push"]) == [
-        "id", "title", "outcome", "horizon", "confidence", "prd_section", "milestone"
+        "id",
+        "title",
+        "outcome",
+        "horizon",
+        "confidence",
+        "prd_section",
+        "milestone",
     ]
     assert list(by_id(out)["slack-alerts"]) == [
-        "id", "title", "outcome", "horizon", "milestone", "confidence", "prd_section"
+        "id",
+        "title",
+        "outcome",
+        "horizon",
+        "milestone",
+        "confidence",
+        "prd_section",
     ]
 
 

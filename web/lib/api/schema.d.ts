@@ -11324,6 +11324,16 @@ export interface components {
             gate?: components["schemas"]["Gate"] | null;
             console?: components["schemas"]["ConsoleAnswer"] | null;
             delivery?: components["schemas"]["CheckpointDelivery"] | null;
+            /**
+             * Approve Label
+             * @default Approve
+             */
+            approve_label: string;
+            /**
+             * Needs Agents
+             * @default []
+             */
+            needs_agents: components["schemas"]["NeedsAgents"][];
         };
         /**
          * CheckpointReview
@@ -16122,6 +16132,16 @@ export interface components {
             console?: components["schemas"]["ConsoleAnswer"] | null;
             delivery?: components["schemas"]["CheckpointDelivery"] | null;
             /**
+             * Approve Label
+             * @default Approve
+             */
+            approve_label: string;
+            /**
+             * Needs Agents
+             * @default []
+             */
+            needs_agents: components["schemas"]["NeedsAgents"][];
+            /**
              * Flow
              * @enum {string}
              */
@@ -18806,6 +18826,22 @@ export interface components {
              * @enum {string}
              */
             signed_in_via: "browser" | "api_token" | "mcp_client";
+        };
+        /**
+         * NeedsAgents
+         * @description A staged action only the agents can carry out (D7): Approve waits until it is
+         *     removed, or the checkpoint is sent back.
+         */
+        NeedsAgents: {
+            /**
+             * Action Id
+             * Format: uuid
+             */
+            action_id: string;
+            /** Item */
+            item: string;
+            /** Kind */
+            kind: string;
         };
         /**
          * NewEvidence
@@ -37820,6 +37856,8 @@ export interface operations {
             query?: {
                 /** @description The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404). */
                 attempt?: number | null;
+                /** @description The file as the agents wrote it, before an approver's edits were applied at its checkpoint (404 when none were). */
+                agents?: boolean;
             };
             header?: never;
             path: {

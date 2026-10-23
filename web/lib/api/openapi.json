@@ -16510,6 +16510,18 @@
               "title": "Attempt"
             },
             "description": "The attempt whose file to read: the current one, or the previous one a send-back kept. Older attempts are not kept (404)."
+          },
+          {
+            "name": "agents",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "The file as the agents wrote it, before an approver's edits were applied at its checkpoint (404 when none were).",
+              "default": false,
+              "title": "Agents"
+            },
+            "description": "The file as the agents wrote it, before an approver's edits were applied at its checkpoint (404 when none were)."
           }
         ],
         "responses": {
@@ -38027,6 +38039,19 @@
                 "type": "null"
               }
             ]
+          },
+          "approve_label": {
+            "type": "string",
+            "title": "Approve Label",
+            "default": "Approve"
+          },
+          "needs_agents": {
+            "items": {
+              "$ref": "#/components/schemas/NeedsAgents"
+            },
+            "type": "array",
+            "title": "Needs Agents",
+            "default": []
           }
         },
         "type": "object",
@@ -51190,6 +51215,19 @@
               }
             ]
           },
+          "approve_label": {
+            "type": "string",
+            "title": "Approve Label",
+            "default": "Approve"
+          },
+          "needs_agents": {
+            "items": {
+              "$ref": "#/components/schemas/NeedsAgents"
+            },
+            "type": "array",
+            "title": "Needs Agents",
+            "default": []
+          },
           "flow": {
             "type": "string",
             "enum": [
@@ -58215,6 +58253,31 @@
         ],
         "title": "MyAccountOut",
         "description": "The signed-in member: who they are, their role and how they sign in."
+      },
+      "NeedsAgents": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Action Id"
+          },
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "item",
+          "kind"
+        ],
+        "title": "NeedsAgents",
+        "description": "A staged action only the agents can carry out (D7): Approve waits until it is\nremoved, or the checkpoint is sent back."
       },
       "NewEvidence": {
         "properties": {

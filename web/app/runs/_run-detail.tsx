@@ -400,6 +400,7 @@ export function RunDetail({ id }: { id: string }) {
                 busy={busy}
                 onDecide={decide}
                 onRetryImport={retryImport}
+                onDraftChanged={() => void reload()}
               />
             ))}
           </ol>
@@ -644,6 +645,7 @@ function SegmentItem({
   busy,
   onDecide,
   onRetryImport,
+  onDraftChanged,
 }: {
   run: RunOut;
   segment: SegmentOut;
@@ -651,6 +653,8 @@ function SegmentItem({
   busy: boolean;
   onDecide: Decide;
   onRetryImport: (seq: number) => void;
+  /** D7: the shared draft changed, so the checkpoint's Approve words may have (the run re-read). */
+  onDraftChanged: () => void;
 }) {
   const kind = s.checkpoint;
   const { me } = useMe();
@@ -659,6 +663,18 @@ function SegmentItem({
   const draft = useDraft(run.id, waitingCp?.id ?? null);
   const shared = draft.review && draft.review.checkpoint_id === waitingCp?.id ? draft.review : null;
   const [draftError, setDraftError] = useState<string | null>(null);
+  // D7: Approve's words and what needs the agents are the checkpoint's: re-read the run when
+  // the draft moves on from the revision first read (a staged edit, another reviewer's).
+  const seenRevision = useRef<string | null>(null);
+  const revisionKey = shared ? `${shared.checkpoint_id}|${shared.revision}` : null;
+  useEffect(() => {
+    if (!revisionKey) return;
+    const before = seenRevision.current;
+    seenRevision.current = revisionKey;
+    if (before && before !== revisionKey) onDraftChanged();
+    // onDraftChanged is a new function on every render: the revision decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revisionKey]);
   const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
   const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
@@ -666,8 +682,11 @@ function SegmentItem({
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
   // D4: the structured reviews sent back from this segment's checkpoints.
   const sentReviews = checkpoints.filter((c) => c.status === "changes_requested" && c.review);
+  // D7: approved with the reviewer's edits applied by Oracle; the agents' file is kept.
+  const editedBy = checkpoints.filter((c) => c.status === "approved" && c.review?.kind === "edits");
   const details =
     sentReviews.length > 0 ||
+    editedBy.length > 0 ||
     s.error ||
     s.autonomy_note ||
     s.items_check ||
@@ -867,6 +886,9 @@ function SegmentItem({
           {sentReviews.map((cp) => (
             <SentReviewLine key={cp.id} runId={run.id} cp={cp} />
           ))}
+          {editedBy.map((cp) => (
+            <AppliedEditsLine key={cp.id} cp={cp} />
+          ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
           {s.draft_import && (
             <DraftImportLine
@@ -877,7 +899,15 @@ function SegmentItem({
               onSendBack={sendBack}
             />
           )}
-          {(s.artifacts.length > 0 || s.previous_attempt) && <Artifacts runId={run.id} seq={s.seq} names={s.artifacts} previous={s.previous_attempt ?? null} />}
+          {(s.artifacts.length > 0 || s.previous_attempt) && (
+            <Artifacts
+              runId={run.id}
+              seq={s.seq}
+              names={s.artifacts}
+              previous={s.previous_attempt ?? null}
+              edited={editedBy.map((cp) => editedFile(cp)).filter((n) => s.artifacts.includes(n))}
+            />
+          )}
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
@@ -1381,6 +1411,42 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
   );
 }
 
+/** D7: the file an approval with edits changed (the API's review names it; roadmap items' otherwise). */
+const editedFile = (cp: CheckpointOut) => (typeof cp.review?.file === "string" ? cp.review.file : "roadmap_items.yaml");
+
+/** D7: "Approved with 3 edits · View": what Oracle applied to the agents' file, opened in place. */
+function AppliedEditsLine({ cp }: { cp: CheckpointOut }) {
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const applied = Array.isArray(cp.review?.applied) ? (cp.review.applied as { id?: string; text?: string }[]) : [];
+  const n = typeof cp.review?.edits === "number" ? cp.review.edits : applied.length;
+  return (
+    <div data-testid="approved-edits">
+      <p className="text-text2">
+        Approved with {plural(n, "edit")} ·{" "}
+        <button
+          type="button"
+          className="font-medium text-accent-ink hover:underline"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setOpen((o) => !o)}
+        >
+          View
+        </button>
+      </p>
+      {open && (
+        <ul id={listId} className="mt-1 list-disc space-y-0.5 pl-5 text-sm" data-testid="applied-edits">
+          {applied.map((a, i) => (
+            <li key={i} className="break-words">
+              {a.text ?? a.id}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** D4: "Sent back · 3 entries · View review": the review.yaml the agents got, opened in place. */
 function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
   const [text, setText] = useState<string | null>(null);
@@ -1416,27 +1482,33 @@ function Artifacts({
   seq,
   names,
   previous,
+  edited = [],
 }: {
   runId: string;
   seq: number;
   names: string[];
   previous: { attempt: number; artifacts: string[] } | null;
+  /** D7: files an approver's edits changed; the agents' original of each is offered too. */
+  edited?: string[];
 }) {
-  // The open file: its name and, for the previous attempt's files, that attempt's number.
-  const [open, setOpen] = useState<{ name: string; attempt: number | null } | null>(null);
+  // The open file: its name and, for the previous attempt's files, that attempt's number; or
+  // the agents' original of an edited file.
+  const [open, setOpen] = useState<{ name: string; attempt: number | null; agents?: boolean } | null>(null);
   const [content, setContent] = useState<string>("");
-  async function show(name: string, attempt: number | null) {
-    if (open?.name === name && open.attempt === attempt) return setOpen(null);
-    setOpen({ name, attempt });
+  const isOpen = (name: string, attempt: number | null, agents = false) => open?.name === name && open.attempt === attempt && !!open.agents === agents;
+  async function show(name: string, attempt: number | null, agents = false) {
+    if (isOpen(name, attempt, agents)) return setOpen(null);
+    setOpen({ name, attempt, agents });
     setContent("Loading…");
+    const query = agents ? { agents: true } : attempt == null ? {} : { attempt };
     const { data, response } = await api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", {
-      params: { path: { run_id: runId, seq, name }, query: attempt == null ? {} : { attempt } },
+      params: { path: { run_id: runId, seq, name }, query },
       parseAs: "text",
     });
     setContent(response.ok ? (data as string) : `Could not load ${name} (${response.status}).`);
   }
   const file = (name: string, attempt: number | null) => {
-    const on = open?.name === name && open.attempt === attempt;
+    const on = isOpen(name, attempt);
     return (
       <button
         key={name}
@@ -1457,6 +1529,22 @@ function Artifacts({
       {names.length > 0 && (
         <div className="flex flex-wrap gap-1.5" data-testid="artifacts-current">
           {names.map((n) => file(n, null))}
+          {edited.map((n) => (
+            // D7: an approver's edits changed this file; the agents' original is kept.
+            <button
+              key={`agents-${n}`}
+              type="button"
+              onClick={() => void show(n, null, true)}
+              aria-expanded={isOpen(n, null, true)}
+              title={`${n} as the agents wrote it, before the approver's edits`}
+              className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
+                isOpen(n, null, true) ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
+              }`}
+            >
+              <Icon name="doc" size={16} />
+              Agents&apos; file
+            </button>
+          ))}
         </div>
       )}
       {previous && previous.artifacts.length > 0 && (
@@ -1547,8 +1635,13 @@ function CheckpointRow({
   const left = closed ? closed.blocking_open + closed.file_problems : 0;
   // Any other refusal (the draft was not imported, the feature set's problems) as the API says it.
   const other = cp.cannot_approve && cp.cannot_approve !== gateMessage(cp.gate) ? cp.cannot_approve : null;
-  const refusal = other ?? (closed ? gateMessage(closed) : null);
-  const approveBlocked = refusal ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.` : null;
+  // D7: with edits staged, Approve applies them and re-checks the file, so the gate is Oracle's
+  // to read again then; a split, merge or open question needs the agents, so Approve waits.
+  const label = cp.approve_label ?? "Approve";
+  const withEdits = label !== "Approve";
+  const agentsOnly = needsAgentsText(cp.needs_agents ?? []);
+  const refusal = other ?? (closed && !withEdits ? gateMessage(closed) : null);
+  const approveBlocked = refusal ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.` : agentsOnly;
   const confirmBlocked = other ? approveBlocked : closed ? `${plural(left, "blocking problem")} left` : null;
   // G1: talk the checkpoint through with the team before deciding, in a sheet.
   const [discussing, setDiscussing] = useState(false);
@@ -1580,6 +1673,11 @@ function CheckpointRow({
       {other && (
         <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
           {approveBlocked}
+        </p>
+      )}
+      {!other && agentsOnly && (
+        <p className="mt-2 text-sm text-warn" data-testid="needs-agents">
+          {agentsOnly}
         </p>
       )}
       {orderHref(cp) && (
@@ -1661,7 +1759,7 @@ function CheckpointRow({
               title={approveBlocked ?? undefined}
               onClick={() => decideWith("approved")}
             >
-              Approve and continue
+              {withEdits ? label : "Approve and continue"}
             </Button>
             <Button
               disabled={busy || (!note.trim() && !staged)}
@@ -1681,7 +1779,17 @@ function CheckpointRow({
           Discuss
         </Button>
       </div>
-      {closed && <GateList gate={closed} message={approveBlocked!} onWaive={review?.can_stage ? onWaive : undefined} />}
+      {closed && (
+        <GateList
+          gate={closed}
+          message={
+            withEdits && !other
+              ? `${plural(left, "blocking problem")} open before your edits: Oracle checks the file again once it applies them.`
+              : approveBlocked!
+          }
+          onWaive={review?.can_stage ? onWaive : undefined}
+        />
+      )}
       <Sheet open={discussing} title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`} onClose={() => setDiscussing(false)} testId="sheet-discuss">
         <div className="px-4 py-3">
           <DiscussSubject
@@ -1707,6 +1815,12 @@ const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
   unread:
     "Oracle has not read the answer yet and reads it again each minute. Until then the run's agents may read Oracle but not write to it.",
 };
+
+/** D7: what needs the agents, one sentence each ("Split on budget-caps needs the agents: …"). */
+function needsAgentsText(list: NonNullable<CheckpointOut["needs_agents"]>): string | null {
+  if (list.length === 0) return null;
+  return list.map((x) => `${x.kind.charAt(0).toUpperCase()}${x.kind.slice(1)} on ${x.item} needs the agents: send back, or remove it to approve.`).join(" ");
+}
 
 /** As oracle.runs.gate.message: why Approve is refused while the gate is closed (D3). */
 function gateMessage(gate: CheckpointOut["gate"] | undefined): string | null {
