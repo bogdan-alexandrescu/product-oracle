@@ -41,8 +41,8 @@ def known_step(key: str) -> str:
     return key
 
 
-# A1's keys: connect, sources, invite, domains, horizons, A3's eng_lead and B1's
-# build_baseline. Later picks add more through STEPS, so the type is a str checked
+# A1's keys: connect, sources, invite, domains, horizons, A3's eng_lead, H2's timezone
+# and B1's build_baseline. Later picks add more through STEPS, so the type is a str checked
 # against the registry.
 SetupKey = Annotated[str, AfterValidator(known_step)]
 
@@ -133,6 +133,19 @@ async def _horizons(db: AsyncSession, principal: Principal) -> SetupStep:
     return SetupStep(key="horizons", done=stored is not None)
 
 
+async def _timezone(db: AsyncSession, principal: Principal) -> SetupStep:
+    """Done once an owner stored the company's time zone (H2 Cadence engine: new
+    rituals' zone); detail: the zone."""
+    stored = await db.scalar(
+        select(TenantSetting.value).where(TenantSetting.key == "company_timezone")
+    )
+    return SetupStep(
+        key="timezone",
+        done=stored is not None,
+        detail=stored if isinstance(stored, str) else None,
+    )
+
+
 async def _build_baseline(db: AsyncSession, principal: Principal) -> SetupStep:
     """Done once a Build the baseline run succeeded (B1); detail: the last one's finish."""
     finished = await db.scalar(
@@ -154,6 +167,7 @@ STEPS: list[Step] = [
     Step("domains", OWNERS, _domains),
     Step("eng_lead", OWNERS, _eng_lead),
     Step("horizons", OWNERS, _horizons),
+    Step("timezone", OWNERS, _timezone),
     Step("build_baseline", OWNERS, _build_baseline),
 ]
 

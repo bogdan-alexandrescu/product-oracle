@@ -260,6 +260,36 @@ function MethodSwitch({ value, onChange, locked = false }: { value: Method; onCh
   );
 }
 
+/**
+ * H3: how well past predictions held, as the factor it puts on confidence ("Track record
+ * ×0.77 · 3 of 6 held"). Company-wide when it has enough assessed outcomes, else the lowest
+ * goal's; nothing while there is too little record.
+ */
+function TrackRecord() {
+  const q = useQuery("priorities|calibration", () => unwrap(api.GET("/v1/priorities/calibration")));
+  const c = q.data;
+  if (!c) return null;
+  const goal = [...c.goals].filter((g) => g.factor != null).sort((a, b) => a.factor! - b.factor!)[0];
+  const fig = c.company.factor != null ? c.company : goal;
+  if (!fig || fig.factor == null) return null;
+  return (
+    <Notice tone="info">
+      <span className="flex flex-wrap items-center gap-2" data-testid="track-record">
+        <b className="tnum">
+          Track record ×{fig.factor} · {fig.held} of {fig.n} held
+        </b>
+        {c.setting === "show" && <Chip kind="line">Shown, not applied</Chip>}
+        <InfoTip label="Track record">
+          Assessed predictions from the last year: held counts 1, partly held 0.5, not held 0. The factor is (held score
+          + 1) ÷ (confidence predicted + 1), between {c.floor} and {c.ceiling}: a poor record lowers confidence, a good one
+          never raises it. Each goal uses its own record once it has {c.min_outcomes} assessed predictions, otherwise the
+          company&apos;s.
+        </InfoTip>
+      </span>
+    </Notice>
+  );
+}
+
 /** The selected feature: rank, confidence, score, then how the score was worked out. */
 function FeatureInspector({
   f,
@@ -344,6 +374,13 @@ function FeatureInspector({
                 <li key={i}>{words(stepText(s, e.confidence.value))}</li>
               ))}
             </ol>
+            {e.calibration && (
+              <p className="mt-2 text-sm text-text2" data-testid="track-record-line">
+                Track record ×{e.calibration.factor}
+                {e.calibration.applied ? "" : " (shown, not applied)"}
+                {e.calibration.basis ? ` · ${e.calibration.basis}` : ""}
+              </p>
+            )}
             {e.missing.length > 0 && (
               <p className="mt-2 flex flex-wrap items-center gap-1.5">
                 <Chip kind="warn">Missing</Chip>
@@ -1000,6 +1037,7 @@ function Priorities() {
         {changeError && <Notice tone="error">{changeError}</Notice>}
         {q.error && <Notice tone="error">{q.error}</Notice>}
         {snapshotId && cq.error && <Notice tone="error">{cq.error}</Notice>}
+        <TrackRecord />
         {cmp && (
           <SnapshotBand
             c={cmp}

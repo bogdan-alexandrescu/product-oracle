@@ -5,13 +5,14 @@ constraint enforces it (proposals may point at neither: a proposed new item).
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Numeric,
@@ -263,3 +264,23 @@ class Conflict(TenantScoped, Base):
         Boolean, nullable=False, default=False, server_default=false()
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
+
+
+class GoalMeasurement(TenantScoped, Base):
+    """A goal's value on a day (B5), recorded by a person; one row per goal per day. The
+    latest by ``measured_on`` is the goal's ``attrs.current`` (oracle.baseline.measurements)."""
+
+    __tablename__ = "goal_measurements"
+    __table_args__ = (UniqueConstraint("entity_id", "measured_on"),)
+
+    entity_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entities.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    measured_on: Mapped[date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("evidence.id", ondelete="SET NULL")
+    )
+    # User or API token id; no FK because it can be either.
+    recorded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)

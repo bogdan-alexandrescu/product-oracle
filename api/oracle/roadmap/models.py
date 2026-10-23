@@ -51,7 +51,7 @@ BASIS_KINDS = ("estimate", "capacity", "commitment")
 BASIS_STATUSES = ("verified", "withdrawn", "proposed", "rejected")
 TRACKERS = ("linear", "jira", "github", "other")
 TRACKER_STATES = ("todo", "in_progress", "done", "cancelled", "unknown")
-# E1 Roadmap per PRD draft (migration 0030_draft_roadmaps): a draft's derivation. "none"
+# E1 Roadmap per PRD draft (migration 0034_draft_roadmaps): a draft's derivation. "none"
 # (no row) is the API's word for a version imported before E1.
 DRAFT_STATUSES = ("queued", "running", "ready", "failed", "superseded", "off", "skipped")
 DRAFT_DEPTHS = ("quick", "standard", "deep")

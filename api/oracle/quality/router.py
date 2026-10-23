@@ -27,6 +27,7 @@ from oracle.quality.schemas import (
     CriterionInfo,
     HumanRatingIn,
     LearningCreate,
+    LearningDecision,
     LearningOut,
     LearningRetire,
     LearningSignal,
@@ -34,8 +35,11 @@ from oracle.quality.schemas import (
     LearningTarget,
     OutcomeCreate,
     OutcomeOut,
+    OutcomeState,
     OutcomeStatus,
+    OutcomeUpdate,
     ReadinessDashboard,
+    ShippedIn,
 )
 from oracle.readiness import Purpose
 from oracle.v2.schemas import EvaluationReportDetail
@@ -125,17 +129,47 @@ async def list_outcomes(
     goal_id: uuid.UUID | None = None,
     document_id: uuid.UUID | None = None,
     status: OutcomeStatus | None = None,
+    state: Annotated[
+        OutcomeState | None,
+        Query(description="predicted, tracking (measuring), due (a proposal waits), assessed"),
+    ] = None,
+    needs_prediction: bool | None = None,
+    track_id: uuid.UUID | None = None,
+    roadmap_item_id: uuid.UUID | None = None,
     limit: Limit = 100,
     offset: Offset = 0,
 ) -> list[OutcomeOut]:
     return await outcomes.list_outcomes(
-        db, goal_id=goal_id, document_id=document_id, status=status, limit=limit, offset=offset
-    )
+        db, goal_id=goal_id, document_id=document_id, status=status, state=state,
+        needs_prediction=needs_prediction, track_id=track_id, roadmap_item_id=roadmap_item_id,
+        limit=limit, offset=offset,
+    )  # fmt: skip
 
 
 @router.get("/outcomes/{outcome_id}", response_model=OutcomeOut)
 async def get_outcome(outcome_id: uuid.UUID, db: TenantDB) -> OutcomeOut:
     return OutcomeOut.model_validate(await _call(outcomes.get_outcome(db, outcome_id)))
+
+
+@router.patch("/outcomes/{outcome_id}", response_model=OutcomeOut)
+async def update_outcome(
+    outcome_id: uuid.UUID, body: OutcomeUpdate, principal: Approver, db: TenantDB
+) -> OutcomeOut:
+    """Edit the prediction while the item is predicted (audited); once shipped it is
+    frozen (409). The owner can change any time."""
+    out = await _call(outcomes.update_outcome(db, principal, outcome_id, body))
+    await db.commit()
+    return out
+
+
+@router.post("/outcomes/{outcome_id}/shipped", response_model=OutcomeOut)
+async def mark_outcome_shipped(
+    outcome_id: uuid.UUID, body: ShippedIn, principal: Approver, db: TenantDB
+) -> OutcomeOut:
+    """Say a predicted item shipped (signal ``manual``): it starts measuring."""
+    out = await _call(outcomes.mark_shipped(db, principal, outcome_id, body))
+    await db.commit()
+    return out
 
 
 @router.post("/outcomes/{outcome_id}/assessments", response_model=AssessmentResult)
@@ -144,6 +178,16 @@ async def assess_outcome(
 ) -> AssessmentResult:
     """Record whether the prediction held; returns drafted learnings to keep or drop."""
     out = await _call(outcomes.assess(db, principal, outcome_id, body))
+    await db.commit()
+    return out
+
+
+@router.post("/outcomes/{outcome_id}/learnings/{index}", response_model=OutcomeOut)
+async def decide_outcome_learning(
+    outcome_id: uuid.UUID, index: int, body: LearningDecision, principal: Approver, db: TenantDB
+) -> OutcomeOut:
+    """Keep or skip one of the latest assessment's drafted learnings (by its index)."""
+    out = await _call(outcomes.decide_learning(db, principal, outcome_id, index, body.decision))
     await db.commit()
     return out
 

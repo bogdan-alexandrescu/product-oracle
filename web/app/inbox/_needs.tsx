@@ -285,6 +285,8 @@ export type NeedGroup =
   | "decisions"
   | "launches"
   | "dates"
+  | "rituals"
+  | "outcomes"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
@@ -1383,6 +1385,76 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
   return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
 }
 
+const ritualWhen = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+/**
+ * H2 ritual rows: Pre-read ready (the owner and attendees, until they open it), Record notes
+ * (the ritual's owner, after the end) and Ritual failed to prepare (owners, with Retry). Each
+ * opens the occurrence; a failed one opens Company › Rituals.
+ */
+export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): StatedNeed[] {
+  return (inbox.rituals ?? []).map((r) => {
+    const label =
+      r.reason === "pre_read"
+        ? `Pre-read ready · ${r.title} · ${ritualWhen.format(new Date(r.due_at))}`
+        : r.reason === "record_notes"
+          ? `Record notes · ${r.title}`
+          : `Ritual failed to prepare · ${r.title}`;
+    return {
+      key: `ritual-${r.reason}-${r.occurrence_id}`,
+      icon: "company",
+      kind: "Ritual",
+      item: (
+        <span className="truncate" title={label} data-testid="ritual-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Rituals</span>,
+      at: r.due_at,
+      action:
+        r.reason === "failed" ? (
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`ritual-retry-${r.ritual_id}`, () => unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", { params: { path: { ritual_id: r.ritual_id } } })))}
+          >
+            Retry
+          </Button>
+        ) : (
+          <LinkButton variant="secondary" href={`/company/rituals/${r.occurrence_id}`} aria-label="Open">
+            Open
+          </LinkButton>
+        ),
+      state: r.state,
+      counted: r.counts,
+      group: "rituals" as const,
+    };
+  });
+}
+
+/** H3 outcome rows: Add predictions (the roadmap's approver) and Outcome check due (the
+ * record's owner) count; Oracle recorded (H11 at Act within limits) is shown, with Change. */
+export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] } {
+  const rows = inbox.outcomes ?? [];
+  const need = (r: (typeof rows)[number]): Need => ({
+    key: `outcome-${r.reason}-${r.id}`,
+    icon: r.reason === "oracle_recorded" ? "check" : "flag",
+    kind: r.reason === "needs_prediction" ? "Add predictions" : r.reason === "check_due" ? "Outcome check due" : "Oracle recorded",
+    item: (
+      <span className="truncate" title={r.title} data-testid="outcome-need">
+        {r.title}
+      </span>
+    ),
+    context: <span className="block truncate text-text2">Plan › Outcomes</span>,
+    at: r.due_on,
+    action: (
+      <LinkButton variant="secondary" href={`/plan/outcomes?outcome=${r.id}`}>
+        {r.reason === "oracle_recorded" ? "Change" : "Open"}
+      </LinkButton>
+    ),
+  });
+  return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
  * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
@@ -1402,6 +1474,7 @@ export function allNeeds(
   const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
+  const outcomes = outcomeNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
     rows.map((r) => ({
       ...r,
@@ -1423,6 +1496,8 @@ export function allNeeds(
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...stated(dateNeeds(inbox, busy, act), "dates"),
     ...stated(launches.counted, "launches"),
+    ...ritualNeeds(inbox, busy, act),
+    ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),
@@ -1432,6 +1507,7 @@ export function allNeeds(
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(launches.shipped, "shipped", false),
+    ...stated(outcomes.shown, "outcomes", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }
 

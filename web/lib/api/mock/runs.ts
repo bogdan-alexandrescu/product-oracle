@@ -1306,6 +1306,9 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],
+    // Ritual rows (H2): the mock has no rituals yet (the UI lane adds them); outcome rows (H3) are added by ./quality.ts.
+    rituals: [],
+    outcomes: [],
     checkpoints,
     deliveries,
     approvals,

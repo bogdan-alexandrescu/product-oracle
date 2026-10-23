@@ -47,7 +47,9 @@ async function editDb(page: Page, edit: string, arg?: unknown) {
  * Home's first paint makes at most this many calls, however large the company. A1 added
  * one: the Set up checklist (/v1/setup), a fixed call whatever the company's size; #403
  * one more for an owner: the Claude account pool (/v1/claude-accounts), for the notice
- * that Oracle's AI is off.
+ * that Oracle's AI is off. B5 added
+ * one: a shown goal with a typed current reads its trend from its measurements first, and
+ * from its revisions only when it has fewer than two (here: paid conversion).
  */
 const CALL_BUDGET = 15;
 

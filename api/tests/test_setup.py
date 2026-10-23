@@ -4,6 +4,7 @@ Every test reads the step state from real tables (connections, sources, users, i
 tenant_settings, user_preferences); nothing here proves the web draws it (web/e2e/setup.spec.ts).
 """
 
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -23,7 +24,10 @@ from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.connection_helpers import add_connection, make_person
 
-OWNER_KEYS = ["connect", "sources", "invite", "domains", "eng_lead", "horizons", "build_baseline"]
+OWNER_KEYS = [
+    "connect", "sources", "invite", "domains", "eng_lead", "horizons", "timezone",
+    "build_baseline",
+]  # fmt: skip
 DEFAULT_HORIZONS = {
     "short_quarters": 1,
     "medium_quarters": 2,
@@ -59,12 +63,12 @@ def _step(body: dict, key: str) -> dict:
 
 async def test_a_new_companys_owner_has_every_step_open(client, owner):
     # protects=the owner's checklist for a new company; fails_when=a step reads done
-    # without its rows, or the order differs; no_claim=the web draws it (seven owner
-    # steps, A3's eng_lead and B1's build_baseline among them).
+    # without its rows, or the order differs; no_claim=the web draws it (eight owner
+    # steps, A3's eng_lead, H2's timezone and B1's build_baseline among them).
     body = await _setup(client, owner)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 7
-    assert body["done"] == 0 and body["total"] == 7 and body["hidden"] is False
+    assert [s["done"] for s in body["steps"]] == [False] * 8
+    assert body["done"] == 0 and body["total"] == 8 and body["hidden"] is False
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -213,6 +217,30 @@ async def test_horizons_done_while_a_row_is_stored(client, owner):
     assert _step(await _setup(client, owner), "horizons")["done"] is False
 
 
+async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant_id, owner):
+    # protects=H2's Time zone step (A1's registry): owners only, done once an owner stored
+    # company_timezone, open again after a reset; fails_when=the UTC default reads as
+    # done, an approver gets the step, or a reset leaves it done; no_claim=the web's
+    # "Time zone" copy and where it opens.
+    approver = await make_person(tenant_id, "approver@example.com", "approver")
+    assert "timezone" not in [s["key"] for s in (await _setup(client, approver))["steps"]]
+    before = await _setup(client, owner)
+    assert _step(before, "timezone") == {
+        "key": "timezone", "done": False, "count": None, "detail": None,
+    }  # fmt: skip
+    url = "/v1/settings/company_timezone"
+    put = await client.put(url, json={"value": "Europe/Lisbon"}, headers=owner.headers)
+    assert put.status_code == 200, put.text
+    body = await _setup(client, owner)
+    assert _step(body, "timezone") == {
+        "key": "timezone", "done": True, "count": None, "detail": "Europe/Lisbon",
+    }  # fmt: skip
+    assert body["done"] == before["done"] + 1
+    reset = await client.put(url, json={"value": None}, headers=owner.headers)
+    assert reset.status_code == 200
+    assert _step(await _setup(client, owner), "timezone")["done"] is False
+
+
 async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owner):
     # protects=every count is the caller's company's; fails_when=a step reads another
     # company's connections, sources, members, invites or horizons; no_claim=domains
@@ -233,7 +261,7 @@ async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owne
     other = await make_person(await make_tenant("Second Co"), "second-owner@example.com")
     body = await _setup(client, other)
     assert [s["key"] for s in body["steps"]] == OWNER_KEYS
-    assert [s["done"] for s in body["steps"]] == [False] * 7
+    assert [s["done"] for s in body["steps"]] == [False] * 8
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
@@ -284,7 +312,8 @@ async def test_the_cost_is_fixed_whatever_the_size(tenant_id, owner, members):
             event.remove(engine, "before_cursor_execute", count)
     assert [st.key for st in out.steps] == OWNER_KEYS
     assert out.steps[2].count == members
-    assert len(statements) <= 8, statements
+    # One statement per owner step (eight), plus the hide preference.
+    assert len(statements) <= 9, statements
 
 
 def test_step_keys_are_checked_against_the_registry():
@@ -328,3 +357,17 @@ async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
         "count": None,
         "detail": "2026-10-20T15:00:00+00:00",
     }
+
+
+def test_the_web_checklist_names_every_step_the_api_returns():
+    """protects=H2 review blocker: Home's Set up checklist has its copy (label, Open
+    link, status) for every step oracle.setup.STEPS can return, timezone among them;
+    fails_when=a step the API returns is missing from web/app/home/_setup.tsx's STEPS
+    (Home drew no row for it, or threw for owners); no_claim=the copy itself
+    (web/e2e/setup.spec.ts)."""
+    from pathlib import Path
+
+    source = (Path(__file__).parents[2] / "web/app/home/_setup.tsx").read_text()
+    block = source.split("const STEPS", 1)[1].split("\n};", 1)[0]
+    web_keys = re.findall(r"^  (\w+): \{$", block, flags=re.M)
+    assert web_keys == [s.key for s in setup.STEPS]

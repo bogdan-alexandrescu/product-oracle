@@ -33,8 +33,10 @@ READ_AREAS = {
         "decisions",
         # H4: the approved vision and strategy, and the drift findings against them.
         "strategy",
-        # Outcomes tracked against goals (a strategy draft reads them).
+        # Outcomes tracked against goals (a strategy draft reads them), and the learnings
+        # kept from them (H3: the prioritizer and writer read the track record).
         "outcomes",
+        "learnings",
         # Launches, their checklist and the changelog (H6): reading only; run tokens
         # never publish, mark sent or mark launched.
         "launches",
@@ -47,6 +49,9 @@ READ_AREAS = {
         "tracks",
         "milestones",
         "roadmaps",
+        # H2: rituals and their pre-reads (a summary or update draft run reads them).
+        "rituals",
+        "ritual-occurrences",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

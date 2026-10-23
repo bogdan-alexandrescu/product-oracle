@@ -3296,6 +3296,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{entity_id}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Measurements
+         * @description A goal's dated values, latest day first.
+         */
+        get: operations["list_goal_measurements"];
+        put?: never;
+        /**
+         * Record Goal Measurement
+         * @description Record a goal's value on a day (a second on the same day replaces it); the latest
+         *     by day becomes the goal's ``current``. 422 when the entity is not a goal, the goal has
+         *     no unit yet, or the day is in the future.
+         */
+        post: operations["record_goal_measurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/measurements/{measurement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Goal Measurement */
+        delete: operations["delete_goal_measurement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goals/fill-from-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill Goals From Text
+         * @description Read each goal's ``*_text`` values (Home's rules, no model call) and write what they
+         *     say as an Oracle write: applied to an unlocked goal, a proposal on a locked one.
+         */
+        post: operations["fill_goals_from_text"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/entities/{entity_id}/revisions": {
         parameters: {
             query?: never;
@@ -3713,6 +3777,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/priorities/calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Priority Calibration
+         * @description The track record (H3): how well assessed predictions held, per goal and company-wide,
+         *     and the factor (0.5 to 1.0) it puts on priority confidence. ``setting`` show: the
+         *     factor is displayed, not applied.
+         */
+        get: operations["get_priority_calibration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/priorities/overrides": {
         parameters: {
             query?: never;
@@ -3985,6 +4071,275 @@ export interface paths {
          *     fills the options with evidence and marks the one it recommends.
          */
         post: operations["recommend_decision_options"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rituals/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ritual Summary Settings
+         * @description The summaries mode (on_demand or always) and the monthly estimate of Every
+         *     pre-read over the active rituals it would cover.
+         */
+        get: operations["get_ritual_summary_settings"];
+        /**
+         * Put Ritual Summary Settings
+         * @description Owners: On demand, or Every pre-read (Oracle summarises each covered pre-read).
+         */
+        put: operations["put_ritual_summary_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rituals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rituals
+         * @description The company's rituals: built-ins first.
+         */
+        get: operations["list_rituals"];
+        put?: never;
+        /**
+         * Create Ritual
+         * @description Owners: a custom ritual, or a built-in kind the company does not have.
+         */
+        post: operations["create_ritual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rituals/{ritual_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ritual */
+        get: operations["get_ritual"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Ritual
+         * @description Owners: custom rituals only; built-ins pause (409).
+         */
+        delete: operations["delete_ritual"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Ritual
+         * @description Owners: schedule, length, lead time, owner, attendees or title.
+         */
+        patch: operations["update_ritual"];
+        trace?: never;
+    };
+    "/v1/rituals/{ritual_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Ritual */
+        post: operations["pause_ritual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rituals/{ritual_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Ritual */
+        post: operations["resume_ritual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rituals/{ritual_id}/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare Ritual
+         * @description Owners: Prepare now (builds the next pre-read at once), or Retry a failed one.
+         */
+        post: operations["prepare_ritual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rituals/{ritual_id}/occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Ritual Occurrences
+         * @description The ritual's recent occurrences, newest first.
+         */
+        get: operations["list_ritual_occurrences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ritual-occurrences/{occurrence_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ritual Occurrence
+         * @description One occurrence: its pre-read blocks, state, notes and summary.
+         */
+        get: operations["get_ritual_occurrence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ritual-occurrences/{occurrence_id}/pre-read.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ritual Occurrence Pre Read
+         * @description The pre-read as markdown, for agents and export.
+         */
+        get: operations["get_ritual_occurrence_pre_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ritual-occurrences/{occurrence_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Ritual Occurrence
+         * @description Marks the pre-read read for me: its Inbox row is done.
+         */
+        post: operations["read_ritual_occurrence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ritual-occurrences/{occurrence_id}/held": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hold Ritual Occurrence
+         * @description The ritual's owner: Mark held, with the notes and the decisions recorded.
+         */
+        post: operations["hold_ritual_occurrence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ritual-occurrences/{occurrence_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Skip Ritual Occurrence
+         * @description The ritual's owner: Skip, with a reason.
+         */
+        post: operations["skip_ritual_occurrence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ritual-occurrences/{occurrence_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarize Ritual Occurrence
+         * @description Summarize with Oracle: one ritual_summary run ($3.00 at quick depth); 409 while
+         *     this occurrence's summary run is under way.
+         */
+        post: operations["summarize_ritual_occurrence"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6433,6 +6788,31 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Update Outcome
+         * @description Edit the prediction while the item is predicted (audited); once shipped it is
+         *     frozen (409). The owner can change any time.
+         */
+        patch: operations["update_outcome"];
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}/shipped": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Outcome Shipped
+         * @description Say a predicted item shipped (signal ``manual``): it starts measuring.
+         */
+        post: operations["mark_outcome_shipped"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -6450,6 +6830,26 @@ export interface paths {
          * @description Record whether the prediction held; returns drafted learnings to keep or drop.
          */
         post: operations["assess_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}/learnings/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Outcome Learning
+         * @description Keep or skip one of the latest assessment's drafted learnings (by its index).
+         */
+        post: operations["decide_outcome_learning"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10415,6 +10815,21 @@ export interface components {
              * Format: date-time
              */
             assessed_at: string;
+            /** Actual Value */
+            actual_value?: number | null;
+            /** Measured At */
+            measured_at?: string | null;
+            /**
+             * Actor
+             * @default person
+             * @enum {string}
+             */
+            actor: "person" | "oracle";
+            /**
+             * Learnings
+             * @default []
+             */
+            learnings: components["schemas"]["DraftedLearning"][];
         };
         /** AssessmentIn */
         AssessmentIn: {
@@ -10432,6 +10847,10 @@ export interface components {
              * @default []
              */
             evidence_ids: string[];
+            /** Actual Value */
+            actual_value?: number | null;
+            /** Measured At */
+            measured_at?: string | null;
         };
         /** AssessmentResult */
         AssessmentResult: {
@@ -11410,6 +11829,53 @@ export interface components {
              * @description .md, .txt or .pdf files
              */
             files: string[];
+        };
+        /** CalibrationFigures */
+        CalibrationFigures: {
+            /** N */
+            n: number;
+            /** Score */
+            score: number;
+            /** Expected */
+            expected: number;
+            /** Factor */
+            factor?: number | null;
+            /**
+             * Held
+             * @default 0
+             */
+            held: number;
+        };
+        /** CalibrationOut */
+        CalibrationOut: {
+            /**
+             * Setting
+             * @enum {string}
+             */
+            setting: "apply" | "show";
+            /** Min Outcomes */
+            min_outcomes: number;
+            /** Floor */
+            floor: number;
+            /** Ceiling */
+            ceiling: number;
+            company: components["schemas"]["CalibrationFigures"];
+            /** Goals */
+            goals: components["schemas"]["GoalCalibration"][];
+        };
+        /**
+         * CalibrationUsed
+         * @description The track record factor (oracle.quality.calibration) and whether it was applied.
+         */
+        CalibrationUsed: {
+            /** Factor */
+            factor: number;
+            /** Applied */
+            applied: boolean;
+            /** Basis */
+            basis?: string | null;
+            /** N */
+            n?: number | null;
         };
         /** CampaignCreate */
         CampaignCreate: {
@@ -13118,6 +13584,8 @@ export interface components {
             explain: string;
             /** Evidence */
             evidence: components["schemas"]["EvidenceUsed"][];
+            /** Before Track Record */
+            before_track_record?: number | null;
         };
         /** ConflictCreate */
         ConflictCreate: {
@@ -13539,7 +14007,7 @@ export interface components {
             review_at?: string | null;
             /** Expected Outcome */
             expected_outcome: string;
-            prediction?: components["schemas"]["PredictionIn"] | null;
+            prediction?: components["schemas"]["oracle__decisions__schemas__PredictionIn"] | null;
             /** Lock Version */
             lock_version?: number | null;
         };
@@ -13839,7 +14307,7 @@ export interface components {
             review_at?: string | null;
             /** Expected Outcome */
             expected_outcome?: string | null;
-            prediction?: components["schemas"]["PredictionIn"] | null;
+            prediction?: components["schemas"]["oracle__decisions__schemas__PredictionIn"] | null;
         };
         /**
          * DecisionPerson
@@ -15390,6 +15858,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            goal_check?: components["schemas"]["GoalCheck"] | null;
             /**
              * Evidence
              * @default []
@@ -15468,6 +15937,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            goal_check?: components["schemas"]["GoalCheck"] | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -15556,6 +16026,17 @@ export interface components {
             entity?: components["schemas"]["EntityOut"] | null;
             proposal?: components["schemas"]["ProposalOut"] | null;
         };
+        /** Estimate */
+        Estimate: {
+            /** Per Summary Usd */
+            per_summary_usd: number;
+            /** Runs Per Month */
+            runs_per_month: number;
+            /** Usd Per Month */
+            usd_per_month: number;
+            /** Rituals */
+            rituals: components["schemas"]["EstimateRitual"][];
+        };
         /** EstimateOut */
         EstimateOut: {
             /**
@@ -15580,6 +16061,18 @@ export interface components {
             budget_usd?: number | null;
             /** Within Budget */
             within_budget: boolean;
+        };
+        /** EstimateRitual */
+        EstimateRitual: {
+            /**
+             * Ritual Id
+             * Format: uuid
+             */
+            ritual_id: string;
+            /** Title */
+            title: string;
+            /** Runs Per Month */
+            runs_per_month: number;
         };
         /** EvaluationFindingOut */
         EvaluationFindingOut: {
@@ -15981,6 +16474,7 @@ export interface components {
                 [key: string]: unknown;
             };
             confidence: components["schemas"]["ConfidenceUsed"];
+            calibration?: components["schemas"]["CalibrationUsed"] | null;
             /** Goals */
             goals: components["schemas"]["GoalTerm"][];
             /** Missing */
@@ -16354,6 +16848,27 @@ export interface components {
             kind: string;
             /** Message */
             message: string;
+        };
+        /** FillFromTextResult */
+        FillFromTextResult: {
+            /** Applied */
+            applied: number;
+            /** Proposed */
+            proposed: number;
+            /** Left As Text */
+            left_as_text: components["schemas"]["FilledText"][];
+        };
+        /** FilledText */
+        FilledText: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Field */
+            field: string;
+            /** Text */
+            text: string;
         };
         /**
          * FindingCount
@@ -16798,6 +17313,47 @@ export interface components {
             /** Sso Hint */
             sso_hint?: string | null;
         };
+        /** GoalCalibration */
+        GoalCalibration: {
+            /** N */
+            n: number;
+            /** Score */
+            score: number;
+            /** Expected */
+            expected: number;
+            /** Factor */
+            factor?: number | null;
+            /**
+             * Held
+             * @default 0
+             */
+            held: number;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Title */
+            title: string;
+        };
+        /** GoalCheck */
+        GoalCheck: {
+            /** Measurable */
+            measurable: boolean;
+            /** Missing */
+            missing: string[];
+            /** Warnings */
+            warnings: string[];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["GoalProblem"][];
+            /** Horizons */
+            horizons?: {
+                [key: string]: number;
+            } | null;
+        };
         /** GoalLink */
         GoalLink: {
             /**
@@ -16821,6 +17377,15 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
+        };
+        /** GoalProblem */
+        GoalProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Where */
+            where: string;
         };
         /** GoalTerm */
         GoalTerm: {
@@ -16859,6 +17424,19 @@ export interface components {
             status: string;
             /** Database */
             database: string;
+        };
+        /** HeldIn */
+        HeldIn: {
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Decision Ids
+             * @default []
+             */
+            decision_ids: string[];
         };
         /**
          * HiddenDiscussion
@@ -17670,10 +18248,20 @@ export interface components {
              */
             needs_me: number;
             /**
+             * Rituals
+             * @default []
+             */
+            rituals: components["schemas"]["InboxRitual"][];
+            /**
              * Launches
              * @default []
              */
             launches: components["schemas"]["InboxLaunch"][];
+            /**
+             * Outcomes
+             * @default []
+             */
+            outcomes: components["schemas"]["InboxOutcome"][];
             /** Last Seen At */
             last_seen_at?: string | null;
             /**
@@ -17681,6 +18269,41 @@ export interface components {
              * @default []
              */
             tracks: components["schemas"]["InboxTrack"][];
+        };
+        /**
+         * InboxOutcome
+         * @description An outcome row of the Inbox (H3): Add predictions (the roadmap's approver, one per
+         *     roadmap, counted), Outcome check due (the owner, counted), Oracle recorded (shown).
+         */
+        InboxOutcome: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "needs_prediction" | "check_due" | "oracle_recorded";
+            /** Due On */
+            due_on?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "predicted" | "due" | "assessed";
+            /** Counts */
+            counts: boolean;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
         };
         /** InboxQuestion */
         InboxQuestion: {
@@ -17814,6 +18437,43 @@ export interface components {
             title: string;
             /** Version */
             version: number;
+        };
+        /**
+         * InboxRitual
+         * @description A ritual row of the Inbox: Pre-read ready (owner and attendees, until opened),
+         *     Record notes (the ritual's owner, after the end) and Ritual failed to prepare
+         *     (owners). ``counts``: in needs_me and the badge.
+         */
+        InboxRitual: {
+            /**
+             * Occurrence Id
+             * Format: uuid
+             */
+            occurrence_id: string;
+            /**
+             * Ritual Id
+             * Format: uuid
+             */
+            ritual_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Due At
+             * Format: date-time
+             */
+            due_at: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "pre_read" | "record_notes" | "failed";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open" | "done";
+            /** Counts */
+            counts: boolean;
         };
         /**
          * InboxStaged
@@ -19552,6 +20212,14 @@ export interface components {
              */
             weight: number;
         };
+        /** LearningDecision */
+        LearningDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "keep" | "skip";
+        };
         /**
          * LearningDraft
          * @description A learning Oracle suggests from an assessment; a person decides to keep it.
@@ -19996,6 +20664,51 @@ export interface components {
             token_id?: string | null;
             /** Token Name */
             token_name?: string | null;
+        };
+        /** MeasurementCreate */
+        MeasurementCreate: {
+            /** Value */
+            value: number;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Note */
+            note?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+        };
+        /** MeasurementOut */
+        MeasurementOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Value */
+            value: number;
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Note */
+            note?: string | null;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Recorded By */
+            recorded_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** MemberOut */
         MemberOut: {
@@ -21011,6 +21724,124 @@ export interface components {
             error_description?: string | null;
         };
         /**
+         * OccurrenceDecision
+         * @description A decision recorded with an occurrence; ``href`` opens it on Company › Decisions.
+         */
+        OccurrenceDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Href */
+            href: string;
+        };
+        /** OccurrenceOut */
+        OccurrenceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Ritual Id
+             * Format: uuid
+             */
+            ritual_id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Due At
+             * Format: date-time
+             */
+            due_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Duration Min */
+            duration_min: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Attendee Ids */
+            attendee_ids: string[];
+            /** Timezone */
+            timezone: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "scheduled" | "ready" | "held" | "skipped" | "missed" | "failed";
+            period: components["schemas"]["Period"];
+            pre_read: components["schemas"]["PreRead"];
+            /** Attempts */
+            attempts: number;
+            /** Error */
+            error: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Skip Reason */
+            skip_reason: string | null;
+            /** Decision Ids */
+            decision_ids: string[];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["OccurrenceDecision"][];
+            /** Summary Run Id */
+            summary_run_id: string | null;
+            /** Summary */
+            summary: string | null;
+            /**
+             * Summary State
+             * @enum {string}
+             */
+            summary_state: "none" | "running" | "ready" | "failed" | "not_started";
+            /** Summary Note */
+            summary_note: string | null;
+            /** Read By Me */
+            read_by_me: boolean;
+        };
+        /** OccurrenceSummary */
+        OccurrenceSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Ritual Id
+             * Format: uuid
+             */
+            ritual_id: string;
+            /**
+             * Due At
+             * Format: date-time
+             */
+            due_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "scheduled" | "ready" | "held" | "skipped" | "missed" | "failed";
+        };
+        /**
          * OracleAsker
          * @description The intake engine's question: "Oracle asks".
          */
@@ -21040,7 +21871,9 @@ export interface components {
             roadmap_item_key?: string | null;
             /** Experiment Id */
             experiment_id?: string | null;
-            prediction: components["schemas"]["Prediction"];
+            /** Roadmap Item Id */
+            roadmap_item_id?: string | null;
+            prediction: components["schemas"]["oracle__quality__schemas__PredictionIn"];
             /**
              * Module Keys
              * @default []
@@ -21089,7 +21922,26 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "tracking" | "held" | "partially_held" | "not_held" | "inconclusive";
+            status: "predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Roadmap Item Id */
+            roadmap_item_id?: string | null;
+            /** Track Id */
+            track_id?: string | null;
+            /**
+             * Needs Prediction
+             * @default false
+             */
+            needs_prediction: boolean;
+            /** Confidence At Prediction */
+            confidence_at_prediction?: number | null;
+            /** Shipped At */
+            shipped_at?: string | null;
+            ship_signal?: components["schemas"]["ShipSignal"] | null;
+            /** Assess Due On */
+            assess_due_on?: string | null;
+            proposed_assessment?: components["schemas"]["ProposedAssessment"] | null;
+            /** Decision Id */
+            decision_id?: string | null;
             /** Observed */
             observed?: string | null;
             /** Assessments */
@@ -21112,6 +21964,17 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * OutcomeUpdate
+         * @description PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner.
+         */
+        OutcomeUpdate: {
+            prediction?: components["schemas"]["oracle__quality__schemas__PredictionIn"] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
         };
         /** OutlineEntry */
         OutlineEntry: {
@@ -21252,6 +22115,13 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** Period */
+        Period: {
+            /** From */
+            from?: string | null;
+            /** To */
+            to?: string | null;
         };
         /**
          * PersonAsker
@@ -21717,6 +22587,18 @@ export interface components {
             /** Lock Version */
             lock_version: number;
         };
+        /** PreRead */
+        PreRead: {
+            /** Built At */
+            built_at?: string | null;
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks: {
+                [key: string]: unknown;
+            }[];
+        };
         /**
          * Prediction
          * @description What the PRD predicted for the goal, in its own words and numbers.
@@ -21732,27 +22614,16 @@ export interface components {
             threshold?: string | null;
             /** By */
             by?: string | null;
-        };
-        /**
-         * PredictionIn
-         * @description A measurable version of the expected outcome: deciding creates its outcome record.
-         */
-        PredictionIn: {
-            /** Metric */
-            metric: string;
-            /** Baseline */
-            baseline?: string | null;
-            /** Predicted */
-            predicted: string;
-            /** Threshold */
-            threshold?: string | null;
-            /** By */
-            by?: string | null;
-            /**
-             * Goal Id
-             * Format: uuid
-             */
-            goal_id: string;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("increase" | "decrease") | null;
+            /** Baseline Value */
+            baseline_value?: number | null;
+            /** Predicted Value */
+            predicted_value?: number | null;
+            /** Threshold Value */
+            threshold_value?: number | null;
         };
         /**
          * Preferences
@@ -22193,6 +23064,27 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * ProposedAssessment
+         * @description Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.
+         */
+        ProposedAssessment: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed?: string | null;
+            /** Actual Value */
+            actual_value?: number | null;
+            /** Measured At */
+            measured_at?: string | null;
+            /** Source */
+            source?: ("goal_history" | "measurement") | null;
+            /** Note */
+            note?: string | null;
         };
         /** ProtectedResourceMetadata */
         ProtectedResourceMetadata: {
@@ -24557,6 +25449,120 @@ export interface components {
             /** Mitigation */
             mitigation?: string | null;
         };
+        /** RitualCreate */
+        RitualCreate: {
+            /**
+             * Kind
+             * @default custom
+             */
+            kind: string;
+            /** Title */
+            title: string;
+            schedule?: components["schemas"]["RitualSchedule"] | null;
+            /** Duration Min */
+            duration_min?: number | null;
+            /** Prep Hours */
+            prep_hours?: number | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Attendee Ids
+             * @default []
+             */
+            attendee_ids: string[];
+        };
+        /** RitualOut */
+        RitualOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Builtin */
+            builtin: boolean;
+            /** Schedule */
+            schedule: {
+                [key: string]: unknown;
+            };
+            /** Duration Min */
+            duration_min: number;
+            /** Prep Hours */
+            prep_hours: number;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Attendee Ids */
+            attendee_ids: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused";
+            /** Next Due At */
+            next_due_at: string | null;
+            /** Lock Version */
+            lock_version: number;
+            last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
+        };
+        /** RitualPatch */
+        RitualPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            schedule?: components["schemas"]["RitualSchedule"] | null;
+            /** Duration Min */
+            duration_min?: number | null;
+            /** Prep Hours */
+            prep_hours?: number | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Attendee Ids */
+            attendee_ids?: string[] | null;
+        };
+        /**
+         * RitualSchedule
+         * @description The rule people set: the API's input. A ``timezone`` sent with it is not read: the
+         *     ritual is in the Company time zone.
+         */
+        RitualSchedule: {
+            /**
+             * Freq
+             * @enum {string}
+             */
+            freq: "weekly" | "monthly" | "quarterly" | "yearly" | "every_n_weeks";
+            /**
+             * Interval
+             * @default 1
+             */
+            interval: number;
+            /**
+             * Weekday
+             * @default 0
+             */
+            weekday: number;
+            /**
+             * Week Of Month
+             * @default 1
+             */
+            week_of_month: number;
+            /**
+             * Month
+             * @default 1
+             */
+            month: number;
+            /**
+             * Time
+             * @default 09:00
+             */
+            time: string;
+        };
         /**
          * RoadmapAnswers
          * @description docs/research/roadmap-formats.md, questions the template picker should ask.
@@ -26276,6 +27282,33 @@ export interface components {
              */
             sharing: "private" | "counts" | "summary" | "full";
         };
+        /** ShipSignal */
+        ShipSignal: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tracker" | "milestone" | "launch" | "manual";
+            /**
+             * Refs
+             * @default []
+             */
+            refs: string[];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** ShippedIn */
+        ShippedIn: {
+            /** At */
+            at?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /**
          * SignedOutEverywhere
          * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
@@ -26300,6 +27333,11 @@ export interface components {
              * @default 0
              */
             runs_tokens_revoked: number;
+        };
+        /** SkipIn */
+        SkipIn: {
+            /** Reason */
+            reason: string;
         };
         /** SkippedSection */
         SkippedSection: {
@@ -27686,6 +28724,23 @@ export interface components {
         SuggestionPatch: {
             /** Text */
             text: string;
+        };
+        /** SummarySettingsIn */
+        SummarySettingsIn: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "on_demand" | "always";
+        };
+        /** SummarySettingsOut */
+        SummarySettingsOut: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "on_demand" | "always";
+            estimate: components["schemas"]["Estimate"];
         };
         /** SweepOut */
         SweepOut: {
@@ -30150,6 +31205,124 @@ export interface components {
         oracle__connections__router__AuthorizeOut: {
             /** Url */
             url: string;
+        };
+        /**
+         * PredictionIn
+         * @description A measurable version of the expected outcome: deciding creates its outcome record.
+         */
+        oracle__decisions__schemas__PredictionIn: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("increase" | "decrease") | null;
+            /** Baseline Value */
+            baseline_value?: number | null;
+            /** Predicted Value */
+            predicted_value?: number | null;
+            /** Threshold Value */
+            threshold_value?: number | null;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+        };
+        /**
+         * PredictionIn
+         * @description A prediction a person writes: its typed figures must agree with each other.
+         */
+        oracle__quality__schemas__PredictionIn: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("increase" | "decrease") | null;
+            /** Baseline Value */
+            baseline_value?: number | null;
+            /** Predicted Value */
+            predicted_value?: number | null;
+            /** Threshold Value */
+            threshold_value?: number | null;
+        };
+        /**
+         * GoalAttrs
+         * @description The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).
+         */
+        GoalAttrs: {
+            /**
+             * Metric
+             * @default null
+             */
+            metric: string | null;
+            /**
+             * Unit
+             * @default null
+             */
+            unit: string | null;
+            /**
+             * Comparison
+             * @default null
+             */
+            comparison: ("at_least" | "above" | "at_most" | "below") | null;
+            /**
+             * Target
+             * @default null
+             */
+            target: number | null;
+            /**
+             * Start
+             * @default null
+             */
+            start: number | null;
+            /**
+             * Current
+             * @default null
+             */
+            current: number | null;
+            /**
+             * Current As Of
+             * @default null
+             */
+            current_as_of: string | null;
+            /**
+             * Horizon
+             * @default null
+             */
+            horizon: ("short" | "medium" | "long") | null;
+            /**
+             * Due
+             * @default null
+             */
+            due: string | null;
+            /**
+             * Owner
+             * @default null
+             */
+            owner: string | null;
+            /**
+             * Weight
+             * @default null
+             */
+            weight: number | null;
         };
     };
     responses: never;
@@ -36456,13 +37629,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Goal fields rejected (B5), every problem */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["YamlImportError"];
                 };
             };
         };
@@ -36570,13 +37743,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Goal fields rejected (B5), every problem */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["YamlImportError"];
                 };
             };
         };
@@ -36678,6 +37851,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_measurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_goal_measurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_measurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                measurement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fill_goals_from_text: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillFromTextResult"];
                 };
             };
         };
@@ -37628,6 +38916,26 @@ export interface operations {
             };
         };
     };
+    get_priority_calibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationOut"];
+                };
+            };
+        };
+    };
     list_priority_overrides: {
         parameters: {
             query?: {
@@ -38347,6 +39655,811 @@ export interface operations {
                 content?: never;
             };
             /** @description Invalid options, rationale, expected outcome or review date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_ritual_summary_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummarySettingsOut"];
+                };
+            };
+        };
+    };
+    put_ritual_summary_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SummarySettingsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummarySettingsOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_rituals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RitualOut"][];
+                };
+            };
+        };
+    };
+    create_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RitualCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RitualOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RitualOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RitualPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RitualOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    pause_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RitualOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resume_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RitualOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prepare_ritual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_ritual_occurrences: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                ritual_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceSummary"][];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_ritual_occurrence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_ritual_occurrence_pre_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                    "text/markdown": unknown;
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_ritual_occurrence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    hold_ritual_occurrence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HeldIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    skip_ritual_occurrence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkipIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summarize_ritual_occurrence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -42562,7 +44675,12 @@ export interface operations {
             query?: {
                 goal_id?: string | null;
                 document_id?: string | null;
-                status?: ("tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+                status?: ("predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+                /** @description predicted, tracking (measuring), due (a proposal waits), assessed */
+                state?: ("predicted" | "tracking" | "due" | "assessed") | null;
+                needs_prediction?: boolean | null;
+                track_id?: string | null;
+                roadmap_item_id?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -42656,6 +44774,76 @@ export interface operations {
             };
         };
     };
+    update_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_outcome_shipped: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShippedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     assess_outcome: {
         parameters: {
             query?: never;
@@ -42678,6 +44866,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_outcome_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
                 };
             };
             /** @description Validation Error */

@@ -32,8 +32,9 @@ connections are not touched. Messages show as the app, "Product Oracle". Oracle 
 
 ## The weekly report
 
-- Setting `alignment_report` (Settings › Notifications): enabled, day, time and time
-  zone (Monday 08:00 America/Los_Angeles by default), and the Slack channel.
+- Setting `alignment_report` (Settings › Notifications): enabled, day and time (Monday
+  08:00 by default) and the Slack channel. The time zone is the Company time zone
+  (`company_timezone`, Settings › Company, UTC by default).
 - Once that moment of the week has passed, the next tick builds the report for the week
   that just ended (Monday 00:00 to Monday 00:00 local). One weekly report per company and
   week: a unique index makes a second impossible. A company with no active or paused track

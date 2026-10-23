@@ -10597,11 +10597,11 @@
             "description": "The item is locked: the change became a proposal"
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Goal fields rejected (B5), every problem",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/YamlImportError"
                 }
               }
             }
@@ -10710,11 +10710,11 @@
             "description": "The item is locked: the change became a proposal"
           },
           "422": {
-            "description": "Validation Error",
+            "description": "Goal fields rejected (B5), every problem",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/YamlImportError"
                 }
               }
             }
@@ -10992,6 +10992,196 @@
             }
           }
         }
+      }
+    },
+    "/v1/baseline/entities/{entity_id}/measurements": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "List Goal Measurements",
+        "description": "A goal's dated values, latest day first.",
+        "operationId": "list_goal_measurements",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MeasurementOut"
+                  },
+                  "title": "Response List Goal Measurements"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Record Goal Measurement",
+        "description": "Record a goal's value on a day (a second on the same day replaces it); the latest\nby day becomes the goal's ``current``. 422 when the entity is not a goal, the goal has\nno unit yet, or the day is in the future.",
+        "operationId": "record_goal_measurement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeasurementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeasurementOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/measurements/{measurement_id}": {
+      "delete": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Delete Goal Measurement",
+        "operationId": "delete_goal_measurement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "measurement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Measurement Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/goals/fill-from-text": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Fill Goals From Text",
+        "description": "Read each goal's ``*_text`` values (Home's rules, no model call) and write what they\nsay as an Oracle write: applied to an unlocked goal, a proposal on a locked one.",
+        "operationId": "fill_goals_from_text",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FillFromTextResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
       }
     },
     "/v1/baseline/entities/{entity_id}/revisions": {
@@ -12690,6 +12880,36 @@
         }
       }
     },
+    "/v1/priorities/calibration": {
+      "get": {
+        "tags": [
+          "priorities"
+        ],
+        "summary": "Get Priority Calibration",
+        "description": "The track record (H3): how well assessed predictions held, per goal and company-wide,\nand the factor (0.5 to 1.0) it puts on priority confidence. ``setting`` show: the\nfactor is displayed, not applied.",
+        "operationId": "get_priority_calibration",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalibrationOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
     "/v1/priorities/overrides": {
       "post": {
         "tags": [
@@ -13897,6 +14117,898 @@
           },
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
+          }
+        }
+      }
+    },
+    "/v1/rituals/summaries": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual Summary Settings",
+        "description": "The summaries mode (on_demand or always) and the monthly estimate of Every\npre-read over the active rituals it would cover.",
+        "operationId": "get_ritual_summary_settings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarySettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Put Ritual Summary Settings",
+        "description": "Owners: On demand, or Every pre-read (Oracle summarises each covered pre-read).",
+        "operationId": "put_ritual_summary_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummarySettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummarySettingsOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/rituals": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "List Rituals",
+        "description": "The company's rituals: built-ins first.",
+        "operationId": "list_rituals",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RitualOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Rituals"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Create Ritual",
+        "description": "Owners: a custom ritual, or a built-in kind the company does not have.",
+        "operationId": "create_ritual",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RitualCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/rituals/{ritual_id}": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual",
+        "operationId": "get_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Update Ritual",
+        "description": "Owners: schedule, length, lead time, owner, attendees or title.",
+        "operationId": "update_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RitualPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Delete Ritual",
+        "description": "Owners: custom rituals only; built-ins pause (409).",
+        "operationId": "delete_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/pause": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Pause Ritual",
+        "operationId": "pause_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/resume": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Resume Ritual",
+        "operationId": "resume_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RitualOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/prepare": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Prepare Ritual",
+        "description": "Owners: Prepare now (builds the next pre-read at once), or Retry a failed one.",
+        "operationId": "prepare_ritual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/rituals/{ritual_id}/occurrences": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "List Ritual Occurrences",
+        "description": "The ritual's recent occurrences, newest first.",
+        "operationId": "list_ritual_occurrences",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ritual_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ritual Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OccurrenceSummary"
+                  },
+                  "title": "Response List Ritual Occurrences"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual Occurrence",
+        "description": "One occurrence: its pre-read blocks, state, notes and summary.",
+        "operationId": "get_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/pre-read.md": {
+      "get": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Get Ritual Occurrence Pre Read",
+        "description": "The pre-read as markdown, for agents and export.",
+        "operationId": "get_ritual_occurrence_pre_read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "text/markdown": {}
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/read": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Read Ritual Occurrence",
+        "description": "Marks the pre-read read for me: its Inbox row is done.",
+        "operationId": "read_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/held": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Hold Ritual Occurrence",
+        "description": "The ritual's owner: Mark held, with the notes and the decisions recorded.",
+        "operationId": "hold_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeldIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/skip": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Skip Ritual Occurrence",
+        "description": "The ritual's owner: Skip, with a reason.",
+        "operationId": "skip_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        }
+      }
+    },
+    "/v1/ritual-occurrences/{occurrence_id}/summary": {
+      "post": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Summarize Ritual Occurrence",
+        "description": "Summarize with Oracle: one ritual_summary run ($3.00 at quick depth); 409 while\nthis occurrence's summary run is under way.",
+        "operationId": "summarize_ritual_occurrence",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
           }
         }
       }
@@ -22549,6 +23661,7 @@
               "anyOf": [
                 {
                   "enum": [
+                    "predicted",
                     "tracking",
                     "held",
                     "partially_held",
@@ -22562,6 +23675,80 @@
                 }
               ],
               "title": "Status"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "predicted",
+                    "tracking",
+                    "due",
+                    "assessed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "predicted, tracking (measuring), due (a proposal waits), assessed",
+              "title": "State"
+            },
+            "description": "predicted, tracking (measuring), due (a proposal waits), assessed"
+          },
+          {
+            "name": "needs_prediction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs Prediction"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track Id"
+            }
+          },
+          {
+            "name": "roadmap_item_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap Item Id"
             }
           },
           {
@@ -22665,6 +23852,128 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Update Outcome",
+        "description": "Edit the prediction while the item is predicted (audited); once shipped it is\nfrozen (409). The owner can change any time.",
+        "operationId": "update_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutcomeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/outcomes/{outcome_id}/shipped": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Mark Outcome Shipped",
+        "description": "Say a predicted item shipped (signal ``manual``): it starts measuring.",
+        "operationId": "mark_outcome_shipped",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShippedIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/outcomes/{outcome_id}/assessments": {
@@ -22712,6 +24021,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AssessmentResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/outcomes/{outcome_id}/learnings/{index}": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Decide Outcome Learning",
+        "description": "Keep or skip one of the latest assessment's drafted learnings (by its index).",
+        "operationId": "decide_outcome_learning",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutcomeOut"
                 }
               }
             }
@@ -35525,6 +36905,46 @@
             "type": "string",
             "format": "date-time",
             "title": "Assessed At"
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
+          },
+          "actor": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle"
+            ],
+            "title": "Actor",
+            "default": "person"
+          },
+          "learnings": {
+            "items": {
+              "$ref": "#/components/schemas/DraftedLearning"
+            },
+            "type": "array",
+            "title": "Learnings",
+            "default": []
           }
         },
         "type": "object",
@@ -35574,6 +36994,29 @@
             "maxItems": 50,
             "title": "Evidence Ids",
             "default": []
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
           }
         },
         "type": "object",
@@ -38660,6 +40103,130 @@
           "files"
         ],
         "title": "Body_upload_files"
+      },
+      "CalibrationFigures": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "expected": {
+            "type": "number",
+            "title": "Expected"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "score",
+          "expected"
+        ],
+        "title": "CalibrationFigures"
+      },
+      "CalibrationOut": {
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "apply",
+              "show"
+            ],
+            "title": "Setting"
+          },
+          "min_outcomes": {
+            "type": "integer",
+            "title": "Min Outcomes"
+          },
+          "floor": {
+            "type": "number",
+            "title": "Floor"
+          },
+          "ceiling": {
+            "type": "number",
+            "title": "Ceiling"
+          },
+          "company": {
+            "$ref": "#/components/schemas/CalibrationFigures"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/GoalCalibration"
+            },
+            "type": "array",
+            "title": "Goals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setting",
+          "min_outcomes",
+          "floor",
+          "ceiling",
+          "company",
+          "goals"
+        ],
+        "title": "CalibrationOut"
+      },
+      "CalibrationUsed": {
+        "properties": {
+          "factor": {
+            "type": "number",
+            "title": "Factor"
+          },
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          }
+        },
+        "type": "object",
+        "required": [
+          "factor",
+          "applied"
+        ],
+        "title": "CalibrationUsed",
+        "description": "The track record factor (oracle.quality.calibration) and whether it was applied."
       },
       "CampaignCreate": {
         "properties": {
@@ -43174,6 +44741,17 @@
             },
             "type": "array",
             "title": "Evidence"
+          },
+          "before_track_record": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Track Record"
           }
         },
         "type": "object",
@@ -44353,7 +45931,7 @@
           "prediction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PredictionIn"
+                "$ref": "#/components/schemas/oracle__decisions__schemas__PredictionIn"
               },
               {
                 "type": "null"
@@ -45276,7 +46854,7 @@
           "prediction": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PredictionIn"
+                "$ref": "#/components/schemas/oracle__decisions__schemas__PredictionIn"
               },
               {
                 "type": "null"
@@ -49499,6 +51077,16 @@
             "format": "date-time",
             "title": "Updated At"
           },
+          "goal_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evidence": {
             "items": {
               "$ref": "#/components/schemas/EvidenceOut"
@@ -49676,6 +51264,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "goal_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -49957,6 +51555,37 @@
         "title": "EntityWriteOut",
         "description": "A write either applied (``entity``) or became a proposal (the item is locked)."
       },
+      "Estimate": {
+        "properties": {
+          "per_summary_usd": {
+            "type": "number",
+            "title": "Per Summary Usd"
+          },
+          "runs_per_month": {
+            "type": "number",
+            "title": "Runs Per Month"
+          },
+          "usd_per_month": {
+            "type": "number",
+            "title": "Usd Per Month"
+          },
+          "rituals": {
+            "items": {
+              "$ref": "#/components/schemas/EstimateRitual"
+            },
+            "type": "array",
+            "title": "Rituals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "per_summary_usd",
+          "runs_per_month",
+          "usd_per_month",
+          "rituals"
+        ],
+        "title": "Estimate"
+      },
       "EstimateOut": {
         "properties": {
           "run_id": {
@@ -50019,6 +51648,30 @@
           "within_budget"
         ],
         "title": "EstimateOut"
+      },
+      "EstimateRitual": {
+        "properties": {
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "runs_per_month": {
+            "type": "number",
+            "title": "Runs Per Month"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ritual_id",
+          "title",
+          "runs_per_month"
+        ],
+        "title": "EstimateRitual"
       },
       "EvaluationFindingOut": {
         "properties": {
@@ -51161,6 +52814,16 @@
           "confidence": {
             "$ref": "#/components/schemas/ConfidenceUsed"
           },
+          "calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalibrationUsed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "goals": {
             "items": {
               "$ref": "#/components/schemas/GoalTerm"
@@ -52268,6 +53931,56 @@
           "message"
         ],
         "title": "FieldProblem"
+      },
+      "FillFromTextResult": {
+        "properties": {
+          "applied": {
+            "type": "integer",
+            "title": "Applied"
+          },
+          "proposed": {
+            "type": "integer",
+            "title": "Proposed"
+          },
+          "left_as_text": {
+            "items": {
+              "$ref": "#/components/schemas/FilledText"
+            },
+            "type": "array",
+            "title": "Left As Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "proposed",
+          "left_as_text"
+        ],
+        "title": "FillFromTextResult"
+      },
+      "FilledText": {
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "field",
+          "text"
+        ],
+        "title": "FilledText"
       },
       "FindingCount": {
         "properties": {
@@ -53555,6 +55268,107 @@
         ],
         "title": "GithubRepoPage"
       },
+      "GoalCalibration": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "expected": {
+            "type": "number",
+            "title": "Expected"
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factor"
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held",
+            "default": 0
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "score",
+          "expected",
+          "goal_id",
+          "title"
+        ],
+        "title": "GoalCalibration"
+      },
+      "GoalCheck": {
+        "properties": {
+          "measurable": {
+            "type": "boolean",
+            "title": "Measurable"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/GoalProblem"
+            },
+            "type": "array",
+            "title": "Problems",
+            "default": []
+          },
+          "horizons": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "measurable",
+          "missing",
+          "warnings"
+        ],
+        "title": "GoalCheck"
+      },
       "GoalLink": {
         "properties": {
           "entity_id": {
@@ -53604,6 +55418,29 @@
           "matched_on"
         ],
         "title": "GoalLink"
+      },
+      "GoalProblem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "where": {
+            "type": "string",
+            "title": "Where"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "where"
+        ],
+        "title": "GoalProblem"
       },
       "GoalTerm": {
         "properties": {
@@ -53714,6 +55551,27 @@
           "database"
         ],
         "title": "Health"
+      },
+      "HeldIn": {
+        "properties": {
+          "notes": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Notes",
+            "default": ""
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "HeldIn"
       },
       "HiddenDiscussion": {
         "properties": {
@@ -55783,12 +57641,28 @@
             "title": "Needs Me",
             "default": 0
           },
+          "rituals": {
+            "items": {
+              "$ref": "#/components/schemas/InboxRitual"
+            },
+            "type": "array",
+            "title": "Rituals",
+            "default": []
+          },
           "launches": {
             "items": {
               "$ref": "#/components/schemas/InboxLaunch"
             },
             "type": "array",
             "title": "Launches",
+            "default": []
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/InboxOutcome"
+            },
+            "type": "array",
+            "title": "Outcomes",
             "default": []
           },
           "last_seen_at": {
@@ -55821,6 +57695,80 @@
           "total"
         ],
         "title": "InboxOut"
+      },
+      "InboxOutcome": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "needs_prediction",
+              "check_due",
+              "oracle_recorded"
+            ],
+            "title": "Reason"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "predicted",
+              "due",
+              "assessed"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 1
+          },
+          "roadmap_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Version Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "reason",
+          "state",
+          "counts"
+        ],
+        "title": "InboxOutcome",
+        "description": "An outcome row of the Inbox (H3): Add predictions (the roadmap's approver, one per\nroadmap, counted), Outcome check due (the owner, counted), Oracle recorded (shown)."
       },
       "InboxQuestion": {
         "properties": {
@@ -60909,6 +62857,23 @@
         ],
         "title": "LearningCreate"
       },
+      "LearningDecision": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "skip"
+            ],
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "LearningDecision"
+      },
       "LearningDraft": {
         "properties": {
           "outcome_id": {
@@ -62077,6 +64042,121 @@
           "role"
         ],
         "title": "Me"
+      },
+      "MeasurementCreate": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "measured_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Measured On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "measured_on"
+        ],
+        "title": "MeasurementCreate"
+      },
+      "MeasurementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "measured_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Measured On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Id"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "entity_id",
+          "value",
+          "measured_on",
+          "created_at"
+        ],
+        "title": "MeasurementOut"
       },
       "MemberOut": {
         "properties": {
@@ -64516,6 +66596,281 @@
         ],
         "title": "OAuthErrorOut"
       },
+      "OccurrenceDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "href"
+        ],
+        "title": "OccurrenceDecision",
+        "description": "A decision recorded with an occurrence; ``href`` opens it on Company \u203a Decisions."
+      },
+      "OccurrenceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "duration_min": {
+            "type": "integer",
+            "title": "Duration Min"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "ready",
+              "held",
+              "skipped",
+              "missed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "pre_read": {
+            "$ref": "#/components/schemas/PreRead"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
+          "decision_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Decision Ids"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/OccurrenceDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "summary_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Run Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "running",
+              "ready",
+              "failed",
+              "not_started"
+            ],
+            "title": "Summary State"
+          },
+          "summary_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Note"
+          },
+          "read_by_me": {
+            "type": "boolean",
+            "title": "Read By Me"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ritual_id",
+          "kind",
+          "title",
+          "due_at",
+          "ends_at",
+          "duration_min",
+          "owner_id",
+          "attendee_ids",
+          "timezone",
+          "status",
+          "period",
+          "pre_read",
+          "attempts",
+          "error",
+          "notes",
+          "skip_reason",
+          "decision_ids",
+          "summary_run_id",
+          "summary",
+          "summary_state",
+          "summary_note",
+          "read_by_me"
+        ],
+        "title": "OccurrenceOut"
+      },
+      "OccurrenceSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ends At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "ready",
+              "held",
+              "skipped",
+              "missed",
+              "failed"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ritual_id",
+          "due_at",
+          "ends_at",
+          "status"
+        ],
+        "title": "OccurrenceSummary"
+      },
       "OracleAsker": {
         "properties": {
           "kind": {
@@ -64602,8 +66957,20 @@
             ],
             "title": "Experiment Id"
           },
+          "roadmap_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Id"
+          },
           "prediction": {
-            "$ref": "#/components/schemas/Prediction"
+            "$ref": "#/components/schemas/oracle__quality__schemas__PredictionIn"
           },
           "module_keys": {
             "items": {
@@ -64770,6 +67137,7 @@
           "status": {
             "type": "string",
             "enum": [
+              "predicted",
               "tracking",
               "held",
               "partially_held",
@@ -64777,6 +67145,102 @@
               "inconclusive"
             ],
             "title": "Status"
+          },
+          "roadmap_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Id"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          },
+          "needs_prediction": {
+            "type": "boolean",
+            "title": "Needs Prediction",
+            "default": false
+          },
+          "confidence_at_prediction": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence At Prediction"
+          },
+          "shipped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipped At"
+          },
+          "ship_signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShipSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assess_due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assess Due On"
+          },
+          "proposed_assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposedAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Id"
           },
           "observed": {
             "anyOf": [
@@ -64862,6 +67326,42 @@
           "updated_at"
         ],
         "title": "OutcomeOut"
+      },
+      "OutcomeUpdate": {
+        "properties": {
+          "prediction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/oracle__quality__schemas__PredictionIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "OutcomeUpdate",
+        "description": "PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner."
       },
       "OutlineEntry": {
         "properties": {
@@ -65293,6 +67793,36 @@
           "new_password"
         ],
         "title": "PasswordChange"
+      },
+      "Period": {
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "title": "Period"
       },
       "PersonAsker": {
         "properties": {
@@ -66613,6 +69143,33 @@
         "title": "PrdScopeOut",
         "description": "A PRD scope (C6): the features and requirements a feature-set stop approves for one\nPRD, in file order. Later segments and the document's next drafts read the approved\none."
       },
+      "PreRead": {
+        "properties": {
+          "built_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built At"
+          },
+          "blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PreRead"
+      },
       "Prediction": {
         "properties": {
           "metric": {
@@ -66662,6 +69219,66 @@
               }
             ],
             "title": "By"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "predicted_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Value"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
           }
         },
         "type": "object",
@@ -66671,71 +69288,6 @@
         ],
         "title": "Prediction",
         "description": "What the PRD predicted for the goal, in its own words and numbers."
-      },
-      "PredictionIn": {
-        "properties": {
-          "metric": {
-            "type": "string",
-            "maxLength": 300,
-            "minLength": 1,
-            "title": "Metric"
-          },
-          "baseline": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Baseline"
-          },
-          "predicted": {
-            "type": "string",
-            "maxLength": 300,
-            "minLength": 1,
-            "title": "Predicted"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "by": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "By"
-          },
-          "goal_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Goal Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "metric",
-          "predicted",
-          "goal_id"
-        ],
-        "title": "PredictionIn",
-        "description": "A measurable version of the expected outcome: deciding creates its outcome record."
       },
       "Preferences": {
         "properties": {
@@ -67909,6 +70461,86 @@
         ],
         "title": "ProposalRun",
         "description": "The run that made a proposal, enough to name it and link to it."
+      },
+      "ProposedAssessment": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "held",
+              "partially_held",
+              "not_held",
+              "inconclusive"
+            ],
+            "title": "Verdict"
+          },
+          "observed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed"
+          },
+          "actual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Value"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "goal_history",
+                  "measurement"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verdict"
+        ],
+        "title": "ProposedAssessment",
+        "description": "Oracle's reading on the due date; a person confirms, edits or marks it inconclusive."
       },
       "ProtectedResourceMetadata": {
         "properties": {
@@ -74592,6 +77224,321 @@
         ],
         "title": "Risk"
       },
+      "RitualCreate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "custom"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RitualSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Min"
+          },
+          "prep_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 168.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Hours"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "RitualCreate"
+      },
+      "RitualOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          },
+          "schedule": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Schedule"
+          },
+          "duration_min": {
+            "type": "integer",
+            "title": "Duration Min"
+          },
+          "prep_hours": {
+            "type": "integer",
+            "title": "Prep Hours"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Attendee Ids"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status"
+          },
+          "next_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "last_pre_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccurrenceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "builtin",
+          "schedule",
+          "duration_min",
+          "prep_hours",
+          "owner_id",
+          "attendee_ids",
+          "status",
+          "next_due_at",
+          "lock_version"
+        ],
+        "title": "RitualOut"
+      },
+      "RitualPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RitualSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Min"
+          },
+          "prep_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 168.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Hours"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "attendee_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendee Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "RitualPatch"
+      },
+      "RitualSchedule": {
+        "properties": {
+          "freq": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "quarterly",
+              "yearly",
+              "every_n_weeks"
+            ],
+            "title": "Freq"
+          },
+          "interval": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Interval",
+            "default": 1
+          },
+          "weekday": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday",
+            "default": 0
+          },
+          "week_of_month": {
+            "type": "integer",
+            "title": "Week Of Month",
+            "default": 1
+          },
+          "month": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "default": 1
+          },
+          "time": {
+            "type": "string",
+            "title": "Time",
+            "default": "09:00"
+          }
+        },
+        "type": "object",
+        "required": [
+          "freq"
+        ],
+        "title": "RitualSchedule",
+        "description": "The rule people set: the API's input. A ``timezone`` sent with it is not read: the\nritual is in the Company time zone."
+      },
       "RoadmapAnswers": {
         "properties": {
           "audience": {
@@ -79875,6 +82822,80 @@
         ],
         "title": "SharingIn"
       },
+      "ShipSignal": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tracker",
+              "milestone",
+              "launch",
+              "manual"
+            ],
+            "title": "Kind"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refs",
+            "default": []
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "at"
+        ],
+        "title": "ShipSignal"
+      },
+      "ShippedIn": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "ShippedIn"
+      },
       "SignedOutEverywhere": {
         "properties": {
           "sessions_valid_after": {
@@ -79904,6 +82925,21 @@
         ],
         "title": "SignedOutEverywhere",
         "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery personal API token, every MCP client (refresh tokens included) and the run\ntokens of the runs you started that are still going are revoked (AC1)."
+      },
+      "SkipIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "SkipIn"
       },
       "SkippedSection": {
         "properties": {
@@ -84027,6 +87063,44 @@
           "text"
         ],
         "title": "SuggestionPatch"
+      },
+      "SummarySettingsIn": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "on_demand",
+              "always"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "SummarySettingsIn"
+      },
+      "SummarySettingsOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "on_demand",
+              "always"
+            ],
+            "title": "Mode"
+          },
+          "estimate": {
+            "$ref": "#/components/schemas/Estimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "estimate"
+        ],
+        "title": "SummarySettingsOut"
       },
       "SweepOut": {
         "properties": {
@@ -90896,6 +93970,407 @@
           "url"
         ],
         "title": "AuthorizeOut"
+      },
+      "oracle__decisions__schemas__PredictionIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Metric"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "predicted": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Predicted"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "predicted_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Value"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
+          },
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "predicted",
+          "goal_id"
+        ],
+        "title": "PredictionIn",
+        "description": "A measurable version of the expected outcome: deciding creates its outcome record."
+      },
+      "oracle__quality__schemas__PredictionIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Metric"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "predicted": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Predicted"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "increase",
+                  "decrease"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "predicted_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Value"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "predicted"
+        ],
+        "title": "PredictionIn",
+        "description": "A prediction a person writes: its typed figures must agree with each other."
+      },
+      "GoalAttrs": {
+        "description": "The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).",
+        "properties": {
+          "metric": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Metric"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unit"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "enum": [
+                  "at_least",
+                  "above",
+                  "at_most",
+                  "below"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comparison"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Current"
+          },
+          "current_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Current As Of"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "enum": [
+                  "short",
+                  "medium",
+                  "long"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Horizon"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Due"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Owner"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 10,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Weight"
+          }
+        },
+        "title": "GoalAttrs",
+        "type": "object"
       }
     },
     "securitySchemes": {

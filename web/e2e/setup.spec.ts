@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+
 import { login } from "./helpers";
 
 /**
@@ -50,6 +52,15 @@ async function nameLeadFromSetup(page: Page) {
   await backToHome(page);
 }
 
+/** H2: saves the Company time zone (Los Angeles, the default) from the checklist's Time zone step. */
+async function setZoneFromSetup(page: Page) {
+  await row(page, "timezone").getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/settings\/company\?from=setup#timezone$/);
+  await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await backToHome(page);
+}
+
 async function confirmHorizonsFromSetup(page: Page) {
   await row(page, "horizons").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#horizons$/);
@@ -64,9 +75,9 @@ test("setup: a new company's owner sees the checklist with what is already done"
   await newCompany(page);
   await login(page);
   await expect(panel(page).getByRole("heading", { name: "Set up" })).toBeVisible();
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("2 of 7");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("2 of 8");
   const keys = await panel(page).locator("[data-testid^='setup-row-']").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
-  expect(keys).toEqual(["setup-row-connect", "setup-row-sources", "setup-row-invite", "setup-row-domains", "setup-row-eng_lead", "setup-row-horizons", "setup-row-build_baseline"]);
+  expect(keys).toEqual(["setup-row-connect", "setup-row-sources", "setup-row-invite", "setup-row-domains", "setup-row-eng_lead", "setup-row-horizons", "setup-row-timezone", "setup-row-build_baseline"]);
   await expect(row(page, "invite")).toHaveAttribute("data-done", "true");
   await expect(row(page, "invite").getByTestId("setup-status")).toHaveText("4 people");
   await expect(row(page, "domains")).toHaveAttribute("data-done", "true");
@@ -76,6 +87,7 @@ test("setup: a new company's owner sees the checklist with what is already done"
     ["sources", "None"],
     ["eng_lead", "None"],
     ["horizons", "Not checked"],
+    ["timezone", "Not set"],
     ["build_baseline", "Not built"],
   ]) {
     await expect(row(page, key)).toHaveAttribute("data-done", "false");
@@ -97,7 +109,7 @@ test("setup: Connect tools opens Connections and Back to Home shows it done", as
   await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" })).toBeVisible();
   await connectSlack(page);
   await backToHome(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 7");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 8");
   await expect(row(page, "connect")).toHaveAttribute("data-done", "true");
   await expect(row(page, "connect").getByTestId("setup-status")).toHaveText("1 connected");
   // Another settings tab drops the way back.
@@ -126,7 +138,7 @@ test("setup: Horizons opens the Company page with the defaults and Confirm ticks
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "true");
   await expect(row(page, "horizons").getByTestId("setup-status")).toHaveText("Checked");
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 7");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 8");
 });
 
 test("setup: a change shows Save, a bad span shows the error, Reset reopens the step", async ({ page }) => {
@@ -184,19 +196,19 @@ test("setup: Hide puts the checklist behind a header chip, and a reload keeps th
   await login(page);
   await connectFromSetup(page);
   await confirmHorizonsFromSetup(page);
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 7");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
   await panel(page).getByRole("button", { name: "Hide" }).click();
   await expect(panel(page)).toHaveCount(0);
-  const chip = page.getByRole("button", { name: "Set up 4/7" });
+  const chip = page.getByRole("button", { name: "Set up 4/8" });
   await expect(chip).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Set up 4/7" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set up 4/8" })).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
-  await page.getByRole("button", { name: "Set up 4/7" }).click();
+  await page.getByRole("button", { name: "Set up 4/8" }).click();
   await expect(panel(page)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Set up 4/7" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set up 4/8" })).toHaveCount(0);
   await page.reload();
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 7");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
 });
 
 test("setup: commenters see their own two steps", async ({ page }) => {
@@ -226,10 +238,11 @@ test("setup: with every step done the checklist is not drawn", async ({ page }) 
   // draws; no_claim=a step going back to open later (covered by the Reset test).
   await login(page);
   // The default company's baseline was built before: invite, domains and Build baseline done.
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 7");
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
   await connectFromSetup(page);
   await nameLeadFromSetup(page);
   await confirmHorizonsFromSetup(page);
+  await setZoneFromSetup(page);
   await expect(page.getByTestId("home-needs")).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Set up/ })).toHaveCount(0);
@@ -243,7 +256,7 @@ test("setup: on a phone each row keeps one line and nothing scrolls sideways", a
   await login(page);
   await expect(panel(page)).toBeVisible();
   const opens = panel(page).getByRole("link", { name: "Open" });
-  await expect(opens).toHaveCount(7);
+  await expect(opens).toHaveCount(8);
   for (const link of await opens.all()) {
     await link.scrollIntoViewIfNeeded();
     await expect(link).toBeInViewport();
@@ -268,4 +281,19 @@ test("setup: a non-owner on Settings > Company sees the role note and no inputs"
   await expect(main.getByRole("combobox")).toHaveCount(0);
   await expect(main.getByRole("spinbutton")).toHaveCount(0);
   await expect(page.locator("#horizons")).toHaveCount(0);
+});
+
+test("setup: a step this build has no words for is still listed", async ({ page }) => {
+  // protects=H2 review (minor): every step /v1/setup returns has a row, so the rows add up
+  // to the panel's count; fails_when=a step the web has no label for is skipped silently
+  // (the count says 9 and 8 rows show); no_claim=the API's steps (the mock's
+  // "setup-new-step" scenario stands in for an API with a step this build predates).
+  await page.addInitScript((key) => localStorage.setItem(key, "setup-new-step"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await expect(panel(page).getByTestId("panel-count")).toHaveText(/^\d+ of 9$/);
+  await expect(panel(page).locator("[data-testid^='setup-row-']")).toHaveCount(9);
+  const fresh = row(page, "calendar");
+  await expect(fresh).toHaveAttribute("data-done", "false");
+  await expect(fresh).toContainText("Calendar");
+  await expect(fresh.getByTestId("setup-status")).toHaveText("Not done");
 });

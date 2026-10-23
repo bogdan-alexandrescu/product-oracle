@@ -55,7 +55,7 @@ def scratch_db():
 
 def test_it_follows_the_prd_review_chain():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0035_track_alerts"]
+    assert script.get_heads() == ["0039_company_timezone"]
     assert script.get_revision(REVISION).down_revision == "0014_member_follow_up_retry"
 
 

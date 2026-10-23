@@ -151,7 +151,33 @@ export type GoalView = {
   targetText: string | null;
   /** The direction the words say (target first, then the title's verb); null when they say none. */
   said: Direction | null;
+  /** B5: the goal has a typed target (unit, comparison and number); else Home reads its text. */
+  typed: boolean;
+  /** What the goal still needs to be measurable (goal_check.missing); null when not known. */
+  missing: string[] | null;
+  /** The current value is typed with its day: the goal may have dated measurements for its trend. */
+  measured: boolean;
 };
+
+/** B5 typed units as Home's figures: "%" and time units as is, currencies as a symbol, else a counted noun. */
+const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£" };
+function typedFigure(value: unknown, unit: unknown): Figure | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || typeof unit !== "string" || !unit) return null;
+  const currency = CURRENCY_SYMBOL[unit] ?? "";
+  return { value, unit: currency ? "" : unit, currency, compact: !!currency && Math.abs(value) >= 1e3, range: null };
+}
+const COMPARISON_WAY: Record<string, Direction> = {
+  at_least: { way: "up", strict: false },
+  above: { way: "up", strict: true },
+  at_most: { way: "down", strict: false },
+  below: { way: "down", strict: true },
+};
+
+/** A typed figure as written: "45%", "$4M", "2 min", "400 teams". */
+function typedText(f: Figure): string {
+  if (f.currency) return `${f.currency}${amount(f.value, f.compact)}`;
+  return f.unit === "%" ? `${f.value}%` : `${f.value} ${f.unit}`;
+}
 
 const text = (v: unknown) => (v == null || v === "" ? null : String(v));
 
@@ -161,20 +187,31 @@ export function goalViews(entities: EntityOut[]): GoalView[] {
     .filter((e) => e.type === "goal" && e.status !== "rejected")
     .sort((a, b) => Number(b.attrs?.weight ?? 0) - Number(a.attrs?.weight ?? 0) || byTitle(a, b))
     .map((g, i) => {
+      const a = g.attrs ?? {};
       const titled = TITLE_DOWN.test(g.title) ? "down" : TITLE_UP.test(g.title) ? "up" : null;
+      // B5: typed values first; the text parser is the fallback for goals still on `*_text`.
+      const target = COMPARISON_WAY[a.comparison as string] ? typedFigure(a.target, a.unit) : null;
+      const current = typedFigure(a.current, a.unit);
+      const targetRaw = a.target_text ?? a.target;
+      const currentRaw = a.current_text ?? a.current;
       return {
         id: g.id,
         tag: `G${i + 1}`,
         title: g.title,
         ...named(g.title, g.key),
-        metric: typeof g.attrs?.metric === "string" ? g.attrs.metric : null,
+        metric: typeof a.metric === "string" ? a.metric : null,
         proposed: g.status === "proposed",
         confidence: g.confidence == null ? null : Math.round(g.confidence * 100),
-        current: parseFigure(g.attrs?.current),
-        currentText: text(g.attrs?.current),
-        target: parseFigure(g.attrs?.target),
-        targetText: text(g.attrs?.target),
-        said: direction(g.attrs?.target) ?? (titled ? { way: titled, strict: false } : null),
+        current: current ?? parseFigure(currentRaw),
+        currentText: current ? typedText(current) : text(currentRaw),
+        target: target ?? parseFigure(targetRaw),
+        targetText: target ? typedText(target) : text(targetRaw),
+        said: target
+          ? COMPARISON_WAY[a.comparison as string]
+          : (direction(targetRaw) ?? (titled ? { way: titled, strict: false } : null)),
+        typed: !!target,
+        missing: g.goal_check?.missing ?? null,
+        measured: !!current && typeof a.current_as_of === "string",
       };
     });
 }
@@ -197,8 +234,11 @@ function sameUnit(c: Figure, t: Figure): boolean {
 const base = (f: Figure, v = f.value) => v * (TIME[f.unit]?.ms ?? 1);
 
 export type Progress = {
-  /** met; to go; short (equal to a strict below/above bound); raw (no distance can be given); none (no current value). */
-  state: "met" | "togo" | "short" | "raw" | "none";
+  /**
+   * met; to go; short (equal to a strict below/above bound); raw (no distance can be given);
+   * none (no current value); notarget (a confirmed goal with no typed target to measure against, B5).
+   */
+  state: "met" | "togo" | "short" | "raw" | "none" | "notarget";
   /** What Home shows under the goal: "5 pts to go", "Target met", "Not below", "" or "No current value". */
   text: string;
   /** The distance in the target's unit, when there is one. */
@@ -229,6 +269,10 @@ export function amount(n: number, compact: boolean): string {
  * Home then shows both strings, never a wrong number.
  */
 export function assess(g: GoalView, history?: Point[]): Progress {
+  // Decided 2026-10-21, B5 "Vague goals": confirmed, but nothing to measure it against.
+  if (!g.proposed && !g.typed && g.missing?.includes("target") && (!g.currentText || !g.targetText)) {
+    return { state: "notarget", text: "No target" };
+  }
   if (!g.currentText) return { state: "none", text: "No current value" };
   const c = g.current;
   const t = g.target;
@@ -278,6 +322,14 @@ export function historyOf(revisions: RevisionOut[]): Point[] {
   if (!last) return [];
   const from = Date.parse(last.at) - SIX_MONTHS_MS;
   return series.filter((p) => Date.parse(p.at) >= from);
+}
+
+/** B5: a goal's dated measurements as trend points, oldest first (the last 12). */
+export function measurementPoints(rows: { measured_on: string; value: number }[]): Point[] {
+  return rows
+    .map((r) => ({ at: `${r.measured_on}T00:00:00Z`, value: r.value }))
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .slice(-12);
 }
 
 /** Whole months the series spans, at least one: the "6m" after a change. */

@@ -173,3 +173,48 @@ test("goals with the same weight sort by title, as the Baseline sorts them", () 
   const c = { ...goal({ weight: 0.9 }, "Zeta"), id: "z" };
   expect(goalViews([a, b, c]).map((g) => g.title)).toEqual(["Zeta", "alpha", "Beta"]);
 });
+
+// B5 Typed goal fields: Home reads the typed current, target, unit and comparison first;
+// the text parser is only the fallback for goals still on `*_text`.
+// protects: Home's distance comes from the typed values once a goal has them.
+// fails_when: a typed goal is read from its text, or a strict comparison is met at equality.
+// no_claim: the API's goal_check (pytest).
+test.describe("typed goals: comparison gives the direction, typed beats text", () => {
+  const asOf = { current_as_of: "2026-10-01" };
+  const cases: [string, Record<string, unknown>, string][] = [
+    ["at least 45%", { unit: "%", comparison: "at_least", target: 45, current: 38, ...asOf }, "7 pts to go"],
+    ["below 8% at 8", { unit: "%", comparison: "below", target: 8, current: 8, ...asOf }, "Not below"],
+    ["at most 8% at 8", { unit: "%", comparison: "at_most", target: 8, current: 8, ...asOf }, "Target met"],
+    ["at most 2 min", { unit: "min", comparison: "at_most", target: 2, current: 3.5, ...asOf }, "1.5 min to go"],
+    ["above 400 teams", { unit: "teams", comparison: "above", target: 400, current: 380, ...asOf }, "20 teams to go"],
+    ["at least $4M", { unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf }, "$900k to go"],
+    // The title says "Raise" and the text says "at least 50%": the typed comparison wins.
+    ["typed beats text", { unit: "%", comparison: "at_most", target: 45, current: 40, target_text: "at least 50%", ...asOf }, "Target met"],
+    ["no current yet", { unit: "%", comparison: "at_least", target: 45 }, "No current value"],
+    // Still on text: the fallback reads *_text as it read the old free text.
+    ["text fallback", { target_text: "below 8%", current_text: "11%" }, "3 pts to go"],
+  ];
+  for (const [name, attrs, want] of cases) {
+    test(name, () => {
+      const [g] = goalViews([goal(attrs, "Raise it")]);
+      expect(assess(g).text).toBe(want);
+    });
+  }
+
+  test("a typed goal shows its figures in its own terms", () => {
+    const [g] = goalViews([goal({ unit: "%", comparison: "at_least", target: 45, current: 38, ...asOf })]);
+    expect(formatFigure(g.current!)).toBe("38%");
+    expect(g.targetText).toBe("45%");
+    const [m] = goalViews([goal({ unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf })]);
+    expect(formatFigure(m.current!)).toBe("$3.1M");
+  });
+
+  // Decided 2026-10-21, B5 "Vague goals": a confirmed goal with no typed target says No target.
+  test("a confirmed goal without a typed target and no current value shows No target", () => {
+    const [g] = goalViews([{ ...goal({ target_text: "below 8%" }), goal_check: { measurable: false, missing: ["unit", "comparison", "target"], warnings: [], problems: [] } } as EntityOut]);
+    const p = assess(g);
+    expect(p.state).toBe("notarget");
+    expect(p.text).toBe("No target");
+    expect(g.missing).toEqual(["unit", "comparison", "target"]);
+  });
+});

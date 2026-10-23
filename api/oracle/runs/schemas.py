@@ -23,6 +23,7 @@ Flow = Literal[
     "code_map",
     "update_draft",
     "prd_draft_items",
+    "ritual_summary",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -1081,6 +1082,8 @@ class InboxStrategy(BaseModel):
 
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
+from oracle.quality.schemas import InboxOutcome  # noqa: E402
+from oracle.rituals.schemas import InboxRitual  # noqa: E402
 from oracle.roadmap.schemas import InboxTrack  # noqa: E402
 
 
@@ -1133,9 +1136,15 @@ class InboxOut(BaseModel):
     decisions: list[InboxDecision] = []
     # Feedback and decisions that need me: new + open (staged, declined and done do not).
     needs_me: int = 0
+    # Ritual rows (H2): Pre-read ready, Record notes, Ritual failed to prepare; counted
+    # ones are in total and needs_me.
+    rituals: list[InboxRitual] = []
     # Launch rows (H6): Ready to launch and Notes to send (the launch's owner), Set tier
     # (approvers), counted in ``total``; Shipped (a member's personal note), shown only.
     launches: list[InboxLaunch] = []
+    # Outcome rows (H3): Add predictions and Outcome check due (counted in ``total``),
+    # Oracle recorded (shown only).
+    outcomes: list[InboxOutcome] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
     # F2 Track health: one row per track with alerts for me (the track's owner, else the

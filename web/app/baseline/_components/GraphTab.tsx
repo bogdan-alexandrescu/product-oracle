@@ -18,6 +18,7 @@ import {
   LockMark,
   sortedGoals,
 } from "./common";
+import { fillable, horizonLabel, missingTip, OwnerName, typedTarget, useOwners } from "./goal-fields";
 import { byTitle } from "./order";
 
 type Props = {
@@ -32,7 +33,19 @@ type Props = {
   onConfirm: (goal: EntityOut) => void;
   /** Opens Add item on this kind (the tables' Add). */
   onAdd: (kind: AddKind) => void;
+  /** B5: read the goals' `*_text` values into typed fields (approvers). */
+  onFill?: () => void;
 };
+
+/** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
+function TextFallback({ attr, text }: { attr: string; text: unknown }) {
+  if (text == null || text === "") return <span data-attr={attr} className="text-text2">–</span>;
+  return (
+    <span data-attr={attr} data-text="true" className="truncate text-text2" title="Not checked yet: fill from text or edit">
+      {String(text)}
+    </span>
+  );
+}
 
 /** A title that opens the item in the inspector; one line. */
 function TitleButton({
@@ -67,7 +80,7 @@ function TitleButton({
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -75,6 +88,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
   const features = live.filter((e) => e.type === "feature").sort(byTitle);
   const traceById = new Map((trace?.features ?? []).map((f) => [f.id, f]));
   const coverage = new Map((trace?.goals ?? []).map((g) => [g.id, g]));
+  const owners = useOwners(goals.map((g) => g.attrs?.owner).filter((x): x is string => typeof x === "string"));
+  const toFill = fillable(goals);
 
   const productOf = new Map<string, string>();
   for (const e of graph.edges) {
@@ -104,6 +119,13 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         <span className="flex min-w-0 items-center gap-2">
           <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
           <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="font-medium" />
+          {g.goal_check?.measurable === false && (
+            <span className="flex-none">
+              <Chip kind="warn" title={missingTip(g.goal_check)} data-testid="not-measurable">
+                Not measurable
+              </Chip>
+            </span>
+          )}
           <LockMark entity={g} meId={meId} />
         </span>
       ),
@@ -129,22 +151,37 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       header: "Target",
       width: "100px",
       phoneLabel: "Target",
-      cell: (g) => (
-        <span data-attr="target" className="tnum font-semibold">
-          {formatValue(g.attrs?.target)}
-        </span>
-      ),
+      cell: (g) => {
+        const t = typedTarget(g.attrs ?? {});
+        if (!t) return <TextFallback attr="target" text={g.attrs?.target_text ?? g.attrs?.target} />;
+        return (
+          <span data-attr="target" className="tnum font-semibold whitespace-nowrap" title={t.words}>
+            {t.short}
+          </span>
+        );
+      },
     },
     {
       key: "horizon",
       header: "Horizon",
-      width: "92px",
+      width: "132px",
       hideOnPhone: true,
-      cell: (g) => (
-        <span data-attr="horizon" className="tnum">
-          {formatValue(g.attrs?.horizon)}
-        </span>
-      ),
+      cell: (g) => {
+        const h = horizonLabel(g.attrs ?? {});
+        if (!h) return <TextFallback attr="horizon" text={g.attrs?.horizon_text ?? g.attrs?.horizon} />;
+        return (
+          <span data-attr="horizon" className="tnum whitespace-nowrap">
+            {h}
+          </span>
+        );
+      },
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      width: "120px",
+      hideOnPhone: true,
+      cell: (g) => <OwnerName id={g.attrs?.owner} owners={owners} />,
     },
     {
       key: "weight",
@@ -238,7 +275,26 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         )}
       </Panel>
 
-      <Panel title="Goals" count={goals.length} tools={add("goal")}>
+      <Panel
+        title="Goals"
+        count={goals.length}
+        tools={
+          <>
+            {add("goal")}
+            {canWrite && onFill && toFill > 0 && (
+              <>
+              <Button disabled={busy} onClick={onFill}>
+                {`Fill from text (${toFill} ${toFill === 1 ? "goal" : "goals"})`}
+              </Button>
+              <InfoTip label="Fill from text">
+                Oracle reads the goals&apos; targets, values and horizons still written as text, with the rules Home uses. A
+                locked goal gets a proposal instead. Ranges and owner names stay as text.
+              </InfoTip>
+              </>
+            )}
+          </>
+        }
+      >
         <DataTable
           label="Goals"
           columns={goalCols}
@@ -320,9 +376,12 @@ function Ledger({
                   >
                     {tags.get(g.id) ?? g.title}
                   </button>
-                  {g.attrs?.target != null && (
+                  {(typedTarget(g.attrs ?? {}) || g.attrs?.target != null || g.attrs?.target_text != null) && (
                     <span className="tnum text-text2 max-[600px]:hidden">
-                      Target <b className="font-semibold text-text">{formatValue(g.attrs.target)}</b>
+                      Target{" "}
+                      <b className="font-semibold text-text">
+                        {typedTarget(g.attrs ?? {})?.short ?? formatValue(g.attrs?.target_text ?? g.attrs?.target)}
+                      </b>
                     </span>
                   )}
                 </span>
