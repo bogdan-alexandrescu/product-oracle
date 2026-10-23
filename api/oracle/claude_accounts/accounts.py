@@ -223,6 +223,10 @@ class Account:
     token_expires_at: datetime | None = None
     last_refresh_reason: str = ""
 
+    #: Which Claude account it is, as reported at sign-in. None: not reported.
+    claude_email: str | None = None
+    claude_organization: str | None = None
+
     def live_holds(self, now: datetime) -> tuple[Hold, ...]:
         return tuple(h for h in self.holds if not h.is_expired(now))
 

@@ -31637,6 +31637,28 @@
               }
             ],
             "title": "Spent Until"
+          },
+          "claude_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claude Email"
+          },
+          "claude_organization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claude Organization"
           }
         },
         "type": "object",
@@ -31657,7 +31679,9 @@
           "last_assigned_at",
           "takes_calls",
           "spent_by",
-          "spent_until"
+          "spent_until",
+          "claude_email",
+          "claude_organization"
         ],
         "title": "AccountOut"
       },

@@ -100,6 +100,8 @@ def to_account(row: ClaudeAccount) -> Account:
             last_refresh_at=row.last_refresh_at,
             token_expires_at=row.token_expires_at,
             last_refresh_reason=row.last_refresh_reason or "",
+            claude_email=row.claude_email,
+            claude_organization=row.claude_organization,
         )
     except MALFORMED_ERRORS as exc:
         error = type(exc).__name__
@@ -196,12 +198,17 @@ async def register(
     pair: str,
     access_token: str,
     added_by: uuid.UUID | None,
+    claude_email: str | None = None,
+    claude_organization: str | None = None,
 ) -> Account:
     """Record an account and its credential, or replace the credential of one that exists.
 
     Re-registering keeps the state, holds and readings (it must not un-pause an
     account a person paused). Signing in again IS the fix for REAUTH_REQUIRED, so an
     account in that state gets its remembered state back once the new pair is stored.
+
+    Who the credential is for is replaced with it, None included: a new pair may be a
+    different Claude account, and the old name must not stay on it.
     """
     validate_label(label)
     async with tenant_session(tenant_id) as s:
@@ -229,6 +236,8 @@ async def register(
         row.access_ciphertext = crypto.encrypt(access_token.encode())
         row.access_key_version = crypto.KEY_VERSION
         row.unreadable_at = None
+        row.claude_email = claude_email
+        row.claude_organization = claude_organization
         await s.commit()
         account_id = str(row.id)
         account = to_account(row)

@@ -9167,6 +9167,10 @@ export interface components {
             spent_by: string | null;
             /** Spent Until */
             spent_until: string | null;
+            /** Claude Email */
+            claude_email: string | null;
+            /** Claude Organization */
+            claude_organization: string | null;
         };
         /** AccountsPage */
         AccountsPage: {

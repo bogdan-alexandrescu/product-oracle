@@ -123,7 +123,8 @@ async def test_the_browser_sign_in_end_to_end(client, tenant_id, owner, endpoint
 
 
 async def _sign_in(client, owner, label: str) -> dict:
-    s = (await client.post(f"{BASE}/authorize", json={"label": label}, headers=owner.headers)).json()
+    started = await client.post(f"{BASE}/authorize", json={"label": label}, headers=owner.headers)
+    s = started.json()
     resp = await client.post(
         f"{BASE}/exchange", json={"state": s["state"], "code": "c0de"}, headers=owner.headers
     )
