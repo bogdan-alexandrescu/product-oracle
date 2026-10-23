@@ -12,7 +12,7 @@ const NONE = "";
 
 /**
  * #345: where a goal sits in the goal tree, for approvers: move a subgoal under another
- * goal, promote it to a goal, or archive it; or put a goal without subgoals under one.
+ * goal, promote it to a goal, or archive it once confirmed; or put a goal without subgoals under one.
  */
 export function SubgoalActions({
   goal,
@@ -60,7 +60,8 @@ export function SubgoalActions({
             <Button disabled={busy} onClick={() => onMove(null)}>
               Promote to goal
             </Button>
-            {goal.status !== "rejected" && (
+            {/* A proposed subgoal is rejected, with the drawer's Reject; a confirmed one is archived. */}
+            {goal.status === "confirmed" && (
               <Button disabled={busy} onClick={onArchive}>
                 Archive subgoal
               </Button>

@@ -32,6 +32,7 @@ import {
   DEFAULT_LOW,
   DeliveryChip,
   formatValue,
+  goalCodes,
   LockBadge,
   NodeStatusBadge,
   titleOf,
@@ -124,7 +125,9 @@ export function EntityDrawer({
   const [problems, setProblems] = useState<GoalProblem[] | null>(null);
   const d = q.data;
   const title = d?.title ?? entity.title;
-  const code = named(title, d?.key ?? entity.key).code;
+  // A subgoal's code is its place in the goal tree (#345), as its chip shows: G-B.1, or none.
+  const treeCode = d?.parent_id ? goalCodes(graph).get(entity.id) : undefined;
+  const code = treeCode !== undefined ? treeCode : named(title, d?.key ?? entity.key).code;
   const root = useRef<HTMLDivElement>(null);
 
   // Below the tables (narrow screens), bring the inspector into view when it opens.
@@ -307,7 +310,9 @@ export function EntityDrawer({
             {code && (
               <>
                 {" · "}
-                <span className="font-mono">{code}</span>
+                <span className="font-mono" data-testid="drawer-code">
+                  {code}
+                </span>
               </>
             )}
           </>

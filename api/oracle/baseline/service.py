@@ -314,8 +314,8 @@ def _check_edge_attrs(type_: str, attrs: dict[str, Any]) -> None:
 async def check_parent(
     db: AsyncSession, type_: str, parent_id: uuid.UUID | None, entity: Entity | None = None
 ) -> None:
-    """#345: a subgoal's parent is a goal that is not a subgoal itself (one level), and a
-    goal with subgoals does not become one; so no goal is ever its own ancestor."""
+    """#345: a subgoal's parent is a live goal that is not a subgoal itself (one level), and
+    a goal with subgoals does not become one; so no goal is ever its own ancestor."""
     if parent_id is None:
         return
     if type_ != "goal":
@@ -325,6 +325,8 @@ async def check_parent(
     parent = await db.get(Entity, parent_id)
     if parent is None or parent.type != "goal":
         raise InvalidError("the parent must be a goal")
+    if parent.status == "rejected":
+        raise InvalidError("the parent goal is archived")
     if entity is not None and parent.parent_id == entity.id:
         raise InvalidError("the parent is a subgoal of this goal (a cycle)")
     if parent.parent_id is not None:

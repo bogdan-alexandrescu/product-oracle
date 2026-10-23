@@ -661,6 +661,11 @@ export function useConfirmedGoals() {
   );
 }
 
+/** Every goal of the company, archived ones included: a subgoal's code counts them (#345). */
+function useAllGoals() {
+  return useQuery("door-goals-all", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+}
+
 /** The confirmed goals a brief (or its PRD run, #260) may serve, each with its distance to go (Home's reading). */
 export function GoalPicker({
   value,
@@ -671,8 +676,8 @@ export function GoalPicker({
   onChange: (ids: string[]) => void;
   legend?: string;
 }) {
-  const goals = useConfirmedGoals();
-  const views = goalViews(goals.data ?? []);
+  const goals = useAllGoals();
+  const views = goalViews((goals.data ?? []).filter((g) => g.status === "confirmed"), goals.data);
   // #345: a goal's subgoals show under it, folded on demand.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const fold = (id: string) =>

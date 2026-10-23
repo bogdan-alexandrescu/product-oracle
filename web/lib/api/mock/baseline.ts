@@ -675,6 +675,7 @@ function parentRefusal(s: BaselineState, type: string, parentId: string | null |
   if (e && parentId === e.id) return "a goal cannot be its own parent (a cycle)";
   const parent = s.entities.find((x) => x.id === parentId);
   if (!parent || parent.type !== "goal") return "the parent must be a goal";
+  if (parent.status === "rejected") return "the parent goal is archived";
   if (e && parent.parent_id === e.id) return "the parent is a subgoal of this goal (a cycle)";
   if (parent.parent_id) return "the parent is a subgoal itself; subgoals are one level deep";
   if (e && s.entities.some((x) => x.parent_id === e.id)) return "a goal with subgoals cannot become a subgoal";

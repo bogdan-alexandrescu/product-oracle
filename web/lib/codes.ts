@@ -30,6 +30,8 @@ export const namedText = (n: Named) => (n.code ? `${n.code} ${n.name}` : n.name)
 export type Names = {
   byKey: Map<string, EntityOut>;
   byId: Map<string, EntityOut>;
+  /** Every goal, archived ones included: they keep their subgoal numbers (#345). */
+  goals: EntityOut[];
 };
 
 const TTL = 60_000;
@@ -41,7 +43,8 @@ function load(company: string): Promise<Names> {
   if (hit && Date.now() - hit.at < TTL) return hit.names;
   const names = unwrap(api.GET("/v1/baseline/entities")).then((list) => {
     const all = list.filter((e) => (e.type === "goal" || e.type === "feature") && e.status !== "rejected");
-    return { byKey: new Map(all.map((e) => [e.key, e])), byId: new Map(all.map((e) => [e.id, e])) };
+    const goals = list.filter((e) => e.type === "goal");
+    return { byKey: new Map(all.map((e) => [e.key, e])), byId: new Map(all.map((e) => [e.id, e])), goals };
   });
   names.catch(() => cache.delete(company));
   cache.set(company, { at: Date.now(), names });

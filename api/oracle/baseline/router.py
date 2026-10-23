@@ -50,6 +50,7 @@ from oracle.baseline.schemas import (
     EvidenceLinkCreate,
     EvidenceOut,
     FillFromTextResult,
+    GoalProgress,
     GraphOut,
     LinkErrorOut,
     LinkPreviewOut,
@@ -151,8 +152,11 @@ async def _entities_out(
     # B5: a goal's check reads the company's day and its planning horizons.
     checked, progress = {}, {}
     if any(e.type == "goal" for e in rows):
-        # #345: a goal's roll-up reads its subgoals, listed or not.
-        progress = rollup.progress_of(await service.list_entities(db, "goal"))
+        # #345: a goal's roll-up reads its subgoals, listed or not; served through its schema.
+        progress = {
+            k: GoalProgress(**v)
+            for k, v in rollup.progress_of(await service.list_entities(db, "goal")).items()
+        }
         on, horizons = await goals.company_today(db), await goals.company_horizons(db)
         checked = {
             e.id: goals.GoalCheck(

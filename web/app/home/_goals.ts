@@ -187,8 +187,8 @@ function typedText(f: Figure): string {
 const text = (v: unknown) => (v == null || v === "" ? null : String(v));
 
 /** Live goals, heaviest first, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them. */
-export function goalViews(entities: EntityOut[]): GoalView[] {
-  return goalTree(entities).map(({ goal: g, tag, code, name, parentId, children }) => {
+export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entities): GoalView[] {
+  return goalTree(entities, numbered).map(({ goal: g, tag, code, name, parentId, children }) => {
     const a = g.attrs ?? {};
     const titled = TITLE_DOWN.test(g.title) ? "down" : TITLE_UP.test(g.title) ? "up" : null;
     // B5: typed values first; the text parser is the fallback for goals still on `*_text`.
