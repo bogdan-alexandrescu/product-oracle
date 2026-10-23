@@ -13,6 +13,7 @@ from oracle.docs.router import router as docs_router
 from oracle.export.router import router as export_router
 from oracle.main import app
 from oracle.members.models import Invite
+from oracle.members.router import invites_router
 from oracle.members.router import router as members_router
 from oracle.models import AuditEvent
 from oracle.review.router import router as review_router
@@ -68,6 +69,7 @@ class World:
     token_id: uuid.UUID
     follow_up_id: uuid.UUID
     update: str
+    request_id: uuid.UUID
 
     def ids(self) -> dict[str, object]:
         return {
@@ -81,6 +83,7 @@ class World:
             "token_id": self.token_id,
             "follow_up_id": self.follow_up_id,
             "update": self.update,
+            "request_id": self.request_id,
         }
 
 
@@ -139,6 +142,11 @@ async def world(client) -> World:
             member_id=member_id, kind="provider_revoke", target_id=uuid.uuid4(), provider="github"
         )
         s.add(follow_up)
+        # A5: a pending access request.
+        from oracle.members.models import AccessRequest
+
+        access_request = AccessRequest(email="asks@example.com")
+        s.add(access_request)
         # An approved PRD scope (C6) for GET /v1/documents/{doc}/scope.
         from oracle.docs.models import Document
         from oracle.runs.models import Run
@@ -187,6 +195,7 @@ async def world(client) -> World:
         bot.id,
         follow_up.id,
         update.json()["slug"],
+        access_request.id,
     )
 
 
@@ -252,14 +261,28 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/api-tokens", "owner", {}),
     ("DELETE", "/v1/api-tokens/{token_id}", "owner", {}),
     ("GET", "/v1/api-tokens/{token_id}/approvals", "owner", {}),
-    ("GET", "/v1/invites", "owner", {}),
-    ("POST", "/v1/invites", "owner", {"json": {"email": "x@example.com", "role": "viewer"}}),
-    ("DELETE", "/v1/invites/{invite_id}", "owner", {}),
+    # A5: approvers invite too (viewers and commenters, their own invites only).
+    ("GET", "/v1/invites", "approver", {}),
+    ("POST", "/v1/invites", "approver", {"json": {"email": "x@example.com", "role": "viewer"}}),
+    ("DELETE", "/v1/invites/{invite_id}", "approver", {}),
+    ("POST", "/v1/invites/{invite_id}/resend", "approver", {}),
+    ("GET", "/v1/access-requests", "approver", {}),
+    ("POST", "/v1/access-requests/{request_id}/approve", "approver", {"json": {"role": "viewer"}}),
+    ("POST", "/v1/access-requests/{request_id}/decline", "approver", {}),
+    ("POST", "/v1/access-requests/{request_id}/reopen", "approver", {}),
+    ("GET", "/v1/sign-in-rules", "owner", {}),
     ("POST", "/v1/invites/{invite_id}/access", "owner", {}),
     ("POST", "/v1/invites/{invite_id}/email", "owner", {}),
     ("POST", "/v1/member-follow-ups/{follow_up_id}/retry", "owner", {}),
     ("POST", "/v1/member-follow-ups/{follow_up_id}/dismiss", "owner", {}),
 ]
+# Past the role check, refused for what the row is (A5): an approver acts on the invites
+# they sent only (the world's is the owner's: 404); a pending request cannot be reopened.
+PAST_THE_ROLE = {
+    ("DELETE", "/v1/invites/{invite_id}"): {"approver": 404},
+    ("POST", "/v1/invites/{invite_id}/resend"): {"approver": 404},
+    ("POST", "/v1/access-requests/{request_id}/reopen"): {"approver": 409, "owner": 409},
+}
 
 
 def _template(path: str) -> str:
@@ -271,7 +294,7 @@ def test_matrix_covers_every_route():
     """Each route of the routers Lane A guards appears in MATRIX, so none goes unchecked."""
     routes = {
         (method, route.path)
-        for r in (docs_router, review_router, export_router, members_router)
+        for r in (docs_router, review_router, export_router, members_router, invites_router)
         for route in r.routes
         if isinstance(route, APIRoute)
         for method in route.methods
@@ -303,7 +326,10 @@ async def test_role_matrix(client, world, role, method, path, min_role, kwargs):
     resp = await client.request(
         method, path.format(**world.ids()), **{**kwargs, "headers": headers}
     )
-    if ROLES.index(role) >= ROLES.index(min_role):
+    refused = PAST_THE_ROLE.get((method, path), {}).get(role)
+    if refused is not None:
+        assert resp.status_code == refused, (role, resp.status_code, resp.text)
+    elif ROLES.index(role) >= ROLES.index(min_role):
         assert resp.status_code < 400, (role, resp.status_code, resp.text)
     else:
         assert resp.status_code == 403, (role, resp.status_code, resp.text)
@@ -377,6 +403,7 @@ async def test_list_members(client, world):
     assert set(resp.json()[0]) == {
         "id",
         "email",
+        "name",
         "role",
         "engineering_lead",
         "created_at",

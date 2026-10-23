@@ -86,6 +86,7 @@ EVERY_MEMBER = frozenset(
         "revoke_my_token",
         "search_sources",
         "sign_out_everywhere",
+        "update_my_account",
         "update_preferences",
         "validate_template",
         "validate_theme",

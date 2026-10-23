@@ -213,7 +213,8 @@ async def test_iap_does_not_provision_reserved_domains_outside_tests(client, mon
 
     settings = get_settings()
     monkeypatch.setattr(settings, "allow_reserved_email_domains", True)
-    await seed(email="owner@acme.io", password=PASSWORD)
+    r = await seed(email="owner@acme.io", password=PASSWORD)
+    await test_iap._join_at_once(r.tenant_id)  # A5: an uninvited sign-in joins at once
     monkeypatch.setattr(settings, "allow_reserved_email_domains", False)
     monkeypatch.setattr(settings, "iap_audiences", [test_iap.AUDIENCE])
     monkeypatch.setattr(settings, "iap_allowed_domains", ["example.com", "acme.io"])
@@ -374,7 +375,8 @@ async def test_iap_provisioned_users_have_no_password(client, monkeypatch):
     from tests import test_iap
 
     settings = get_settings()
-    await seed(password=PASSWORD)
+    r = await seed(password=PASSWORD)
+    await test_iap._join_at_once(r.tenant_id)  # A5: an uninvited sign-in joins at once
     monkeypatch.setattr(settings, "iap_audiences", [test_iap.AUDIENCE])
     monkeypatch.setattr(settings, "iap_allowed_domains", ["example.com"])
     monkeypatch.setattr(settings, "iap_auto_provision", True)

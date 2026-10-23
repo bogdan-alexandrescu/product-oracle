@@ -24,7 +24,8 @@ from oracle.mcp.auth import McpCaller
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 # Signing in and out belongs to browsers; an MCP client already holds a credential.
-EXCLUDED_OPERATIONS = {"login", "logout"}
+# A5: a Google-signed person's own access state and note: the browser only.
+EXCLUDED_OPERATIONS = {"login", "logout", "get_access_state", "send_access_note"}
 # Live streams, and what a client that cannot read one calls instead.
 STREAM_OPERATIONS = {
     "stream_discussion_reply": "a live stream; call create_discussion_message with wait=true",

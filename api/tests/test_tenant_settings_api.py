@@ -36,6 +36,8 @@ async def test_defaults_and_unknown_keys(client, owner):
     listed = (await client.get("/v1/settings", headers=owner.headers)).json()
     assert {s["key"]: s["value"] for s in listed} == {
         "iap_default_role": "commenter",
+        # A5 "Join rule": ``join`` until the /access page a waiting person sees exists.
+        "sign_in_without_invite": "join",
         "confidence_weights": {},
         # v2-review: the company's default review policy (oracle.review.state).
         "review_policy": {
@@ -91,7 +93,8 @@ async def test_iap_default_role(client, tenant_id, owner):
         "/v1/settings/iap_default_role", json={"value": "admin"}, headers=owner.headers
     )
     assert bad.status_code == 422
-    assert "viewer, commenter, approver, owner" in bad.json()["detail"]
+    # A5: only viewer or commenter (an approver or an owner is chosen per invite).
+    assert bad.json()["detail"] == "iap_default_role must be viewer or commenter"
 
     ok = await client.put(
         "/v1/settings/iap_default_role", json={"value": "viewer"}, headers=owner.headers

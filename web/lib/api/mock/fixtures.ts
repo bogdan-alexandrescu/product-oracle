@@ -826,6 +826,11 @@ export const REMOVED_MEMBER = {
   disabled_at: "2026-10-18T09:00:00Z",
 } as const;
 
+/** A5: someone from the company's domains who signed in with Google without an invite. */
+export const MOCK_ACCESS_REQUESTS = [
+  { email: "new.person@example.com", note: "I lead support and need to read the PRD.", created_at: "2026-10-21T16:05:00Z", last_seen_at: "2026-10-21T18:40:00Z" },
+] as const;
+
 export const MOCK_INVITES = [{ email: "new.hire@example.com", role: "commenter", engineering_lead: false, created_at: "2026-10-15T09:00:00Z" }] as const;
 
 /*

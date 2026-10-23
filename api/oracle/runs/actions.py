@@ -769,7 +769,9 @@ async def _people(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Rev
         return {}
     out: dict[uuid.UUID, ReviewPerson] = {}
     for user in await db.scalars(select(User).where(User.id.in_(wanted))):
-        out[user.id] = ReviewPerson(id=user.id, name=display_name(user.email), role=user.role)
+        out[user.id] = ReviewPerson(
+            id=user.id, name=display_name(user.email, user.name), role=user.role
+        )
     for token in await db.scalars(select(ApiToken).where(ApiToken.id.in_(wanted))):
         out[token.id] = ReviewPerson(id=token.id, name=token.name, role=token.role)
     return out

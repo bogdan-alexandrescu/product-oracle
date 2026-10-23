@@ -30,7 +30,8 @@ type Inbox = Awaited<ReturnType<typeof loadInbox>>;
  * What waits on me, as the rail badge, Home and /inbox count it: each new or open item
  * (owner, 2026-10-20), so the Inbox's New + Open tabs. The API's total counts checkpoints,
  * cost approvals, overruns, stuck runs, couldn't-import and new or open feedback items
- * (staged, declined and done never); the questions asked of me are added here.
+ * (staged, declined and done never), and never access requests (A5: no Inbox screen shows
+ * them yet); the questions asked of me are added here.
  */
 export function waitingCount(inbox: Inbox, questions: readonly unknown[]): number {
   return inbox.total + questions.length;

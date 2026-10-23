@@ -16,7 +16,7 @@ from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken
 from oracle.mcp.oauth.verify import verify_access_token, www_authenticate
 from oracle.seed import seed
 from oracle.tenancy import tenant_session, unscoped_session
-from tests.test_iap import HEADER, assertion, fetches  # noqa: F401  (fetches: IAP on)
+from tests.test_iap import HEADER, _join_at_once, assertion, fetches  # noqa: F401  (fetches: IAP on)
 
 BASE = "http://test"
 REDIRECT = "http://127.0.0.1:33418/callback"
@@ -629,7 +629,8 @@ async def test_role_changes_apply_to_live_tokens(client):
 
 
 async def test_google_signed_in_user_goes_straight_to_consent(client, fetches):  # noqa: F811
-    await seed()
+    r = await seed()
+    await _join_at_once(r.tenant_id)  # A5: an uninvited sign-in joins at once
     reg = await register(client)
     verifier, challenge = pkce()
     headers = {HEADER: assertion("dana@example.com")}

@@ -26,8 +26,9 @@ from oracle.auth.models import User
 from oracle.auth.service import make_session_cookie
 from oracle.authz import not_for_runs
 from oracle.config import get_settings
+from oracle.members import service as members
 from oracle.members import tokens
-from oracle.members.schemas import ApiTokenOut
+from oracle.members.schemas import ApiTokenOut, NamePatch
 from oracle.members.service import MemberError
 
 
@@ -66,11 +67,7 @@ async def _call[T](op: Awaitable[T]) -> T:
         ) from e
 
 
-@router.get("/account", response_model=MyAccountOut)
-async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
-    """Your email, role, when you last signed in and how you sign in: with a password,
-    with Google (when this deployment signs in through Google), or both."""
-    user = await db.get(User, principal.user_id)
+def _account_out(principal: Principal, user: User) -> MyAccountOut:
     methods = ["password"] if user.password_sign_in else []
     if get_settings().iap_audiences:
         methods.append("google")
@@ -78,12 +75,33 @@ async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
     return MyAccountOut(
         user_id=user.id,
         email=user.email,
+        name=user.name,
         role=principal.role,
         created_at=user.created_at,
         last_sign_in_at=user.last_sign_in_at,
         sign_in_methods=methods,
         signed_in_via=via,
     )
+
+
+@router.get("/account", response_model=MyAccountOut)
+async def get_my_account(principal: Member, db: TenantDB) -> MyAccountOut:
+    """Your email, name, role, when you last signed in and how you sign in: with a
+    password, with Google (when this deployment signs in through Google), or both."""
+    return _account_out(principal, await db.get(User, principal.user_id))
+
+
+@router.patch(
+    "/account",
+    response_model=MyAccountOut,
+    responses={403: {"description": "A read-only credential"}},
+)
+async def update_my_account(body: NamePatch, principal: Member, db: TenantDB) -> MyAccountOut:
+    """Set your name (A5), shown to your teammates instead of your email; null clears
+    it. Any role; a read-only token or MCP client cannot change it. Audited."""
+    user = await _call(members.set_name(db, principal, principal.user_id, body.name, own=True))
+    await db.commit()
+    return _account_out(principal, user)
 
 
 @router.post(

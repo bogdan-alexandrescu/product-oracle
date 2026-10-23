@@ -2,7 +2,12 @@
 
 The known keys and how each value is checked:
 
-- ``iap_default_role``: one of the roles; the role of a Google sign-in without an invite.
+- ``iap_default_role``: viewer or commenter (A5; a stored approver or owner is still
+  honoured until changed); the role of an approved access request and of a Google sign-in
+  that joins at once.
+- ``sign_in_without_invite`` (A5): ``request`` (an owner approves first), ``join`` (at
+  once, with the default role; the default until the /access page a waiting person sees
+  exists) or ``refuse`` (invite only).
 - ``confidence_weights``: overrides of ``oracle.confidence.DEFAULTS``, same shape.
 - ``review_policy``: the company's default review policy (``oracle.review.state``):
   designated decider, mandatory reviewers, required sections, which sections need an
@@ -71,8 +76,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
-from oracle.auth.models import ROLES
-from oracle.authz import recheck_caller, require_role
+from oracle.authz import not_for_runs, recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
@@ -81,6 +85,9 @@ from oracle.tenant_settings import TenantSetting
 
 DEFAULTS: dict[str, Any] = {
     "iap_default_role": "commenter",
+    # A5 "Join rule": ``request`` (owner, 2026-10-21) once the /access page a waiting
+    # person sees exists; ``join`` until then, so an uninvited sign-in is never a 401.
+    "sign_in_without_invite": "join",
     "confidence_weights": {},
     "review_policy": {
         "decider_id": None,
@@ -263,8 +270,13 @@ def validate_confidence_weights(value: Any) -> dict[str, Any]:
 
 async def validate(session: AsyncSession, principal: Principal, key: str, value: Any) -> Any:
     if key == "iap_default_role":
-        if value not in ROLES:
-            raise InvalidSetting(f"iap_default_role must be one of {', '.join(ROLES)}")
+        # A5: an approver or an owner is only ever chosen per person (an invite).
+        if value not in ("viewer", "commenter"):
+            raise InvalidSetting("iap_default_role must be viewer or commenter")
+        return value
+    if key == "sign_in_without_invite":
+        if value not in ("request", "join", "refuse"):
+            raise InvalidSetting("sign_in_without_invite must be request, join or refuse")
         return value
     if key == "confidence_weights":
         return validate_confidence_weights(value)
@@ -413,6 +425,10 @@ def validate_shared_drives(value: Any) -> list[dict[str, str]]:
 # --- API ----------------------------------------------------------------------------
 
 router = APIRouter(prefix="/v1", tags=["settings"])
+# Who becomes a member through Google sign-in (A5): refused to a run's agents. Every
+# setting sign-in or membership reads: the role a sign-in joins with, the join rule, and
+# the company's domains (who may join under ``join`` or ask under ``request``).
+SIGN_IN_KEYS = ("iap_default_role", "sign_in_without_invite", "company_email_domains")
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 
 
@@ -496,6 +512,9 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
 
     if key not in DEFAULTS:
         raise _unknown(key)
+    if key in SIGN_IN_KEYS:
+        # A5 (AC 20): who becomes a member is never a run's to change.
+        await not_for_runs(principal)
     # Every key: the caller must still be an owner when the change lands (a rogue owner
     # being disabled must not raise iap_default_role with a request in flight).
     await recheck_caller(db, principal, "owner", shared=key not in GATE_KEYS)

@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import uuid
 from datetime import datetime
 from typing import Literal
@@ -7,7 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 from oracle.auth.models import Role
 
-InviteStatus = Literal["open", "accepted", "revoked"]
+# expired (A5): open, past its expiry; not claimed at sign-in until resent.
+InviteStatus = Literal["open", "expired", "accepted", "revoked"]
 # granted: the invitee may pass Google IAP; pending: not granted yet (access_error says
 # why; Retry grants it); skipped: this Oracle has no IAP backends to grant (local, dev).
 InviteAccess = Literal["granted", "pending", "skipped"]
@@ -49,6 +51,8 @@ class MemberOut(BaseModel):
 
     id: uuid.UUID
     email: str
+    # A5: their name, when they or an owner set one (else named from the email).
+    name: str | None = None
     role: Role
     # A3: speaks for engineering (decides the engineering stops, verifies dates).
     engineering_lead: bool = False
@@ -72,15 +76,49 @@ class MemberOut(BaseModel):
 
 
 class MemberPatch(BaseModel):
-    """A role, the engineering lead flag, or both (applied in one change, role first)."""
+    """A role, the engineering lead flag, a name (A5), or several (applied in one
+    change: role first). ``"name": null`` clears the name."""
 
     role: Role | None = None
     engineering_lead: bool | None = None
+    name: str | None = Field(default=None, max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return clean_name(v)
+
+
+class NamePatch(BaseModel):
+    """``PATCH /v1/me/account``: your name (A5); null clears it."""
+
+    name: str | None = Field(max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return clean_name(v)
+
+
+def clean_name(v: str | None) -> str | None:
+    """A person's name (A5): trimmed, 1 to 80 characters, no control characters."""
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        raise ValueError("A name needs at least one character")
+    if len(v) > 80:
+        raise ValueError("A name is at most 80 characters")
+    if any(unicodedata.category(c) in ("Cc", "Cf") for c in v):
+        raise ValueError("A name has no control characters")
+    return v
 
 
 class InviteCreate(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     role: Role
+    # A5: how teammates know them; the member takes it at their first sign-in.
+    name: str | None = Field(default=None, max_length=200)
     # A3: their first sign-in lands as an engineering lead (never with role viewer).
     engineering_lead: bool = False
 
@@ -88,6 +126,11 @@ class InviteCreate(BaseModel):
     @classmethod
     def _normalise(cls, v: str) -> str:
         return plain_address(v)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return clean_name(v)
 
 
 class InviteOut(BaseModel):
@@ -98,8 +141,16 @@ class InviteOut(BaseModel):
     role: Role
     engineering_lead: bool = False
     status: InviteStatus
+    name: str | None = None
     invited_by: uuid.UUID | None = None
+    invited_by_name: str | None = None
     created_at: datetime
+    # A5: claimable until then (14 days from creation or the last resend).
+    expires_at: datetime
+    resent_at: datetime | None = None
+    resend_count: int = 0
+    # The access request it was approved from, if any.
+    access_request_id: uuid.UUID | None = None
     accepted_at: datetime | None = None
     revoked_at: datetime | None = None
     access: InviteAccess = "pending"
@@ -201,3 +252,53 @@ class PersonOut(BaseModel):
     role: Role
     # Commenter or above: can answer a question, comment or be asked.
     can_write: bool
+
+
+AccessRequestStatus = Literal["pending", "approved", "declined", "closed"]
+
+
+class AccessRequestOut(BaseModel):
+    """Someone who signed in with Google without an invite, asking to join (A5)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    status: AccessRequestStatus
+    note: str | None = None
+    # When they first asked.
+    created_at: datetime
+    last_seen_at: datetime
+    decided_by: uuid.UUID | None = None
+    decided_at: datetime | None = None
+    # The role it was approved with, and the invite made for it.
+    role: Role | None = None
+    invite_id: uuid.UUID | None = None
+
+
+class AccessApprove(BaseModel):
+    role: Role
+    name: str | None = Field(default=None, max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return clean_name(v)
+
+
+class SignInDomain(BaseModel):
+    domain: str
+    # deployment: ORACLE_IAP_ALLOWED_DOMAINS (changed where Oracle is deployed);
+    # settings: the owner's company_email_domains.
+    source: Literal["deployment", "settings"] = Field(serialization_alias="from")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SignInRulesOut(BaseModel):
+    google_sign_in: bool
+    # ORACLE_IAP_AUTO_PROVISION=false: no new member through Google at all.
+    new_sign_ins_off: bool
+    domains: list[SignInDomain]
+    without_invite: Literal["request", "join", "refuse"]
+    default_role: Role

@@ -206,7 +206,7 @@ async def test_a_patch_needs_a_field_and_an_owner(client, owner):
     lead = await person(tenant_id, "commenter", "lead")
     resp = await client.patch(f"/v1/members/{lead.user_id}", json={}, headers=auth)
     assert resp.status_code == 422, resp.text
-    assert resp.json()["detail"] == "Send role, engineering_lead or both"
+    assert resp.json()["detail"] == "Send role, name or both"  # A5: a name is the third field
     approver = await person(tenant_id, "approver")
     resp = await _flag(client, approver.headers, lead.user_id)
     assert resp.status_code == 403, resp.text
