@@ -309,6 +309,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (stranger) return refuse(422, `${stranger} is not a member of this company`);
     const fresh = [...new Set(ids)].filter((id) => !isIn(d, id));
     if (!fresh.length) return null;
+    if (d.origin === "panel") return refuse(422, "Share a panel chat with Share as discussion");
     if (d.author_only) return refuse(422, "Share this finding at Summary or above to add people");
     if (d.visibility === "private" && !(starter(d) && isIn(d))) return refuse(422, "Only the starter can add people to a private discussion");
     if (d.visibility === "open" && !atLeast(me.role, "commenter")) return refuse(403, "Viewers can read discussions but not write in them");
@@ -420,6 +421,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         .filter((d) => !q.get("run_id") || d.run_id === q.get("run_id"))
         .filter((d) => !q.get("status") || d.status === q.get("status"))
         .filter((d) => !mine || isIn(d))
+        .filter((d) => !q.get("origin") || d.origin === q.get("origin"))
         .filter((d) => !(d.author_only && !isIn(d)))
         .sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at));
       const items = rows.flatMap<Schemas["DiscussionSummary"] | Schemas["HiddenDiscussion"]>((d) =>
@@ -429,7 +431,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
             ? [{ id: d.id, visibility: "private" as const, hidden: true as const, summary: d.summary_shared ? d.summary : null }]
             : [],
       );
-      return json(200, { items, next: null });
+      return json(200, { items: items.slice(0, Number(q.get("limit") ?? 50)), next: null });
     }
     if (m === "POST") {
       if (!atLeast(me.role, "commenter")) return refuse(403, "Requires the commenter role");
@@ -439,7 +441,10 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       const picked = [...new Set(input.participants ?? [])].filter((id) => id !== me.id);
       const stranger = notMember(picked);
       if (stranger) return refuse(422, `${stranger} is not a member of this company`);
-      const visibility = input.visibility ?? "open";
+      // G7 "Panel chats": only you, until shared.
+      const panel = input.origin === "panel";
+      if (panel && (picked.length || input.message?.mentions?.length)) return refuse(422, "A panel chat is just you and Oracle");
+      const visibility = panel ? "private" : (input.visibility ?? "open");
       const at = ctx.now();
       const d: DiscussionRow = {
         id: ctx.uuid(),
@@ -454,7 +459,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         visibility,
         author_only: false,
         status: "open",
-        origin: "discuss",
+        origin: panel ? "panel" : "discuss",
         started_by: me.id,
         summary: null,
         summary_status: "none",
@@ -613,5 +618,31 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     return json(204, null);
   }
   if (p[3] === "changes" && m === "GET") return json(200, []);
+  // G7 Share as discussion: a new open discussion on the chat's subject from its edited summary.
+  if (p[3] === "share" && m === "POST") {
+    if (d.origin !== "panel") return refuse(422, "Only a panel chat is shared as a discussion");
+    if (!starter(d)) return refuse(403, "Only the person who started this chat can share it");
+    const input = await body<Schemas["DiscussionShareIn"]>();
+    if (!input.first_message.trim()) return refuse(422, "A message needs some text");
+    const at = ctx.now();
+    const shared: DiscussionRow = {
+      ...d,
+      id: ctx.uuid(),
+      title: (input.title ?? "").trim() || d.subject_label.slice(0, 200),
+      visibility: "open",
+      origin: "discuss",
+      summary: null,
+      summary_status: "none",
+      summary_shared: true,
+      last_message_at: null,
+      lock_version: 1,
+      created_at: at,
+      updated_at: at,
+    };
+    db.discussions.push(shared);
+    add(shared, me.id, "started");
+    push(shared, { author_kind: "person", author_id: me.id, body: input.first_message.trim(), mentions: [], mentions_oracle: false, reply_to: null });
+    return json(201, out(shared));
+  }
   return null;
 }

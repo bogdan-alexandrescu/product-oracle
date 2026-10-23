@@ -27,6 +27,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
@@ -208,6 +209,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const [picked, setPicked] = useState<number | null>(null);
   const selected = versions.find((v) => v.number === picked) ?? versions[0] ?? null;
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
+  // G7 3.3: the panel is about this document (its latest version).
+  useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
   return (
     <div>
       <DocToolbar doc={d} />
