@@ -45,11 +45,15 @@ test("hover and Tab open the card; a range lists its members; Go to section open
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
-  // Tab from the section heading to the range.
+  // Tab from the section heading to the range. Tab on an open card goes into it (#304), so
+  // a keyboard user leaves each earlier card with Escape and tabs on.
   await page.mouse.move(0, 0);
   const range = s.getByTestId("named-code").filter({ hasText: "R1–R3" });
   await s.getByRole("heading", { name: "Summary" }).click();
-  for (let i = 0; i < 60 && !(await range.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+  for (let i = 0; i < 60 && !(await range.evaluate((el) => el === document.activeElement)); i++) {
+    if (await card.count()) await page.keyboard.press("Escape");
+    await page.keyboard.press("Tab");
+  }
   await expect(range).toBeFocused();
   await expect(card).toBeVisible();
   await expect(card).toContainText("Requirement · this PRD");
