@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
+import { CONSOLE_HELD_RUN, ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -237,6 +237,22 @@ export async function seedRoadmapReview(page: Page): Promise<string> {
     localStorage.setItem(key, JSON.stringify(db));
     return seed.run.id;
   }, ROADMAP_REVIEW_RUN);
+}
+
+/**
+ * Seeds the mock with the roadmap-items-console-held run (CONSOLE_HELD_RUN, D3): approved in
+ * SwarmCloud's console while one waivable blocking reason is open, so the approval is held.
+ */
+export async function seedConsoleHeld(page: Page): Promise<string> {
+  return page.evaluate((seed) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
+    db.runs.runs.push(seed.run);
+    Object.assign(db.runs.artifacts, seed.artifacts);
+    localStorage.setItem(key, JSON.stringify(db));
+    return seed.run.id;
+  }, CONSOLE_HELD_RUN);
 }
 
 /** The finished run seedDecidedRun adds. */

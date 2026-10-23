@@ -81,18 +81,21 @@ test("a decision over a draft that changed since it loaded is refused until I lo
   await seedRoadmapReview(page);
   await openRun(page);
   await expect(decision(page).getByTestId("wait-chip")).toBeVisible();
-  // Another reviewer changes the draft after this page loaded it, before Approve.
+  // D3: the seeded run has blocking problems, so the decision here is Request changes.
+  await decision(page).getByLabel("Note for the agents").fill("Remove the Slack alerts date");
+  await expect(decision(page).getByTestId("note-status")).toHaveText("Saved");
+  // Another reviewer changes the draft after this page loaded it, before the decision.
   await page.evaluate((key) => localStorage.setItem(key, "commenter@example.com"), MOCK_REVIEW_CHANGE_KEY);
-  await decision(page).getByRole("button", { name: "Approve and continue" }).click();
+  await decision(page).getByRole("button", { name: "Request changes" }).click();
   const changed = page.getByTestId("review-changed");
   await expect(changed).toContainText("The review changed since you loaded it (1 change by Commenter): look again, then decide.");
   // Nothing was decided: the checkpoint still waits.
   await expect(page.getByTestId("checkpoint-waiting")).toBeVisible();
-  await expect(decision(page).getByRole("button", { name: "Approve and continue" })).toBeEnabled();
+  await expect(decision(page).getByRole("button", { name: "Request changes" })).toBeEnabled();
 
   await changed.getByRole("button", { name: "Reload" }).click();
   await expect(changed).toHaveCount(0);
-  await decision(page).getByRole("button", { name: "Approve and continue" }).click();
+  await decision(page).getByRole("button", { name: "Request changes" }).click();
   await expect(page.getByTestId("checkpoint-waiting")).toHaveCount(0);
-  await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Approved");
+  await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Changes requested");
 });

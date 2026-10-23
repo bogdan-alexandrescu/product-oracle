@@ -894,6 +894,7 @@ function SegmentItem({
               review={shared?.checkpoint_id === cp.id ? shared : null}
               onSaveNote={(text) => saveNote(cp.id, text)}
               onReload={draft.reload}
+              onWaive={shared?.checkpoint_id === cp.id ? draftActs?.act : undefined}
               noteRef={(el) => {
                 noteFields.current[cp.id] = el;
               }}
@@ -1494,6 +1495,7 @@ function CheckpointRow({
   review,
   onSaveNote,
   onReload,
+  onWaive,
 }: {
   cp: CheckpointOut;
   run: RunOut;
@@ -1507,6 +1509,8 @@ function CheckpointRow({
   review: CheckpointReview | null;
   onSaveNote: (note: string) => Promise<void>;
   onReload: () => Promise<void>;
+  /** D3: stage a waiver in the shared draft (the approver role or above). */
+  onWaive?: (body: ActionIn) => Promise<void>;
 }) {
   // D8: the note is saved to the shared draft as I type; the line under it says how it went.
   const saved = review?.note ?? "";
@@ -1537,8 +1541,15 @@ function CheckpointRow({
   const staged = !!review?.items.some((i) => i.actions.some((a) => a.state === "staged"));
   // Redo carries the console's findings, else the note: the API refuses it without either.
   const redoBlocked = !answer?.can_redo && !note.trim();
-  // The draft was not imported: approving is refused until Retry import imports it.
-  const approveBlocked = cp.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
+  // D3: the approve gate, the draft's read first (it moves as soon as a waiver is staged).
+  const gate = review?.gate ?? cp.gate ?? null;
+  const closed = gate && !gate.open ? gate : null;
+  const left = closed ? closed.blocking_open + closed.file_problems : 0;
+  // Any other refusal (the draft was not imported, the feature set's problems) as the API says it.
+  const other = cp.cannot_approve && cp.cannot_approve !== gateMessage(cp.gate) ? cp.cannot_approve : null;
+  const refusal = other ?? (closed ? gateMessage(closed) : null);
+  const approveBlocked = refusal ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.` : null;
+  const confirmBlocked = other ? approveBlocked : closed ? `${plural(left, "blocking problem")} left` : null;
   // G1: talk the checkpoint through with the team before deciding, in a sheet.
   const [discussing, setDiscussing] = useState(false);
   return (
@@ -1565,8 +1576,8 @@ function CheckpointRow({
         {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
       {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
-      {answer && <ConsolePanel answer={answer} />}
-      {approveBlocked && (
+      {answer && <ConsolePanel answer={answer} held={answer.needs === "confirm" && answer.verdict === "MERGE" && !!closed} />}
+      {other && (
         <p className="mt-2 text-sm text-warn" data-testid="cannot-approve">
           {approveBlocked}
         </p>
@@ -1636,8 +1647,8 @@ function CheckpointRow({
               <Button
                 variant="solid"
                 icon="check"
-                disabled={busy || (answer.verdict === "MERGE" && !!approveBlocked)}
-                title={answer.verdict === "MERGE" ? (approveBlocked ?? undefined) : undefined}
+                disabled={busy || (answer.verdict === "MERGE" && !!confirmBlocked)}
+                title={answer.verdict === "MERGE" ? (confirmBlocked ?? undefined) : undefined}
                 onClick={() => decideWith("confirm")}
               >
                 Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
@@ -1670,6 +1681,7 @@ function CheckpointRow({
           Discuss
         </Button>
       </div>
+      {closed && <GateList gate={closed} message={approveBlocked!} onWaive={review?.can_stage ? onWaive : undefined} />}
       <Sheet open={discussing} title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`} onClose={() => setDiscussing(false)} testId="sheet-discuss">
         <div className="px-4 py-3">
           <DiscussSubject
@@ -1696,8 +1708,76 @@ const CONSOLE_NEEDS: Record<ConsoleAnswer["needs"], string> = {
     "Oracle has not read the answer yet and reads it again each minute. Until then the run's agents may read Oracle but not write to it.",
 };
 
+/** As oracle.runs.gate.message: why Approve is refused while the gate is closed (D3). */
+function gateMessage(gate: CheckpointOut["gate"] | undefined): string | null {
+  if (!gate || gate.open) return null;
+  return `${plural(gate.blocking_open + gate.file_problems, "blocking problem")} left: fix or waive them, or send back to the agents`;
+}
+
+/** D3: the blocking reasons still open under the decision, each waivable one with Waive…. */
+function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut["gate"]>; message: string; onWaive?: (body: ActionIn) => Promise<void> }) {
+  const [waiving, setWaiving] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const key = (x: { item: string; code: string }) => `${x.item}|${x.code}`;
+  return (
+    <div className="mt-2 text-sm" data-testid="approve-gate">
+      <p className="text-warn">{message}</p>
+      <ul className="mt-1 space-y-1">
+        {gate.left.map((x) => (
+          <li key={key(x)} data-testid="gate-reason">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{x.item_title ?? x.item}</span>
+              <Chip kind="crit" className={REASON_CHIP}>
+                {x.label}
+              </Chip>
+              {x.waivable && onWaive && waiving !== key(x) && (
+                <button
+                  type="button"
+                  className="font-medium text-accent-ink underline"
+                  onClick={() => {
+                    setWaiving(key(x));
+                    setReason("");
+                  }}
+                >
+                  Waive…
+                </button>
+              )}
+            </div>
+            {waiving === key(x) && onWaive && (
+              <form
+                className="mt-1 flex flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setBusy(true);
+                  void onWaive({ item_key: x.item, kind: "waive", answers: [x.code], value: { reason: reason.trim() } }).finally(() => {
+                    setBusy(false);
+                    // Another reason's form may have opened meanwhile: only this one closes.
+                    setWaiving((open) => (open === key(x) ? null : open));
+                  });
+                }}
+              >
+                <input
+                  aria-label={`Reason to waive: ${x.label}`}
+                  placeholder="Why this is fine for now"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className={`${INPUT} h-8 min-w-0 flex-1`}
+                />
+                <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
+                  Waive
+                </Button>
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Who answered in SwarmCloud's console and what Oracle still needs; the why sits in the (i). */
-function ConsolePanel({ answer: c }: { answer: ConsoleAnswer }) {
+function ConsolePanel({ answer: c, held = false }: { answer: ConsoleAnswer; held?: boolean }) {
   return (
     <div className="mt-2 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn" data-testid="console-answer">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
@@ -1723,6 +1803,7 @@ function ConsolePanel({ answer: c }: { answer: ConsoleAnswer }) {
         </ul>
       )}
       {c.reason && c.counted === false && <p className="mt-1">Not counted: {c.reason}.</p>}
+      {held && <p className="mt-1">Blocking problems are open: fix or waive them, then confirm</p>}
     </div>
   );
 }

@@ -63,7 +63,12 @@ async def test_console_approval_with_blocking_is_held(client, owner, monkeypatch
             headers=auth,
         )
         assert resp.status_code == 409, resp.text
-        assert resp.json()["detail"] == BLOCKED
+        detail = resp.json()["detail"]
+        assert detail["code"] == "blocking_open"
+        assert detail["message"] == BLOCKED
+        assert [(x["item"], x["code"]) for x in detail["left"]] == [
+            ("saved-addresses", "before_prerequisite")
+        ]
         (snap,) = await snapshots(tenant_id, run["id"])
         assert snap.status == "proposed"
     finally:

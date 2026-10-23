@@ -471,20 +471,78 @@ function reviewOf(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
 
 /** As the API: approving is refused while the draft its segment left is not imported. */
 const NOT_IMPORTED = "the draft was not imported: retry import, or request changes";
-/** As the API (oracle.runs.feature_set.blocking_message): approving is refused while the feature set has blocking problems. */
-const blockingMessage = (n: number) => `The feature set has ${n} blocking problem${n === 1 ? "" : "s"}; send it back with Request changes`;
-/** As the API (oracle.priorities.run_order.blocking_message): the same for the priority order (C8). */
-const orderBlockingMessage = (n: number) => `The priority order has ${n} blocking problem${n === 1 ? "" : "s"}; send it back with Request changes`;
+/** As the API: blocking problems are the approve gate's (D3, gateOf), the feature set's and the priority order's included. */
 function cannotApprove(c: CheckpointOut): string | null {
   if (c.status !== "pending") return null;
-  const payload = c.payload as
-    | { import?: { error?: string | null }; feature_set_check?: FeatureSetCheck | null; priority_check?: PriorityCheck | null }
-    | undefined;
-  if (payload?.import?.error) return NOT_IMPORTED;
-  const blocking = (payload?.feature_set_check?.problems ?? []).filter((p) => p.blocking !== false).length;
-  if (blocking > 0) return blockingMessage(blocking);
-  const order = (payload?.priority_check?.problems ?? []).filter((p) => p.blocking !== false).length;
-  return order > 0 ? orderBlockingMessage(order) : null;
+  const payload = c.payload as { import?: { error?: string | null } } | undefined;
+  return payload?.import?.error ? NOT_IMPORTED : null;
+}
+
+/** As oracle.runs.gate (D3): a date reason is never waived; file-level problems never are. */
+const DATE_CODES = ["unverified_date", "date_outside_now", "undated_source", "invalid_date"];
+const DATE_NOT_WAIVED = "a date is never waived: remove it or record a verified basis";
+const FILE_NOT_WAIVED = "a problem of the whole file is never waived: send it back to the agents";
+/** As oracle.runs.gate.message. */
+const gateMessage = (n: number) => `${n} blocking problem${n === 1 ? "" : "s"} left: fix or waive them, or send back to the agents`;
+/** As service.CONSOLE_BLOCKED: a console approval held while blocking problems are open. */
+export const CONSOLE_HELD = "Blocking problems are open: fix or waive them, then confirm";
+
+/** As oracle.runs.gate (C6): a key the baseline does not know is fixed, never waived. */
+const UNKNOWN_CODES = ["unknown_feature", "unknown_requirement", "unknown_goal", "unknown_dependency"];
+const UNKNOWN_NOT_WAIVED = "an unknown key is never waived: fix it or send it back to the agents";
+/** As oracle.runs.feature_set.FILE_PROBLEMS: problems of the file itself. */
+const FEATURE_SET_FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document"];
+
+/** As oracle.runs.gate.waivable: what each kind's spec lets a waiver answer (C8: nothing). */
+function waivable(kind: string, code: string): boolean {
+  if (kind === "roadmap_items") return !DATE_CODES.includes(code);
+  if (kind === "feature_set") return !UNKNOWN_CODES.includes(code);
+  return false;
+}
+
+/** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
+type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label">;
+function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number } | null {
+  if (cp.kind === "roadmap_items") {
+    const check = (cp.payload?.items_check ?? null) as ItemsCheck | null;
+    return { reasons: check?.reasons ?? [], files: check?.file_problems ?? 0 };
+  }
+  const payload = cp.payload as { feature_set_check?: FeatureSetCheck | null; priority_check?: PriorityCheck | null } | undefined;
+  const check = cp.kind === "feature_set" ? payload?.feature_set_check : cp.kind === "priority_order" ? payload?.priority_check : undefined;
+  if (check === undefined) return null;
+  const problems = (check?.problems ?? []).filter((p) => p.blocking !== false);
+  const fileLevel = (p: (typeof problems)[number]) => !p.feature || (cp.kind === "feature_set" && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
+  const reasons = problems
+    .filter((p) => !fileLevel(p))
+    .map((p): GateReason => ({ item: p.feature!, item_title: null, code: p.code, severity: "blocking", label: p.message }));
+  return { reasons, files: problems.filter(fileLevel).length };
+}
+
+/** As oracle.runs.gate.approve_gate: the stored blocking reasons a staged waiver does not answer. */
+function gateOf(cp: CheckpointOut, actions: DraftActionRow[]): Schemas["Gate"] | null {
+  const blocking = cp.status === "pending" ? blockingOf(cp) : null;
+  if (!blocking) return null;
+  const waives = (x: GateReason) =>
+    waivable(cp.kind, x.code) &&
+    actions.some((a) => a.state === "staged" && a.kind === "waive" && a.item_key === x.item && (!a.answers?.length || a.answers.includes(x.code)));
+  const left = blocking.reasons
+    .filter((x) => x.severity === "blocking" && !waives(x))
+    .map((x) => ({ item: x.item, item_title: x.item_title ?? null, code: x.code, label: x.label, waivable: waivable(cp.kind, x.code) }));
+  const files = blocking.files;
+  return { open: left.length === 0 && files === 0, blocking_open: left.length, file_problems: files, left };
+}
+
+/** As oracle.priorities.service (the compare read): not imported, else the closed gate's message. */
+export function cannotApproveNow(db: RunsDb | undefined, cp: CheckpointOut): string | null {
+  const gate = gateOf(cp, db?.drafts?.[cp.id]?.actions ?? []);
+  return cannotApprove(cp) ?? (gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null);
+}
+
+/** The checkpoint with its gate, and Approve refused while the gate is closed (D3). */
+function gated(ctx: RunsContext, cp: CheckpointOut): CheckpointOut {
+  const gate = gateOf(cp, ctx.db.drafts?.[cp.id]?.actions ?? []);
+  const closed = gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null;
+  return { ...cp, gate, cannot_approve: cp.cannot_approve ?? closed };
 }
 
 /** The decided review of a finished run's segment whose draft was refused (owners retry it). */
@@ -1014,7 +1072,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     r.checkpoints
       .filter((c) => c.status === "pending" && mine(c, r))
       .map((c) => ({
-        ...c,
+        ...gated(ctx, c),
         can_decide: true,
         flow: r.flow,
         flow_title: r.flow_title,
@@ -1267,7 +1325,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     // As the API: a checkpoint is decided by its approver role or above; an engineering stop
     // by the engineering leads and owners once one is named (A3, ctx.mayDecide).
     const checkpoints = r.checkpoints.map((c) => ({
-      ...c,
+      ...gated(ctx, c),
       can_decide:
         c.can_decide &&
         (ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind) ? ctx.mayDecide(c, r.flow) : atLeast(ctx.userRole, c.approver_role)),
@@ -1452,16 +1510,25 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (expected_revision != null && expected_revision !== draft.revision) return json(409, { detail: reviewChanged(draft, expected_revision) });
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
+    // W5: confirming a console approval decides it as an approval (the console's MERGE).
+    const confirming = decision === "confirm" && cp.console?.needs === "confirm" && cp.console.verdict === "MERGE";
+    if (decision === "confirm" && !confirming) return fail(422, "nothing recorded in SwarmCloud's console waits to be confirmed here");
+    const gate = gateOf(cp, draft.actions);
+    if ((decision === "approved" || confirming) && gate && !gate.open) {
+      const message = gateMessage(gate.blocking_open + gate.file_problems);
+      return json(409, { detail: { code: "blocking_open", message, left: gate.left } });
+    }
     // D8: the note defaults to the shared draft's.
     const text = (note ?? draft.note)?.trim() || null;
     // D4: a send-back says something: a staged action or a note.
     const staged = draft.actions.filter((a) => a.state === "staged");
     if (decision === "changes_requested" && !text && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
-    Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
+    const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
+    Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = buildReview(ctx, r, cp, staged, text);
     if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
-    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
+    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -1476,7 +1543,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       );
     }
     const s = r.segments.find((x) => x.seq === cp.segment_seq)!;
-    if (decision === "approved") next(ctx, r, s);
+    if (status === "approved") next(ctx, r, s);
     else submit(ctx, r, s, text);
     return done();
   }
@@ -2179,6 +2246,52 @@ function roadmapReviewRun(): RunOut {
   return run;
 }
 
+/** The seeded roadmap-items-console-held run (seedConsoleHeld in e2e/helpers.ts). */
+export const CONSOLE_HELD_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d4";
+
+/**
+ * D3 "Console gate": the roadmap review run's twin, approved in SwarmCloud's console by a
+ * member whose answer counts while one waivable blocking reason (usage-export's section) is
+ * open, so Oracle holds it: pending, console.needs "confirm", nothing delivered.
+ */
+function consoleHeldRun(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d4")) as RunOut;
+  run.id = CONSOLE_HELD_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-2";
+  const [items] = run.segments;
+  const check = items.items_check!;
+  const keep = (code: string) => !["unverified_date", "horizon_breaks_dependency"].includes(code);
+  items.items_check = withReasons(
+    { items: check.items, by_horizon: check.by_horizon, problems: check.problems.filter((x) => keep(x.code)) },
+    check.reasons.filter((x) => keep(x.code)),
+    check.base,
+  );
+  const [cp] = run.checkpoints;
+  cp.run_id = run.id;
+  cp.payload = { ...cp.payload, items_check: items.items_check };
+  cp.console = {
+    answered_by: "lead@example.com",
+    answered_at: "2026-10-20T10:00:00Z",
+    via: null,
+    verdict: "MERGE",
+    findings: [],
+    counted: true,
+    reason: CONSOLE_HELD,
+    needs: "confirm",
+    revise: false,
+    can_redo: false,
+  };
+  run.token_read_only = true;
+  refresh(run);
+  return run;
+}
+
+/** The console-held run and its file, as e2e/helpers.ts seedConsoleHeld adds them. */
+export const CONSOLE_HELD_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: consoleHeldRun(),
+  artifacts: { [`${CONSOLE_HELD_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
+};
+
 /** The roadmap review run and its file, as e2e/helpers.ts seedRoadmapReview adds them to the mock's data. */
 export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: roadmapReviewRun(),
@@ -2255,6 +2368,13 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   if (rest[0] === "actions" && rest.length === 1 && m === "POST") {
     const a = await body<Schemas["ActionIn"]>();
     if (!KINDS.includes(a.kind)) return fail(422, `unknown action kind ${a.kind}: one of ${KINDS.join(", ")}`);
+    if (a.kind === "waive") {
+      // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
+      if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
+      if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
+      if ((a.answers ?? []).some((code) => !waivable(cp.kind, code))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
+      if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
+    }
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
     const row: DraftActionRow = {
@@ -2348,6 +2468,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     can_suggest: pending && atLeast(role, "commenter"),
     can_stage: stages,
     can_decide: stages,
+    gate: gateOf(cp, draft.actions),
   };
 }
 

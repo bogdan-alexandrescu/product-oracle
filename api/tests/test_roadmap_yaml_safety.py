@@ -115,15 +115,33 @@ async def test_a_run_s_bomb_waits_at_its_checkpoint_and_is_never_stored(
     run = await get(client, auth, run["id"])
     cp = next(c for c in run["checkpoints"] if c["status"] == "pending")
     assert [p["code"] for p in cp["payload"]["items_check"]["problems"]] == ["yaml_alias"]
-    # A reviewer approves it anyway: the roadmap imports, its items do not.
+    assert cp["gate"] == {"open": False, "blocking_open": 0, "file_problems": 1, "left": []}
+    # A reviewer cannot approve it (D3): a problem of the whole file is never waived.
     resp = await client.post(
         f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
         json={"decision": "approved"},
         headers=auth,
     )
+    assert resp.status_code == 409, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "blocking_open" and detail["left"] == []
+    assert detail["message"].startswith("1 blocking problem left")
+    run = await get(client, auth, run["id"])
+    assert next(c for c in run["checkpoints"] if c["id"] == cp["id"])["status"] == "pending"
+    # Nothing is stored: not the roadmap, not its items.
+    resp = await client.get(f"/v1/roadmaps/{ROADMAP}/items", headers=auth)
+    assert resp.status_code == 404, resp.text
+    # The only way on is Send back.
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "changes_requested", "note": "Write the file without aliases."},
+        headers=auth,
+    )
     assert resp.status_code == 200, resp.text
-    await tick(client, auth)
-    await tick(client, auth)
-    assert (await get(client, auth, run["id"]))["status"] == "succeeded"
-    items = (await client.get(f"/v1/roadmaps/{ROADMAP}/items", headers=auth)).json()["items"]
-    assert items == []
+    run = await get(client, auth, run["id"])
+    assert next(c for c in run["checkpoints"] if c["id"] == cp["id"])["status"] == (
+        "changes_requested"
+    )
+    # Nothing is stored: not the roadmap, not its items.
+    resp = await client.get(f"/v1/roadmaps/{ROADMAP}/items", headers=auth)
+    assert resp.status_code == 404, resp.text
