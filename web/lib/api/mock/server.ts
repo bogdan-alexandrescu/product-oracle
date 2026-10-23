@@ -28,7 +28,7 @@ import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
-import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
+import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
@@ -299,6 +299,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
+/** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
+export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
 /**
  * D8: tests set this localStorage key to a member's email to have them change a checkpoint's
  * shared draft after the page loaded it: the next decide bumps the draft's revision by one
@@ -2457,7 +2459,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
     };
     const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail }, req, p.slice(2), q);
+    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem }, req, p.slice(2), q);
   }
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
@@ -3017,6 +3019,10 @@ export async function mockFetch(req: Request): Promise<Response> {
   log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
   if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
+  }
+  if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {
+    localStorage.removeItem(MOCK_FAIL_ONCE_KEY);
     return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
   }
   const next = queue.then(async () => {

@@ -88,7 +88,10 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
 
   // Supports, with contribution 0-3, strongest first.
   const supports = d.getByRole("list", { name: "Supports" }).getByRole("listitem");
-  await expect(supports).toHaveText([/Raise activation\s*contribution 3\/3/, /Grow paid conversion\s*contribution 1\/3/]);
+  await expect(supports).toHaveText([/Raise activation/, /Grow paid conversion/]);
+  // An approver changes the contribution in place (#338).
+  await expect(d.getByLabel("Contribution to Raise activation")).toHaveValue("3");
+  await expect(d.getByLabel("Contribution to Grow paid conversion")).toHaveValue("1");
   await expect(d.getByRole("list", { name: "Depends on" })).toHaveText(/Sample data/);
   await expect(d.getByRole("list", { name: "Blocks" })).toHaveText(/Saved carts/);
 
@@ -136,7 +139,7 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   );
 
   // Links open the linked item in the drawer.
-  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: "Sample data" }).click();
+  await d.getByRole("list", { name: "Depends on" }).getByRole("button", { name: "Sample data", exact: true }).click();
   await expect(drawer(page, "Sample data")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
