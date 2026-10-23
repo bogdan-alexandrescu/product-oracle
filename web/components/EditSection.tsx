@@ -32,7 +32,8 @@ export function EditSection({
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(section.body_md);
-  const [base, setBase] = useState({ version: n, revision: section.content_hash });
+  // The API checks the section's revision (its text, what it cites, its layer), not its content hash.
+  const [base, setBase] = useState({ version: n, revision: section.revision ?? section.content_hash });
   const [conflict, setConflict] = useState<Schemas["ConflictResponse"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

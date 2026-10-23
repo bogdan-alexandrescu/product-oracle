@@ -700,9 +700,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
     refine: canDecide && !readOnly && n === latest ? refine : undefined,
-    // Approvers edit any section by hand; a section's owner edits their own.
+    // Approvers edit any section by hand; a section's owner edits their own from the commenter
+    // role up (the API's floor), so a viewer never can and is not offered it (#370).
     edit:
-      !readOnly && n === latest && (canDecide || (!!me?.user_id && sectionStates.get(s.section_key)?.owner_id === me.user_id))
+      !readOnly &&
+      n === latest &&
+      (canDecide || (canComment && !!me?.user_id && sectionStates.get(s.section_key)?.owner_id === me.user_id))
         ? refine
         : undefined,
     rereview: !!sectionStates.get(s.section_key)?.rereview_requested,

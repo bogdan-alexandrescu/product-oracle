@@ -106,10 +106,12 @@ function HeldRewrite({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  // Accept is checked against the section's current revision; a section the latest version dropped has none.
+  const gone = !!detail.data && !detail.data.current_revision;
 
   async function decide(action: "accept" | "reject") {
     const d = detail.data;
-    if (!d) return;
+    if (!d || (action === "accept" && !d.current_revision)) return;
     setBusy(true);
     setError(null);
     setStale(false);
@@ -119,7 +121,7 @@ function HeldRewrite({
         action === "accept"
           ? await api.POST("/v1/section-patches/{patch_id}/accept", {
               params: { path: { patch_id: patch.id } },
-              body: { base_revision: d.current_revision ?? d.base_hash, lock_version: d.lock_version, note: reason },
+              body: { base_revision: d.current_revision!, lock_version: d.lock_version, note: reason },
             })
           : await api.POST("/v1/section-patches/{patch_id}/reject", {
               params: { path: { patch_id: patch.id } },
@@ -158,8 +160,12 @@ function HeldRewrite({
       )}
       {isOpen && detail.data && (
         <>
-          {detail.data.rebase_needed && (
-            <p className="mt-1 text-sm font-medium text-warn">The section changed since this rewrite was proposed.</p>
+          {gone ? (
+            <p className="mt-1 text-sm font-medium text-warn">This section is no longer in the latest version. Reject it to close it.</p>
+          ) : (
+            detail.data.rebase_needed && (
+              <p className="mt-1 text-sm font-medium text-warn">The section changed since this rewrite was proposed.</p>
+            )
           )}
           <p className="mt-2 rounded-lg border border-line bg-surface px-2.5 py-2 text-sm leading-6 whitespace-pre-wrap text-text" data-testid="held-diff">
             {detail.data.words.map((w, i) =>
@@ -183,7 +189,7 @@ function HeldRewrite({
                 <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} className={TEXTAREA} />
               </label>
               <div className="flex flex-wrap gap-1.5">
-                <Button variant="solid" icon="check" disabled={busy} onClick={() => decide("accept")}>
+                <Button variant="solid" icon="check" disabled={busy || gone} onClick={() => decide("accept")}>
                   Accept
                 </Button>
                 <Button disabled={busy} onClick={() => decide("reject")}>
