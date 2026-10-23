@@ -853,6 +853,7 @@ def _checkpoint_out(
         can_decide=cp.status == "pending"
         and principal is not None
         and may_decide(principal, cp, flow, leads),
+        lead_stop=lead_stop(cp.kind, flow, leads),
         cannot_approve=_cannot_approve(cp)
         or (gate.message(shut) if shut is not None and not shut.open else None),
         gate=shut,

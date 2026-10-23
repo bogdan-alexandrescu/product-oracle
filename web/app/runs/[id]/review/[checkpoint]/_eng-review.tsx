@@ -45,7 +45,6 @@ export function EngReview({
   run,
   cp,
   title,
-  byLead,
   check,
   review,
   back,
@@ -55,7 +54,6 @@ export function EngReview({
   run: RunOut;
   cp: CheckpointOut;
   title: string;
-  byLead: boolean;
   check: BriefsCheck;
   review: Review;
   back: ReactNode;
@@ -71,8 +69,9 @@ export function EngReview({
   const [sending, setSending] = useState(false);
   const pending = cp.status === "pending";
   const stages = pending && review.can_stage;
-  // Only those who decide write here; anyone else reads the screen (View only).
-  const suggests = false;
+  // A commenter's choices are suggestions a decider stages (AC6); an approver who is not the
+  // lead reads the screen (View only, AC24).
+  const suggests = pending && !stages && review.can_suggest && !hasRole(role, "approver");
   const decides = pending && review.can_decide;
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
 
@@ -122,7 +121,8 @@ export function EngReview({
   const gateOpen = !!review.gate?.open;
   const staged = review.items.flatMap((i) => i.actions.filter((a) => a.state === "staged").map((a) => ({ item: i.key, a })));
   const feature = check.features.find((f) => f.key === selected) ?? null;
-  const waitsFor = byLead && hasRole(role, cp.approver_role) ? "Waits for the engineering lead" : "Waits for the engineering lead or an approver";
+  // Only who can decide: the engineering lead once one is named, else the stop's role.
+  const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
 
   const tally = `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
   const approveWhy = !gateOpen ? "Give each feature a verdict and answer each blocking question first" : null;
@@ -137,7 +137,7 @@ export function EngReview({
             <Chip kind={pending ? "warn" : "na"}>{pending ? "Waiting" : cp.status === "approved" ? "Approved" : "Sent back"}</Chip>
             {pending && !decides && (
               <span className="inline-flex items-center gap-2" data-testid="view-only">
-                <Chip kind="na">View only</Chip>
+                <Chip kind="na">{suggests ? "Suggestions only" : "View only"}</Chip>
                 <span className="text-sm text-text2">{waitsFor}</span>
               </span>
             )}
@@ -158,6 +158,7 @@ export function EngReview({
         inspector={
           feature && (
             <BriefInspector
+              key={feature.key}
               feature={feature}
               codeMap={check.code_map_used}
               acts={actionsOf(review, feature.key)}

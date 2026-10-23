@@ -88,6 +88,8 @@ export interface RunsContext {
    * one is named). Absent: anyone may, as the mock had it.
    */
   mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
+  /** As oracle.members.leads.lead_stop: an engineering stop outside prd_to_spec once a lead is named. */
+  leadStop?: (c: Pick<CheckpointOut, "kind">, flow: RunOut["flow"]) => boolean;
   /** F4: Approve at the Engineering check sets a feature's effort (a person's edit, locked). */
   setEffort?: (featureKey: string, size: string, runId: string) => void;
   /**
@@ -958,6 +960,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     payload,
     created_at: ctx.now(),
     can_decide: on,
+    lead_stop: false,
     cannot_approve: null,
   };
   r.checkpoints.push(cp);
@@ -1072,7 +1075,7 @@ function launch(ctx: RunsContext, r: RunOut) {
     r.checkpoints.push({
       id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
       segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
-      created_at: ctx.now(), can_decide: false, cannot_approve: null,
+      created_at: ctx.now(), can_decide: false, lead_stop: false, cannot_approve: null,
     });
     submit(ctx, r, r.segments[1]);
     return;
@@ -1343,6 +1346,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_decide:
         c.can_decide &&
         (ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind) ? ctx.mayDecide(c, r.flow) : atLeast(ctx.userRole, c.approver_role)),
+      lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
     return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
@@ -1753,7 +1757,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
     id: ctx.uuid(), run_id: done.id, kind: "prd_review", status: "skipped", approver_role: "approver", segment_seq: 1,
-    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, cannot_approve: null,
+    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, lead_stop: false, cannot_approve: null,
   });
   Object.assign(done, { status: "succeeded", started_at: "2026-10-16T09:00:00Z", finished_at: "2026-10-16T09:20:00Z", overrun_ceiling_usd: 13.5 });
 
@@ -2283,6 +2287,7 @@ function roadmapReviewRun(): RunOut {
         },
         created_at: "2026-10-20T09:04:00Z",
         can_decide: true,
+        lead_stop: false,
         cannot_approve: null,
       },
     ],

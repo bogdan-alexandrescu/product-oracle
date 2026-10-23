@@ -663,8 +663,11 @@ function SegmentItem({
   const [draftError, setDraftError] = useState<string | null>(null);
   // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
   const screened = checkpoints.find((c) => c.status === "pending" && reviewHref(run.id, c)) ?? null;
-  const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide && c !== screened);
-  const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
+  // The Waiting chip counts every stop waiting for me, the screened one included.
+  const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
+  const deciding = mine.filter((c) => c !== screened);
+  // The screened stop is said once, on its line: never again as a chip.
+  const compact = checkpoints.filter((c) => c !== screened && !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
@@ -810,17 +813,17 @@ function SegmentItem({
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
-          {deciding.length > 0 && (
+          {mine.length > 0 && (
             // The decision panel below and the inspector name the checkpoint; the row shows its state.
             <a
               href="#decide"
               data-testid="checkpoint-waiting"
               className="inline-flex max-w-full rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <Chip kind="warn" title={`Waiting: ${deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
+              <Chip kind="warn" title={`Waiting: ${mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
                 <Icon name="clock" size={16} />
                 Waiting
-                <span className="sr-only">: {deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+                <span className="sr-only">: {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
               </Chip>
             </a>
           )}

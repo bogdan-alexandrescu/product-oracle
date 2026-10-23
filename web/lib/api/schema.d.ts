@@ -11319,6 +11319,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Lead Stop
+             * @default false
+             */
+            lead_stop: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
             gate?: components["schemas"]["Gate"] | null;
@@ -16124,6 +16129,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Lead Stop
+             * @default false
+             */
+            lead_stop: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
             gate?: components["schemas"]["Gate"] | null;

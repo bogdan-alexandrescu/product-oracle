@@ -21,7 +21,6 @@ export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string;
   const path = { params: { path: { run_id: runId, checkpoint_id: checkpointId } } };
   const run = useQuery(`run|${runId}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })));
   const draft = useQuery(`draft|${runId}|${checkpointId}`, () => unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", path)));
-  const flows = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
   const { setData, reload } = draft;
   const accept = useCallback((out: Schemas["CheckpointReview"]) => setData(() => out), [setData]);
   const reloadAll = useCallback(async () => {
@@ -61,7 +60,6 @@ export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string;
     );
   }
   const segment = r.segments.find((s) => s.seq === cp.segment_seq);
-  const def = flows.data?.flows.find((f) => f.key === r.flow)?.segments.find((s) => s.name === segment?.name);
   const check = briefsCheck(cp);
   if (!check) {
     return (
@@ -79,7 +77,6 @@ export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string;
       run={r}
       cp={cp}
       title={segment?.title ?? CHECKPOINT_LABEL[cp.kind]}
-      byLead={def?.decider === "engineering_lead"}
       check={check}
       review={draft.data}
       back={back}

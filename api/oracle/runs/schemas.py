@@ -569,6 +569,9 @@ class CheckpointOut(BaseModel):
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
+    # F4: an engineering stop that waits for the engineering leads and owners (a lead is
+    # named); False: it goes by its approver role, as every other stop.
+    lead_stop: bool = False
     # Why approving it is refused now (owner, 2026-10-20): the draft its segment left was
     # not imported (Request changes, or Retry import on the segment, first), or the feature
     # set has blocking problems (C6: Request changes).

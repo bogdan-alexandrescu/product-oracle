@@ -752,6 +752,13 @@ function seedEngCheck(): Db {
   return db;
 }
 
+/** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
+function seedEngCheckNoLead(): Db {
+  const db = seed();
+  seeded("eng-check-no-lead", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
 function seedFeatureSet(): Db {
   const db = seed();
@@ -1321,6 +1328,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       if (flow !== "prd_to_spec" && leads.length) return role === "owner" || (leads.includes(member.id) && atLeast(role, "commenter"));
       return atLeast(role, c.approver_role);
     },
+    leadStop: (c, flow) => ENGINEERING_KINDS.includes(c.kind) && flow !== "prd_to_spec" && engineeringLeads(db).length > 0,
     setEffort: (key, size, runId) => setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
@@ -1462,6 +1470,8 @@ function load(): Db {
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
+          : scenario === "eng-check-no-lead"
+            ? seedEngCheckNoLead
           : scenario === "priority-order"
             ? seedPriorityOrder
           : scenario === "next-draft" || scenario === "next-draft-costly"
