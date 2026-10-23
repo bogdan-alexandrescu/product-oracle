@@ -57,6 +57,7 @@ from oracle.reports.router import router as reports_router
 from oracle.requests.router import router as requests_router
 from oracle.review.router import router as review_router
 from oracle.review.v2_router import router as review_v2_router
+from oracle.rituals.router import router as rituals_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
 from oracle.safe_yaml import ParseBusy
@@ -214,6 +215,7 @@ def create_app() -> FastAPI:
     app.include_router(baseline_router)
     app.include_router(priorities_router)
     app.include_router(decisions_router)
+    app.include_router(rituals_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.

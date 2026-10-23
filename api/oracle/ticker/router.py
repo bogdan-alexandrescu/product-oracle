@@ -55,6 +55,7 @@ from oracle.launches import service as launches_service
 from oracle.models import Tenant
 from oracle.reports import alignment as alignment_reports
 from oracle.requests import triage as request_triage
+from oracle.rituals import service as rituals
 from oracle.roadmap import views as track_views
 from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
@@ -173,8 +174,9 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
-    tracks' monitoring, then its weekly alignment report (oracle.reports), its launches'
-    Ready detection and its daily request triage, each on its own."""
+    tracks' monitoring, its rituals (oracle.rituals), then its weekly alignment report
+    (oracle.reports), its launches' Ready detection and its daily request triage, each on
+    its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -198,6 +200,14 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             failures.add(tenant_id)
     except Exception:
         log.exception("run ticker: track monitoring failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Rituals (H2): seed the built-ins, create and prepare the occurrences that are
+        # due (deterministic pre-reads, no model call), mark the missed ones.
+        async with tenant_session(tenant_id) as db:
+            await rituals.tick_due(db)
+    except Exception:
+        log.exception("run ticker: rituals failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # F6: the weekly alignment report once its moment has passed, and the Slack posts
