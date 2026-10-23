@@ -15829,6 +15829,8 @@ export interface components {
             };
             /** Status */
             status?: ("proposed" | "confirmed" | "rejected") | null;
+            /** Parent Id */
+            parent_id?: string | null;
             /**
              * Origin
              * @default user
@@ -15898,6 +15900,9 @@ export interface components {
              */
             updated_at: string;
             goal_check?: components["schemas"]["GoalCheck"] | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            progress?: components["schemas"]["GoalProgress"] | null;
             /**
              * Evidence
              * @default []
@@ -15977,6 +15982,9 @@ export interface components {
              */
             updated_at: string;
             goal_check?: components["schemas"]["GoalCheck"] | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            progress?: components["schemas"]["GoalProgress"] | null;
         };
         /** EntityPatch */
         EntityPatch: {
@@ -15990,6 +15998,8 @@ export interface components {
             } | null;
             /** Status */
             status?: ("proposed" | "confirmed" | "rejected") | null;
+            /** Parent Id */
+            parent_id?: string | null;
             /**
              * Origin
              * @default user
@@ -17426,6 +17436,22 @@ export interface components {
             /** Where */
             where: string;
         };
+        /**
+         * GoalProgress
+         * @description #345: a goal's progress, 0 to 1: its own measurement ("own") when it has one, else
+         *     the weighted progress of its subgoals ("subgoals"); null source without either.
+         */
+        GoalProgress: {
+            /** Value */
+            value?: number | null;
+            /** Source */
+            source?: ("own" | "subgoals") | null;
+            /**
+             * Subgoals
+             * @default 0
+             */
+            subgoals: number;
+        };
         /** GoalTerm */
         GoalTerm: {
             /** Goal */
@@ -17444,6 +17470,10 @@ export interface components {
             link_status: string;
             /** Term */
             term: number | null;
+            /** Parent */
+            parent?: string | null;
+            /** Parent Title */
+            parent_title?: string | null;
         };
         /** GraphOut */
         GraphOut: {

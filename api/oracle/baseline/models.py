@@ -89,6 +89,7 @@ class Entity(TenantScoped, Base):
         CheckConstraint(_in("status", NODE_STATUSES), name="status"),
         CheckConstraint(_in("origin", ORIGINS), name="origin"),
         CheckConstraint(CONFIDENCE_RANGE, name="confidence"),
+        CheckConstraint("parent_id IS NULL OR parent_id <> id", name="not_own_parent"),
     )
 
     type: Mapped[str] = mapped_column(Text, nullable=False)
@@ -111,6 +112,10 @@ class Entity(TenantScoped, Base):
     # Aggregate of its evidence's confidence (oracle.baseline confidence scoring).
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     run_id: Mapped[uuid.UUID | None] = _run_fk()
+    # #345: a goal's parent goal (a subgoal; one level, no cycles: oracle.baseline.service).
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("entities.id", ondelete="SET NULL"), index=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

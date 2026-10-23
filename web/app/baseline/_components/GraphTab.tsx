@@ -1,9 +1,11 @@
 "use client";
 
-import type { MouseEvent, ReactNode } from "react";
+import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
 import { Button, Chip, CodeChip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
+import { named, namedText, type Named } from "@/lib/codes";
+import { goalTree, percent } from "@/lib/goal-tree";
 
 import type { AddKind } from "./AddItem";
 import {
@@ -35,7 +37,51 @@ type Props = {
   onAdd: (kind: AddKind) => void;
   /** B5: read the goals' `*_text` values into typed fields (approvers). */
   onFill?: () => void;
+  /** #345: add a subgoal under a goal (approvers); resolves true once it is saved. */
+  onAddSubgoal?: (parent: EntityOut, title: string) => Promise<boolean>;
 };
+
+/** #345: a new subgoal's title, under the goal it is added to. */
+function AddSubgoal({
+  parent,
+  busy,
+  onAdd,
+  onCancel,
+}: {
+  /** The parent's code and name, as its chip reads. */
+  parent: Named;
+  busy: boolean;
+  onAdd: (title: string) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (title.trim()) onAdd(title.trim());
+  };
+  return (
+    <form aria-label="Add subgoal" onSubmit={submit} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3 max-[600px]:px-3">
+      <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+        <span className="text-text2">
+          Subgoal of {namedText(parent)}
+        </span>
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          aria-label="Subgoal title"
+          className="min-w-0 rounded-md border border-line bg-surface px-2 py-1.5 text-text"
+        />
+      </label>
+      <Button type="submit" variant="primary" disabled={busy || !title.trim()}>
+        Add
+      </Button>
+      <Button type="button" onClick={onCancel}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
 
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
 function TextFallback({ attr, text }: { attr: string; text: unknown }) {
@@ -67,7 +113,7 @@ function TitleButton({
         e.stopPropagation();
         onOpen(entity.id);
       }}
-      className={`min-w-0 truncate text-left hover:underline ${className}`}
+      className={`${className.includes("min-w-") ? "" : "min-w-0"} truncate text-left hover:underline ${className}`}
     >
       {name ?? entity.title}
     </button>
@@ -80,10 +126,26 @@ function TitleButton({
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onAddSubgoal }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
+  // #345: the goals table is a tree; a goal's subgoals fold under it.
+  const tree = new Map(goalTree(graph.entities).map((n) => [n.goal.id, n]));
+  const codes = new Map([...tree].map(([id, n]) => [id, n.code]));
+  const [folded, setFolded] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState<EntityOut | null>(null);
+  const goalRows = goals.filter((g) => {
+    const parent = tree.get(g.id)?.parentId;
+    return !parent || !folded.has(parent);
+  });
+  const fold = (id: string, open?: boolean) =>
+    setFolded((f) => {
+      const next = new Set(f);
+      if (open ?? next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const products = live.filter((e) => e.type === "product").sort(byTitle);
   const features = live.filter((e) => e.type === "feature").sort(byTitle);
   const traceById = new Map((trace?.features ?? []).map((f) => [f.id, f]));
@@ -116,9 +178,32 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "goal",
       header: "Goal",
       cell: (g) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
-          <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="font-medium" />
+        <span className={`flex min-w-0 items-center gap-2 ${tree.get(g.id)?.depth ? "pl-6" : ""}`}>
+          {(tree.get(g.id)?.children ?? 0) > 0 && (
+            <button
+              type="button"
+              aria-expanded={!folded.has(g.id)}
+              aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(tree.get(g.id)!)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                fold(g.id);
+              }}
+              className="-ml-1 flex size-6 flex-none items-center justify-center rounded text-text2 hover:bg-surface2"
+            >
+              {folded.has(g.id) ? "▸" : "▾"}
+            </button>
+          )}
+          <CodeChip
+            kind="goal"
+            entityId={g.id}
+            entityKey={g.key}
+            title={g.title}
+            code={tree.get(g.id)?.code}
+            proposed={g.status === "proposed"}
+            codeOnly
+          />
+          {/* The title keeps room beside an indent and its chips (#345); the chips give way first. */}
+          <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="min-w-[8rem] font-medium" />
           {g.goal_check?.measurable === false && (
             <span className="flex-none">
               <Chip kind="warn" title={missingTip(g.goal_check)} data-testid="not-measurable">
@@ -160,6 +245,28 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           </span>
         );
       },
+    },
+    {
+      key: "progress",
+      header: "Progress",
+      width: "120px",
+      phoneLabel: "Progress",
+      cell: (g) =>
+        g.progress?.value != null ? (
+          <span
+            data-attr="progress"
+            data-source={g.progress.source}
+            className="tnum whitespace-nowrap"
+            title={g.progress.source === "subgoals" ? "Rolled up from its subgoals" : "Its own measurement"}
+          >
+            {percent(g.progress.value)}
+            <span className="ml-1 text-text2">{g.progress.source === "subgoals" ? "subgoals" : "own"}</span>
+          </span>
+        ) : (
+          <span data-attr="progress" className="text-text2">
+            –
+          </span>
+        ),
     },
     {
       key: "horizon",
@@ -217,22 +324,36 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "act",
       header: <span className="sr-only">Action</span>,
       // The whole button: nothing in the action column truncates.
-      width: "128px",
+      width: "232px",
       className: "overflow-visible",
       align: "right",
       phone: "action",
-      cell: (g) =>
-        g.status === "proposed" ? (
-          <Button
-            disabled={busy}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation();
-              onConfirm(g);
-            }}
-          >
-            Confirm
-          </Button>
-        ) : null,
+      cell: (g) => (
+        <span className="flex flex-wrap justify-end gap-2">
+          {g.status === "proposed" && (
+            <Button
+              disabled={busy}
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onConfirm(g);
+              }}
+            >
+              Confirm
+            </Button>
+          )}
+          {onAddSubgoal && !tree.get(g.id)?.depth && (
+            <Button
+              disabled={busy}
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                setAdding(g);
+              }}
+            >
+              Add subgoal
+            </Button>
+          )}
+        </span>
+      ),
     });
   }
 
@@ -265,6 +386,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             goals={goals}
             groups={groups}
             tags={tags}
+            codes={codes}
             links={links}
             traceById={traceById}
             low={low}
@@ -295,10 +417,24 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           </>
         }
       >
+        {adding && onAddSubgoal && (
+          <AddSubgoal
+            key={adding.id}
+            parent={tree.get(adding.id) ?? named(adding.title, adding.key)}
+            busy={busy}
+            onCancel={() => setAdding(null)}
+            onAdd={async (title) => {
+              if (await onAddSubgoal(adding, title)) {
+                fold(adding.id, true);
+                setAdding(null);
+              }
+            }}
+          />
+        )}
         <DataTable
           label="Goals"
           columns={goalCols}
-          rows={goals}
+          rows={goalRows}
           rowKey={(g) => g.id}
           selected={selectedId}
           onSelect={(id) => onOpen(id)}
@@ -314,6 +450,7 @@ function Ledger({
   goals,
   groups,
   tags,
+  codes,
   links,
   traceById,
   low,
@@ -324,6 +461,8 @@ function Ledger({
   goals: EntityOut[];
   groups: { id: string; product: EntityOut | null; features: EntityOut[] }[];
   tags: Map<string, string>;
+  /** #345: each goal's code, a subgoal's "G-B.1" (lib/goal-tree). */
+  codes: Map<string, string | null>;
   links: Map<string, Map<string, EdgeOut>>;
   traceById: Map<string, TraceFeature>;
   low: number;
@@ -367,7 +506,7 @@ function Ledger({
               >
                 <span className="flex flex-col gap-1.5 max-[600px]:items-center">
                   <span className="max-[600px]:hidden">
-                    <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
+                    <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
                   </span>
                   <button
                     type="button"
@@ -428,6 +567,7 @@ function Ledger({
                 key={f.id}
                 feature={f}
                 goals={goals}
+                codes={codes}
                 links={links.get(f.id)}
                 trace={traceById.get(f.id)}
                 low={low}
@@ -446,6 +586,7 @@ function Ledger({
 function FeatureRow({
   feature,
   goals,
+  codes,
   links,
   trace,
   low,
@@ -455,6 +596,7 @@ function FeatureRow({
 }: {
   feature: EntityOut;
   goals: EntityOut[];
+  codes: Map<string, string | null>;
   links: Map<string, EdgeOut> | undefined;
   trace: TraceFeature | undefined;
   low: number;
@@ -508,7 +650,7 @@ function FeatureRow({
             <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
             {e && (
               <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-0.5 max-[600px]:inline-flex">
-                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} wrap />
+                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
                 <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
               </span>
             )}
