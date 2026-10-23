@@ -5,7 +5,9 @@ come back (its PRD purged meanwhile, or a dependent trashed in a separate delete
 import pytest
 from sqlalchemy import select
 
+from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
+from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ArtifactRequest
@@ -67,6 +69,59 @@ async def test_a_trashed_spec_leaves_the_spec_requests(client, runtime):
     assert back.status_code == 200, back.text
     assert back.json()["not_restored"] == []
     assert (await get_spec(client, owner, request_id))["document_slug"] == slug
+
+
+async def test_a_prds_tech_brief_goes_to_trash_with_it_and_comes_back(client, runtime):
+    """A tech brief made through the spec request (no source_version_id on its versions)
+    is the PRD's dependent: listed, trashed with it and restored with it (#482 follow-up)."""
+    world, owner, request_id, slug = await _spec_world(client, runtime)
+    async with tenant_session(world.ctx.tenant_id) as s:
+        sources = await s.scalars(
+            select(DocumentVersion.source_version_id)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .where(Document.slug == slug)
+        )
+        assert set(sources) == {None}
+
+    deps = await client.get(f"/v1/documents/{PRD}/dependents", headers=owner)
+    assert deps.status_code == 200, deps.text
+    assert slug in {i["slug"] for i in deps.json()["items"] if i["type"] == "document"}
+
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=owner)
+    assert resp.status_code == 200, resp.text
+    entry = resp.json()
+    assert slug in {i["slug"] for i in entry["items"] if i["type"] == "document"}
+    assert not {PRD, slug} & await _slugs(client, owner)
+    assert (await client.get(f"/v1/documents/{slug}", headers=owner)).status_code == 404
+    assert (await client.get(f"/v1/documents/{PRD}", headers=owner)).status_code == 404
+    listed = await client.get("/v1/spec-requests", headers=owner)
+    assert request_id not in {s["request"]["id"] for s in listed.json()}
+    by_prd = await client.get("/v1/spec-requests", params={"prd": PRD}, headers=owner)
+    assert request_id not in {s["request"]["id"] for s in by_prd.json()}
+
+    back = await client.post(f"/v1/trash/{entry['id']}/restore", headers=owner)
+    assert back.status_code == 200, back.text
+    assert back.json()["not_restored"] == []
+    assert {PRD, slug} <= await _slugs(client, owner)
+    by_prd = await client.get("/v1/spec-requests", params={"prd": PRD}, headers=owner)
+    assert request_id in {s["request"]["id"] for s in by_prd.json()}
+    assert (await get_spec(client, owner, request_id))["document_slug"] == slug
+    assert (await client.get("/v1/trash", headers=owner)).json() == []
+
+
+async def test_a_run_working_on_a_prds_tech_brief_refuses_the_prds_delete(client, runtime):
+    world, owner, request_id, slug = await _spec_world(client, runtime)
+    async with tenant_session(world.ctx.tenant_id) as s:
+        spec = await s.scalar(select(Document).where(Document.slug == slug))
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        s.add(Run(flow="prd_to_spec", status="running", document_id=spec.id))
+        await s.commit()
+        prd_id = prd.id
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=owner)
+    assert resp.status_code == 409, resp.text
+    assert "cancel it first" in resp.text
+    async with tenant_session(world.ctx.tenant_id) as s:
+        assert (await s.get(Document, prd_id)).deleted_at is None
 
 
 async def test_estimating_a_spec_regeneration_changes_nothing(client, runtime):

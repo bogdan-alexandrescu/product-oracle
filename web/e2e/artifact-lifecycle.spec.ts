@@ -94,6 +94,17 @@ async function deleteAndRestore(page: Page) {
   await expectFamilyBack(page);
 }
 
+test("the delete dialog lists a PRD's tech brief made through its spec request", async ({ page }) => {
+  // trash-family: the brief's versions name no source; only its spec request links it to the PRD.
+  await withFamily(page);
+  await login(page);
+  await openPrds(page);
+  await prdRow(page, PRD).getByRole("button", { name: `Actions for ${PRD}` }).click();
+  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  const dialog = page.getByRole("dialog", { name: `Delete ${PRD}` });
+  await expect(dialog.getByTestId("delete-dependents")).toContainText(BRIEF);
+});
+
 test("an owner deletes a PRD with its roadmap and brief, then restores them together from Settings › Trash", async ({ page }) => {
   await deleteAndRestore(page);
 });
