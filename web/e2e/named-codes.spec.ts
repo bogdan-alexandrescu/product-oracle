@@ -183,3 +183,70 @@ test("the card reads in the dark theme", async ({ page }) => {
   const lum = (c: string) => c.match(/\d+/g)!.slice(0, 3).map(Number).reduce((a, b) => a + b, 0);
   expect(lum(fg)).toBeGreaterThan(lum(bg));
 });
+
+test("Before drafting's Goals draws each goal with its chip, never a place code", async ({ page }) => {
+  await withCodes(page);
+  await login(page, "approver@example.com");
+  await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await page.getByRole("link", { name: "New PRD" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for repeat buyers");
+  await page
+    .getByRole("textbox", { name: "What problem does it solve?" })
+    .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
+  const door = page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox");
+  for (const box of await door.all()) await box.check();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+
+  const goals = page.getByTestId("intake-goals");
+  await expect(goals.getByTestId("code-chip").filter({ hasText: "Activation" })).toHaveAccessibleName("G-A Activation");
+  await expect(goals.getByTestId("code-chip").filter({ hasText: "Growth" })).toHaveAccessibleName("G-B Growth");
+  expect(await goals.innerText()).not.toMatch(BARE);
+  await goals.getByTestId("code-chip").filter({ hasText: "Growth" }).click();
+  await expect(page.getByTestId("code-card").getByTestId("card-name")).toHaveText("Growth");
+});
+
+test("keyboard: Tab goes into the card and cycles there; Escape closes it and focus returns to the chip", async ({ page }) => {
+  await withCodes(page);
+  await login(page);
+  await page.goto("/plan");
+  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  const card = page.getByTestId("code-card");
+  await page.getByTestId("plan-row").filter({ hasText: "Daily alert digest email" }).filter({ visible: true }).click();
+  for (let i = 0; i < 40 && !(await chip.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+  await expect(card.getByRole("link", { name: "Open" })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(chip).toBeFocused();
+  // Enter on the chip opens the card with focus inside it.
+  await page.keyboard.press("Enter");
+  await expect(card).toBeVisible();
+  await expect(chip).not.toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/baseline\?entity=/);
+});
+
+test("keyboard: a citation chip's card takes focus on open, keeps Tab inside, and gives focus back on Escape", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/checkout-redesign/v/2");
+  const cite = (await openSection(page, "problem")).getByTestId("cite-c4");
+  const card = page.getByTestId("code-card");
+  await cite.click();
+  await expect(card).toBeVisible();
+  const source = card.getByRole("link", { name: /Open source/ });
+  await expect(source).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(source).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(cite).toBeFocused();
+});

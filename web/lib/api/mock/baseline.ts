@@ -948,7 +948,7 @@ export function attributeCommenterProposal(s: BaselineState, userId: string) {
 /**
  * The "named-codes" scenario (#304): the company writes its own code before each goal's
  * name ("G-B Growth"), the way it numbers goals in its plans. One name is long, so narrow
- * cells cut it.
+ * cells cut it. Growth has no current value yet, so it has no distance to go.
  */
 export function addGoalCodes(s: BaselineState) {
   const titles: Record<string, string> = {
@@ -957,4 +957,6 @@ export function addGoalCodes(s: BaselineState) {
     "g.early-churn": "G-C Fewer accounts leaving in their first ninety days",
   };
   for (const e of s.entities) if (e.type === "goal" && titles[e.key]) e.title = titles[e.key];
+  const growth = s.entities.find((e) => e.key === "g.paid-conversion");
+  if (growth) delete growth.attrs.current;
 }
