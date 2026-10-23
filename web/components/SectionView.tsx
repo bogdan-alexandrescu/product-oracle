@@ -6,6 +6,7 @@ import { memo, useMemo, useState, type ReactNode } from "react";
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { AskTeammate } from "@/components/AskTeammate";
 import { Button, Chip } from "@/components/ds";
+import { EditSection } from "@/components/EditSection";
 import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
@@ -22,11 +23,11 @@ const HEADING_CLASS: Record<number, string> = {
   3: "font-display tracking-heading text-lg leading-6 font-bold",
 };
 
-type Tool = "evidence" | "refine" | "ask";
+type Tool = "evidence" | "refine" | "ask" | "edit";
 
 /**
  * One section of a version. The open section (one at a time) carries the review bar and a
- * ⋯ menu with Add evidence link, Refine section, Ask a teammate and Discuss this section; a
+ * ⋯ menu with Add evidence link, Edit section, Refine section, Ask a teammate and Discuss this section; a
  * `nested` section (detail shown in place inside a brief section) shows its content only
  * and offers to review it in the full document.
  */
@@ -40,6 +41,8 @@ export const SectionView = memo(function SectionView({
   changedLock,
   evidenceTargets,
   refine,
+  edit,
+  rereview = false,
   ask,
   onHighlightClick,
   onVerdict,
@@ -63,6 +66,10 @@ export const SectionView = memo(function SectionView({
   evidenceTargets?: EntityOut[];
   /** Set for approvers on the latest version: offers "Refine section" (never on locked ones). */
   refine?: { doc: string; n: number };
+  /** Set for approvers and the section's owner on the latest version: offers "Edit section" (#347). */
+  edit?: { doc: string; n: number };
+  /** The review policy asks for this section's re-review (it changed after its approval). */
+  rereview?: boolean;
   /** Set for commenters and above: offers "Ask a teammate" about this section (C2). */
   ask?: { documentId: string };
   onHighlightClick: (id: string) => void;
@@ -148,6 +155,11 @@ export const SectionView = memo(function SectionView({
             <Chip kind="warn">Changed after lock</Chip>
           </span>
         )}
+        {rereview && (
+          <span data-testid="rereview-chip" title="This section changed after it was approved; the review policy asks for its review again.">
+            <Chip kind="warn">Re-review requested</Chip>
+          </span>
+        )}
         <span className="ml-auto flex flex-none items-center gap-1.5">
           {nested
             ? onReviewInFull && (
@@ -160,7 +172,7 @@ export const SectionView = memo(function SectionView({
                 </Button>
               )
             : headTools}
-          {!nested && (evidenceTargets || canRefine || ask || mayDecide || onDiscuss) && (
+          {!nested && (evidenceTargets || edit || canRefine || ask || mayDecide || onDiscuss) && (
             <Menu label={`Actions for ${section.heading}`} icon="more" iconOnly>
               {(closeMenu) => (
                 <span role="menu" aria-label={`Actions for ${section.heading}`} className="flex min-w-44 flex-col gap-0.5">
@@ -173,6 +185,17 @@ export const SectionView = memo(function SectionView({
                       }}
                     >
                       Add evidence link
+                    </MenuItem>
+                  )}
+                  {edit && (
+                    <MenuItem
+                      label={`Edit section ${section.heading}`}
+                      onClick={() => {
+                        closeMenu();
+                        pick("edit");
+                      }}
+                    >
+                      Edit section
                     </MenuItem>
                   )}
                   {canRefine && (
@@ -290,6 +313,9 @@ export const SectionView = memo(function SectionView({
           context={section.heading}
           onClose={close}
         />
+      )}
+      {!nested && tool?.kind === "edit" && edit && (
+        <EditSection key={tool.n} doc={edit.doc} n={edit.n} section={section} citations={citations} onClose={close} />
       )}
       {!nested && tool?.kind === "refine" && canRefine && (
         <RefineSection
