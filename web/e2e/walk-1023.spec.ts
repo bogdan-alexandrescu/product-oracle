@@ -47,6 +47,36 @@ test("an approver on the Plan sees the track controls", async ({ page }) => {
   await expect(t.getByRole("group", { name: "Track status" })).toBeVisible();
 });
 
+// protects = #370 (PR #507 review): a commenter who opens a milestone sees it read only (its
+// name, date and state as text); fails_when = the editor shows with disabled fields, a disabled
+// Save milestone or "needs the approver role".
+test("a commenter opens a milestone and sees it read only", async ({ page }) => {
+  await openPlan(page, "commenter@example.com");
+  await track(page).getByTestId("track-milestone").filter({ hasText: "First release" }).click();
+  const e = page.getByTestId("plan-milestone").filter({ visible: true });
+  await expect(e).toContainText("Milestone · selected");
+  await expect(e.getByTestId("milestone-name")).toHaveText("First release");
+  await expect(e.getByTestId("milestone-date")).toHaveText("No date");
+  await expect(e.getByTestId("milestone-state")).toHaveText("Planned");
+  await expect(e.getByRole("textbox")).toHaveCount(0);
+  await expect(e.getByRole("checkbox")).toHaveCount(0);
+  await expect(e.getByRole("button")).toHaveCount(0);
+  await expect(e).not.toContainText("needs the approver role");
+});
+
+// protects = an approver still edits a milestone; fails_when = the read-only view shows for
+// approvers too.
+test("an approver opens a milestone and edits it", async ({ page }) => {
+  await openPlan(page, "approver@example.com");
+  const row = track(page).getByTestId("track-milestone").filter({ hasText: "First release" });
+  await row.click();
+  const e = page.getByTestId("plan-milestone").filter({ visible: true });
+  await expect(e.getByLabel("Name")).toBeEditable();
+  await e.getByLabel("Name").fill("First public release");
+  await e.getByRole("button", { name: "Save milestone" }).click();
+  await expect(track(page).getByTestId("track-milestone").filter({ hasText: "First public release" })).toBeVisible();
+});
+
 // protects = the goal drawer names who locked it and labels its attributes and history in
 // words; fails_when = "member 5e6b65ac", owner_text or "owner_confidence: 0.425 → 1" shows.
 test("the goal drawer shows a person's name and labelled attributes and history", async ({ page }) => {

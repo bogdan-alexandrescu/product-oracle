@@ -156,8 +156,8 @@ test("check now, push to tracker and draft a roadmap from the track", async ({
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 });
 
-// protects = #370 (#505): viewers see no track control, since they can never change a track;
-// fails_when = a viewer is offered a control the API refuses.
+// protects = #370 (#505): viewers see no track control, since they can never change a track,
+// and a milestone reads read only; fails_when = a viewer is offered a control the API refuses.
 test("viewers see no track controls", async ({
   page,
 }) => {
@@ -175,11 +175,14 @@ test("viewers see no track controls", async ({
   ]) {
     await expect(t.getByRole("button", { name })).toHaveCount(0);
   }
+  // A milestone opens read only: no fields, no Save, no role note (#370).
   await t.getByTestId("track-milestone").first().click();
+  await expect(editor(page).getByTestId("milestone-name")).toBeVisible();
   await expect(
     editor(page).getByRole("button", { name: "Save milestone" }),
-  ).toBeDisabled();
-  await expect(editor(page).getByLabel("Name")).toBeDisabled();
+  ).toHaveCount(0);
+  await expect(editor(page).getByRole("textbox")).toHaveCount(0);
+  await expect(editor(page)).not.toContainText("needs the approver role");
 });
 
 // protects = on a phone (390 px, dark theme) the track panel fits and a milestone opens in a
