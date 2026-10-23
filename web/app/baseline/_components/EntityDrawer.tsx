@@ -13,6 +13,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
+import { GoalDiscuss, type Stepper } from "./GoalInterview";
 import {
   AddDependencyForm,
   CiteSourceForm,
@@ -87,6 +88,13 @@ type Props = {
   promote?: boolean;
   /** For a blocker: opens its blocker inspector (#340). */
   onOpenBlocker?: () => void;
+  /** B6: the goals interview shown in the Discuss view, and the stepper over the vague goals. */
+  discussionId?: string | null;
+  stepper?: Stepper | null;
+  /** B6: Make measurable on a goal that is not (commenters and up). */
+  onMakeMeasurable?: () => void;
+  /** B6: back from the Discuss view to the goal's details. */
+  onCloseDiscuss?: () => void;
 };
 
 /**
@@ -106,6 +114,10 @@ export function EntityDrawer({
   onChanged,
   promote = false,
   onOpenBlocker,
+  discussionId,
+  stepper,
+  onMakeMeasurable,
+  onCloseDiscuss,
 }: Props) {
   const q = useQuery(`baseline-entity:${entity.id}`, () =>
     unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: entity.id } } })),
@@ -300,6 +312,14 @@ export function EntityDrawer({
   const evidence = d?.evidence.length ?? entity.evidence_count;
   const proposals = d?.open_proposals;
 
+  if (discussionId && entity.type === "goal") {
+    return (
+      <div role="dialog" aria-label={title} aria-modal="false" data-testid="entity-drawer" ref={root} className="scroll-mt-4">
+        <GoalDiscuss goal={entity} discussionId={discussionId} stepper={stepper} onBack={onCloseDiscuss ?? onClose} onChanged={onChanged} />
+      </div>
+    );
+  }
+
   return (
     <div role="dialog" aria-label={title} aria-modal="false" data-testid="entity-drawer" ref={root} className="scroll-mt-4">
       <Inspector
@@ -394,6 +414,21 @@ export function EntityDrawer({
             )}
 
             {blocker && <RecordDecision entity={d ?? entity} />}
+
+            {d.type === "goal" && d.goal_check?.measurable === false && onMakeMeasurable && (
+              <InspectorSection
+                label="Not measurable"
+                tools={
+                  <Button disabled={busy} onClick={onMakeMeasurable}>
+                    Make measurable
+                  </Button>
+                }
+              >
+                <p className="text-text2" data-testid="drawer-missing">
+                  {missingTip(d.goal_check)}. Oracle asks one question at a time and proposes measurable versions.
+                </p>
+              </InspectorSection>
+            )}
 
             {promoting && suggestion ? (
               <InspectorSection label="Promote to blocker">

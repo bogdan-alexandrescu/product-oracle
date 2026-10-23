@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
 import { namedText } from "@/lib/codes";
 import { percent } from "@/lib/goal-tree";
@@ -7,7 +9,7 @@ import { percent } from "@/lib/goal-tree";
 import { amount, assess, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
 
 /** One goal: id and title, current over target, confidence ring, trend when there is history, distance to go. */
-function GoalCard({ g, subs, history }: { g: GoalView; subs: GoalView[]; history: Point[] | undefined }) {
+function GoalCard({ g, subs, history, canInterview }: { g: GoalView; subs: GoalView[]; history: Point[] | undefined; canInterview: boolean }) {
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
   const p = assess(g, history);
@@ -70,6 +72,16 @@ function GoalCard({ g, subs, history }: { g: GoalView; subs: GoalView[]; history
             </span>
           ) : null}
         </span>
+        {p.state === "notarget" && canInterview && (
+          // B6: a goals interview on it, in the Baseline's goal drawer (nothing starts before the click).
+          <Link
+            href={`/baseline?entity=${g.id}&interview=1`}
+            data-testid="goal-make-measurable"
+            className="text-sm font-semibold text-accent-ink hover:underline"
+          >
+            Make measurable
+          </Link>
+        )}
         {change != null && change !== 0 && p.state !== "raw" && (
           <span className="tnum text-sm font-semibold text-text2" data-testid="goal-change">
             <span className="text-text">{`${change > 0 ? "+" : "−"}${amount(Math.abs(change), !!g.current?.compact)}`}</span> {spanMonths(trend!)}m
@@ -116,6 +128,7 @@ export function GoalsPanel({
   error,
   loading,
   canImport,
+  canInterview = false,
   testId = "home-goals",
 }: {
   goals: GoalView[] | undefined;
@@ -124,6 +137,8 @@ export function GoalsPanel({
   loading: boolean;
   /** Approvers and owners build the baseline; a viewer sees no action they cannot take. */
   canImport: boolean;
+  /** B6: commenters and up get Make measurable on a goal with No target. */
+  canInterview?: boolean;
   /** Home's band by default; Plan shows the same band under its own id. */
   testId?: string;
 }) {
@@ -187,7 +202,7 @@ export function GoalsPanel({
           style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
           {shown.map((g) => (
-            <GoalCard key={g.id} g={g} subs={goals!.filter((s) => s.parentId === g.id)} history={history.get(g.id)} />
+            <GoalCard key={g.id} g={g} subs={goals!.filter((s) => s.parentId === g.id)} history={history.get(g.id)} canInterview={canInterview} />
           ))}
         </ul>
       )}

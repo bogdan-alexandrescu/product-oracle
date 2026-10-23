@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 
 import { Button, Chip, CodeText, Panel } from "@/components/ds";
 import { INPUT } from "@/components/ui";
@@ -45,6 +45,8 @@ export function ProposalsTab({
   onOpen,
   onDecide,
   onPromote,
+  afterReview,
+  onMakeMeasurable,
 }: {
   proposals: ProposalOut[];
   /** The runs the From select offers: those with open proposals, and the one chosen. */
@@ -60,6 +62,10 @@ export function ProposalsTab({
   onDecide: (proposal: ProposalOut, accept: boolean, skip?: string[]) => void;
   /** Opens a suggested blocker on its Promote to blocker form. */
   onPromote: (id: string) => void;
+  /** B6: the run's after-review line ("2 goals are not measurable · Interview"), in its From this run band. */
+  afterReview?: ReactNode;
+  /** B6: Make measurable on a row of the From this run view whose goal is not (commenters and up). */
+  onMakeMeasurable?: (goalId: string) => void;
 }) {
   // Accepted intake constraints still marked as suggested blockers (B4).
   const suggested = (graph?.entities ?? []).filter((e) => e.status !== "rejected" && suggestedBlocker(e));
@@ -114,6 +120,8 @@ export function ProposalsTab({
         busy={busy}
         onOpen={onOpen}
         onDecide={onDecide}
+        afterReview={afterReview}
+        onMakeMeasurable={onMakeMeasurable}
       />
     </>
   );
@@ -161,12 +169,22 @@ function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
   // A run that is gone: deleting it nulls run_id, but a run's own merge keeps "run:<id>" as the actor.
   if (p.proposer.kind === "run") return <p className={line} data-testid="proposal-by">From a run (removed)</p>;
   const who = p.proposer.user_id && p.proposer.user_id === meId ? "You" : p.proposer.label;
+  // B6 (c6): a version proposed from a discussion reads as the person's suggestion.
+  if (p.proposer.kind === "person" && (p.payload as Payload).reason?.startsWith("From discussion "))
+    return (
+      <p className={line} data-testid="proposal-by" title={p.proposer.email ?? undefined}>
+        Suggested by {p.proposer.label} · {formatDateTime(p.created_at)}
+      </p>
+    );
   return (
     <p className={line} data-testid="proposal-by" title={p.proposer.email ?? undefined}>
       {who} · {formatDateTime(p.created_at)}
     </p>
   );
 }
+
+/** A goal the graph says is not measurable yet (B5's goal_check). */
+const vagueGoal = (graph: GraphOut | undefined, id: string) => graph?.entities.find((e) => e.id === id && e.type === "goal")?.goal_check?.measurable === false;
 
 /** A proposal's field key in words: "attrs.milestone" is "milestone". */
 export const fieldName = (key: string) => key.replace(/^attrs\./, "");
@@ -275,6 +293,8 @@ function ProposalList({
   busy,
   onOpen,
   onDecide,
+  afterReview,
+  onMakeMeasurable,
 }: {
   proposals: ProposalOut[];
   runs: ProposalRun[];
@@ -286,6 +306,8 @@ function ProposalList({
   busy: boolean;
   onOpen: (id: string) => void;
   onDecide: (proposal: ProposalOut, accept: boolean, skip?: string[]) => void;
+  afterReview?: ReactNode;
+  onMakeMeasurable?: (goalId: string) => void;
 }) {
   // The proposal whose Accept opened the overlap warning (#268).
   const [warning, setWarning] = useState<string | null>(null);
@@ -308,6 +330,11 @@ function ProposalList({
             Open run
           </Link>
         </p>
+      )}
+      {byRun && afterReview && (
+        <div data-testid="from-this-run" className="border-b border-line px-4 py-2 text-sm">
+          {afterReview}
+        </div>
       )}
       {proposals.length === 0 ? (
         <p className="px-4 py-8 text-center text-text2">{byRun ? "No open proposals from this run." : "No open proposals."}</p>
@@ -372,6 +399,11 @@ function ProposalList({
                   </details>
                   {warn && <OverlapWarning p={p} busy={busy} onDecide={onDecide} />}
                 </div>
+                {byRun && onMakeMeasurable && p.entity_id && vagueGoal(graph, p.entity_id) && (
+                  <Button className="flex-none" disabled={busy} onClick={() => onMakeMeasurable(p.entity_id!)}>
+                    Make measurable
+                  </Button>
+                )}
                 {canWrite && !warn && (
                   <div className="flex flex-none gap-2">
                     {noChange(p) ? (

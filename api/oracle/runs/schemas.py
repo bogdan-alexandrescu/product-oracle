@@ -667,6 +667,9 @@ class CheckpointOut(BaseModel):
     # D10: a PRD or roadmap review whose draft was imported is decided in its version:
     # "/documents/{slug}/v/{n}?run_review={id}", the same place for every client.
     review_link: str | None = None
+    # B6: on an approved baseline_confirm, the confirmed and proposed goals that are not
+    # measurable ("2 goals are not measurable · Interview"); None on every other.
+    vague_goals: int | None = None
 
 
 class RunDecision(BaseModel):
