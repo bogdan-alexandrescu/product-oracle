@@ -11,14 +11,13 @@ alignment rules themselves are read only.
 Until F2 Track health ships its alerts, "needs attention" lists the track's current
 at-risk reasons and says "as of now" (``needs_attention_as_of_now``).
 
-The schedule is the company setting ``alignment_report`` (Monday 08:00
-America/Los_Angeles by default). The ticker calls :func:`due` once per company per tick:
-when enabled, this week's scheduled moment has passed and the week that just ended has
-no weekly report, it builds that one and posts it to Slack right away
+The schedule is the company setting ``alignment_report`` (Monday 08:00 by default) in
+the Company time zone (``company_timezone``, America/Los_Angeles by default). Its clock is H2's: the
+built-in ``alignment_report`` ritual (oracle.rituals) is seeded on this setting's day
+and time in that zone, follows their changes, and at each weekly moment builds the
+week that just ended (``oracle.rituals.blocks.alignment_report``); the same tick posts it to Slack
 (oracle.reports.slack). The unique index on (company, week_start) for weekly reports
 makes a second build impossible. A company with no active or paused track gets none.
-
-H2 Cadence engine will own the clock later and remove this check (see the spec).
 """
 
 import logging
@@ -27,7 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -38,6 +37,7 @@ from oracle.docs.models import Document
 from oracle.models import AuditEvent
 from oracle.reports import clock
 from oracle.reports.models import AlignmentReport
+from oracle.rituals.schedule import DEFAULT_ZONE
 from oracle.roadmap import views
 from oracle.roadmap.models import ProductTrack, ScheduleBasis
 from oracle.v2.models import ChangeEvent
@@ -79,7 +79,8 @@ class ReportSettings:
     enabled: bool = True
     weekday: str = "mon"
     time: str = "08:00"
-    timezone: str = "America/Los_Angeles"
+    # The Company time zone (Settings), read by load_settings; the setting has no zone.
+    timezone: str = DEFAULT_ZONE
     slack_channel: dict[str, str] | None = field(default=None, hash=False)
 
     @property
@@ -91,7 +92,6 @@ DEFAULT_SETTING: dict[str, Any] = {
     "enabled": True,
     "weekday": "mon",
     "time": "08:00",
-    "timezone": "America/Los_Angeles",
     "slack_channel": None,
 }
 
@@ -111,15 +111,6 @@ def validate_setting(value: Any) -> dict[str, Any]:
         raise ValueError(f"alignment_report.weekday must be one of {', '.join(WEEKDAYS)}")
     if not isinstance(out["time"], str) or not TIME.fullmatch(out["time"]):
         raise ValueError("alignment_report.time must be HH:MM, 00:00 to 23:59")
-    tz = out["timezone"]
-    try:
-        if not isinstance(tz, str) or not tz or tz != tz.strip():
-            raise ValueError
-        ZoneInfo(tz)
-    except (ValueError, ZoneInfoNotFoundError):
-        raise ValueError(
-            "alignment_report.timezone must be a time zone name, e.g. America/Los_Angeles"
-        ) from None
     channel = out["slack_channel"]
     if channel is not None:
         if not isinstance(channel, dict) or not isinstance(channel.get("id"), str):
@@ -135,7 +126,8 @@ def validate_setting(value: Any) -> dict[str, Any]:
 
 
 async def load_settings(db: AsyncSession) -> ReportSettings:
-    from oracle.tenant_settings_api import get_setting
+    """The report's setting, in the Company time zone."""
+    from oracle.tenant_settings_api import company_timezone, get_setting
 
     raw = await get_setting(db, SETTING_KEY)
     try:
@@ -143,7 +135,7 @@ async def load_settings(db: AsyncSession) -> ReportSettings:
     except ValueError:
         log.warning("alignment_report setting is invalid; using the defaults")
         value = dict(DEFAULT_SETTING)
-    return ReportSettings(**value)
+    return ReportSettings(**value, timezone=str(await company_timezone(db)))
 
 
 # --- weeks -------------------------------------------------------------------------------
@@ -543,30 +535,3 @@ async def build(
         },
     )
     return report
-
-
-async def due(db: AsyncSession) -> AlignmentReport | None:
-    """The ticker's call, once per company per tick (the caller commits): builds the
-    weekly report for the week that just ended once its moment has passed, then makes the
-    Slack posts that are due. Returns the report built, if any."""
-    from oracle.reports import slack
-
-    settings = await load_settings(db)
-    built = None
-    if settings.enabled:
-        now = clock.now()
-        this_week = week_start_of(now, settings.timezone)
-        week = this_week - timedelta(days=7)
-        if now >= scheduled_moment(this_week, settings):
-            exists = await db.scalar(
-                select(AlignmentReport.id).where(
-                    AlignmentReport.kind == "weekly", AlignmentReport.week_start == week
-                )
-            )
-            if exists is None:
-                try:
-                    built = await build(db, kind="weekly", week_start=week, settings=settings)
-                except (NoTracks, AlreadyBuilt):
-                    built = None
-    await slack.deliver_due(db)
-    return built

@@ -60,16 +60,25 @@ async def test_defaults_and_unknown_keys(client, owner):
             "long_from_months": 12,
             "long_to_months": 24,
         },
-        # F6: the weekly alignment report, Monday 08:00 Pacific, no Slack channel yet.
+        # F6: the weekly alignment report, Monday 08:00, no Slack channel yet; its time zone
+        # is the Company time zone.
         "alignment_report": {
             "enabled": True,
             "weekday": "mon",
             "time": "08:00",
-            "timezone": "America/Los_Angeles",
             "slack_channel": None,
         },
         # H11: every responsibility at its default (written through /v1/autonomy).
         "autonomy": {},
+        # The Company time zone: goals' today, the alignment report and rituals; Los
+        # Angeles until an owner sets it (owner decision 2026-10-22).
+        "company_timezone": "America/Los_Angeles",
+        # H2: Oracle's written summary of a pre-read, on demand.
+        "ritual_summaries": "on_demand",
+        # H3: outcome checks 30 days after shipping, 5 assessed outcomes, apply calibration.
+        "outcome_measure_days": 30,
+        "calibration_min_outcomes": 5,
+        "outcome_calibration": "apply",
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

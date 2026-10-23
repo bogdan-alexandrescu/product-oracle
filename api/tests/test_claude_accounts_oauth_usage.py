@@ -22,6 +22,7 @@ from oracle.claude_accounts.oauth import (
     build_authorize_url,
     challenge_for,
     credential_from_token_response,
+    identity_from_token_response,
     new_state,
     new_verifier,
     parse_credential,
@@ -149,6 +150,25 @@ def test_a_redeemed_code_without_a_refresh_token_saves_nothing():
         {"access_token": "a", "refresh_token": "r", "expires_in": 100}, now=NOW
     )
     assert cred.expires_at == NOW + timedelta(seconds=100)
+
+
+def test_the_redeemed_codes_answer_says_which_claude_account_it_is():
+    # #405: the token endpoint reports the account and organization beside the tokens.
+    assert identity_from_token_response(
+        {
+            "access_token": "a",
+            "account": {"uuid": "u", "email_address": " ada@example.com "},
+            "organization": {"uuid": "o", "name": "Example Studio"},
+        }
+    ) == ("ada@example.com", "Example Studio")
+    # Absent, odd shapes, blanks and runaway values are "not reported", never a crash.
+    assert identity_from_token_response({"access_token": "a"}) == (None, None)
+    assert identity_from_token_response(
+        {"account": "ada@example.com", "organization": {"name": 7}}
+    ) == (None, None)
+    assert identity_from_token_response(
+        {"account": {"email_address": "  "}, "organization": {"name": "x" * 1000}}
+    ) == (None, None)
 
 
 # --- usage ------------------------------------------------------------------------

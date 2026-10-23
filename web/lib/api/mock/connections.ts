@@ -89,8 +89,11 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   company_shared_drives: [],
   // A1, B2 Goals framework: Now = the current quarter, Next = the next 2, Later = 12-24 months.
   planning_horizons: { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 },
-  // F6: the weekly alignment report, Monday 08:00 Pacific; the channel once Slack is connected.
-  alignment_report: { enabled: true, weekday: "mon", time: "08:00", timezone: "America/Los_Angeles", slack_channel: null },
+  // F6: the weekly alignment report, Monday 08:00 in the Company time zone; the channel once Slack is connected.
+  alignment_report: { enabled: true, weekday: "mon", time: "08:00", slack_channel: null },
+  // The Company time zone: goals' today, the weekly report and rituals (Los Angeles until an
+  // owner sets one, owner decision 2026-10-22).
+  company_timezone: "America/Los_Angeles",
 };
 
 /** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */
@@ -243,13 +246,14 @@ function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
  * What the Set up checklist reads from this store (A1): active connections, the company's
  * domains and whether the horizons were confirmed (a stored row).
  */
-export function setupFacts(): { connections: number; domains: string[]; horizons: boolean } {
+export function setupFacts(): { connections: number; domains: string[]; horizons: boolean; timezone: string | null } {
   const db = load();
   const domains = ("company_email_domains" in db.settings ? db.settings.company_email_domains : SETTING_DEFAULTS.company_email_domains) as string[];
   return {
     connections: db.connections.filter((c) => c.status === "active").length,
     domains,
     horizons: "planning_horizons" in db.settings,
+    timezone: "company_timezone" in db.settings ? String(db.settings.company_timezone) : null,
   };
 }
 
@@ -280,6 +284,17 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
         const v = value as { weekday: string; time: string };
         if (!["mon", "tue", "wed", "thu", "fri", "sat", "sun"].includes(v.weekday)) return json(422, { detail: "alignment_report.weekday must be one of mon, tue, wed, thu, fri, sat, sun" });
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) return json(422, { detail: "alignment_report.time must be HH:MM, 00:00 to 23:59" });
+        const unknown = Object.keys(value as object).find((k) => !(k in (SETTING_DEFAULTS.alignment_report as object)));
+        if (unknown) return json(422, { detail: `alignment_report: unknown key '${unknown}'` });
+      }
+      if (key === "company_timezone" && value !== null && value !== undefined) {
+        let ok = typeof value === "string" && value !== "";
+        try {
+          if (ok) new Intl.DateTimeFormat("en-US", { timeZone: value as string });
+        } catch {
+          ok = false;
+        }
+        if (!ok) return json(422, { detail: "company_timezone must be an IANA time zone name" });
       }
       if (key === "company_email_domains" && Array.isArray(value)) {
         const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);

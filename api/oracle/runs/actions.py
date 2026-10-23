@@ -45,13 +45,16 @@ from oracle.runs.schemas import (
     ActionIn,
     CheckpointReview,
     ConsoleAnswer,
+    FieldDiff,
     InboxChild,
     InboxChildReason,
     InboxSource,
     InboxSummary,
     ItemReason,
+    ItemsAttemptDiff,
     ItemsProblem,
     ReasonFix,
+    ResolutionEntry,
     ReviewAction,
     ReviewAnswer,
     ReviewAnswerer,
@@ -300,7 +303,11 @@ async def _file(db: AsyncSession, run: Run, cp: Checkpoint) -> _File | None:
     text = ((segment.artifacts or {}).get("files") or {}).get(name) if segment else None
     if not isinstance(text, str):
         return _File(seq, name, None)
-    return _File(seq, name, await service.checked_items(db, run, text))
+    attempt = (cp.payload or {}).get("attempt")
+    prior = await service.prior_review(
+        db, run, segment, attempt if isinstance(attempt, int) else None
+    )
+    return _File(seq, name, await service.checked_items(db, run, text, prior))
 
 
 def _context(found: _File | None) -> ValidationContext:
@@ -737,7 +744,7 @@ def _rank(item: dict[str, Any]) -> int | None:
 def _sent_yaml(cp: Checkpoint) -> str | None:
     from oracle.runs import review_file
 
-    if cp.status == "pending" or not cp.review:
+    if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         return None
     return review_file.render_yaml(cp.review, cp.decided_at)
 
@@ -883,6 +890,16 @@ async def _read(
         reasons_of.setdefault(reason["item"], []).append(reason)
     titles = {r["item"]: r.get("item_title") for r in all_reasons}
 
+    resolution = checked.resolution if checked else None
+    attempt_diff = checked.diff if checked else None
+    answered: dict[str, ResolutionEntry] = {}
+    for e in (resolution or {}).get("entries") or []:
+        answered.setdefault(e["id"], ResolutionEntry(**e))
+    changed = {
+        d["id"]: [FieldDiff(**c) for c in d["changes"]]
+        for d in (attempt_diff or {}).get("items") or []
+    }
+
     tally = ReviewTally()
     waiting: dict[uuid.UUID, WaitingOn] = {}
     items: list[ReviewItem] = []
@@ -937,6 +954,8 @@ async def _read(
                 reasons=[ItemReason(**x) for x in found_reasons],
                 actions=mine,
                 state=state,  # type: ignore[arg-type]
+                resolution=answered.get(key),
+                diff=changed.get(key, []),
             )
         )
     tally.waiting_on = list(waiting.values())
@@ -960,7 +979,9 @@ async def _read(
         items=items,
         tally=tally,
         note=cp.draft_note,
-        sent_review=cp.review if cp.status != "pending" else None,
+        sent_review=cp.review
+        if cp.status != "pending" and (cp.review or {}).get("kind") != "edits"
+        else None,
         sent_review_yaml=_sent_yaml(cp),
         can_read=True,
         can_suggest=pending
@@ -969,6 +990,7 @@ async def _read(
         can_stage=stages,
         can_decide=stages,
         gate=gate.approve_gate(cp, None, staged) if pending else None,
+        diff=ItemsAttemptDiff(**attempt_diff) if attempt_diff else None,
     )
 
 

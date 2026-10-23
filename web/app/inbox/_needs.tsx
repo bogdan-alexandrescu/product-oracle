@@ -9,6 +9,20 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
+import {
+  acceptTrackAlertDate,
+  alertSentence,
+  firstSafeAction,
+  HEALTH_WORD,
+  inboxTracks,
+  keepTrackAlert,
+  planHref,
+  reopenTrackAlert,
+  type InboxTrack,
+  type TrackAlertOut,
+} from "@/lib/api/track-alerts";
+
+import { calendarDay } from "@/lib/dates";
 
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
@@ -198,7 +212,7 @@ export function NeedTable({
         rows={drawn}
         rowKey={(n) => n.key}
         hideHeader
-        rowProps={(n) => ({ "data-need": n.childOf ? "Checkpoint item" : n.kind, "data-state": n.state, "data-child-of": n.childOf })}
+        rowProps={(n) => ({ "data-need": n.childOf ? n.kind || "Checkpoint item" : n.kind, "data-state": n.state, "data-child-of": n.childOf })}
         detail={(n) =>
           n.quote && shown.has(n.key) ? (
             <>
@@ -254,6 +268,7 @@ export const STATE_TABS: { id: InboxState; label: string }[] = [
  */
 export type NeedGroup =
   | "checkpoints"
+  | "tracks"
   | "deliveries"
   | "approvals"
   | "overruns"
@@ -272,6 +287,8 @@ export type NeedGroup =
   | "decisions"
   | "launches"
   | "dates"
+  | "rituals"
+  | "outcomes"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
@@ -683,13 +700,11 @@ export function oracleActionNeeds(actions: OracleAction[], busy: string | null, 
   });
 }
 
-const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
 /** F3: each proposed date basis, for the engineering leads (and owners while none is named):
  * Verify in place, Reject (with a reason) on Plan › Dates. */
 export function dateNeeds(inbox: InboxOut, busy: string | null, act: Act): Need[] {
   return (inbox.dates ?? []).map((b) => {
-    const day = dayFmt.format(new Date(`${b.supports_date}T00:00:00Z`));
+    const day = calendarDay(b.supports_date);
     const path = { params: { path: { basis_id: b.id } } };
     return {
       key: `date-${b.id}`,
@@ -1370,6 +1385,76 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
   return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
 }
 
+const ritualWhen = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+/**
+ * H2 ritual rows: Pre-read ready (the owner and attendees, until they open it), Record notes
+ * (the ritual's owner, after the end) and Ritual failed to prepare (owners, with Retry). Each
+ * opens the occurrence; a failed one opens Company › Rituals.
+ */
+export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): StatedNeed[] {
+  return (inbox.rituals ?? []).map((r) => {
+    const label =
+      r.reason === "pre_read"
+        ? `Pre-read ready · ${r.title} · ${ritualWhen.format(new Date(r.due_at))}`
+        : r.reason === "record_notes"
+          ? `Record notes · ${r.title}`
+          : `Ritual failed to prepare · ${r.title}`;
+    return {
+      key: `ritual-${r.reason}-${r.occurrence_id}`,
+      icon: "company",
+      kind: "Ritual",
+      item: (
+        <span className="truncate" title={label} data-testid="ritual-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Rituals</span>,
+      at: r.due_at,
+      action:
+        r.reason === "failed" ? (
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`ritual-retry-${r.ritual_id}`, () => unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", { params: { path: { ritual_id: r.ritual_id } } })))}
+          >
+            Retry
+          </Button>
+        ) : (
+          <LinkButton variant="secondary" href={`/company/rituals/${r.occurrence_id}`} aria-label="Open">
+            Open
+          </LinkButton>
+        ),
+      state: r.state,
+      counted: r.counts,
+      group: "rituals" as const,
+    };
+  });
+}
+
+/** H3 outcome rows: Add predictions (the roadmap's approver) and Outcome check due (the
+ * record's owner) count; Oracle recorded (H11 at Act within limits) is shown, with Change. */
+export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] } {
+  const rows = inbox.outcomes ?? [];
+  const need = (r: (typeof rows)[number]): Need => ({
+    key: `outcome-${r.reason}-${r.id}`,
+    icon: r.reason === "oracle_recorded" ? "check" : "flag",
+    kind: r.reason === "needs_prediction" ? "Add predictions" : r.reason === "check_due" ? "Outcome check due" : "Oracle recorded",
+    item: (
+      <span className="truncate" title={r.title} data-testid="outcome-need">
+        {r.title}
+      </span>
+    ),
+    context: <span className="block truncate text-text2">Plan › Outcomes</span>,
+    at: r.due_on,
+    action: (
+      <LinkButton variant="secondary" href={`/plan/outcomes?outcome=${r.id}`}>
+        {r.reason === "oracle_recorded" ? "Change" : "Open"}
+      </LinkButton>
+    ),
+  });
+  return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
  * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
@@ -1389,6 +1474,7 @@ export function allNeeds(
   const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
+  const outcomes = outcomeNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
     rows.map((r) => ({
       ...r,
@@ -1398,6 +1484,7 @@ export function allNeeds(
     }));
   return [
     ...stated(n.checkpoints, "checkpoints"),
+    ...trackNeeds(inboxTracks(inbox), busy, act, seenBefore, compact),
     ...stated(n.approvals, "approvals"),
     ...stated(n.overruns, "overruns"),
     ...stated(n.lookups, "lookups"),
@@ -1409,6 +1496,8 @@ export function allNeeds(
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...stated(dateNeeds(inbox, busy, act), "dates"),
     ...stated(launches.counted, "launches"),
+    ...ritualNeeds(inbox, busy, act),
+    ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),
@@ -1418,6 +1507,7 @@ export function allNeeds(
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(launches.shipped, "shipped", false),
+    ...stated(outcomes.shown, "outcomes", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }
 
@@ -1484,3 +1574,223 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
 
 /** What the rail badge counts: the new and open items. */
 export const waitingNeeds = (rows: StatedNeed[]) => rows.filter((r) => r.counted && (r.state === "new" || r.state === "open"));
+
+// --- F2 Track health: one row per track, its open alerts under it -----------------------
+
+const ALERT_KIND: Record<TrackAlertOut["kind"], string> = {
+  date_slip: "Date slip",
+  overdue: "Overdue",
+  cancelled: "Cancelled",
+  ahead: "Started early",
+  unplanned: "Not on the roadmap",
+  blocked: "Blocked",
+  stale: "May be stale",
+  prd_moved: "PRD moved on",
+};
+
+const alertTitle = (a: TrackAlertOut) => a.item_title ?? a.item_key ?? a.prd.title;
+
+/**
+ * F2: the Inbox's track rows. A track with open alerts is one row, "<PRD> · At risk · N need
+ * you" with Open in Plan, and (on the Inbox, not Home) up to three alerts under it, each with
+ * its first safe action and Open, then "+N more · N kept". Kept and resolved alerts are Done
+ * rows, with the note they were kept with.
+ */
+export function trackNeeds(
+  tracks: InboxTrack[],
+  busy: string | null,
+  act: Act,
+  seenBefore: string | null | undefined,
+  compact = false,
+): StatedNeed[] {
+  const out: StatedNeed[] = [];
+  for (const t of tracks) {
+    const need = t.counts.open + t.counts.new;
+    if (need > 0) {
+      const label = `${t.prd.title} · ${(t.health && HEALTH_WORD[t.health]) || "At risk"} · ${need} need you`;
+      const kinds = [...new Set(t.alerts.map((a) => ALERT_KIND[a.kind]))].join(", ");
+      const children: Need[] = t.alerts.map((a) => ({
+        key: `track-alert-${a.id}`,
+        icon: "flag",
+        kind: "Track alert",
+        item: (
+          <>
+            <span className="truncate" data-testid="child-title">
+              {alertTitle(a)}
+            </span>
+            <Chip kind="warn">{ALERT_KIND[a.kind]}</Chip>
+          </>
+        ),
+        context: (
+          <span className="block truncate text-[14px] text-text2" title={alertSentence(a)} data-testid="track-alert-detail">
+            {alertSentence(a)}
+          </span>
+        ),
+        action: <TrackAlertActions key={`${a.id}-${a.state}`} a={a} busy={busy} act={act} />,
+      }));
+      if (t.more > 0 || t.counts.kept > 0) {
+        children.push({
+          key: `track-${t.track_id}-more`,
+          icon: "flag",
+          kind: "Track alert",
+          item: (
+            <Link href="/plan" className="truncate text-[14px] hover:underline" data-testid="child-more">
+              {[t.more > 0 ? `+${t.more} more` : null, t.counts.kept > 0 ? `${t.counts.kept} kept` : null].filter(Boolean).join(" · ")}
+            </Link>
+          ),
+          context: null,
+          action: null,
+        });
+      }
+      out.push({
+        key: `track-${t.track_id}`,
+        icon: "roadmap",
+        kind: "Track",
+        item: (
+          <span className="truncate" data-testid="track-label" title={label}>
+            {label}
+          </span>
+        ),
+        context: (
+          <span className="block truncate" title={kinds}>
+            {kinds}
+          </span>
+        ),
+        at: t.newest_at,
+        action: (
+          <LinkButton href={t.alerts[0] ? planHref(t.alerts[0]) : "/plan"} aria-label={`Open ${t.prd.title} in Plan`}>
+            Open in Plan
+          </LinkButton>
+        ),
+        // What was new on arrival stays New this visit, as the other rows.
+        state: (seenBefore === undefined ? t.counts.new > 0 : t.alerts.some((a) => isNew(a.opened_at, seenBefore))) ? "new" : "open",
+        counted: true,
+        group: "tracks",
+        children: compact ? undefined : children,
+      });
+    }
+    for (const a of t.done) {
+      const outcome = a.state === "kept" ? (a.note ? `Kept · ${a.note}` : "Kept") : "Resolved";
+      out.push({
+        key: `track-alert-${a.id}`,
+        icon: "check",
+        kind: "Track",
+        item: (
+          <>
+            <span className="truncate" title={alertSentence(a)}>
+              {alertTitle(a)} · {alertSentence(a)}
+            </span>
+            <span className="flex-none truncate text-[14px] text-text2" data-testid="track-alert-outcome" title={outcome}>
+              {outcome}
+            </span>
+          </>
+        ),
+        context: <span className="block truncate">{a.prd.title}</span>,
+        at: a.kept_at ?? a.resolved_at ?? a.opened_at,
+        action: (
+          <span data-child-actions className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full">
+            {a.actions.includes("reopen") && (
+              <Button
+                variant="ghost"
+                disabled={busy !== null}
+                aria-label={`Reopen ${alertTitle(a)}`}
+                onClick={() => act(`reopen-${a.id}`, () => reopenTrackAlert(a.id))}
+              >
+                Reopen
+              </Button>
+            )}
+            <LinkButton variant="ghost" href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
+              Open
+            </LinkButton>
+          </span>
+        ),
+        state: "done",
+        counted: true,
+        group: "tracks",
+      });
+    }
+  }
+  return out;
+}
+
+/** A track alert's first safe action (Accept new date, Review or Keep watching, with an optional note) and Open. */
+function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | null; act: Act }) {
+  const [keeping, setKeeping] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const fieldId = useId();
+  const title = alertTitle(a);
+  const first = firstSafeAction(a);
+  const run = (key: string, call: () => Promise<unknown>) => {
+    setError(null);
+    void act(key, () => call().catch((e) => setError(errorMessage(e))));
+  };
+  const errorLine = error && (
+    <span role="alert" className="basis-full text-right text-[13px] text-crit max-[600px]:text-left" data-testid="child-error">
+      {error}
+    </span>
+  );
+  if (keeping) {
+    return (
+      <form
+        data-child-actions
+        data-testid="track-keep-field"
+        className="flex w-full flex-col items-stretch gap-1.5 py-1 text-left whitespace-normal"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(`keep-${a.id}`, () => keepTrackAlert(a.id, note.trim() || null));
+        }}
+      >
+        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+          Note (optional)
+        </label>
+        <input
+          id={fieldId}
+          autoFocus
+          value={note}
+          maxLength={500}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
+          className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+        />
+        {errorLine}
+        <span className="flex justify-end gap-1.5 max-[600px]:flex-col">
+          <Button type="submit" disabled={busy !== null} className="max-[600px]:w-full">
+            Keep watching
+          </Button>
+          <Button variant="ghost" disabled={busy !== null} onClick={() => setKeeping(false)} className="max-[600px]:w-full">
+            Cancel
+          </Button>
+        </span>
+      </form>
+    );
+  }
+  return (
+    <span data-child-actions className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full">
+      {first === "accept_date" && (
+        <Button
+          disabled={busy !== null}
+          aria-label={`Accept new date for ${title}`}
+          onClick={() => run(`accept-${a.id}`, () => acceptTrackAlertDate(a.id))}
+        >
+          Accept new date
+        </Button>
+      )}
+      {first === "review" && <LinkButton href={planHref(a)}>Review</LinkButton>}
+      {first === "keep" && (
+        <Button disabled={busy !== null} aria-label={`Keep watching ${title}`} onClick={() => setKeeping(true)}>
+          Keep watching
+        </Button>
+      )}
+      {first !== "keep" && a.actions.includes("keep") && (
+        <Button variant="ghost" disabled={busy !== null} aria-label={`Keep watching ${title}`} onClick={() => setKeeping(true)}>
+          Keep watching
+        </Button>
+      )}
+      <LinkButton variant="ghost" href={planHref(a)} aria-label={`Open ${title}`}>
+        Open
+      </LinkButton>
+      {errorLine}
+    </span>
+  );
+}

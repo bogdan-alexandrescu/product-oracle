@@ -59,6 +59,9 @@ FIELD_WORDS = {
     "prd_section": "PRD section",
     "depends_on": "dependencies",
     "validation_gates": "validation gates",
+    "milestone.date": "milestone date",
+    "milestone.name": "milestone name",
+    "priority.rank": "rank",
 }
 # The fix for a missing field: its label and the field it edits. A missing id has none.
 MISSING_FIX = {
@@ -270,6 +273,14 @@ CATALOGUE: dict[str, Entry] = {
         code: Entry(BLOCKING, "Malformed {field}", "{message}", "Clear {field}")
         for code in MALFORMED
     },
+    # D6 Per-item resolutions: a review entry the next attempt did not apply.
+    "change_not_applied": Entry(
+        BLOCKING,
+        "Change not applied",
+        "The agents said done, but {field} is still {value}. / Not applied: {field} is still "
+        "{value}. No answer from the agents.",
+        "Apply it myself; Waive…",
+    ),
     "low_confidence": Entry(
         CONFIRM,
         "Low confidence",
@@ -301,6 +312,18 @@ CATALOGUE: dict[str, Entry] = {
     ),
     "linked_blocker": Entry(
         CONFIRM, "Open blocker", "{blocker} is {status}.", "Accept; Move to Later; Open blocker"
+    ),
+    "declined_change": Entry(
+        CONFIRM,
+        "Change declined",
+        "Declined: {note}",
+        "Accept decline; Apply it myself",
+    ),
+    "unrequested_change": Entry(
+        CONFIRM,
+        "Unrequested change",
+        "Changed without being asked: {field} {old} → {new}",
+        "Accept; Revert",
     ),
     "stale_section": Entry(
         CONFIRM,
@@ -665,8 +688,11 @@ def summarize(
     reasons: list[dict[str, Any]],
     base: dict[str, Any] | None,
     partial: bool = False,
+    resolution: dict[str, Any] | None = None,
+    diff: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """The check's JSON with its reasons and their counts."""
+    """The check's JSON with its reasons and their counts; after a send-back with a review,
+    how the attempt answered it and its diff (D6, None on a first attempt)."""
     return {
         **check,
         "reasons": reasons,
@@ -675,7 +701,177 @@ def summarize(
         "file_problems": sum(1 for p in check.get("problems") or [] if not p.get("item")),
         "base": base,
         "reasons_partial": partial,
+        "resolution": resolution,
+        "diff": diff,
     }
+
+
+# --------------------------------------------------------------------------- resolutions
+
+# The item file's field names (D6) -> the D8 edit field that sets it.
+EDIT_OF = {"milestone.date": "milestone_date", "milestone.name": "milestone_name"}
+# Fields a person can set back to any earlier value with an edit (D8 vocabulary).
+REVERTIBLE = ("horizon", "title", "outcome", "prd_section", "milestone.name", "depends_on")
+
+
+def _shown(value: Any) -> str:
+    if value is None or value == [] or value == "":
+        return "none"
+    if isinstance(value, list | tuple):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        parts = [f"{k} {_shown(v)}" for k, v in value.items()]
+        return "; ".join(parts) if parts else "none"
+    return str(value)
+
+
+def _not_applied(entry: dict[str, Any]) -> str:
+    """What the file still shows instead of the requested change."""
+    key, action = entry["id"], entry["action"]
+    if action == "change":
+        missed = [f for f in entry.get("fields") or [] if not f["applied"]]
+        parts = [
+            "the order is unchanged"
+            if f["field"] == "order"
+            else f"{_word(f['field'])} is still {_shown(f.get('current'))}"
+            for f in missed
+        ]
+        return _and(parts) if parts else f"{key} is not changed"
+    if action == "drop":
+        return f"{key} is still in the file"
+    if action == "restore":
+        return f"{key} is not back"
+    if action == "split":
+        return f"{key} is not split into {_and([str(i) for i in entry.get('into') or []])}"
+    if action == "merge":
+        return f"{key} is not merged with {_and([str(i) for i in entry.get('with') or []])}"
+    return f"{key} is unchanged"
+
+
+def _apply_fixes(entry: dict[str, Any]) -> list[dict]:
+    """The same edit the review asked for, for a person to stage (D7 Approve with edits)."""
+    key, action = entry["id"], entry["action"]
+    if action == "change":
+        missed = [f for f in entry.get("fields") or [] if not f["applied"]]
+        fixes = []
+        for f in missed:
+            name = f["field"]
+            if name in EDIT_OF or name in ("horizon", "title", "outcome", "prd_section", "order"):
+                edit, value = EDIT_OF.get(name, name), f["requested"]
+            elif name == "depends_on":
+                edit, value = name, f["requested"]
+                if isinstance(value, list):
+                    value = {"add": value, "remove": []}
+            elif f["requested"] is None:
+                edit, value = f"clear:{name}", None
+            else:
+                continue
+            label = "Apply it myself" if len(missed) == 1 else f"Apply {_word(name)} myself"
+            fixes.append(_fix(label, "edit", key, edit, value))
+        return fixes
+    if action == "drop":
+        return [drop(key, "Apply it myself")]
+    if action == "restore":
+        return [_fix("Apply it myself", "restore", key)]
+    if action == "split":
+        return [_fix("Apply it myself", "split", key, None, {"into": entry.get("into") or []})]
+    if action == "merge":
+        return [_fix("Apply it myself", "merge", key, None, {"with": entry.get("with") or []})]
+    return []
+
+
+def _revert(key: str, change: dict[str, Any]) -> list[dict]:
+    name, old, new = change["field"], change["from"], change["to"]
+    if name not in REVERTIBLE and not (name == "milestone.date" and old is None):
+        return []
+    if name == "depends_on":
+        before, after = set(old or []), set(new or [])
+        value: Any = {"add": sorted(before - after), "remove": sorted(after - before)}
+    else:
+        value = old
+    if name in ("horizon", "title", "outcome") and old is None:
+        return []
+    return [_fix("Revert", "edit", key, EDIT_OF.get(name, name), value)]
+
+
+def resolution_reasons(
+    resolution: dict[str, Any], items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The reasons of a resolution (oracle.runs.resolutions.resolve): a decline to confirm,
+    a change not applied (blocking), each unrequested change to confirm."""
+    titles = {i["id"]: roadmap._text(i.get("title")) for i in items}
+    out: list[dict[str, Any]] = []
+    for e in resolution.get("entries") or []:
+        key = e["id"]
+        data = {"action": e["action"], "said": e["said"], "note": e["note"], "fields": e["fields"]}
+        if e["outcome"] == "declined":
+            out.append(
+                _reason(
+                    key,
+                    "declined_change",
+                    "Change declined",
+                    f"Declined: {e['note']}",
+                    [accept(key, "Accept decline"), *_apply_fixes(e)],
+                    data,
+                    titles.get(key),
+                )
+            )
+        elif e["outcome"] == "not_applied":
+            detail = _not_applied(e)
+            text = (
+                f"The agents said done, but {detail}."
+                if e["said"] == "done"
+                else f"Not applied: {detail}. No answer from the agents."
+                if e["said"] == "missing"
+                else f"Not applied: {detail}. The agents declined without a reason."
+            )
+            out.append(
+                _reason(
+                    key,
+                    "change_not_applied",
+                    "Change not applied",
+                    text,
+                    [*_apply_fixes(e), _fix("Waive…", "waive", key)],
+                    data,
+                    titles.get(key),
+                )
+            )
+    for c in resolution.get("unrequested") or []:
+        key = c["id"]
+        out.append(
+            _reason(
+                key,
+                "unrequested_change",
+                "Unrequested change",
+                f"Changed without being asked: {_word(c['field'])} {_shown(c['from'])} → "
+                f"{_shown(c['to'])}",
+                [accept(key), *_revert(key, c)],
+                {"field": c["field"], "from": c["from"], "to": c["to"]},
+                titles.get(key),
+            )
+        )
+    return out
+
+
+def with_resolutions(
+    found: list[dict[str, Any]], extra: list[dict[str, Any]], items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """``found`` with ``extra`` placed after the reasons of their item (blocking before to
+    confirm), else before the first reason of a later item, else at the end."""
+    index = {i["id"]: n for n, i in reversed(list(enumerate(items)))}
+    out = list(found)
+    for r in sorted(extra, key=lambda r: _SEVERITY[r["severity"]]):
+        mine = [n for n, x in enumerate(out) if x["item"] == r["item"]]
+        if mine:
+            confirm = [n for n in mine if out[n]["severity"] == CONFIRM]
+            at = confirm[0] if r["severity"] == BLOCKING and confirm else mine[-1] + 1
+        else:
+            pos = index.get(r["item"], len(items))
+            at = next(
+                (n for n, x in enumerate(out) if index.get(x["item"], len(items)) > pos), len(out)
+            )
+        out.insert(at, r)
+    return out
 
 
 # --------------------------------------------------------------------------- context

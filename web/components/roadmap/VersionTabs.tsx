@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 
+import type { DraftRoadmapSummary } from "@/lib/api/draft-roadmap";
+
 /**
  * A version's page tabs, directly under its header (E2): Document and Items on a roadmap
- * version. Links, not buttons; the active one carries aria-current="page". E1 adds the PRD
- * variant (Document and Roadmap) here.
+ * version; Document and Roadmap on every PRD version (E1: the draft's items-only roadmap,
+ * "Roadmap 4", or "Roadmap · deriving" / "Roadmap · queued" while it has no items yet).
+ * Links, not buttons; the active one carries aria-current="page".
  */
 export function VersionTabs({
   doc,
@@ -13,6 +16,7 @@ export function VersionTabs({
   kind,
   active,
   count,
+  draft,
 }: {
   doc: string;
   n: number;
@@ -20,13 +24,21 @@ export function VersionTabs({
   active: "document" | "items" | "roadmap";
   /** The version's item count; while it loads the label is "Items". */
   count?: number;
+  /** A PRD version's draft roadmap summary (VersionOut.draft_roadmap). */
+  draft?: DraftRoadmapSummary | null;
 }) {
-  if (kind !== "roadmap") return null;
+  if (kind !== "roadmap" && kind !== "prd") return null;
   const base = `/documents/${doc}/v/${n}`;
-  const tabs = [
-    { key: "document", label: "Document", href: base },
-    { key: "items", label: count == null ? "Items" : `Items ${count}`, href: `${base}/items` },
-  ] as const;
+  const tabs =
+    kind === "prd"
+      ? [
+          { key: "document", label: "Document", href: base },
+          { key: "roadmap", label: roadmapLabel(draft), href: `${base}/roadmap` },
+        ]
+      : [
+          { key: "document", label: "Document", href: base },
+          { key: "items", label: count == null ? "Items" : `Items ${count}`, href: `${base}/items` },
+        ];
   return (
     <nav aria-label="Version tabs" data-testid="version-tabs" className="mb-3 flex min-w-0 items-center gap-1 border-b border-line">
       {tabs.map((t) => {
@@ -47,4 +59,12 @@ export function VersionTabs({
       })}
     </nav>
   );
+}
+
+/** "Roadmap 4"; while there are no items, the status word of a derivation under way. */
+function roadmapLabel(draft: DraftRoadmapSummary | null | undefined): string {
+  if (draft?.items) return `Roadmap ${draft.items}`;
+  if (draft?.status === "running") return "Roadmap · deriving";
+  if (draft?.status === "queued") return "Roadmap · queued";
+  return "Roadmap";
 }

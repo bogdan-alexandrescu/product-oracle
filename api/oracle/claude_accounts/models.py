@@ -69,6 +69,10 @@ class ClaudeAccount(TenantScoped, Base):
     # The access token alone, written after the pair; what a call reads.
     access_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
     access_key_version: Mapped[int | None] = mapped_column(Integer)
+    # Which Claude account the credential is for, as the token endpoint reported it at
+    # sign-in. Null when not reported (a pasted saved login carries neither).
+    claude_email: Mapped[str | None] = mapped_column(Text)
+    claude_organization: Mapped[str | None] = mapped_column(Text)
     # User or API token that added it; no FK because it can be either.
     added_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 

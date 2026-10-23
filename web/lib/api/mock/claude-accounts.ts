@@ -5,7 +5,8 @@
  * with a job on it (personal), an old reading (work, marked ~), one never measured (spare,
  * em dashes) and one whose sign-in expired (old-laptop). Reads are open to every role;
  * changes need the owner role, as in the API. Sign-in: the code "bad-code" is refused,
- * anything else is accepted. A pasted login must carry a refresh token.
+ * anything else is accepted, as the Claude account <label>@example.com of "Example Studio"
+ * (#405). A pasted login must carry a refresh token, and reports no Claude account.
  *
  * Whether an account (and the pool) takes calls is the API's rule (accounts.py choose and
  * eligibility): AVAILABLE, readable, and its binding window at least 15% clear, an old
@@ -57,6 +58,8 @@ function seed(scenario: string | null): PoolDb {
     reason: "",
     unreadable_now: false,
     last_refresh_reason: "still_valid",
+    claude_email: null,
+    claude_organization: null,
   };
   const personal = "a1111111-0000-4000-8000-000000000001";
   if (scenario === POOL_SPENT_SCENARIO)
@@ -90,6 +93,8 @@ function seed(scenario: string | null): PoolDb {
         ...base,
         account_id: personal,
         label: "personal",
+        claude_email: "ada@example.com",
+        claude_organization: "Example Studio",
         state: "AVAILABLE",
         assigned: 1,
         windows: {
@@ -283,7 +288,10 @@ function newState(): string {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function register(db: PoolDb, label: string): Account {
+/** Who a sign-in was for, as Claude reports it; null for a pasted login. */
+type Identity = { email: string; organization: string } | null;
+
+function register(db: PoolDb, label: string, who: Identity): Account {
   let row = db.accounts.find((a) => a.label === label);
   if (!row) {
     row = {
@@ -300,9 +308,14 @@ function register(db: PoolDb, label: string): Account {
       token_expires_at: at(8 * HOUR),
       last_refresh_reason: null,
       last_assigned_at: null,
+      claude_email: null,
+      claude_organization: null,
     };
     db.accounts.push(row);
-  } else if (row.state === "REAUTH_REQUIRED") {
+  }
+  // A new pair may be a different Claude account: its name is replaced, null included.
+  Object.assign(row, { claude_email: who?.email ?? null, claude_organization: who?.organization ?? null });
+  if (row.state === "REAUTH_REQUIRED") {
     Object.assign(row, { state: "AVAILABLE", reason: "", token_expires_at: at(8 * HOUR) });
   }
   return out(row);
@@ -345,7 +358,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
     }
     const inner = (parsed.claudeAiOauth ?? parsed) as Record<string, unknown>;
     if (!inner.refreshToken && !inner.refresh_token) return json(422, { detail: "the credential has no refresh token" });
-    return json(201, { account: register(db, label), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" });
+    return json(201, { account: register(db, label, null), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" });
   }
   if (p[2] === "authorize" && m === "POST") {
     const { label } = await body<Schemas["AuthorizeIn"]>();
@@ -370,7 +383,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
       return json(422, { detail: "the sign-in code was not accepted. Codes are single-use and expire quickly. Try Add account once more." });
     }
     db.pending = db.pending.filter((x) => x.state !== state);
-    return json(201, { account: register(db, pending.label), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" });
+    return json(201, { account: register(db, pending.label, { email: `${pending.label}@example.com`, organization: "Example Studio" }), expires_at: at(8 * HOUR), note: "stored encrypted and write-only" });
   }
   if (p[2] === "fallback") {
     if (m === "PUT") {

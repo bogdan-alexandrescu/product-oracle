@@ -428,8 +428,15 @@ async def get_run_artifact(
             "a send-back kept. Older attempts are not kept (404)."
         ),
     ] = None,
+    agents: Annotated[
+        bool,
+        Query(
+            description="The file as the agents wrote it, before an approver's edits were "
+            "applied at its checkpoint (404 when none were)."
+        ),
+    ] = False,
 ) -> PlainTextResponse:
-    content = await _call(service.read_artifact(db, run_id, seq, name, attempt))
+    content = await _call(service.read_artifact(db, run_id, seq, name, attempt, agents))
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 

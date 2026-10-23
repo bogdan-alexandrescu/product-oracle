@@ -149,6 +149,9 @@ const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
   approver_role: "approver",
 };
 
+/** E1: the draft-items flow (the generated Flow literal gains it when the schema is regenerated). */
+export const DRAFT_ITEMS_FLOW: Schemas["FlowOut"]["key"] = "prd_draft_items";
+
 export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   flows: [
     {
@@ -197,6 +200,22 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       segments: [
         { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
         { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
+      ],
+    },
+    {
+      // E1: every PRD draft's items-only roadmap; started by Oracle's ticker (or Derive on the
+      // Roadmap tab), never from the New run dialog. Writes no document; no checkpoint waits.
+      key: DRAFT_ITEMS_FLOW,
+      title: "Roadmap items for a PRD draft",
+      description: "Roadmap items (horizon, milestone, dependencies, priority) proposed from one PRD draft; shown on that version's Roadmap tab.",
+      requires_document: false,
+      target_kind: null,
+      source_kind: "prd",
+      in_new_run_dialog: false,
+      starts_from: null,
+      writes_document: false,
+      segments: [
+        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
       ],
     },
     {
@@ -501,7 +520,7 @@ function waivable(kind: string, code: string): boolean {
 }
 
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
-type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label">;
+type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"] };
 function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number } | null {
   if (cp.kind === "roadmap_items") {
     const check = (cp.payload?.items_check ?? null) as ItemsCheck | null;
@@ -518,15 +537,22 @@ function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number }
   return { reasons, files: problems.filter(fileLevel).length };
 }
 
-/** As oracle.runs.gate.approve_gate: the stored blocking reasons a staged waiver does not answer. */
-function gateOf(cp: CheckpointOut, actions: DraftActionRow[]): Schemas["Gate"] | null {
+/**
+ * As oracle.runs.gate.approve_gate: the stored blocking reasons a staged waiver does not
+ * answer. D7: with `edits`, the gate Approve with edits re-checks: in the mock a staged edit
+ * fixes the reasons it is a fix of (Remove date, Move to Later) and a drop the item's reasons.
+ * A console approval applies no edits, so its gate is read without them.
+ */
+function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
   const blocking = cp.status === "pending" ? blockingOf(cp) : null;
   if (!blocking) return null;
   const waives = (x: GateReason) =>
     waivable(cp.kind, x.code) &&
     actions.some((a) => a.state === "staged" && a.kind === "waive" && a.item_key === x.item && (!a.answers?.length || a.answers.includes(x.code)));
+  const applied = edits ? editsOf(cp, actions) : [];
+  const fixed = (x: GateReason) => applied.some((a) => (a.kind === "drop" && a.item_key === x.item) || (x.fixes ?? []).some((f) => isFix(a, f)));
   const left = blocking.reasons
-    .filter((x) => x.severity === "blocking" && !waives(x))
+    .filter((x) => x.severity === "blocking" && !waives(x) && !fixed(x))
     .map((x) => ({ item: x.item, item_title: x.item_title ?? null, code: x.code, label: x.label, waivable: waivable(cp.kind, x.code) }));
   const files = blocking.files;
   return { open: left.length === 0 && files === 0, blocking_open: left.length, file_problems: files, left };
@@ -538,11 +564,131 @@ export function cannotApproveNow(db: RunsDb | undefined, cp: CheckpointOut): str
   return cannotApprove(cp) ?? (gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null);
 }
 
-/** The checkpoint with its gate, and Approve refused while the gate is closed (D3). */
+/**
+ * The checkpoint with its gate, and Approve refused while the gate is closed (D3); D7: the
+ * Approve button's words and the staged actions only the agents can carry out.
+ */
 function gated(ctx: RunsContext, cp: CheckpointOut): CheckpointOut {
-  const gate = gateOf(cp, ctx.db.drafts?.[cp.id]?.actions ?? []);
+  const actions = ctx.db.drafts?.[cp.id]?.actions ?? [];
+  const gate = gateOf(cp, actions);
   const closed = gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null;
-  return { ...cp, gate, cannot_approve: cp.cannot_approve ?? closed };
+  return { ...cp, gate, cannot_approve: cp.cannot_approve ?? closed, approve_label: approveLabel(editsOf(cp, actions).length), needs_agents: needsAgentsOf(cp, actions) };
+}
+
+// ---------------------------------------------------------------- D7 approve with edits
+
+/** Staged actions Oracle applies to the file on Approve (they count in "Approve with {n} edits"). */
+const APPLIED_KINDS = ["edit", "drop", "restore"];
+/** Staged actions only the agents carry out: Approve waits until they are sent back or removed. */
+const AGENT_KINDS = ["split", "merge", "question"];
+
+/** The staged edits Oracle applies at a pending Roadmap items checkpoint. */
+function editsOf(cp: CheckpointOut, actions: DraftActionRow[]): DraftActionRow[] {
+  if (cp.kind !== "roadmap_items" || cp.status !== "pending") return [];
+  return actions.filter((a) => a.state === "staged" && APPLIED_KINDS.includes(a.kind));
+}
+
+/** As CheckpointOut.needs_agents: staged split, merge or (unanswered) question actions. */
+function needsAgentsOf(cp: CheckpointOut, actions: DraftActionRow[]): Schemas["NeedsAgents"][] {
+  if (cp.status !== "pending") return [];
+  return actions.filter((a) => a.state === "staged" && AGENT_KINDS.includes(a.kind)).map((a) => ({ action_id: a.id, item: a.item_key, kind: a.kind }));
+}
+
+const approveLabel = (n: number) => (n === 0 ? "Approve" : `Approve with ${n} edit${n === 1 ? "" : "s"}`);
+
+const needsAgentsMessage = (list: Schemas["NeedsAgents"][]) =>
+  list.map((x) => `${x.kind.charAt(0).toUpperCase()}${x.kind.slice(1)} on ${x.item} needs the agents: send back, or remove it to approve.`).join(" ");
+
+const ITEM_LINE = (id: string) => new RegExp(`^\\s*- \\{?id: ${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[,}\\s]`);
+const itemIds = (lines: string[]) => lines.map((l) => /^\s*- \{?id: ([\w-]+)/.exec(l)?.[1]).filter((x): x is string => !!x);
+const dependsOf = (line: string) => (/depends_on: \[([^\]]*)\]/.exec(line)?.[1] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+const withDepends = (line: string, ids: string[]) => line.replace(/depends_on: \[[^\]]*\]/, `depends_on: [${ids.join(", ")}]`);
+
+/**
+ * As oracle.runs.apply_edits.apply, over the mock's file of one flow-style item per line: the
+ * staged edits in a fixed order (changes, restores, then drops), with the applied entries and
+ * what the result leaves wrong (a dependency on an item not in the file).
+ */
+function applyEdits(text: string, edits: DraftActionRow[], reasons: ItemReason[]): { text: string; applied: Record<string, unknown>[]; problems: string[] } {
+  const lines = text.split("\n");
+  const at = (id: string) => lines.findIndex((l) => ITEM_LINE(id).test(l));
+  const applied: Record<string, unknown>[] = [];
+  const rank = (a: DraftActionRow) => ["edit", "restore", "drop"].indexOf(a.kind);
+  for (const a of [...edits].sort((x, y) => rank(x) - rank(y))) {
+    const id = a.item_key;
+    const i = at(id);
+    if (a.kind === "drop") {
+      if (i < 0) continue;
+      lines.splice(i, 1);
+      for (let j = 0; j < lines.length; j++) if (dependsOf(lines[j]).includes(id)) lines[j] = withDepends(lines[j], dependsOf(lines[j]).filter((x) => x !== id));
+      applied.push({ id, action: "drop", text: `${id} dropped` });
+      continue;
+    }
+    if (a.kind === "restore") {
+      if (i >= 0) continue;
+      const title = reasons.find((x) => x.item === id)?.item_title ?? id;
+      const end = lines.length && lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
+      lines.splice(end, 0, `  - {id: ${id}, title: ${title}}`);
+      applied.push({ id, action: "restore", text: `${id} restored from the comparison base` });
+      continue;
+    }
+    if (i < 0) continue;
+    const field = a.field ?? "";
+    let line = lines[i];
+    let said: string;
+    if (field === "milestone_date") {
+      line = line.replace(/, date: [^,}]+/, "").replace(/, date_source: [^,}]+/, "");
+      said = `${id} milestone date removed`;
+    } else if (field === "depends_on") {
+      const v = (a.value ?? {}) as { add?: string[]; remove?: string[] };
+      const had = dependsOf(line);
+      const now = [...had.filter((x) => !(v.remove ?? []).includes(x)), ...(v.add ?? []).filter((x) => !had.includes(x))];
+      line = /depends_on: \[/.test(line) ? withDepends(line, now) : line.replace(/\}\s*$/, `, depends_on: [${now.join(", ")}]}`);
+      said = `${id} depends_on [${had.join(", ")}] → [${now.join(", ")}]`;
+    } else if (field.startsWith("clear:")) {
+      line = line.replace(new RegExp(`, ${field.slice(6)}: (\\{[^}]*\\}|\\[[^\\]]*\\]|[^,}]+)`), "");
+      said = `${id} ${field.slice(6).replace("_", " ")} cleared`;
+    } else {
+      const value = String(a.value ?? "");
+      const was = new RegExp(`\\b${field}: ([^,}]+)`).exec(line)?.[1] ?? null;
+      line = was != null ? line.replace(new RegExp(`\\b${field}: [^,}]+`), `${field}: ${value}`) : line.replace(/\}\s*$/, `, ${field}: ${value}}`);
+      said = `${id} ${field.replace("_", " ")} ${was ?? "none"} → ${value}`;
+    }
+    lines[i] = line;
+    applied.push({ id, action: "change", field, value: a.value ?? null, text: said });
+  }
+  const known = itemIds(lines);
+  const problems = lines.flatMap((l) => {
+    const id = /^\s*- \{?id: ([\w-]+)/.exec(l)?.[1];
+    return id ? dependsOf(l).filter((d) => !known.includes(d)).map((d) => `${id} depends on ${d}, which is not in the file`) : [];
+  });
+  return { text: lines.join("\n"), applied, problems };
+}
+
+/** As decide_checkpoint's re-check: the items check of the edited file (fixed reasons gone). */
+function recheck(check: ItemsCheck, text: string, edits: DraftActionRow[]): ItemsCheck {
+  const ids = itemIds(text.split("\n"));
+  const dropped = edits.filter((a) => a.kind === "drop").map((a) => a.item_key);
+  const fixed = (x: ItemReason) => dropped.includes(x.item) || x.fixes.some((f) => edits.some((a) => isFix(a, f)));
+  const reasons = check.reasons.filter((x) => !fixed(x));
+  const gone = check.reasons.filter(fixed);
+  const problems = check.problems.filter((p) => !p.item || (!dropped.includes(p.item) && !gone.some((x) => x.item === p.item && x.code === p.code)));
+  const by_horizon: Record<string, number> = { now: 0, next: 0, later: 0 };
+  for (const l of text.split("\n")) {
+    const h = /^\s*- \{?id: .*\bhorizon: (\w+)/.exec(l)?.[1];
+    if (h) by_horizon[h] = (by_horizon[h] ?? 0) + 1;
+  }
+  return withReasons({ items: ids.length, by_horizon: by_horizon as ItemsCheck["by_horizon"], problems }, reasons, check.base);
+}
+
+/** A staged action is this reason's fix: the same item, kind, field and value. */
+function isFix(a: DraftActionRow, f: ItemReason["fixes"][number]): boolean {
+  return (
+    f.action.kind === a.kind &&
+    f.action.item === a.item_key &&
+    (f.action.field ?? null) === (a.field ?? null) &&
+    JSON.stringify(f.action.value ?? null) === JSON.stringify(a.value ?? null)
+  );
 }
 
 /** The decided review of a finished run's segment whose draft was refused (owners retry it). */
@@ -946,6 +1092,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     created_at: ctx.now(),
     can_decide: on,
     cannot_approve: null,
+    approve_label: "Approve",
+    needs_agents: [],
   };
   r.checkpoints.push(cp);
   if (snapshot) snapshot.checkpoint_id = cp.id;
@@ -990,6 +1138,8 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
   }
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
+    // E1: a draft's items run is finished by the draft roadmap's own tick (./draft-roadmap.ts).
+    if (r.flow === DRAFT_ITEMS_FLOW) continue;
     out.runs_checked += 1;
     if (ctx.slowAgents && agentsWorking(ctx, r)) continue;
     const done = finishRunning(ctx, r);
@@ -1058,7 +1208,7 @@ function launch(ctx: RunsContext, r: RunOut) {
     r.checkpoints.push({
       id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
       segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
-      created_at: ctx.now(), can_decide: false, cannot_approve: null,
+      created_at: ctx.now(), can_decide: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
     });
     submit(ctx, r, r.segments[1]);
     return;
@@ -1154,6 +1304,11 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // Launch rows (H6) are added by the server (./launches.ts); date rows (F3) too.
     launches: [],
     dates: [],
+    // Track rows (F2) are added by the server (./roadmap.ts).
+    tracks: [],
+    // Ritual rows (H2): the mock has no rituals yet (the UI lane adds them); outcome rows (H3) are added by ./quality.ts.
+    rituals: [],
+    outcomes: [],
     checkpoints,
     deliveries,
     approvals,
@@ -1487,7 +1642,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "checkpoints" && p[5] === "review.yaml" && m === "GET") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
-    if (cp.status === "pending" || !cp.review) return fail(404, "no review was sent back at this checkpoint");
+    if (cp.status === "pending" || !cp.review || cp.review.kind === "edits") return fail(404, "no review was sent back at this checkpoint");
     return new Response(renderReview(cp.review, cp.decided_at), { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
   }
   if (action === "checkpoints" && p[4] && p[5] !== "decide") {
@@ -1513,13 +1668,33 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (expected_revision != null && expected_revision !== draft.revision) return json(409, { detail: reviewChanged(draft, expected_revision) });
     const blocked = cannotApprove(cp);
     if (decision === "approved" && blocked) return fail(409, blocked);
+    // D7: split, merge and open questions need the agents; Approve waits until they are removed.
+    const agents = decision === "approved" ? needsAgentsOf(cp, draft.actions) : [];
+    if (agents.length) return json(409, { detail: { code: "needs_agents", message: needsAgentsMessage(agents), actions: agents.map((x) => x.action_id) } });
+    const edits = decision === "approved" ? editsOf(cp, draft.actions) : [];
     // W5: confirming a console approval decides it as an approval (the console's MERGE).
     const confirming = decision === "confirm" && cp.console?.needs === "confirm" && cp.console.verdict === "MERGE";
     if (decision === "confirm" && !confirming) return fail(422, "nothing recorded in SwarmCloud's console waits to be confirmed here");
-    const gate = gateOf(cp, draft.actions);
+    // W5: a console approval applies no staged edits, so its gate reads none.
+    const gate = gateOf(cp, draft.actions, !confirming);
     if ((decision === "approved" || confirming) && gate && !gate.open) {
-      const message = gateMessage(gate.blocking_open + gate.file_problems);
-      return json(409, { detail: { code: "blocking_open", message, left: gate.left } });
+      const n = gate.blocking_open + gate.file_problems;
+      if (edits.length) {
+        // D7: re-checked after the edits; nothing changes (the edits stay staged).
+        const what = gate.left.map((x) => `${x.item_title ?? x.item}: ${x.label}`).join("; ");
+        const message = `After the edits, ${n} blocking problem${n === 1 ? " is" : "s are"} left${what ? `: ${what}` : ""}`;
+        return json(409, { detail: { code: "edits_leave_problems", message, left: gate.left } });
+      }
+      return json(409, { detail: { code: "blocking_open", message: gateMessage(n), left: gate.left } });
+    }
+    const fileKey = `${r.id}|${cp.segment_seq}|roadmap_items.yaml`;
+    const edited = edits.length
+      ? applyEdits(ctx.db.artifacts[fileKey] ?? "", edits, r.segments.find((x) => x.seq === cp.segment_seq)?.items_check?.reasons ?? [])
+      : null;
+    if (edited?.problems.length) {
+      const n = edited.problems.length;
+      const message = `After the edits, ${n} blocking problem${n === 1 ? " is" : "s are"} left: ${edited.problems.join("; ")}`;
+      return json(409, { detail: { code: "edits_leave_problems", message, left: [] } });
     }
     // D8: the note defaults to the shared draft's.
     const text = (note ?? draft.note)?.trim() || null;
@@ -1529,6 +1704,23 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = buildReview(ctx, r, cp, staged, text);
+    if (edited) {
+      // D7: the edited file replaces the agents' (kept for ?agents=1), and its check is re-run.
+      const role = ctx.userRole ?? "approver";
+      const attempt = (cp.payload?.attempt as number | undefined) ?? 1;
+      const header = [
+        `# roadmap_items.yaml, edited at the Roadmap items checkpoint on ${ctx.now().slice(0, 10)} by ${/^[aeiou]/.test(role) ? "an" : "a"} ${role}`,
+        `# (${displayName(ctx.userName ?? "admin@example.com")}): ${edits.length} edit${edits.length === 1 ? "" : "s"} applied by Oracle; no agent ran. The agents' attempt ${attempt} is kept.`,
+      ].join("\n");
+      ctx.db.artifacts[`${fileKey}|agents`] = ctx.db.artifacts[fileKey];
+      ctx.db.artifacts[fileKey] = `${header}\n${edited.text}`;
+      cp.review = { kind: "edits", file: "roadmap_items.yaml", applied: edited.applied, revision: 1, edits: edits.length };
+      const seg = r.segments.find((x) => x.seq === cp.segment_seq);
+      if (seg?.items_check) {
+        seg.items_check = recheck(seg.items_check, edited.text, edits);
+        cp.payload = { ...cp.payload, items_check: seg.items_check };
+      }
+    }
     if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
@@ -1571,6 +1763,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const raw = new URL(req.url).searchParams.get("attempt");
     const current = s?.attempts[s.attempts.length - 1]?.attempt;
     let key = `${r.id}|${p[4]}|${p[6]}`;
+    // D7: the agents' original of a file an approver's edits replaced.
+    const agents = ["1", "true"].includes(new URL(req.url).searchParams.get("agents") ?? "");
+    if (agents) {
+      const original = ctx.db.artifacts[`${key}|agents`];
+      if (original == null) return fail(404, `no edits were applied to '${p[6]}': the file served is the agents'`);
+      return new Response(original, { headers: { "content-type": "text/plain" } });
+    }
     if (raw != null && Number(raw) !== current) {
       if (Number(raw) !== s?.previous_attempt?.attempt) {
         return fail(404, `attempt ${raw} of segment ${p[4]} is not kept: only the current and the previous attempt are kept`);
@@ -1739,6 +1938,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   done.checkpoints.push({
     id: ctx.uuid(), run_id: done.id, kind: "prd_review", status: "skipped", approver_role: "approver", segment_seq: 1,
     decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, cannot_approve: null,
+    approve_label: "Approve", needs_agents: [],
   });
   Object.assign(done, { status: "succeeded", started_at: "2026-10-16T09:00:00Z", finished_at: "2026-10-16T09:20:00Z", overrun_ceiling_usd: 13.5 });
 
@@ -2240,6 +2440,8 @@ function roadmapReviewRun(): RunOut {
         created_at: "2026-10-20T09:04:00Z",
         can_decide: true,
         cannot_approve: null,
+        approve_label: "Approve",
+        needs_agents: [],
       },
     ],
     token_read_only: false,
@@ -2293,6 +2495,143 @@ function consoleHeldRun(): RunOut {
 export const CONSOLE_HELD_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: consoleHeldRun(),
   artifacts: { [`${CONSOLE_HELD_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
+};
+
+/** The seeded roadmap review run's attempt 2 (seedRoadmapAttempt2 in e2e/helpers.ts, D6). */
+export const ROADMAP_ATTEMPT2_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d6";
+
+// Attempt 2: the date removed, the dependency removed, the section linked (done); mobile-push
+// kept in Later (declined); sso-login kept although the agents said they dropped it; invoice-pdf's
+// outcome changed without being asked.
+const ATTEMPT2_NOTE = "Push waits for the mobile app release next quarter, so it stays in Later until the app ships to every owner";
+const REVIEW_ITEMS_2 = REVIEW_ITEMS.replace(
+  "items:\n",
+  `resolutions:
+  - {id: slack-alerts, action: change, status: done}
+  - {id: budget-caps, action: change, status: done}
+  - {id: usage-export, action: change, status: done}
+  - {id: mobile-push, action: change, status: declined, note: "${ATTEMPT2_NOTE}"}
+  - {id: sso-login, action: drop, status: done}
+items:\n`,
+)
+  .replace(", milestone: {name: Beta, date: 2026-11-30, date_source: a guess}", ", milestone: {name: Beta}")
+  .replace(", depends_on: [anomaly-detection]", "")
+  .replace("prd_section: export,", "prd_section: alerts-export,")
+  .replace("outcome: Finance downloads each invoice,", "outcome: Finance downloads every invoice as a PDF,");
+
+/**
+ * D6 "Per-item resolutions": the roadmap review run sent back with a five-entry review; attempt 2
+ * answered it with three changes done, one declined with its note, one claimed and not applied
+ * (blocking, so Approve stays disabled) and one unrequested change.
+ */
+function roadmapAttempt2Run(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d6")) as RunOut;
+  run.id = ROADMAP_ATTEMPT2_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-3";
+  const [items] = run.segments;
+  const first = items.attempts[0];
+  items.attempts = [
+    { ...first, note: null },
+    { ...first, attempt: 2, workflow_id: "mock-wf-roadmap-items-2", submitted_at: "2026-10-20T10:00:00Z", cost_usd: 3.1 },
+  ];
+  items.cost_usd = 8;
+  items.previous_attempt = { attempt: 1, artifacts: ["roadmap_items.yaml"] };
+  const before = items.items_check!;
+  const fixed = ["unverified_date", "horizon_breaks_dependency", "unknown_prd_section"];
+  const declined: ItemReason = {
+    item: "mobile-push",
+    item_title: "Mobile push",
+    code: "declined_change",
+    severity: "confirm",
+    label: "Change declined",
+    text: `Declined: ${ATTEMPT2_NOTE}`,
+    data: { action: "change", said: "declined", note: ATTEMPT2_NOTE },
+    fixes: [accept("mobile-push", "Accept decline"), fix("Apply it myself", "edit", "mobile-push", "horizon", "next")],
+  };
+  const notApplied: ItemReason = {
+    item: "sso-login",
+    item_title: "Single sign-on",
+    code: "change_not_applied",
+    severity: "blocking",
+    label: "Change not applied",
+    text: "The agents said done, but sso-login is still in the file.",
+    data: { action: "drop", said: "done", note: null },
+    fixes: [fix("Apply it myself", "drop", "sso-login"), fix("Waive…", "waive", "sso-login")],
+  };
+  const unrequested: ItemReason = {
+    item: "invoice-pdf",
+    item_title: "Invoice PDF",
+    code: "unrequested_change",
+    severity: "confirm",
+    label: "Unrequested change",
+    text: "Changed without being asked: outcome Finance downloads each invoice → Finance downloads every invoice as a PDF",
+    data: { field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" },
+    fixes: [accept("invoice-pdf"), fix("Revert", "edit", "invoice-pdf", "outcome", "Finance downloads each invoice")],
+  };
+  const kept = before.reasons.filter((r) => !fixed.includes(r.code));
+  const at = (item: string) => kept.findIndex((r) => r.item === item);
+  kept.splice(at("mobile-push") + 1, 0, declined);
+  kept.splice(at("sso-login"), 0, notApplied);
+  kept.splice(at("invoice-pdf") + 1, 0, unrequested);
+  const done = (id: string, field: string, requested: unknown, current: unknown) => ({
+    id,
+    action: "change",
+    outcome: "done" as const,
+    said: "done" as const,
+    note: null,
+    fields: [{ field, requested, applied: true, current }],
+  });
+  items.items_check = {
+    ...withReasons({ items: 9, by_horizon: before.by_horizon, problems: [] }, kept, before.base),
+    resolution: {
+      review_attempt: 1,
+      attempt: 2,
+      entries: [
+        done("slack-alerts", "milestone.date", null, null),
+        done("budget-caps", "depends_on", { remove: ["anomaly-detection"] }, []),
+        done("usage-export", "prd_section", "alerts-export", "alerts-export"),
+        { id: "mobile-push", action: "change", outcome: "declined", said: "declined", note: ATTEMPT2_NOTE, fields: [{ field: "horizon", requested: "next", applied: false, current: "later" }] },
+        { id: "sso-login", action: "drop", outcome: "not_applied", said: "done", note: null, fields: [] },
+      ],
+      counts: { done: 3, declined: 1, not_applied: 1, unrequested: 1 },
+      unrequested: [{ id: "invoice-pdf", field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" }],
+    },
+    diff: {
+      against_attempt: 1,
+      items: [
+        { id: "slack-alerts", changes: [{ field: "milestone.date", from: "2026-11-30", to: null }] },
+        { id: "budget-caps", changes: [{ field: "depends_on", from: ["anomaly-detection"], to: [] }] },
+        { id: "usage-export", changes: [{ field: "prd_section", from: "export", to: "alerts-export" }] },
+        { id: "invoice-pdf", changes: [{ field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" }] },
+      ],
+      added: [],
+      removed: [],
+    },
+  };
+  const [cp] = run.checkpoints;
+  const sent: CheckpointOut = {
+    ...cp,
+    id: "7a11c0de-0000-4000-8000-0000000d6c01",
+    status: "changes_requested",
+    decided_by: "mock-user",
+    decided_at: "2026-10-20T09:30:00Z",
+    payload: { ...cp.payload, wait: undefined },
+  };
+  cp.run_id = run.id;
+  cp.created_at = "2026-10-20T10:04:00Z";
+  cp.payload = { ...cp.payload, attempt: 2, items_check: items.items_check };
+  run.checkpoints = [sent, cp];
+  refresh(run);
+  return run;
+}
+
+/** The attempt-2 run and both attempts' files, as e2e/helpers.ts seedRoadmapAttempt2 adds them. */
+export const ROADMAP_REVIEW_RUN_ATTEMPT2: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapAttempt2Run(),
+  artifacts: {
+    [`${ROADMAP_ATTEMPT2_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS_2,
+    [`${ROADMAP_ATTEMPT2_RUN_ID}|1|roadmap_items.yaml|1`]: REVIEW_ITEMS,
+  },
 };
 
 /** The roadmap review run and its file, as e2e/helpers.ts seedRoadmapReview adds them to the mock's data. */
@@ -2462,6 +2801,9 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
       reasons: theirs,
       actions: mine.map((a) => ({ ...a, created_by: person(a.created_by), updated_by: person(a.updated_by), question: null })),
       state,
+      // D6: the item's answer to the review and its changes since the previous attempt.
+      resolution: check?.resolution?.entries.find((e) => e.id === key) ?? null,
+      diff: check?.diff?.items.find((d) => d.id === key)?.changes ?? [],
     };
   });
   const pending = cp.status === "pending";
@@ -2481,12 +2823,13 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     tally,
     note: draft.note,
     sent_review: pending ? null : (cp.review ?? null),
-    sent_review_yaml: !pending && cp.review ? renderReview(cp.review, cp.decided_at) : null,
+    sent_review_yaml: !pending && cp.review && cp.review.kind !== "edits" ? renderReview(cp.review, cp.decided_at) : null,
     can_read: true,
     can_suggest: pending && atLeast(role, "commenter"),
     can_stage: stages,
     can_decide: stages,
     gate: gateOf(cp, draft.actions),
+    diff: check?.diff ?? null,
   };
 }
 
@@ -2651,4 +2994,88 @@ function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["
     sections: null,
     console_held: cp.console?.needs === "confirm" && (t.blocking_open ?? 0) > 0,
   };
+}
+
+// ---------------------------------------------------------------- E1 draft roadmap items
+
+/**
+ * E1: the run Oracle's ticker starts for a PRD draft's items (./draft-roadmap.ts): flow
+ * prd_draft_items on that version at standard depth, its roadmap_items checkpoint off,
+ * created by whoever imported the version (or clicked Derive), running at once.
+ */
+export function startDraftItemsRun(
+  db: RunsDb,
+  args: { uuid: () => string; now: string; createdBy: string; source: VersionSource; depth?: "quick" | "standard" | "deep" },
+): RunOut {
+  const flow = flowOf(DRAFT_ITEMS_FLOW);
+  const knobs = resolveKnobs(DRAFT_ITEMS_FLOW, { depth: args.depth ?? "standard", checkpoints: { roadmap_items: false } }) as RunOut["knobs"];
+  const segments = segmentsFor(DRAFT_ITEMS_FLOW, knobs, args.uuid);
+  for (const s of segments) s.estimate_usd = segEstimate(s.roles, knobs.depth);
+  const [items] = segments;
+  Object.assign(items, {
+    status: "running",
+    started_at: args.now,
+    workflow_id: `mock-wf-${args.uuid().slice(0, 8)}`,
+    attempts: [{ attempt: 1, workflow_id: "mock-wf-draft-items", submitted_at: args.now, cost_usd: 0, note: null, note_by: null, state: "running" }],
+  });
+  const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
+  const run: RunOut = {
+    id: args.uuid(),
+    flow: DRAFT_ITEMS_FLOW,
+    flow_title: flow.title,
+    status: "running",
+    document_id: null,
+    document_slug: null,
+    document_kind: null,
+    source: args.source,
+    template: null,
+    theme: null,
+    estimate_usd: estimate,
+    spent_usd: 0,
+    created_by: args.createdBy,
+    created_at: args.now,
+    started_at: args.now,
+    finished_at: null,
+    waiting_on: null,
+    error: null,
+    can_retry: false,
+    can_stop_cancelling: false,
+    can_retry_lookup: false,
+    cancel_again: [],
+    can_dismiss_overrun: false,
+    can_retry_import: false,
+    knobs,
+    snapshot_id: args.uuid(),
+    snapshot_as_of: args.now,
+    approved_by: null,
+    approved_at: null,
+    needs_approval: false,
+    overrun_ceiling_usd: round2(estimate * FACTOR),
+    runtime: "fake",
+    notes: FLOW_CATALOG.runtime_notes,
+    segments,
+    checkpoints: [],
+    token_read_only: false,
+    open_proposals: 0,
+  };
+  refresh(run);
+  db.runs.push(run);
+  return run;
+}
+
+/** E1: the agents finish a draft's items run (90% of its estimate); its checkpoint is recorded skipped. */
+export function finishDraftItemsRun(db: RunsDb, runId: string | null, args: { uuid: () => string; now: string }) {
+  const run = db.runs.find((r) => r.id === runId);
+  if (!run || run.status !== "running") return;
+  const [s] = run.segments;
+  const a = s.attempts[s.attempts.length - 1];
+  if (a) Object.assign(a, { cost_usd: round2((s.estimate_usd ?? 0) * 0.9), state: "succeeded" });
+  Object.assign(s, { status: "succeeded", cost_usd: round2((s.estimate_usd ?? 0) * 0.9), artifacts: ["roadmap_items.yaml"], finished_at: args.now });
+  run.checkpoints.push({
+    id: args.uuid(), run_id: run.id, kind: "roadmap_items", status: "skipped", approver_role: "approver",
+    segment_seq: s.seq, decided_by: null, decided_at: args.now, note: "No checkpoint: draft items are reviewed on the Roadmap tab", payload: {},
+    created_at: args.now, can_decide: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
+  });
+  Object.assign(run, { status: "succeeded", finished_at: args.now });
+  refresh(run);
 }

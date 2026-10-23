@@ -6,16 +6,19 @@ import { useId, useState } from "react";
 import { Button, InfoTip, Sheet } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { todayIn, useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
 import { DOC, type DocKind, type DocRef } from "./lib";
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-/** A strategy covers from the first of next month to the end of next year by default. */
-function defaultSpan(): { from: string; to: string } {
-  const now = new Date();
-  return { from: iso(new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1))), to: `${now.getFullYear() + 1}-12-31` };
+/**
+ * A strategy covers from the first of next month to the end of next year by default,
+ * counted from `today` (YYYY-MM-DD) in the Company time zone (#401).
+ */
+function defaultSpan(today: string): { from: string; to: string } {
+  const [y, m] = today.split("-").map(Number);
+  const from = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  return { from, to: `${y + 1}-12-31` };
 }
 
 /**
@@ -45,7 +48,8 @@ export function DraftSheet({
   const id = useId();
   const [changed, setChanged] = useState("");
   const [years, setYears] = useState("5");
-  const [span, setSpan] = useState(defaultSpan);
+  const zone = useCompanyZone();
+  const [span, setSpan] = useState(() => defaultSpan(todayIn(zone)));
   const [fromApproved, setFromApproved] = useState(approvedVersion != null);
   const [busy, setBusy] = useState<"oracle" | "empty" | null>(null);
   const [error, setError] = useState<string | null>(null);

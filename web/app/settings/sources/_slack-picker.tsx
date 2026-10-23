@@ -4,6 +4,7 @@ import { useId } from "react";
 
 import { Icon } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
+import { useCompanyZone } from "@/lib/dates";
 
 import { INPUT } from "../_components/fields";
 import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
@@ -15,7 +16,8 @@ export const MAX_CHANNELS = 100;
 
 /**
  * Slack source picker (S5): public channels and the private ones you are in, never DMs;
- * writes `{channels, since, until, labels}` (days, UTC; the same range shape as Fireflies;
+ * writes `{channels, since, until, timezone, labels}` (days in the Company time zone, which
+ * `timezone` names (#401); the same range shape as Fireflies;
  * `labels` names each picked channel, "#product", for the source's row). Only
  * messages from `since` through `until` are read; nothing posted after `until` is, thread
  * replies included (S5, owner 2026-10-20). Narrowing the range removes what falls outside
@@ -25,6 +27,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
   const sinceId = useId();
   const untilId = useId();
   const hintId = useId();
+  const zone = useCompanyZone();
   const since = typeof config.since === "string" ? config.since : "";
   const until = typeof config.until === "string" ? config.until : "";
   const backwards = since !== "" && until !== "" && until < since;
@@ -84,7 +87,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
                 value={since}
                 max={until || undefined}
                 aria-describedby={hintId}
-                onChange={(e) => onChange({ ...config, since: e.target.value || undefined })}
+                onChange={(e) => onChange({ ...config, since: e.target.value || undefined, timezone: zone })}
                 className={INPUT}
               />
             </span>
@@ -99,7 +102,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
                 min={since || undefined}
                 aria-invalid={backwards || undefined}
                 aria-describedby={hintId}
-                onChange={(e) => onChange({ ...config, until: e.target.value || undefined })}
+                onChange={(e) => onChange({ ...config, until: e.target.value || undefined, timezone: zone })}
                 className={`${INPUT} aria-invalid:border-crit`}
               />
             </span>
@@ -110,7 +113,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
             </p>
           ) : (
             <p id={hintId} className="text-[13px] leading-5 text-text2">
-              Optional, in UTC. Nothing posted after Until is read, thread replies included. Narrowing the
+              Optional, whole days in the Company time zone ({zone}). Nothing posted after Until is read, thread replies included. Narrowing the
               range removes messages outside it when you save.
             </p>
           )}

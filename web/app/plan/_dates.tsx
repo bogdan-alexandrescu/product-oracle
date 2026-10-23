@@ -12,6 +12,7 @@ import {
   useDateRights,
   verifyBasis,
 } from "@/components/DateBasisDialog";
+import { useCompanyZone } from "@/lib/dates";
 import { Button, Chip, DataTable, FilterChips, Notice, Page, PageHeader, type ChipKind, type Column } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { api, unwrap } from "@/lib/api/client";
@@ -36,6 +37,7 @@ export function DatesTab() {
   const bases = useQuery("schedule-bases", () => unwrap(api.GET("/v1/schedule-bases")));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const rights = useDateRights();
+  const zone = useCompanyZone();
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [picked, setPicked] = useState<Filter | null>(null);
   const [dialog, setDialog] = useState<{ kind: "record" } | { kind: "withdraw" | "reject"; basis: Basis } | null>(null);
@@ -78,13 +80,13 @@ export function DatesTab() {
           <span className="font-semibold">{b.reference}</span>
           {b.status === "withdrawn" && b.withdrawn_at && (
             <p data-testid="withdrawn-reason" className="text-sm text-text2">
-              Withdrawn by {who(b.withdrawn_by)}, {shortDay(b.withdrawn_at)}
+              Withdrawn by {who(b.withdrawn_by)}, {shortDay(b.withdrawn_at, zone)}
               {b.withdrawn_reason ? `: ${b.withdrawn_reason}` : ""}
             </p>
           )}
           {b.status === "rejected" && b.rejected_at && (
             <p className="text-sm text-text2">
-              Rejected by {who(b.rejected_by)}, {shortDay(b.rejected_at)}: {b.rejected_reason}
+              Rejected by {who(b.rejected_by)}, {shortDay(b.rejected_at, zone)}: {b.rejected_reason}
             </p>
           )}
         </div>
@@ -122,7 +124,7 @@ export function DatesTab() {
         b.status === "proposed"
           ? `Proposed by ${who(b.proposed_by)}`
           : b.verified_at
-            ? `Verified by ${who(b.verified_by)}, ${shortDay(b.verified_at)}`
+            ? `Verified by ${who(b.verified_by)}, ${shortDay(b.verified_at, zone)}`
             : `Proposed by ${who(b.proposed_by)}`,
     },
     {

@@ -85,9 +85,11 @@ async def test_import_v1_persists_document_sections_and_citations(client):
         problem = await s.scalar(select(Section).where(Section.section_key == "problem"))
         assert problem.citation_keys == ["c2", "c3"]
         assert problem.level == 2 and problem.ordinal == 3
-        event = await s.scalar(select(AuditEvent))
-        assert event.action == "document.version_imported"
-        assert event.data["number"] == 1
+        # E1 queues the draft's roadmap in the same import, so the import's own event is read.
+        event = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "document.version_imported")
+        )
+        assert event is not None and event.data["number"] == 1
 
 
 async def test_a_draft_citing_the_oracle_baseline_imports(client):

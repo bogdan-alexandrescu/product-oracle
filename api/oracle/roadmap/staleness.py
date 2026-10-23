@@ -114,7 +114,10 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
         ).all()
     )
     rows = await db.scalars(
-        select(RoadmapItem).where(RoadmapItem.prd_document_id == new.document_id)
+        select(RoadmapItem).where(
+            RoadmapItem.prd_document_id == new.document_id,
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
     )
     for item in rows:
         version_id, section_hash = anchor(item)
@@ -137,6 +140,7 @@ async def _by_section(db: AsyncSession, event: ChangeEvent, found: dict) -> None
         select(RoadmapItem).where(
             RoadmapItem.prd_document_id == event.document_id,
             RoadmapItem.prd_section_key == key,
+            RoadmapItem.roadmap_version_id.is_not(None),
         )
     )
     for item in rows:
@@ -158,7 +162,8 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
                 RoadmapItem.feature_id.in_(id_list),
                 RoadmapItem.requirement_ids.overlap(id_list),
                 RoadmapItem.blocker_ids.overlap(id_list),
-            )
+            ),
+            RoadmapItem.roadmap_version_id.is_not(None),
         )
     )
     for item in rows:
@@ -183,7 +188,8 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
                         )
                         for v, k in set(links)
                     )
-                )
+                ),
+                RoadmapItem.roadmap_version_id.is_not(None),
             )
         )
         for item in rows:

@@ -550,7 +550,15 @@ async def read_version(
         ],
         citations=await _citations_out(db, version, citations),
         date_marks=date_marks,
+        draft_roadmap=await _draft_roadmap(db, version) if kind == "prd" else None,
     )
+
+
+async def _draft_roadmap(db: AsyncSession, version: DocumentVersion):
+    """E1: a PRD version's derivation, for its Roadmap tab's label."""
+    from oracle.roadmap import draft_items
+
+    return await draft_items.summary(db, version)
 
 
 async def version_markdown(db: AsyncSession, version: DocumentVersion) -> tuple[str, list[dict]]:
@@ -1167,6 +1175,8 @@ async def import_draft(
         data={
             "number": version.number,
             "previous_version_id": str(previous.id) if previous else None,
+            # E1: a template's empty skeleton derives no roadmap items.
+            **({"template_only": True} if template_only else {}),
         },
     )
     await state.record_section_changes(

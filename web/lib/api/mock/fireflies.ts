@@ -7,11 +7,13 @@
  * does the series list from 2000-01-01, until its Retry-After wait is over. The series
  * list from 2001-01-01 stands for a window larger than the list reads: it answers
  * truncated, counted over the newest SERIES_CAP meetings, as the API does past its
- * 6-page cap.
+ * 6-page cap. From/to are days in the Company time zone, as the API reads them (#401).
  * Searching "all hands" finds 100 weekly all hands on no calendar, 9 pages, and every
  * page after the first answers slowly, so a test can act while Tick all loads them.
  */
 import type { Schemas } from "@/lib/api/client";
+
+import { mockSettingValue } from "./connections";
 
 type Meeting = Schemas["FirefliesMeetingOut"];
 
@@ -91,8 +93,10 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 }
 
+/** As the API (#401): from/to are whole days in the Company time zone. */
 function inRange(m: Meeting, q: URLSearchParams): boolean {
-  const day = m.date!.slice(0, 10);
+  const zone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(m.date!));
   const from = q.get("from");
   const to = q.get("to");
   return (!from || day >= from) && (!to || day <= to);

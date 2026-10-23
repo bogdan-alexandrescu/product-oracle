@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { CONSOLE_HELD_RUN, ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
+import { CONSOLE_HELD_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -237,6 +237,23 @@ export async function seedRoadmapReview(page: Page): Promise<string> {
     localStorage.setItem(key, JSON.stringify(db));
     return seed.run.id;
   }, ROADMAP_REVIEW_RUN);
+}
+
+/**
+ * Seeds the mock with the roadmap review run's attempt 2 (ROADMAP_REVIEW_RUN_ATTEMPT2, D6):
+ * sent back with a five-entry review, attempt 2 answered it with one decline, one change it
+ * claimed and did not make, and one change nobody asked for.
+ */
+export async function seedRoadmapAttempt2(page: Page): Promise<string> {
+  return page.evaluate((seed) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
+    db.runs.runs.push(seed.run);
+    Object.assign(db.runs.artifacts, seed.artifacts);
+    localStorage.setItem(key, JSON.stringify(db));
+    return seed.run.id;
+  }, ROADMAP_REVIEW_RUN_ATTEMPT2);
 }
 
 /**

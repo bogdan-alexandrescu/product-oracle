@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from oracle.baseline.goals import GoalCheck, goal_check
 
 EntityType = Literal[
     "goal",
@@ -96,6 +98,14 @@ class EntityOut(ORM):
     evidence_count: int = 0
     created_at: datetime
     updated_at: datetime
+    # B5: whether a goal is measurable, what it misses and its warnings; null otherwise.
+    goal_check: GoalCheck | None = None
+
+    @model_validator(mode="after")
+    def _check_goal(self) -> "EntityOut":
+        if self.type == "goal" and self.goal_check is None:
+            self.goal_check = GoalCheck(**goal_check(self.attrs, status=self.status))
+        return self
 
 
 class EdgeCreate(BaseModel):
@@ -519,3 +529,36 @@ class ReviewStatusOut(BaseModel):
     reason: Literal["too_old", "never_reviewed", "build_under_way"] | None = None
     # The baseline segment's estimate per depth: what Rebuild adds to a run.
     baseline_segment_usd: BaselineSegmentUsd
+
+
+# --- goals (B5) ----------------------------------------------------------------------------
+
+
+class MeasurementCreate(BaseModel):
+    value: float = Field(allow_inf_nan=False)
+    measured_on: date
+    note: str | None = Field(None, max_length=500)
+    evidence_id: uuid.UUID | None = None
+
+
+class MeasurementOut(ORM):
+    id: uuid.UUID
+    entity_id: uuid.UUID
+    value: float
+    measured_on: date
+    note: str | None = None
+    evidence_id: uuid.UUID | None = None
+    recorded_by: uuid.UUID | None = None
+    created_at: datetime
+
+
+class FilledText(BaseModel):
+    entity_id: uuid.UUID
+    field: str
+    text: str
+
+
+class FillFromTextResult(BaseModel):
+    applied: int
+    proposed: int
+    left_as_text: list[FilledText]

@@ -6,6 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { Button, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
 import { TEMPLATES, defaultPeriod, defaultTitle, templateOf, todayIso, type Period, type Update, type UpdateTemplate } from "./lib";
@@ -22,18 +23,19 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
   const [template, setTemplate] = useState<UpdateTemplate>("investor-update");
-  const [period, setPeriod] = useState<Period>(() => defaultPeriod(updates, "investor-update"));
+  // The period's days are days in the Company time zone (#401).
+  const today = todayIso(useCompanyZone());
+  const [period, setPeriod] = useState<Period>(() => defaultPeriod(updates, "investor-update", today));
   // The title follows the template and period until the owner writes their own.
   const [customTitle, setCustomTitle] = useState<string | null>(null);
   const title = customTitle ?? defaultTitle(template, period);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = templateOf(template)!;
-  const today = todayIso();
 
   function pick(t: UpdateTemplate) {
     setTemplate(t);
-    setPeriod(defaultPeriod(updates, t));
+    setPeriod(defaultPeriod(updates, t, today));
   }
 
   async function submit(e: FormEvent) {

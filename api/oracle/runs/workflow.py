@@ -150,7 +150,10 @@ def revise_note(round_: int) -> str:
         f"The reviewer's verdict is in review{round_}.json, staged in your workspace "
         '({"verdict": "MERGE" | "NOT_YET", "findings": [...]}). If it is NOT_YET, address '
         "every finding in a new version of the files; if it is MERGE, write the files "
-        "unchanged."
+        "unchanged. When the findings are a structured review (their first line names "
+        "get_checkpoint_review): at the top of the file it reviews, write `resolutions:` with "
+        "one entry per review entry: `{id, action, status: done | declined, note}`. Declining "
+        "is allowed with a reason in `note`."
     )
 
 

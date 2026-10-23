@@ -118,6 +118,7 @@ fails and owners see "Couldn't import" in the Inbox with Retry.
 import asyncio
 import contextvars
 import copy
+import hashlib
 import logging
 import time
 import uuid
@@ -136,6 +137,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline import yaml_io
+from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
@@ -166,6 +168,7 @@ from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
 from oracle.roadmap.views import items_version, version_items
 from oracle.runs import (
+    apply_edits,
     extensions,
     feature_set,
     flows,
@@ -176,6 +179,7 @@ from oracle.runs import (
     roadmap,
     workflow,
 )
+from oracle.runs import resolutions as answers
 from oracle.runs.batch import batched, once
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
@@ -204,6 +208,7 @@ from oracle.runs.schemas import (
     ItemsCheck,
     KnobsIn,
     KnobsOut,
+    NeedsAgents,
     PrdScopeOut,
     PreviousAttempt,
     RunCreate,
@@ -246,6 +251,7 @@ from oracle.templates.models import Template, TemplateVersion, Theme
 from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
 from oracle.tenant_settings_api import company_horizons
+from oracle.v2.models import StakeholderQuestion
 
 if TYPE_CHECKING:
     from oracle.members.models import MemberFollowUp
@@ -287,6 +293,8 @@ ORACLE_KNOBS = (
     "reuse_baseline",
     # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
     "target_goals",
+    # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
+    "draft_roadmap_id",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -796,17 +804,18 @@ def _checkpoint_out(
     flow: str,
     leads: frozenset[uuid.UUID],
     staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
+    open_questions: set[uuid.UUID] | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
     ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
-    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate)."""
+    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate);
+    ``open_questions``: :func:`_open_questions` of those (D7: what needs the agents)."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
-    shut = (
-        gate.approve_gate(cp, None, (staged or {}).get(cp.id, []))
-        if cp.status == "pending"
-        else None
-    )
+    mine = (staged or {}).get(cp.id, []) if cp.status == "pending" else []
+    shut = gate.approve_gate(cp, None, mine) if cp.status == "pending" else None
+    edits = cp.kind in apply_edits.FILES
+    blocked = apply_edits.needs_agents(mine, open_questions or set()) if edits else []
     return CheckpointOut(
         id=cp.id,
         run_id=cp.run_id,
@@ -830,6 +839,25 @@ def _checkpoint_out(
         or (gate.message(shut) if shut is not None and not shut.open else None),
         gate=shut,
         delivery=delivery,
+        approve_label=apply_edits.label(apply_edits.edit_count(mine) if edits else 0),
+        needs_agents=[NeedsAgents(action_id=a.id, item=a.item_key, kind=a.kind) for a in blocked],
+    )
+
+
+async def _open_questions(
+    db: AsyncSession, staged: dict[uuid.UUID, list[CheckpointAction]]
+) -> set[uuid.UUID]:
+    """The questions of staged question actions still asked (D7: they need the agents)."""
+    ids = {a.question_id for xs in staged.values() for a in xs if a.question_id is not None}
+    if not ids:
+        return set()
+    return set(
+        await db.scalars(
+            select(StakeholderQuestion.id).where(
+                StakeholderQuestion.id.in_(ids),
+                StakeholderQuestion.status.in_(apply_edits.OPEN_QUESTIONS),
+            )
+        )
     )
 
 
@@ -1035,6 +1063,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
+    asked = await _open_questions(db, staged)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -1073,7 +1102,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
-            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads, staged=staged)
+            _checkpoint_out(
+                c, principal, names, flow=run.flow, leads=leads, staged=staged, open_questions=asked
+            )
             for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
@@ -1424,16 +1455,29 @@ async def read_scope(db: AsyncSession, run_id: uuid.UUID) -> PrdScopeOut:
 
 
 async def read_artifact(
-    db: AsyncSession, run_id: uuid.UUID, seq: int, name: str, attempt: int | None = None
+    db: AsyncSession,
+    run_id: uuid.UUID,
+    seq: int,
+    name: str,
+    attempt: int | None = None,
+    agents: bool = False,
 ) -> str:
     """A segment's file; with ``attempt``, that attempt's: the current one, or the previous
-    one a send-back kept (D5). Older attempts are not kept."""
+    one a send-back kept (D5). Older attempts are not kept. ``agents``: the file as the
+    agents wrote it, before an approver's edits were applied (D7; 404 when none were)."""
     await _get_run(db, run_id)
     segment = await db.scalar(
         select(RunSegment).where(RunSegment.run_id == run_id, RunSegment.seq == seq)
     )
     art = (segment.artifacts or {}) if segment else {}
     files = art.get("files") or {}
+    if agents:
+        revisions = art.get("revisions") or []
+        last = str(revisions[-1].get("attempt")) if revisions else None
+        kept = (art.get("agent_files") or {}).get(last) or {} if last else {}
+        if name not in kept:
+            raise NotFound(f"no edits were applied to {name!r}: the agents' file is current")
+        return kept[name]
     if attempt is not None:
         previous = art.get("previous") or {}
         attempts = art.get("attempts") or []
@@ -1510,11 +1554,13 @@ async def _resolve_source(
             f"not a {name}"
         )
     stmt = select(DocumentVersion).where(DocumentVersion.document_id == document.id)
+    if number is None and not flow.source_approved:
+        raise Invalid(f"name the version of the {name} to read")
     if number is not None:
         version = await db.scalar(stmt.where(DocumentVersion.number == number))
         if version is None:
             raise Invalid(f"version {number} of '{document.slug}' not found")
-        if version.approved_at is None:
+        if version.approved_at is None and flow.source_approved:
             target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
             raise Invalid(
                 f"version {number} of '{document.slug}' is not approved: a {target} is built "
@@ -1644,6 +1690,12 @@ async def _resolve_inputs(
     if flow.target_kind not in TEMPLATED_KINDS and (inputs.template or inputs.theme):
         raise Invalid(f"the {flow.title} flow takes no template or theme")
     source = await _resolve_source(db, flow, inputs.source, inputs.source_version)
+    if flow.stores_draft_items:
+        # E1: the run's document is its source PRD; it writes no document of its own.
+        if inputs.document is not None:
+            raise Invalid(f"the {flow.title} flow writes no document")
+        assert source is not None
+        return source[0].id, {"source_version_id": str(source[1].id)}
     default_slug = None
     if source is not None and inputs.document is None:
         # "<prd>-roadmap": that roadmap's next version, or a new roadmap.
@@ -2364,13 +2416,21 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
             "key": e.key,
             "title": e.title,
             **{k: (e.attrs or {}).get(k) for k in ("metric", "target", "horizon")},
+            # B5: the typed target in words ("at least 45% (...), short horizon").
+            "target_words": target_words(e.attrs or {}),
         }
         for e in sorted(entities.values(), key=lambda e: e.key)
         if e.type == "goal" and e.status == "confirmed"
     ]
     bases = await schedule.verified_bases(db, version.document_id)
-    known_from, known = await _known_roadmap_items(db, run)
+    if _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        known_from, known = await draft_items.known_items(db, version)
+    else:
+        known_from, known = await _known_roadmap_items(db, run)
     return flows.SourceContext(
+        approved=version.approved_at is not None or not _flow(run).stores_draft_items,
         known_items=known,
         known_from=known_from,
         horizons=await _run_horizons(db, run),
@@ -3646,6 +3706,10 @@ async def _finish(
     await _detach(db, run, cancel=status != "succeeded", state=state, done=done)
     _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     await revoke_run_tokens(db, run.id)
+    if status in ("failed", "cancelled") and _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        await draft_items.run_ended(db, run, run.error or "Cancelled")
 
 
 async def _next(
@@ -4031,7 +4095,9 @@ async def _advance(
             # reads only, and the tick's transaction (the segment, the run's row lock)
             # stays usable.
             async with db.begin_nested():
-                items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+                items_check = await _check_items(
+                    db, run, art["files"].get(ITEMS_FILE), segment, number
+                )
         except safe_yaml.ParseBusy:
             raise  # no worker for it: this tick gives up, the next retries
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
@@ -4051,6 +4117,22 @@ async def _advance(
                 None,
             )
         art["items_check"] = items_check
+    draft_error: str | None = None
+    if flow.stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        try:
+            # In a savepoint, as the check: a failed store fails the run, never the tick.
+            async with db.begin_nested():
+                stored, draft_error = await draft_items.store(
+                    db, run, art["files"].get(ITEMS_FILE), items_check or {}
+                )
+        except safe_yaml.ParseBusy:
+            raise  # no worker for it: this tick gives up, the next retries
+        except Exception as exc:  # noqa: BLE001
+            log.exception("storing the draft items of run %s failed", run.id)
+            draft_error = f"the roadmap items could not be stored ({type(exc).__name__})"
+        art["draft_items"] = {"error": draft_error} if draft_error else {"stored": stored}
     fs_check: dict[str, Any] | None = None
     scope_id: uuid.UUID | None = None
     if feature_set.FILE in sdef.outputs:
@@ -4256,7 +4338,13 @@ async def _advance(
         if result is not None and result.get("error"):
             await _finish(db, run, "failed", result["error"])
             return True
-    if items_check is not None and items_check["problems"]:
+    if flow.stores_draft_items:
+        # E1: the items are stored with their problems; the review is on the Roadmap
+        # tab. The run fails only when nothing could be stored.
+        if draft_error:
+            await _finish(db, run, "failed", draft_error)
+            return True
+    elif items_check is not None and items_check["problems"]:
         problems = "; ".join(f"[{p['code']}] {p['message']}" for p in items_check["problems"][:5])
         await _finish(db, run, "failed", f"{ITEMS_FILE} was rejected: {problems}")
         return True
@@ -4612,9 +4700,16 @@ def _resume_error(run_id: uuid.UUID, segment: RunSegment, failed: dict[str, Any]
     )
 
 
-async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
+async def _check_items(
+    db: AsyncSession,
+    run: Run,
+    text: str | None,
+    segment: RunSegment | None = None,
+    attempt: int | None = None,
+) -> dict[str, Any]:
     """roadmap_items.yaml checked against the run's PRD version (oracle.runs.roadmap),
-    with every item's reasons (oracle.runs.reasons)."""
+    with every item's reasons (oracle.runs.reasons); after a send-back with a review (D6),
+    how this attempt answered it (``resolution``) and its diff (``diff``)."""
     if text is None:
         missing = {
             "items": 0,
@@ -4622,10 +4717,53 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
         return reasons.summarize(missing, [], None)
-    checked = await checked_items(db, run, text)
+    prior = await prior_review(db, run, segment, attempt) if segment is not None else None
+    checked = await checked_items(db, run, text, prior)
     return reasons.summarize(
-        checked.check.as_json(), checked.reasons, checked.base, checked.partial
+        checked.check.as_json(),
+        checked.reasons,
+        checked.base,
+        checked.partial,
+        checked.resolution,
+        checked.diff,
     )
+
+
+@dataclass(frozen=True)
+class PriorReview:
+    """D6: the review a send-back delivered (D4) and the attempt it reviewed (D5)."""
+
+    review: dict[str, Any]
+    attempt: int
+    text: str
+    # The attempt that answers it.
+    answered_by: int
+
+
+async def prior_review(
+    db: AsyncSession, run: Run, segment: RunSegment, attempt: int | None
+) -> PriorReview | None:
+    """The review the segment's ``attempt`` answers: the send-back of the previous attempt
+    (``artifacts["previous"]``, D5) whose checkpoint stored a review (D4); None for a first
+    attempt, a note-only send-back's kept file, or a kind with no item file."""
+    previous = (segment.artifacts or {}).get("previous")
+    if not isinstance(previous, dict):
+        return None
+    text = (previous.get("files") or {}).get(ITEMS_FILE)
+    number = previous.get("attempt")
+    if not isinstance(text, str) or not isinstance(number, int):
+        return None
+    if attempt is not None and attempt <= number:
+        return None
+    for cp in reversed(await _checkpoints(db, [run.id])):
+        if (
+            (cp.payload or {}).get("segment_seq") == segment.seq
+            and cp.status == "changes_requested"
+            and isinstance(cp.review, dict)
+            and cp.review.get("attempt") == number
+        ):
+            return PriorReview(cp.review, number, text, attempt or number + 1)
+    return None
 
 
 @dataclass
@@ -4639,6 +4777,9 @@ class CheckedItems:
     partial: bool
     # The section keys of the run's PRD version; None without one.
     prd_sections: set[str] | None
+    # D6: how the attempt answered the review it was sent back with, and its diff.
+    resolution: dict[str, Any] | None = None
+    diff: dict[str, Any] | None = None
 
 
 async def _version_source(db: AsyncSession, source_id: uuid.UUID) -> Any:
@@ -4687,7 +4828,9 @@ async def _checked(
     return check, slug, version, keys
 
 
-async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
+async def checked_items(
+    db: AsyncSession, run: Run, text: str, prior: PriorReview | None = None
+) -> CheckedItems:
     check, slug, version, keys = await once(
         ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
     )
@@ -4704,7 +4847,16 @@ async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
         context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
         partial = True
     found = reasons.reasons_for(check.items, check.problems, context)
-    return CheckedItems(check, found, context.base, partial, keys)
+    if prior is None:
+        return CheckedItems(check, found, context.base, partial, keys)
+    before = await roadmap.check_items_async(prior.text)
+    resolution = answers.resolve(prior.review, before.items, check.items, check.resolutions)
+    resolution["attempt"] = prior.answered_by
+    found = reasons.with_resolutions(
+        found, reasons.resolution_reasons(resolution, check.items), check.items
+    )
+    diff = answers.item_diff(before.items, check.items, prior.attempt)
+    return CheckedItems(check, found, context.base, partial, keys, resolution, diff)
 
 
 # --------------------------------------------------------------------------- tick
@@ -6025,6 +6177,10 @@ async def _take_answer(
         if shut is not None and not shut.open:
             await _hold_console_approval(db, run, cp, segment, record, wait, at, revise, member)
             return
+        if cp.kind in apply_edits.FILES and (
+            unapplied := apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
+        ):
+            _note(segment, _unapplied_note(unapplied))
     if not counted or (not approved and not revise):
         console = _console_record(run, segment, record, at, revise)
         console.update(
@@ -6412,6 +6568,10 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
     of runtime calls per run, and never with a run's row lock held across one."""
     stats = _TickStats()
     errors: list[str] = []
+    # E1: queued derivations of PRD drafts start first, so this pass submits them.
+    from oracle.roadmap import draft_items
+
+    errors += await draft_items.start_due(db)
     # Runs with a live workflow are watched whatever their state: a wait may be answered
     # outside Oracle or expire, the workflow may end in SwarmCloud, and one Oracle is
     # cancelling (even for a run that ended) has its cost read until the cancel holds.
@@ -6601,9 +6761,25 @@ async def decide_checkpoint(
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
-    if decision == "approved" and (shut := await approve_gate_of(db, cp)) and not shut.open:
+    edited: _Edited | None = None
+    if decision == "approved" and via == "oracle" and cp.kind in apply_edits.FILES:
+        # D7: the staged edits are applied to the file and the result re-checked under the
+        # same gate; a refusal raises before anything is written.
+        edited = await _apply_staged_edits(db, principal, run, cp)
+    if (
+        decision == "approved"
+        and edited is None
+        and (shut := await approve_gate_of(db, cp))
+        and not shut.open
+    ):
         # D3: the same for a blocking reason not fixed or waived (one gate for every path).
         raise blocking_open(shut)
+    # D7: a console approval never applies staged edits (its answerer did not see them).
+    unapplied = (
+        apply_edits.edit_count((await _staged_actions(db, [cp])).get(cp.id, []))
+        if decision == "approved" and via == "swarmcloud_console"
+        else 0
+    )
     if decision == "changes_requested" and not note:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
@@ -6632,8 +6808,14 @@ async def decide_checkpoint(
         from oracle.runs import review_file
 
         cp.review = await review_file.sent_review(db, principal, run, cp, note)
+    if edited is not None:
+        _write_edits(run, cp, segment, edited)
+    if unapplied:
+        _note(segment, _unapplied_note(unapplied))
     _record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
+    if edited is not None:
+        data.update(edited.audit)
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
         # F4 Engineering review stop reads whether a lead was named when it was decided.
         data["engineering_lead_named"] = bool(leads)
@@ -6703,6 +6885,170 @@ async def decide_checkpoint(
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
+def _unapplied_note(n: int) -> str:
+    return (
+        f"Approved in the runtime's console: {n} staged edit{' was' if n == 1 else 's were'} "
+        "not applied"
+    )
+
+
+@dataclass
+class _Edited:
+    """Staged edits applied and re-checked (D7), not written yet."""
+
+    name: str
+    agents: str
+    text: str
+    attempt: int
+    check: dict[str, Any]
+    revision: dict[str, Any]
+    review: dict[str, Any]
+    audit: dict[str, Any]
+
+
+def _edits_refused(code: str, message: str, **extra: Any) -> RunError:
+    error = RunError(message)
+    error.detail = {"code": code, "message": message, **extra}  # type: ignore[attr-defined]
+    return error
+
+
+async def _member_name(db: AsyncSession, principal: Principal) -> str:
+    user = await db.get(User, principal.user_id) if principal.user_id else None
+    if user is None:
+        return "an API token"
+    from oracle.members.names import display_name
+
+    return display_name(user.email)
+
+
+async def _apply_staged_edits(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> _Edited | None:
+    """D7 Approve with edits: the staged actions of ``cp``'s draft applied to the agents'
+    file (no model, nothing spent), re-checked (``check_items`` and the D2 reasons) and
+    gated (D3) on that check. None when nothing staged changes the file (a plain
+    approval). Raises 409 ``needs_agents`` or ``edits_leave_problems`` having written
+    nothing: the edits stay staged."""
+    staged = list(
+        await db.scalars(
+            select(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+            .order_by(CheckpointAction.created_at, CheckpointAction.id)
+        )
+    )
+    blocked = apply_edits.needs_agents(staged, await _open_questions(db, {cp.id: staged}))
+    if blocked:
+        raise _edits_refused(
+            "needs_agents", apply_edits.refusal(blocked), actions=[str(a.id) for a in blocked]
+        )
+    n = apply_edits.edit_count(staged)
+    if not n:
+        return None
+    name = apply_edits.FILES[cp.kind]
+    segment = await db.scalar(
+        select(RunSegment).where(
+            RunSegment.run_id == run.id, RunSegment.seq == (cp.payload or {}).get("segment_seq")
+        )
+    )
+    art = (segment.artifacts or {}) if segment is not None else {}
+    agents = (art.get("files") or {}).get(name)
+    if not isinstance(agents, str):
+        raise RunError(f"the checkpoint's segment left no {name} to apply the edits to")
+    _, base = await reasons._base(db, run)
+    try:
+        body, applied = apply_edits.apply(
+            agents, staged, {k: v.get("raw") or {} for k, v in base.items()}
+        )
+    except apply_edits.EditError as exc:
+        raise _edits_refused(
+            "edit_cannot_apply", f"{exc}: remove that edit, or send back to the agents",
+            actions=[str(exc.action_id)],
+        ) from None  # fmt: skip
+    except safe_yaml.SafeYamlError as exc:
+        raise _edits_refused(
+            "edit_cannot_apply", f"{name} cannot be edited ({exc}): send back to the agents"
+        ) from None
+    attempts = art.get("attempts") or []
+    attempt = int(attempts[-1].get("attempt") or len(attempts)) if attempts else 1
+    now = _now()
+    on = now.astimezone(apply_edits.COMPANY_ZONE).date()
+    text = apply_edits.header(await _member_name(db, principal), on, n, attempt) + body
+    check = await _check_items(db, run, text)
+    # The gate on the re-checked file, read from a copy: a refusal leaves the stored check.
+    shut = gate.approve_gate(
+        Checkpoint(kind=cp.kind, payload={**(cp.payload or {}), "items_check": check}),
+        None,
+        staged,
+    )
+    if shut is not None and not shut.open:
+        left = gate.left_count(shut)
+        what = "; ".join(f"{x.item}: {x.label}" for x in shut.left) or "a problem of the file"
+        raise _edits_refused(
+            "edits_leave_problems",
+            f"After the edits, {left} blocking problem{' is' if left == 1 else 's are'} left: "
+            f"{what}",
+            left=[x.model_dump() for x in shut.left],
+        )
+    ids = [str(a.id) for a in staged]
+    sha = hashlib.sha256(text.encode()).hexdigest()
+    revision = {
+        "attempt": attempt,
+        "by": str(principal.user_id or principal.token_id),
+        "at": now.isoformat(),
+        "actions": ids,
+        "agent_sha256": hashlib.sha256(agents.encode()).hexdigest(),
+        "edited_sha256": sha,
+    }
+    review = {
+        "kind": "edits",
+        "file": name,
+        "applied": applied,
+        "edits": n,
+        "summary": apply_edits.summary(applied),
+    }
+    audit_data = {"edits": n, "actions": ids, "edited_sha256": sha}
+    return _Edited(name, agents, text, attempt, check, revision, review, audit_data)
+
+
+def _write_edits(run: Run, cp: Checkpoint, segment: RunSegment, edited: _Edited) -> None:
+    """The edited file as the segment's current one; the agents' text kept per attempt."""
+    art = _art(segment)
+    agent_files = copy.deepcopy(art.get("agent_files") or {})
+    agent_files.setdefault(str(edited.attempt), {}).setdefault(edited.name, edited.agents)
+    revisions = [*(art.get("revisions") or []), edited.revision]
+    art["files"] = {**(art.get("files") or {}), edited.name: edited.text}
+    art["agent_files"] = agent_files
+    art["revisions"] = revisions
+    art["items_check"] = edited.check
+    _set_art(segment, art)
+    cp.payload = {**(cp.payload or {}), "items_check": edited.check}
+    cp.review = {**edited.review, "revision": len(revisions)}
+
+
+async def _restore_agents_file(db: AsyncSession, run: Run, cp: Checkpoint) -> None:
+    """A voided approval with edits (D7): the agents' file is the current one again,
+    re-checked; the edits are staged as they were."""
+    if not isinstance(cp.review, dict) or cp.review.get("kind") != "edits":
+        return
+    name = cp.review.get("file") or apply_edits.FILE
+    segment = await db.scalar(
+        select(RunSegment).where(
+            RunSegment.run_id == run.id, RunSegment.seq == (cp.payload or {}).get("segment_seq")
+        )
+    )
+    art = _art(segment) if segment is not None else {}
+    revisions = art.get("revisions") or []
+    attempt = str(revisions[-1].get("attempt")) if revisions else "1"
+    agents = ((art.get("agent_files") or {}).get(attempt) or {}).get(name)
+    if segment is None or not isinstance(agents, str):
+        return
+    check = await _check_items(db, run, agents)
+    art["files"] = {**(art.get("files") or {}), name: agents}
+    art["items_check"] = check
+    _set_art(segment, art)
+    cp.payload = {**(cp.payload or {}), "items_check": check}
+
+
 async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID) -> str:
     """The ``review.yaml`` a send-back at the checkpoint delivered (D4)."""
     from oracle.runs import review_file
@@ -6713,7 +7059,7 @@ async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: u
     )
     if cp is None:
         raise NotFound(f"checkpoint {checkpoint_id} not found")
-    if cp.status == "pending" or not cp.review:
+    if cp.status == "pending" or not cp.review or cp.review.get("kind") == "edits":
         raise NotFound("no review was sent back at this checkpoint")
     return review_file.render_yaml(cp.review, cp.decided_at)
 
@@ -7028,6 +7374,7 @@ async def _void_owed(
     wait["voided"] = {"decided_by": str(cp.decided_by), "why": why, "at": _now().isoformat()}
     _set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
+    await _restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None
@@ -7145,6 +7492,7 @@ async def void_decision(
     _set_art(segment, art)
     segment.status = decision.get("restore") or "pending"
     decided_by, kind = cp.decided_by, cp.status
+    await _restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None
@@ -7201,6 +7549,7 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     wait.pop("posting")
     _set_wait(cp, wait)
     decided_by, kind = cp.decided_by, cp.status
+    await _restore_agents_file(db, run, cp)
     cp.status = "pending"
     cp.decided_by = None
     cp.decided_at = None
@@ -7403,8 +7752,9 @@ async def _decide_in_workflow(
         if not await _detach(db, run, cancel=True, state="tail"):
             raise _unconfirmed("continue the run as a new workflow")
         return False
+    edits = cp.review if isinstance(cp.review, dict) and cp.review.get("kind") == "edits" else None
     payload: dict[str, Any] = (
-        {"verdict": MERGE, "findings": []}
+        {"verdict": MERGE, "findings": [edits["summary"]] if edits else []}
         if approved
         else {
             "verdict": NOT_YET,
@@ -8903,6 +9253,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
+    asked = await _open_questions(db, staged)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
     if owner:
@@ -8922,7 +9273,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         sdef = _flow(run).segments[seq - 1] if seq else None
         return InboxCheckpoint(
             **_checkpoint_out(
-                c, principal, names, flow=run.flow, leads=leads, staged=staged
+                c,
+                principal,
+                names,
+                flow=run.flow,
+                leads=leads,
+                staged=staged,
+                open_questions=asked,
             ).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
@@ -9070,11 +9427,21 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.launches import service as launches_service
 
     launch_rows = await launches_service.inbox_rows(db, principal)
+    from oracle.rituals.service import inbox_rows as ritual_rows
+
+    rituals = await ritual_rows(db, principal)
+    counted += sum(1 for r in rituals if r.counts)
+    from oracle.quality.outcomes import inbox_rows as outcome_rows
+
+    outcome_inbox = await outcome_rows(db, principal)
     # H11: what Oracle did on its own, for those it notified (open ones count).
     from oracle.autonomy_router import inbox_actions
 
     oracle_actions = await inbox_actions(db, principal)
     dates = await _date_rows(db, principal, leads)
+    from oracle.roadmap.alerts import inbox_rows as track_rows
+
+    track_groups = await track_rows(db, principal, seen)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9112,9 +9479,14 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         # Strategy drift: one row, however many findings.
         + (1 if strategy else 0)
         + sum(1 for r in launch_rows if r.counted)
+        + sum(1 for r in outcome_inbox if r.counts)
         + sum(a.counts for a in oracle_actions)
+        + sum(t.counts.new + t.counts.open for t in track_groups)
         + counted,
+        tracks=track_groups,
         launches=launch_rows,
+        rituals=rituals,
+        outcomes=outcome_inbox,
         items=states,
         counts=counts,
         staged=staged,

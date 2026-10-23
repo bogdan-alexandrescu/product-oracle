@@ -579,9 +579,9 @@ function windowStat(reading: AccountReading, window: string): Pick<InspectorStat
 }
 
 /** One fact: a 13 px label left, the value right (truncated, full text in its title). */
-function Fact({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+function Fact({ label, children, mono, testId }: { label: string; children: ReactNode; mono?: boolean; testId?: string }) {
   return (
-    <div className="flex min-h-8 items-center gap-3">
+    <div className="flex min-h-8 items-center gap-3" data-testid={testId}>
       <Label className="flex-none">{label}</Label>
       <span
         className={`tnum min-w-0 flex-1 truncate text-right font-semibold ${mono ? "font-mono text-sm" : ""}`}
@@ -653,6 +653,13 @@ function Detail({
       ]}
     >
       <InspectorSection label="Facts">
+        <Fact label="Claude account" testId="fact-claude-account">
+          {claudeAccountOf(account) ?? (
+            <span className="font-normal text-text2" title="Claude reports it at sign-in; a pasted saved login carries none.">
+              Not reported
+            </span>
+          )}
+        </Fact>
         {account.spent_by && <Fact label="Spent">Over its {limitWord(account.spent_by)}</Fact>}
         {account.reason && <Fact label="Reason">{reasonLabel(account.reason)}</Fact>}
         <Fact label="Jobs on it">{account.assigned}</Fact>
@@ -1061,7 +1068,16 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
   );
 }
 
-/** The browser sign-in: open Claude's page, sign in, paste the code it shows. */
+/** Which Claude account it is, as Claude reported it at sign-in; null when not reported. */
+function claudeAccountOf(a: Pick<Account, "claude_email" | "claude_organization">): string | null {
+  return [a.claude_email, a.claude_organization].filter(Boolean).join(" · ") || null;
+}
+
+/** Claude's page signs in whoever that browser is signed in as. */
+const WHICH_ACCOUNT =
+  "Claude adds the account signed in on that page. To add a different one, open the link in a browser signed in to it";
+
+/** The browser sign-in: open Claude's page (or copy its link), sign in, paste the code it shows. */
 function SignInSteps({
   label,
   signin,
@@ -1069,6 +1085,7 @@ function SignInSteps({
   reload,
   fixedLabel,
   start,
+  primary,
 }: {
   label: string;
   signin: SignIn;
@@ -1076,24 +1093,46 @@ function SignInSteps({
   reload: () => Promise<void>;
   fixedLabel?: boolean;
   start: string;
+  /** The panel's one action: the filled primary button. */
+  primary?: boolean;
 }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  async function begin() {
+  async function copy(url: string) {
+    setCopied(false);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setError("Could not copy the link. Open shows it.");
+    }
+  }
+
+  /** Starts the sign-in, then opens Claude's page here, or copies its link for another browser. */
+  async function begin(then: "open" | "copy") {
     setBusy(true);
     setError(null);
     try {
       const s = await unwrap(api.POST("/v1/claude-accounts/authorize", { body: { label } }));
       setSignin({ kind: "started", label, state: s.state, url: s.authorize_url, expiresIn: s.expires_in_seconds });
-      window.open(s.authorize_url, "_blank", "noopener");
+      if (then === "open") window.open(s.authorize_url, "_blank", "noopener");
+      else await copy(s.authorize_url);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
   }
+
+  const which = <p className="text-sm text-text2">{WHICH_ACCOUNT}</p>;
+  const copiedNote = copied && (
+    <span role="status" className="text-sm font-medium text-pass">
+      Link copied
+    </span>
+  );
 
   async function finish(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1122,6 +1161,11 @@ function SignInSteps({
         <span>
           Signed in: <b>{signin.account.label}</b> is {signin.account.state.toLowerCase().replace(/_/g, " ")}.
         </span>
+        {claudeAccountOf(signin.account) && (
+          <span>
+            Claude account: <b>{claudeAccountOf(signin.account)}</b>
+          </span>
+        )}
         <button type="button" className="font-semibold underline underline-offset-2" onClick={() => setSignin({ kind: "idle" })}>
           Done
         </button>
@@ -1131,15 +1175,25 @@ function SignInSteps({
   if (signin.kind === "idle") {
     return (
       <div className="flex flex-col items-start gap-2">
-        <Button
-          variant="solid"
-          icon="signout"
-          disabled={busy || !label}
-          title={!fixedLabel && !label ? "Give it a label first" : undefined}
-          onClick={() => void begin()}
-        >
-          {busy ? "starting…" : start}
-        </Button>
+        <span className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={primary ? "primary" : "solid"}
+            icon="signout"
+            disabled={busy || !label}
+            title={!fixedLabel && !label ? "Give it a label first" : undefined}
+            onClick={() => void begin("open")}
+          >
+            {busy ? "starting…" : start}
+          </Button>
+          <Button
+            disabled={busy || !label}
+            title={!fixedLabel && !label ? "Give it a label first" : undefined}
+            onClick={() => void begin("copy")}
+          >
+            Copy link
+          </Button>
+        </span>
+        {which}
         {error && <Notice tone="error">{error}</Notice>}
       </div>
     );
@@ -1155,8 +1209,9 @@ function SignInSteps({
           className="inline-flex h-8 items-center rounded-lg border border-line-strong px-3 text-sm font-semibold hover:bg-surface2"
           data-testid="signin-link"
         >
-          Open the Claude sign-in page
+          Open
         </a>
+        <Button onClick={() => void copy(signin.url)}>Copy link</Button>
         <Chip kind="na" className="tnum" title="Paste the code within this time">
           {Math.round(signin.expiresIn / 60)} min
         </Chip>
@@ -1164,7 +1219,9 @@ function SignInSteps({
           Sign in on Claude&apos;s page to the account to add as <b>{signin.label}</b>. Claude shows a code when you are
           done. Copy all of it (it may end in #…) and paste it here within {Math.round(signin.expiresIn / 60)} minutes.
         </InfoTip>
+        {copiedNote}
       </span>
+      {which}
       <Field label="Code from the Claude page" htmlFor={codeId}>
         <input
           id={codeId}
@@ -1325,29 +1382,39 @@ function AddAccount({
             )}
           </InspectorSection>
           <InspectorSection label="Method">
-            <div role="tablist" aria-label="How to add it" className="flex flex-wrap gap-1">
+            <div role="radiogroup" aria-label="How to add it" className="flex flex-col gap-1.5">
               {(
                 [
                   ["signin", "Sign in with Claude"],
                   ["paste", "Paste Claude Code's saved login"],
                 ] as const
               ).map(([key, text]) => (
-                <button
+                <label
                   key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === key}
-                  disabled={signin.kind === "started"}
-                  onClick={() => setMode(key)}
-                  className={`${TAB} ${tabTone(mode === key)}`}
+                  className="flex cursor-pointer items-center gap-2 text-sm text-text has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2"
                 >
+                  <input
+                    type="radio"
+                    name="add-account-method"
+                    className="size-4 accent-[var(--accent)]"
+                    checked={mode === key}
+                    disabled={signin.kind === "started"}
+                    onChange={() => setMode(key)}
+                  />
                   {text}
-                </button>
+                </label>
               ))}
             </div>
             <div className="mt-3">
               {mode === "signin" ? (
-                <SignInSteps label={label.trim()} signin={signin} setSignin={setSignin} reload={reload} start="Sign in with Claude" />
+                <SignInSteps
+                  label={label.trim()}
+                  signin={signin}
+                  setSignin={setSignin}
+                  reload={reload}
+                  start="Open Claude's sign-in page"
+                  primary
+                />
               ) : (
                 <form onSubmit={paste} className="flex flex-col gap-2.5" aria-label="Paste Claude Code login JSON">
                   <Field

@@ -56,8 +56,8 @@ from oracle.interviews import service as interviews_service
 from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
 from oracle.models import Tenant
-from oracle.reports import alignment as alignment_reports
 from oracle.requests import triage as request_triage
+from oracle.rituals import service as rituals
 from oracle.roadmap import views as track_views
 from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
@@ -178,9 +178,9 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
-    tracks' monitoring, then its weekly alignment report (oracle.reports), its launches'
-    Ready detection, its interview links' expiry and its daily request triage, each on
-    its own."""
+    tracks' monitoring, its rituals (oracle.rituals, the weekly alignment report among
+    them), its launches' Ready detection, its interview links' expiry and its daily request
+    triage, each on its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -206,13 +206,13 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         log.exception("run ticker: track monitoring failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
-        # F6: the weekly alignment report once its moment has passed, and the Slack posts
-        # that are due; deterministic, no model call.
+        # Rituals (H2): seed the built-ins, create and prepare the occurrences that are
+        # due (deterministic pre-reads, no model call; F6's weekly alignment report is
+        # the alignment_report ritual), mark the missed ones.
         async with tenant_session(tenant_id) as db:
-            await alignment_reports.due(db)
-            await db.commit()
+            await rituals.tick_due(db)
     except Exception:
-        log.exception("run ticker: the alignment report failed for company %s", tenant_id)
+        log.exception("run ticker: rituals failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Strategy drift (H4): a daily deterministic check, no model call.
@@ -238,6 +238,17 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
                 await db.commit()
     except Exception:
         log.exception("run ticker: interview expiry failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Outcomes (H3): predicted items that shipped start measuring, and due ones get
+        # Oracle's proposed assessment (deterministic, no model call).
+        from oracle.quality import shipping
+
+        async with tenant_session(tenant_id) as db:
+            await shipping.tick_due(db)
+            await db.commit()
+    except Exception:
+        log.exception("run ticker: outcome tracking failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Requests (C1 "Triage runs"): once a day at 07:00 Pacific, a quick classify-only

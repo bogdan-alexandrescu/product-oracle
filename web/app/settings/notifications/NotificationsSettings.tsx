@@ -6,11 +6,13 @@
  * revokes the token at Slack), and the report's schedule. No credential is ever shown.
  */
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { useCompanyZone } from "@/lib/dates";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -20,7 +22,6 @@ type ReportSetting = {
   enabled: boolean;
   weekday: string;
   time: string;
-  timezone: string;
   slack_channel: { id: string; name: string } | null;
 };
 
@@ -34,7 +35,6 @@ const WEEKDAYS: [string, string][] = [
   ["sat", "Saturday"],
   ["sun", "Sunday"],
 ];
-const ZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "Europe/London", "Europe/Berlin", "Asia/Tokyo", "Australia/Sydney", "UTC"];
 
 const loadSetting = () => unwrap(api.GET("/v1/settings/{key}", KEY)).then((s) => s.value as ReportSetting);
 const saveSetting = (value: ReportSetting) => unwrap(api.PUT("/v1/settings/{key}", { ...KEY, body: { value } })).then((s) => s.value as ReportSetting);
@@ -214,14 +214,15 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const zones = ZONES.includes(draft.timezone) ? ZONES : [draft.timezone, ...ZONES];
+  // The report runs in the Company time zone (Settings › Company), not a zone of its own.
+  const zone = useCompanyZone();
 
   async function save() {
     setBusy(true);
     setError(null);
     setSaved(false);
     try {
-      onSaved(await saveSetting({ ...setting, enabled: draft.enabled, weekday: draft.weekday, time: draft.time, timezone: draft.timezone }));
+      onSaved(await saveSetting({ ...setting, enabled: draft.enabled, weekday: draft.weekday, time: draft.time }));
       setSaved(true);
     } catch (e) {
       setError(errorMessage(e));
@@ -258,15 +259,15 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
           <Field label="Time" className="w-32 max-w-full">
             <input type="time" className={INPUT} value={draft.time} onChange={(e) => setDraft({ ...draft, time: e.target.value })} />
           </Field>
-          <Field label="Time zone" className="w-64 max-w-full">
-            <select className={SELECT_FIELD} value={draft.timezone} onChange={(e) => setDraft({ ...draft, timezone: e.target.value })}>
-              {zones.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div className="flex h-9 items-center gap-2 text-sm">
+            <span className="font-semibold text-text2">Company time zone</span>
+            <span data-testid="report-zone" className="tnum">
+              {zone}
+            </span>
+            <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
+              Change
+            </Link>
+          </div>
           <Button variant="solid" disabled={busy} onClick={save}>
             Save schedule
           </Button>

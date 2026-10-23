@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
@@ -22,6 +22,8 @@ Flow = Literal[
     "baseline",
     "code_map",
     "update_draft",
+    "prd_draft_items",
+    "ritual_summary",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -326,6 +328,76 @@ class ReasonBase(BaseModel):
     attempt: int | None = None
 
 
+class ResolutionField(BaseModel):
+    """One requested field of a ``change`` entry: what was asked, whether the file shows
+    it, and its value in the file now (D6)."""
+
+    field: str
+    requested: Any = None
+    applied: bool
+    current: Any = None
+
+
+class ResolutionEntry(BaseModel):
+    """How the next attempt answered one review entry (D6): Oracle's check (``outcome``)
+    and what the agents said in ``resolutions`` (``said``, ``missing`` for no answer)."""
+
+    id: str
+    action: str
+    outcome: Literal["done", "declined", "not_applied"]
+    said: Literal["done", "declined", "missing"]
+    note: str | None = None
+    fields: list[ResolutionField] = []
+
+
+class ResolutionCounts(BaseModel):
+    done: int = 0
+    declined: int = 0
+    not_applied: int = 0
+    unrequested: int = 0
+
+
+class FieldDiff(BaseModel):
+    """One field of an item that differs from the previous attempt (D6)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    field: str
+    from_: Any = Field(None, alias="from")
+    to: Any = None
+
+
+class UnrequestedChange(FieldDiff):
+    """A field of an item the review left alone (``unchanged``) that changed anyway."""
+
+    id: str
+
+
+class ItemsResolution(BaseModel):
+    """The answers of ``attempt`` to the review of ``review_attempt`` (D6)."""
+
+    review_attempt: int | None = None
+    attempt: int | None = None
+    entries: list[ResolutionEntry] = []
+    counts: ResolutionCounts = ResolutionCounts()
+    unrequested: list[UnrequestedChange] = []
+
+
+class ItemFieldsDiff(BaseModel):
+    id: str
+    changes: list[FieldDiff]
+
+
+class ItemsAttemptDiff(BaseModel):
+    """Each item's field changes since ``against_attempt``, and the ids added and removed
+    (D6)."""
+
+    against_attempt: int | None = None
+    items: list[ItemFieldsDiff] = []
+    added: list[str] = []
+    removed: list[str] = []
+
+
 class ItemsCheck(BaseModel):
     """The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons
     (oracle.runs.reasons). Checks stored before reasons existed read with none."""
@@ -341,6 +413,10 @@ class ItemsCheck(BaseModel):
     base: ReasonBase | None = None
     # The advisory reasons could not be loaded: only the blocking ones are listed.
     reasons_partial: bool = False
+    # D6: after a send-back with a review, how this attempt answered it and what changed
+    # since the previous attempt. None on a first attempt.
+    resolution: ItemsResolution | None = None
+    diff: ItemsAttemptDiff | None = None
 
 
 class PreviousAttempt(BaseModel):
@@ -548,6 +624,15 @@ class Gate(BaseModel):
     left: list[GateLeft] = []
 
 
+class NeedsAgents(BaseModel):
+    """A staged action only the agents can carry out (D7): Approve waits until it is
+    removed, or the checkpoint is sent back."""
+
+    action_id: uuid.UUID
+    item: str
+    kind: str
+
+
 class CheckpointOut(BaseModel):
     id: uuid.UUID
     run_id: uuid.UUID
@@ -575,6 +660,10 @@ class CheckpointOut(BaseModel):
     console: ConsoleAnswer | None = None
     # A decided checkpoint whose decision Oracle has not delivered to the run yet.
     delivery: CheckpointDelivery | None = None
+    # D7: the approve button's words ("Approve with 3 edits" while staged edits wait for
+    # Oracle to apply them), and the staged actions that need the agents instead.
+    approve_label: str = "Approve"
+    needs_agents: list[NeedsAgents] = []
 
 
 class RunDecision(BaseModel):
@@ -993,6 +1082,9 @@ class InboxStrategy(BaseModel):
 
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
+from oracle.quality.schemas import InboxOutcome  # noqa: E402
+from oracle.rituals.schemas import InboxRitual  # noqa: E402
+from oracle.roadmap.schemas import InboxTrack  # noqa: E402
 
 
 class InboxOut(BaseModel):
@@ -1044,11 +1136,21 @@ class InboxOut(BaseModel):
     decisions: list[InboxDecision] = []
     # Feedback and decisions that need me: new + open (staged, declined and done do not).
     needs_me: int = 0
+    # Ritual rows (H2): Pre-read ready, Record notes, Ritual failed to prepare; counted
+    # ones are in total and needs_me.
+    rituals: list[InboxRitual] = []
     # Launch rows (H6): Ready to launch and Notes to send (the launch's owner), Set tier
     # (approvers), counted in ``total``; Shipped (a member's personal note), shown only.
     launches: list[InboxLaunch] = []
+    # Outcome rows (H3): Add predictions and Outcome check due (counted in ``total``),
+    # Oracle recorded (shown only).
+    outcomes: list[InboxOutcome] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
+    # F2 Track health: one row per track with alerts for me (the track's owner, else the
+    # owners; slips and overdue items also the engineering leads); new and open ones
+    # count in ``total``.
+    tracks: list[InboxTrack] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]
@@ -1194,6 +1296,10 @@ class ReviewItem(BaseModel):
     reasons: list[ItemReason] = []
     actions: list[ReviewAction] = []
     state: Literal["needs_you", "handled", "waiting", "fine"]
+    # D6: the answer to this item's review entry, and its changes since the previous
+    # attempt.
+    resolution: ResolutionEntry | None = None
+    diff: list[FieldDiff] = []
 
 
 class WaitingOn(BaseModel):
@@ -1239,6 +1345,9 @@ class CheckpointReview(BaseModel):
     can_decide: bool = False
     # The approve gate, as decide reads it (D3); None for a kind with no blocking reasons.
     gate: Gate | None = None
+    # D6: the attempt's changes since the previous one (added and removed ids); None on a
+    # first attempt.
+    diff: ItemsAttemptDiff | None = None
 
 
 InboxChild.model_rebuild()

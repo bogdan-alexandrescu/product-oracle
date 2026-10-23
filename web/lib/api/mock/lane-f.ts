@@ -8,6 +8,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainText } from "@/lib/markdown";
 import { presenterNotes, resolveBrief } from "./brief";
 import { mockUuid, seeded } from "./ids";
+import { calibration } from "./quality";
 import { cannotApproveNow } from "./runs";
 
 import type { Db, DocumentRow, VersionRow } from "./server";
@@ -67,7 +68,7 @@ const notFound = (what: string) => json(404, { detail: `${what} not found` });
 // ---------------------------------------------------------------- priorities
 
 const FORMULAS: Record<Method, string> = {
-  goal_weighted: "score = Σ(goal weight × contribution) × confidence ÷ effort",
+  goal_weighted: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
   rice: "score = reach × impact × confidence ÷ effort",
   moscow: "rank = must (4) > should (3) > could (2) > won't (1); ties by goal value",
   wsjf: "score = (business value + time criticality + risk reduction) ÷ job size",
@@ -207,7 +208,27 @@ type Scored = Omit<Schemas["RankedFeature"], "rank" | "score_rank" | "dependents
   order_score: number;
 };
 
-function scoreFeature(f: FeatureSeed, method: Method): Scored {
+/** H3: the track record factor a feature's goals carry (by goal title), or the company's. */
+type TrackRecord = Schemas["CalibrationOut"] | null;
+
+function trackFactor(f: FeatureSeed, cal: TrackRecord): Schemas["CalibrationUsed"] | null {
+  if (!cal || !f.goals.length) return null;
+  let best: Schemas["CalibrationUsed"] | null = null;
+  for (const g of f.goals) {
+    const own = cal.goals.find((x) => x.title === g.title && x.factor != null);
+    const fig = own ?? (cal.company.factor != null ? cal.company : null);
+    if (!fig || fig.factor == null) continue;
+    const label = own ? `Goal '${own.title}'` : "Company";
+    const found = {
+      factor: fig.factor, applied: cal.setting === "apply", n: fig.n,
+      basis: `${label}: ${fig.held} of ${fig.n} assessed predictions held (expected ${fig.expected})`,
+    };
+    if (!best || found.factor < best.factor) best = found;
+  }
+  return best;
+}
+
+function scoreFeature(f: FeatureSeed, method: Method, cal: TrackRecord = null): Scored {
   const flags: string[] = [];
   const servesGoal = f.goals.length > 0;
   if (!servesGoal) flags.push("no_confirmed_goal");
@@ -226,7 +247,12 @@ function scoreFeature(f: FeatureSeed, method: Method): Scored {
     };
   });
   const value = terms.reduce((s, t) => s + (t.term ?? 0), 0);
+  const track = trackFactor(f, cal);
   const confidence = confidenceOf(f);
+  if (track?.applied) {
+    confidence.before_track_record = confidence.value;
+    confidence.value = round(confidence.value * track.factor);
+  }
   if (confidence.source === "default") flags.push("no_confidence");
   else if (confidence.value < 0.4) flags.push("low_confidence");
   const inputs: Record<string, unknown> = {};
@@ -243,6 +269,7 @@ function scoreFeature(f: FeatureSeed, method: Method): Scored {
     return v;
   };
   const c = confidence.value;
+  if (track?.applied) steps.push(`confidence = ${confidence.before_track_record} × track record ${track.factor} = ${c}`);
   if (method === "goal_weighted") {
     const effort = need("effort", true);
     inputs.goal_value = { value: round(value), terms };
@@ -299,7 +326,7 @@ function scoreFeature(f: FeatureSeed, method: Method): Scored {
     serves_goal: servesGoal,
     flags,
     depends_on: f.depends_on,
-    explanation: { method, formula: FORMULAS[method], inputs, confidence, goals: terms, missing, steps, order: [] },
+    explanation: { method, formula: FORMULAS[method], inputs, confidence, calibration: track, goals: terms, missing, steps, order: [] },
     group: !servesGoal ? 2 : score != null ? 0 : 1,
     order_score: score ?? -Infinity,
   };
@@ -339,8 +366,8 @@ function findCycles(deps: Record<string, string[]>): string[][] {
   return out;
 }
 
-export function ranking(method: Method): Schemas["PriorityRanking"] {
-  const scored = FEATURES.map((f) => scoreFeature(f, method));
+export function ranking(method: Method, cal: TrackRecord = null): Schemas["PriorityRanking"] {
+  const scored = FEATURES.map((f) => scoreFeature(f, method, cal));
   const byScore = [...scored].sort(
     (a, b) => a.group - b.group || b.order_score - a.order_score || a.key.localeCompare(b.key),
   );
@@ -1897,7 +1924,9 @@ export async function laneF(db: Db, req: Request, p: string[], m: string, role?:
       const method = q.get("method") ?? "goal_weighted";
       if (!isMethod(method)) return json(422, { detail: `unknown method '${method}'` });
       const people = q.get("overrides") !== "false";
-      return json(200, goalTitles(db, applyOverrides(ranking(method), people ? overrideInputs(st.overrides ?? []) : [])));
+      const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]);
+      const track = calibration(db.quality, Object.fromEntries(goals));
+      return json(200, goalTitles(db, applyOverrides(ranking(method, track), people ? overrideInputs(st.overrides ?? []) : [])));
     }
     if (p[2] === "overrides") return overridesRoute(st, db.session ?? "someone", req, p, m);
     if (p[2] === "snapshots") {

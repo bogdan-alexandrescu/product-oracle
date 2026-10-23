@@ -11,6 +11,7 @@ SourceStatus = Literal["active", "paused", "error", "needs_attention"]
 CONFIG_DESCRIPTION = (
     'What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: '
     '{"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", '
+    '"timezone"?: IANA zone the days are in (the Company time zone; UTC without one), '
     '"labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: '
     "{page id: title}}. labels only name the picks for people to read (at most 200 "
     "characters each; names of ids not picked are dropped): a save that changes labels "

@@ -648,6 +648,9 @@ async def test_end_to_end(client, owner, runtime):
         "file_problems": 0,
         "base": None,
         "reasons_partial": False,
+        # D6 per-item resolutions (additive): a first attempt answers no review.
+        "resolution": None,
+        "diff": None,
     }
     assert pending(run)["payload"]["items_check"] == check
     run = await decide(client, auth, run, note="Keep shipping in next")

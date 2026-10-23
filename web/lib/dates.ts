@@ -1,0 +1,102 @@
+import { useMe } from "@/lib/me";
+
+/**
+ * Display dates and times (#401): every one a person sees is in the Company time zone
+ * (Settings › Company, America/Los_Angeles until an owner sets one), labelled with the
+ * zone's short name ("PDT") where a time shows. Machine values sent to the API stay
+ * ISO/UTC; a picked day is sent as the day, or as an instant made with `zoneInstant`.
+ */
+
+export const DEFAULT_ZONE = "America/Los_Angeles";
+
+/** The Company time zone, as GET /v1/me gives it to every member. */
+export function useCompanyZone(): string {
+  return useMe().me?.company_timezone || DEFAULT_ZONE;
+}
+
+const cache = new Map<string, Intl.DateTimeFormat>();
+
+function fmt(locale: string, timeZone: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${timeZone}|${JSON.stringify(opts)}`;
+  let f = cache.get(key);
+  if (!f) {
+    try {
+      f = new Intl.DateTimeFormat(locale, { ...opts, timeZone });
+    } catch {
+      f = new Intl.DateTimeFormat(locale, { ...opts, timeZone: DEFAULT_ZONE });
+    }
+    cache.set(key, f);
+  }
+  return f;
+}
+
+/** `iso` (an instant) in `zone`, with the zone's short name when the options show a time. */
+export function formatInZone(iso: string, zone: string, opts: Intl.DateTimeFormatOptions, locale = "en-US"): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const timed = opts.hour !== undefined || opts.minute !== undefined;
+  return fmt(locale, zone, timed ? { ...opts, timeZoneName: "short" } : opts).format(at);
+}
+
+/** "Oct 16": the day of an instant in `zone`. */
+export const zoneDay = (iso: string, zone: string) => formatInZone(iso, zone, { month: "short", day: "numeric" });
+
+/** "Fri, Oct 16". */
+export const zoneWeekday = (iso: string, zone: string) => formatInZone(iso, zone, { weekday: "short", month: "short", day: "numeric" });
+
+/** "Oct 19, 8:00 AM PDT". */
+export const zoneDateTime = (iso: string, zone: string) =>
+  formatInZone(iso, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ at /, ", ");
+
+/** "09:00 PDT" (24-hour). */
+export const zoneTime = (iso: string, zone: string) => formatInZone(iso, zone, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, "en-GB");
+
+/** The calendar day (YYYY-MM-DD) of an instant in `zone`. */
+export function dayIn(at: Date | number | string, zone: string): string {
+  const parts = fmt("en-CA", zone, { year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(at));
+  const n = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${n("year")}-${n("month")}-${n("day")}`;
+}
+
+/** Today in `zone`, as YYYY-MM-DD. */
+export const todayIn = (zone: string, now: number = Date.now()) => dayIn(now, zone);
+
+/** `day` (YYYY-MM-DD) plus `n` days. */
+export function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** The ISO instant of `time` (HH:MM) on `day` (YYYY-MM-DD) in `zone`: what the API receives for a picked day. */
+export function zoneInstant(day: string, time: string, zone: string): string {
+  const [y, mo, d] = day.split("-").map(Number);
+  const [h, mi] = time.split(":").map(Number);
+  const wall = Date.UTC(y, mo - 1, d, h, mi);
+  // The zone's offset at that wall time, found by formatting the guess (twice, for DST edges).
+  let at = wall;
+  for (let i = 0; i < 2; i++) at = wall - offset(at, zone);
+  return new Date(at).toISOString();
+}
+
+function offset(at: number, zone: string): number {
+  const parts = fmt("en-US", zone, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(new Date(at));
+  const n = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - Math.floor(at / 1000) * 1000;
+}
+
+/**
+ * A calendar day (YYYY-MM-DD, no time: a milestone, a picked From) as "Sep 1": the same
+ * day in every zone, so it is formatted as written.
+ */
+export function calendarDay(day: string, opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }, locale = "en-US"): string {
+  const d = new Date(`${day.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? day : fmt(locale, "UTC", opts).format(d);
+}

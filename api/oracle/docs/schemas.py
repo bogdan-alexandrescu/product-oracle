@@ -4,6 +4,8 @@ from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from oracle.roadmap.schemas import DraftRoadmapSummary
+
 DocumentStatus = Literal["draft", "in_review", "approved"]
 # "oracle": Oracle's own baseline (a goal, decision, constraint or feature); its ``ref`` is
 # free text naming the baseline item, not a link.
@@ -258,6 +260,8 @@ class VersionOut(VersionSummary):
     citations: list[CitationOut] = []
     # Roadmaps only: each date its text writes, one per date and section.
     date_marks: list[DateMarkOut] = []
+    # PRDs only (E1): the version's items-only roadmap, for the Roadmap tab's label.
+    draft_roadmap: DraftRoadmapSummary | None = None
 
 
 class WordOp(BaseModel):

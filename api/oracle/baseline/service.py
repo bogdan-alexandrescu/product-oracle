@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
 from oracle.auth.deps import Principal
-from oracle.baseline import scoring
+from oracle.baseline import goals, scoring
 from oracle.baseline.models import (
     EDGE_TYPES,
     ENTITY_TYPES,
@@ -74,6 +74,14 @@ class ForbiddenError(BaselineError):
     status_code = 403
 
 
+class GoalFieldsInvalid(InvalidError):
+    """A person's goal write with bad typed fields (B5); 422 with every problem."""
+
+    def __init__(self, problems: list[dict[str, str]]):
+        self.problems = problems
+        super().__init__(f"goal fields rejected: {len(problems)} problem(s)")
+
+
 @dataclass(frozen=True)
 class Writer:
     principal: Principal | None
@@ -108,6 +116,8 @@ class WriteResult:
     entity: Entity | None = None
     edge: Edge | None = None
     proposal: Proposal | None = None
+    # Goal fields an agent's or import's write kept as "<key>_text" (B5).
+    kept_as_text: tuple[str, ...] = ()
 
     @property
     def applied(self) -> bool:
@@ -308,6 +318,29 @@ def _initial_status(type_: str, status: str | None, writer: Writer) -> str:
             raise InvalidError("goals start proposed; confirm them with POST .../confirm")
         return status or "proposed"
     return status or ("confirmed" if writer.locks else "proposed")
+
+
+async def check_goal_attrs(
+    db: AsyncSession, attrs: dict[str, Any], before: dict[str, Any] | None = None
+) -> None:
+    """B5: refuse bad typed goal fields (a person's write, a proposal). ``before`` is the
+    goal's attrs on an update: a problem it already had is refused only when touched."""
+    try:
+        await goals.check(db, attrs, before=before)
+    except goals.GoalFieldsError as e:
+        raise GoalFieldsInvalid(e.problems) from None
+
+
+async def _goal_attrs(
+    db: AsyncSession, writer: Writer, attrs: dict[str, Any], before: dict[str, Any] | None = None
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """A goal's attrs as written: a person's are checked (422); an agent's or an
+    import's keep a refused value as ``<key>_text`` instead."""
+    if writer.locks:
+        await check_goal_attrs(db, attrs, before)
+        return attrs, ()
+    kept, moved = await goals.keep_as_text(db, attrs)
+    return kept, tuple(moved)
 
 
 # --- proposals ---------------------------------------------------------------------------
@@ -679,6 +712,15 @@ async def submit_proposal(
         if not edge_id or entity_id:
             raise InvalidError("an edge proposal targets edge_id")
         edge = await get_edge(db, edge_id)
+    attrs = fields.get("attrs")
+    is_goal = (entity.type if entity is not None else fields.get("type")) == "goal"
+    if kind == "entity" and op in ("create", "update") and is_goal and isinstance(attrs, dict):
+        # B5: refused at creation, so an Accept never fails on a field (it re-checks owners).
+        await check_goal_attrs(
+            db,
+            merge_attrs(entity.attrs if entity else {}, attrs),
+            dict(entity.attrs or {}) if entity else None,
+        )
     return await propose(db, writer, op=op, kind=kind, fields=fields, entity=entity, edge=edge)
 
 
@@ -938,11 +980,14 @@ async def create_entity(
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
     check_managed_attrs(writer, {}, attrs)
+    kept: tuple[str, ...] = ()
+    if type_ == "goal":
+        attrs, kept = await _goal_attrs(db, writer, dict(attrs or {}))
     if writer.must_propose(None):
         fields = {"type": type_, "key": key, "title": title, "body": body,
                   "attrs": dict(attrs or {}), "status": status}  # fmt: skip
         proposal = await propose(db, writer, op="create", kind="entity", fields=fields)
-        return WriteResult(proposal=proposal)
+        return WriteResult(proposal=proposal, kept_as_text=kept)
     entity = Entity(
         type=type_,
         key=key,
@@ -959,7 +1004,7 @@ async def create_entity(
     await db.flush()
     _revision(db, writer, None, entity_snapshot(entity), entity=entity)
     await db.flush()
-    return WriteResult(entity=entity)
+    return WriteResult(entity=entity, kept_as_text=kept)
 
 
 def _entity_changes(entity: Entity, changes: dict[str, Any]) -> dict[str, Any]:
@@ -983,9 +1028,19 @@ async def update_entity(
     if unknown:
         raise InvalidError(f"cannot change {', '.join(sorted(unknown))}")
     _check_status(changes.get("status"))
+    kept: tuple[str, ...] = ()
+    if entity.type == "goal" and isinstance(changes.get("attrs"), dict):
+        merged = merge_attrs(entity.attrs, changes["attrs"])
+        if merged != (entity.attrs or {}):
+            checked, kept = await _goal_attrs(db, writer, merged, dict(entity.attrs or {}))
+            if kept:
+                patch = dict(changes["attrs"])
+                for k in kept:
+                    patch[k], patch[f"{k}_text"] = None, checked[f"{k}_text"]
+                changes = {**changes, "attrs": patch}
     diff = _entity_changes(entity, changes)
     if not diff:
-        return WriteResult(entity=entity)
+        return WriteResult(entity=entity, kept_as_text=kept)
     if "attrs" in diff:
         check_managed_attrs(writer, entity.attrs, diff["attrs"])
     if entity.type == "goal" and diff.get("status") == "confirmed":
@@ -995,7 +1050,7 @@ async def update_entity(
         proposal = await propose(
             db, writer, op="update", kind="entity", fields=fields, entity=entity
         )
-        return WriteResult(entity=entity, proposal=proposal)
+        return WriteResult(entity=entity, proposal=proposal, kept_as_text=kept)
     if diff.get("status") == "rejected":
         await _check_archivable(db, writer.principal, entity, "archive")
     before = entity_snapshot(entity)
@@ -1008,7 +1063,7 @@ async def update_entity(
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
     await db.flush()
     await _record_change(db, writer.actor, entity, before, "entity_updated")
-    return WriteResult(entity=entity)
+    return WriteResult(entity=entity, kept_as_text=kept)
 
 
 async def set_entity_status(

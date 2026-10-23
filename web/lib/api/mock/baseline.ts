@@ -9,6 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 
 import { DEPOSITS_IDS } from "./blockers";
 import { describe, proposer } from "./describe";
+import { goalCheck, readText, refusedProblems, todayIso, unitOk, type GoalProblem } from "./goals";
 import { PRODUCT_CHAT_ID, seededItemId } from "./ids";
 import { routeEvidenceLinks } from "./public-links";
 
@@ -32,6 +33,8 @@ export interface BaselineState {
   revisions?: Schemas["RevisionOut"][];
   /** Each applied change to one entity field, as entity_revisions would show it (#268). */
   fieldChanges?: FieldChange[];
+  /** Goals' dated values (B5), as GET .../measurements serves them; absent in older saved data. */
+  measurements?: Schemas["MeasurementOut"][];
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
@@ -43,6 +46,8 @@ export type BaselineCaller = {
   runOf?: (runId: string) => Schemas["ProposalRun"] | null;
   /** A member's email, for the proposer's name (B4); null when there is no such member. */
   memberEmail?: (userId: string) => string | null;
+  /** An active member of this Oracle: a goal's owner must be one (B5). */
+  isMember?: (userId: string) => boolean;
   /** One of the caller's own source items (./sources.ts), to cite as evidence; null when it is not theirs. */
   sourceItem?: (itemId: string) => CitedItem | null;
 };
@@ -139,7 +144,7 @@ export function scored(f: Factors, latestAt: string) {
 }
 
 export function seedBaseline(uuid: () => string): BaselineState {
-  const s: BaselineState = { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] };
+  const s: BaselineState = { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [], measurements: [] };
   const t0 = "2026-10-12T09:00:00Z";
 
   const entity = (
@@ -232,25 +237,38 @@ export function seedBaseline(uuid: () => string): BaselineState {
     return row;
   };
 
-  // Goals: two confirmed, one still proposed (and served by nothing yet).
+  // Goals: two confirmed, one still proposed (and served by nothing yet). B5: activation is
+  // typed and owned (by the approver, see attributeGoalOwner), paid conversion typed without
+  // an owner, early churn still on text, so it is Not measurable and offers Fill from text.
   const activation = entity("goal", "g.activation", "Raise activation", {
     body: "More new accounts reach their first successful order in the first week.",
-    attrs: { weight: 0.5, metric: "Accounts that finish setup within 7 days", target: "45%", horizon: "2026-Q4", current: "38%" },
+    attrs: {
+      weight: 0.5, metric: "Accounts that finish setup within 7 days", unit: "%", comparison: "at_least", target: 45, start: 31,
+      current: 38, current_as_of: "2026-10-01", horizon: "short", due: "2026-12-31",
+    },
     confidence: 0.78,
   });
   const paid = entity("goal", "g.paid-conversion", "Grow paid conversion", {
     body: "More trial accounts move to a paid plan.",
-    attrs: { weight: 0.3, metric: "Trial to paid rate", target: "12%", horizon: "2027-H1", current: "9.4%" },
+    attrs: {
+      weight: 0.3, metric: "Trial to paid rate", unit: "%", comparison: "at_least", target: 12, current: 9.4,
+      current_as_of: "2026-10-01", horizon: "medium", due: "2027-06-30",
+    },
     confidence: 0.66,
   });
-  const churn = entity("goal", "g.early-churn", "Cut early churn", {
+  entity("goal", "g.early-churn", "Cut early churn", {
     body: "Fewer accounts leave in their first three months.",
-    attrs: { weight: 0.2, metric: "Accounts lost in the first 90 days", target: "below 8%", horizon: "2027-H1", current: "11%" },
+    attrs: { weight: 0.2, metric: "Accounts lost in the first 90 days", target_text: "below 8%" },
     status: "proposed",
     confidence: 0.45,
   });
+  // Activation's value on the first of each month, as people recorded it.
+  [31, 33, 32, 35, 34, 36, 38].forEach((value, i) => {
+    const measured_on = `2026-${String(4 + i).padStart(2, "0")}-01`;
+    s.measurements!.push({ id: uuid(), entity_id: activation.id, value, measured_on, note: i === 6 ? "October export" : null, evidence_id: null, recorded_by: null, created_at: `${measured_on}T09:00:00Z` });
+  });
   // Each goal's metric, read monthly: the revisions that set `current`, as the API records them.
-  const history = (goal: EntityRow, values: string[]) => {
+  const history = (goal: EntityRow, values: number[]) => {
     values.forEach((current, i) => {
       const at = new Date(Date.UTC(2026, 10 - values.length + i, 12, 9)).toISOString();
       const attrs = { ...goal.attrs, current };
@@ -267,9 +285,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
       });
     });
   };
-  history(activation, ["31%", "33%", "32%", "35%", "34%", "36%", "38%"]);
-  history(paid, ["11.2%", "10.8%", "10.5%", "10.1%", "9.9%", "9.6%", "9.4%"]);
-  history(churn, ["12%", "11%"]);
+  history(activation, [31, 33, 32, 35, 34, 36, 38]);
+  history(paid, [11.2, 10.8, 10.5, 10.1, 9.9, 9.6, 9.4]);
 
   // Products.
   const storefront = entity("product", "p.storefront", "Storefront", { body: "The shop builder new accounts start with." });
@@ -936,7 +953,23 @@ export async function routeBaseline(
 ): Promise<Response> {
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
-  const entityOut = (e: EntityRow) => withCount(s, e, "entity_id") as Schemas["EntityOut"];
+  const isMember = caller.isMember ?? (() => true);
+  // B5: a goal carries its goal_check (null for other types).
+  const entityOut = (e: EntityRow) =>
+    ({ ...withCount(s, e, "entity_id"), goal_check: e.type === "goal" ? goalCheck(e.attrs, e.status, isMember) : null }) as Schemas["EntityOut"];
+  /** 422 with every problem, as the API refuses a person's bad goal fields. */
+  const refuse = (errors: GoalProblem[]) => json(422, { detail: `goal fields rejected: ${errors.length} problem(s)`, errors });
+  const goalRefusal = (e: EntityRow, attrs: Attrs | null | undefined) =>
+    e.type === "goal" && attrs ? refusedProblems(mergeAttrs(e.attrs, attrs), e.attrs, isMember) : [];
+  const measurements = () => (s.measurements ??= []);
+  /** The latest measurement by day becomes the goal's current, through a person's write (it locks). */
+  const syncCurrent = (goal: EntityRow, reason: string) => {
+    const latest = measurements()
+      .filter((x) => x.entity_id === goal.id)
+      .sort((a, b) => b.measured_on.localeCompare(a.measured_on))[0];
+    const attrs = latest ? { current: latest.value, current_as_of: latest.measured_on } : { current: null, current_as_of: null };
+    updateEntity(s, goal, { attrs }, { origin: "user", userId: caller.userId, reason });
+  };
   const edgeOut = (e: EdgeRow) => withCount(s, e, "edge_id") as Schemas["EdgeOut"];
   const findEntity = (id: string) => s.entities.find((e) => e.id === id);
   /** ProposalOut: the run that made it, its sentence (kept from the decision once decided) and who made it. */
@@ -1042,6 +1075,8 @@ export async function routeBaseline(
       }
       if (!action && m === "PATCH") {
         const input = await body<Schemas["EntityPatch"]>();
+        const problems = (input.origin ?? "user") === "user" ? goalRefusal(e, input.attrs as Attrs | null) : [];
+        if (problems.length) return refuse(problems);
         const proposal = updateEntity(s, e, input as Changes, {
           origin: input.origin ?? "user",
           userId: caller.userId,
@@ -1072,6 +1107,26 @@ export async function routeBaseline(
           });
         }
         return json(200, entityOut(e));
+      }
+      if (action === "measurements" && m === "GET") {
+        return json(200, measurements().filter((x) => x.entity_id === e.id).sort((a, b) => b.measured_on.localeCompare(a.measured_on)));
+      }
+      if (action === "measurements" && m === "POST") {
+        const input = await body<Schemas["MeasurementCreate"]>();
+        if (e.type !== "goal") return fail(422, "measurements are recorded on goals only");
+        if (!unitOk(e.attrs.unit)) return fail(422, "give the goal its unit before recording a value");
+        if (typeof input.value !== "number" || !Number.isFinite(input.value)) return fail(422, "The value is a number");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(input.measured_on ?? "")) return fail(422, "A date is written YYYY-MM-DD");
+        if (input.measured_on > todayIso()) return fail(422, "a value cannot be measured in the future");
+        if (e.attrs.unit === "%" && input.value < 0) return fail(422, "A percentage is 0 or more");
+        let row = measurements().find((x) => x.entity_id === e.id && x.measured_on === input.measured_on);
+        if (!row) {
+          row = { id: newId(), entity_id: e.id, value: 0, measured_on: input.measured_on, note: null, evidence_id: null, recorded_by: null, created_at: now() };
+          measurements().push(row);
+        }
+        Object.assign(row, { value: input.value, note: input.note ?? null, evidence_id: input.evidence_id ?? null, recorded_by: caller.userId });
+        syncCurrent(e, `value ${input.value} measured on ${input.measured_on}`);
+        return json(201, row);
       }
       if (action === "unlock" && m === "POST") {
         Object.assign(e, { locked: false, locked_by: null, locked_at: null });
@@ -1121,6 +1176,9 @@ export async function routeBaseline(
         const changes = flatChanges(payload.fields).map(([k]) => k);
         const unknown = keys.find((k) => !changes.includes(k));
         if (unknown) return fail(422, `this proposal does not change ${unknown}`);
+        // Re-checked: a member named as owner may have left since (B5).
+        const problems = goalRefusal(target, without(payload.fields ?? {}, keys).attrs);
+        if (problems.length) return refuse(problems);
         p.payload = { ...p.payload, summary: describe(p, s.entities, s.edges), ...(keys.length ? { skipped_fields: keys } : {}) };
         updateEntity(s, target, without(payload.fields ?? {}, keys), { origin: "user", userId: caller.userId });
       }
@@ -1131,6 +1189,33 @@ export async function routeBaseline(
         decided_at: now(),
       });
       return json(200, proposalOut(p));
+    }
+
+    if (head === "measurements" && id && !action && m === "DELETE") {
+      const row = measurements().find((x) => x.id === id);
+      if (!row) return fail(404, "Measurement not found");
+      const goal = findEntity(row.entity_id);
+      s.measurements = measurements().filter((x) => x.id !== id);
+      if (goal) syncCurrent(goal, `measurement of ${row.measured_on} deleted`);
+      return new Response(null, { status: 204 });
+    }
+    if (head === "goals" && id === "fill-from-text" && !action && m === "POST") {
+      // An Oracle (agent) write: applied to an unlocked goal, a proposal on a locked one.
+      let applied = 0;
+      let proposed = 0;
+      const left: Schemas["FilledText"][] = [];
+      const goals = s.entities.filter((e) => e.type === "goal" && e.status !== "rejected").sort((a, b) => a.key.localeCompare(b.key));
+      for (const goal of goals) {
+        const { values, left: unread } = readText(goal.attrs);
+        for (const k of unread) if (goal.attrs[`${k}_text`] != null) left.push({ entity_id: goal.id, field: k, text: String(goal.attrs[`${k}_text`]) });
+        if (Object.keys(values).length === 0) continue;
+        const patch: Attrs = { ...values };
+        for (const k of ["target", "start", "current", "horizon", "weight"]) if (k in values && `${k}_text` in goal.attrs) patch[`${k}_text`] = null;
+        const proposal = updateEntity(s, goal, { attrs: patch }, { origin: "agent", userId: caller.userId, reason: "Fill from text" });
+        if (proposal) proposed += 1;
+        else applied += 1;
+      }
+      return json(200, { applied, proposed, left_as_text: left } satisfies Schemas["FillFromTextResult"]);
     }
 
     if (head === "conflicts" && !id && m === "GET") {
@@ -1228,13 +1313,13 @@ export function addNoisyProposals(s: BaselineState, uuid: () => string) {
   const churn = goal("g.early-churn");
   propose(
     churn,
-    { title: churn.title, body: churn.body, attrs: { ...churn.attrs, weight: 0.25, target: "below 7%", horizon: "2026-Q4", current: "10%" } },
+    { title: churn.title, body: churn.body, attrs: { ...churn.attrs, weight: 0.25, target_text: "below 7%", horizon_text: "2026-Q4", current_text: "10%" } },
     "2026-10-16T08:20:00Z",
   );
   const activation = goal("g.activation");
   propose(
     activation,
-    { title: activation.title, body: "More new accounts reach their first successful order in the first two weeks.", attrs: { ...activation.attrs, target: "50%" } },
+    { title: activation.title, body: "More new accounts reach their first successful order in the first two weeks.", attrs: { ...activation.attrs, target: 50 } },
     "2026-10-16T08:21:00Z",
   );
   const paid = goal("g.paid-conversion");
@@ -1262,6 +1347,12 @@ export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
     });
   propose({ attrs: { milestone: "M2" } }, "Slice a ships in M2.", "2026-10-16T08:30:00Z");
   propose({ attrs: { milestone: "Below the line", effort: "XL" } }, "Moved below the line after sizing.", "2026-10-16T08:31:00Z");
+}
+
+/** Makes the seeded activation goal owned by the given member (the mock's members get their ids after the seed). */
+export function attributeGoalOwner(s: BaselineState, userId: string) {
+  const g = s.entities.find((e) => e.key === "g.activation");
+  if (g) g.attrs = { ...g.attrs, owner: userId };
 }
 
 /** Makes the seeded commenter proposal the given member's (the mock's members get their ids after the seed). */

@@ -6,7 +6,7 @@ import { Button, Chip, InfoTip, Inspector, InspectorSection, Notice, type ChipKi
 import { findPeople, type Person } from "@/components/PersonPicker";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { addDays, todayIn, useCompanyZone, zoneDateTime, zoneDay, zoneInstant } from "@/lib/dates";
 import { hasRole, useMe } from "@/lib/me";
 import { useRiskPolicy } from "@/lib/risk-policy";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
@@ -126,6 +126,7 @@ export function BlockerInspector({
   onChanged: () => void;
 }) {
   const { me, role } = useMe();
+  const zone = useCompanyZone();
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const q = useQuery(`blocker:${blockerId}`, () =>
@@ -248,7 +249,7 @@ export function BlockerInspector({
                 <ul className="flex flex-col gap-1.5" aria-label="History">
                   {[...s.events].reverse().map((e) => (
                     <li key={e.id} className="text-sm">
-                      <span className="tnum text-text2">{formatDateTime(e.created_at)}</span> {e.summary}
+                      <span className="tnum text-text2">{zoneDateTime(e.created_at, zone)}</span> {e.summary}
                       {e.reason && <span className="text-text2"> · {e.reason}</span>}
                     </li>
                   ))}
@@ -827,8 +828,6 @@ function Experiments({
   );
 }
 
-const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-
 function PlanExperiment({
   strategy: s,
   people,
@@ -852,7 +851,8 @@ function PlanExperiment({
   const [threshold, setThreshold] = useState("");
   const [owner, setOwner] = useState(meId ?? "");
   const [gate, setGate] = useState("");
-  const [today] = useState(() => Date.now());
+  const zone = useCompanyZone();
+  const today = todayIn(zone);
   const { error, setError, submit } = useSubmit(act);
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -868,8 +868,8 @@ function PlanExperiment({
               method: method.trim() || null,
               success_threshold: threshold.trim() || null,
               owner_id: owner || null,
-              // 09:00 UTC on the chosen day.
-              decision_gate_at: gate ? `${gate}T09:00:00Z` : null,
+              // 09:00 on the chosen day in the Company time zone.
+              decision_gate_at: gate ? zoneInstant(gate, "09:00", zone) : null,
               evidence_ids: [],
             },
           }),
@@ -888,7 +888,7 @@ function PlanExperiment({
         <Text name="Success threshold" value={threshold} onChange={setThreshold} />
         <Select name="Owner" value={owner} options={ownerOptions(people, meId, name)} onChange={setOwner} />
         <Field name="Decision gate">
-          {(id) => <input id={id} className={INPUT} type="date" min={isoDay(today + 86_400_000)} value={gate} onChange={(e) => setGate(e.target.value)} />}
+          {(id) => <input id={id} className={INPUT} type="date" min={addDays(today, 1)} value={gate} onChange={(e) => setGate(e.target.value)} />}
         </Field>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
@@ -917,6 +917,7 @@ function ExperimentRow({
   denied: Denied;
   act: Act;
 }) {
+  const zone = useCompanyZone();
   const [concluding, setConcluding] = useState(false);
   const [outcome, setOutcome] = useState<Experiment["status"]>("succeeded");
   const [result, setResult] = useState("");
@@ -938,7 +939,7 @@ function ExperimentRow({
     ["Method", x.method],
     ["Success threshold", x.success_threshold],
     ["Owner", name(x.owner_id)],
-    ["Decision gate", x.decision_gate_at && formatDay(x.decision_gate_at)],
+    ["Decision gate", x.decision_gate_at && zoneDay(x.decision_gate_at, zone)],
     ["Result", x.result],
   ];
   return (

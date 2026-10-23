@@ -37,9 +37,23 @@ from every member's Google Docs sources in the same request, with no Drive call
 (:func:`oracle.sources.service.hide_outside_company`).
 
 - ``alignment_report`` (F6): the weekly alignment report's schedule and Slack channel,
-  ``{"enabled", "weekday": "mon".."sun", "time": "HH:MM", "timezone": an IANA zone,
+  ``{"enabled", "weekday": "mon".."sun", "time": "HH:MM",
   "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
   takes the defaults for the rest.
+
+- ``company_timezone``: the Company time zone, an IANA name (``zoneinfo``),
+  America/Los_Angeles by default (owner decision 2026-10-22; H2's A1 Time zone step
+  opens Settings › Company to set it). Goals' "today", the decision log's "today" (#336),
+  the weekly alignment report's schedule and every ritual read it (a ritual has no zone
+  of its own); a change moves every ritual.
+- ``ritual_summaries`` (H2): ``on_demand`` or ``always`` (Every pre-read); also set with
+  ``PUT /v1/rituals/summaries``.
+- ``outcome_measure_days`` (H3): 7-365, default 30: an outcome is checked at the later of
+  its prediction's ``by`` and this many days after it shipped.
+- ``calibration_min_outcomes`` (H3): 1-100, default 5: assessed outcomes a goal (or the
+  company) needs before its track record sets a factor.
+- ``outcome_calibration`` (H3): ``apply`` (default) multiplies priority confidence by the
+  track record; ``show`` only displays it.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -48,6 +62,7 @@ import re
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -60,6 +75,7 @@ from oracle.auth.models import ROLES
 from oracle.authz import recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
+from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
 from oracle.tenant_settings import TenantSetting
 
@@ -90,16 +106,27 @@ DEFAULTS: dict[str, Any] = {
         "long_from_months": 12,
         "long_to_months": 24,
     },
-    # F6 (defaults the spec picks): Monday 08:00 Pacific, for the week that just ended.
+    # F6 (defaults the spec picks): Monday 08:00, for the week that just ended, in the
+    # Company time zone.
     "alignment_report": {
         "enabled": True,
         "weekday": "mon",
         "time": "08:00",
-        "timezone": "America/Los_Angeles",
         "slack_channel": None,
     },
     # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
     "autonomy": {},
+    # The Company time zone (an IANA name): goals' and decisions' today, the alignment
+    # report, rituals. Los Angeles until an owner sets one (owner decision 2026-10-22).
+    "company_timezone": COMPANY_ZONE,
+    # H2: Oracle's written summary of a pre-read: on_demand, or always (Every pre-read).
+    "ritual_summaries": "on_demand",
+    # H3 Predicted versus actual: days after shipping before an outcome is checked, the
+    # assessed outcomes a goal needs before its own track record counts, and whether the
+    # track record lowers priority scores (apply) or is only shown (show).
+    "outcome_measure_days": 30,
+    "calibration_min_outcomes": 5,
+    "outcome_calibration": "apply",
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -131,6 +158,16 @@ async def get_setting(session: AsyncSession, key: str) -> Any:
 
 async def clear_setting(session: AsyncSession, key: str) -> None:
     await session.execute(delete(TenantSetting).where(TenantSetting.key == key))
+
+
+async def company_timezone(session: AsyncSession) -> ZoneInfo:
+    """The Company time zone from Settings; :data:`COMPANY_ZONE` when none is set (or it
+    no longer reads)."""
+    zone = await get_setting(session, "company_timezone")
+    try:
+        return ZoneInfo(zone) if isinstance(zone, str) and zone else ZoneInfo(COMPANY_ZONE)
+    except (ValueError, ZoneInfoNotFoundError):
+        return ZoneInfo(COMPANY_ZONE)
 
 
 async def company_horizons(session: AsyncSession) -> dict[str, int]:
@@ -262,6 +299,15 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
                 f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
             )
         return value
+    if key in ("outcome_measure_days", "calibration_min_outcomes"):
+        lo, hi = (7, 365) if key == "outcome_measure_days" else (1, 100)
+        if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
+            raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
+        return value
+    if key == "outcome_calibration":
+        if value not in ("apply", "show"):
+            raise InvalidSetting("outcome_calibration must be apply or show")
+        return value
     if key == "company_email_domains":
         return validate_company_domains(value)
     if key == "company_shared_drives":
@@ -275,6 +321,18 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
             return validate_setting(value)
         except ValueError as e:
             raise InvalidSetting(str(e)) from None
+    if key == "company_timezone":
+        from oracle.rituals.schedule import zone
+
+        try:
+            zone(value) if isinstance(value, str) else zone("")
+        except ValueError:
+            raise InvalidSetting("company_timezone must be an IANA time zone name") from None
+        return value
+    if key == "ritual_summaries":
+        if value not in ("on_demand", "always"):
+            raise InvalidSetting("ritual_summaries must be on_demand or always")
+        return value
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: use "
@@ -413,6 +471,21 @@ async def _company_narrowing(
     return {"hidden_items": hidden} if hidden else {}
 
 
+async def _follow(db: AsyncSession, key: str, previous: Any) -> None:
+    """What follows a stored change: F6's report schedule moves its ritual (H2); the
+    Company time zone moves the rituals on the old zone."""
+    if key == "company_timezone":
+        from oracle.rituals.service import follow_company_timezone
+
+        await db.flush()
+        await follow_company_timezone(db, str(previous))
+    if key == "alignment_report":
+        from oracle.rituals.service import follow_alignment_setting
+
+        await db.flush()
+        await follow_alignment_setting(db)
+
+
 @router.put(
     "/settings/{key}",
     response_model=SettingOut,
@@ -427,8 +500,10 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     # being disabled must not raise iap_default_role with a request in flight).
     await recheck_caller(db, principal, "owner", shared=key not in GATE_KEYS)
     before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
+    previous = await get_setting(db, key)
     if body.value is None:
         await clear_setting(db, key)
+        await _follow(db, key, previous)
         extra = await _company_narrowing(db, principal, before)
         await audit.record(
             db, principal, "setting.reset", "tenant_setting", data={"key": key, **extra}
@@ -446,6 +521,7 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     else:
         row.value = value
         row.updated_by = principal.id
+    await _follow(db, key, previous)
     extra = await _company_narrowing(db, principal, before)
     await audit.record(
         db,

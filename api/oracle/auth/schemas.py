@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from oracle.auth.models import Role
+from oracle.rituals.schedule import DEFAULT_ZONE
 
 
 class LoginRequest(BaseModel):
@@ -22,3 +23,6 @@ class Me(BaseModel):
     engineering_lead: bool = False
     token_id: uuid.UUID | None = None
     token_name: str | None = None
+    # #401: the Company time zone (an IANA name) every screen shows dates and times in;
+    # every member reads it here (Settings' own GET is for owners).
+    company_timezone: str = DEFAULT_ZONE

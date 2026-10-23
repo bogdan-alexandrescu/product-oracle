@@ -2,10 +2,12 @@
 
 credential ``{"token"}``, a user token (a bot token is refused: it reads the bot's
 channels, not the person's); config ``{"channels": [channel ids], "since"?: "YYYY-MM-DD",
-"until"?: "YYYY-MM-DD"}``, the date range in the same shape as Fireflies'. With
-``since``, no message posted before that day (UTC) is read; with ``until`` (on or after
-``since``), nothing posted after that day is read, thread replies included (S5, owner
-2026-10-20): a thread started inside the range holds only the replies posted inside it.
+"until"?: "YYYY-MM-DD", "timezone"?: IANA zone}``, the date range in the same shape as
+Fireflies' (#401: whole days in ``timezone``, the Company time zone the picker saves; UTC
+for configs saved without one). With ``since``, no message posted before that day is
+read; with ``until`` (on or after ``since``), nothing posted after that day is read,
+thread replies included (S5, owner 2026-10-20): a thread started inside the range holds
+only the replies posted inside it.
 Narrowing the config (a later ``since``, an earlier ``until``, a removed channel) deletes
 the items now outside it on the next sync (:meth:`SlackConnector.scope`).
 
@@ -61,6 +63,7 @@ from typing import Any
 import httpx
 
 from oracle.sources.base import (
+    ZONE_KEY,
     Attention,
     ConnectorAuthError,
     ConnectorConfigError,
@@ -74,8 +77,10 @@ from oracle.sources.base import (
     Scope,
     SyncEvent,
     check_labels,
+    config_zone,
     normalize_labels,
     register,
+    zone_midnight,
 )
 
 API_URL = "https://slack.com/api/"
@@ -198,14 +203,16 @@ def _day(config: dict[str, Any], key: str) -> date | None:
     return day
 
 
-def _midnight(day: date) -> float:
-    return datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()
+def _midnight(day: date, config: dict[str, Any]) -> float:
+    """The start of ``day`` in the config's zone (#401: the Company time zone the picker
+    saved; UTC without one)."""
+    return zone_midnight(day, config_zone(config)).timestamp()
 
 
 def _since(config: dict[str, Any]) -> float | None:
     """``since`` as a Slack timestamp (seconds), or ``None`` when absent."""
     day = _day(config, "since")
-    return None if day is None else _midnight(day)
+    return None if day is None else _midnight(day, config)
 
 
 def _until(config: dict[str, Any]) -> float | None:
@@ -217,12 +224,12 @@ def _until(config: dict[str, Any]) -> float | None:
     since = _day(config, "since")
     if since is not None and day < since:
         raise ConnectorConfigError("until must be on or after since")
-    return _midnight(day + timedelta(days=1))
+    return _midnight(day + timedelta(days=1), config)
 
 
 def _range_of(config: dict[str, Any]) -> dict[str, str]:
-    """The date range of a config as the cursor records it."""
-    return {k: config[k] for k in ("since", "until") if config.get(k) is not None}
+    """The date range of a config as the cursor records it, with the zone its days are in."""
+    return {k: config[k] for k in ("since", "until", ZONE_KEY) if config.get(k) is not None}
 
 
 def _token(credential: dict[str, Any] | None) -> str:
@@ -407,6 +414,7 @@ class SlackConnector:
         """The rules a saved config must still meet (the channel cap, the dates, the
         channel names in ``labels``)."""
         _channels(config)
+        config_zone(config)
         _since(config)
         _until(config)
         check_labels(config, MAX_CHANNELS, "labels must map channel ids to names")
@@ -478,6 +486,7 @@ class SlackConnector:
 
     async def validate(self, config: dict[str, Any], credential: dict[str, Any] | None) -> None:
         channels = _channels(config)
+        config_zone(config)
         _since(config)
         _until(config)
         async with self._session(credential) as slack:

@@ -210,6 +210,7 @@ async def load_features(
                     weight=_float((goal.attrs or {}).get("weight")),
                     contribution=_contribution((edge.attrs or {}).get("contribution")),
                     edge_status=edge.status,
+                    goal_id=str(goal.id),
                 )
             )
         elif edge.type == "depends_on" and edge.src_id in inputs and edge.dst_id in inputs:
@@ -254,7 +255,28 @@ async def load_features(
     for f in inputs.values():
         f.goals.sort(key=lambda g: g.goal_key)
         f.depends_on.sort()
+    await _track_record(db, list(inputs.values()))
     return sorted(inputs.values(), key=lambda f: f.key)
+
+
+async def _track_record(db: AsyncSession, features: list[FeatureInput]) -> None:
+    """H3: each feature's track record factor from its confirmed goals' assessed outcomes."""
+    from oracle.quality import calibration
+
+    cal = await calibration.compute(db)
+    if cal.company.factor is None and not any(g.factor is not None for g in cal.goals):
+        return
+    for f in features:
+        found = calibration.for_goals(cal, [uuid.UUID(g.goal_id) for g in f.goals if g.goal_id])
+        if found is not None:
+            f.calibration, f.calibration_basis, f.calibration_n = found
+            f.calibration_apply = cal.setting == "apply"
+
+
+async def calibration_out(db: AsyncSession):
+    from oracle.quality import calibration
+
+    return await calibration.compute(db)
 
 
 async def compute(

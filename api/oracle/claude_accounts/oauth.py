@@ -273,6 +273,25 @@ def credential_from_token_response(
     )
 
 
+#: Longer than any email address may be (RFC 5321) or than a name a person reads.
+_IDENTITY_MAX = 320
+
+
+def identity_from_token_response(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Which Claude account a redeemed code was for: its email and organization name, as
+    the token endpoint reports them beside the tokens (``account.email_address``,
+    ``organization.name``). Anything absent, odd or blank is None: not reported."""
+
+    def field(section: str, key: str) -> str | None:
+        part = payload.get(section)
+        value = part.get(key) if isinstance(part, dict) else None
+        if not isinstance(value, str) or not value.strip() or len(value) > _IDENTITY_MAX:
+            return None
+        return value.strip()
+
+    return field("account", "email_address"), field("organization", "name")
+
+
 def serialise(credential: Credential) -> str:
     """The canonical stored form, in the shape Claude Code uses."""
     return json.dumps(

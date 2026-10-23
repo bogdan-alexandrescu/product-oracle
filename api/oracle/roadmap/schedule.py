@@ -272,14 +272,18 @@ async def _milestone_effects(
 
 
 async def _resting_items(db: AsyncSession, basis: ScheduleBasis) -> list[Any]:
-    """The roadmap items whose stored date rests on ``basis`` (withdraw's query, shared
-    with :func:`impact`)."""
+    """The roadmap items of approved roadmaps whose stored date rests on ``basis``
+    (withdraw's query, shared with :func:`impact`)."""
     from oracle.roadmap.models import RoadmapItem
 
     return list(
         await db.scalars(
             select(RoadmapItem)
-            .where(RoadmapItem.milestone["basis_ids"].astext.contains(str(basis.id)))
+            .where(
+                RoadmapItem.milestone["basis_ids"].astext.contains(str(basis.id)),
+                # E1: a PRD draft's items (no roadmap version yet) never go stale.
+                RoadmapItem.roadmap_version_id.is_not(None),
+            )
             .order_by(RoadmapItem.id)
         )
     )

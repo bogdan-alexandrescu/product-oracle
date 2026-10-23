@@ -24,11 +24,11 @@ function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined })
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0" data-testid="goal-figure">
-          {p.state === "none" ? (
+          {p.state === "none" || (p.state === "notarget" && !g.currentText) ? (
             <b className="tnum font-display text-[34px] leading-9 font-bold text-text2" aria-label="No current value">
               –
             </b>
-          ) : p.state === "raw" ? (
+          ) : p.state === "raw" || (p.state === "notarget" && !g.current) ? (
             // Units that do not match, or a side Home cannot read: both as written, no distance.
             <b className="tnum font-display text-2xl leading-9 font-bold break-words" title={g.currentText!}>
               {g.currentText}
@@ -63,6 +63,10 @@ function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined })
             <span className="font-semibold whitespace-nowrap">{p.text}</span>
           ) : p.state === "none" ? (
             <span className="text-text2">{p.text}</span>
+          ) : p.state === "notarget" ? (
+            <span className="font-semibold whitespace-nowrap text-warn" title={`Not measurable yet: missing ${(g.missing ?? ["target", "unit"]).join(", ")}`}>
+              {p.text}
+            </span>
           ) : null}
         </span>
         {change != null && change !== 0 && p.state !== "raw" && (
