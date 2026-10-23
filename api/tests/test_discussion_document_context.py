@@ -60,9 +60,7 @@ async def test_a_section_discussion_reads_the_version_section_first(client, fake
 # version even when it has no brief layer; fails_when=it reads nothing of the document;
 # no_claim=the budget's exact cut.
 async def test_a_document_discussion_reads_the_whole_version(client, fake):  # noqa: F811
-    prompt, _ = await ask(
-        client, fake, "document", lambda doc: {"document_id": doc, "version": 1}
-    )
+    prompt, _ = await ask(client, fake, "document", lambda doc: {"document_id": doc, "version": 1})
     assert PROBLEM in prompt and PAYMENT in prompt and LAST in prompt
     assert EXCERPT not in prompt
 
