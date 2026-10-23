@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.baseline.models import Conflict, Edge, Entity, Evidence
@@ -217,7 +217,120 @@ async def _subject(db: AsyncSession, ctx: Context, d: Discussion) -> set[uuid.UU
                     "finding", str(gap.id), f"Gap ({gap.category})",
                     sharing.one_line(view.statement),
                 )  # fmt: skip
+    elif kind == "screen":
+        await _screen(db, ctx, s["path"])
     return linked
+
+
+# G7 Head-of-product panel (3.4): a ``screen`` subject's page names, by first path segment.
+PAGES = {
+    "": "Home", "home": "Home", "requests": "Requests", "baseline": "Baseline",
+    "documents": "PRDs", "priorities": "Priorities", "plan": "Plan", "roadmap": "Plan",
+    "runs": "Runs", "inbox": "Inbox", "company": "Company", "sources": "Sources",
+    "settings": "Settings",
+}  # fmt: skip
+OPEN_RUNS = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
+
+
+def page_name(path: str) -> str:
+    """ "Settings · Members" for ``/settings/members``; the path itself for an unknown page."""
+    parts = [p for p in path.split("?")[0].split("/") if p]
+    head = parts[0] if parts else ""
+    if head not in PAGES:
+        return path
+    name = PAGES[head]
+    if head in ("settings", "company") and len(parts) > 1:
+        name += " · " + parts[1].replace("-", " ").capitalize()
+    return name
+
+
+def _figure(value: Any) -> float | None:
+    try:
+        return float(str(value).replace(",", "").rstrip("%"))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _home(db: AsyncSession, ctx: Context) -> None:
+    from oracle.roadmap.models import ProductTrack
+    from oracle.runs.models import Checkpoint, Run
+
+    goals = await db.scalars(
+        select(Entity)
+        .where(Entity.type == "goal", Entity.status == "confirmed")
+        .order_by(Entity.created_at)
+        .limit(MAX_ENTITIES)
+    )
+    for g in goals:
+        attrs = g.attrs or {}
+        current, target = attrs.get("current"), attrs.get("target")
+        line = f"current {current if current is not None else 'unknown'}"
+        if target is not None:
+            line += f", target {target}"
+        a, b = _figure(current), _figure(target)
+        if a is not None and b is not None:
+            line += f", {abs(b - a):g} to go"
+        ctx.add("entity", str(g.id), f"Goal: {g.title}", line, url=f"/baseline#{g.id}")
+    tracks = await db.scalars(select(ProductTrack).order_by(ProductTrack.created_at).limit(20))
+    for t in tracks:
+        ctx.add("track", str(t.id), f"Track: {t.title}", f"status {t.status}", url="/plan")
+    runs = await db.scalar(select(func.count()).select_from(Run).where(Run.status.in_(OPEN_RUNS)))
+    waiting = await db.scalar(
+        select(func.count()).select_from(Checkpoint).where(Checkpoint.status == "pending")
+    )
+    ctx.note(f"Open runs: {runs}; checkpoints waiting: {waiting}")
+
+
+async def _documents(db: AsyncSession, ctx: Context) -> None:
+    from oracle.docs.models import Document, DocumentVersion
+
+    latest = (
+        select(
+            DocumentVersion.document_id,
+            func.max(DocumentVersion.number).label("latest"),
+            func.max(DocumentVersion.number)
+            .filter(DocumentVersion.approved_at.is_not(None))
+            .label("approved"),
+        )
+        .group_by(DocumentVersion.document_id)
+        .subquery()
+    )
+    rows = await db.execute(
+        select(Document, latest.c.latest, latest.c.approved)
+        .join(latest, latest.c.document_id == Document.id)
+        .order_by(Document.title)
+        .limit(MAX_ENTITIES)
+    )
+    for doc, last, approved in rows:
+        line = f"{doc.kind}; latest v{last}" + (f"; approved v{approved}" if approved else "")
+        ctx.add("document", str(doc.id), doc.title, line, url=f"/documents/{doc.slug}")
+
+
+async def _runs(db: AsyncSession, ctx: Context) -> None:
+    from oracle.runs import flows
+    from oracle.runs.models import Run
+
+    runs = await db.scalars(
+        select(Run).where(Run.status.in_(OPEN_RUNS)).order_by(Run.created_at.desc()).limit(20)
+    )
+    for run in runs:
+        flow = flows.FLOWS.get(run.flow)
+        title = flow.title if flow else run.flow
+        ctx.add("run", str(run.id), f"Run: {title}", f"status {run.status}", url=f"/runs/{run.id}")
+
+
+async def _screen(db: AsyncSession, ctx: Context, path: str) -> None:
+    """Only what every member may read (3.4). The Inbox is personal, sources and settings
+    are a person's own (AUD-9), Requests and the Company tabs have no data here yet, and
+    board and investor drafts are hidden from commenters and viewers (H8): the page name."""
+    ctx.note(f"The page: {page_name(path)}")
+    head = path.split("?")[0].rstrip("/")
+    if head in ("", "/home"):
+        await _home(db, ctx)
+    elif head == "/documents":
+        await _documents(db, ctx)
+    elif head == "/runs":
+        await _runs(db, ctx)
 
 
 async def _baseline(db: AsyncSession, ctx: Context, linked: set[uuid.UUID]) -> None:
@@ -275,6 +388,7 @@ async def build(db: AsyncSession, d: Discussion, reply_id: uuid.UUID) -> Context
     weights = await _thresholds(db)
     ctx = Context(low=float(weights.get("low", 0.4)), pushback=float(weights["pushback"]))
     linked = await _subject(db, ctx, d)
-    await _baseline(db, ctx, linked)
+    if d.subject_kind != "screen":  # a screen's own builder says what it reads (3.4)
+        await _baseline(db, ctx, linked)
     await _conversation(db, ctx, d, reply_id)
     return ctx

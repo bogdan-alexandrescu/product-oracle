@@ -80,7 +80,8 @@ async def test_a_panel_chat_is_just_you_and_oracle(client):
         json={"body": "And you?", "mentions": [uid(ctx, "approver")]},
         headers=ctx.as_("commenter"),
     )
-    assert resp.status_code == 422 and resp.json()["detail"] == "Share a panel chat with Share as discussion"
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Share a panel chat with Share as discussion"
     resp = await client.post(
         f"/v1/discussions/{d['id']}/participants",
         json={"user_ids": [uid(ctx, "approver")]},
@@ -107,7 +108,7 @@ async def test_share_as_discussion_starts_an_open_one_and_the_chat_stays_private
     assert shared["subject_key"] == d["subject_key"] and shared["subject"] == d["subject"]
     assert shared["title"] == "Outcomes: name the measure"
     [first] = [m for m in await messages(client, ctx, shared["id"], "approver")]
-    assert first["body"] == SUMMARY and first["author_id"] == uid(ctx, "commenter")
+    assert first["body"] == SUMMARY and first["author"]["user_id"] == uid(ctx, "commenter")
 
     resp = await client.get(f"/v1/discussions/{shared['id']}/changes", headers=ctx.as_("viewer"))
     assert resp.status_code == 200, resp.text
