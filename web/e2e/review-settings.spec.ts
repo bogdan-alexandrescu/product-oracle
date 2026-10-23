@@ -220,3 +220,78 @@ for (const theme of ["light", "dark"] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+test("after a 409 on a section's assignment the form shows the other person's change, and Save does not overwrite it", async ({ context, page }) => {
+  // protects=issue #342 review fixes 4 item 1; fails_when=after a 409 the form keeps the stale
+  // values with the new lock_version, so a second Save silently overwrites the other change.
+  await context.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, "approver"] as const);
+  await login(page);
+  await page.goto(DOC);
+  const mine = page.getByTestId("section-assignments").locator('[data-section-key="problem"]');
+  await mine.getByRole("button", { name: "Edit owner and reviewers of 2. Problem" }).click();
+  await mine.getByRole("button", { name: "Choose the owner" }).click();
+  await mine.getByRole("option", { name: /commenter@example\.com/ }).click();
+
+  // Someone else, in another tab, sets the owner first.
+  const other = await context.newPage();
+  await other.goto(DOC);
+  const theirs = other.getByTestId("section-assignments").locator('[data-section-key="problem"]');
+  await theirs.getByRole("button", { name: "Edit owner and reviewers of 2. Problem" }).click();
+  await theirs.getByRole("button", { name: "Choose the owner" }).click();
+  await theirs.getByRole("option", { name: /approver@example\.com/ }).click();
+  await theirs.getByRole("button", { name: "Save" }).click();
+  await expect(theirs).toContainText("Owner Approver");
+
+  await mine.getByRole("button", { name: "Save" }).click();
+  await expect(mine).toContainText("Someone else changed this");
+  // The form now holds what is saved, and says what changed.
+  await expect(mine.getByRole("button", { name: "Remove Approver" })).toBeVisible();
+  await expect(mine.getByRole("button", { name: "Remove Commenter" })).toHaveCount(0);
+  await expect(mine.getByTestId("assignment-changed")).toContainText("Owner: Approver (was No owner)");
+
+  // Saving again keeps the other person's owner.
+  await mine.getByRole("button", { name: "Save" }).click();
+  await expect(mine).toContainText("Owner Approver");
+  await other.reload();
+  await expect(other.getByTestId("section-assignments").locator('[data-section-key="problem"]')).toContainText("Owner Approver");
+});
+
+test("a double click on Close closes the campaign once, with no conflict", async ({ page }) => {
+  // protects=issue #342 review fixes 4 item 2; fails_when=Close/Reopen stays enabled while in
+  // flight, so a double click sends a second PATCH with the old lock_version and shows a 409.
+  await asRole(page, "approver");
+  await login(page);
+  await page.goto(DOC);
+  const panel = page.getByTestId("campaigns");
+  const row = panel.getByRole("listitem").filter({ hasText: "Company-wide feedback" });
+  await expect(row).toContainText("Open");
+  const close = row.getByRole("button", { name: "Close Company-wide feedback" });
+  // The button's disabled state is short-lived: note whether it was ever disabled.
+  await close.evaluate((el) => {
+    const w = window as unknown as { wasDisabled?: boolean };
+    w.wasDisabled = false;
+    new MutationObserver(() => (w.wasDisabled ||= el.hasAttribute("disabled"))).observe(el, { attributes: true });
+  });
+  await close.dblclick();
+  await expect(row).toContainText("Closed");
+  // While the change was in flight the button waited, so the second click sent nothing.
+  expect(await page.evaluate(() => (window as unknown as { wasDisabled?: boolean }).wasDisabled)).toBe(true);
+  await expect(row.getByRole("button", { name: "Reopen Company-wide feedback" })).toBeEnabled();
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+});
+
+test("review settings show View only to members who are not owners, and not to owners (#370 owner rule)", async ({ browser }) => {
+  // protects=issue #342 review fixes 4 item 3; fails_when=a read-only Review settings sheet has
+  // no View only label, or an owner's editable sheet shows one.
+  for (const role of ["viewer", "commenter", "approver", null] as const) {
+    const page = await browser.newPage();
+    if (role) await asRole(page, role);
+    await login(page);
+    await page.goto(DOC);
+    await page.getByRole("button", { name: "Review settings" }).click();
+    const sheet = page.getByRole("dialog", { name: "Review settings" });
+    await expect(sheet.getByTestId("decider")).toContainText("Any approver");
+    await expect(sheet.getByText("View only", { exact: true })).toHaveCount(role ? 1 : 0);
+    await page.close();
+  }
+});
