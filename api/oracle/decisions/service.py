@@ -476,6 +476,8 @@ async def update(
     if not _editor(principal, d):
         raise DecisionError(403, "Only its creator, its approver or an owner edits a proposal")
     expect_version(d, body.lock_version)
+    if "prediction" in fields and body.prediction is not None:
+        await _check_goal(db, body.prediction)
     if "title" in fields and body.title is not None:
         d.title = body.title.strip()
     if "question" in fields:
@@ -500,11 +502,22 @@ async def update(
         d.subjects = _subjects(body.subjects)
     if "expected_outcome" in fields:
         d.expected_outcome = (body.expected_outcome or "").strip() or None
+    if "review_at" in fields:
+        d.review_at = None if body.review_at is None else check_review_at(body.review_at)
+    if "prediction" in fields:
+        # Stored on the proposal; deciding creates its outcome record.
+        d.prediction = None if body.prediction is None else body.prediction.model_dump(mode="json")
     await flush_or_conflict(db)
     await audit.record(
         db, principal, "decision.updated", "decision", d.id, {"fields": sorted(fields)}
     )
     return d
+
+
+async def _check_goal(db: AsyncSession, prediction: PredictionIn) -> None:
+    goal = await db.get(Entity, prediction.goal_id)
+    if goal is None or goal.type != "goal":
+        raise DecisionError(422, "prediction.goal_id is not a goal of the baseline")
 
 
 async def _set_prediction(
@@ -514,15 +527,13 @@ async def _set_prediction(
     if prediction is None:
         d.prediction = None
         return
-    goal = await db.get(Entity, prediction.goal_id)
-    if goal is None or goal.type != "goal":
-        raise DecisionError(422, "prediction.goal_id is not a goal of the baseline")
+    await _check_goal(db, prediction)
     d.prediction = prediction.model_dump(mode="json")
     if d.outcome_id is not None:
         return
     record = OutcomeRecord(
         title=d.title,
-        goal_id=goal.id,
+        goal_id=prediction.goal_id,
         prediction={k: v for k, v in d.prediction.items() if k != "goal_id"},
         module_keys=[],
         gap_categories=[],
@@ -578,7 +589,9 @@ async def decide(db: AsyncSession, principal: Principal, d: Decision, body: Deci
         refusal = await irreversible_refusal(db, approver)
         if refusal:
             raise DecisionError(403, refusal)
-    review_at = check_review_at(body.review_at or today() + timedelta(days=REVIEW_DAYS))
+    # The proposal's own review date stands unless the approver sets one (or it has passed).
+    kept = d.review_at if d.review_at and d.review_at >= today() else None
+    review_at = check_review_at(body.review_at or kept or today() + timedelta(days=REVIEW_DAYS))
     d.reversibility = reversibility
     d.chosen_option = body.option_key
     d.rationale = rationale
@@ -586,6 +599,8 @@ async def decide(db: AsyncSession, principal: Principal, d: Decision, body: Deci
     d.review_at = review_at
     if body.prediction is not None:
         await _set_prediction(db, principal, d, body.prediction)
+    elif d.prediction:
+        await _set_prediction(db, principal, d, PredictionIn.model_validate(d.prediction))
     d.status = "decided"
     d.decided_by = who
     d.decided_actor = "user"

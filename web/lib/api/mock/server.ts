@@ -2603,10 +2603,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   const launches = await routeLaunches(launchesContext(db, me), ensureLaunches(db), req, p, q);
   if (launches) return launches;
   // The API's role checks: viewers read, commenters comment, approvers decide. A checkpoint's
-  // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage.
+  // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
+  // the decision log (./decisions.ts): commenters propose, edit and withdraw.
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note");
   const need: Role | null =
-    m === "GET" || draftWrite
+    m === "GET" || draftWrite || p[1] === "decisions"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.
