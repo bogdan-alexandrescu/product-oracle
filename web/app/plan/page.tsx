@@ -5,13 +5,14 @@ import { useCallback, useMemo, useState } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split } from "@/components/ds";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { usePlanScope, type PlanScope } from "@/lib/preferences";
 import { useQuery } from "@/lib/use-query";
 
 import { GoalsPanel } from "../home/_goals-panel";
 import { useGoals } from "../home/_use-goals";
+import { approvedRoadmaps, EditPlanButton, PlanChanges } from "./_edit-plan";
 import { PlanInspector } from "./_inspector";
 import { PrdCards } from "./_prd-cards";
 import { grouped, PlanTable, type GroupBy } from "./_table";
@@ -76,6 +77,7 @@ export default function PlanPage() {
   const [by, setBy] = useState<GroupBy>("horizon");
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
+  const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
 
   const data = q.data;
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
@@ -86,6 +88,7 @@ export default function PlanPage() {
     if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
   }, []);
   const counts = data?.counts;
+  const roadmaps = approvedRoadmaps(data?.items);
   const inspector = item ? <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} /> : undefined;
 
   return (
@@ -134,11 +137,27 @@ export default function PlanPage() {
         {q.error && <Notice tone="error">{q.error}</Notice>}
         <GoalsBand canImport={canWrite} />
         <PrdCards prds={data?.prds} canWrite={canWrite} />
+        {roadmaps.map((r) => (
+          <PlanChanges
+            key={`${r.slug}|${opened?.roadmap === r.slug ? opened.id : ""}`}
+            roadmap={r}
+            opened={opened?.roadmap === r.slug ? opened : null}
+            me={userId}
+            canWrite={canWrite}
+            onPlanChanged={() => void q.reload()}
+          />
+        ))}
         <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
           <Panel
             title="Roadmap"
             tools={
               <>
+                {roadmaps.map((r) => (
+                  <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2 max-[600px]:hidden">
+                    {r.slug} v{r.version}
+                  </span>
+                ))}
+                {canWrite && <EditPlanButton roadmaps={roadmaps} onOpened={setOpened} />}
                 <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
                   Dashed: proposed by a draft, not approved
                 </span>
