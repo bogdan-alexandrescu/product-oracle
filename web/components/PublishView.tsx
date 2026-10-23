@@ -22,6 +22,7 @@ import {
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -178,9 +179,9 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
   const review = picked ?? isoDay(today + Math.max(1, Math.min(30, policy.maxDays - 1)) * DAY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // #370: POST accept-risk, and the handler asks for the company's acceptance role too. When
-  // that is the owner, an owner-only call of the same settings (PUT /v1/settings) stands for it.
-  const canAccept = can("accept_blocker_risk") && (policy.role !== "owner" || can("put_setting"));
+  // #370: POST accept-risk; for a blocker that gates publishing the handler asks for the
+  // company's acceptance role too (its per-item role, owner): an approver passes when it is theirs.
+  const canAccept = can("accept_blocker_risk", policy.role !== "owner");
 
   if (!canAccept) return null;
 
@@ -450,8 +451,9 @@ export function PublishView({ doc }: { doc: string }) {
   const blocks = readiness && n != null ? blocksOf(doc, n, readiness, strategyQ.data) : [];
   const selected = blocks.find((b) => b.id === picked) ?? blocks[0] ?? null;
   const published = n != null && d?.approved_version === n;
-  // #370: Publish is POST .../approve; anyone who may not call it never sees the button.
-  const canPublish = can("approve_version");
+  // #370: Publish is POST .../approve; anyone who may not call it never sees the button. A
+  // vision, strategy or update is an owner's (its per-item role); any other kind an approver's.
+  const canPublish = can("approve_version", d != null && !OWNER_APPROVES[d.kind]);
   const hard = readiness?.items.filter((i) => i.hard) ?? [];
   const advisory = readiness?.items.filter((i) => !i.hard) ?? [];
   const failing = hard.filter((i) => i.status === "critical").length;

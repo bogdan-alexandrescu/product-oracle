@@ -37,6 +37,7 @@ import { feedbackEntries, openBySection } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { blocksText, parseBlocks } from "@/lib/markdown";
 import { useMe } from "@/lib/me";
+import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { useDocumentView, type DocumentView } from "@/lib/preferences";
 import { keyFromHash, sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
@@ -85,9 +86,6 @@ function readSelection(): Selection | null {
     rect: { top: r.top + window.scrollY, bottom: r.bottom + window.scrollY, left: r.left + window.scrollX },
   };
 }
-
-/** Document kinds only an owner approves (H4, H8), in the words the page uses. */
-const OWNER_APPROVES: Partial<Record<string, string>> = { vision: "a vision", strategy: "a product strategy", update: "an update" };
 
 /**
  * A version under review, ONE SECTION AT A TIME (I3, 2026-10-19), with the navigation the
@@ -627,10 +625,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // H4: a vision or a product strategy is an owner's to approve; approvers still set
   // section verdicts and comment.
   const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
-  // The API checks the owner by the document's kind (MIN_APPROVER_ROLE), which the
-  // capabilities cannot say per kind: an owner-only document operation (the review
-  // policy) stands for "is an owner" here.
-  const canApprove = can("approve_version") && (!ownerApproves || can("put_review_policy"));
+  // The API checks the owner by the document's kind (MIN_APPROVER_ROLE): approve_version's
+  // per-item role (owner) passes any kind, an approver only the other kinds.
+  const canApprove = can("approve_version", !ownerApproves);
   /** Opens the Feedback tab on a new discussion of `subject` (on a phone, in the Review sheet). */
   const discuss = useCallback((subject: DiscussionSubject) => {
     setTab("feedback");

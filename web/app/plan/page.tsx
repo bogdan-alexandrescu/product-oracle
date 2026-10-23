@@ -63,8 +63,9 @@ function BuildRoadmaps() {
 export default function PlanPage() {
   const { me, can, capsReady } = useMe();
   const userId = me?.user_id ?? null;
-  // #370: approvers start PRDs and build the baseline; below that the Plan is read only.
-  const canWrite = can("start_draft");
+  // #370: approvers start PRDs (a PRD is any approver's; only a vision, strategy or update
+  // is an owner's) and build the baseline; below that the Plan is read only.
+  const canWrite = can("start_draft", true);
   // create_run's handler wants an owner only to update a draft run; any other run lets
   // approvers in.
   const canBuild = can("create_run", true);

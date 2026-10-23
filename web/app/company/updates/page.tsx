@@ -25,8 +25,8 @@ import { byNewestPeriod, formatPeriod, templateOf, VISIBILITY_LABEL, type Update
 export default function UpdatesPage() {
   const { can, capsReady, capsError } = useMe();
   if (!capsReady && !capsError) return <Loading />;
-  // #370: the Updates tab's own read (company/_tabs.ts).
-  if (!can("start_draft")) {
+  // #370: the Updates tab's own read (company/_tabs.ts), for any item.
+  if (!can("start_draft", true)) {
     return (
       <>
         <PageHeader title="Company" />

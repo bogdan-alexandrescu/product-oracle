@@ -1681,7 +1681,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/discussions": {
@@ -2026,7 +2027,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/discussions/{discussion_id}/messages": {
@@ -2399,7 +2401,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
       }
     },
     "/v1/discussions/{discussion_id}/participants/{user_id}": {
@@ -11819,7 +11822,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/baseline/rescore": {
@@ -13456,7 +13460,8 @@
             "description": "Invalid options, rationale, expected outcome or review date"
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/decisions/{decision}/decide": {
@@ -13648,7 +13653,8 @@
             "description": "Invalid options, rationale, expected outcome or review date"
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/decisions/{decision}/reviews": {
@@ -13712,7 +13718,8 @@
             "description": "Invalid options, rationale, expected outcome or review date"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/decisions/{decision}/options-job": {
@@ -14781,7 +14788,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/drafts/defaults": {
@@ -15512,7 +15520,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/cancel": {
@@ -15564,7 +15573,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/stop-cancelling": {
@@ -15617,7 +15627,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/retry-lookup": {
@@ -15670,7 +15681,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/retry-import": {
@@ -15723,7 +15735,8 @@
             }
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
@@ -15849,7 +15862,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/dismiss-overrun": {
@@ -15902,7 +15916,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide": {
@@ -25049,7 +25064,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/status": {
@@ -25112,7 +25128,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/accept-risk": {
@@ -25175,7 +25192,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/feasibility-scope": {
@@ -25238,7 +25256,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/options": {
@@ -26062,7 +26081,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/roadmaps/{doc}/items": {
@@ -29267,8 +29287,7 @@
             }
           }
         },
-        "x-min-role": "viewer",
-        "x-per-item": "viewer"
+        "x-min-role": "viewer"
       }
     },
     "/v1/plan/items/history": {
@@ -29333,8 +29352,7 @@
             }
           }
         },
-        "x-min-role": "viewer",
-        "x-per-item": "viewer"
+        "x-min-role": "viewer"
       }
     },
     "/v1/strategy/stack": {
@@ -30154,7 +30172,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/launches/{launch_id}/notes": {

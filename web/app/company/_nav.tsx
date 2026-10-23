@@ -10,7 +10,7 @@ import { COMPANY_TABS, type CompanyTab } from "./_tabs";
 
 /** The tabs the signed-in member may see, in registry order. */
 export function visibleTabs(can: ReturnType<typeof useMe>["can"]): CompanyTab[] {
-  return COMPANY_TABS.filter((t) => !t.read || can(t.read));
+  return COMPANY_TABS.filter((t) => !t.read || can(t.read, true));
 }
 
 /**

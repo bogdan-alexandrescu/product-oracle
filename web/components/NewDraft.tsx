@@ -706,7 +706,7 @@ export function NewPrd() {
   const { can } = useMe();
   // #370: Continue creates an intake not linked to a PRD (the handler only asks an approver to link one).
   const canWrite = can("create_intake", true);
-  const canSkeleton = can("start_draft");
+  const canSkeleton = can("start_draft", true);
   const [prd, setPrd] = useState<PrdAnswers>({});
   const [title, setTitle] = useState("");
   const [problem, setProblem] = useState("");

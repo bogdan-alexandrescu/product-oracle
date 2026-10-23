@@ -34,8 +34,6 @@ type MeState = {
    * not critical). False until the capabilities have loaded.
    */
   can: (op: Operation, onItem?: boolean) => boolean;
-  /** A3: whether the signed-in principal decides the engineering stops. */
-  decideEngineeringStops: boolean;
   /** True once the capabilities of the signed-in principal have loaded. */
   capsReady: boolean;
   /** Why the capabilities could not be read, or null. */
@@ -119,14 +117,13 @@ export function MeProvider({ children }: { children: ReactNode }) {
       engineeringLead: state.me?.engineering_lead ?? false,
       loading: state.loading,
       can,
-      decideEngineeringStops: current?.decide_engineering_stops ?? false,
       capsReady: ops !== null,
       capsError,
       retryCaps,
       refresh,
       clear,
     }),
-    [state, refresh, clear, can, ops, current, capsError, retryCaps],
+    [state, refresh, clear, can, ops, capsError, retryCaps],
   );
   return <MeContext.Provider value={value}>{children}</MeContext.Provider>;
 }

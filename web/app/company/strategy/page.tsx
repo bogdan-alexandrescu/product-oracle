@@ -24,7 +24,8 @@ import type { DocKind, FindingState } from "./_components/lib";
  */
 export default function StrategyPage() {
   const { can, capsReady } = useMe();
-  // #370: a vision or a product strategy is an owner's to start (POST /v1/drafts by kind).
+  // #370: a vision or a product strategy is an owner's to start: POST /v1/drafts lets an
+  // approver in by kind, and its per-item role (owner) is the one these kinds need.
   const owner = can("start_draft", false);
   // #370: approvers waive drift and owners draft; below that the strategy is read only.
   const readOnly = capsReady && !can("waive_strategy_finding");

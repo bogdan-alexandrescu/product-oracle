@@ -112,14 +112,23 @@ DECIDED_PER_ITEM = frozenset(
 # Operations whose handler can still refuse a role the route lets in, for this item or this
 # input (the intake's author, the person asked, a critical gap, the checkpoint's own role).
 # Each names the role the handler never refuses on role grounds; below it the item decides
-# (None: only the item does, e.g. the decision's named approver). The capabilities answer
+# (None: only the item does, e.g. the decision's named approver). A vision, strategy or
+# update is an owner's to start or approve (by its kind); a blocker that gates publishing
+# the company's acceptance role's, an owner at most; a run an owner's or its creator's.
+# The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
+    "accept_blocker_risk": "owner",
     "accept_intake_proposal": "approver",
+    "add_discussion_participants": "commenter",
     "answer_question": "owner",
+    "approve_feasibility_scope": "owner",
+    "approve_version": "owner",
     "ask_next_question_batch": "approver",
+    "cancel_again_run": "owner",
+    "cancel_run": "owner",
     "create_checkpoint_action": "owner",
     "create_discussion_message": None,
     "create_intake": "approver",
@@ -131,27 +140,40 @@ PER_ITEM: dict[str, Role | None] = {
     "decide_knowledge_gap": "owner",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
+    "dismiss_overrun_run": "owner",
     "edit_document_section": "approver",
     "get_checkpoint_draft": "owner",
     "get_next_question_batch": "approver",
-    "get_plan": "viewer",
-    "get_plan_item_history": "viewer",
     "open_oracle_action": "owner",
     "reassign_decision": "owner",
     "regenerate_spec": "owner",
+    "remove_evidence": "approver",
     "retry_draft_import": "owner",
+    "retry_import_run": "owner",
+    "retry_lookup_run": "owner",
+    "retry_run": "owner",
+    "review_decision": None,
+    "review_design_artifact": "owner",
+    "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_document_visibility": "owner",
     "stage_checkpoint_action": "owner",
+    "start_draft": "owner",
     "start_intake_run": "approver",
+    "stop_cancelling_run": "owner",
     "tick": "owner",
     "undo_oracle_action": "owner",
+    "update_blocker": "owner",
+    "update_decision": None,
+    "update_discussion": None,
     "update_discussion_message": None,
     "update_intake": "owner",
     "update_knowledge_gap": "owner",
+    "update_launch_task": "approver",
     "update_question": "approver",
     "update_requester_note": "approver",
     "waive_strategy_finding": "owner",
+    "withdraw_decision": "owner",
 }
 
 

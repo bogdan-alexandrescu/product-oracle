@@ -63,8 +63,8 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  */
 export default function HomePage() {
   const { can } = useMe();
-  // #370: New PRD starts a draft; Build the baseline opens where the baseline's writers build it.
-  const canWrite = can("start_draft");
+  // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
+  const canWrite = can("start_draft", true);
   const canBuild = can("confirm_entity");
 
   const inboxQ = useQuery("home|inbox", loadInbox);
