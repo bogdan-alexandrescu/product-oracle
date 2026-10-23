@@ -136,7 +136,7 @@ test("api tokens: every kind, filter by kind and member, revoke with confirm", a
 test("api tokens: owners only", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/settings/api-tokens");
-  await expect(page.getByTestId("role-note")).toContainText("Only owners");
+  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
   await expect(page.getByTestId("token-row")).toHaveCount(0);
 });
 
