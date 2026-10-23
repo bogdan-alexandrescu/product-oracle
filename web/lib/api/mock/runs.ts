@@ -2292,6 +2292,143 @@ export const CONSOLE_HELD_RUN: { run: RunOut; artifacts: Record<string, string> 
   artifacts: { [`${CONSOLE_HELD_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
 };
 
+/** The seeded roadmap review run's attempt 2 (seedRoadmapAttempt2 in e2e/helpers.ts, D6). */
+export const ROADMAP_ATTEMPT2_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d6";
+
+// Attempt 2: the date removed, the dependency removed, the section linked (done); mobile-push
+// kept in Later (declined); sso-login kept although the agents said they dropped it; invoice-pdf's
+// outcome changed without being asked.
+const ATTEMPT2_NOTE = "Push waits for the mobile app release next quarter, so it stays in Later until the app ships to every owner";
+const REVIEW_ITEMS_2 = REVIEW_ITEMS.replace(
+  "items:\n",
+  `resolutions:
+  - {id: slack-alerts, action: change, status: done}
+  - {id: budget-caps, action: change, status: done}
+  - {id: usage-export, action: change, status: done}
+  - {id: mobile-push, action: change, status: declined, note: "${ATTEMPT2_NOTE}"}
+  - {id: sso-login, action: drop, status: done}
+items:\n`,
+)
+  .replace(", milestone: {name: Beta, date: 2026-11-30, date_source: a guess}", ", milestone: {name: Beta}")
+  .replace(", depends_on: [anomaly-detection]", "")
+  .replace("prd_section: export,", "prd_section: alerts-export,")
+  .replace("outcome: Finance downloads each invoice,", "outcome: Finance downloads every invoice as a PDF,");
+
+/**
+ * D6 "Per-item resolutions": the roadmap review run sent back with a five-entry review; attempt 2
+ * answered it with three changes done, one declined with its note, one claimed and not applied
+ * (blocking, so Approve stays disabled) and one unrequested change.
+ */
+function roadmapAttempt2Run(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d6")) as RunOut;
+  run.id = ROADMAP_ATTEMPT2_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-3";
+  const [items] = run.segments;
+  const first = items.attempts[0];
+  items.attempts = [
+    { ...first, note: null },
+    { ...first, attempt: 2, workflow_id: "mock-wf-roadmap-items-2", submitted_at: "2026-10-20T10:00:00Z", cost_usd: 3.1 },
+  ];
+  items.cost_usd = 8;
+  items.previous_attempt = { attempt: 1, artifacts: ["roadmap_items.yaml"] };
+  const before = items.items_check!;
+  const fixed = ["unverified_date", "horizon_breaks_dependency", "unknown_prd_section"];
+  const declined: ItemReason = {
+    item: "mobile-push",
+    item_title: "Mobile push",
+    code: "declined_change",
+    severity: "confirm",
+    label: "Change declined",
+    text: `Declined: ${ATTEMPT2_NOTE}`,
+    data: { action: "change", said: "declined", note: ATTEMPT2_NOTE },
+    fixes: [accept("mobile-push", "Accept decline"), fix("Apply it myself", "edit", "mobile-push", "horizon", "next")],
+  };
+  const notApplied: ItemReason = {
+    item: "sso-login",
+    item_title: "Single sign-on",
+    code: "change_not_applied",
+    severity: "blocking",
+    label: "Change not applied",
+    text: "The agents said done, but sso-login is still in the file.",
+    data: { action: "drop", said: "done", note: null },
+    fixes: [fix("Apply it myself", "drop", "sso-login"), fix("Waive…", "waive", "sso-login")],
+  };
+  const unrequested: ItemReason = {
+    item: "invoice-pdf",
+    item_title: "Invoice PDF",
+    code: "unrequested_change",
+    severity: "confirm",
+    label: "Unrequested change",
+    text: "Changed without being asked: outcome Finance downloads each invoice → Finance downloads every invoice as a PDF",
+    data: { field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" },
+    fixes: [accept("invoice-pdf"), fix("Revert", "edit", "invoice-pdf", "outcome", "Finance downloads each invoice")],
+  };
+  const kept = before.reasons.filter((r) => !fixed.includes(r.code));
+  const at = (item: string) => kept.findIndex((r) => r.item === item);
+  kept.splice(at("mobile-push") + 1, 0, declined);
+  kept.splice(at("sso-login"), 0, notApplied);
+  kept.splice(at("invoice-pdf") + 1, 0, unrequested);
+  const done = (id: string, field: string, requested: unknown, current: unknown) => ({
+    id,
+    action: "change",
+    outcome: "done" as const,
+    said: "done" as const,
+    note: null,
+    fields: [{ field, requested, applied: true, current }],
+  });
+  items.items_check = {
+    ...withReasons({ items: 9, by_horizon: before.by_horizon, problems: [] }, kept, before.base),
+    resolution: {
+      review_attempt: 1,
+      attempt: 2,
+      entries: [
+        done("slack-alerts", "milestone.date", null, null),
+        done("budget-caps", "depends_on", { remove: ["anomaly-detection"] }, []),
+        done("usage-export", "prd_section", "alerts-export", "alerts-export"),
+        { id: "mobile-push", action: "change", outcome: "declined", said: "declined", note: ATTEMPT2_NOTE, fields: [{ field: "horizon", requested: "next", applied: false, current: "later" }] },
+        { id: "sso-login", action: "drop", outcome: "not_applied", said: "done", note: null, fields: [] },
+      ],
+      counts: { done: 3, declined: 1, not_applied: 1, unrequested: 1 },
+      unrequested: [{ id: "invoice-pdf", field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" }],
+    },
+    diff: {
+      against_attempt: 1,
+      items: [
+        { id: "slack-alerts", changes: [{ field: "milestone.date", from: "2026-11-30", to: null }] },
+        { id: "budget-caps", changes: [{ field: "depends_on", from: ["anomaly-detection"], to: [] }] },
+        { id: "usage-export", changes: [{ field: "prd_section", from: "export", to: "alerts-export" }] },
+        { id: "invoice-pdf", changes: [{ field: "outcome", from: "Finance downloads each invoice", to: "Finance downloads every invoice as a PDF" }] },
+      ],
+      added: [],
+      removed: [],
+    },
+  };
+  const [cp] = run.checkpoints;
+  const sent: CheckpointOut = {
+    ...cp,
+    id: "7a11c0de-0000-4000-8000-0000000d6c01",
+    status: "changes_requested",
+    decided_by: "mock-user",
+    decided_at: "2026-10-20T09:30:00Z",
+    payload: { ...cp.payload, wait: undefined },
+  };
+  cp.run_id = run.id;
+  cp.created_at = "2026-10-20T10:04:00Z";
+  cp.payload = { ...cp.payload, attempt: 2, items_check: items.items_check };
+  run.checkpoints = [sent, cp];
+  refresh(run);
+  return run;
+}
+
+/** The attempt-2 run and both attempts' files, as e2e/helpers.ts seedRoadmapAttempt2 adds them. */
+export const ROADMAP_REVIEW_RUN_ATTEMPT2: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapAttempt2Run(),
+  artifacts: {
+    [`${ROADMAP_ATTEMPT2_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS_2,
+    [`${ROADMAP_ATTEMPT2_RUN_ID}|1|roadmap_items.yaml|1`]: REVIEW_ITEMS,
+  },
+};
+
 /** The roadmap review run and its file, as e2e/helpers.ts seedRoadmapReview adds them to the mock's data. */
 export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: roadmapReviewRun(),
@@ -2444,6 +2581,9 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
       reasons: theirs,
       actions: mine.map((a) => ({ ...a, created_by: person(a.created_by), updated_by: person(a.updated_by), question: null })),
       state,
+      // D6: the item's answer to the review and its changes since the previous attempt.
+      resolution: check?.resolution?.entries.find((e) => e.id === key) ?? null,
+      diff: check?.diff?.items.find((d) => d.id === key)?.changes ?? [],
     };
   });
   const pending = cp.status === "pending";
@@ -2469,6 +2609,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     can_stage: stages,
     can_decide: stages,
     gate: gateOf(cp, draft.actions),
+    diff: check?.diff ?? null,
   };
 }
 
