@@ -25,6 +25,7 @@ from oracle.requests.schemas import (
     CandidateFile,
     CandidateOut,
     Channel,
+    DeclineSuggestionIn,
     DisqualifyIn,
     MergeIn,
     QualifyIn,
@@ -227,6 +228,19 @@ async def accept_request_suggestion(
     """Accept parts of Oracle's suggestion: theme, goals, feature, or duplicate (merges)."""
     try:
         row = await service.accept_suggestion(db, principal, request_id, data)
+    except service.RequestError as e:
+        raise _http(e) from e
+    await db.commit()
+    return await service.out_one(db, row)
+
+
+@router.post("/requests/{request_id}/suggestion/decline", response_model=RequestOut)
+async def decline_request_suggestion(
+    request_id: uuid.UUID, data: DeclineSuggestionIn, db: TenantDB, principal: Approver
+) -> RequestOut:
+    """Decline Oracle's suggestion; nothing else changes."""
+    try:
+        row = await service.decline_suggestion(db, principal, request_id, data)
     except service.RequestError as e:
         raise _http(e) from e
     await db.commit()
