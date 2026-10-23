@@ -785,7 +785,8 @@ async def test_rule_4_share_the_finding_first(client):
                     title="Is it regional?")  # fmt: skip
     assert d["author_only"] is True
     cid = await add_change(ctx.tenant_id, d["id"], "goal_measure",
-                           {"entity_id": goal["id"], "metric": "activation rate"})  # fmt: skip
+                           {"entity_id": goal["id"], "metric": "activation rate"},
+                           target={"entity_id": goal["id"]})  # fmt: skip
     for verb in ("stage", "propose"):
         out = await act(client, ctx.as_("commenter"), cid, verb, expect=422)
         assert out["detail"] == "Share the finding first to use this change"

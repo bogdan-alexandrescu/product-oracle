@@ -4416,7 +4416,7 @@
           "discussions"
         ],
         "summary": "Propose Discussion Change",
-        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion; approvers accept it in Baseline.",
+        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion and links its page; approvers accept it in Baseline.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override.",
         "operationId": "propose_discussion_change",
         "security": [
           {
@@ -4466,7 +4466,14 @@
             "description": "No such discussion (or not one the caller may know of)"
           },
           "409": {
-            "description": "Stale lock_version, or already handled"
+            "description": "Oracle's pushback on a goal version (once), a stale lock_version, or already handled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMeasurePushback"
+                }
+              }
+            }
           },
           "422": {
             "description": "The kind, rule 4 (share the finding first), or a reason is missing"

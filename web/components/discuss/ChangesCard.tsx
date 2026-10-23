@@ -18,7 +18,9 @@ import {
   VERB_ROUTE,
   type ChangeKindOut,
   type ChangeOut,
+  type ChangeVerb,
 } from "@/lib/api/discussion-changes";
+import { useMe, type Operation } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { ChangeForm } from "./ChangeForm";
@@ -34,6 +36,15 @@ const STATUS: Record<ChangeOut["status"], { label: string; kind: ChipKind }> = {
   done: { label: "Done", kind: "pass" },
   dismissed: { label: "Dismissed", kind: "na" },
   superseded: { label: "Replaced", kind: "na" },
+};
+
+/** Each verb's route (#370): can() asks whether the caller may call it, and the change (per item) decides below its role. */
+const VERB_OP: Partial<Record<ChangeVerb, Operation>> = {
+  Stage: "stage_discussion_change",
+  Propose: "propose_discussion_change",
+  Resolve: "resolve_discussion_change",
+  "Use as answer": "answer_with_discussion_change",
+  Record: "record_discussion_change",
 };
 
 /** The API's words without the status suffix the client adds ("… (403)"). */
@@ -112,8 +123,13 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
   const [mode, setMode] = useState<"edit" | "stage" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { can } = useMe();
   const live = isOpen(c) && d.status === "open";
   const action = live ? c.action : null;
+  // #370: the route's capability, the change deciding below the role its handler never refuses
+  // (Record: F3's date rights, which the change's action carries).
+  const op = action ? VERB_OP[action.verb] : undefined;
+  const allowed = !!action?.allowed && (!op || can(op, action.allowed));
 
   const run = async (call: () => Promise<unknown>) => {
     setBusy(true);
@@ -155,7 +171,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       {buttons && mode === null && (
         <span className="flex flex-wrap gap-1" data-testid="change-actions">
           {action && (
-            <Button variant="solid" disabled={busy || !action.allowed} title={action.allowed ? undefined : (action.why_not ?? undefined)} onClick={act}>
+            <Button variant="solid" disabled={busy || !allowed} title={allowed ? undefined : (action.why_not ?? undefined)} onClick={act}>
               {action.verb}
             </Button>
           )}
@@ -230,8 +246,15 @@ function ProposeChange({ d, onDone }: { d: Discussion; onDone: () => Promise<voi
     setKinds(null);
     setKind("");
   };
+  const itemKey = typeof subject.item_key === "string" ? subject.item_key : "";
   const initial = (k: string): Record<string, unknown> =>
-    k === "section_edit" ? { section_key: typeof subject.section_key === "string" ? subject.section_key : "", instruction: "" } : k === "item_horizon" ? { item_key: typeof subject.item_key === "string" ? subject.item_key : "", horizon: "next" } : {};
+    k === "section_edit"
+      ? { section_key: typeof subject.section_key === "string" ? subject.section_key : "", instruction: "" }
+      : k === "item_horizon"
+        ? { item_key: itemKey, horizon: "next" }
+        : k === "basis_record"
+          ? { prd_document_id: subject.document_id ?? "", kind: "estimate", reference: "", supports_date: "", ...(itemKey ? { item_key: itemKey } : {}) }
+          : {};
 
   if (!kinds)
     return (

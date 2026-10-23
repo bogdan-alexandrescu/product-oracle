@@ -758,10 +758,15 @@ async def _done(db, principal, d, c, ref: dict[str, Any], did: str) -> None:
 
 async def propose(
     db: AsyncSession, principal: "Principal", change_id: uuid.UUID, lock_version: int
-) -> tuple[DiscussionChange, dict[str, Any]]:
+) -> tuple[DiscussionChange, dict[str, Any] | None]:
     """``goal_measure`` and ``entity_edit``: an open baseline proposal an approver accepts
-    in Baseline, its reason naming the discussion (B1)."""
+    in Baseline, its reason naming the discussion and linking its page (B1). A goal version
+    goes through B6's one path (``goal_interview.propose_version``): B5's checks, Oracle's
+    pushback once when its target is already met (the result is then None and the change
+    carries the pushback), and the typed values clearing their ``*_text``."""
+    from oracle.baseline import goal_interview
     from oracle.baseline import service as baseline
+    from oracle.baseline.models import Proposal
     from oracle.discussions.service import DiscussionError
 
     d, seat, c = await _load(db, principal, change_id, lock_version)
@@ -769,25 +774,42 @@ async def propose(
     _need_open(c)
     k = _need_kind(c, "goal_measure", "entity_edit")
     _need_role(seat, k.role, "Commenters and up propose changes")
-    p = c.edited_payload or c.payload
+    reason = f"From discussion {d.title} ({await discussion_page(db, d)})"
     if c.kind == "goal_measure":
-        # B5's typed goal fields; the change's owner_id is the goal's owner.
-        typed = ("metric", "unit", "comparison", "target", "horizon", "owner_id", "weight")
-        attrs = {"owner" if f == "owner_id" else f: p[f] for f in typed if p.get(f) is not None}
-        fields: dict[str, Any] = {"attrs": attrs}
+        try:
+            out = await goal_interview.propose_version(
+                db, principal, c, d, goal_interview.GoalMeasureAct(), reason=reason
+            )
+        except baseline.GoalFieldsInvalid:
+            raise  # B5: 422 with every problem (the app's handler)
+        except baseline.BaselineError as e:
+            raise DiscussionError(422, str(e)) from e
+        if isinstance(out, goal_interview.GoalMeasurePushback):
+            return c, None
+        proposal_id = out.result_ref["proposal_id"]
+        status = (await db.get(Proposal, uuid.UUID(proposal_id))).status
     else:
-        fields = {p["field"]: p["value"]}
-    link = f"/v1/discussions/{d.id}"
-    writer = baseline.Writer(principal, "user", reason=f"From discussion {d.title} ({link})")
-    try:
-        proposal = await baseline.submit_proposal(
-            db, writer, op="update", kind="entity", fields=fields,
-            entity_id=uuid.UUID(str(p["entity_id"])), edge_id=None,
-        )  # fmt: skip
-    except baseline.BaselineError as e:
-        raise DiscussionError(422, str(e)) from e
-    await _done(db, principal, d, c, {"proposal_id": str(proposal.id)}, "proposed")
-    return c, {"proposal_id": str(proposal.id), "status": proposal.status}
+        p = c.edited_payload or c.payload
+        writer = baseline.Writer(principal, "user", reason=reason)
+        try:
+            proposal = await baseline.submit_proposal(
+                db, writer, op="update", kind="entity", fields={p["field"]: p["value"]},
+                entity_id=uuid.UUID(str(p["entity_id"])), edge_id=None,
+            )  # fmt: skip
+        except baseline.BaselineError as e:
+            raise DiscussionError(422, str(e)) from e
+        proposal_id, status = str(proposal.id), proposal.status
+    await _done(db, principal, d, c, {"proposal_id": proposal_id}, "proposed")
+    return c, {"proposal_id": proposal_id, "status": status}
+
+
+async def discussion_page(db: AsyncSession, d: Discussion) -> str:
+    """The discussion's page in the web app: its subject's page opened on the thread."""
+    from oracle.discussions.inbox import with_discussion
+    from oracle.discussions.service import Labels
+
+    _label, url = await Labels(db).of(d)
+    return with_discussion(url, d.id)
 
 
 async def resolve(

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
+from oracle.baseline.goal_interview import GoalMeasurePushback
 from oracle.discussions import agent_view, changes, inbox, kinds, replies, service, summary
 from oracle.discussions.schemas import (
     ChangeActIn,
@@ -557,14 +558,31 @@ async def dismiss_discussion_change(
     return await _result(db, principal, change_id, result)
 
 
-@router.post("/discussion-changes/{change_id}/propose", response_model=ChangeResult,
-             responses=ACTS)  # fmt: skip
+@router.post(
+    "/discussion-changes/{change_id}/propose",
+    response_model=ChangeResult,
+    responses={
+        **ACTS,
+        409: {
+            "model": GoalMeasurePushback,
+            "description": "Oracle's pushback on a goal version (once), a stale lock_version, "
+            "or already handled",
+        },
+    },
+)
 async def propose_discussion_change(
     change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
-) -> ChangeResult:
+) -> ChangeResult | JSONResponse:
     """``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
-    whose reason names the discussion; approvers accept it in Baseline."""
-    _c, result = await _call(changes.propose(db, principal, change_id, body.lock_version))
+    whose reason names the discussion and links its page; approvers accept it in Baseline.
+    A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
+    and a target the start or current value already meets gets Oracle's pushback once
+    (409); proposing it again keeps it and logs the override."""
+    c, result = await _call(changes.propose(db, principal, change_id, body.lock_version))
+    if result is None:
+        await db.commit()
+        pushback = GoalMeasurePushback(detail=(c.pushback or {}).get("reason", ""))
+        return JSONResponse(pushback.model_dump(), status.HTTP_409_CONFLICT)
     return await _result(db, principal, change_id, result)
 
 

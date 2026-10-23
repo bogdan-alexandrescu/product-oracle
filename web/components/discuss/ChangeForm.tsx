@@ -3,13 +3,19 @@
 import { useState, type ReactNode } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
-import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
+import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { kindLabel } from "@/lib/api/discussion-changes";
 
 type Payload = Record<string, unknown>;
 type Horizon = "now" | "next" | "later";
 
 const INPUT = "h-8 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] font-normal tracking-normal text-text";
+/** F3's basis kinds (ScheduleBasisCreate.kind). */
+const BASIS_KINDS = [
+  { value: "estimate", label: "Estimate" },
+  { value: "capacity", label: "Capacity" },
+  { value: "commitment", label: "Commitment" },
+];
 const HORIZONS: { value: Horizon; label: string }[] = [
   { value: "now", label: "Now" },
   { value: "next", label: "Next" },
@@ -36,6 +42,7 @@ function missing(kind: string, p: Payload): string | null {
   if (kind === "goal_measure") return need("metric", "Name the metric") ?? need("target", "Give the target");
   if (kind === "conflict_pick") return Number.isInteger(p.claim_index) ? null : "Pick a claim";
   if (kind === "answer") return need("body", "Write the answer");
+  if (kind === "basis_record") return need("reference", "Name what the date rests on") ?? need("supports_date", "Pick the date it supports");
   return null;
 }
 
@@ -72,7 +79,7 @@ export function ChangeForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (key: string, value: unknown) => setP((x) => ({ ...x, [key]: value }));
-  const known = ["item_horizon", "item_outcome", "section_edit", "goal_measure", "conflict_pick", "answer"].includes(kind);
+  const known = ["item_horizon", "item_outcome", "section_edit", "goal_measure", "conflict_pick", "answer", "basis_record"].includes(kind);
 
   const save = async () => {
     let payload = p;
@@ -173,6 +180,25 @@ export function ChangeForm({
         <Field label="Answer">
           <textarea aria-label="Answer" rows={3} maxLength={4000} className={TEXTAREA} value={str(p.body)} onChange={(e) => set("body", e.target.value)} />
         </Field>
+      )}
+      {kind === "basis_record" && (
+        <>
+          <Field label="Kind of basis">
+            <select aria-label="Kind of basis" className={SELECT} value={str(p.kind) || "estimate"} onChange={(e) => set("kind", e.target.value)}>
+              {BASIS_KINDS.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="What the date rests on">
+            <input aria-label="What the date rests on" className={INPUT} value={str(p.reference)} onChange={(e) => set("reference", e.target.value)} />
+          </Field>
+          <Field label="Date it supports">
+            <input aria-label="Date it supports" type="date" className={INPUT} value={str(p.supports_date)} onChange={(e) => set("supports_date", e.target.value)} />
+          </Field>
+        </>
       )}
       {!known && (
         <Field label="Change (JSON)">

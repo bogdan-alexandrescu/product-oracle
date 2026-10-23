@@ -29,6 +29,7 @@ import {
   seedDiscussionInbox,
   seedDiscussionReplies,
   seedDiscussions,
+  seedDiscussionRecord,
   seedRunDiscussions,
   type DiscussionRow,
   type DiscussionsContext,
@@ -1781,7 +1782,9 @@ function load(): Db {
           ? seedDiscussionsScenario(db, seedSlackBridge)
           : scenario === "run-discussions"
             ? seedRunDiscussionsScenario(db)
-            : emptyDiscussions();
+            : scenario === "discussion-record"
+              ? seedDiscussionRecordScenario(db)
+              : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
@@ -1873,6 +1876,27 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
     status: "asked", created_at: at, updated_at: at, discussion_id: d.id, discussion_title: d.title,
   });
   return discussions;
+}
+
+/** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
+function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
+  const prd = findDocument(db, "checkout-redesign")!;
+  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
+}
+
+/** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
+function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): RoadmapContext {
+  return {
+    userId: me.id,
+    role: me.role,
+    engineeringLead: engineeringLeads(db).includes(me.id),
+    leadNamed: engineeringLeads(db).length > 0,
+    userName: me.email,
+    documents: db.documents,
+    versions: db.versions,
+    approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
+    drafts: () => draftDb(db).rows,
+  };
 }
 
 /** G5 "run-discussions": an open and a private discussion on the feature-set run's waiting checkpoint. */
@@ -3070,6 +3094,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
       slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
+      // G3 Record: F3's date rights and its schedule-basis route, as the API's record() uses them.
+      dateRights: () => {
+        const leads = engineeringLeads(db);
+        if (me.role === "owner" || (leads.includes(me.id) && atLeast(me.role, "commenter"))) return "verify";
+        return atLeast(me.role, "approver") ? (leads.length ? "propose" : "verify") : null;
+      },
+      recordBasis: async (b) => {
+        const ctx = roadmapContext(db, me);
+        db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+        const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
+        return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
+      },
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
@@ -3395,17 +3431,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (v2) return v2;
 
   // Roadmap alignment and product tracks (CR-11).
-  const roadmapCtx: RoadmapContext = {
-    userId: me.id,
-    role: me.role,
-    engineeringLead: engineeringLeads(db).includes(me.id),
-    leadNamed: engineeringLeads(db).length > 0,
-    userName: me.email,
-    documents: db.documents,
-    versions: db.versions,
-    approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
-    drafts: () => draftDb(db).rows,
-  };
+  const roadmapCtx = roadmapContext(db, me);
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
   const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
   if (draftRes) return draftRes;

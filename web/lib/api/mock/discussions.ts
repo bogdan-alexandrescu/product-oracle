@@ -150,6 +150,10 @@ export type DiscussionsContext = {
   refusal?: () => string | null;
   /** #406: the text of the document version a discussion is on, the section it is on first. */
   documentText?: (d: DiscussionRow) => DocumentSection[];
+  /** F3 Date bases' rights for me (leads.date_rights): verify, propose, or none. */
+  dateRights?: () => "verify" | "propose" | null;
+  /** F3's schedule-basis route (./roadmap.ts POST /v1/schedule-bases): Record writes through it. */
+  recordBasis?: (body: Schemas["ScheduleBasisCreate"]) => Promise<Response>;
 };
 
 /** A section of the document a discussion is on, as Oracle reads it (markers stripped). */
@@ -231,9 +235,9 @@ const VERB_PAST: Record<ChangeVerb, string> = {
 const SUBJECT_KINDS: Record<string, string[]> = {
   document: ["section_edit", "answer"],
   section: ["section_edit", "answer"],
-  roadmap_item: ["item_horizon", "item_outcome"],
+  roadmap_item: ["item_horizon", "item_outcome", "basis_record"],
   checkpoint: ["item_horizon", "item_outcome", "conflict_pick"],
-  checkpoint_item: ["item_horizon", "item_outcome"],
+  checkpoint_item: ["item_horizon", "item_outcome", "basis_record"],
   entity: ["goal_measure", "entity_edit"],
   conflict: ["conflict_pick"],
   question: ["answer"],
@@ -247,9 +251,16 @@ const KIND_SCHEMA: Record<string, Record<string, unknown>> = {
   entity_edit: { type: "object", properties: {} },
   conflict_pick: { type: "object", required: ["claim_index"], properties: { claim_index: { type: "integer", minimum: 0 } } },
   answer: { type: "object", required: ["body"], properties: { body: TEXT } },
+  basis_record: {
+    type: "object",
+    required: ["prd_document_id", "kind", "reference", "supports_date"],
+    properties: { prd_document_id: TEXT, kind: { enum: ["estimate", "capacity", "commitment"] }, reference: TEXT, supports_date: { type: "string", format: "date" }, item_key: { type: "string" } },
+  },
 };
 export const STAGE_WHY_NOT = "Approvers stage changes. You can suggest it.";
 const APPROVERS_ACT = "Approvers take this action. You can suggest it.";
+/** F3: who has no date rights (oracle.discussions.changes.RECORDERS). */
+export const RECORDERS = "Engineering leads and approvers record date bases";
 const VIEWERS_READ = "Viewers can read discussions but not write in them";
 const STALE = "Someone else changed this since you loaded it; reload and try again";
 const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
@@ -266,6 +277,7 @@ export function changeLabel(kind: string, p: Record<string, unknown>): string {
   if (kind === "goal_measure") return clip(`Measure the goal by ${str(p.metric)}: ${str(p.target)}${str(p.horizon) ? ` by ${str(p.horizon)}` : ""}`);
   if (kind === "conflict_pick") return `Settle the conflict with claim ${Number(p.claim_index)}`;
   if (kind === "answer") return clip(`Answer: ${str(p.body)}`);
+  if (kind === "basis_record") return clip(`Record a date basis: ${str(p.reference)} supports ${str(p.supports_date)}`);
   return kind.replace(/_/g, " ");
 }
 
@@ -637,8 +649,11 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const open = isOpenStatus(c.status);
     const writer = atLeast(me.role, "commenter") && readable(d) && d.status === "open";
     const anyWriter = verb === "Propose" || verb === "Ask";
-    const allowed = writer && open && (anyWriter || atLeast(me.role, "approver"));
-    const whyNot = allowed || !open ? null : d.status !== "open" ? "This discussion is closed" : verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT;
+    // Record: F3's date rights decide, not the role (as the API's action_for).
+    const records = verb === "Record" ? !!ctx.dateRights?.() : null;
+    const allowed = writer && open && (records ?? (anyWriter || atLeast(me.role, "approver")));
+    const whyNot =
+      allowed || !open ? null : d.status !== "open" ? "This discussion is closed" : verb === "Record" ? RECORDERS : verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT;
     return {
       id: c.id,
       discussion_id: c.discussion_id,
@@ -934,7 +949,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const verb = VERB_OF_ROUTE[step];
     if (verb) {
       if (KIND_VERB[c.kind] !== verb) return refuse(422, "This change does not take this action");
-      if (verb !== "Propose" && verb !== "Ask" && !atLeast(me.role, "approver")) return refuse(403, verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT);
+      if (verb === "Record") {
+        if (!ctx.dateRights?.()) return refuse(403, RECORDERS);
+      } else if (verb !== "Propose" && verb !== "Ask" && !atLeast(me.role, "approver")) return refuse(403, verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT);
     } else if (step === "dismiss" && !atLeast(me.role, "approver")) return refuse(403, "Approvers dismiss changes");
     else if (!["edit", "suggest", "withdraw", "dismiss"].includes(step)) return null;
     if (d.status === "closed") return refuse(409, "This discussion is closed");
@@ -970,6 +987,20 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         result_ref: { kind: c.target.run_id ? "checkpoint_action" : "next_draft_change", id: ctx.uuid() },
       });
       line(`${name} staged: ${c.label}`);
+    } else if (verb === "Record") {
+      // F3's own write: verified for a lead or an owner (an approver while no lead is named), proposed otherwise.
+      if (!ctx.recordBasis) return refuse(422, "A basis_record change is not used this way");
+      const p = c.edited_payload ?? c.payload;
+      const res = await ctx.recordBasis({
+        kind: p.kind as Schemas["ScheduleBasisCreate"]["kind"], reference: str(p.reference), supports_date: str(p.supports_date),
+        prd: str(p.prd_document_id), item_key: str(p.item_key) || null, detail: str(p.detail) || null,
+      });
+      if (res.status !== 201) return res;
+      const basis = (await res.json()) as { id: string; status: string };
+      Object.assign(c, { status: "done", result_ref: { basis_id: basis.id } });
+      line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
+      c.lock_version += 1;
+      return json(200, { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } });
     } else if (verb) {
       Object.assign(c, { status: "done", result_ref: { id: ctx.uuid() } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
@@ -1361,5 +1392,58 @@ export function seedRunDiscussions(
       edited_at: null,
       deleted_at: null,
     });
+  return db;
+}
+
+/** G3 "discussion-record": the open discussion on a PRD's roadmap item where Oracle proposed recording a date basis. */
+export const DISCUSSION_RECORD = "d15c0000-0000-4000-8000-0000000000b1";
+
+/**
+ * The "discussion-record" scenario (G3 Record with F3 Date bases): the approver's open
+ * discussion on the PRD's guest-checkout item, Oracle's reply, and the basis_record change it
+ * proposed (a team estimate that supports 2026-12-15).
+ */
+export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">, prd: { id: string; title: string; slug: string }, version: number): DiscussionsDb {
+  const db = emptyDiscussions();
+  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
+  const at = "2026-10-22T10:00:00Z";
+  const item = "guest-checkout";
+  db.discussions.push({
+    id: DISCUSSION_RECORD,
+    subject_kind: "roadmap_item",
+    subject: { document_id: prd.id, version, item_key: item },
+    subject_key: `roadmap_item:${prd.id}:${item}`,
+    subject_label: `${prd.title} · ${item}`,
+    subject_url: `/documents/${prd.slug}/v/${version}/items`,
+    document_id: prd.id,
+    run_id: null,
+    title: "Guest checkout: what date can we hold?",
+    visibility: "open",
+    author_only: false,
+    status: "open",
+    origin: "discuss",
+    started_by: approver,
+    summary: null,
+    summary_status: "none",
+    summary_shared: true,
+    last_message_at: at,
+    lock_version: 1,
+    created_at: at,
+    updated_at: at,
+  });
+  db.participants.push({ discussion_id: DISCUSSION_RECORD, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  const asked = ctx.uuid();
+  const reply = ctx.uuid();
+  const row = { discussion_id: DISCUSSION_RECORD, mentions: [], created_at: at, edited_at: null, deleted_at: null };
+  db.messages.push(
+    { ...row, id: asked, author_kind: "person", author_id: approver, body: "@Oracle the team estimated mid-December. Can we hold that date?", mentions_oracle: true, reply_to: null },
+    { ...row, id: reply, author_kind: "oracle", author_id: null, body: "The team's estimate supports December 15; record it as the date's basis.", mentions_oracle: false, reply_to: asked, status: "complete" },
+  );
+  const payload = { prd_document_id: prd.id, kind: "estimate", reference: "Team estimate", supports_date: "2026-12-15", item_key: item };
+  db.changes!.push({
+    id: ctx.uuid(), discussion_id: DISCUSSION_RECORD, kind: "basis_record", label: changeLabel("basis_record", payload), target: {}, payload,
+    edited_payload: null, rationale: "The team estimated the item for mid-December.", proposed_by_kind: "oracle", proposed_by: null,
+    suggested_by: null, status: "proposed", from_message_id: reply, lock_version: 1, created_at: at,
+  });
   return db;
 }

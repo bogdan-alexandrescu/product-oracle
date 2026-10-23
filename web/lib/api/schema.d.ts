@@ -1271,7 +1271,10 @@ export interface paths {
         /**
          * Propose Discussion Change
          * @description ``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
-         *     whose reason names the discussion; approvers accept it in Baseline.
+         *     whose reason names the discussion and links its page; approvers accept it in Baseline.
+         *     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
+         *     and a target the start or current value already meets gets Oracle's pushback once
+         *     (409); proposing it again keeps it and logs the override.
          */
         post: operations["propose_discussion_change"];
         delete?: never;
@@ -36904,12 +36907,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Stale lock_version, or already handled */
+            /** @description Oracle's pushback on a goal version (once), a stale lock_version, or already handled */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["GoalMeasurePushback"];
+                };
             };
             /** @description The kind, rule 4 (share the finding first), or a reason is missing */
             422: {
