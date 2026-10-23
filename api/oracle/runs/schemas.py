@@ -782,6 +782,11 @@ class CancelAgain(BaseModel):
     workflow_id: str = Field(min_length=1, max_length=200)
 
 
+class RunNoteRefs(BaseModel):
+    note: str
+    refs: dict[str, str | list[str]]
+
+
 class RunOut(RunSummary):
     knobs: KnobsOut
     snapshot_id: uuid.UUID | None = None
@@ -793,6 +798,9 @@ class RunOut(RunSummary):
     overrun_ceiling_usd: float | None = None
     runtime: str
     notes: list[str]
+    # #481: the operator detail of the notes a person reads (SwarmCloud's code, the call
+    # that fixes it), one entry per such note; the note's text carries none of it.
+    note_refs: list[RunNoteRefs] = []
     segments: list[SegmentOut]
     checkpoints: list[CheckpointOut]
     # W5: while a console answer that did not count waits for an approver, the run's

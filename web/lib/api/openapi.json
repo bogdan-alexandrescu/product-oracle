@@ -79942,6 +79942,37 @@
         "title": "RunDiscussionsOut",
         "description": "The discussions about a run: its checkpoints', its intake's and, for a feedback\nloop, its document's with staged next-draft changes. Newest activity first, at most\n50 and 40,000 characters; ``omitted`` counts the rest."
       },
+      "RunNoteRefs": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "refs": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Refs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note",
+          "refs"
+        ],
+        "title": "RunNoteRefs"
+      },
       "RunOut": {
         "properties": {
           "id": {
@@ -80359,6 +80390,14 @@
             },
             "type": "array",
             "title": "Notes"
+          },
+          "note_refs": {
+            "items": {
+              "$ref": "#/components/schemas/RunNoteRefs"
+            },
+            "type": "array",
+            "title": "Note Refs",
+            "default": []
           },
           "segments": {
             "items": {

@@ -26165,6 +26165,15 @@ export interface components {
             /** Omitted */
             omitted: number;
         };
+        /** RunNoteRefs */
+        RunNoteRefs: {
+            /** Note */
+            note: string;
+            /** Refs */
+            refs: {
+                [key: string]: string | string[];
+            };
+        };
         /** RunOut */
         RunOut: {
             /**
@@ -26276,6 +26285,11 @@ export interface components {
             runtime: string;
             /** Notes */
             notes: string[];
+            /**
+             * Note Refs
+             * @default []
+             */
+            note_refs: components["schemas"]["RunNoteRefs"][];
             /** Segments */
             segments: components["schemas"]["SegmentOut"][];
             /** Checkpoints */

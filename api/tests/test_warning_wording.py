@@ -515,7 +515,9 @@ async def test_a_stale_spec_s_approve_refusal_is_plain_and_keeps_its_id(client, 
 
 
 # #481: where a person reviews or reconciles a spec version that may be stale.
-CONTROLS = "Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile)"
+CONTROLS = (
+    "Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile)"
+)
 
 
 async def test_review_clears_a_stale_spec_s_label_and_approve_then_succeeds(client, runtime):  # noqa: F811
