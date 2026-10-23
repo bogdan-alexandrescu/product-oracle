@@ -243,6 +243,17 @@ class SegmentAttempt(BaseModel):
     state: str | None = None
 
 
+class SegmentAgent(BaseModel):
+    """#258: one agent working on a running segment, as Oracle's last tick read it."""
+
+    role: str | None = None
+    # The runtime's task state, lower case (running, leased, ...).
+    state: str
+    started_at: datetime | None = None
+    heartbeat_at: datetime | None = None
+    cost_usd: float | None = None
+
+
 class PrdLinks(BaseModel):
     """Cross-document links from a roadmap draft to its PRD version's sections."""
 
@@ -461,6 +472,10 @@ class SegmentOut(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
+    # #258: a running segment's working agents and when Oracle last read them (None: not
+    # read since it started); empty once the segment is no longer running.
+    agents: list[SegmentAgent] = []
+    checked_at: datetime | None = None
 
 
 class ConsoleAnswer(BaseModel):

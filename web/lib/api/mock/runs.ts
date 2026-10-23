@@ -94,6 +94,12 @@ export interface RunsContext {
    * API does when SwarmCloud did not confirm it; the tick delivers it.
    */
   undelivered?: boolean;
+  /**
+   * #258 The "slow-agents" scenario: a segment's agents take two ticks. The first reads them
+   * working (each role's agent, its heartbeat and a third of the estimate spent so far); the
+   * second finishes the segment.
+   */
+  slowAgents?: boolean;
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   /** #260: the confirmed goals a Baseline to PRD run may name. */
@@ -422,6 +428,8 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     started_at: null,
     finished_at: null,
     error: null,
+    agents: [],
+    checked_at: null,
   }));
 }
 
@@ -518,6 +526,7 @@ function submit(ctx: RunsContext, r: RunOut, s: SegmentOut, note: string | null 
   s.workflow_id = `mock-wf-${ctx.uuid().slice(0, 8)}`;
   s.started_at ??= ctx.now();
   s.finished_at = null;
+  Object.assign(s, { agents: [], checked_at: null });
   s.attempts.push({ attempt: s.attempts.length + 1, workflow_id: s.workflow_id, submitted_at: ctx.now(), cost_usd: 0, note, state: "running" });
   r.status = "running";
 }
@@ -916,6 +925,7 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     const s = r.segments.find((x) => x.seq === owed.segment_seq)!;
     if (owed.status === "approved") next(ctx, r, s);
     else submit(ctx, r, s, owed.note);
+    startedInCheck(ctx, r);
     refresh(r);
     delivered.add(r.id);
     out.runs_checked += 1;
@@ -923,13 +933,38 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
   for (const r of ctx.db.runs) {
     if (r.status !== "running" || delivered.has(r.id)) continue;
     out.runs_checked += 1;
+    if (ctx.slowAgents && agentsWorking(ctx, r)) continue;
     const done = finishRunning(ctx, r);
     if (done === "none") continue;
     out.segments_finished += 1;
     if (done === "paused") out.runs_paused += 1;
     else out.runs_advanced += 1;
+    startedInCheck(ctx, r);
   }
   return out;
+}
+
+/** #258: a segment that started during this check shows what the check read of its agents. */
+function startedInCheck(ctx: RunsContext, r: RunOut) {
+  const s = r.segments.find((x) => x.status === "running");
+  if (!s || s.checked_at) return;
+  if (ctx.slowAgents) agentsWorking(ctx, r);
+  else s.checked_at = ctx.now();
+}
+
+/** #258 "slow-agents": the first tick of a running segment reads its agents working; true if it did. */
+function agentsWorking(ctx: RunsContext, r: RunOut): boolean {
+  const s = r.segments.find((x) => x.status === "running");
+  if (!s || s.checked_at) return false;
+  const each = round2(((s.estimate_usd ?? 0) / 3) / Math.max(s.roles.length, 1));
+  const now = ctx.now();
+  s.agents = s.roles.map((role) => ({ role, state: "running", started_at: s.started_at, heartbeat_at: now, cost_usd: each }));
+  s.checked_at = now;
+  const a = s.attempts[s.attempts.length - 1];
+  a.cost_usd = round2(each * s.roles.length);
+  s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
+  refresh(r);
+  return true;
 }
 
 /** The agents finish the run's running segment (at 90% of its estimate), and the run goes on. */
@@ -942,6 +977,7 @@ function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanc
   s.cost_usd = round2(s.attempts.reduce((sum, x) => sum + x.cost_usd, 0));
   s.status = "succeeded";
   s.finished_at = ctx.now();
+  Object.assign(s, { agents: [], checked_at: null });
   refresh(r);
   if (r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd) {
     r.status = "paused_overrun";
