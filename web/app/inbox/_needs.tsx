@@ -201,6 +201,7 @@ export type NeedGroup =
   | "decisions"
   | "launches"
   | "rituals"
+  | "outcomes"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
@@ -1034,6 +1035,30 @@ export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): Sta
   });
 }
 
+/** H3 outcome rows: Add predictions (the roadmap's approver) and Outcome check due (the
+ * record's owner) count; Oracle recorded (H11 at Act within limits) is shown, with Change. */
+export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] } {
+  const rows = inbox.outcomes ?? [];
+  const need = (r: (typeof rows)[number]): Need => ({
+    key: `outcome-${r.reason}-${r.id}`,
+    icon: r.reason === "oracle_recorded" ? "check" : "flag",
+    kind: r.reason === "needs_prediction" ? "Add predictions" : r.reason === "check_due" ? "Outcome check due" : "Oracle recorded",
+    item: (
+      <span className="truncate" title={r.title} data-testid="outcome-need">
+        {r.title}
+      </span>
+    ),
+    context: <span className="block truncate text-text2">Plan › Outcomes</span>,
+    at: r.due_on,
+    action: (
+      <LinkButton variant="secondary" href={`/plan/outcomes?outcome=${r.id}`}>
+        {r.reason === "oracle_recorded" ? "Change" : "Open"}
+      </LinkButton>
+    ),
+  });
+  return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
  * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
@@ -1052,6 +1077,7 @@ export function allNeeds(
   const n = inboxNeeds(inbox, busy, act, compact);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
+  const outcomes = outcomeNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
     rows.map((r) => ({
       ...r,
@@ -1072,6 +1098,7 @@ export function allNeeds(
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...stated(launches.counted, "launches"),
     ...ritualNeeds(inbox, busy, act),
+    ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),
@@ -1081,6 +1108,7 @@ export function allNeeds(
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(launches.shipped, "shipped", false),
+    ...stated(outcomes.shown, "outcomes", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }
 

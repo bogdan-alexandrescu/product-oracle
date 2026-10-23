@@ -3648,6 +3648,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/priorities/calibration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Priority Calibration
+         * @description The track record (H3): how well assessed predictions held, per goal and company-wide,
+         *     and the factor (0.5 to 1.0) it puts on priority confidence. ``setting`` show: the
+         *     factor is displayed, not applied.
+         */
+        get: operations["get_priority_calibration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/priorities/overrides": {
         parameters: {
             query?: never;
@@ -6616,6 +6638,31 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Update Outcome
+         * @description Edit the prediction while the item is predicted (audited); once shipped it is
+         *     frozen (409). The owner can change any time.
+         */
+        patch: operations["update_outcome"];
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}/shipped": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Outcome Shipped
+         * @description Say a predicted item shipped (signal ``manual``): it starts measuring.
+         */
+        post: operations["mark_outcome_shipped"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -6633,6 +6680,26 @@ export interface paths {
          * @description Record whether the prediction held; returns drafted learnings to keep or drop.
          */
         post: operations["assess_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/outcomes/{outcome_id}/learnings/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Outcome Learning
+         * @description Keep or skip one of the latest assessment's drafted learnings (by its index).
+         */
+        post: operations["decide_outcome_learning"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9843,6 +9910,21 @@ export interface components {
              * Format: date-time
              */
             assessed_at: string;
+            /** Actual Value */
+            actual_value?: number | null;
+            /** Measured At */
+            measured_at?: string | null;
+            /**
+             * Actor
+             * @default person
+             * @enum {string}
+             */
+            actor: "person" | "oracle";
+            /**
+             * Learnings
+             * @default []
+             */
+            learnings: components["schemas"]["DraftedLearning"][];
         };
         /** AssessmentIn */
         AssessmentIn: {
@@ -9860,6 +9942,10 @@ export interface components {
              * @default []
              */
             evidence_ids: string[];
+            /** Actual Value */
+            actual_value?: number | null;
+            /** Measured At */
+            measured_at?: string | null;
         };
         /** AssessmentResult */
         AssessmentResult: {
@@ -10821,6 +10907,53 @@ export interface components {
              * @description .md, .txt or .pdf files
              */
             files: string[];
+        };
+        /** CalibrationFigures */
+        CalibrationFigures: {
+            /** N */
+            n: number;
+            /** Score */
+            score: number;
+            /** Expected */
+            expected: number;
+            /** Factor */
+            factor?: number | null;
+            /**
+             * Held
+             * @default 0
+             */
+            held: number;
+        };
+        /** CalibrationOut */
+        CalibrationOut: {
+            /**
+             * Setting
+             * @enum {string}
+             */
+            setting: "apply" | "show";
+            /** Min Outcomes */
+            min_outcomes: number;
+            /** Floor */
+            floor: number;
+            /** Ceiling */
+            ceiling: number;
+            company: components["schemas"]["CalibrationFigures"];
+            /** Goals */
+            goals: components["schemas"]["GoalCalibration"][];
+        };
+        /**
+         * CalibrationUsed
+         * @description The track record factor (oracle.quality.calibration) and whether it was applied.
+         */
+        CalibrationUsed: {
+            /** Factor */
+            factor: number;
+            /** Applied */
+            applied: boolean;
+            /** Basis */
+            basis?: string | null;
+            /** N */
+            n?: number | null;
         };
         /** CampaignCreate */
         CampaignCreate: {
@@ -12409,6 +12542,8 @@ export interface components {
             explain: string;
             /** Evidence */
             evidence: components["schemas"]["EvidenceUsed"][];
+            /** Before Track Record */
+            before_track_record?: number | null;
         };
         /** ConflictCreate */
         ConflictCreate: {
@@ -12794,7 +12929,7 @@ export interface components {
             review_at?: string | null;
             /** Expected Outcome */
             expected_outcome: string;
-            prediction?: components["schemas"]["PredictionIn"] | null;
+            prediction?: components["schemas"]["oracle__decisions__schemas__PredictionIn"] | null;
             /** Lock Version */
             lock_version?: number | null;
         };
@@ -13086,7 +13221,7 @@ export interface components {
             review_at?: string | null;
             /** Expected Outcome */
             expected_outcome?: string | null;
-            prediction?: components["schemas"]["PredictionIn"] | null;
+            prediction?: components["schemas"]["oracle__decisions__schemas__PredictionIn"] | null;
         };
         /**
          * DecisionPerson
@@ -14102,6 +14237,41 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * DraftedLearning
+         * @description A drafted learning on its assessment: drafted until the owner keeps or skips it.
+         */
+        DraftedLearning: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+            /**
+             * State
+             * @default drafted
+             * @enum {string}
+             */
+            state: "drafted" | "kept" | "skipped";
+            /** Learning Id */
+            learning_id?: string | null;
+        };
         /** DriftEntry */
         DriftEntry: {
             /**
@@ -15041,6 +15211,7 @@ export interface components {
                 [key: string]: unknown;
             };
             confidence: components["schemas"]["ConfidenceUsed"];
+            calibration?: components["schemas"]["CalibrationUsed"] | null;
             /** Goals */
             goals: components["schemas"]["GoalTerm"][];
             /** Missing */
@@ -15813,6 +15984,29 @@ export interface components {
             /** Sso Hint */
             sso_hint?: string | null;
         };
+        /** GoalCalibration */
+        GoalCalibration: {
+            /** N */
+            n: number;
+            /** Score */
+            score: number;
+            /** Expected */
+            expected: number;
+            /** Factor */
+            factor?: number | null;
+            /**
+             * Held
+             * @default 0
+             */
+            held: number;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Title */
+            title: string;
+        };
         /** GoalCheck */
         GoalCheck: {
             /** Measurable */
@@ -16567,8 +16761,48 @@ export interface components {
              * @default []
              */
             launches: components["schemas"]["InboxLaunch"][];
+            /**
+             * Outcomes
+             * @default []
+             */
+            outcomes: components["schemas"]["InboxOutcome"][];
             /** Last Seen At */
             last_seen_at?: string | null;
+        };
+        /**
+         * InboxOutcome
+         * @description An outcome row of the Inbox (H3): Add predictions (the roadmap's approver, one per
+         *     roadmap, counted), Outcome check due (the owner, counted), Oracle recorded (shown).
+         */
+        InboxOutcome: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "needs_prediction" | "check_due" | "oracle_recorded";
+            /** Due On */
+            due_on?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "predicted" | "due" | "assessed";
+            /** Counts */
+            counts: boolean;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Roadmap Version Id */
+            roadmap_version_id?: string | null;
         };
         /** InboxQuestion */
         InboxQuestion: {
@@ -18024,6 +18258,14 @@ export interface components {
              * @default 1
              */
             weight: number;
+        };
+        /** LearningDecision */
+        LearningDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "keep" | "skip";
         };
         /**
          * LearningDraft
@@ -19532,7 +19774,9 @@ export interface components {
             roadmap_item_key?: string | null;
             /** Experiment Id */
             experiment_id?: string | null;
-            prediction: components["schemas"]["Prediction"];
+            /** Roadmap Item Id */
+            roadmap_item_id?: string | null;
+            prediction: components["schemas"]["oracle__quality__schemas__PredictionIn"];
             /**
              * Module Keys
              * @default []
@@ -19581,7 +19825,26 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "tracking" | "held" | "partially_held" | "not_held" | "inconclusive";
+            status: "predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Roadmap Item Id */
+            roadmap_item_id?: string | null;
+            /** Track Id */
+            track_id?: string | null;
+            /**
+             * Needs Prediction
+             * @default false
+             */
+            needs_prediction: boolean;
+            /** Confidence At Prediction */
+            confidence_at_prediction?: number | null;
+            /** Shipped At */
+            shipped_at?: string | null;
+            ship_signal?: components["schemas"]["ShipSignal"] | null;
+            /** Assess Due On */
+            assess_due_on?: string | null;
+            proposed_assessment?: components["schemas"]["ProposedAssessment"] | null;
+            /** Decision Id */
+            decision_id?: string | null;
             /** Observed */
             observed?: string | null;
             /** Assessments */
@@ -19604,6 +19867,17 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * OutcomeUpdate
+         * @description PATCH /v1/outcomes/{id}: the prediction (while predicted) and the owner.
+         */
+        OutcomeUpdate: {
+            prediction?: components["schemas"]["oracle__quality__schemas__PredictionIn"] | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Lock Version */
+            lock_version: number;
         };
         /** OutlineEntry */
         OutlineEntry: {
@@ -20196,27 +20470,16 @@ export interface components {
             threshold?: string | null;
             /** By */
             by?: string | null;
-        };
-        /**
-         * PredictionIn
-         * @description A measurable version of the expected outcome: deciding creates its outcome record.
-         */
-        PredictionIn: {
-            /** Metric */
-            metric: string;
-            /** Baseline */
-            baseline?: string | null;
-            /** Predicted */
-            predicted: string;
-            /** Threshold */
-            threshold?: string | null;
-            /** By */
-            by?: string | null;
-            /**
-             * Goal Id
-             * Format: uuid
-             */
-            goal_id: string;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("increase" | "decrease") | null;
+            /** Baseline Value */
+            baseline_value?: number | null;
+            /** Predicted Value */
+            predicted_value?: number | null;
+            /** Threshold Value */
+            threshold_value?: number | null;
         };
         /**
          * Preferences
@@ -20606,6 +20869,27 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * ProposedAssessment
+         * @description Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.
+         */
+        ProposedAssessment: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Observed */
+            observed?: string | null;
+            /** Actual Value */
+            actual_value?: number | null;
+            /** Measured At */
+            measured_at?: string | null;
+            /** Source */
+            source?: ("goal_history" | "measurement") | null;
+            /** Note */
+            note?: string | null;
         };
         /** ProtectedResourceMetadata */
         ProtectedResourceMetadata: {
@@ -24520,6 +24804,33 @@ export interface components {
              */
             sharing: "private" | "counts" | "summary" | "full";
         };
+        /** ShipSignal */
+        ShipSignal: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "tracker" | "milestone" | "launch" | "manual";
+            /**
+             * Refs
+             * @default []
+             */
+            refs: string[];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** ShippedIn */
+        ShippedIn: {
+            /** At */
+            at?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /**
          * SignedOutEverywhere
          * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
@@ -27979,6 +28290,63 @@ export interface components {
         oracle__connections__router__AuthorizeOut: {
             /** Url */
             url: string;
+        };
+        /**
+         * PredictionIn
+         * @description A measurable version of the expected outcome: deciding creates its outcome record.
+         */
+        oracle__decisions__schemas__PredictionIn: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("increase" | "decrease") | null;
+            /** Baseline Value */
+            baseline_value?: number | null;
+            /** Predicted Value */
+            predicted_value?: number | null;
+            /** Threshold Value */
+            threshold_value?: number | null;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+        };
+        /**
+         * PredictionIn
+         * @description A prediction a person writes: its typed figures must agree with each other.
+         */
+        oracle__quality__schemas__PredictionIn: {
+            /** Metric */
+            metric: string;
+            /** Baseline */
+            baseline?: string | null;
+            /** Predicted */
+            predicted: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** By */
+            by?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("increase" | "decrease") | null;
+            /** Baseline Value */
+            baseline_value?: number | null;
+            /** Predicted Value */
+            predicted_value?: number | null;
+            /** Threshold Value */
+            threshold_value?: number | null;
         };
         /**
          * GoalAttrs
@@ -35399,6 +35767,26 @@ export interface operations {
             };
         };
     };
+    get_priority_calibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationOut"];
+                };
+            };
+        };
+    };
     list_priority_overrides: {
         parameters: {
             query?: {
@@ -41104,7 +41492,12 @@ export interface operations {
             query?: {
                 goal_id?: string | null;
                 document_id?: string | null;
-                status?: ("tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+                status?: ("predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+                /** @description predicted, tracking (measuring), due (a proposal waits), assessed */
+                state?: ("predicted" | "tracking" | "due" | "assessed") | null;
+                needs_prediction?: boolean | null;
+                track_id?: string | null;
+                roadmap_item_id?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -41198,6 +41591,76 @@ export interface operations {
             };
         };
     };
+    update_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_outcome_shipped: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShippedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     assess_outcome: {
         parameters: {
             query?: never;
@@ -41220,6 +41683,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssessmentResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_outcome_learning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeOut"];
                 };
             };
             /** @description Validation Error */

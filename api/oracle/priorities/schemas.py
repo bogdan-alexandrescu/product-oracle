@@ -41,6 +41,18 @@ class ConfidenceUsed(BaseModel):
     source: Literal["evidence", "baseline", "attrs", "default"]
     explain: str
     evidence: list[EvidenceUsed]
+    # H3: the confidence before the track record factor, when one applied.
+    before_track_record: float | None = None
+
+
+class CalibrationUsed(BaseModel):
+    """The track record factor (oracle.quality.calibration) and whether it was applied."""
+
+    factor: float
+    applied: bool
+    # "Goal 'Raise activation': 3 of 6 assessed predictions held (expected 4.2)".
+    basis: str | None = None
+    n: int | None = None
 
 
 class Explanation(BaseModel):
@@ -49,6 +61,8 @@ class Explanation(BaseModel):
     # Each input by name: {"value", "attr", "raw"}; goal_value carries its terms.
     inputs: dict[str, Any]
     confidence: ConfidenceUsed
+    # H3: the track record factor of its goals; None when there is too little record.
+    calibration: CalibrationUsed | None = None
     goals: list[GoalTerm]
     missing: list[str]
     steps: list[str]
