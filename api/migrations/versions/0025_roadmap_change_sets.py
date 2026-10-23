@@ -2,8 +2,9 @@
 
 New table ``roadmap_change_sets`` (oracle.roadmap.models.RoadmapChangeSet): a draft set of
 changes (add, move, defer, cut with a reason, reorder) opened on a roadmap's approved
-version; proposing it imports the next roadmap version for the decider. A partial unique
-index keeps one draft per roadmap.
+version; proposing it imports the next roadmap version for the decider. A later proposal while one
+waits supersedes it (``superseded_by_version_id``). A partial unique index keeps one draft
+per roadmap.
 
 Additive: a new table only, nothing backfilled. The downgrade drops it; proposed versions
 stay as ordinary roadmap versions.
@@ -24,6 +25,13 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 TABLE = "roadmap_change_sets"
+INDEXED = (
+    "tenant_id",
+    "roadmap_document_id",
+    "base_version_id",
+    "proposed_version_id",
+    "superseded_by_version_id",
+)
 
 
 def upgrade() -> None:
@@ -36,6 +44,7 @@ def upgrade() -> None:
             "changes", postgresql.JSONB(astext_type=sa.Text()), server_default="[]", nullable=False
         ),
         sa.Column("proposed_version_id", sa.Uuid(), nullable=True),
+        sa.Column("superseded_by_version_id", sa.Uuid(), nullable=True),
         sa.Column("created_by", sa.Uuid(), nullable=True),
         sa.Column("lock_version", sa.Integer(), server_default="1", nullable=False),
         sa.Column(
@@ -53,7 +62,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "status IN ('draft', 'proposed', 'discarded')",
+            "status IN ('draft', 'proposed', 'discarded', 'superseded')",
             name=op.f("ck_roadmap_change_sets_status"),
         ),
         sa.ForeignKeyConstraint(
@@ -75,6 +84,12 @@ def upgrade() -> None:
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
+            ["superseded_by_version_id"],
+            ["document_versions.id"],
+            name=op.f("fk_roadmap_change_sets_superseded_by_version_id_document_versions"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
             ["tenant_id"],
             ["tenants.id"],
             name=op.f("fk_roadmap_change_sets_tenant_id_tenants"),
@@ -82,7 +97,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_roadmap_change_sets")),
     )
-    for column in ("tenant_id", "roadmap_document_id", "base_version_id", "proposed_version_id"):
+    for column in INDEXED:
         op.create_index(op.f(f"ix_{TABLE}_{column}"), TABLE, [column], unique=False)
     op.create_index(
         "ux_roadmap_change_sets_draft",
@@ -95,6 +110,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ux_roadmap_change_sets_draft", table_name=TABLE)
-    for column in ("tenant_id", "roadmap_document_id", "base_version_id", "proposed_version_id"):
+    for column in INDEXED:
         op.drop_index(op.f(f"ix_{TABLE}_{column}"), table_name=TABLE)
     op.drop_table(TABLE)

@@ -10972,7 +10972,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "draft" | "proposed" | "discarded";
+            status: "draft" | "proposed" | "discarded" | "superseded";
             /** Changes */
             changes: (components["schemas"]["AddChange"] | components["schemas"]["MoveChange"] | components["schemas"]["DeferChange"] | components["schemas"]["CutChange"] | components["schemas"]["ReorderChange"])[];
             /** Items */
@@ -10992,6 +10992,8 @@ export interface components {
              * @default false
              */
             approved: boolean;
+            /** Superseded By Version */
+            superseded_by_version?: number | null;
             /** Decider Id */
             decider_id?: string | null;
             /** Lock Version */
@@ -41732,7 +41734,7 @@ export interface operations {
     list_roadmap_change_sets: {
         parameters: {
             query?: {
-                status?: ("draft" | "proposed" | "discarded") | null;
+                status?: ("draft" | "proposed" | "discarded" | "superseded") | null;
             };
             header?: never;
             path: {
