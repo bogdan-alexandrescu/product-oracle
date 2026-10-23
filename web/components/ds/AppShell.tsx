@@ -7,6 +7,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternal
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
+import { useSettingsTabs } from "@/lib/settings-tabs";
 import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
@@ -33,7 +34,7 @@ export const DESTINATIONS: Dest[] = [
   { label: "Inbox", href: "/inbox", icon: "inbox", testId: "nav-inbox" },
   { label: "Company", href: "/company", icon: "company", testId: "nav-company" },
 ];
-const SETTINGS: Dest = { label: "Settings", href: "/settings/members", icon: "settings", testId: "nav-settings", match: "/settings" };
+const SETTINGS: Dest = { label: "Settings", href: "/settings", icon: "settings", testId: "nav-settings", match: "/settings" };
 
 /** Phone tab bar: Home, PRDs, Plan, Inbox, More. */
 const TABS = ["Home", "PRDs", "Plan", "Inbox"];
@@ -81,7 +82,7 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (home) return d.href === home || home.startsWith(`${d.href}/`);
   const base = d.match ?? d.href;
   // /sources (evidence search) lives under Settings › Sources.
-  if (d === SETTINGS && pathname.startsWith("/sources")) return true;
+  if (d.testId === SETTINGS.testId && pathname.startsWith("/sources")) return true;
   // A brief before drafting (C5) is on its way to a PRD.
   if (d.href === "/documents" && pathname.startsWith("/intakes/")) return true;
   // The Plan's alignment reports (F6) belong with the Roadmap.
@@ -303,6 +304,13 @@ function Navs() {
   const inbox = useInboxCount(shown);
   const home = useDocumentHome(pathname);
   const [more, setMore] = useState(false);
+  // #370: Settings opens on the first tab the role can read, and leaves when there is none.
+  const settingsTabs = useSettingsTabs();
+  const settings: Dest | null = !settingsTabs.ready
+    ? SETTINGS
+    : settingsTabs.tabs[0]
+      ? { ...SETTINGS, href: settingsTabs.tabs[0].href }
+      : null;
   // Close the More sheet on navigation.
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) {
@@ -312,7 +320,7 @@ function Navs() {
   if (!shown) return null;
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
-  const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), SETTINGS];
+  const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
   const moreActive = moreDests.some((d) => isActive(pathname, d, home));
 
   return (
@@ -330,7 +338,7 @@ function Navs() {
         ))}
         <span className="flex-1" />
         <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
-        <RailLink d={SETTINGS} pathname={pathname} home={home} />
+        {settings && <RailLink d={settings} pathname={pathname} home={home} />}
         <UserMenu placement="rail" />
       </nav>
 

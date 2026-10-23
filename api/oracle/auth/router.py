@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from oracle.auth import service
 from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.auth.models import ApiToken, User
-from oracle.auth.schemas import LoginRequest, Me
+from oracle.auth.schemas import Capabilities, LoginRequest, Me
+from oracle.capabilities import capabilities as role_capabilities
 from oracle.config import get_settings
 
 router = APIRouter(prefix="/v1", tags=["auth"])
@@ -64,4 +65,16 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
         role=principal.role,
         token_id=token.id,
         token_name=token.name,
+    )
+
+
+@router.get("/me/capabilities", response_model=Capabilities)
+async def capabilities(request: Request, principal: CurrentPrincipal, db: TenantDB) -> Capabilities:
+    """What the caller's role may do, from the routes' own role checks (#370): the web
+    app reads it once per sign-in and hides the controls a role can never use."""
+    user = await db.get(User, principal.user_id) if principal.kind == "user" else None
+    return Capabilities(
+        role=principal.role,
+        engineering_lead=bool(user and user.engineering_lead),
+        operations=role_capabilities(request.app, principal.role),
     )

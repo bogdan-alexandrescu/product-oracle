@@ -11,7 +11,11 @@ from oracle.auth.deps import get_principal
 from oracle.auth.models import ROLES
 from oracle.capabilities import DECIDED_PER_ITEM, EVERY_MEMBER, operation_roles
 from oracle.main import app
-from tests.test_members import MATRIX, World, _template, token_with_role, world  # noqa: F401
+from tests.test_members import MATRIX, _template, token_with_role
+from tests.test_members import world as members_world  # noqa: F401  (the fixture)
+
+# The matrix changes someone else's comment (approver); a commenter changes their own.
+OWN_ITEM = {("PATCH", "/v1/comments/{comment_id}"): "commenter"}
 
 
 def _calls(dependant):
@@ -75,9 +79,9 @@ def test_openapi_carries_each_operations_role():
 
 
 @pytest.mark.parametrize("role", ROLES)
-async def test_capabilities_match_the_route_matrix(client, world, role):
+async def test_capabilities_match_the_route_matrix(client, members_world, role):  # noqa: F811
     resp = await client.get(
-        "/v1/me/capabilities", headers=await token_with_role(world.tenant_id, role)
+        "/v1/me/capabilities", headers=await token_with_role(members_world.tenant_id, role)
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -85,23 +89,24 @@ async def test_capabilities_match_the_route_matrix(client, world, role):
     ops = _operation_ids()
     for method, path, min_role, _ in MATRIX:
         op = ops[(method, _template(path))]
+        min_role = OWN_ITEM.get((method, path), min_role)
         allowed = ROLES.index(role) >= ROLES.index(min_role)
         assert body["operations"][op] is allowed, (role, method, path)
     assert set(body["operations"]) == set(operation_roles(app))
 
 
-async def test_capabilities_carry_the_engineering_lead_flag(client, world):
+async def test_capabilities_carry_the_engineering_lead_flag(client, members_world):  # noqa: F811
     from oracle.auth.models import User
     from oracle.tenancy import tenant_session
 
-    async with tenant_session(world.tenant_id) as s:
-        user = await s.get(User, world.member_id)
+    async with tenant_session(members_world.tenant_id) as s:
+        user = await s.get(User, members_world.member_id)
         user.engineering_lead = True
         await s.commit()
     from oracle.auth.service import create_api_token
 
-    async with tenant_session(world.tenant_id) as s:
-        _, raw = await create_api_token(s, "lead-bot", user_id=world.member_id)
+    async with tenant_session(members_world.tenant_id) as s:
+        _, raw = await create_api_token(s, "lead-bot", user_id=members_world.member_id)
         await s.commit()
     resp = await client.get("/v1/me/capabilities", headers={"Authorization": f"Bearer {raw}"})
     assert resp.status_code == 200, resp.text
