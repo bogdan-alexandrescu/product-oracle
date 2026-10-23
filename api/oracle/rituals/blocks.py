@@ -10,7 +10,7 @@ blocks in order (oracle.rituals.kinds). The ``goals`` block's distance to go is 
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -40,6 +40,7 @@ TITLES = {
     "outcomes_assessed": "Outcomes assessed",
     "unserved_features": "Features serving no confirmed goal",
     "suggested_next": "Suggested next",
+    "alignment_report": "Weekly alignment report",
 }
 # Features that moved this many ranks between the last two snapshots.
 PRIORITY_MOVE = 3
@@ -443,6 +444,34 @@ async def suggested_next(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
     return rows
 
 
+async def alignment_report(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """F6's weekly report for the week before the occurrence's local week, built once
+    (oracle.reports.alignment.build; its Slack post goes out on the same tick). A company
+    with no active or paused track gets none that week."""
+    from oracle.reports import alignment
+    from oracle.reports.models import AlignmentReport
+
+    settings = await alignment.load_settings(db)
+    week = alignment.week_start_of(ctx.period_to, settings.timezone) - timedelta(days=7)
+    try:
+        report: AlignmentReport | None = await alignment.build(
+            db, kind="weekly", week_start=week, settings=settings
+        )
+    except alignment.NoTracks:
+        return [{"text": "No active or paused track: no report this week", "href": None}]
+    except alignment.AlreadyBuilt:
+        report = await db.scalar(
+            select(AlignmentReport).where(
+                AlignmentReport.kind == "weekly", AlignmentReport.week_start == week
+            )
+        )
+    assert report is not None
+    title = alignment.title("weekly", week)
+    return [{"report_id": str(report.id), "title": title,
+             "headline": report.content.get("headline"), "href": f"/plan/reports/{report.id}",
+             "text": f"{title}: {report.content.get('headline')}"}]  # fmt: skip
+
+
 Builder = Callable[[AsyncSession, BlockCtx], Awaitable[list[dict[str, Any]]]]
 BUILDERS: dict[str, Builder] = {
     "goals": goals,
@@ -459,6 +488,7 @@ BUILDERS: dict[str, Builder] = {
     "outcomes_assessed": outcomes_assessed,
     "unserved_features": unserved_features,
     "suggested_next": suggested_next,
+    "alignment_report": alignment_report,
 }
 
 

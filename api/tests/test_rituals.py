@@ -21,6 +21,7 @@ from tests.baseline_helpers import make_ctx
 from tests.ritual_helpers import (  # noqa: F401 - fixtures
     at,
     ctx,
+    only,
     ready_occurrence,
     rituals_of,
     tick,
@@ -242,12 +243,13 @@ async def test_summarize_with_oracle_starts_one_quick_run(client, ctx, at):
 
 
 async def test_summary_settings_and_estimate(client, ctx, at):
-    """protects=criterion 9a: a new company is on_demand, the three active built-ins come
-    to 5.66 runs and $16.98 a month, pausing the weekly check-in drops it to 1.33 and
+    """protects=criterion 9a: a new company is on_demand, with only the three first
+    built-ins active (an owner paused the others) they come to 5.66 runs and $16.98 a
+    month, pausing the weekly check-in drops it to 1.33 and
     $3.99; owners switch to always (audited), approvers get 403, other values 422;
     fails_when=another figure, an approver changes it, or no audit event; no_claim=the
     screen's rounding (Playwright)."""
-    await tick(ctx.tenant_id)
+    await only(client, ctx, "goals_checkin", "roadmap_refresh", "goals_review")
     got = (await client.get("/v1/rituals/summaries", headers=ctx.as_("viewer"))).json()
     assert got["mode"] == "on_demand"
     assert got["estimate"]["runs_per_month"] == 5.66

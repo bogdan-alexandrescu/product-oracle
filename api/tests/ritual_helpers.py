@@ -65,3 +65,13 @@ async def ready_occurrence(client, ctx: Ctx, at, kind: str = "roadmap_refresh") 
     resp = await client.get(f"/v1/ritual-occurrences/{occ.id}", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+async def only(client, ctx: Ctx, *kinds: str) -> None:
+    """Seeds the built-ins, then an owner pauses every other active one on Company ›
+    Rituals, so a test sees only ``kinds``' occurrences and summary runs."""
+    await tick(ctx.tenant_id)
+    for kind, r in (await rituals_of(ctx.tenant_id)).items():
+        if kind not in kinds and r.status == "active":
+            resp = await client.post(f"/v1/rituals/{r.id}/pause", headers=ctx.as_("owner"))
+            assert resp.status_code == 200, resp.text
