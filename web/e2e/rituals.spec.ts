@@ -2,7 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
-import { login } from "./helpers";
+import { displayName } from "../lib/names";
+
+import { ADMIN, login } from "./helpers";
 
 /*
  * H2 Cadence engine: Company › Rituals and the occurrence page, driven through the UI as a
@@ -221,4 +223,51 @@ test("12h: there is no Rituals item under Settings", async ({ page }) => {
   const nav = page.getByRole("navigation", { name: "Settings" });
   await expect(nav.getByRole("link", { name: "Members" })).toBeVisible();
   await expect(nav.getByRole("link", { name: /Rituals/ })).toHaveCount(0);
+});
+
+test("H2 review: an approver sees each ritual's owner by name", async ({ page }) => {
+  // protects=the Owner column and the inspector's Owner name the ritual's owner for every
+  // member who may see the table (the member directory, GET /v1/people); fails_when=a
+  // non-owner sees "Someone" (the owner-only member list was read); no_claim=the owner's
+  // member picker.
+  await withRituals(page);
+  await login(page, APPROVER);
+  await openRituals(page);
+  const owner = displayName(ADMIN.email);
+  await expect(ritualRow(page, "Weekly goals check-in")).toContainText(owner);
+  await expect(page.getByTestId("ritual-row").filter({ hasText: "Someone" })).toHaveCount(0);
+  await ritualRow(page, "Weekly goals check-in").click();
+  await expect(inspector(page)).toContainText(owner);
+});
+
+test("H2 review: a held occurrence lists the decisions recorded with it, each opening on Company › Decisions", async ({ page }) => {
+  // protects="Held occurrences list the decisions recorded with them" (number and title),
+  // and the link opens that decision; fails_when=the held page lists none, or the link
+  // opens a page that does not show the decision; no_claim=recording a decision (H1's form).
+  await withRituals(page);
+  await login(page, APPROVER);
+  await page.goto("/company/rituals");
+  await openLastPreRead(page, "Weekly goals check-in");
+  await expect(page.getByTestId("occurrence-state")).toHaveText("Held");
+  const listed = page.getByTestId("occurrence-decisions").getByRole("link");
+  await expect(listed).toHaveCount(1);
+  await expect(listed).toHaveText(/^D-\d+ Ship usage caps before anomaly detection$/);
+  await listed.click();
+  await expect(page).toHaveURL(/\/company\/decisions\?d=\d+$/);
+  await expect(page.getByTestId("decision-inspector").filter({ visible: true })).toContainText("Ship usage caps before anomaly detection");
+});
+
+test("H2 review: the rituals follow a change of the Company time zone", async ({ page }) => {
+  // protects=rituals on the Company time zone move with it (owner decision 2026-10-22), in
+  // the mock as in the API; fails_when=the inspector keeps UTC after the owner picked Tokyo;
+  // no_claim=the API's next dates (test_company_timezone.py).
+  await withRituals(page);
+  await login(page);
+  await page.goto("/settings/company");
+  await page.getByLabel("Company time zone").selectOption("Asia/Tokyo");
+  await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await openRituals(page);
+  await ritualRow(page, "Weekly goals check-in").click();
+  await expect(inspector(page).getByLabel("Time zone")).toHaveValue("Asia/Tokyo");
 });
