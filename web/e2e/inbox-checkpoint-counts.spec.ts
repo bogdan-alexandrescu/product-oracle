@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
-import { login, seedRoadmapReview, seedRoadmapReviewConsoleHeld, signOut } from "./helpers";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { login, seedRoadmapReview, signOut } from "./helpers";
 
 /**
  * D9 Inbox checkpoint counts: the Roadmap items checkpoint row says how many items need me and
@@ -135,14 +136,16 @@ test("a commenter's suggestion shows as Suggested with Stage", async ({ page }) 
 // console approval held while blocking reasons are open says so on the row; fails_when = Home
 // draws child rows or no counts, or the suffix is missing; no_claim = D3's Confirm action.
 test("Home shows the counts only; a held console approval says so", async ({ page }) => {
-  await login(page);
-  await seedRoadmapReviewConsoleHeld(page);
-  await page.goto("/home");
+  // D3's seeded roadmap-items-console-held scenario: the roadmap review run approved in
+  // SwarmCloud's console while blocking reasons are open.
+  await page.addInitScript((key) => localStorage.setItem(key, "roadmap-items-console-held"), MOCK_SCENARIO_KEY);
+  await login(page); // signing in lands on Home
   const row = parent(page);
   await expect(row.getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you · console approval held");
   await expect(row.getByTestId("checkpoint-blocking")).toHaveText("3 blocking");
   await expect(page.locator(`tr[data-child-of="${CP}"]`)).toHaveCount(0);
-  await page.goto("/inbox");
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
   await expect(parent(page).getByTestId("checkpoint-label")).toHaveText("Roadmap items · 10 need you · console approval held");
 });
 
