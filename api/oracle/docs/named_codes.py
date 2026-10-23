@@ -15,10 +15,11 @@ from dataclasses import dataclass, field
 from oracle.docs.parser import ParsedSection
 from oracle.docs.schemas import VersionWarning
 
-# A code: one to three capitals, a dash, digits (F-28, REQ-4, D-12).
-_CODE = re.compile(r"(?<![\w-])([A-Z]{1,3}-\d{1,5})(?![\w-])")
-# Standards that look like codes and are not ones.
-_NOT_CODES = {"UTF", "SHA", "ISO", "MD", "TLS", "SSL", "RFC"}
+# A code: one to three capitals, a dash, digits (F-28, REQ-4, D-12), or one capital and
+# digits without a dash (G1 a goal, R1 a requirement, M1 a milestone).
+_CODE = re.compile(r"(?<![\w-])([A-Z]{1,3}-\d{1,5}|[A-Z]\d{1,4})(?![\w-])")
+# Standards, quarters, halves and versions that look like codes and are not ones.
+_NOT_CODES = {"UTF", "SHA", "ISO", "MD", "TLS", "SSL", "RFC", "Q", "H", "V"}
 # What may stand between two codes of a run: a comma, a slash, "and" or "or".
 _JOINER = re.compile(r"[ \t]*(?:,|/|&|,?[ \t]+(?:and|or))[ \t]*")
 # A name after a code: an optional separator, then a capital.
@@ -36,7 +37,11 @@ class Findings:
 
 
 def _codes(text: str) -> list[re.Match[str]]:
-    return [m for m in _CODE.finditer(text) if m.group(1).split("-")[0] not in _NOT_CODES]
+    return [m for m in _CODE.finditer(text) if _prefix(m.group(1)) not in _NOT_CODES]
+
+
+def _prefix(code: str) -> str:
+    return code.split("-")[0] if "-" in code else code.rstrip("0123456789")
 
 
 def findings(body: str, heading: str = "") -> Findings:
