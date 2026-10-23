@@ -17,7 +17,17 @@ import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
+import {
+  discussionInboxRows,
+  emptyDiscussions,
+  routeDiscussions,
+  seedDiscussionInbox,
+  seedDiscussionReplies,
+  seedDiscussions,
+  type DiscussionsContext,
+  type DiscussionsDb,
+  type SubjectInfo,
+} from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
@@ -1489,7 +1499,7 @@ function load(): Db {
   // so other specs' counts stay as they were.
   db.discussions =
     scenario === "discussions"
-      ? seedDiscussionsScenario(db)
+      ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
       : scenario === "discussion-replies"
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : emptyDiscussions();
@@ -1518,6 +1528,23 @@ function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDisc
   const doc = findDocument(db, "team-workspaces")!;
   const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
   return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+}
+
+/** G6: the "discussions" seed plus the open discussion on saved-carts v2 whose rows wait in the Inbox. */
+function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): DiscussionsDb {
+  const doc = findDocument(db, "saved-carts")!;
+  const ctx = { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now };
+  seedDiscussionInbox(ctx, discussions, doc.id, doc.title, `/documents/${doc.slug}/v/2`);
+  // Criterion 7: a question Oracle asked the approver from that discussion names it.
+  const d = discussions.discussions.find((x) => x.document_id === doc.id)!;
+  const at = "2026-10-21T08:25:00Z";
+  ensureV2(db).questions.push({
+    id: uuid(), gap_id: null, intake_id: null, document_id: doc.id, checkpoint_id: null, item_ref: null, entity_id: null,
+    module_key: null, category: "general", prompt: "How long should a guest's cart last?", rationale: null, priority: 100,
+    batch: null, asked_to: db.members.find((m) => m.email === "approver@example.com")!.id, asked_by: null, section_key: null,
+    status: "asked", created_at: at, updated_at: at, discussion_id: d.id, discussion_title: d.title,
+  });
+  return discussions;
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -2772,6 +2799,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const strategy = inboxStrategy(db.strategy, me.role);
     const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
     const open = did.filter((a) => a.counts).length;
+    // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
+    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
+    const discussing = discussions.filter((r) => r.state !== "done").length;
     return json(200, {
       ...inbox,
       revoke_failures: failures,
@@ -2780,7 +2810,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       report_failures: reported.report_failures,
       strategy,
       oracle_actions: did,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open,
+      discussions,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + discussing,
     });
   }
   if (runs) return runs;

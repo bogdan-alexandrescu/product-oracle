@@ -11,12 +11,14 @@ import { api, ApiError, unwrap, type CitationOut, type Schemas } from "@/lib/api
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { errorMessage } from "@/lib/use-query";
 
 import { plural } from "./DiscussionList";
 
 type Discussion = Schemas["DiscussionOut"];
 type Message = Schemas["DiscussionMessageOut"];
+type Change = Schemas["DiscussionChangeOut"];
 type Counts = { messages: number; people: number };
 type Loaded = { kind: "ok"; d: Discussion; messages: Message[] } | { kind: "private" } | { kind: "error"; message: string };
 
@@ -454,12 +456,15 @@ export function DiscussionThread({
   onBack,
   backLabel = "All feedback",
   onChanged,
+  focusChanges = false,
 }: {
   id: string;
   onBack?: () => void;
   backLabel?: string;
   /** Something about it changed (a message, its visibility): lists showing it reload. */
   onChanged?: () => void;
+  /** Opened from the Inbox's Review changes (G6): scroll to the changes card. */
+  focusChanges?: boolean;
 }) {
   const { me, role } = useMe();
   const myId = me?.user_id ?? null;
@@ -483,6 +488,40 @@ export function DiscussionThread({
       live = false;
     };
   }, [id]);
+  // The changes still waiting on a decision (proposed by Oracle, suggested by people).
+  const [changes, setChanges] = useState<Change[]>([]);
+  useEffect(() => {
+    let live = true;
+    unwrap(api.GET("/v1/discussions/{discussion_id}/changes", { params: { path: { discussion_id: id } } }))
+      .then((rows) => live && setChanges(rows.filter((c) => c.status === "proposed" || c.status === "suggested")))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  const changesRef = useRef<HTMLElement>(null);
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (focusChanges && changes.length > 0 && !scrolled.current && changesRef.current) {
+      scrolled.current = true;
+      changesRef.current.scrollIntoView({ block: "center" });
+    }
+  }, [focusChanges, changes]);
+  // Reading the thread marks it read to its last message: the Inbox's invitation and
+  // mentions read past are done (G6), and the rail's count reads again.
+  const lastId = state?.kind === "ok" ? state.messages.at(-1)?.id : undefined;
+  const readTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!lastId || readTo.current === lastId) return;
+    readTo.current = lastId;
+    void api
+      .POST("/v1/discussions/{discussion_id}/read", { params: { path: { discussion_id: id } }, body: { message_id: lastId } })
+      .then(({ response }) => {
+        if (!response.ok) return;
+        invalidateWaiting();
+        waitingChanged();
+      });
+  }, [id, lastId]);
 
   const back = onBack && (
     <Button variant="ghost" icon="chevron-left" onClick={onBack} aria-label={backLabel}>
@@ -689,6 +728,22 @@ export function DiscussionThread({
           </p>
         )}
       </div>
+
+      {changes.length > 0 && (
+        <section ref={changesRef} aria-label="Changes proposed" className="flex flex-col gap-2 rounded-lg border border-line p-3" data-testid="discussion-changes">
+          <h4 className="text-sm font-semibold">{plural(changes.length, "change", "changes")} proposed</h4>
+          <ul className="flex flex-col gap-1.5">
+            {changes.map((c) => (
+              <li key={c.id} className="flex min-w-0 items-center gap-2 text-sm" data-testid="discussion-change">
+                <span className="min-w-0 flex-1 truncate" title={c.label}>
+                  {c.label}
+                </span>
+                <Chip kind="line">{c.status === "suggested" ? "Suggested" : c.proposed_by_kind === "oracle" ? "Proposed by Oracle" : "Proposed"}</Chip>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {editing && (
         <form

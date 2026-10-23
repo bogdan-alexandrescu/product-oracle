@@ -1151,6 +1151,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   return {
     // Launch rows (H6) are added by the server (./launches.ts).
     launches: [],
+    // G6: discussion rows are added by the server (./discussions.ts).
+    discussions: [],
     checkpoints,
     deliveries,
     approvals,
