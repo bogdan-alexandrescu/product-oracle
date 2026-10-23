@@ -71,6 +71,9 @@ export interface IntakeContext {
   /** The company's members (C2); without them nobody can be asked a teammate's question. */
   people?: MockPerson[];
   subjects?: SubjectLookup;
+  /** The approved (locked) section keys of a document's latest version, by its id or slug; a
+   * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
+  lockedSections?: (document: string) => string[];
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -627,6 +630,11 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
         if (!resp.ok) return resp;
         proposal.result = { run_id: ((await resp.json()) as { id: string }).id };
       } else {
+        const section = typeof proposal.detail.section_key === "string" ? proposal.detail.section_key : null;
+        const document = proposal.detail.document_id ?? proposal.detail.document;
+        if (section && typeof document === "string" && (ctx.lockedSections?.(document) ?? []).includes(section)) {
+          return fail(409, `Section '${section}' is approved and locked; its text is kept as approved`);
+        }
         proposal.result = { feedback_item_id: uuid() };
       }
       Object.assign(proposal, { status: "accepted", decided_by: ctx.userId, decided_at: now(), updated_at: now() });
@@ -955,7 +963,7 @@ export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: strin
   ask("goal_alignment", 2, authorId, "2026-10-21T09:00:00Z");
   reply("customer_user", "Returning buyers on the web shop, signed in.", "2026-10-20T11:00:00Z", "answered");
   reply("blockers", "The address lookup API has a rate limit that could block pre-fill.", "2026-10-20T12:00:00Z", "answered_pending_review");
-  // #343: a PRD patch from the customer answer, and two findings from the author's own sources.
+  // #343: PRD patches from the customer and blockers answers, and two findings from the author's own sources.
   const customer = question("customer_user");
   db.intake_proposals = [
     ...(db.intake_proposals ?? []),
@@ -966,6 +974,15 @@ export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: strin
       detail: { document: "saved-addresses", base_version: 2, section_key: "context.users", text: `${customer.prompt} Returning buyers on the web shop, signed in.` },
       status: "proposed", result: {}, created_by: approverId, decided_by: null, decided_at: null, decision_note: null,
       created_at: "2026-10-20T11:00:00Z", updated_at: "2026-10-20T11:00:00Z",
+    },
+    // On usage-alerts' behaviour section, approved in v1: accepting it is refused (locked).
+    {
+      id: uuid(), intake_id: intake.id, gap_id: gap("blockers").id, question_id: question("blockers").id,
+      answer_id: db.answers.find((a) => a.question_id === question("blockers").id)?.id ?? null, kind: "prd_patch",
+      title: `Add to the PRD: ${LABEL.blockers}`,
+      detail: { document: "usage-alerts", base_version: 1, section_key: "behaviour", text: "Alerts wait while the address lookup is rate limited." },
+      status: "proposed", result: {}, created_by: approverId, decided_by: null, decided_at: null, decision_note: null,
+      created_at: "2026-10-20T12:00:00Z", updated_at: "2026-10-20T12:00:00Z",
     },
   ];
   const finding = (kind: Schemas["FindingOut"]["kind"], category: string, sharing: Schemas["FindingOut"]["sharing"], draft: string): Schemas["FindingOut"] => ({

@@ -34,9 +34,9 @@ export const GAP_STATUS: Record<RankedGap["status"], { label: string; kind: Chip
   accepted_risk: { label: "Risk accepted", kind: "warn" },
 };
 
+// A control the signed-in role can never use is hidden (owner rule, #370); the note says who acts.
 const ADD_REASON = "A commenter adds gaps";
 const TRIAGE_REASON = "An approver triages gaps";
-const RESEARCH_REASON = "A commenter asks for research";
 
 /** "a.b, c.d" → ["a.b", "c.d"]. */
 const keysOf = (text: string) => [...new Set(text.split(",").map((k) => k.trim()).filter(Boolean))];
@@ -272,32 +272,32 @@ function GapRow({
           }}
         />
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          <Button disabled={!approver} title={approver ? undefined : TRIAGE_REASON} onClick={() => setTriaging(true)}>
-            Triage
-          </Button>
-          {open && !researching && (
-            <Button icon="search" disabled={busy || !commenter} title={commenter ? undefined : RESEARCH_REASON} onClick={research}>
-              Research this
-            </Button>
-          )}
-          {open && (
-            <Button variant="ghost" disabled={busy || !approver} title={approver ? undefined : TRIAGE_REASON} onClick={() => setStatus("deferred")}>
-              Defer
-            </Button>
-          )}
-          {gap.status === "deferred" && (
-            <Button variant="ghost" disabled={busy || !approver} title={approver ? undefined : TRIAGE_REASON} onClick={() => setStatus("unknown")}>
-              Reopen
-            </Button>
-          )}
-        </div>
+        (approver || (commenter && open && !researching)) && (
+          <div className="flex flex-wrap gap-1.5">
+            {approver && <Button onClick={() => setTriaging(true)}>Triage</Button>}
+            {commenter && open && !researching && (
+              <Button icon="search" disabled={busy} onClick={research}>
+                Research this
+              </Button>
+            )}
+            {approver && open && (
+              <Button variant="ghost" disabled={busy} onClick={() => setStatus("deferred")}>
+                Defer
+              </Button>
+            )}
+            {approver && gap.status === "deferred" && (
+              <Button variant="ghost" disabled={busy} onClick={() => setStatus("unknown")}>
+                Reopen
+              </Button>
+            )}
+          </div>
+        )
       )}
     </li>
   );
 }
 
-/** Why some gap controls are disabled for the signed-in role; nothing for approvers and owners. */
+/** Who acts on the gap controls the signed-in role does not see; nothing for approvers and owners. */
 function roleNote(role: Role | null): string | null {
   if (!hasRole(role, "commenter")) return `You can read the gaps. ${ADD_REASON} and asks for research; an approver triages them.`;
   if (!hasRole(role, "approver")) return `${TRIAGE_REASON}: importance, owner, sections, stop condition, defer and reopen.`;
@@ -319,9 +319,11 @@ export function GapsTab({ summary: s, role, onChanged }: { summary: Summary; rol
   return (
     <div data-testid="intake-gaps" className="flex min-w-0 flex-col gap-3 pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button icon="plus" disabled={adding || !commenter} title={commenter ? undefined : ADD_REASON} onClick={() => setAdding(true)}>
-          Add a gap
-        </Button>
+        {commenter && (
+          <Button icon="plus" disabled={adding} onClick={() => setAdding(true)}>
+            Add a gap
+          </Button>
+        )}
         {note && (
           <p data-testid="gaps-role-note" role="note" className="min-w-0 flex-1 basis-60 text-[13px] text-text2">
             {note}

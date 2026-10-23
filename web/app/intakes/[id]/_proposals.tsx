@@ -100,7 +100,8 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
       <ProposalDiff p={p} />
       <Outcome p={p} />
       {error && <InlineError>{error}</InlineError>}
-      {p.status === "proposed" &&
+      {approver &&
+        p.status === "proposed" &&
         (dismissing ? (
           <div className="flex min-w-0 flex-col gap-2 rounded-button border border-line bg-surface2 p-2.5">
             <label className={FIELD_LABEL}>
@@ -118,10 +119,10 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            <Button variant="solid" icon="check" disabled={busy || !approver} title={approver ? undefined : DECIDE_REASON} onClick={accept}>
+            <Button variant="solid" icon="check" disabled={busy} onClick={accept}>
               Accept
             </Button>
-            <Button variant="ghost" disabled={busy || !approver} title={approver ? undefined : DECIDE_REASON} onClick={() => setDismissing(true)}>
+            <Button variant="ghost" disabled={busy} onClick={() => setDismissing(true)}>
               Dismiss
             </Button>
           </div>
@@ -133,7 +134,8 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
 /**
  * The brief's proposals (#343): research runs and PRD patches, each with what it would
  * change. An approver accepts (a research run starts; a patch becomes feedback on the PRD)
- * or dismisses, with an optional reason.
+ * or dismisses, with an optional reason. Others do not see those controls (a control a role
+ * can never use is hidden, owner rule #370); the note says who decides.
  */
 export function ProposalsTab({ summary: s, role, onChanged }: { summary: Summary; role: Role | null; onChanged: () => void }) {
   const approver = hasRole(role, "approver");
