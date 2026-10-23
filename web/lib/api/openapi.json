@@ -2160,6 +2160,68 @@
         "x-per-item": null
       }
     },
+    "/v1/discussions/{discussion_id}/share": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Share Discussion",
+        "description": "Share as discussion (G7 head-of-product panel): a new open discussion on the panel\nchat's subject, ``origin: \"discuss\"``, whose first message is ``first_message`` (the\nchat's summary as its starter edited it); the chat's open changes are copied as\n``suggested`` by the sharer. Only the chat's starter may; the chat stays private.",
+        "operationId": "share_discussion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionShareIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the panel chat's starter"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Not a panel chat, or no first message"
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/discussions/{discussion_id}/messages": {
       "get": {
         "tags": [
@@ -48728,6 +48790,15 @@
                 "type": "null"
               }
             ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "discuss",
+              "panel"
+            ],
+            "title": "Origin",
+            "default": "discuss"
           }
         },
         "type": "object",
@@ -49536,6 +49607,32 @@
           "message_id"
         ],
         "title": "DiscussionReadIn"
+      },
+      "DiscussionShareIn": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "first_message": {
+            "type": "string",
+            "title": "First Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_message"
+        ],
+        "title": "DiscussionShareIn",
+        "description": "G7 Share as discussion: the new open discussion's title and first message (the\nchat's summary as the person edited it)."
       },
       "DiscussionStarted": {
         "properties": {

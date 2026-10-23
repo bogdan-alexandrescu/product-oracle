@@ -30,6 +30,7 @@ from oracle.discussions.schemas import (
     DiscussionParticipantsIn,
     DiscussionPatch,
     DiscussionReadIn,
+    DiscussionShareIn,
     DiscussionStarted,
     Origin,
     RunDiscussionsOut,
@@ -169,6 +170,29 @@ async def update_discussion(
         await db.rollback()
         conflict = DiscussionExposureConflict(detail=str(e), messages=e.messages, people=e.people)
         return JSONResponse(conflict.model_dump(), status.HTTP_409_CONFLICT)
+    await db.commit()
+    await db.refresh(d)
+    return await service.discussion_out(db, principal, d)
+
+
+@router.post(
+    "/discussions/{discussion_id}/share",
+    response_model=DiscussionOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        403: {"description": "Not the panel chat's starter"},
+        404: GONE,
+        422: {"description": "Not a panel chat, or no first message"},
+    },
+)
+async def share_discussion(
+    discussion_id: uuid.UUID, body: DiscussionShareIn, principal: Commenter, db: TenantDB
+) -> DiscussionOut:
+    """Share as discussion (G7 head-of-product panel): a new open discussion on the panel
+    chat's subject, ``origin: "discuss"``, whose first message is ``first_message`` (the
+    chat's summary as its starter edited it); the chat's open changes are copied as
+    ``suggested`` by the sharer. Only the chat's starter may; the chat stays private."""
+    d = await _call(service.share(db, principal, discussion_id, body))
     await db.commit()
     await db.refresh(d)
     return await service.discussion_out(db, principal, d)

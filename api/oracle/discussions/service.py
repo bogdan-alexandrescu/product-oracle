@@ -43,6 +43,7 @@ from oracle.discussions.schemas import (
     DiscussionParticipantOut,
     DiscussionPatch,
     DiscussionPerson,
+    DiscussionShareIn,
     DiscussionStarter,
     DiscussionSummary,
     HiddenDiscussion,
@@ -64,6 +65,11 @@ SHARE_TO_ADD = "Share this finding at Summary or above to add people"
 STARTER_OPENS = "Only the starter can make a private discussion open"
 SHARE_FIRST = "Share this finding at Summary or above first"
 PANEL_CHAT = "Share a panel chat with Share as discussion"
+PANEL_ALONE = "A panel chat is just you and Oracle"
+PANEL_ONLY = "Only a panel chat is shared as a discussion"
+STARTER_SHARES = "Only the person who started this chat can share it"
+# Changes still to act on; Share as discussion copies these as suggestions.
+OPEN_CHANGES = ("proposed", "suggested", "staged")
 CONFIRM_EXPOSURE = "Confirm what this exposes"
 BODY_TOO_LONG = "A message can be at most 8,000 characters"
 SUMMARY_TOO_LONG = "A summary can be at most 1,200 characters"
@@ -411,7 +417,9 @@ class Labels:
             return (f"{label} · {s['milestone']}" if s.get("milestone") else label), "/plan"
         if kind == "priorities":
             return "Priority order", "/priorities"
-        return s["path"], s["path"]
+        from oracle.discussions.context import page_name
+
+        return page_name(s["path"]), s["path"]
 
 
 # --- people -------------------------------------------------------------------------------
@@ -911,6 +919,8 @@ async def _bring_in(
     new = [u for u in dict.fromkeys(user_ids) if u not in _active(parts)]
     if not new:
         return []
+    if d.origin == "panel":
+        raise DiscussionError(422, PANEL_CHAT)
     if seat.author_only:
         raise DiscussionError(422, SHARE_TO_ADD)
     if not access.can_add(seat):
@@ -977,8 +987,12 @@ async def start(
     subject = parse_subject(body.subject_kind, body.subject)
     found = await resolve_subject(db, principal, body.subject_kind, subject)
     author_only = found.finding_author is not None
-    visibility = "private" if author_only else body.visibility
+    panel = body.origin == "panel"
+    # G7 "Panel chats" (owner, 2026-10-21): only you, until shared.
+    visibility = "private" if author_only or panel else body.visibility
     picked = list(dict.fromkeys(u for u in body.participants if u != me))
+    if panel and (picked or (body.message and body.message.mentions)):
+        raise DiscussionError(422, PANEL_ALONE)
     await members(db, picked)
     if author_only and (picked or (body.message and body.message.mentions)):
         raise DiscussionError(422, SHARE_TO_ADD)
@@ -997,6 +1011,7 @@ async def start(
         visibility=visibility,
         author_only=author_only,
         started_by=me,
+        origin=body.origin,
         summary_shared=visibility == "open",
     )
     db.add(d)
@@ -1009,7 +1024,7 @@ async def start(
     await _record(
         db, principal, "start", d,
         subject_kind=d.subject_kind, subject_key=d.subject_key, visibility=visibility,
-        participants=len(picked), author_only=author_only,
+        participants=len(picked), author_only=author_only, origin=d.origin,
     )  # fmt: skip
     for u in picked:
         await _record(db, principal, "participant_add", d, user_id=str(u), via=via)
@@ -1019,6 +1034,53 @@ async def start(
         first = await _post(db, principal, d, parts, seat, body.message, _via(principal))
     await db.flush()
     return d, first
+
+
+async def share(
+    db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID, body: DiscussionShareIn
+) -> Discussion:
+    """G7 Share as discussion: a new open discussion on the panel chat's subject, its first
+    message the summary as the starter edited it, the chat's open changes copied as
+    suggested by the sharer. The panel chat itself stays private."""
+    await recheck_caller(db, principal, "commenter")
+    me = _person(principal)
+    chat, _parts, seat = await readable(db, principal, discussion_id)
+    if chat.origin != "panel":
+        raise DiscussionError(422, PANEL_ONLY)
+    if not seat.starter:
+        raise DiscussionError(403, STARTER_SHARES)
+    _check_body(body.first_message)
+    d = await start(
+        db, principal,
+        DiscussionCreate(
+            subject_kind=chat.subject_kind, subject=chat.subject, title=body.title,
+            message=DiscussionMessageIn(body=body.first_message),
+        ),
+    )  # fmt: skip
+    now = datetime.now(UTC)
+    changes = await db.scalars(
+        select(DiscussionChange)
+        .where(DiscussionChange.discussion_id == chat.id, DiscussionChange.status.in_(OPEN_CHANGES))
+        .order_by(DiscussionChange.created_at)
+    )
+    copied = 0
+    for c in changes:
+        db.add(
+            DiscussionChange(
+                discussion_id=d.id, kind=c.kind, target=c.target, payload=c.payload,
+                edited_payload=c.edited_payload, rationale=c.rationale, basis=c.basis,
+                proposed_by_kind=c.proposed_by_kind, proposed_by=c.proposed_by,
+                pushback=c.pushback, status="suggested", suggested_by=me, suggested_at=now,
+            )
+        )  # fmt: skip
+        copied += 1
+    await audit.record(
+        db, principal, "discussion.shared", ENTITY, d.id,
+        {"from": str(chat.id), "to": str(d.id), "changes": copied,
+         "length": len(body.first_message)},
+    )  # fmt: skip
+    await db.flush()
+    return d
 
 
 async def post_message(

@@ -4,11 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { HopPanel } from "@/components/hop/HopPanel";
+import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
 import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
+import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
@@ -17,6 +20,7 @@ import { initialsOf } from "./Figures";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { Notice } from "./Layout";
+import { Sheet } from "./Sheet";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
 
@@ -469,6 +473,12 @@ function PhoneHeader() {
   const pathname = usePathname();
   const { me } = useMe();
   const title = usePageTitle(pathname);
+  const [ask, setAsk] = useState(false);
+  const [askPath, setAskPath] = useState(pathname);
+  if (askPath !== pathname) {
+    setAskPath(pathname);
+    setAsk(false);
+  }
   if (pathname.startsWith("/i/")) return null;
   return (
     <header
@@ -481,8 +491,85 @@ function PhoneHeader() {
       <p data-testid="phone-title" className="min-w-0 flex-1 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
         {title}
       </p>
+      {me && !panelHidden(pathname) && (
+        <button
+          type="button"
+          data-testid="phone-ask"
+          aria-label="Ask Oracle"
+          aria-expanded={ask}
+          onClick={() => setAsk(true)}
+          className="flex h-9 flex-none items-center gap-1 rounded-lg px-2 text-[15px] font-semibold text-rail-active-text hover:bg-rail-hover"
+        >
+          <Icon name="ask" size={20} />
+          Ask
+        </button>
+      )}
       {me && <UserMenu placement="header" />}
+      <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
+        <HopPanel showHeader={false} />
+      </Sheet>
     </header>
+  );
+}
+
+/** Where the head-of-product panel never shows (G7 3.2): sign-in, consent, present mode, the design page. */
+export function panelHidden(pathname: string): boolean {
+  return /^\/(login|oauth|design)(\/|$)/.test(pathname) || /\/present\/?$/.test(pathname);
+}
+
+/**
+ * The head-of-product panel's place (G7 "Panel place", owner 2026-10-21): a 44 px "Ask" strip
+ * on the right edge of every screen; a click or ⌘J / Ctrl+J opens the 400 px panel, docked
+ * from 1280 px (the page's grid gives up the width) and an overlay drawer below. Esc or the
+ * strip closes it. Phones get the header's Ask button instead. Nothing loads until it opens.
+ */
+function HopDock() {
+  const pathname = usePathname();
+  const { me } = useMe();
+  const open = usePanelOpen();
+  const shown = !!me && !panelHidden(pathname);
+  useEffect(() => {
+    if (!shown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        setPanelOpen(!open);
+      } else if (e.key === "Escape" && open && !e.defaultPrevented) {
+        setPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [shown, open]);
+  if (!shown) return null;
+  return (
+    <aside
+      aria-label="Ask Oracle"
+      data-testid="hop-dock"
+      data-open={open ? "true" : "false"}
+      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-l border-line bg-surface max-[600px]:hidden ${open ? "w-11 min-[1280px]:w-[400px]" : "w-11"}`}
+    >
+      <button
+        type="button"
+        data-testid="hop-strip"
+        aria-expanded={open}
+        aria-label={open ? "Close Ask Oracle" : "Ask Oracle"}
+        title="Ask Oracle (⌘J)"
+        onClick={() => setPanelOpen(!open)}
+        className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "min-[1280px]:hidden" : ""}`}
+      >
+        <Mark size={24} tone="current" className="block flex-none text-accent" />
+        <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
+      </button>
+      {open && (
+        <div
+          data-testid="hop-drawer"
+          className="fixed inset-y-0 right-11 z-40 w-[400px] max-w-[calc(100vw-44px)] border-l border-line shadow-tip min-[1280px]:static min-[1280px]:h-full min-[1280px]:w-full min-[1280px]:max-w-none min-[1280px]:border-l-0 min-[1280px]:shadow-none"
+        >
+          <HopPanel onClose={() => setPanelOpen(false)} />
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -518,18 +605,23 @@ export function CapsError() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)]">
-      <Suspense fallback={null}>
-        <Navs />
-      </Suspense>
-      <main className="col-start-2 row-start-1 min-w-0">
+    <ScreenSubjectProvider>
+      <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto]">
         <Suspense fallback={null}>
-          <PhoneHeader />
+          <Navs />
         </Suspense>
-        <CapsError />
-        {children}
-      </main>
-      <ConfirmHost />
-    </div>
+        <main className="col-start-2 row-start-1 min-w-0">
+          <Suspense fallback={null}>
+            <PhoneHeader />
+          </Suspense>
+          <CapsError />
+          {children}
+        </main>
+        <Suspense fallback={null}>
+          <HopDock />
+        </Suspense>
+        <ConfirmHost />
+      </div>
+    </ScreenSubjectProvider>
   );
 }

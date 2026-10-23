@@ -33,6 +33,7 @@ import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -121,6 +122,12 @@ export function RunDetail({ id }: { id: string }) {
   const [checked, setChecked] = useState<string | null>(null);
   const run = q.data;
   const { reload } = q;
+  // G7 3.3: the panel is about the waiting checkpoint, else the run's page.
+  const pendingCp = run?.checkpoints.find((c) => c.status === "pending") ?? null;
+  useScreenSubject(
+    run && pendingCp ? { kind: "checkpoint", subject: { run_id: run.id, checkpoint_id: pendingCp.id } } : null,
+    run && pendingCp ? `${run.flow_title} · ${CHECKPOINT_LABEL[pendingCp.kind as keyof typeof CHECKPOINT_LABEL] ?? pendingCp.kind}` : null,
+  );
 
   // Agents work in the background: re-read while the run is moving, and while a recorded
   // decision is still being delivered to it (Oracle sends it again on every tick).

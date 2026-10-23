@@ -602,6 +602,29 @@ export interface paths {
         patch: operations["update_discussion"];
         trace?: never;
     };
+    "/v1/discussions/{discussion_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Discussion
+         * @description Share as discussion (G7 head-of-product panel): a new open discussion on the panel
+         *     chat's subject, ``origin: "discuss"``, whose first message is ``first_message`` (the
+         *     chat's summary as its starter edited it); the chat's open changes are copied as
+         *     ``suggested`` by the sharer. Only the chat's starter may; the chat stays private.
+         */
+        post: operations["share_discussion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions/{discussion_id}/messages": {
         parameters: {
             query?: never;
@@ -14807,6 +14830,12 @@ export interface components {
             /** Participants */
             participants?: string[];
             message?: components["schemas"]["DiscussionMessageIn"] | null;
+            /**
+             * Origin
+             * @default discuss
+             * @enum {string}
+             */
+            origin: "discuss" | "panel";
         };
         /**
          * DiscussionExposure
@@ -15090,6 +15119,17 @@ export interface components {
              * Format: uuid
              */
             message_id: string;
+        };
+        /**
+         * DiscussionShareIn
+         * @description G7 Share as discussion: the new open discussion's title and first message (the
+         *     chat's summary as the person edited it).
+         */
+        DiscussionShareIn: {
+            /** Title */
+            title?: string | null;
+            /** First Message */
+            first_message: string;
         };
         /**
          * DiscussionStarted
@@ -32905,6 +32945,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    share_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionShareIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description Not the panel chat's starter */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a panel chat, or no first message */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

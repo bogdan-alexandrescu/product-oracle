@@ -25,6 +25,7 @@ import { addDays, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { useRiskPolicy } from "@/lib/risk-policy";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -410,6 +411,8 @@ export function PublishView({ doc }: { doc: string }) {
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const d = docQ.data;
   const n = d?.latest_version ?? null;
+  // G7 3.3: the panel is about this document (its latest version).
+  useScreenSubject(d && n != null ? { kind: "document", subject: { document_id: d.id, version: n } } : null, d?.title);
   const readinessQ = useQuery(`readiness|${doc}|${n}`, () =>
     n == null
       ? Promise.resolve(undefined)

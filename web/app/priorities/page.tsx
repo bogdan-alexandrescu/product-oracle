@@ -32,6 +32,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
@@ -715,7 +716,11 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   );
 }
 
+const PRIORITIES_SUBJECT = { kind: "priorities" as const, subject: {} };
+
 export default function PrioritiesPage() {
+  // G7 3.3: the panel is about the priority order.
+  useScreenSubject(PRIORITIES_SUBJECT, "Priority order");
   // The query string is read on the client: the page streams in under Suspense.
   return (
     <Suspense fallback={null}>

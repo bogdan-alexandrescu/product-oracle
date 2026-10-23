@@ -9,6 +9,7 @@ import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, LayerBadge, Loading, SpecStateBadge } from "@/components/ui";
 import { api, unwrap, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { sectionHref } from "@/lib/section-link";
 
 const STATUS: Record<SectionDiff["status"], { label: string; kind: ChipKind }> = {
@@ -291,6 +292,8 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
   const latest = versions.at(-1)?.number;
   const toN = to ?? latest;
   const fromN = from ?? (toN != null ? Math.max(1, toN - 1) : undefined);
+  // G7 3.3: the panel is about this document (the version compared to).
+  useScreenSubject(docQ.data && toN != null ? { kind: "document", subject: { document_id: docQ.data.id, version: toN } } : null, docQ.data?.title);
   const ready = fromN != null && toN != null;
 
   const diffQ = useQuery(`diff|${doc}|${fromN}|${toN}`, async () =>

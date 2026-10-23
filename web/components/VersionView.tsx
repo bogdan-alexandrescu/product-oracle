@@ -48,6 +48,7 @@ import { blocksText, parseBlocks } from "@/lib/markdown";
 import { useMe } from "@/lib/me";
 import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { useDocumentView, type DocumentView } from "@/lib/preferences";
+import { useScreenSubject } from "@/lib/screen-subject";
 import { keyFromHash, sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
 import { useViewportFit } from "@/lib/use-viewport-fit";
@@ -292,6 +293,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const openSection =
     shownSections.find((s) => s.section_key === hashKey) ?? shownSections.find((s) => !s.verdict) ?? shownSections[0];
   const openKey = openSection?.section_key ?? null;
+  // G7 3.3: the panel is about the open section, else the document.
+  useScreenSubject(
+    document_ ? (openSection ? { kind: "section", subject: { document_id: document_.id, version: n, section_key: openSection.section_key } } : { kind: "document", subject: { document_id: document_.id, version: n } }) : null,
+    document_ ? (openSection ? `${document_.title} · ${openSection.heading}` : document_.title) : null,
+  );
   const openIdx = openSection ? shownSections.indexOf(openSection) : -1;
   const prevSection = openIdx > 0 ? shownSections[openIdx - 1] : null;
   const nextSection = openIdx >= 0 ? shownSections[openIdx + 1] ?? null : null;

@@ -49,6 +49,16 @@ class DiscussionCreate(BaseModel):
     # The starter's pick for a private discussion; treated as mentions on an open one.
     participants: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     message: DiscussionMessageIn | None = None
+    # "panel": a G7 head-of-product panel chat, always private, just its starter and Oracle.
+    origin: Literal["discuss", "panel"] = "discuss"
+
+
+class DiscussionShareIn(BaseModel):
+    """G7 Share as discussion: the new open discussion's title and first message (the
+    chat's summary as the person edited it)."""
+
+    title: str | None = Field(default=None, max_length=200)
+    first_message: str
 
 
 class DiscussionExposure(BaseModel):
