@@ -352,3 +352,177 @@ async def test_the_sweep_forgets_sign_ins_nobody_finished(client, tenant_id, own
     await sweep.prune_all_holds(tenant_id, now())
     async with tenant_session(tenant_id) as db:
         assert await db.scalar(select(ClaudeAccountSignin)) is None
+
+
+# --- the state the pool decides by (#403) -------------------------------------------
+
+
+async def test_an_account_over_its_weekly_limit_reads_spent_as_the_pool_decides(
+    client, tenant_id, owner
+):
+    from oracle.claude_accounts.accounts import choose, eligibility
+
+    spent = await add_account(
+        tenant_id,
+        "weekly",
+        windows={
+            "five_hour": window(0.09),
+            "seven_day": window(0.95, timedelta(days=2, hours=13)),
+        },
+    )
+    page = (await client.get(BASE, headers=owner.headers)).json()
+    served = page["accounts"][0]
+    at = now()
+    assert served["state"] == "AVAILABLE"
+    assert served["takes_calls"] is (choose([spent], at) is not None) is False
+    reason, until = eligibility([spent], at)
+    assert served["spent_by"] == "seven_day"
+    assert datetime.fromisoformat(served["spent_until"]) == until
+    assert page["pool"] == {
+        "takes_calls": False,
+        "on_fallback": False,
+        "reason": reason.value,
+        "until": served["spent_until"],
+    }
+    assert reason.value == "no_account_available"
+    assert page["time_zone"] == "America/Los_Angeles"
+
+
+async def test_an_account_with_room_takes_calls_and_the_pool_with_it(client, tenant_id, owner):
+    await add_account(tenant_id, "roomy", windows={"five_hour": window(0.3)})
+    await add_account(tenant_id, "five-hour", windows={"five_hour": window(0.9)})
+    page = (await client.get(BASE, headers=owner.headers)).json()
+    by = {a["label"]: a for a in page["accounts"]}
+    assert by["roomy"]["takes_calls"] is True and by["roomy"]["spent_until"] is None
+    assert by["roomy"]["spent_by"] is None
+    assert by["five-hour"]["takes_calls"] is False and by["five-hour"]["spent_by"] == "five_hour"
+    assert page["pool"] == {
+        "takes_calls": True,
+        "on_fallback": False,
+        "reason": None,
+        "until": None,
+    }
+
+
+async def test_a_paused_account_is_not_spent_and_a_paused_pool_takes_no_calls(
+    client, tenant_id, owner
+):
+    from oracle.claude_accounts.accounts import AccountState
+
+    await add_account(tenant_id, "resting", state=AccountState.PAUSED)
+    page = (await client.get(BASE, headers=owner.headers)).json()
+    served = page["accounts"][0]
+    assert served["takes_calls"] is False and served["spent_until"] is None
+    assert page["pool"] == {
+        "takes_calls": False,
+        "on_fallback": False,
+        "reason": "pool_paused",
+        "until": None,
+    }
+
+
+async def test_with_no_account_the_pool_takes_calls_only_through_a_fallback(
+    client, tenant_id, owner
+):
+    empty = (await client.get(BASE, headers=owner.headers)).json()
+    assert empty["pool"] == {
+        "takes_calls": False,
+        "on_fallback": False,
+        "reason": "no_accounts_registered",
+        "until": None,
+    }
+    put = await client.put(
+        f"{BASE}/fallback", json={"token": PLAN_TOKEN_PREFIX + "01-xxxxxxxx"}, headers=owner.headers
+    )
+    assert put.status_code == 200
+    covered = (await client.get(BASE, headers=owner.headers)).json()
+    assert covered["pool"] == {
+        "takes_calls": True,
+        "on_fallback": True,
+        "reason": "no_accounts_registered",
+        "until": None,
+    }
+
+
+async def test_the_page_gives_the_company_time_zone(client, tenant_id, owner):
+    put = await client.put(
+        "/v1/settings/alignment_report",
+        json={"value": {"timezone": "Europe/Berlin"}},
+        headers=owner.headers,
+    )
+    assert put.status_code == 200, put.text
+    viewer = await make_person(tenant_id, "viewer@example.com", "viewer")
+    page = (await client.get(BASE, headers=viewer.headers)).json()
+    assert page["time_zone"] == "Europe/Berlin"
+
+
+# --- a spent pool and the fallback credential (#403, owner decision 2026-10-23) ------
+
+
+class _Answers:
+    """A transport that answers every call, recording the token it ran on."""
+
+    def __init__(self):
+        self.tokens: list[str] = []
+
+    async def complete(self, token, request):
+        from oracle.llm.transports import TransportResult
+
+        self.tokens.append(token)
+        return TransportResult(text="answer", model=request.model, readings={})
+
+
+async def _gateway_answer(tenant_id):
+    """What the gateway does with one call now: the credential it ran on, or its refusal."""
+    from oracle.llm import NoClaudeAccount, gateway
+
+    transports = gateway.Transports(plan=_Answers(), api_key=_Answers())
+    messages = [{"role": "user", "content": "Summarise the goals."}]
+    async with tenant_session(tenant_id) as s:
+        try:
+            out = await gateway.complete(
+                s, "Be brief.", messages, 64, job="reporting", transports=transports
+            )
+        except NoClaudeAccount as refused:
+            return False, None, refused.reason
+    return True, out.via, None
+
+
+async def test_a_spent_pool_with_a_fallback_takes_calls_on_it_as_the_gateway_does(
+    client, tenant_id, owner
+):
+    await add_account(
+        tenant_id,
+        "weekly",
+        windows={
+            "five_hour": window(0.09),
+            "seven_day": window(0.95, timedelta(days=2, hours=13)),
+        },
+    )
+    put = await client.put(
+        f"{BASE}/fallback", json={"token": PLAN_TOKEN_PREFIX + "01-xxxxxxxx"}, headers=owner.headers
+    )
+    assert put.status_code == 200
+    page = (await client.get(BASE, headers=owner.headers)).json()
+    served = page["accounts"][0]
+    assert served["takes_calls"] is False and served["spent_by"] == "seven_day"
+    assert page["pool"] == {
+        "takes_calls": True,
+        "on_fallback": True,
+        "reason": "no_account_available",
+        "until": served["spent_until"],
+    }
+    assert await _gateway_answer(tenant_id) == (True, "fallback_plan", None)
+
+
+async def test_a_spent_pool_without_a_fallback_takes_no_calls_as_the_gateway_refuses(
+    client, tenant_id, owner
+):
+    await add_account(
+        tenant_id, "weekly", windows={"seven_day": window(0.95, timedelta(days=2, hours=13))}
+    )
+    page = (await client.get(BASE, headers=owner.headers)).json()
+    assert page["pool"]["takes_calls"] is False and page["pool"]["on_fallback"] is False
+    assert page["pool"]["until"] == page["accounts"][0]["spent_until"]
+    assert await _gateway_answer(tenant_id) == (False, None, page["pool"]["reason"])
+    assert page["pool"]["reason"] == "no_account_available"

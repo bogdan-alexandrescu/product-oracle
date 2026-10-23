@@ -34,7 +34,8 @@ const noSubscribe = () => () => {};
 export function PlanNav() {
   const pathname = usePathname();
   const raw = useSyncExternalStore(noSubscribe, registeredRaw, () => "[]");
-  const extra = useMemo(() => parse(raw), [raw]);
+  // A registered entry whose page has since landed is not listed twice.
+  const extra = useMemo(() => parse(raw).filter((t) => !PLAN_TABS.some((x) => x.key === t.key)), [raw]);
   return (
     <nav aria-label="Plan" data-testid="plan-tabs" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
       <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">

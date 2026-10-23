@@ -9,8 +9,9 @@ its caller share a process, so these are function calls rather than HTTP:
                unusable), or a NoAccount with the current hold untouched
     release()  give the named hold back; ``unusable`` when the credential would not read
 
-"No account" is an answer, not an error: ``no_accounts_registered`` means the pool is
-not how this company runs (use the fallback credential); every other reason is a wait.
+"No account" is an answer, not an error: ``no_accounts_registered`` (the pool is not how
+this company runs) and ``no_account_available`` (every account is spent) run on the
+fallback credential when one is set (``fallback.covers``); every other reason is a wait.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from oracle.claude_accounts.accounts import (
     choose,
     eligibility,
 )
+from oracle.company_time import DEFAULT_ZONE, in_words
 from oracle.tenancy import tenant_session
 
 
@@ -49,9 +51,10 @@ class NoAccount:
     def is_pool_absent(self) -> bool:
         return self.reason is Unavailable.NO_ACCOUNTS_REGISTERED
 
-    def message(self) -> str:
+    def message(self, zone: str = DEFAULT_ZONE) -> str:
+        """In words, the clearing time in ``zone`` (the company's), never ISO."""
         when = (
-            f"; the earliest window clears at {self.next_reset_at.isoformat()}"
+            f"; the earliest window clears {in_words(self.next_reset_at, zone)}"
             if (self.next_reset_at)
             else ""
         )

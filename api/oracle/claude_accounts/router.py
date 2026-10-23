@@ -32,6 +32,8 @@ from oracle.claude_accounts.accounts import (
     AccountError,
     AccountState,
     Hold,
+    choose,
+    eligibility,
     validate_label,
 )
 from oracle.claude_accounts.models import ClaudeAccountHold, ClaudeAccountSignin
@@ -50,6 +52,7 @@ from oracle.claude_accounts.oauth import (
 )
 from oracle.claude_accounts.sweep import get_token_endpoint, liveness, refresher_for
 from oracle.claude_accounts.sweep import sweep as run_sweep
+from oracle.company_time import company_time_zone
 
 router = APIRouter(prefix="/v1/claude-accounts", tags=["claude-accounts"])
 
@@ -99,6 +102,27 @@ class AccountOut(BaseModel):
     last_refresh_reason: str | None
     # Null means NEVER assigned.
     last_assigned_at: datetime | None
+    # Whether the pool would give it a call now: ``choose`` on this account alone.
+    takes_calls: bool
+    # An AVAILABLE account the pool will not choose because a window is below the assign
+    # floor: that window (``seven_day``, ``five_hour``) and when it resets. Null otherwise.
+    spent_by: str | None
+    spent_until: datetime | None
+
+
+class PoolOut(BaseModel):
+    """Whether Oracle's built-in calls can run now, as the gateway decides it."""
+
+    # An account the pool would choose, or a fallback set for the pool's reason
+    # (``fallback.covers``: no account registered, or every account spent).
+    takes_calls: bool
+    # Calls run on the fallback credential, not an account.
+    on_fallback: bool
+    # Why no account takes them (``eligibility``): no_accounts_registered,
+    # no_account_available, pool_paused or no_recent_reading. Null when one does.
+    reason: str | None
+    # When the earliest spent window clears, if a clock is what it waits on.
+    until: datetime | None
 
 
 class RefreshSweepOut(BaseModel):
@@ -119,8 +143,11 @@ class AccountsPage(BaseModel):
     unreadable_documents: list[str]
     unreadable_document_count: int
     refresh_sweep: RefreshSweepOut
-    # The credential used while no account is registered.
+    # The credential used while no account is registered or every account is spent.
     fallback: FallbackOut | None
+    pool: PoolOut
+    # The company's time zone, which a person reads these times in.
+    time_zone: str
 
 
 class AuthorizeIn(Strict):
@@ -237,6 +264,12 @@ def account_out(account: Account, *, now: datetime | None = None) -> AccountOut:
     """One account for a person to read. ``stale`` is computed: the server owns the clock."""
     now = now or datetime.now(UTC)
     observed = account.observed_at
+    takes = account.provider == "anthropic" and choose([account], now) is not None
+    spent = (
+        None
+        if takes or account.state is not AccountState.AVAILABLE or account.is_unreadable(now)
+        else account.spent_by(now)
+    )
     return AccountOut(
         account_id=account.account_id,
         label=account.label,
@@ -259,6 +292,23 @@ def account_out(account: Account, *, now: datetime | None = None) -> AccountOut:
         token_expires_at=account.token_expires_at,
         last_refresh_reason=account.last_refresh_reason or None,
         last_assigned_at=account.last_assigned_at,
+        takes_calls=takes,
+        spent_by=spent[0] if spent else None,
+        spent_until=spent[1] if spent else None,
+    )
+
+
+def pool_out(accounts: list[Account], *, has_fallback: bool, now: datetime) -> PoolOut:
+    """The gateway's own answer (``choose``, then ``eligibility``, then
+    ``fallback.covers``), so the page cannot say Available while the gateway refuses, nor
+    that the AI is off while it runs on the fallback."""
+    candidates = [a for a in accounts if a.provider == "anthropic"]
+    if choose(candidates, now) is not None:
+        return PoolOut(takes_calls=True, on_fallback=False, reason=None, until=None)
+    reason, until = eligibility(candidates, now)
+    on_fallback = has_fallback and fallback.covers(reason)
+    return PoolOut(
+        takes_calls=on_fallback, on_fallback=on_fallback, reason=reason.value, until=until
     )
 
 
@@ -305,6 +355,8 @@ async def list_claude_accounts(principal: Member, db: TenantDB) -> AccountsPage:
         fallback=None
         if spare is None
         else FallbackOut(kind=spare.kind, label=spare.label, updated_at=spare.updated_at),  # type: ignore[arg-type]
+        pool=pool_out(listing.accounts, has_fallback=spare is not None, now=now),
+        time_zone=await company_time_zone(db),
     )
 
 

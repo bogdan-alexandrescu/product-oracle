@@ -180,7 +180,7 @@ export async function routeEvidenceLinks(
       text_chars: page.text.length,
     },
   };
-  s.evidence.push(row);
+  s.evidence.push({ ...row, added_by: caller.userId });
   // The entity's confidence: independent support raises it (confidence.aggregate).
   const target = s.entities.find((e) => e.id === entityId);
   if (target) {

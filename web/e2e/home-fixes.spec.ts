@@ -45,9 +45,11 @@ async function editDb(page: Page, edit: string, arg?: unknown) {
 
 /**
  * Home's first paint makes at most this many calls, however large the company. A1 added
- * one: the Set up checklist (/v1/setup), a fixed call whatever the company's size.
+ * one: the Set up checklist (/v1/setup), a fixed call whatever the company's size; #403
+ * one more for an owner: the Claude account pool (/v1/claude-accounts), for the notice
+ * that Oracle's AI is off.
  */
-const CALL_BUDGET = 14;
+const CALL_BUDGET = 15;
 
 test("Home: a large company's first paint stays within the call budget", async ({ page }) => {
   await openHome(page, "large");
@@ -229,7 +231,7 @@ test("Home: Enter on an In flight row selects it; the inspector's Open opens it"
   await expect(page.getByTestId("home-inspector")).toContainText(name.replace(/v\d+$/, "").trim().slice(0, 12));
   // The inspector shows the selected PRD's goals (loaded for that row only).
   await flights.filter({ hasText: "Checkout redesign PRD" }).click();
-  await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("G1G2");
+  await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
 });
 
 test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) => {
@@ -237,7 +239,7 @@ test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) =>
   await openHome(page);
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
   await expect(page.getByRole("link", { name: "New PRD" })).toHaveCount(0);
-  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-trend").getByRole("img")).toHaveAttribute("aria-label", "G1 trend");
+  await expect(page.getByTestId("home-goal-G1").getByTestId("goal-trend").getByRole("img")).toHaveAttribute("aria-label", "Raise activation trend");
 });
 
 test("Home for a viewer of a new company: one line per block, no actions they cannot take", async ({ page }) => {

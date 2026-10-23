@@ -320,6 +320,37 @@ async def _goals(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, l
     return out
 
 
+def _withdrawn_bases(
+    item: RoadmapItem, records: list[TrackerRecord], withdrawn: list[ScheduleBasis]
+) -> list[schedule.Basis]:
+    """The item's PRD's withdrawn bases with their scope, as schedule.bases_by_status
+    scopes them: one item, the items a tracker issue is matched to (the item's own
+    records name the issues matched to it), or the whole PRD."""
+    refs = {r.external_ref for r in records}
+    out = []
+    for b in withdrawn:
+        if b.prd_document_id != item.prd_document_id:
+            continue
+        scope: frozenset[str] | None = None
+        if b.item_key:
+            scope = frozenset({b.item_key})
+        elif b.tracker_key:
+            scope = frozenset({item.item_key}) if b.tracker_key in refs else frozenset()
+        out.append(
+            schedule.Basis(
+                b.id,
+                b.kind,
+                b.reference,
+                b.supports_date,
+                b.prd_document_id,
+                scope,
+                b.item_key,
+                b.tracker_key,
+            )
+        )
+    return out
+
+
 def _engineering(
     item: RoadmapItem,
     records: list[TrackerRecord],
@@ -330,8 +361,11 @@ def _engineering(
     ms = milestone or {}
     day: date | None = None
     status = None
+    basis_ids: list[uuid.UUID] = []
     if ms.get("date"):
         day, status = schedule.as_date(ms["date"]), "verified"
+        # items.recheck_date kept the date on these (schedule.supporting).
+        basis_ids = [uuid.UUID(str(b)) for b in ms.get("basis_ids") or []]
     elif ms.get("refused_date"):
         day = schedule.as_date(ms["refused_date"])
         source = ms.get("date_source") or ""
@@ -340,6 +374,13 @@ def _engineering(
             for b in withdrawn
         )
         status = "withdrawn" if named else "unverified"
+        if named:
+            basis_ids = [
+                b.id
+                for b in schedule.supporting(
+                    day, source, _withdrawn_bases(item, records, withdrawn), item.item_key
+                )
+            ]
     when = tracker.milestone_date(item, dated, milestone)
     slips = [
         (r.target_date - when).days
@@ -353,6 +394,7 @@ def _engineering(
         records=[tracker.ref(r) for r in records],
         date=day,
         date_status=status,  # type: ignore[arg-type]
+        basis_ids=sorted(basis_ids, key=str),
         slip_days=max(slips) if slips else None,
         tracked=bool(records),
     )

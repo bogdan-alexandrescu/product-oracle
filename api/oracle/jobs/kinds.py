@@ -43,6 +43,10 @@ MAX_TOKENS = {
     "decision_options": 4000,
     # A synchronous call inside POST /v1/priorities/overrides (oracle.priorities.reason_check).
     "override_reason_check": 600,
+    # C3 Interviews (oracle.interviews.jobs); interview_turn is inline (oracle.interviews.turns).
+    "interview_guide": 1500,
+    "interview_turn": 400,
+    "interview_snapshot": 2500,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -955,6 +959,20 @@ async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
     }
 
 
+async def interview_guide(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """A customer interview's draft guide (oracle.interviews.jobs)."""
+    from oracle.interviews import jobs as interview_jobs
+
+    return await interview_jobs.guide(s, job, ask)
+
+
+async def interview_snapshot(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """A finished interview's snapshot and its requests (oracle.interviews.jobs)."""
+    from oracle.interviews import jobs as interview_jobs
+
+    return await interview_jobs.snapshot(s, job, ask)
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
@@ -963,6 +981,8 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "quality_review": quality_review,
     "refinement_batch": refinement_batch,
     "decision_options": decision_options,
+    "interview_guide": interview_guide,
+    "interview_snapshot": interview_snapshot,
 }
 
 

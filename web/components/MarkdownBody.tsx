@@ -2,8 +2,11 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
+import { DateMarker } from "@/components/DateMarker";
+import { withCodes } from "@/components/ds/CodeChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut } from "@/lib/api/client";
+import type { CodeIndex } from "@/lib/code-index";
 import { isSafeHref, storedImageSrc, type Block, type Inline } from "@/lib/markdown";
 import { sectionHash, sectionHref } from "@/lib/section-link";
 
@@ -41,6 +44,13 @@ type Ctx = {
    * gets its marker ("unverified", "date withdrawn") after it; the text is unchanged.
    */
   dateMarks?: DateMarkOut[];
+  /**
+   * #305: the codes this version names (built once per version). A known code in prose
+   * gets the shared card; code spans, code blocks and link text are left as written.
+   */
+  codes?: CodeIndex;
+  /** Inside link text: a code there is not drawn as a button. */
+  inLink?: boolean;
 };
 
 const ignore = { [IGNORE_ATTR]: "" };
@@ -86,12 +96,13 @@ function isOpen(ctx: Ctx, key: string): boolean {
   return !!ctx.expand && ctx.expand.open.get(key) === ctx.expand.origin;
 }
 
-function renderText(text: string, ctx: Ctx, key: string): ReactNode {
+function renderText(text: string, ctx: Ctx, key: string, prose = false): ReactNode {
   const start = ctx.pos;
   const end = start + text.length;
   ctx.pos = end;
+  const codes = prose && !ctx.inLink ? ctx.codes : undefined;
   const hits = ctx.highlights.filter((h) => h.start < end && h.end > start);
-  if (!hits.length) return text;
+  if (!hits.length) return withCodes(text, codes, key);
   const cuts = new Set([start, end]);
   for (const h of hits) {
     if (h.start > start) cuts.add(h.start);
@@ -105,7 +116,7 @@ function renderText(text: string, ctx: Ctx, key: string): ReactNode {
     const slice = text.slice(a - start, b - start);
     const covering = hits.filter((h) => h.start <= a && h.end >= b);
     if (!covering.length) {
-      out.push(slice);
+      out.push(<Fragment key={`${key}-${i}`}>{withCodes(slice, codes, `${key}-${i}`)}</Fragment>);
       continue;
     }
     const pending = covering.some((h) => h.kind === "pending");
@@ -129,32 +140,17 @@ function escapeRe(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** The marker after a date that rests on no verified basis (not part of the anchored text). */
-export function DateMarker({ mark }: { mark: DateMarkOut }) {
-  return (
-    <span
-      {...ignore}
-      className="date-mark"
-      data-date-mark={mark.status}
-      title={
-        mark.status === "withdrawn"
-          ? `The basis of this date (${mark.bases.join(", ")}) was withdrawn`
-          : "No verified estimate, capacity or commitment of the PRD supports this date"
-      }
-    >
-      {mark.label}
-    </span>
-  );
-}
+// F3: the marker opens a popover (./DateMarker).
+export { DateMarker };
 
 /**
  * Text (prose, a code span or a code block) with the marker after each flagged date (O4
  * 'document dates'). A date the text writes across emphasis or an entity is not in one
  * text node: SectionView lists those under the heading instead (`unplacedMarks`).
  */
-function renderMarkedText(text: string, ctx: Ctx, key: string): ReactNode {
+function renderMarkedText(text: string, ctx: Ctx, key: string, prose = false): ReactNode {
   const marks = (ctx.dateMarks ?? []).filter((m) => m.label && m.where !== "heading" && text.includes(m.text));
-  if (!marks.length) return renderText(text, ctx, key);
+  if (!marks.length) return renderText(text, ctx, key, prose);
   const byText = new Map(marks.map((m) => [m.text, m]));
   const re = new RegExp(`(${[...byText.keys()].sort((a, b) => b.length - a.length).map(escapeRe).join("|")})`);
   return text.split(re).map((piece, i) => {
@@ -162,7 +158,7 @@ function renderMarkedText(text: string, ctx: Ctx, key: string): ReactNode {
     const mark = i % 2 === 1 ? byText.get(piece) : undefined;
     return (
       <Fragment key={`${key}~${i}`}>
-        {renderText(piece, ctx, `${key}~${i}`)}
+        {renderText(piece, ctx, `${key}~${i}`, prose)}
         {mark && <DateMarker mark={mark} />}
       </Fragment>
     );
@@ -174,7 +170,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
     const k = `${key}.${i}`;
     switch (n.t) {
       case "text":
-        return <span key={k}>{renderMarkedText(n.v, ctx, k)}</span>;
+        return <span key={k}>{renderMarkedText(n.v, ctx, k, true)}</span>;
       case "code":
         return <code key={k}>{renderMarkedText(n.v, ctx, k)}</code>;
       case "strong":
@@ -184,18 +180,22 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
       case "link": {
         // Only http, https, mailto and relative or anchor links render as links.
         if (!isSafeHref(n.href)) return <Fragment key={k}>{renderInline(n.c, ctx, k)}</Fragment>;
+        const outer = ctx.inLink;
+        ctx.inLink = true;
+        const kids = renderInline(n.c, ctx, k);
+        ctx.inLink = outer;
         const doc = docLinkHref(n.href);
         if (doc) {
           return (
             <Link key={k} href={doc}>
-              {renderInline(n.c, ctx, k)}
+              {kids}
             </Link>
           );
         }
         if (!n.href.startsWith("#")) {
           return (
             <a key={k} href={n.href} target="_blank" rel="noopener noreferrer">
-              {renderInline(n.c, ctx, k)}
+              {kids}
             </a>
           );
         }
@@ -203,7 +203,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
         if (!ctx.expand?.keys.has(target)) {
           return (
             <a key={k} href={sectionHash(target)}>
-              {renderInline(n.c, ctx, k)}
+              {kids}
             </a>
           );
         }
@@ -212,7 +212,7 @@ function renderInline(nodes: Inline[], ctx: Ctx, key: string): ReactNode[] {
         const { toggle, origin } = ctx.expand;
         return (
           <span key={k} className="detail-link">
-            {renderInline(n.c, ctx, k)}
+            {kids}
             <button
               {...ignore}
               type="button"
@@ -317,7 +317,8 @@ export function MarkdownBody({
   expand,
   markers,
   dateMarks,
-}: Omit<Ctx, "pos" | "found" | "shown"> & {
+  codes,
+}: Omit<Ctx, "pos" | "found" | "shown" | "inLink"> & {
   blocks: Block[];
   /** Shown before the block at each index (not part of the anchorable text). */
   markers?: Map<number, ReactNode>;
@@ -332,6 +333,7 @@ export function MarkdownBody({
     found: [],
     shown: new Set(),
     dateMarks,
+    codes,
   };
   // Renders a block, then the detail its links opened.
   const withDetail = (k: string, node: ReactNode) => {

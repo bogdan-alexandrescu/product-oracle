@@ -968,7 +968,10 @@ def _via(principal: "Principal") -> str:
     return "mcp" if principal.grant_id is not None else "web"
 
 
-async def start(db: AsyncSession, principal: "Principal", body: DiscussionCreate) -> Discussion:
+async def start(
+    db: AsyncSession, principal: "Principal", body: DiscussionCreate
+) -> tuple[Discussion, DiscussionMessage | None]:
+    """The discussion, and its first message when ``body`` has one."""
     await recheck_caller(db, principal, "commenter")
     me = _person(principal)
     subject = parse_subject(body.subject_kind, body.subject)
@@ -1010,11 +1013,12 @@ async def start(db: AsyncSession, principal: "Principal", body: DiscussionCreate
     )  # fmt: skip
     for u in picked:
         await _record(db, principal, "participant_add", d, user_id=str(u), via=via)
+    first = None
     if body.message is not None:
         seat = await _seat(db, principal, d, parts)
-        await _post(db, principal, d, parts, seat, body.message, _via(principal))
+        first = await _post(db, principal, d, parts, seat, body.message, _via(principal))
     await db.flush()
-    return d
+    return d, first
 
 
 async def post_message(
@@ -1106,6 +1110,10 @@ async def update(
         d.closed_by = principal.user_id if body.status == "closed" else None
         d.closed_at = datetime.now(UTC) if body.status == "closed" else None
         await _record(db, principal, "close" if body.status == "closed" else "reopen", d)
+        if body.status == "closed":
+            from oracle.discussions import summary
+
+            await summary.queue(db, d)
     if (manages or body.visibility not in (None, d.visibility)) and d.status == "closed":
         raise DiscussionError(409, CLOSED)
     if body.visibility == "open" and d.visibility == "private":

@@ -65,6 +65,7 @@ from oracle.docs.models import Citation, Document, DocumentVersion, Section  # n
 from oracle.engineering.models import CodeMap  # noqa: E402
 from oracle.intake.models import IntakeProposal, IntakeWithheldItem  # noqa: E402
 from oracle.integrations.models import CompanyIntegration  # noqa: E402
+from oracle.interviews.models import Interview, InterviewMessage  # noqa: E402
 from oracle.jobs.models import LlmJob, LlmSuggestion  # noqa: E402
 from oracle.launches.models import (  # noqa: E402
     ChangelogEntry,
@@ -96,6 +97,7 @@ from oracle.review.models import (  # noqa: E402
 )
 from oracle.roadmap.models import (  # noqa: E402
     ProductTrack,
+    RoadmapChangeSet,
     RoadmapItem,
     ScheduleBasis,
     TrackerRecord,
@@ -192,6 +194,8 @@ __all__ = [
     "FeasibilityExperiment",
     "FeedbackItem",
     "IntakeProposal",
+    "Interview",
+    "InterviewMessage",
     "IntakeWithheldItem",
     "Invite",
     "KnowledgeGap",
@@ -219,6 +223,7 @@ __all__ = [
     "RequestTheme",
     "ReviewCampaign",
     "RequesterNote",
+    "RoadmapChangeSet",
     "RoadmapItem",
     "Run",
     "RunSegment",

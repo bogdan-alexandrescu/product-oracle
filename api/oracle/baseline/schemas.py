@@ -312,6 +312,18 @@ class ProposalProposer(BaseModel):
     email: str | None = None
 
 
+class ProposalOverlap(BaseModel):
+    """A field an open proposal would change that has changed since it was written (#268):
+    by accepting another proposal, or by an edit."""
+
+    # "title", "body", "status" or "attrs.<key>"
+    field: str
+    current: Any = None
+    proposed: Any = None
+    changed_at: datetime
+    by: Literal["proposal", "edit"]
+
+
 class ProposalOut(ORM):
     id: uuid.UUID
     entity_id: uuid.UUID | None = None
@@ -329,10 +341,19 @@ class ProposalOut(ORM):
     decided_by: uuid.UUID | None = None
     decided_at: datetime | None = None
     created_at: datetime
+    # An open update's fields whose value changed since it was written; accepting it
+    # would undo that change.
+    overlaps: list[ProposalOverlap] = []
 
 
 class ProposalDecision(BaseModel):
     note: str | None = None
+
+
+class ProposalAccept(ProposalDecision):
+    # Fields to keep as they are ("milestone" means "attrs.milestone"); the rest apply,
+    # and the decision records them as payload.skipped_fields.
+    skip_fields: list[str] = []
 
 
 class EntityWriteOut(BaseModel):

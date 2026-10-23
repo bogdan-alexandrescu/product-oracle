@@ -1,5 +1,6 @@
 import { byTitle } from "@/app/baseline/_components/order";
 import type { EntityOut, Schemas } from "@/lib/api/client";
+import { named } from "@/lib/codes";
 
 type RevisionOut = Schemas["RevisionOut"];
 
@@ -132,9 +133,12 @@ export function direction(raw: unknown): Direction | null {
 
 export type GoalView = {
   id: string;
-  /** G1, G2… in the baseline's order (heaviest first). */
+  /** G1, G2… in the baseline's order (heaviest first): an order, never drawn (#304). */
   tag: string;
   title: string;
+  /** The company's code ("G-B"), if it has one, and the name after it. */
+  code: string | null;
+  name: string;
   metric: string | null;
   proposed: boolean;
   /** 0-100, or null when the baseline has none. */
@@ -162,6 +166,7 @@ export function goalViews(entities: EntityOut[]): GoalView[] {
         id: g.id,
         tag: `G${i + 1}`,
         title: g.title,
+        ...named(g.title, g.key),
         metric: typeof g.attrs?.metric === "string" ? g.attrs.metric : null,
         proposed: g.status === "proposed",
         confidence: g.confidence == null ? null : Math.round(g.confidence * 100),

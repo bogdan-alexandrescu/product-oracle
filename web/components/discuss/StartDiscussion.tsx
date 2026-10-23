@@ -21,7 +21,8 @@ export type DiscussionSubject = {
 
 /**
  * Start a discussion: the title (prefilled with the subject's label), Open or Private, the
- * people a private one is for, and an optional first message.
+ * people a private one is for, and an optional first message, which Oracle answers under
+ * the composer's rule (Ask Oracle when others are in it).
  */
 export function StartDiscussion({
   subject,
@@ -37,8 +38,12 @@ export function StartDiscussion({
   const [visibility, setVisibility] = useState<"open" | "private">("open");
   const [people, setPeople] = useState<Person[]>([]);
   const [first, setFirst] = useState("");
+  const [askOracle, setAskOracle] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // G2: Oracle answers the first message while it is just the starter (#402).
+  const solo = visibility === "open" || people.length === 0;
 
   const start = async () => {
     setSaving(true);
@@ -52,7 +57,7 @@ export function StartDiscussion({
             title: title.trim() || null,
             visibility,
             participants: visibility === "private" ? people.map((p) => p.user_id) : [],
-            message: first.trim() ? { body: first.trim(), mention_oracle: false } : null,
+            message: first.trim() ? { body: first.trim(), mention_oracle: askOracle } : null,
           },
         }),
       );
@@ -137,7 +142,7 @@ export function StartDiscussion({
         className={`${TEXTAREA} -mt-2`}
       />
       {error && <InlineError>{error}</InlineError>}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="solid" disabled={saving}>
           Start discussion
         </Button>
@@ -146,6 +151,13 @@ export function StartDiscussion({
             Cancel
           </Button>
         )}
+        <label className="inline-flex items-center gap-1.5 text-sm text-text">
+          <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+          Ask Oracle
+        </label>
+        <span className="text-[13px] text-text2" data-testid="oracle-rule">
+          {solo || askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
+        </span>
       </div>
     </form>
   );

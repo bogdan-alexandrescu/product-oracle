@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.auth.service import create_api_token
-from oracle.members.leads import ENGINEERING_KINDS, may_decide, may_verify_dates
+from oracle.members.leads import ENGINEERING_KINDS, date_rights, may_decide
 from oracle.members.models import Invite
 from oracle.models import AuditEvent
 from oracle.runs.models import Checkpoint
@@ -35,6 +35,7 @@ settings = _v2_settings
 LEAD_ONLY = "Only an engineering lead or an owner decides the engineering stops"
 VIEWER_REFUSED = "A viewer can't be the engineering lead. Make them a commenter or above first."
 DATES_REFUSED = "Requires the approver role or the engineering lead"
+VERIFY_REFUSED = "Requires the engineering lead or an owner"
 PRD = "checkout-redesign"
 _UNAVAILABLE = {"code": "unavailable", "message": "try later", "detail": {"reason": "unavailable"}}
 
@@ -76,7 +77,7 @@ async def _inbox_ids(client, headers) -> list[str]:
     return [c["id"] for c in resp.json()["checkpoints"]]
 
 
-# --- may_decide / may_verify_dates: the truth table -----------------------------------------
+# --- may_decide / date_rights: the truth table -----------------------------------------
 
 LEAD = uuid.uuid4()
 WHO = {
@@ -132,18 +133,21 @@ def test_may_decide_truth_table(kind, flow, named, allowed):
 
 
 @pytest.mark.parametrize(
-    ("named", "allowed"),
+    ("named", "verify", "propose"),
     [
-        (True, {"owner", "approver", "lead_commenter", "lead_approver", "service_approver"}),
-        (False, {"owner", "approver", "lead_approver", "service_approver"}),
+        (True, {"owner", "lead_commenter", "lead_approver"}, {"approver", "service_approver"}),
+        (False, {"owner", "approver", "lead_approver", "service_approver"}, set()),
     ],
 )
-def test_may_verify_dates(named, allowed):
-    # protects=leads may verify dates and approvers keep O4's right until F3 lands;
-    # fails_when=a lead is refused, a plain commenter allowed, or an approver loses the
-    # right; no_claim=F3's proposed state.
+def test_date_rights(named, verify, propose):
+    # protects=F3's decided rule: leads and owners verify, approvers propose while a lead
+    # is named and verify while none is; fails_when=a lead is refused, a plain commenter
+    # gets a right, or an approver verifies with a lead named; no_claim=the routes
+    # (test_schedule_bases_verify).
     leads = frozenset({LEAD}) if named else frozenset()
-    assert {who for who, p in WHO.items() if may_verify_dates(p, leads)} == allowed
+    got = {who: date_rights(p, leads) for who, p in WHO.items()}
+    assert {w for w, r in got.items() if r == "verify"} == verify
+    assert {w for w, r in got.items() if r == "propose"} == propose
 
 
 # --- Members: PATCH, invites, sign-in, /me, the constraint ----------------------------------
@@ -455,9 +459,9 @@ async def test_unflagging_an_owner_lead_voids_nothing(client, owner):
 
 
 async def test_leads_record_and_withdraw_date_bases(client, owner):
-    # protects=AC13, leads may verify dates and nothing else changes; fails_when=a lead is
-    # refused or an approver loses the right before F3 lands; no_claim=the date-basis UI
-    # and the proposed state (F3 applies the decided rule).
+    # protects=AC13 as F3 Date bases decided it: leads verify dates, an approver's basis
+    # waits as proposed once a lead is named; fails_when=a lead is refused or an approver
+    # verifies or withdraws with a lead named; no_claim=the date-basis UI.
     tenant_id, auth = owner
     assert (await import_draft(client, auth, draft("prd_v1.md"))).status_code == 201
     lead = await person(tenant_id, "commenter", "lead")
@@ -480,8 +484,8 @@ async def test_leads_record_and_withdraw_date_bases(client, owner):
     resp = await record(commenter.headers)
     assert resp.status_code == 403 and resp.json()["detail"] == DATES_REFUSED, resp.text
     resp = await record(approver.headers)
-    assert resp.status_code == 201, resp.text  # a lead named: still O4's rule until F3
-    by_approver = resp.json()
+    assert resp.status_code == 201, resp.text  # a lead named: proposed (F3)
+    assert resp.json()["status"] == "proposed"
 
     def withdraw(basis_id, headers):
         return client.post(
@@ -490,9 +494,10 @@ async def test_leads_record_and_withdraw_date_bases(client, owner):
         )  # fmt: skip
 
     resp = await withdraw(basis["id"], commenter.headers)
-    assert resp.status_code == 403 and resp.json()["detail"] == DATES_REFUSED, resp.text
+    assert resp.status_code == 403 and resp.json()["detail"] == VERIFY_REFUSED, resp.text
+    resp = await withdraw(basis["id"], approver.headers)
+    assert resp.status_code == 403 and resp.json()["detail"] == VERIFY_REFUSED, resp.text
     assert (await withdraw(basis["id"], lead.headers)).status_code == 200
-    assert (await withdraw(by_approver["id"], approver.headers)).status_code == 200
 
 
 # --- A1 hand-off: the Set up checklist's Engineering lead step ---------------------------------

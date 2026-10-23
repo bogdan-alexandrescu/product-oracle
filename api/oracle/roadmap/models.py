@@ -32,6 +32,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -46,7 +47,7 @@ TRACK_STATUSES = ("active", "paused", "closed")
 TRACK_HEALTH = ("on_track", "at_risk", "off_track", "no_roadmap", "paused", "closed")
 MILESTONE_STATUSES = ("planned", "done", "dropped")
 BASIS_KINDS = ("estimate", "capacity", "commitment")
-BASIS_STATUSES = ("verified", "withdrawn")
+BASIS_STATUSES = ("verified", "withdrawn", "proposed", "rejected")
 TRACKERS = ("linear", "jira", "github", "other")
 TRACKER_STATES = ("todo", "in_progress", "done", "cancelled", "unknown")
 
@@ -87,8 +88,10 @@ class ScheduleBasis(TenantScoped, Base):
     issue key, a capacity plan); ``supports_date`` is the date it supports. It is
     recorded for one PRD (O4, owner 2026-10-19) and supports only that PRD's roadmap
     items; naming an ``item_key`` or a ``tracker_key`` narrows it to that item, or to the
-    items that tracker issue is matched to. A person with the approver role records and
-    verifies it; a withdrawn basis supports nothing.
+    items that tracker issue is matched to. Who records it decides its status (F3,
+    oracle.members.leads.date_rights): an engineering lead or an owner (an approver while
+    no lead is named) verifies it at once; an approver's waits as ``proposed`` until a lead
+    verifies or rejects it. Only a verified basis supports a date.
     """
 
     __tablename__ = "schedule_bases"
@@ -96,6 +99,10 @@ class ScheduleBasis(TenantScoped, Base):
         CheckConstraint(_in("kind", BASIS_KINDS), name="kind"),
         CheckConstraint(_in("status", BASIS_STATUSES), name="status"),
         CheckConstraint("item_key IS NULL OR tracker_key IS NULL", name="one_key"),
+        CheckConstraint(
+            "status = 'proposed' OR status = 'rejected' OR verified_at IS NOT NULL",
+            name="verified_at",
+        ),
         Index("ix_schedule_bases_reference", "tenant_id", "reference"),
     )
 
@@ -115,9 +122,17 @@ class ScheduleBasis(TenantScoped, Base):
         Text, nullable=False, default="verified", server_default="verified"
     )
     verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     withdrawn_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_reason: Mapped[str | None] = mapped_column(Text)
+    proposed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    proposed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The recorder's or verifier's note.
+    note: Mapped[str | None] = mapped_column(Text)
+    rejected_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class TrackMilestone(TenantScoped, Base):
@@ -247,4 +262,44 @@ class RoadmapItem(TenantScoped, Base):
     reconciled_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     reconciled_section_hash: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = _updated_at()
+
+
+CHANGE_SET_STATUSES = ("draft", "proposed", "discarded", "superseded")
+
+
+class RoadmapChangeSet(TenantScoped, Base):
+    """Edits to a roadmap's approved version, proposed as a new version (#346).
+
+    Nobody edits an approved version in place: a change set is opened on the approved
+    version (``base_version_id``) and holds its changes in order (add, move, defer, cut
+    with a reason, reorder within a horizon). Proposing it imports the next roadmap
+    version, with the base's items plus the changes, for the document's decider to
+    approve. A roadmap has at most one draft change set. A later proposal while one waits
+    supersedes it (``superseded``, ``superseded_by_version_id``): it can't be approved.
+    """
+
+    __tablename__ = "roadmap_change_sets"
+    __table_args__ = (
+        CheckConstraint(_in("status", CHANGE_SET_STATUSES), name="status"),
+        Index(
+            "ux_roadmap_change_sets_draft",
+            "roadmap_document_id",
+            unique=True,
+            postgresql_where=text("status = 'draft'"),
+        ),
+    )
+
+    roadmap_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    base_version_id: Mapped[uuid.UUID] = _fk("document_versions", nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="draft", server_default="draft"
+    )
+    # [{"op": "add" | "move" | "defer" | "cut" | "reorder", ...}], applied in order.
+    changes: Mapped[list[dict[str, Any]]] = _json("[]")
+    proposed_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
+    # The later proposal's version that superseded this one's (status ``superseded``).
+    superseded_by_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    lock_version: Mapped[int] = _lock_version()
     updated_at: Mapped[datetime] = _updated_at()

@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from oracle import confidence
 from oracle.baseline.models import Evidence
+from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
 from tests.baseline_helpers import NOW, cite, confirm, edge, entity, make_ctx, make_item
@@ -85,6 +86,33 @@ async def test_free_standing_evidence_and_detach(client, ctx):
     assert resp.status_code == 204
     detail = (await client.get(f"{B}/entities/{feat['id']}", headers=ctx.as_("owner"))).json()
     assert detail["evidence"] == [] and detail["confidence"] is None
+
+
+async def test_detach_keeps_the_reason_in_the_audit_log(client, ctx):
+    """#338: the drawer's Remove asks why; the audit event keeps the reason."""
+    feat = await entity(client, ctx, type="feature", key="guided-setup")
+    ev = await cite(client, ctx, feat, url="https://notes.example.com/plan", excerpt="Plan")
+    plain = await cite(client, ctx, feat, url="https://notes.example.com/old", excerpt="Old")
+    resp = await client.delete(
+        f"{B}/evidence/{ev['id']}",
+        params={"reason": "Cites the wrong feature."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 204
+    resp = await client.delete(f"{B}/evidence/{plain['id']}", headers=ctx.as_("approver"))
+    assert resp.status_code == 204
+    resp = await client.delete(
+        f"{B}/evidence/{ev['id']}", params={"reason": "x" * 1001}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 422
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = (
+            await s.scalars(
+                select(AuditEvent).where(AuditEvent.action == "baseline.evidence.removed")
+            )
+        ).all()
+    reasons = {str(r.entity_id): r.data.get("reason") for r in rows}
+    assert reasons == {ev["id"]: "Cites the wrong feature.", plain["id"]: None}
 
 
 async def test_scoring_factors_and_aggregate(client, ctx):

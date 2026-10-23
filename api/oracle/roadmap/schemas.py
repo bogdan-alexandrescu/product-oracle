@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -14,7 +14,7 @@ TrackStatus = Literal["active", "paused", "closed"]
 TrackHealth = Literal["on_track", "at_risk", "off_track", "no_roadmap", "paused", "closed"]
 MilestoneStatus = Literal["planned", "done", "dropped"]
 BasisKind = Literal["estimate", "capacity", "commitment"]
-BasisStatus = Literal["verified", "withdrawn"]
+BasisStatus = Literal["verified", "proposed", "withdrawn", "rejected"]
 Tracker = Literal["linear", "jira", "github", "other"]
 TrackerState = Literal["todo", "in_progress", "done", "cancelled", "unknown"]
 ItemView = Literal["brief", "full"]
@@ -39,9 +39,10 @@ class DocumentRef(BaseModel):
 
 
 class ScheduleBasisCreate(BaseModel):
-    """A verified estimate, capacity figure or commitment. Recording it is the
-    verification: the approver says this source supports this date, for this PRD's
-    roadmap items (O4)."""
+    """An estimate, capacity figure or commitment supporting a date for this PRD's roadmap
+    items (O4). The recorder's rights decide its status (F3): an engineering lead or an
+    owner (an approver while no lead is named) verifies it by recording it; an approver's
+    waits as proposed for a lead."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -56,6 +57,7 @@ class ScheduleBasisCreate(BaseModel):
     item_key: str | None = Field(None, min_length=1, max_length=200, pattern=r"\S")
     tracker_key: str | None = Field(None, min_length=1, max_length=200, pattern=r"\S")
     tracker_record_id: uuid.UUID | None = None
+    note: str | None = Field(None, max_length=2000)
 
     @model_validator(mode="after")
     def _one_key(self) -> "ScheduleBasisCreate":
@@ -70,6 +72,18 @@ class ScheduleBasisWithdraw(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+class ScheduleBasisVerify(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(None, max_length=2000)
+
+
+class ScheduleBasisReject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000, pattern=r"\S")
+
+
 class ScheduleBasisOut(ORM):
     id: uuid.UUID
     kind: BasisKind
@@ -81,11 +95,61 @@ class ScheduleBasisOut(ORM):
     tracker_key: str | None
     tracker_record_id: uuid.UUID | None
     status: BasisStatus
+    note: str | None = None
+    proposed_by: uuid.UUID | None = None
+    proposed_at: datetime | None = None
     verified_by: uuid.UUID | None
-    verified_at: datetime
+    verified_at: datetime | None
     withdrawn_by: uuid.UUID | None
     withdrawn_at: datetime | None
+    withdrawn_reason: str | None = None
+    rejected_by: uuid.UUID | None = None
+    rejected_at: datetime | None = None
+    rejected_reason: str | None = None
     created_at: datetime
+
+
+class InboxDateBasis(ScheduleBasisOut):
+    """A proposed basis in the Inbox of those who verify it (F3), with its PRD."""
+
+    prd: DocumentRef
+
+
+class ImpactMilestone(BaseModel):
+    id: uuid.UUID
+    track_id: uuid.UUID
+    name: str
+    target_date: date | None
+    # Whether another verified basis still supports its date.
+    keeps_date: bool
+
+
+class ImpactItem(BaseModel):
+    id: uuid.UUID
+    roadmap: str
+    version: int
+    item_key: str
+
+
+class ImpactDocument(BaseModel):
+    slug: str
+    version: int
+    # Places that will show "date withdrawn".
+    marks: int
+
+
+class DateRightsOut(BaseModel):
+    rights: Literal["verify", "propose"] | None
+    lead_named: bool
+
+
+class BasisImpactOut(BaseModel):
+    """What withdrawing a basis would change (F3), computed as the withdrawal would."""
+
+    basis_id: uuid.UUID
+    milestones: list[ImpactMilestone]
+    items: list[ImpactItem]
+    documents: list[ImpactDocument]
 
 
 class WithdrawOut(BaseModel):
@@ -511,6 +575,123 @@ class TrackChange(BaseModel):
     actor: str
     data: dict[str, Any]
     created_at: datetime
+
+
+# --- change sets: edits to the approved plan, proposed as a new version (#346) --------------
+
+ChangeSetStatus = Literal["draft", "proposed", "discarded", "superseded"]
+ItemKey = Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class AddChange(BaseModel):
+    """Add an item: a Baseline feature (``feature_id``) or a new one (``title``)."""
+
+    op: Literal["add"]
+    title: str = Field(min_length=1, max_length=200)
+    horizon: Horizon
+    feature_id: uuid.UUID | None = None
+    outcome: str | None = Field(default=None, max_length=1000)
+    # Set by Oracle when the change is stored: the feature's key, else from the title.
+    key: ItemKey | None = None
+
+
+class MoveChange(BaseModel):
+    """Move an item to another horizon (to the end of it)."""
+
+    op: Literal["move"]
+    key: ItemKey
+    horizon: Horizon
+
+
+class DeferChange(BaseModel):
+    """Defer an item: it moves to Later."""
+
+    op: Literal["defer"]
+    key: ItemKey
+
+
+class CutChange(BaseModel):
+    """Cut an item from the plan, with the reason."""
+
+    op: Literal["cut"]
+    key: ItemKey
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ReorderChange(BaseModel):
+    """Put an item at ``position`` (0 first) within its horizon."""
+
+    op: Literal["reorder"]
+    key: ItemKey
+    position: int = Field(ge=0, le=500)
+
+
+PlanChange = Annotated[
+    AddChange | MoveChange | DeferChange | CutChange | ReorderChange, Field(discriminator="op")
+]
+
+
+class ChangeSetPatch(BaseModel):
+    """The change set's changes, whole, in order, and the lock_version last read."""
+
+    changes: list[PlanChange] = Field(max_length=200)
+    lock_version: int
+
+
+class PlannedItem(BaseModel):
+    key: str
+    title: str
+    horizon: Horizon
+    position: int
+    outcome: str | None = None
+    feature_id: uuid.UUID | None = None
+    new: bool = False
+    deferred: bool = False
+
+
+class CutItem(BaseModel):
+    key: str
+    title: str
+    horizon: Horizon
+    reason: str
+
+
+class ChangeSetDiffItem(BaseModel):
+    """How an item of the proposal differs from the approved version (roadmap.diff)."""
+
+    key: str
+    title: str
+    status: Literal["added", "dropped", "moved", "changed", "unchanged"]
+    from_horizon: Horizon | None = None
+    to_horizon: Horizon | None = None
+    fields: list[str] = []
+    # Its place within its horizon changed (a reorder).
+    reordered: bool = False
+    reason: str | None = None
+
+
+class ChangeSetOut(BaseModel):
+    id: uuid.UUID
+    roadmap: str
+    roadmap_title: str
+    base_version: int
+    status: ChangeSetStatus
+    changes: list[PlanChange]
+    items: list[PlannedItem]
+    cut: list[CutItem]
+    diff: list[ChangeSetDiffItem]
+    summary: dict[str, int]
+    proposed_version: int | None = None
+    # The proposed version is approved: it is the live plan (or was).
+    approved: bool = False
+    # A later proposal superseded this one while it waited: its version can't be approved.
+    superseded_by_version: int | None = None
+    # Who approves the proposed version: the document's designated decider, when named.
+    decider_id: uuid.UUID | None = None
+    lock_version: int
+    created_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 # --- roadmap item diff (E3) ------------------------------------------------------------------

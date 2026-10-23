@@ -3,6 +3,7 @@ up start and write; who may add people, close or make a private discussion open 
 checked per discussion (oracle.discussions.access). Every route is also an MCP tool with
 the caller's role; run tokens never see them (``discussions`` is not a run-token area)."""
 
+import contextlib
 import uuid
 from collections.abc import Awaitable
 from typing import Annotated, Any
@@ -12,8 +13,15 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
-from oracle.discussions import replies, service
+from oracle.discussions import changes, kinds, replies, service, summary
 from oracle.discussions.schemas import (
+    ChangeActIn,
+    ChangeDismissIn,
+    ChangeEdit,
+    ChangeIn,
+    ChangeKindOut,
+    ChangeResult,
+    ChangeStageIn,
     ChangeStatus,
     DiscussionChangeOut,
     DiscussionCreate,
@@ -29,8 +37,10 @@ from oracle.discussions.schemas import (
     DiscussionParticipantsIn,
     DiscussionPatch,
     DiscussionReadIn,
+    DiscussionStarted,
     Origin,
     Status,
+    SummaryAsk,
 )
 
 router = APIRouter(
@@ -52,21 +62,35 @@ async def _call[T](op: Awaitable[T]) -> T:
 
 @router.post(
     "/discussions",
-    response_model=DiscussionOut,
+    response_model=DiscussionStarted,
     status_code=status.HTTP_201_CREATED,
     responses={404: {"description": "The subject is not in this company"}},
 )
 async def create_discussion(
-    body: DiscussionCreate, principal: Commenter, db: TenantDB
-) -> DiscussionOut:
+    body: DiscussionCreate, principal: Commenter, db: TenantDB, wait: bool = False
+) -> DiscussionStarted:
     """Start a discussion about one subject: open (everyone who can see the subject reads
     it) or private (only the people picked). ``title`` defaults to the subject's label;
     ``participants`` is the starter's pick for a private discussion and mentions on an
-    open one; ``message`` is optional."""
-    d = await _call(service.start(db, principal, body))
+    open one; ``message`` is optional.
+
+    Oracle replies to the first message as to any other (``POST …/messages``): while only
+    the starter is in it, and after that when addressed. ``reply`` is its ``pending``
+    reply; ``wait`` runs it here, as there. When Oracle has answered a lot in a short time
+    the discussion still starts, without a reply."""
+    d, first = await _call(service.start(db, principal, body))
+    reply = None
+    if first is not None and await replies.wants_reply(db, d, first):
+        with contextlib.suppress(replies.ReplyLimited):
+            reply = await replies.ask(db, d, first)
     await db.commit()
+    if reply is not None and wait:
+        await replies.wait(principal.tenant_id, reply.id)
+        await db.refresh(reply)
     await db.refresh(d)
-    return await service.discussion_out(db, principal, d)
+    out = await service.discussion_out(db, principal, d)
+    [reply_out] = await service.messages_out(db, [reply], principal) if reply else [None]
+    return DiscussionStarted(**out.model_dump(), reply=reply_out)
 
 
 @router.get("/discussions", response_model=DiscussionPage)
@@ -362,7 +386,186 @@ async def list_discussion_changes(
     db: TenantDB,
     status_: Annotated[ChangeStatus | None, Query(alias="status")] = None,
 ) -> list[DiscussionChangeOut]:
-    """The typed changes the discussion ended in, read-only here (proposing, suggesting
-    and staging arrive with G3 and G4)."""
+    """The typed changes the discussion ended in, each with the action the caller may take
+    (``action``: the kind's verb, ``allowed`` and ``why_not``) and what else they may do
+    (``can``). Viewers read them and get no action."""
+    d, _parts, seat = await _call(service.readable(db, principal, discussion_id))
+    return await changes.list_changes(db, principal, d, seat, status_)
+
+
+@router.get(
+    "/discussions/{discussion_id}/change-kinds",
+    response_model=list[ChangeKindOut],
+    responses={403: PRIVATE, 404: GONE},
+)
+async def list_discussion_change_kinds(
+    discussion_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> list[ChangeKindOut]:
+    """The kinds "Propose a change" offers on this discussion's subject: only those
+    available now, each with its action verb and its payload's JSON schema."""
     d, _parts, _seat = await _call(service.readable(db, principal, discussion_id))
-    return await service.list_changes(db, d, status_)
+    return [
+        ChangeKindOut(kind=k, verb=kinds.REGISTRY[k].verb, schema=kinds.schema_of(k))  # type: ignore[arg-type]
+        for k in kinds.available_for(d.subject_kind, db)
+    ]
+
+
+async def _result(
+    db: TenantDB, principal: Principal, change_id: uuid.UUID, result: dict[str, Any] | None
+) -> ChangeResult:
+    await db.commit()
+    row = await db.get(changes.DiscussionChange, change_id, populate_existing=True)
+    assert row is not None
+    d, _parts, seat = await _call(service.readable(db, principal, row.discussion_id))
+    [out] = await changes.list_changes(db, principal, d, seat, ids=[row.id])
+    return ChangeResult(change=out, result=result)
+
+
+ACTS = {
+    403: {"description": "Not this caller's to do (viewers read; approvers stage)"},
+    404: GONE,
+    409: {"description": "Stale lock_version, or already handled"},
+    422: {"description": "The kind, rule 4 (share the finding first), or a reason is missing"},
+}
+
+
+@router.post(
+    "/discussions/{discussion_id}/changes",
+    response_model=ChangeResult,
+    status_code=status.HTTP_201_CREATED,
+    responses={403: PRIVATE, 404: GONE, 422: ACTS[422]},
+)
+async def create_discussion_change(
+    discussion_id: uuid.UUID, body: ChangeIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """Write a change by hand (commenters and up): a commenter's is ``suggested``, an
+    approver's ``proposed``, ready to stage. Only the subject's available kinds; the
+    payload is checked as Oracle's are."""
+    row = await _call(
+        changes.create(db, principal, discussion_id, body.kind, body.payload, body.rationale)
+    )
+    return await _result(db, principal, row.id, None)
+
+
+@router.patch("/discussion-changes/{change_id}", response_model=ChangeResult, responses=ACTS)
+async def update_discussion_change(
+    change_id: uuid.UUID, body: ChangeEdit, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """Edit before acting: saves ``edited_payload``. A commenter's edit makes it their
+    suggestion; an approver's keeps the status."""
+    _c, result = await _call(
+        changes.edit(db, principal, change_id, body.payload, body.rationale, body.lock_version)
+    )
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/suggest", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def suggest_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """Suggest it for an approver to stage (commenters and up): "Suggested by <name>". At
+    a checkpoint it is also the item's suggested shared-draft action."""
+    _c, result = await _call(changes.suggest(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/withdraw", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def withdraw_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """Withdraw your own suggestion: back to ``proposed`` when Oracle proposed it, else
+    ``dismissed``."""
+    _c, result = await _call(changes.withdraw(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/stage", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def stage_discussion_change(
+    change_id: uuid.UUID, body: ChangeStageIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """Stage it (approvers and up): a shared-draft action at the checkpoint or a row for
+    the document's next draft (G4). When Oracle pushed back on it, ``override_reason`` is
+    required; from a private discussion, ``reason`` (the reason everyone will see) is."""
+    _c, result = await _call(
+        changes.stage(
+            db, principal, change_id, body.lock_version, body.override_reason, body.reason
+        )
+    )
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/dismiss", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def dismiss_discussion_change(
+    change_id: uuid.UUID, body: ChangeDismissIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """Dismiss it (approvers and up), with an optional note."""
+    _c, result = await _call(
+        changes.dismiss(db, principal, change_id, body.lock_version, body.note)
+    )
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/propose", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def propose_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
+    whose reason names the discussion; approvers accept it in Baseline."""
+    _c, result = await _call(changes.propose(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/resolve", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def resolve_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """``conflict_pick`` (approvers and up): resolves the conflict with the picked claim."""
+    _c, result = await _call(changes.resolve(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/answer", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def answer_with_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """``answer`` (the person asked, or approvers and up): posts it as the question's
+    answer."""
+    _c, result = await _call(changes.answer(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/verify", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def record_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """``basis_record`` (Record): records the schedule basis with the caller's date rights
+    (F3, ``leads.date_rights``): verified for an engineering lead or an owner, and for an
+    approver while no lead is named; ``proposed`` for the lead when an approver records it
+    while a lead is named. Anyone else gets 403."""
+    _c, result = await _call(changes.record(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post(
+    "/discussions/{discussion_id}/summary",
+    response_model=DiscussionOut,
+    responses={403: PRIVATE, 404: GONE, 409: {"description": "The starter confirmed it"}},
+)
+async def summarize_discussion(
+    discussion_id: uuid.UUID, body: SummaryAsk, principal: Viewer, db: TenantDB
+) -> DiscussionOut:
+    """Ask Oracle for a summary draft now (commenters and up who can write in it), at most
+    1,200 characters: "Decided:", "Open:", "Context:". A summary the starter confirmed is
+    replaced only when the starter asks (``replace``); anyone else gets 409."""
+    d = await _call(summary.ask(db, principal, discussion_id, body.replace))
+    await db.commit()
+    await db.refresh(d)
+    return await service.discussion_out(db, principal, d)

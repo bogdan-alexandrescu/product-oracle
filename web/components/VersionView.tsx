@@ -12,6 +12,7 @@ import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, Segme
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
+import { HeldRewritesButton, HeldRewritesPanel, useHeldRewrites } from "@/components/HeldRewrites";
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
   OutlineRail,
@@ -24,9 +25,13 @@ import {
 import { Kbd } from "@/components/review/parts";
 import { ReviewPanel, type PanelTab } from "@/components/review/ReviewPanel";
 import { RoleNote } from "@/components/RoleNote";
+import { useDateRights } from "@/components/DateBasisDialog";
+import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
+import { buildCodeIndex } from "@/lib/code-index";
+import { useCodeEntities } from "@/lib/codes";
 import { BuildDraftButton } from "@/components/NextDraft";
 import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
 import { VersionTabs } from "@/components/roadmap/VersionTabs";
@@ -121,6 +126,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     unwrap(api.GET("/v1/documents/{doc}/versions/{n}/comments", { params: { path: { doc, n } } })),
   );
   const [refreshKey, setRefreshKey] = useState(0);
+  // #347: each section's review state (re-review asked, its owner) and the held agent rewrites.
+  const statesQ = useQuery(`section-states|${doc}|${n}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n } } })).catch(() => null),
+  );
+  const held = useHeldRewrites(doc);
+  const [heldOpen, setHeldOpen] = useState(false);
   // Every feedback item on the document: the panel's list and every open-feedback count.
   const feedbackQ = useQuery(
     `feedback|${doc}|${refreshKey}`,
@@ -252,6 +263,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // #255: a PRD still on its template's skeleton is drafted first, then published.
   const templateOnly = isTemplateOnly(document_?.kind, versions);
   const refine = useMemo(() => ({ doc, n }), [doc, n]);
+  const sectionStates = useMemo(
+    () => new Map((statesQ.data?.sections ?? []).map((st) => [st.section_key, st])),
+    [statesQ.data],
+  );
 
   const sections = useMemo(() => version?.sections ?? [], [version]);
   const allKeys = useMemo(() => new Set(sections.map((s) => s.section_key)), [sections]);
@@ -356,6 +371,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     }
     return m;
   }, [version]);
+
+  // #305: the codes this version names (its headings and lines, the company's goals and
+  // features), indexed once per version, not per section.
+  const codeEntities = useCodeEntities();
+  const codes = useMemo(() => buildCodeIndex(version?.sections ?? [], codeEntities), [version, codeEntities]);
 
   const citations = useMemo(() => {
     const m = new Map<string, { citation: CitationOut; number: number }>();
@@ -618,6 +638,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     ...new Map((version?.date_marks ?? []).filter((m) => m.label).map((m) => [`${m.text}|${m.label}`, m])).values(),
   ];
   const isUpdate = document_?.kind === "update";
+  // F3: a roadmap's markers open a popover to record the basis a date needs.
+  const dateRights = useDateRights();
+  const dateMarkCtx: DateMarkCtx | null =
+    isRoadmap && version
+      ? {
+          prd: version.source?.document_id ?? null,
+          sectionText: (key) => version.sections.find((x) => x.section_key === key)?.body_md ?? "",
+          rights: dateRights.data ?? null,
+          onChanged: () => void verQ.reload(),
+        }
+      : null;
   const approveBlocked =
     flaggedDates.length > 0 && isUpdate
       ? // H8: an update's Approve names what is left to resolve.
@@ -692,12 +723,22 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     changedLock: changedLocks.has(s.section_key),
     evidenceTargets: canComment ? graphQ.data?.entities : undefined,
     refine: canDecide && !readOnly && n === latest ? refine : undefined,
+    // Approvers edit any section by hand; a section's owner edits their own from the commenter
+    // role up (the API's floor), so a viewer never can and is not offered it (#370).
+    edit:
+      !readOnly &&
+      n === latest &&
+      (canDecide || (canComment && !!me?.user_id && sectionStates.get(s.section_key)?.owner_id === me.user_id))
+        ? refine
+        : undefined,
+    rereview: !!sectionStates.get(s.section_key)?.rereview_requested,
     ask: canComment && !readOnly && n === latest && document_ ? { documentId: document_.id } : undefined,
     onHighlightClick,
     onVerdict,
     showLayer: hasBrief,
     dateMarks: dateMarks.get(s.section_key),
     onDiscuss: !readOnly ? discussSection : undefined,
+    codes,
   });
   const expandFor = (origin: string): ExpandCtx => ({
     keys: expandable,
@@ -888,6 +929,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   );
 
   return (
+    <DateMarkContext.Provider value={dateMarkCtx}>
     <div ref={rootRef} onClickCapture={onLinkCapture} className={onDocument ? "max-[639px]:pb-16" : undefined}>
       <Page>
         <PageHeader
@@ -1017,6 +1059,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               Comment on the whole draft
             </Button>
           )}
+          {(held.rows.length > 0 || heldOpen) && (
+            <HeldRewritesButton open={held.open} active={heldOpen} onClick={() => setHeldOpen((o) => !o)} />
+          )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
           {document_?.kind === "prd" && n === latest && !canDecide && (
             <LinkButton icon="check" href={`/documents/${doc}/publish`}>
@@ -1098,6 +1143,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               </p>
             )}
           </div>
+        )}
+
+        {heldOpen && (
+          <HeldRewritesPanel
+            doc={doc}
+            rows={held.rows}
+            headings={headings}
+            canDecide={canDecide}
+            onChanged={held.reload}
+            onClose={() => setHeldOpen(false)}
+          />
         )}
 
         {pane === "items" && isRoadmap && (
@@ -1252,6 +1308,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         <CommentPopover rect={composing.rect} anchor={composing.anchor} onCancel={closeComposer} onSubmit={submitComment} />
       )}
     </div>
+    </DateMarkContext.Provider>
   );
 }
 

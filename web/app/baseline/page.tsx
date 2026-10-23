@@ -9,6 +9,7 @@ import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from 
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
+import { AddItemSheet, type AddKind } from "./_components/AddItem";
 import { BlockerInspector } from "./_components/BlockerInspector";
 import { BlockersTab } from "./_components/BlockersTab";
 import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
@@ -17,11 +18,12 @@ import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
 import { GraphTab } from "./_components/GraphTab";
-import { noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
+import { ItemsTab } from "./_components/ItemsTab";
+import { fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
-type Tab = "graph" | "flagged" | "conflicts" | "proposals" | "blockers";
-const TABS: readonly Tab[] = ["graph", "flagged", "conflicts", "proposals", "blockers"];
+type Tab = "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
+const TABS: readonly Tab[] = ["graph", "items", "flagged", "conflicts", "proposals", "blockers"];
 
 /** ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review links here). */
 function TabFromUrl({ onTab, onFrom }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void }) {
@@ -121,6 +123,14 @@ export default function BaselinePage() {
   const refresh = useCallback(() => {
     void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers()]);
   }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers]);
+  // #337: Add item, on the kind the button that opened it names.
+  const [adding, setAdding] = useState<AddKind | null>(null);
+  const added = (message: string) => {
+    setAdding(null);
+    setError(null);
+    setNotice(message);
+    refresh();
+  };
   const close = useCallback(() => {
     setOpenId(null);
     setPromoteId(null);
@@ -173,11 +183,13 @@ export default function BaselinePage() {
       return "Conflict resolved.";
     });
 
-  const decide = (proposal: ProposalOut, accept: boolean) =>
+  const decide = (proposal: ProposalOut, accept: boolean, skip: string[] = []) =>
     act(async () => {
       const params = { params: { path: { proposal_id: proposal.id } } };
-      if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", params));
+      if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", { ...params, body: { skip_fields: skip } }));
       else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
+      if (accept && skip.length > 0)
+        return `Proposal accepted without ${skip.map(fieldName).join(", ")}: the rest is applied and the item locked.`;
       if (accept) return "Proposal accepted: the change is applied and the item locked.";
       return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
     });
@@ -185,6 +197,7 @@ export default function BaselinePage() {
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
   const tabs: TabItem<Tab>[] = [
     { id: "graph", label: "Graph" },
+    { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
     { id: "conflicts", label: "Conflicts", count: openConflicts, kind: "warn" },
     { id: "proposals", label: "Proposals", count: proposals.data?.length, kind: "acc" },
@@ -231,18 +244,28 @@ export default function BaselinePage() {
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
       {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
+      {adding && canWrite && (
+        <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
+      )}
       <PageHeader
         title="Baseline"
         action={
-          canWrite &&
-          runs.data &&
-          (build && build.status !== "failed" ? (
-            <BuildChip build={build} />
-          ) : (
-            <Button variant="primary" icon="baseline" onClick={openBuild}>
-              Build baseline
-            </Button>
-          ))
+          <span className="flex flex-wrap items-center gap-2">
+            {canWrite && (
+              <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
+                Add item
+              </Button>
+            )}
+            {canWrite &&
+              runs.data &&
+              (build && build.status !== "failed" ? (
+                <BuildChip build={build} />
+              ) : (
+                <Button variant="primary" icon="baseline" onClick={openBuild}>
+                  Build baseline
+                </Button>
+              ))}
+          </span>
         }
         status={
           <>
@@ -318,6 +341,23 @@ export default function BaselinePage() {
                   tags={tags}
                   onOpen={openItem}
                   onConfirm={confirmGoal}
+                  onAdd={setAdding}
+                />
+              )}
+            </>
+          )}
+          {tab === "items" && (
+            <>
+              {graph.error && <Notice tone="error">{graph.error}</Notice>}
+              {graph.loading && !graph.data && <Loading />}
+              {graph.data && (
+                <ItemsTab
+                  graph={graph.data}
+                  canWrite={canWrite}
+                  meId={me?.user_id}
+                  selectedId={openId}
+                  onOpen={openItem}
+                  onAdd={setAdding}
                 />
               )}
             </>

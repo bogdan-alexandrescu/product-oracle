@@ -1078,6 +1078,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         flow_title: r.flow_title,
         document_slug: r.document_slug,
         segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
+        // D9: what it needs of me and how much, from the same review read.
+        summary: inboxSummary(ctx, r, c),
       })),
   );
   // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
@@ -1149,8 +1151,9 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // shown only (nothing to decide, not in the total).
   const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
   return {
-    // Launch rows (H6) are added by the server (./launches.ts).
+    // Launch rows (H6) are added by the server (./launches.ts); date rows (F3) too.
     launches: [],
+    dates: [],
     checkpoints,
     deliveries,
     approvals,
@@ -2298,6 +2301,21 @@ export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string
   artifacts: { [`${ROADMAP_REVIEW_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
 };
 
+/**
+ * D3's roadmap-items-console-held scenario: the same run, approved in SwarmCloud's console
+ * while blocking reasons are open, so the approval is held until an approver confirms (seeded
+ * by po-mock-scenario=roadmap-items-console-held, ./server.ts).
+ */
+export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
+  run: {
+    ...ROADMAP_REVIEW_RUN.run,
+    checkpoints: ROADMAP_REVIEW_RUN.run.checkpoints.map((c, i) =>
+      i === 0 ? { ...c, console: { needs: "confirm", answered_by: "Sam Lee", verdict: "MERGE", counted: false, findings: [], revise: false, can_redo: false } } : c,
+    ),
+  },
+  artifacts: ROADMAP_REVIEW_RUN.artifacts,
+};
+
 
 // ---------------------------------------------------------------- D8 shared draft decision
 
@@ -2569,4 +2587,68 @@ function renderReview(review: Record<string, unknown>, decidedAt: string | null 
   const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
   const ordered = Object.fromEntries(REVIEW_KEYS.map((k) => [k, review[k] ?? null]));
   return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");
+}
+
+// ---------------------------------------------------------------- D9 Inbox checkpoint counts
+
+const SEVERITY = { blocking: 0, confirm: 1 } as const;
+
+/** As oracle.runs.actions._determined: a fix that only stages, needs no text and one click undoes. */
+function determined(kind: string, field: string | null | undefined, value: unknown): boolean {
+  if (kind === "accept") return true;
+  if (kind !== "edit") return false;
+  const v = value as Record<string, unknown> | null;
+  if (field === "horizon") return ["now", "next", "later"].includes(value as string);
+  if (field === "milestone_date") return value == null;
+  if (field === "depends_on") return !!v && Object.keys(v).join() === "remove" && Array.isArray(v.remove) && v.remove.length > 0;
+  if (field === "order") return value == null || (!!v && Object.keys(v).join() === "after" && typeof v.after === "string" && !!v.after);
+  return false;
+}
+
+/** As oracle.runs.actions.inbox_summary: the review's tally and up to three items still needing me, blocking first. */
+function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["InboxSummary"] | null {
+  if (cp.kind !== "roadmap_items") return null;
+  const role = ctx.member?.role ?? ctx.userRole ?? null;
+  const review = reviewOut(ctx, r, cp, ctx.db.drafts?.[cp.id] ?? { revision: 0, note: null, actions: [], log: [] }, role);
+  const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
+    a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code));
+  const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
+  const rows: { order: [number, number]; child: Schemas["InboxChild"] }[] = [];
+  for (const it of review.items) {
+    const reasons = it.reasons ?? [];
+    const acts = it.actions ?? [];
+    // An item fixed earlier (handled) never takes a slot.
+    if (!reasons.length || it.state !== "needs_you") continue;
+    const shown = first(reasons.filter((x) => !acts.some((a) => answers(a, x))));
+    const fix = (shown.fixes ?? []).find((f) => f.action.item === it.key && determined(f.action.kind, f.action.field, f.action.value)) ?? null;
+    rows.push({
+      order: [SEVERITY[shown.severity], it.position ?? 1e6],
+      child: {
+        item: it.key,
+        title: it.title ?? null,
+        reason: { code: shown.code, severity: shown.severity, label: shown.label, text: shown.text },
+        fix,
+        staged: null,
+        suggested: acts.find((a) => a.state === "suggested" && a.kind !== "question") ?? null,
+      },
+    });
+  }
+  rows.sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1]);
+  const shown = rows.slice(0, 3);
+  const t = review.tally;
+  const doc = ctx.documents.find((d) => d.slug === r.document_slug);
+  return {
+    need_you: t.need_you ?? 0,
+    blocking: t.blocking_open ?? 0,
+    to_confirm: t.to_confirm_open ?? 0,
+    handled: t.handled ?? 0,
+    waiting_on: review.items.filter((i) => i.state === "waiting").length,
+    wait: review.wait,
+    children: shown.map((x) => x.child),
+    more: (t.need_you ?? 0) - shown.length,
+    title: doc?.title ?? null,
+    source: r.source ? { title: r.source.title, version: r.source.version } : null,
+    sections: null,
+    console_held: cp.console?.needs === "confirm" && (t.blocking_open ?? 0) > 0,
+  };
 }

@@ -2,7 +2,8 @@
 
 Everyone reads (viewer+). Approvers and owners write: import a version's items, settle
 item staleness, record tracker state and schedule bases (engineering leads too, A3),
-start and edit tracks and milestones, monitor a track, start a roadmap run. Every route
+start and edit tracks and milestones, monitor a track, start a roadmap run. Schedule
+bases follow F3 Date bases' rule (oracle.members.leads.date_rights). Every route
 is company-scoped; another company's id is a 404. MCP tools derive from these
 operations. Run tokens reach none of them (their areas are not in oracle.mcp.scopes).
 
@@ -25,8 +26,9 @@ from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
-from oracle.members.leads import engineering_leads, may_verify_dates
-from oracle.roadmap import diff_views, links, schedule, staleness, tracker, tracks, views
+from oracle.docs.parser import DraftError
+from oracle.members.leads import DateRights, date_rights, engineering_leads, lead_now
+from oracle.roadmap import changeset, diff_views, links, schedule, staleness, tracker, tracks, views
 from oracle.roadmap import items as items_mod
 from oracle.roadmap.models import (
     ProductTrack,
@@ -37,7 +39,12 @@ from oracle.roadmap.models import (
 )
 from oracle.roadmap.schemas import (
     AlignmentReport,
+    BasisImpactOut,
     BasisStatus,
+    ChangeSetOut,
+    ChangeSetPatch,
+    ChangeSetStatus,
+    DateRightsOut,
     ItemProblem,
     ItemsDiffOut,
     ItemsImport,
@@ -53,6 +60,8 @@ from oracle.roadmap.schemas import (
     RoadmapItemsOut,
     ScheduleBasisCreate,
     ScheduleBasisOut,
+    ScheduleBasisReject,
+    ScheduleBasisVerify,
     ScheduleBasisWithdraw,
     TrackChange,
     TrackCreate,
@@ -81,18 +90,53 @@ Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 
 
+DATES_REFUSED = "Requires the engineering lead or an owner"
+RECORD_REFUSED = "Requires the approver role or the engineering lead"
+
+
+async def rights_now(db: AsyncSession, principal: Principal) -> DateRights | None:
+    """The caller's date rights (F3, :func:`oracle.members.leads.date_rights`), read at
+    write time: the leads as flagged now, the caller's own flag re-read FOR SHARE, and the
+    caller still a member with the role the right rests on (C2 Approvers)."""
+    from oracle.auth.service import caller_refusal
+
+    leads = await engineering_leads(db)
+    if principal.user_id is not None and principal.user_id in leads:
+        if not await lead_now(db, principal.user_id):
+            leads = leads - {principal.user_id}
+    rights = date_rights(principal, leads)
+    if rights is None:
+        return None
+    needs = (
+        "owner"
+        if principal.role == "owner"
+        else "commenter"
+        if principal.user_id is not None and principal.user_id in leads
+        else "approver"
+    )
+    if await caller_refusal(db, principal, needs) is not None:  # type: ignore[arg-type]
+        return None
+    return rights
+
+
+async def date_recorder(principal: CurrentPrincipal, db: TenantDB) -> Principal:
+    """Who records a schedule basis at all: anyone with date rights (F3)."""
+    if date_rights(principal, await engineering_leads(db)) is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, RECORD_REFUSED)
+    return principal
+
+
 async def date_verifier(principal: CurrentPrincipal, db: TenantDB) -> Principal:
-    """Who records and withdraws a verified schedule basis (A3): approvers and owners (O4
-    Roadmap shape), plus engineering leads, until F3 Date bases applies the owner's decided
-    rule (oracle.members.leads.may_verify_dates)."""
-    if not may_verify_dates(principal, await engineering_leads(db)):
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Requires the approver role or the engineering lead"
-        )
+    """Who verifies, rejects and withdraws a schedule basis (F3): engineering leads and
+    owners, and approvers while no lead is named. Re-checked at write time
+    (:func:`rights_now`)."""
+    if date_rights(principal, await engineering_leads(db)) != "verify":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, DATES_REFUSED)
     return principal
 
 
 DateVerifier = Annotated[Principal, Depends(date_verifier)]
+DateRecorder = Annotated[Principal, Depends(date_recorder)]
 
 
 async def issue_linker(principal: CurrentPrincipal, db: TenantDB) -> Principal:
@@ -101,7 +145,7 @@ async def issue_linker(principal: CurrentPrincipal, db: TenantDB) -> Principal:
     ``tracker`` area is in no run-token scope."""
     if principal.run_id is not None or principal.run_token_id is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Linking tracker issues is for people")
-    if not may_verify_dates(principal, await engineering_leads(db)):
+    if date_rights(principal, await engineering_leads(db)) is None:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Requires the approver role or the engineering lead"
         )
@@ -297,6 +341,117 @@ async def get_roadmap_alignment(
     return await views.alignment(db, document, await _version(db, document, version))
 
 
+# --- change sets: edits to the approved plan, proposed as a new version (#346) ----------
+
+
+async def _change_set(db, doc: str, set_id: uuid.UUID):
+    document = await _document(db, doc, "roadmap")
+    try:
+        return document, await changeset.get(db, document, set_id)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+
+
+@router.post(
+    "/roadmaps/{doc}/change-sets", response_model=ChangeSetOut, status_code=201,
+    responses={200: {}},
+)  # fmt: skip
+async def open_roadmap_change_set(
+    doc: str, principal: Approver, db: TenantDB, response: Response
+) -> ChangeSetOut:
+    """Edit plan: open a draft change set on the roadmap's approved version (201), or
+    return the draft it has (200). Nobody edits an approved version in place: the changes
+    are proposed as a new version. 422 when no version is approved."""
+    document = await _document(db, doc, "roadmap")
+    try:
+        row, created = await changeset.open_set(db, principal, document)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+    await db.commit()
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return await changeset.view(db, document, row)
+
+
+@router.get("/roadmaps/{doc}/change-sets", response_model=list[ChangeSetOut])
+async def list_roadmap_change_sets(
+    doc: str,
+    principal: Reader,
+    db: TenantDB,
+    status_: Annotated[ChangeSetStatus | None, Query(alias="status")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[ChangeSetOut]:
+    """The roadmap's change sets, newest first: the draft being edited, the proposals
+    waiting for the decider (``approved`` false) and the rest. ``limit`` and ``offset``
+    page through them."""
+    document = await _document(db, doc, "roadmap")
+    return [
+        await changeset.view(db, document, row)
+        for row in await changeset.list_sets(db, document, status_, limit, offset)
+    ]
+
+
+@router.get("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)
+async def get_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> ChangeSetOut:
+    """A change set: its changes, the plan they make, and the diff against the base."""
+    document, row = await _change_set(db, doc, set_id)
+    return await changeset.view(db, document, row)
+
+
+@router.patch("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)
+async def update_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, body: ChangeSetPatch, principal: Approver, db: TenantDB
+) -> ChangeSetOut:
+    """Replace a draft change set's changes (in order): add, move, defer, cut with a
+    reason, reorder within a horizon. 422 when a change does not apply; 409 when it
+    changed since it was loaded, is no longer a draft, or its base is no longer the
+    approved version."""
+    document, row = await _change_set(db, doc, set_id)
+    try:
+        await changeset.update(db, principal, document, row, body.changes, body.lock_version)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+    await db.commit()
+    return await changeset.view(db, document, row)
+
+
+@router.delete("/roadmaps/{doc}/change-sets/{set_id}", response_model=ChangeSetOut)
+async def discard_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> ChangeSetOut:
+    """Discard a draft change set: the approved plan stays as it is."""
+    document, row = await _change_set(db, doc, set_id)
+    try:
+        await changeset.discard(db, principal, document, row)
+    except changeset.ChangeSetError as e:
+        raise _fail(e) from e
+    await db.commit()
+    return await changeset.view(db, document, row)
+
+
+@router.post("/roadmaps/{doc}/change-sets/{set_id}/propose", response_model=ChangeSetOut)
+async def propose_roadmap_change_set(
+    doc: str, set_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> ChangeSetOut:
+    """Propose changes: import the next roadmap version (the base's items plus the
+    changes), for the document's decider to approve through the review. 409 on a stale
+    base; 422 when there is nothing to propose."""
+    document, row = await _change_set(db, doc, set_id)
+    try:
+        await changeset.propose(db, principal, document, row)
+    except changeset.ChangeSetError as e:
+        await db.rollback()
+        raise _fail(e) from e
+    except DraftError as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+    await db.commit()
+    return await changeset.view(db, document, await changeset.get(db, document, set_id))
+
+
 # --- schedule bases (O4: never an invented date) ---------------------------------------------
 
 
@@ -306,14 +461,25 @@ async def list_schedule_bases(
     db: TenantDB,
     prd: str | None = None,
     status_: Annotated[BasisStatus | None, Query(alias="status")] = None,
+    item_key: str | None = None,
 ) -> list[ScheduleBasis]:
     query = select(ScheduleBasis).order_by(ScheduleBasis.supports_date, ScheduleBasis.reference)
+    if item_key is not None:
+        query = query.where(ScheduleBasis.item_key == item_key)
     if prd is not None:
         document = await _document(db, prd, "prd")
         query = query.where(ScheduleBasis.prd_document_id == document.id)
     if status_ is not None:
         query = query.where(ScheduleBasis.status == status_)
     return list(await db.scalars(query))
+
+
+@router.get("/schedule-bases/rights", response_model=DateRightsOut)
+async def get_schedule_basis_rights(principal: Reader, db: TenantDB) -> DateRightsOut:
+    """The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an
+    engineering lead is named (the Record basis dialog's submit label)."""
+    leads = await engineering_leads(db)
+    return DateRightsOut(rights=date_rights(principal, leads), lead_named=bool(leads))
 
 
 async def _record_is_prds(db, record: TrackerRecord, prd: Document) -> bool:
@@ -330,14 +496,18 @@ async def _record_is_prds(db, record: TrackerRecord, prd: Document) -> bool:
 
 @router.post("/schedule-bases", response_model=ScheduleBasisOut, status_code=201)
 async def create_schedule_basis(
-    body: ScheduleBasisCreate, principal: DateVerifier, db: TenantDB
+    body: ScheduleBasisCreate, principal: DateRecorder, db: TenantDB
 ) -> ScheduleBasis:
-    """Record a verified estimate, capacity figure or commitment supporting a date for
-    one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
-    tracker issue is matched to (``tracker_key``). The approver or engineering lead
-    recording it verifies it.
+    """Record an estimate, capacity figure or commitment supporting a date for one PRD's
+    roadmap items (O4), optionally only one item (``item_key``) or the items a tracker
+    issue is matched to (``tracker_key``). The recorder's rights decide its status (F3):
+    an engineering lead or an owner (an approver while no lead is named) verifies it by
+    recording it; an approver's waits as ``proposed`` until a lead verifies it.
     From a tracker record, the record's own target date must be that date, and the record
     must be this PRD's."""
+    rights = await rights_now(db, principal)
+    if rights is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, RECORD_REFUSED)
     prd = await _document(db, body.prd, "prd")
     tracker_key = body.tracker_key.strip() if body.tracker_key else None
     if body.tracker_record_id is not None:
@@ -377,16 +547,31 @@ async def create_schedule_basis(
         item_key=body.item_key.strip() if body.item_key else None,
         tracker_key=tracker_key,
         tracker_record_id=body.tracker_record_id,
-        status="verified",
-        verified_by=principal.id,
-        verified_at=schedule.now(),
+        note=body.note,
     )
+    await record_basis(db, principal, rights, row, prd)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def record_basis(
+    db: AsyncSession, principal: Principal, rights: DateRights, row: ScheduleBasis, prd: Document
+) -> ScheduleBasis:
+    """Write a schedule basis with the status the recorder's rights give it (F3): verified
+    for ``verify``, proposed for a lead for ``propose``; audited, flushed, not committed.
+    The route above and G3's Record (``oracle.discussions.changes.record``) both call it."""
+    when = schedule.now()
+    if rights == "verify":
+        row.status, row.verified_by, row.verified_at = "verified", principal.id, when
+    else:
+        row.status, row.proposed_by, row.proposed_at = "proposed", principal.id, when
     db.add(row)
     await db.flush()
     await audit.record(
         db,
         principal,
-        "schedule_basis.verified",
+        f"schedule_basis.{row.status}",
         "schedule_basis",
         row.id,
         {
@@ -398,8 +583,6 @@ async def create_schedule_basis(
             "tracker_key": row.tracker_key,
         },
     )
-    await db.commit()
-    await db.refresh(row)
     return row
 
 
@@ -415,14 +598,114 @@ async def withdraw_schedule_basis(
     )
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Schedule basis not found")
+    if await rights_now(db, principal) != "verify":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, DATES_REFUSED)
     if row.status == "withdrawn":
         raise HTTPException(status.HTTP_409_CONFLICT, "This schedule basis is already withdrawn")
+    if row.status != "verified":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Only a verified basis is withdrawn; this one is {row.status}",
+        )
     undated, stale = await schedule.withdraw(db, principal, row, body.reason)
     await db.commit()
     await db.refresh(row)
     return WithdrawOut(
         basis=ScheduleBasisOut.model_validate(row), undated_milestones=undated, stale_items=stale
     )
+
+
+async def _proposed(db: AsyncSession, basis_id: uuid.UUID, principal: Principal) -> ScheduleBasis:
+    """The proposed basis, locked, the caller's right to decide it re-read now."""
+    row = await db.scalar(
+        select(ScheduleBasis).where(ScheduleBasis.id == basis_id).with_for_update()
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schedule basis not found")
+    if await rights_now(db, principal) != "verify":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, DATES_REFUSED)
+    if row.status != "proposed":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"Only a proposed basis is decided; this one is {row.status}"
+        )
+    return row
+
+
+@router.post("/schedule-bases/{basis_id}/verify", response_model=ScheduleBasisOut)
+async def verify_schedule_basis(
+    basis_id: uuid.UUID, body: ScheduleBasisVerify, principal: DateVerifier, db: TenantDB
+) -> ScheduleBasis:
+    """Verify a proposed basis (F3): from now on it supports its date. Milestones of its
+    tracker key are re-checked and its PRD's tracks monitored again. 409 unless proposed."""
+    row = await _proposed(db, basis_id, principal)
+    row.status, row.verified_by, row.verified_at = "verified", principal.id, schedule.now()
+    if body.note is not None:
+        row.note = body.note
+    await db.flush()
+    if row.tracker_key:
+        await schedule.recheck_tracker_milestones(db, [row.tracker_key])
+    for track in await db.scalars(
+        select(ProductTrack).where(
+            ProductTrack.prd_document_id == row.prd_document_id, ProductTrack.status == "active"
+        )
+    ):
+        await views.monitor(db, track, principal)
+    prd = await db.get(Document, row.prd_document_id)
+    await audit.record(
+        db,
+        principal,
+        "schedule_basis.verified",
+        "schedule_basis",
+        row.id,
+        {
+            "kind": row.kind,
+            "reference": row.reference,
+            "supports_date": str(row.supports_date),
+            "prd": prd.slug if prd else None,
+            "proposed_by": str(row.proposed_by) if row.proposed_by else None,
+            "note": body.note,
+        },
+    )
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/schedule-bases/{basis_id}/reject", response_model=ScheduleBasisOut)
+async def reject_schedule_basis(
+    basis_id: uuid.UUID, body: ScheduleBasisReject, principal: DateVerifier, db: TenantDB
+) -> ScheduleBasis:
+    """Reject a proposed basis, with a reason (F3): it never supports a date. 409 unless
+    proposed."""
+    row = await _proposed(db, basis_id, principal)
+    row.status, row.rejected_by, row.rejected_at = "rejected", principal.id, schedule.now()
+    row.rejected_reason = body.reason
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "schedule_basis.rejected",
+        "schedule_basis",
+        row.id,
+        {"reference": row.reference, "reason": body.reason},
+    )
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.get("/schedule-bases/{basis_id}/impact", response_model=BasisImpactOut)
+async def get_schedule_basis_impact(
+    basis_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> BasisImpactOut:
+    """What withdrawing this basis would change (F3), computed as the withdrawal does and
+    writing nothing: the milestones it dates (and whether another basis keeps the date),
+    the roadmap items whose date rests on it, and the roadmap versions' places that would
+    show "date withdrawn"."""
+    row = await db.get(ScheduleBasis, basis_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Schedule basis not found")
+    return await schedule.impact(db, row)
 
 
 # --- tracker (read-only) ----------------------------------------------------------------------

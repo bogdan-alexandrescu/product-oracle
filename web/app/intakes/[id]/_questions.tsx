@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import { AnswerQuestion, type InboxQuestion } from "@/components/AnswerQuestion";
 import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl } from "@/components/ds";
 import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
-import { InlineError, SELECT } from "@/components/review/parts";
-import { api, unwrap } from "@/lib/api/client";
+import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, type Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
@@ -15,6 +15,83 @@ import { CATEGORY_LABEL, NON_ANSWER, dayMonth, knowledgeLabel, when, type Batch,
 
 type Me = { id: string | null; role: Role | null };
 type People = ReadonlyMap<string, Person>;
+type Message = Schemas["InterviewMessageOut"];
+type Turn = (questionId: string, body: string | null, skip: boolean) => Promise<boolean>;
+
+/** C3 team follow-ups: "Oracle follows up" is on unless this person turned it off. */
+const FOLLOW_UP_KEY = "po-interview-follow-up";
+/** Oracle's note when it records an answer: the answer bubble already shows it. */
+const RECORDED = "Answer recorded.";
+
+/** This question's messages since Oracle last recorded an answer to it. */
+function openRound(messages: Message[]): Message[] {
+  return messages.slice(messages.map((m) => m.kind).lastIndexOf("closing") + 1);
+}
+
+/** One of Oracle's interview messages: a follow-up, or the note that it could not follow up. */
+function OracleBubble({ message, testId }: { message: Message; testId: string }) {
+  return (
+    <div data-testid={testId} className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
+      <span aria-hidden className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text">
+        <Mark size={16} />
+      </span>
+      <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-surface px-3 py-2 text-[15px] leading-[22px] break-words text-text">
+        {message.body}
+      </p>
+    </div>
+  );
+}
+
+/** What the person wrote before Oracle's follow-up, not recorded yet. */
+function PendingBubble({ message }: { message: Message }) {
+  return (
+    <div data-testid="pending-answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
+      <Avatar name="You" tone="me" />
+      <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+        {message.body}
+      </p>
+    </div>
+  );
+}
+
+/** Reply to Oracle's follow-up, or record the answer as written. */
+function FollowUpReply({ onTurn }: { onTurn: (body: string | null, skip: boolean) => Promise<boolean> }) {
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function go(skip: boolean) {
+    if (!skip && !body.trim()) {
+      setError("Write your reply first");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onTurn(skip ? null : body.trim(), skip);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-2 rounded-panel border border-line bg-surface p-3">
+      <label className={FIELD_LABEL}>
+        Your reply
+        <textarea rows={2} maxLength={4000} value={body} autoFocus onChange={(e) => setBody(e.target.value)} className={TEXTAREA} />
+      </label>
+      {error && <InlineError>{error}</InlineError>}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button variant="solid" disabled={busy} onClick={() => go(false)}>
+          Reply
+        </Button>
+        <Button disabled={busy} onClick={() => go(true)}>
+          Skip, record my answer
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /** A person's name, "you" for the reader. */
 function nameOf(people: People, me: Me, id: string | null | undefined): string {
@@ -67,17 +144,46 @@ function QuestionBubble({
   people,
   me,
   onChanged,
+  transcript,
+  onTurn,
+  focus,
 }: {
   card: Card;
   summary: Summary;
   people: People;
   me: Me;
   onChanged: () => void;
+  /** This question's messages in my team interview (C3). */
+  transcript: Message[];
+  /** Send answer goes through my team interview's turn ("Oracle follows up" on). */
+  onTurn?: Turn;
+  /** Oracle moved here after recording the previous answer: open the answer form. */
+  focus: boolean;
 }) {
   const q = card.question;
   const gap = card.gap;
   const [mode, setMode] = useState<"answer" | "review" | "reassign" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const [focused, setFocused] = useState(false);
+  if (focus !== focused) {
+    setFocused(focus);
+    if (focus) setMode("answer");
+  }
+  const round = openRound(transcript);
+  const waiting = round.some((m) => m.kind === "follow_up");
+
+  async function turn(body: string | null, skip: boolean): Promise<boolean> {
+    if (!onTurn) return false;
+    setThinking(true);
+    try {
+      const recorded = await onTurn(q.id, body, skip);
+      setMode(null);
+      return recorded;
+    } finally {
+      setThinking(false);
+    }
+  }
   const open = q.status === "asked" || q.status === "delegated";
   const mine = q.asked_to === me.id;
   const approver = hasRole(me.role, "approver");
@@ -117,12 +223,27 @@ function QuestionBubble({
             <span data-testid="asked-to">{mine ? "Asked you" : `Asked ${nameOf(people, me, q.asked_to)}`}</span>
             {q.status === "deferred" && <Chip kind="na">Deferred</Chip>}
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
+            {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
         </article>
       </div>
+      {transcript.map((m) =>
+        m.kind === "follow_up" ? (
+          <OracleBubble key={m.id} message={m} testId="follow-up" />
+        ) : m.kind === "closing" && m.body !== RECORDED ? (
+          <OracleBubble key={m.id} message={m} testId="oracle-note" />
+        ) : waiting && m.kind === "answer" && round.includes(m) ? (
+          <PendingBubble key={m.id} message={m} />
+        ) : null,
+      )}
       {card.answers.map((a) => (
         <AnswerBubble key={a.id} answer={a} people={people} me={me} />
       ))}
+      {thinking && (
+        <p data-testid="oracle-typing" role="status" className="ml-10 text-sm text-text2 max-[600px]:ml-4">
+          Oracle is thinking…
+        </p>
+      )}
       <div className="ml-10 flex min-w-0 flex-col gap-2 max-[600px]:ml-4">
         {waitingReview && gap && (
           <div className="flex flex-wrap items-center gap-2">
@@ -144,7 +265,8 @@ function QuestionBubble({
             }}
           />
         )}
-        {open && (
+        {open && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
+        {open && !waiting && (
           <div className="flex flex-wrap items-center gap-2">
             {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
             {(mine || approver) && mode !== "answer" && (
@@ -155,10 +277,11 @@ function QuestionBubble({
             {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
           </div>
         )}
-        {open && mode === "answer" && (
+        {open && !waiting && mode === "answer" && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion
               question={asInbox(card, s)}
+              sendAnswer={onTurn && mine ? (body) => turn(body, false) : undefined}
               onCancel={() => setMode(null)}
               onSettled={() => {
                 setMode(null);
@@ -314,8 +437,59 @@ export function QuestionsTab({
     };
   }, [key]);
   const asker = s.intake.author_id === me.id || hasRole(me.role, "approver");
+  // C3 team follow-ups: my team interview on this brief holds Oracle's follow-ups and my replies.
+  const member = hasRole(me.role, "commenter");
+  const [followUp, setFollowUp] = useState(() => typeof window === "undefined" || localStorage.getItem(FOLLOW_UP_KEY) !== "off");
+  const [interview, setInterview] = useState<{ id: string; messages: Message[] } | null>(null);
+  const [focus, setFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!member) return;
+    let live = true;
+    unwrap(api.POST("/v1/intakes/{intake_id}/interview", { params: { path: { intake_id: s.intake.id } } }))
+      .then((iv) => live && setInterview({ id: iv.id, messages: iv.messages }))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [member, s.intake.id]);
+  function toggle(on: boolean) {
+    setFollowUp(on);
+    localStorage.setItem(FOLLOW_UP_KEY, on ? "on" : "off");
+  }
+  const turn: Turn = async (questionId, body, skip) => {
+    if (!interview) throw new Error("Your interview is still loading; try again.");
+    const out = await unwrap(
+      api.POST("/v1/interviews/{interview_id}/turns", {
+        params: { path: { interview_id: interview.id } },
+        body: { question_id: questionId, body, skip_follow_up: skip },
+      }),
+    );
+    setInterview((iv) => (iv ? { ...iv, messages: [...iv.messages, ...out.messages] } : iv));
+    if (!out.recorded) return false;
+    setFocus(out.next_question_id ?? null);
+    onChanged();
+    return true;
+  };
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      {member && (
+        <div className="flex justify-end">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Oracle follows up"
+              className="size-4 accent-[var(--accent)]"
+              checked={followUp}
+              onChange={(e) => toggle(e.target.checked)}
+            />
+            Oracle follows up
+            <InfoTip label="what Oracle follows up does" align="end">
+              When your answer does not settle the question yet, Oracle asks you one follow-up before it records your answer.
+            </InfoTip>
+          </label>
+        </div>
+      )}
       <div data-testid="intake-thread" className="flex min-w-0 flex-col gap-5">
         {batches.length === 0 && <Empty>No questions asked yet</Empty>}
         {batches.map((b) => (
@@ -326,13 +500,23 @@ export function QuestionsTab({
             </h2>
             <ul className="flex min-w-0 flex-col gap-4">
               {b.questions.map((c) => (
-                <QuestionBubble key={c.question.id} card={c} summary={s} people={people} me={me} onChanged={onChanged} />
+                <QuestionBubble
+                  key={c.question.id}
+                  card={c}
+                  summary={s}
+                  people={people}
+                  me={me}
+                  onChanged={onChanged}
+                  transcript={interview?.messages.filter((m) => m.question_id === c.question.id) ?? []}
+                  onTurn={followUp && interview ? turn : undefined}
+                  focus={focus === c.question.id}
+                />
               ))}
             </ul>
           </section>
         ))}
       </div>
-      {asker && <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />}
+      {asker && s.intake.status !== "archived" && <NextQuestions intakeId={s.intake.id} me={me} version={version} onAsked={onChanged} />}
     </div>
   );
 }

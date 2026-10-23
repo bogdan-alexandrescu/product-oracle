@@ -33,6 +33,8 @@ from oracle.export.router import router as export_router
 from oracle.intake.drafting import DraftGateClosed, draft_gate_closed
 from oracle.intake.router import router as intake_router
 from oracle.integrations.router import router as company_integrations_router
+from oracle.interviews.public import router as public_interviews_router
+from oracle.interviews.router import router as interviews_router
 from oracle.jobs.router import router as llm_jobs_router
 from oracle.jobs.worker import (
     JOB_OVERHEAD_SECONDS,
@@ -229,6 +231,10 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(company_integrations_router)
     app.include_router(requests_router)
+    # C3 Interviews: members' routes, and the customer's behind a private link (no member
+    # credential, never MCP tools: oracle.mcp.tools.PUBLIC_OPERATIONS).
+    app.include_router(interviews_router)
+    app.include_router(public_interviews_router)
     # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
     app.include_router(plan_router)
     app.include_router(strategy_router)

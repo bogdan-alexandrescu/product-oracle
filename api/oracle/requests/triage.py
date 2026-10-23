@@ -116,6 +116,7 @@ def parse(text: str) -> dict[str, list[Any]]:
 _DROPS = (
     ("entry", "unknown request", "dropped"),
     ("entry", "not New", "dropped"),
+    ("entry", "suggestion declined", "dropped"),
     ("entry", "not readable", "dropped"),
     ("goal key", "not a confirmed goal", "dropped"),
     ("feature key", "not a baseline feature", "dropped"),
@@ -269,6 +270,10 @@ async def _suggest(
             continue
         if row.state != "new":
             drops[("entry", "not New")] += 1
+            continue
+        if (row.suggestion or {}).get("declined_at"):
+            # An approver declined Oracle's suggestion: it stays, and triage leaves it.
+            drops[("entry", "suggestion declined")] += 1
             continue
         theme_id, theme_title = lookups.theme(entry.get("theme"), drops)
         feature_id = None

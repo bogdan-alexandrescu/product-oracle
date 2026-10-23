@@ -51,7 +51,9 @@ from oracle.config import get_settings
 from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.discussions import replies as discussion_replies
+from oracle.discussions import summary as discussion_summary
 from oracle.discussions.replies import RepliesTick
+from oracle.interviews import service as interviews_service
 from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
 from oracle.models import Tenant
@@ -178,7 +180,8 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
     tracks' monitoring, then its weekly alignment report (oracle.reports), its launches'
-    Ready detection and its daily request triage, each on its own."""
+    Ready detection, its interview links' expiry and its daily request triage, each on
+    its own."""
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -227,6 +230,15 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             await launches_service.detect_ready(db, tenant_id)
     except Exception:
         log.exception("run ticker: launch Ready detection failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Interviews (C3): customer interview links past their 7 days expire, and one
+        # with an answer gets its snapshot queued (deterministic, no model call here).
+        async with tenant_session(tenant_id) as db:
+            if await interviews_service.expire_due(db):
+                await db.commit()
+    except Exception:
+        log.exception("run ticker: interview expiry failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Requests (C1 "Triage runs"): once a day at 07:00 Pacific, a quick classify-only
@@ -287,6 +299,15 @@ async def _run_jobs(
                 name,
                 getattr(out.discussion_replies, name) + getattr(got, name),
             )
+        # G3: the summary drafts queued by a close or a first staged change.
+        if (
+            HARD_LIMIT_SECONDS - (time.monotonic() - started)
+            > 2 * discussion_replies.reply_seconds()
+        ):
+            try:
+                await discussion_summary.run_queued(tenant_id, limit=2)
+            except Exception:
+                log.exception("run ticker: discussion summaries failed for company %s", tenant_id)
     limit = llm_jobs.get_worker_settings().max_per_tick
     if limit <= 0:
         return

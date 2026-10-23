@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
 import { Chip, Empty, Icon, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
@@ -59,11 +60,15 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  * First paint costs a fixed number of calls whatever the company's size: five lists (goals,
  * inbox, questions asked of me, PRDs, runs), the setup checklist, one trend per goal shown
  * (at most four), and the selected row's inspector. Nothing is fetched per run, per PRD or
- * per hidden goal.
+ * per hidden goal. An owner's Home also reads the Claude account pool, for the notice that
+ * Oracle's AI is off (#403).
  */
 export default function HomePage() {
   const { role } = useMe();
   const canWrite = hasRole(role, "approver");
+  const owner = hasRole(role, "owner");
+  // #403: only an owner's Home reads the pool, for the notice that Oracle's AI is off.
+  const poolQ = useQuery(owner ? "home|claude-pool" : "home|no-pool", () => (owner ? unwrap(api.GET("/v1/claude-accounts")) : Promise.resolve(null)));
 
   const inboxQ = useQuery("home|inbox", loadInbox);
   // Asked of me, filtered by the API so none is cut off; a failure shows in Needs you.
@@ -92,7 +97,7 @@ export default function HomePage() {
 
   const { goals, history, error: goalsError, loading: goalsLoading } = useGoals("home");
   const goalIndex: GoalIndex = useMemo(
-    () => new Map((goals ?? []).map((g) => [g.id, { tag: g.tag, title: g.title, proposed: g.proposed }])),
+    () => new Map((goals ?? []).map((g) => [g.id, { id: g.id, tag: g.tag, title: g.title, proposed: g.proposed }])),
     [goals],
   );
 
@@ -185,6 +190,7 @@ export default function HomePage() {
       <Split
         inspector={selected ? <FlightInspector f={selected} openItems={openItems} docs={docs} goalIndex={goalIndex} /> : undefined}
       >
+        {owner && poolQ.data && <ClaudeOffNotice page={poolQ.data} />}
         {setupError && <Notice tone="error">{setupError}</Notice>}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 

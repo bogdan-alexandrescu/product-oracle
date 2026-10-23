@@ -2,8 +2,8 @@
  * Mock of the requests routes (api/oracle/requests/router.py, C1) for
  * NEXT_PUBLIC_API_MOCKS=1: the request queue with its tab counts and channel facet, a
  * request with what was merged into it, edits, qualify (needs a confirmed goal), merge
- * (to the root, no cycles), disqualify (Other needs a note), reopen, accepting Oracle's
- * suggestion, and themes. It keeps the API's shapes and role rules.
+ * (to the root, no cycles), disqualify (Other needs a note), reopen, accepting or declining
+ * Oracle's suggestion (#348), and themes. It keeps the API's shapes and role rules.
  *
  * It also stands in for Oracle's triage (GET and POST /v1/requests/triage: Classify now
  * starts a run that finishes on its own a few seconds later, suggesting a goal and theme for
@@ -191,6 +191,27 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
       "Two prospects asked whether buyers can choose a delivery slot at check-out. Both said it would decide whether they switch this quarter."),
   );
   return db;
+}
+
+/**
+ * C3: a need from a customer interview's snapshot, filed as a request: New, channel and origin
+ * Interview, the customer's name as given, unverified, linked to the interview and to its
+ * intake or theme (oracle.requests.service). Returns its id.
+ */
+export function addInterviewRequest(
+  db: RequestsDb,
+  input: { title: string; body: string; requester_name: string; interview_id: string; intake_id: string | null; theme_id: string | null },
+): string {
+  const at = now();
+  const row: Row = {
+    id: mockUuid(), title: input.title, body: input.body, channel: "interview", origin: "interview",
+    requester_name: input.requester_name, requester_kind: "customer", verified: false, state: "new",
+    merged_into_id: null, disqualify_reason: null, decision_note: null, theme_id: input.theme_id, goal_ids: [],
+    feature_id: null, document_id: null, intake_id: input.intake_id, interview_id: input.interview_id, source: null,
+    suggestion: null, filed_by: null, decided_by: null, decided_at: null, created_at: at, updated_at: at, lock_version: 1,
+  };
+  db.requests.push(row);
+  return row.id;
 }
 
 /**
@@ -448,7 +469,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     }
     if (m === "POST" && p.length >= 4) {
       const verb = p.slice(3).join("/");
-      if (!["qualify", "merge", "disqualify", "reopen", "suggestion/accept"].includes(verb)) return null;
+      if (!["qualify", "merge", "disqualify", "reopen", "suggestion/accept", "suggestion/decline"].includes(verb)) return null;
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       const input = await body<{ lock_version: number } & Record<string, unknown>>();
       if (input.lock_version !== row.lock_version) return stale();
@@ -488,12 +509,17 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       } else if (verb === "reopen") {
         if (row.state !== "merged" && row.state !== "disqualified") return fail(409, "Only a Merged or Disqualified request can be reopened");
         Object.assign(row, { state: "new", merged_into_id: null, disqualify_reason: null, decision_note: null, decided_by: null, decided_at: null });
+      } else if (verb === "suggestion/decline") {
+        if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
+        if (!row.suggestion || row.suggestion.declined_at) return fail(422, "Oracle has no suggestion for this request");
+        const email = ctx.people?.().find((x) => x.id === ctx.userId)?.email;
+        row.suggestion = { ...row.suggestion, declined_at: now(), declined_by: ctx.userId, declined_by_name: email ? displayName(email) : null };
       } else {
         const parts = (input.parts as Part[] | undefined) ?? [];
         if (parts.length === 0) return fail(422, "parts: at least one");
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
         const s = row.suggestion;
-        if (!s) return fail(422, "Oracle has no suggestion for this request");
+        if (!s || s.declined_at) return fail(422, "Oracle has no suggestion for this request");
         // Every check first, as the API: a refused part changes nothing.
         if (parts.includes("theme") && !(s.theme_id ? liveTheme(s.theme_id) : s.theme_title?.trim())) return fail(422, "Oracle suggested no theme");
         if (parts.includes("goals") && (!s.goal_ids?.length || badGoals(s.goal_ids).length)) return fail(422, "Oracle suggested no confirmed goal");
