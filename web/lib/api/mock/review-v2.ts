@@ -9,7 +9,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
-type SectionRow = { section_key: string; heading: string; ordinal: number; layer: "brief" | "detail"; content_hash: string; body_md: string; body_text: string; level: number };
+type SectionRow = { section_key: string; heading: string; ordinal: number; layer: "brief" | "detail"; content_hash: string; body_md: string; body_text: string; level: number; citation_keys?: string[] };
 type VersionLike = { id: string; document_id: string; number: number; content_hash: string; approved_at?: string | null; markdown?: string; sections: SectionRow[] };
 type DocumentLike = { id: string; slug: string; title: string };
 type ReviewLike = { version_id: string; section_key: string; verdict: string; reviewer_id?: string | null; created_at: string; id: string };
@@ -52,8 +52,19 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+/**
+ * A section's revision as oracle.docs.parser.section_revision makes it: a detail section
+ * that cites nothing keeps its content hash; a cited or brief one adds what it cites and
+ * its layer. Section saves and accepts are checked against it, as the API checks them.
+ */
+export function sectionRevision(s: Pick<SectionRow, "content_hash" | "layer" | "citation_keys">, hash: (text: string) => string): string {
+  const cited = s.citation_keys ?? [];
+  if (s.layer !== "brief" && !cited.length) return s.content_hash;
+  return hash(JSON.stringify([s.content_hash, s.layer, cited]));
+}
+
 /** Seeded for the first PRD: one assignment due soon, an open campaign and patch, two notifications. */
-export function seedReviewV2(doc: DocumentLike | undefined, latest: VersionLike | undefined, userId: string): ReviewV2Db {
+export function seedReviewV2(doc: DocumentLike | undefined, latest: VersionLike | undefined, userId: string, hash: (text: string) => string): ReviewV2Db {
   const db: ReviewV2Db = { assignments: [], policies: [], patches: [], campaigns: [], notifications: [], publications: [] };
   if (!doc || !latest || !latest.sections.length) return db;
   const target = latest.sections.find((s) => s.section_key !== "title") ?? latest.sections[0];
@@ -71,7 +82,7 @@ export function seedReviewV2(doc: DocumentLike | undefined, latest: VersionLike 
   });
   db.patches.push({
     id: "p0000000-0000-4000-8000-000000000001", document_id: doc.id, section_key: target.section_key,
-    base_version: latest.number, base_hash: target.content_hash, heading: target.heading,
+    base_version: latest.number, base_hash: sectionRevision(target, hash), heading: target.heading,
     body_md: `${target.body_md}\n\nAn agent proposed this added sentence.`, origin: "run", action: "replace", run_id: null,
     rationale: "An agent draft rewrote this approved section; the approved text was kept. Review the rewrite as a diff.",
     status: "open", created_by: userId, decided_by: null, decided_at: null, decision_note: null, applied_version: null,
@@ -111,7 +122,7 @@ function statesOf(ctx: ReviewV2Context, doc: DocumentLike, v: VersionLike): Sche
     const a = ctx.db.assignments.find((x) => x.document_id === doc.id && x.section_key === s.section_key);
     const approver = last && last.verdict === "approved" ? last : null;
     return {
-      section_key: s.section_key, heading: s.heading, ordinal: s.ordinal, layer: s.layer, revision: s.content_hash,
+      section_key: s.section_key, heading: s.heading, ordinal: s.ordinal, layer: s.layer, revision: sectionRevision(s, ctx.hash),
       revision_since_version: v.number, status,
       approval: approver ? { review_id: approver.id, reviewer_id: approver.reviewer_id ?? null, version: versions.find((x) => x.id === approver.version_id)?.number ?? v.number, revision: hashOf(approver) ?? null, approved_at: approver.created_at } : null,
       invalidated: status === "approval_stale" ? { at: AT, change_id: null, revision: approver ? hashOf(approver) ?? null : null } : null,
@@ -196,12 +207,13 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
     const doc = ctx.documents.find((d) => d.id === patch.document_id)!;
     const latest = ctx.versions.filter((v) => v.document_id === doc.id).sort((x, y) => y.number - x.number)[0];
     const current = latest.sections.find((s) => s.section_key === patch.section_key);
+    const currentRevision = current ? sectionRevision(current, ctx.hash) : null;
     if (!p[3] && m === "GET") {
       const words = [
         ...(current?.body_text ?? "").split(/\s+/).filter(Boolean).map((text) => ({ op: "equal" as const, text })),
         ...["An", "agent", "proposed", "this", "added", "sentence."].map((text) => ({ op: "insert" as const, text })),
       ];
-      return json(200, { ...patch, latest_version: latest.number, current_revision: current?.content_hash ?? null, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null, rebase_needed: current?.content_hash !== patch.base_hash, words });
+      return json(200, { ...patch, latest_version: latest.number, current_revision: currentRevision, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null, rebase_needed: currentRevision !== patch.base_hash, words });
     }
     const denied = need("approver");
     if (denied) return denied;
@@ -213,8 +225,8 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       return json(200, patch);
     }
     if (p[3] === "accept" && m === "POST") {
-      if (input.base_revision !== current?.content_hash) {
-        return json(409, { detail: `section ${patch.section_key} changed since you loaded it`, code: "section_conflict", base_version: patch.base_version, latest_version: latest.number, sections: [{ section_key: patch.section_key, base_revision: input.base_revision, current_revision: current?.content_hash ?? null, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null }] });
+      if (!currentRevision || input.base_revision !== currentRevision) {
+        return json(409, { detail: `section ${patch.section_key} changed since you loaded it`, code: "section_conflict", base_version: patch.base_version, latest_version: latest.number, sections: [{ section_key: patch.section_key, base_revision: input.base_revision, current_revision: currentRevision, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null }] });
       }
       const out = ctx.editSection(doc, patch.section_key, input.heading ?? patch.heading, input.body_md ?? patch.body_md);
       Object.assign(patch, { status: "accepted", decided_by: ctx.me.id, decided_at: ctx.now(), decision_note: input.note ?? null, applied_version: latest.number + 1, lock_version: patch.lock_version + 1 });
@@ -282,8 +294,10 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
     if (denied) return denied;
     const input = await body<Schemas["SectionEditIn"]>();
     const current = latest?.sections.find((s) => s.section_key === p[4]);
-    if (!current || current.content_hash !== input.base_revision) {
-      return json(409, { detail: `section ${p[4]} changed since you loaded it (version ${input.base_version}); merge it and save again`, code: "section_conflict", base_version: input.base_version, latest_version: latest?.number ?? null, sections: [{ section_key: p[4], base_revision: input.base_revision, current_revision: current?.content_hash ?? null, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null }] });
+    // Checked against the section's revision (oracle.docs.edit.edit_section), not its content hash.
+    const currentRevision = current ? sectionRevision(current, ctx.hash) : null;
+    if (!current || currentRevision !== input.base_revision) {
+      return json(409, { detail: `section ${p[4]} changed since you loaded it (version ${input.base_version}); merge it and save again`, code: "section_conflict", base_version: input.base_version, latest_version: latest?.number ?? null, sections: [{ section_key: p[4], base_revision: input.base_revision, current_revision: currentRevision, current_heading: current?.heading ?? null, current_body_md: current?.body_md ?? null }] });
     }
     return json(201, ctx.editSection(doc, p[4], input.heading ?? null, input.body_md));
   }
