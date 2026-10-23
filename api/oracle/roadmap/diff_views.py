@@ -251,7 +251,7 @@ async def history(db: AsyncSession, prd: str, item_key: str) -> RoadmapItemHisto
     if document.kind != "prd":
         raise DiffError(422, f"'{document.slug}' is a {document.kind}, not a prd")
     traced = select(RoadmapItem.roadmap_version_id).where(
-        RoadmapItem.prd_document_id == document.id
+        RoadmapItem.prd_document_id == document.id, RoadmapItem.roadmap_version_id.is_not(None)
     )
     versions = list(
         await db.scalars(

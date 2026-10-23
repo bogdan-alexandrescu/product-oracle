@@ -135,6 +135,37 @@ every export work as before. What it adds (code in `api/oracle/roadmap/`, migrat
 - **Launches.** Approving a roadmap version plans a launch for each item in Now; see
   [launches-and-changelog.md](launches-and-changelog.md).
 
+## Roadmap items per PRD draft (E1, PS1)
+
+Every imported PRD version gets its own items-only roadmap (owner, 2026-10-20: "yes, items
+only"), shown on the version's **Roadmap** tab (`/documents/{doc}/v/{n}/roadmap`). There is
+no roadmap document: only items, derived by the `prd_draft_items` flow (one `roadmap_items`
+segment, analyst + prioritizer, about $5.50 at standard depth) and checked by the same O4
+rules as a roadmap's items.
+
+- **Queued on import.** The `roadmap.draft_items` change handler records a `draft_roadmaps`
+  row for each new PRD version: `queued`, or `skipped` for a template's empty skeleton
+  (`POST /v1/drafts`), or `off` when the PRD's owner turned "Derive for each new draft" off.
+  A failure in the handler is logged and never fails the import.
+- **One at a time, latest draft wins.** The tick starts at most one derivation per PRD, the
+  queued row of the highest version first; an older row queued automatically is
+  `superseded` by a newer draft. A person's Derive (approver+) is never superseded.
+- **For the importer.** The run is created by, and reads as, whoever imported the version
+  (or clicked Derive). If they can no longer start runs, the row is `failed` and nothing
+  runs.
+- **No checkpoint.** Items are stored with the check's problems (a refused date is kept as
+  `refused_date`); the run fails only when nothing can be stored (no file, an unreadable
+  or refused file, no items, `wrong_prd`).
+- **Stable ids.** The prompt says "PRD draft" and lists the known items (the nearest
+  earlier ready draft's, then the approved roadmap's) so the agents keep their ids.
+- **Never stale.** Draft items (`roadmap_items.draft_roadmap_id` set, no roadmap version)
+  are skipped by staleness, tracker links and basis withdrawal; the next draft derives
+  again.
+- **API.** `GET /v1/documents/{doc}/versions/{n}/roadmap-items` (viewer+, run tokens with
+  `read:documents`), `POST .../roadmap-items/derive` (approver+, 202; 409 while queued or
+  running), `GET`/`PUT /v1/documents/{doc}/roadmap-items/settings` (`PUT`: owners).
+  `VersionOut.draft_roadmap` carries `{status, items, problems}` for the tab label.
+
 ## Plan screen (F1, c7 Plan rename)
 
 The Roadmap page became **Plan** (`/plan`; `/roadmap` redirects there, 308): one view of

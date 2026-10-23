@@ -28,7 +28,17 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.parser import DraftError
 from oracle.members.leads import DateRights, date_rights, engineering_leads, lead_now
-from oracle.roadmap import changeset, diff_views, links, schedule, staleness, tracker, tracks, views
+from oracle.roadmap import (
+    changeset,
+    diff_views,
+    draft_items,
+    links,
+    schedule,
+    staleness,
+    tracker,
+    tracks,
+    views,
+)
 from oracle.roadmap import items as items_mod
 from oracle.roadmap.models import (
     ProductTrack,
@@ -45,6 +55,9 @@ from oracle.roadmap.schemas import (
     ChangeSetPatch,
     ChangeSetStatus,
     DateRightsOut,
+    DeriveIn,
+    DraftRoadmapOut,
+    DraftRoadmapSettings,
     ItemProblem,
     ItemsDiffOut,
     ItemsImport,
@@ -88,6 +101,7 @@ router = APIRouter(prefix="/v1", tags=["roadmaps"])
 
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
+Owner = Annotated[Principal, Depends(require_role("owner"))]
 
 
 DATES_REFUSED = "Requires the engineering lead or an owner"
@@ -156,6 +170,10 @@ IssueLinker = Annotated[Principal, Depends(issue_linker)]
 
 changes.register_handler(staleness.HANDLER, staleness.mark_items, subjects=staleness.SUBJECTS)
 changes.register_handler("roadmap.start_track", tracks.on_published, subjects={"document_version"})
+# E1: every new PRD version queues its items-only roadmap (never aborts the import).
+changes.register_handler(
+    draft_items.HANDLER, draft_items.on_prd_version, subjects={"document_version"}
+)
 
 
 def _fail(exc: Exception) -> HTTPException:
@@ -286,6 +304,99 @@ async def act_on_roadmap_item_staleness(
     await db.commit()
     out = await views.items_view(db, document, version, "full")
     return ItemStalenessOut(changed=changed, items=out.items)
+
+
+# --- roadmap items per PRD draft (E1) -------------------------------------------------------
+
+
+async def _prd_version(db, doc: str, n: int) -> tuple[Document, DocumentVersion]:
+    document = await _document(db, doc)
+    version = await db.scalar(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id, DocumentVersion.number == n
+        )
+    )
+    if version is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"version {n} of '{document.slug}' not found"
+        )
+    if document.kind != "prd":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"'{document.slug}' is a {document.kind}, not a prd: only a PRD's versions "
+            "have draft roadmap items",
+        )
+    return document, version
+
+
+@router.get(
+    "/documents/{doc}/versions/{n}/roadmap-items",
+    response_model=DraftRoadmapOut,
+    operation_id="get_draft_roadmap_items",
+)
+async def get_draft_roadmap_items(
+    doc: str, n: int, principal: Reader, db: TenantDB, view: ItemView = "full"
+) -> DraftRoadmapOut:
+    """A PRD version's items-only roadmap (E1): its derivation's status (queued,
+    running, ready, failed, superseded, off, skipped, or none) and its items, which are
+    proposals until a roadmap is approved."""
+    document, version = await _prd_version(db, doc, n)
+    return await draft_items.view(db, document, version, view)
+
+
+@router.post(
+    "/documents/{doc}/versions/{n}/roadmap-items/derive",
+    response_model=DraftRoadmapOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="derive_draft_roadmap_items",
+    responses={409: {"description": "Already being derived"}},
+)
+async def derive_draft_roadmap_items(
+    doc: str, n: int, principal: Approver, db: TenantDB, body: DeriveIn | None = None
+) -> DraftRoadmapOut:
+    """Derive the version's roadmap items again (or for the first time): queued for the
+    caller; the tick starts it within a minute. The current items stay until the new
+    ones are stored."""
+    document, version = await _prd_version(db, doc, n)
+    try:
+        await draft_items.derive(db, principal, document, version, (body or DeriveIn()).depth)
+    except draft_items.Conflict as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+    await db.commit()
+    return await draft_items.view(db, document, version, "full")
+
+
+@router.get(
+    "/documents/{doc}/roadmap-items/settings",
+    response_model=DraftRoadmapSettings,
+    operation_id="get_draft_roadmap_settings",
+)
+async def get_draft_roadmap_settings(
+    doc: str, principal: Reader, db: TenantDB
+) -> DraftRoadmapSettings:
+    """Whether Oracle derives roadmap items for each new draft of this PRD."""
+    document = await _document(db, doc, "prd")
+    return DraftRoadmapSettings(each_draft=document.draft_roadmap_auto)
+
+
+@router.put(
+    "/documents/{doc}/roadmap-items/settings",
+    response_model=DraftRoadmapSettings,
+    operation_id="put_draft_roadmap_settings",
+)
+async def put_draft_roadmap_settings(
+    doc: str, body: DraftRoadmapSettings, principal: Owner, db: TenantDB
+) -> DraftRoadmapSettings:
+    """Turn "Derive for each new draft" off or on for this PRD (owners)."""
+    document = await _document(db, doc, "prd")
+    before = document.draft_roadmap_auto
+    document.draft_roadmap_auto = body.each_draft
+    await audit.record(
+        db, principal, "draft_roadmap.settings", "document", document.id,
+        {"before": {"each_draft": before}, "after": {"each_draft": body.each_draft}},
+    )  # fmt: skip
+    await db.commit()
+    return DraftRoadmapSettings(each_draft=document.draft_roadmap_auto)
 
 
 # --- roadmap item diff (E3) ------------------------------------------------------------------
@@ -488,7 +599,11 @@ async def _record_is_prds(db, record: TrackerRecord, prd: Document) -> bool:
         return False
     found = await db.scalar(
         select(RoadmapItem.id)
-        .where(RoadmapItem.prd_document_id == prd.id, RoadmapItem.item_key == record.item_key)
+        .where(
+            RoadmapItem.prd_document_id == prd.id,
+            RoadmapItem.item_key == record.item_key,
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
         .limit(1)
     )
     return found is not None

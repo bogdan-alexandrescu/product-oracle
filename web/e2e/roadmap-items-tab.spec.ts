@@ -51,9 +51,9 @@ async function withdrawBasis(page: Page, reference: string) {
 }
 
 // Card tabs-on-roadmaps: protects = a roadmap version has Document and Items tabs, with the
-// item count, and a PRD version has none; fails_when = the tabs are missing, the count is
-// wrong or a PRD shows Items; no_claim = how the count is computed server-side.
-test("a roadmap version has Document and Items tabs with the item count; a PRD has none", async ({ page }) => {
+// item count, and a PRD version has no Items tab (E1 gives it Roadmap); fails_when = the tabs
+// are missing, the count is wrong or a PRD shows Items; no_claim = how the count is computed server-side.
+test("a roadmap version has Document and Items tabs with the item count; a PRD has no Items tab", async ({ page }) => {
   await login(page);
   await page.goto(ROADMAP);
   const doc = visible(page, "version-tab-document");
@@ -75,7 +75,8 @@ test("a roadmap version has Document and Items tabs with the item count; a PRD h
   await page.goto("/documents/usage-alerts/v/1");
   await expect(visible(page, "document-sections")).toBeVisible();
   await expect(page.getByTestId("version-tab-items")).toHaveCount(0);
-  await expect(page.getByTestId("version-tab-document")).toHaveCount(0);
+  // E1: a PRD version's tabs are Document and Roadmap (e2e/draft-roadmap.spec.ts), never Items.
+  await expect(visible(page, "version-tab-roadmap")).toBeVisible();
 });
 
 // Card items-grouped: protects = rows grouped by horizon in stored order with the item's

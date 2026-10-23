@@ -145,7 +145,11 @@ async def _item_of(db: AsyncSession, record: TrackerRecord) -> tuple[str | None,
     if prd_id is not None and record.item_key:
         title = await db.scalar(
             select(RoadmapItem.title)
-            .where(RoadmapItem.prd_document_id == prd_id, RoadmapItem.item_key == record.item_key)
+            .where(
+                RoadmapItem.prd_document_id == prd_id,
+                RoadmapItem.item_key == record.item_key,
+                RoadmapItem.roadmap_version_id.is_not(None),
+            )
             .order_by(RoadmapItem.created_at.desc())
             .limit(1)
         )
@@ -238,7 +242,11 @@ async def link(
     item = await _source_item(db, principal, body)
     roadmap_item = await db.scalar(
         select(RoadmapItem)
-        .where(RoadmapItem.prd_document_id == prd.id, RoadmapItem.item_key == body.item_key)
+        .where(
+            RoadmapItem.prd_document_id == prd.id,
+            RoadmapItem.item_key == body.item_key,
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
         .order_by(RoadmapItem.created_at.desc())
         .limit(1)
     )

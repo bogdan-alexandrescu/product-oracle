@@ -272,6 +272,67 @@ class RoadmapItemsOut(BaseModel):
     items: list[RoadmapItemOut]
 
 
+# E1 Roadmap per PRD draft. "none": the version has no derivation (imported before E1).
+DraftRoadmapStatus = Literal[
+    "queued", "running", "ready", "failed", "superseded", "off", "skipped", "none"
+]
+
+
+class DraftRoadmapSummary(BaseModel):
+    """A PRD version's derivation on its version read (the Roadmap tab's label)."""
+
+    status: DraftRoadmapStatus
+    items: int
+    problems: int
+
+
+class DraftRoadmapPrd(BaseModel):
+    id: uuid.UUID
+    slug: str
+    title: str
+    version: int
+    approved: bool
+
+
+class DraftRoadmapPrevious(BaseModel):
+    """The nearest earlier version of the PRD with ready items."""
+
+    version: int
+    status: DraftRoadmapStatus
+    items: int
+
+
+class DraftRoadmapOut(BaseModel):
+    """A PRD version's items-only roadmap: its derivation's status and its items. Items
+    have no track, are always fresh and carry no engineering records."""
+
+    prd: DraftRoadmapPrd
+    status: DraftRoadmapStatus
+    run_id: uuid.UUID | None
+    requested_at: datetime | None
+    ready_at: datetime | None
+    error: str | None
+    # {"items", "by_horizon", "problems"} as the run's items check returned it.
+    check: dict[str, Any] | None
+    previous: DraftRoadmapPrevious | None
+    # The PRD's "Derive for each new draft" switch.
+    auto: bool
+    view: ItemView
+    items: list[RoadmapItemOut]
+
+
+class DeriveIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    depth: Literal["quick", "standard", "deep"] = "standard"
+
+
+class DraftRoadmapSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    each_draft: bool
+
+
 class ItemsImportOut(RoadmapItemsOut):
     problems: list[ItemProblem]
     # Items whose milestone date was refused (no verified basis supports it).

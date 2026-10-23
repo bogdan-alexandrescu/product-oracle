@@ -18,6 +18,7 @@ from sqlalchemy import (
     false,
     func,
     text,
+    true,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -76,6 +77,8 @@ class Document(TenantScoped, Base):
     disabled_llm_jobs: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default="{}"
     )
+    # E1: a PRD's "Derive for each new draft" switch (an owner's); on by default.
+    draft_roadmap_auto: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

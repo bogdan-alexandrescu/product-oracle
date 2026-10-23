@@ -22,6 +22,7 @@ Flow = Literal[
     "baseline",
     "code_map",
     "update_draft",
+    "prd_draft_items",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
