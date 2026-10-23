@@ -31,6 +31,7 @@ import {
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
+  reviewHref,
   RETRY_CONFIRM,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
@@ -1057,15 +1058,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
       action: isHeld(c) ? (
         // The run page's checkpoint row, until the kind's review screen ships (D1).
-        <LinkButton href={review}>Review</LinkButton>
+        <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>
       ) : counted ? (
         // Until D1's review screen lands, the run page opens at the decision.
         <LinkButton href={review}>Review items</LinkButton>
       ) : (
         // The same verb as the runs list: the run page opens at the decision; a priority stop
         // opens its order next to the live ranking (C8), where it is decided too; a PRD or
-        // roadmap review opens its version (D10).
-        <LinkButton href={orderHref(c) ?? c.review_link ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
+        // roadmap review opens its version (D10); a feature set opens its review screen (C7).
+        <LinkButton href={reviewHref(c) ?? orderHref(c) ?? c.review_link ?? `/runs/${c.run_id}#decide`}>Decide</LinkButton>
       ),
       children: counted && !compact ? childNeeds(c, summary, busy, act, fixed) : undefined,
     };

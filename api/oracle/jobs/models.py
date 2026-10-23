@@ -45,7 +45,12 @@ INTAKE_JOB_KINDS = ("intake_analysis",)
 DECISION_JOB_KINDS = ("decision_options",)
 # An interview's guide and snapshot (C3, migration 0032_interviews): ``interview_id``.
 INTERVIEW_JOB_KINDS = ("interview_guide", "interview_snapshot")
-ALL_JOB_KINDS = JOB_KINDS + INTAKE_JOB_KINDS + DECISION_JOB_KINDS + INTERVIEW_JOB_KINDS
+# A requirement deepened at a feature-set review (C7, migration 0042_scope_review): no
+# document, ``scope_id`` (the PRD scope) instead.
+SCOPE_JOB_KINDS = ("scope_enhance",)
+ALL_JOB_KINDS = (
+    JOB_KINDS + INTAKE_JOB_KINDS + DECISION_JOB_KINDS + INTERVIEW_JOB_KINDS + SCOPE_JOB_KINDS
+)
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 CLASSIFICATIONS = ("question", "change_request", "factual_correction", "approval", "other")
 SUGGESTION_KINDS = ("section_text", "answer", "none", "duplicate")
@@ -59,7 +64,7 @@ class LlmJob(TenantScoped, Base):
         CheckConstraint(_in("status", JOB_STATUSES), name="status"),
         CheckConstraint(
             "document_id IS NOT NULL OR intake_id IS NOT NULL OR decision_id IS NOT NULL "
-            "OR interview_id IS NOT NULL",
+            "OR interview_id IS NOT NULL OR scope_id IS NOT NULL",
             name="subject",
         ),
         Index("ix_llm_jobs_document_status", "document_id", "status"),
@@ -79,6 +84,9 @@ class LlmJob(TenantScoped, Base):
     )
     interview_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("interviews.id", ondelete="CASCADE"), index=True
+    )
+    scope_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("prd_scopes.id", ondelete="CASCADE"), index=True
     )
     version_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), index=True
