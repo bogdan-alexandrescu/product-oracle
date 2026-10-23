@@ -72,6 +72,10 @@ class KnobsIn(BaseModel):
     # goal trace covers them (422 for a goal that is not confirmed, or another flow).
     # Omitted on create: none (a run from a brief: the brief's goals); on PATCH: unchanged.
     goals: list[str] | None = Field(default=None, max_length=10)
+    # Build roadmap only (E1 part B, "Reuse items"): false derives the roadmap items again
+    # instead of reusing the approved version's draft items ("Derive the items again").
+    # Omitted on create: true; on PATCH: unchanged.
+    reuse_draft_items: bool | None = None
 
 
 class ReusedBaseline(BaseModel):
@@ -98,6 +102,9 @@ class KnobsOut(BaseModel):
     reuse_baseline: ReusedBaseline | None = None
     # The goals the run serves, in the order named (#260).
     goals: list[TargetGoal] = []
+    # Build roadmap (E1 part B): whether its items step reuses the source version's draft
+    # items when they are ready; null on other flows.
+    reuse_draft_items: bool | None = None
 
 
 class StrategyBriefIn(BaseModel):
@@ -221,6 +228,10 @@ class SegmentEstimate(BaseModel):
     # C4: the baseline segment of a run that uses the current baseline: $0.00, with the
     # note "Current baseline, approved Oct 12".
     reused: bool = False
+    # E1 part B: the roadmap_items segment of a Build roadmap run reusing the draft items
+    # of this PRD version: $0.00, with the note "Reused: the roadmap items of v3, derived
+    # 20 Oct".
+    reused_from_version: int | None = None
     note: str | None = None
 
 

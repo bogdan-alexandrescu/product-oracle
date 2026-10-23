@@ -165,6 +165,17 @@ rules as a roadmap's items.
   `read:documents`), `POST .../roadmap-items/derive` (approver+, 202; 409 while queued or
   running), `GET`/`PUT /v1/documents/{doc}/roadmap-items/settings` (`PUT`: owners).
   `VersionOut.draft_roadmap` carries `{status, items, problems}` for the tab label.
+- **Build roadmap reuses them** (part B, owner 2026-10-21, "Reuse items"). When a
+  `prd_to_roadmap` run's source version has a `ready` draft roadmap with at least one item
+  and no `wrong_prd` problem, its estimate shows the Roadmap items segment at $0.00 ("Reused:
+  the roadmap items of v3, derived 20 Oct"; $9.00 in all at standard instead of $14.50).
+  On start Oracle writes those items as the segment's `roadmap_items.yaml` (a refused date
+  is left out), records the segment succeeded at no cost with nothing submitted (audit
+  `run.items_reused`), and opens the Roadmap items stop on them at once (or, with that stop
+  off, goes straight to the roadmap draft). The knob `reuse_draft_items: false` ("Derive the
+  items again" in the Build roadmap dialog's advanced options) runs the items step as
+  before. A start after the draft items changed (Derive again, a new derivation) is refused
+  (409): estimate again.
 
 ## Plan screen (F1, c7 Plan rename)
 

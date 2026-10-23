@@ -185,3 +185,92 @@ test.describe("phone", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });
+
+// Card reuse-items (part B, "Reuse items"): protects = Build roadmap on an approved PRD
+// version whose draft items are ready shows the Roadmap items row reused at $0.00 and the
+// lower total, and ticking "Derive the items again" brings back the $5.50 row and the
+// higher total (AC21a); fails_when = the reused row costs anything, names no version, or
+// the advanced option does not change the estimate; no_claim = the run itself (the API's
+// test_draft_roadmaps_reuse.py) and the derivation's items (mocked).
+test("Build roadmap reuses the approved version's draft items, unless asked to derive them again", async ({ page }) => {
+  await login(page, "approver@example.com");
+  // usage-alerts v1 is approved and has no draft items yet: derive them first.
+  await page.goto("/documents/usage-alerts/v/1/roadmap");
+  await expect(status(page)).toHaveAttribute("data-status", "none");
+  await status(page).getByRole("button", { name: "Derive now" }).click();
+  await expect(status(page)).toHaveAttribute("data-status", "queued");
+  await tick(page);
+  await tick(page);
+  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+
+  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Build roadmap" });
+  await expect(dialog).toContainText("Usage alerts PRD v1");
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  const items = dialog.getByTestId("estimate-row-roadmap_items");
+  await expect(items).toHaveText(/^Roadmap items · reused from v1\s*\$0\.00$/);
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$9.00");
+
+  await dialog.getByText("Advanced options").click();
+  await dialog.getByRole("checkbox", { name: "Derive the items again" }).check();
+  // The estimate was for the other choice: estimate again.
+  await expect(dialog.getByTestId("estimate")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Re-estimate" }).click();
+  await expect(items).toHaveText(/^Roadmap items\s*\$5\.50$/);
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
+});
+
+// Card reuse-items-advanced: protects = the Build roadmap dialog offers "Advanced options" /
+// "Derive the items again" only when the approved version has ready draft items to reuse;
+// fails_when = the option shows on a version with none (it would change nothing); no_claim =
+// the estimate rows (the test above).
+test("Build roadmap offers Derive the items again only when the version has ready draft items", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await page.goto("/documents/usage-alerts/v/1/roadmap");
+  await expect(status(page)).toHaveAttribute("data-status", "none");
+  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
+  let dialog = page.getByRole("dialog", { name: "Build roadmap" });
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  await expect(dialog.getByTestId("estimate-row-roadmap_items")).toHaveText(/^Roadmap items\s*\$5\.50$/);
+  await expect(dialog.getByText("Advanced options")).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox", { name: "Derive the items again" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+
+  await status(page).getByRole("button", { name: "Derive now" }).click();
+  await tick(page);
+  await tick(page);
+  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
+  dialog = page.getByRole("dialog", { name: "Build roadmap" });
+  await expect(dialog.getByText("Advanced options")).toBeVisible();
+});
+
+// Card reuse-items-stale: protects = as the API, Start uses what the estimate reused and
+// refuses (409) when the draft items changed since, so the person estimates again;
+// fails_when = Start re-decides the reuse itself and starts a run whose cost differs from
+// the estimate shown; no_claim = the run page after the start.
+test("Start after the draft items changed since the estimate asks to estimate again", async ({ page, context }) => {
+  await login(page, "approver@example.com");
+  await page.goto("/documents/usage-alerts/v/1/roadmap");
+  await status(page).getByRole("button", { name: "Derive now" }).click();
+  await tick(page);
+  await tick(page);
+  await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
+  await page.getByRole("button", { name: "Build roadmap" }).filter({ visible: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Build roadmap" });
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$9.00");
+
+  // Meanwhile, in another tab, the same approver derives the items again.
+  const other = await context.newPage();
+  await other.goto("/documents/usage-alerts/v/1/roadmap");
+  await status(other).getByRole("button", { name: "Derive again" }).click();
+  await expect(status(other)).toHaveAttribute("data-status", "queued");
+  await other.close();
+
+  await dialog.getByRole("button", { name: "Start run" }).click();
+  await expect(dialog).toContainText("changed since the estimate");
+  await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1\/roadmap$/);
+  await dialog.getByRole("button", { name: "Re-estimate" }).click();
+  await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
+});

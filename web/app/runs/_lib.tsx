@@ -205,8 +205,11 @@ export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
       <table className="w-full text-[15px]">
         <tbody>
           {estimate.segments.map((s) => (
-            <tr key={s.seq}>
-              <td className="py-0.5 text-text">{s.title}</td>
+            <tr key={s.seq} data-testid={`estimate-row-${s.name}`}>
+              <td className="py-0.5 text-text">
+                {/* E1 part B: Build roadmap reuses the approved version's draft items. */}
+                {s.reused_from_version != null ? `${s.title} · reused from v${s.reused_from_version}` : s.title}
+              </td>
               <td className="tnum py-0.5 text-right font-mono text-sm text-text2">{usd(s.estimate_usd)}</td>
             </tr>
           ))}

@@ -20344,6 +20344,8 @@ export interface components {
             reuse_baseline?: boolean | null;
             /** Goals */
             goals?: string[] | null;
+            /** Reuse Draft Items */
+            reuse_draft_items?: boolean | null;
         };
         /** KnobsOut */
         KnobsOut: {
@@ -20368,6 +20370,8 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["TargetGoal"][];
+            /** Reuse Draft Items */
+            reuse_draft_items?: boolean | null;
         };
         /** KnowledgeGapOut */
         KnowledgeGapOut: {
@@ -27741,6 +27745,8 @@ export interface components {
              * @default false
              */
             reused: boolean;
+            /** Reused From Version */
+            reused_from_version?: number | null;
             /** Note */
             note?: string | null;
         };
