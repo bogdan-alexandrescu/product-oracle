@@ -16,7 +16,7 @@ from sqlalchemy.engine import make_url
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
 REVISION = "0032_interviews"
-BEFORE = "0029_discussion_replies"
+BEFORE = "0031_basis_verification"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_interviews")
