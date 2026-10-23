@@ -214,16 +214,19 @@ function Recorded({ occ }: { occ: Occurrence }) {
     <section data-testid="occurrence-notes" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
       <h2 className="mb-1 font-display text-[17px] font-bold">{occ.status === "held" ? "Notes" : "Skipped"}</h2>
       <p className="text-[15px] whitespace-pre-wrap">{(occ.status === "held" ? occ.notes : occ.skip_reason) || "No notes"}</p>
-      {occ.decision_ids.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1 text-sm">
-          {occ.decision_ids.map((d) => (
-            <li key={d}>
-              <Link href={`/company/decisions?d=${d}`} className="hover:underline">
-                Decision recorded with it
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {occ.status === "held" && occ.decisions.length > 0 && (
+        <div data-testid="occurrence-decisions" className="mt-3">
+          <h3 className="mb-1 text-sm font-semibold text-text2">Decisions</h3>
+          <ul className="flex flex-col gap-1 text-sm">
+            {occ.decisions.map((d) => (
+              <li key={d.id}>
+                <Link href={d.href} className="text-accent-ink hover:underline">
+                  D-{d.number} {d.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );

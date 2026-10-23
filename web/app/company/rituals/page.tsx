@@ -10,7 +10,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { RitualInspector } from "./_components/RitualInspector";
-import { estimateText, localDate, localTime, memberName, scheduleOf, whenText, zoneTime, type Ritual, type SummarySettings } from "./_components/lib";
+import { estimateText, localDate, localTime, personName, scheduleOf, whenText, zoneTime, type Ritual, type SummarySettings } from "./_components/lib";
 
 export default function RitualsPage() {
   return (
@@ -31,10 +31,16 @@ function Rituals() {
   const owner = hasRole(role, "owner");
   const ritualsQ = useQuery("rituals", () => unwrap(api.GET("/v1/rituals")));
   const settingsQ = useQuery("rituals|summaries", () => unwrap(api.GET("/v1/rituals/summaries")));
-  const membersQ = useQuery("rituals|members", () => unwrap(api.GET("/v1/members")));
+  // The owner's member pickers read the member list (owners only); every name on the page
+  // comes from the member directory, which everyone who sees the table may read.
+  const membersQ = useQuery(owner ? "rituals|members" : "rituals|members|none", () => (owner ? unwrap(api.GET("/v1/members")) : Promise.resolve(undefined)));
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const rows = ritualsQ.data ?? [];
+  const ownerIds = [...new Set(rows.map((r) => r.owner_id))].sort().join(",");
+  const peopleQ = useQuery(`rituals|people|${ownerIds}`, () =>
+    ownerIds ? unwrap(api.GET("/v1/people", { params: { query: { ids: ownerIds.split(",") } } })) : Promise.resolve([]),
+  );
   const selected = rows.find((r) => r.id === picked) ?? rows[0];
 
   async function changed(r?: Ritual) {
@@ -45,7 +51,7 @@ function Rituals() {
   const columns: Column<Ritual>[] = [
     { key: "title", header: "Ritual", phone: "title", cell: (r) => <span className="truncate font-medium">{r.title}</span> },
     { key: "when", header: "When", phone: "meta", cell: (r) => <span className="truncate text-sm">{whenText(scheduleOf(r.schedule))}</span> },
-    { key: "owner", header: "Owner", width: "180px", phone: "hide", cell: (r) => <span className="truncate text-sm">{memberName(membersQ.data, r.owner_id)}</span> },
+    { key: "owner", header: "Owner", width: "180px", phone: "hide", cell: (r) => <span className="truncate text-sm">{personName(peopleQ.data, r.owner_id)}</span> },
     { key: "attendees", header: "Attendees", width: "96px", phone: "hide", align: "right", cell: (r) => <span className="tnum text-sm">{r.attendee_ids.length}</span> },
     {
       key: "next",
@@ -114,7 +120,7 @@ function Rituals() {
       <Split
         inspector={
           selected ? (
-            <RitualInspector key={`${selected.id}|${selected.lock_version}`} ritual={selected} members={membersQ.data} canEdit={owner} onChanged={changed} />
+            <RitualInspector key={`${selected.id}|${selected.lock_version}`} ritual={selected} members={membersQ.data} people={peopleQ.data} canEdit={owner} onChanged={changed} />
           ) : undefined
         }
       >

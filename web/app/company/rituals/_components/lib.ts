@@ -6,6 +6,7 @@ export type Occurrence = Schemas["OccurrenceOut"];
 export type OccurrenceSummary = Schemas["OccurrenceSummary"];
 export type Schedule = Schemas["Schedule"];
 export type Member = Schemas["MemberOut"];
+export type Person = Schemas["PersonOut"];
 export type SummarySettings = Schemas["SummarySettingsOut"];
 
 export const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -103,4 +104,5 @@ export function estimateText(s: SummarySettings): string {
   return `About ${usd} a month (${n} ${n === 1 ? "summary" : "summaries"})`;
 }
 
-export const memberName = (members: Member[] | undefined, id: string) => members?.find((m) => m.id === id)?.email ?? "Someone";
+/** A person's name from the member directory (GET /v1/people), which every member may read. */
+export const personName = (people: Person[] | undefined, id: string) => people?.find((p) => p.user_id === id)?.name ?? "—";

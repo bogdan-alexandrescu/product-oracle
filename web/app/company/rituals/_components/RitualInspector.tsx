@@ -18,12 +18,13 @@ import {
   WEEKS,
   localDate,
   localTime,
-  memberName,
+  personName,
   presetOf,
   scheduleOf,
   whenText,
   zoneTime,
   type Member,
+  type Person,
   type Preset,
   type Ritual,
   type Schedule,
@@ -59,11 +60,13 @@ function withPreset(s: Schedule, preset: Preset): Schedule {
 export function RitualInspector({
   ritual,
   members,
+  people,
   canEdit,
   onChanged,
 }: {
   ritual: Ritual;
   members: Member[] | undefined;
+  people: Person[] | undefined;
   canEdit: boolean;
   onChanged: (r?: Ritual) => Promise<void>;
 }) {
@@ -156,7 +159,7 @@ export function RitualInspector({
           </InspectorRow>
         </InspectorSection>
         <InspectorSection label="People">
-          <InspectorRow value={memberName(members, ritual.owner_id)}>Owner</InspectorRow>
+          <InspectorRow value={personName(people, ritual.owner_id)}>Owner</InspectorRow>
           <InspectorRow value={ritual.attendee_ids.length}>Attendees</InspectorRow>
         </InspectorSection>
         {recent}
