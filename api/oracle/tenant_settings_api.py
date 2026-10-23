@@ -367,8 +367,10 @@ def validate_shared_drives(value: Any) -> list[dict[str, str]]:
 # --- API ----------------------------------------------------------------------------
 
 router = APIRouter(prefix="/v1", tags=["settings"])
-# Who becomes a member through Google sign-in (A5): refused to a run's agents.
-SIGN_IN_KEYS = ("iap_default_role", "sign_in_without_invite")
+# Who becomes a member through Google sign-in (A5): refused to a run's agents. Every
+# setting sign-in or membership reads: the role a sign-in joins with, the join rule, and
+# the company's domains (who may join under ``join`` or ask under ``request``).
+SIGN_IN_KEYS = ("iap_default_role", "sign_in_without_invite", "company_email_domains")
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 
 
