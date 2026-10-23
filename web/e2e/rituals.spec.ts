@@ -28,6 +28,7 @@ const badge = (page: Page) => page.getByTestId("app-nav").getByTestId("nav-inbox
 const ritualRow = (page: Page, title: string) => page.getByTestId("ritual-row").filter({ hasText: title });
 const inspector = (page: Page) => page.getByTestId("ritual-inspector").filter({ visible: true });
 const summaries = (page: Page) => page.getByTestId("ritual-summaries");
+const tab = (page: Page, name: string) => page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${name}`) });
 const ritualNeed = (page: Page, text: string) => page.getByTestId("inbox-rituals").locator("tr[data-row]").filter({ hasText: text });
 
 async function badgeCount(page: Page): Promise<number> {
@@ -37,9 +38,10 @@ async function badgeCount(page: Page): Promise<number> {
 
 async function openRituals(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
-  await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-rituals").click();
+  await expect(page).toHaveURL(/\/company\/strategy$/);
+  await page.getByTestId("company-tab-rituals").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/company\/rituals$/);
-  await expect(page.getByTestId("company-tab-rituals")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("company-tab-rituals").filter({ visible: true })).toHaveAttribute("aria-current", "page");
 }
 
 /** Opens a ritual's last pre-read from its Last pre-read link. */
@@ -58,7 +60,7 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await withRituals(page);
   await login(page);
   await openRituals(page);
-  await expect(page.getByRole("navigation", { name: "Company" }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates"]);
+  await expect(page.getByRole("navigation", { name: "Company" }).filter({ visible: true }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates"]);
   const row = ritualRow(page, "Monthly roadmap refresh");
   await expect(row).toContainText("First Tuesday of the month, 10:00");
   await row.click();
@@ -71,7 +73,9 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(row).toContainText("Last Friday of the month, 16:00");
   await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 12:00 PM");
-  await expect(page.locator("body")).not.toContainText(/workspace|tenant/i);
+  // Oracle's words: a company, never a workspace or tenant.
+  await expect(page.getByTestId("rituals-panel")).not.toContainText(/workspace|tenant/i);
+  await expect(panel).not.toContainText(/workspace|tenant/i);
 });
 
 test("12b: an attendee follows Pre-read ready to the occurrence; Tracks and Date slips show and the badge drops by 1", async ({ page }) => {
@@ -87,7 +91,7 @@ test("12b: an attendee follows Pre-read ready to the occurrence; Tracks and Date
   const before = await badgeCount(page);
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByTestId("company-tab-rituals")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("company-tab-rituals").filter({ visible: true })).toHaveAttribute("aria-current", "page");
   const blocks = page.getByTestId("ritual-block");
   await expect(blocks.filter({ hasText: "Tracks" }).first()).toContainText("Usage alerts PRD");
   await expect(blocks.filter({ hasText: "Date slips" })).toContainText("Threshold alerts beta");
@@ -110,6 +114,7 @@ test("12c: after the end time the owner records notes and marks it held; the Rec
   // The meeting ends Tue Nov 3 11:00 UTC; a day later:
   await page.clock.setSystemTime(new Date("2026-11-04T12:00:00Z"));
   await page.goto("/inbox");
+  await tab(page, "Open").click();
   const notes = ritualNeed(page, "Record notes · Monthly roadmap refresh");
   await expect(notes).toHaveCount(1);
   await notes.getByRole("link", { name: "Open" }).click();
@@ -119,7 +124,8 @@ test("12c: after the end time the owner records notes and marks it held; the Rec
   await expect(page.getByTestId("occurrence-state")).toHaveText("Held");
   await expect(page.getByTestId("occurrence-notes")).toContainText("Agreed to move threshold alerts to December.");
   await page.goto("/inbox");
-  await expect(page.getByTestId("inbox-tab-new")).toBeVisible();
+  await tab(page, "Open").click();
+  await expect(page.getByTestId("inbox-tab-open")).toBeVisible();
   await expect(ritualNeed(page, "Record notes")).toHaveCount(0);
 });
 
