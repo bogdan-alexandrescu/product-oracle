@@ -218,8 +218,12 @@ async def test_only_the_decider_approves_and_it_becomes_the_plan(client, owner, 
     plan = (await client.get("/v1/plan", params={"scope": "approved"}, headers=auth)).json()
     assert {i["roadmap"]["version"] for i in plan["items"]} == {1}
 
+    # The decider finds the proposal waiting.
+    (waiting,) = (await client.get(SETS, params={"status": "proposed"}, headers=decider)).json()
+    assert waiting["id"] == out["id"] and waiting["approved"] is False
     ok = await client.post(f"/v1/documents/{ROADMAP}/versions/2/approve", headers=decider)
     assert ok.status_code == 200, ok.text
+    assert (await client.get(f"{SETS}/{out['id']}", headers=auth)).json()["approved"] is True
     plan = (await client.get("/v1/plan", params={"scope": "approved"}, headers=auth)).json()
     assert [(i["key"], i["horizon"], i["roadmap"]["version"]) for i in plan["items"]] == [
         ("gift-cards", "next", 2),

@@ -7421,7 +7421,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Roadmap Change Sets
+         * @description The roadmap's change sets, newest first: the draft being edited, the proposals
+         *     waiting for the decider (``approved`` false) and the rest.
+         */
+        get: operations["list_roadmap_change_sets"];
         put?: never;
         /**
          * Open Roadmap Change Set
@@ -10982,6 +10987,11 @@ export interface components {
             };
             /** Proposed Version */
             proposed_version?: number | null;
+            /**
+             * Approved
+             * @default false
+             */
+            approved: boolean;
             /** Decider Id */
             decider_id?: string | null;
             /** Lock Version */
@@ -41706,6 +41716,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlignmentReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roadmap_change_sets: {
+        parameters: {
+            query?: {
+                status?: ("draft" | "proposed" | "discarded") | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetOut"][];
                 };
             };
             /** @description Validation Error */
