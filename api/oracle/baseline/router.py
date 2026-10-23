@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 
 from oracle import autonomy
 from oracle.auth.deps import Principal, TenantDB
@@ -57,6 +57,7 @@ from oracle.baseline.schemas import (
     LinkTarget,
     MeasurementCreate,
     MeasurementOut,
+    MergeIn,
     NodeStatus,
     OriginIn,
     ProposalAccept,
@@ -73,6 +74,9 @@ from oracle.baseline.schemas import (
     YamlImportResult,
 )
 from oracle.http import read_capped_body
+from oracle.runs import actions, review_file
+from oracle.runs.models import Checkpoint, Run
+from oracle.runs.schemas import FromRunCheckpoint, FromRunOut
 
 router = APIRouter(prefix="/v1/baseline", tags=["baseline"])
 
@@ -378,6 +382,77 @@ async def _set_status(db, principal, entity_id, status_, body) -> EntityOut:
         raise _fail(exc) from exc
     await db.commit()
     return (await _entities_out(db, [entity]))[0]
+
+
+@router.post(
+    "/entities/{entity_id}/merge",
+    response_model=EntityOut,
+    responses={409: {"description": "Not mergeable: the detail says why"}},
+)
+async def merge_entity(
+    entity_id: uuid.UUID, body: MergeIn, principal: ApproverNow, db: TenantDB
+) -> EntityOut:
+    """Merge into… (B2): a duplicate a run created goes into an item of the same type (its
+    evidence and edges move, its open proposals are rejected, it is deleted). Returns the
+    target."""
+    try:
+        source = await service.get_entity(db, entity_id)
+        into = await service.get_entity(db, body.into)
+        await service.merge_entity(db, principal, source, into, body.reason)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    return (await _entities_out(db, [into], principal))[0]
+
+
+@router.get("/from-run/{run_id}", response_model=FromRunOut)
+async def get_baseline_from_run(run_id: uuid.UUID, principal: Reader, db: TenantDB) -> FromRunOut:
+    """What a run wrote to the baseline, for a person to review (B2): every item it
+    created, changed or proposed a change to, with the reasons each needs a person and the
+    shared draft's actions on it; the run's Confirm the baseline stop with its gate; the
+    other proposed goals."""
+    from oracle.baseline import from_run
+
+    run = await db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(404, "Run not found")
+    cp = await db.scalar(
+        select(Checkpoint)
+        .where(Checkpoint.run_id == run.id, Checkpoint.kind == "baseline_confirm")
+        .order_by(Checkpoint.created_at.desc(), Checkpoint.id.desc())
+        .limit(1)
+    )
+    runs = await service.proposal_runs(db, [run.id])
+    checkpoint = None
+    acts = []
+    if cp is not None:
+        review = await actions.read(db, principal, run.id, cp.id)
+        acts = [a for i in review.items for a in i.actions]
+        names = await actions._people(db, [cp.decided_by] if cp.decided_by else [])
+        checkpoint = FromRunCheckpoint(
+            id=cp.id,
+            kind=cp.kind,  # type: ignore[arg-type]
+            status=cp.status,  # type: ignore[arg-type]
+            approver_role=cp.approver_role,
+            revision=review.revision,
+            can_suggest=review.can_suggest,
+            can_stage=review.can_stage,
+            can_decide=review.can_decide,
+            gate=review.gate,
+            note=cp.draft_note,
+            wait=review.wait,
+            decided_by_name=names[cp.decided_by].name if cp.decided_by in names else None,
+            decided_at=cp.decided_at,
+            review_note=review_file.look_again_note(cp.review) if cp.review else None,
+        )
+    built = await from_run.build(db, run.id, acts)
+    return FromRunOut(
+        run=runs[run.id],
+        checkpoint=checkpoint,
+        summary=built.summary,
+        rows=built.rows,
+        other_proposed_goals=built.other_proposed_goals,
+    )
 
 
 @router.post("/entities/{entity_id}/unlock", response_model=EntityOut)

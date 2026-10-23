@@ -11342,6 +11342,125 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/baseline/entities/{entity_id}/merge": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Merge Entity",
+        "description": "Merge into\u2026 (B2): a duplicate a run created goes into an item of the same type (its\nevidence and edges move, its open proposals are rejected, it is deleted). Returns the\ntarget.",
+        "operationId": "merge_entity",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/oracle__baseline__schemas__MergeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not mergeable: the detail says why"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/baseline/from-run/{run_id}": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Get Baseline From Run",
+        "description": "What a run wrote to the baseline, for a person to review (B2): every item it\ncreated, changed or proposed a change to, with the reasons each needs a person and the\nshared draft's actions on it; the run's Confirm the baseline stop with its gate; the\nother proposed goals.",
+        "operationId": "get_baseline_from_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FromRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/baseline/entities/{entity_id}/unlock": {
       "post": {
         "tags": [
@@ -32273,7 +32392,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MergeIn"
+                "$ref": "#/components/schemas/oracle__requests__schemas__MergeIn"
               }
             }
           }
@@ -55974,6 +56093,364 @@
         "title": "FreshnessCounts",
         "description": "Live items by age: fresh up to one half-life, aging up to two, stale older."
       },
+      "FromRunCheckpoint": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_confirm",
+              "feature_set",
+              "priority_order",
+              "prd_review",
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review",
+              "request_triage",
+              "strategy_review",
+              "launch_review",
+              "update_review"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "changes_requested",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "approver_role": {
+            "type": "string",
+            "title": "Approver Role"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
+          },
+          "can_suggest": {
+            "type": "boolean",
+            "title": "Can Suggest",
+            "default": false
+          },
+          "can_stage": {
+            "type": "boolean",
+            "title": "Can Stage",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/WaitInfo"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "approver_role",
+          "wait"
+        ],
+        "title": "FromRunCheckpoint",
+        "description": "The run's latest Confirm the baseline stop, as the caller may use it."
+      },
+      "FromRunEdges": {
+        "properties": {
+          "new": {
+            "type": "integer",
+            "title": "New",
+            "default": 0
+          },
+          "changed": {
+            "type": "integer",
+            "title": "Changed",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "FromRunEdges"
+      },
+      "FromRunMerge": {
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed"
+        ],
+        "title": "FromRunMerge"
+      },
+      "FromRunOut": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ProposalRun"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FromRunCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FromRunSummary"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/FromRunRow"
+            },
+            "type": "array",
+            "title": "Rows",
+            "default": []
+          },
+          "other_proposed_goals": {
+            "items": {
+              "$ref": "#/components/schemas/EntityOut"
+            },
+            "type": "array",
+            "title": "Other Proposed Goals",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "run",
+          "summary"
+        ],
+        "title": "FromRunOut",
+        "description": "GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a\nperson to review (B2). ``checkpoint`` null when the run never stopped at Confirm the\nbaseline."
+      },
+      "FromRunProposal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "FromRunProposal"
+      },
+      "FromRunRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/EntityOut"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "new",
+              "changed",
+              "proposal"
+            ],
+            "title": "Change"
+          },
+          "proposal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Proposal Ids",
+            "default": []
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/FromRunProposal"
+            },
+            "type": "array",
+            "title": "Proposals",
+            "default": []
+          },
+          "conflict_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Conflict Ids",
+            "default": []
+          },
+          "edges": {
+            "$ref": "#/components/schemas/FromRunEdges",
+            "default": {
+              "new": 0,
+              "changed": 0
+            }
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/RowReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewAction"
+            },
+            "type": "array",
+            "title": "Actions",
+            "default": []
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "needs_you",
+              "handled",
+              "waiting",
+              "fine"
+            ],
+            "title": "State"
+          },
+          "merge": {
+            "$ref": "#/components/schemas/FromRunMerge"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "entity",
+          "change",
+          "state",
+          "merge"
+        ],
+        "title": "FromRunRow",
+        "description": "One baseline item a run created (``new``), changed (``changed``) or proposed a\nchange to (``proposal``), as B2 Baseline review from this run lists it: its reasons\n(recomputed on every read), the shared draft's actions on its key and its state."
+      },
+      "FromRunSummary": {
+        "properties": {
+          "items": {
+            "type": "integer",
+            "title": "Items",
+            "default": 0
+          },
+          "need_you": {
+            "type": "integer",
+            "title": "Need You",
+            "default": 0
+          },
+          "not_decided": {
+            "type": "integer",
+            "title": "Not Decided",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "left_proposed": {
+            "type": "integer",
+            "title": "Left Proposed",
+            "default": 0
+          },
+          "other_proposed_goals": {
+            "type": "integer",
+            "title": "Other Proposed Goals",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "FromRunSummary"
+      },
       "GapCreate": {
         "properties": {
           "intake_id": {
@@ -65560,26 +66037,6 @@
         "type": "object",
         "title": "MemberPatch",
         "description": "A role, the engineering lead flag, or both (applied in one change, role first)."
-      },
-      "MergeIn": {
-        "properties": {
-          "lock_version": {
-            "type": "integer",
-            "title": "Lock Version"
-          },
-          "into_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Into Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "lock_version",
-          "into_id"
-        ],
-        "title": "MergeIn"
       },
       "MilestoneCreate": {
         "properties": {
@@ -77472,6 +77929,16 @@
             ],
             "title": "State"
           },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FromRunRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resolution": {
             "anyOf": [
               {
@@ -78349,6 +78816,18 @@
               }
             ],
             "title": "Reason"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           },
           "created_at": {
             "type": "string",
@@ -79511,6 +79990,91 @@
         ],
         "title": "RowOverride",
         "description": "The active move or pin that placed a row (C9)."
+      },
+      "RowReason": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "default": {}
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonFix"
+            },
+            "type": "array",
+            "title": "Fixes",
+            "default": []
+          },
+          "waivable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waivable"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "code",
+          "severity",
+          "label",
+          "text"
+        ],
+        "title": "RowReason",
+        "description": "B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's\nreasons read as they are stored."
       },
       "RunCreate": {
         "properties": {
@@ -95632,6 +96196,33 @@
         "type": "object",
         "title": "YamlImportResult"
       },
+      "oracle__baseline__schemas__MergeIn": {
+        "properties": {
+          "into": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Into"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "into"
+        ],
+        "title": "MergeIn",
+        "description": "Merge into\u2026 (B2): the item to merge the duplicate into, and why."
+      },
       "oracle__claude_accounts__router__AuthorizeOut": {
         "properties": {
           "authorize_url": {
@@ -95911,6 +96502,26 @@
         ],
         "title": "PredictionIn",
         "description": "A prediction a person writes: its typed figures must agree with each other."
+      },
+      "oracle__requests__schemas__MergeIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "into_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Into Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version",
+          "into_id"
+        ],
+        "title": "MergeIn"
       },
       "GoalAttrs": {
         "description": "The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).",

@@ -10,6 +10,7 @@ import { displayName } from "@/lib/names";
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
+import type { RowTally } from "./from-run";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -60,6 +61,16 @@ export interface RunsDb {
   drafts?: Record<string, DraftRow>;
 }
 
+/** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
+export interface BaselineReviewOf {
+  /** The approve gate's reasons: each goal from the run still proposed (goal_undecided). */
+  goals: GateReason[];
+  /** The Inbox row's counts (D9's summary). */
+  summary: RowTally;
+  /** item key -> title, for the send-back note. */
+  titles: Record<string, string>;
+}
+
 /** B1's Set up step: when the last Build the baseline run finished, or null when none succeeded. */
 export function lastBaselineBuild(db: RunsDb | undefined): string | null {
   if (!db) return null;
@@ -89,6 +100,8 @@ export interface RunsContext {
    * one is named). Absent: anyone may, as the mock had it.
    */
   mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
+  /** B2: the baseline's rows of a run under its shared draft's actions (absent: no goals rule). */
+  baselineReview?: (runId: string, actions: DraftActionRow[]) => BaselineReviewOf;
   /** D10: the designated decider of the document a run review reviews (its review policy), if any. */
   reviewDecider?: (c: CheckpointOut) => string | null;
   /**
@@ -523,14 +536,17 @@ const FEATURE_SET_FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_ver
 
 /** As oracle.runs.gate.waivable: what each kind's spec lets a waiver answer (C8: nothing). */
 function waivable(kind: string, code: string): boolean {
+  if (kind === "baseline_confirm") return code === "goal_undecided";
   if (kind === "roadmap_items") return !DATE_CODES.includes(code);
   if (kind === "feature_set") return !UNKNOWN_CODES.includes(code);
   return false;
 }
 
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
-type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"] };
-function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number } | null {
+export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"] };
+function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReason[]; files: number } | null {
+  // B2: Confirm the baseline's reasons are read live (a goal confirmed anywhere clears its own).
+  if (cp.kind === "baseline_confirm") return live ? { reasons: live, files: 0 } : null;
   if (cp.kind === "roadmap_items") {
     const check = (cp.payload?.items_check ?? null) as ItemsCheck | null;
     return { reasons: check?.reasons ?? [], files: check?.file_problems ?? 0 };
@@ -550,10 +566,11 @@ function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number }
  * As oracle.runs.gate.approve_gate: the stored blocking reasons a staged waiver does not
  * answer. D7: with `edits`, the gate Approve with edits re-checks: in the mock a staged edit
  * fixes the reasons it is a fix of (Remove date, Move to Later) and a drop the item's reasons.
- * A console approval applies no edits, so its gate is read without them.
+ * A console approval applies no edits, so its gate is read without them. B2: `live`, the
+ * reasons read live (Confirm the baseline's undecided goals).
  */
-function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
-  const blocking = cp.status === "pending" ? blockingOf(cp) : null;
+function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true, live?: GateReason[]): Schemas["Gate"] | null {
+  const blocking = cp.status === "pending" ? blockingOf(cp, live) : null;
   if (!blocking) return null;
   const waives = (x: GateReason) =>
     waivable(cp.kind, x.code) &&
@@ -573,13 +590,39 @@ export function cannotApproveNow(db: RunsDb | undefined, cp: CheckpointOut): str
   return cannotApprove(cp) ?? (gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null);
 }
 
+/** B2: the goals from the run nobody decided, at Confirm the baseline (the gate's live reasons). */
+function liveOf(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[]): GateReason[] | undefined {
+  return cp.kind === "baseline_confirm" ? ctx.baselineReview?.(cp.run_id, actions).goals : undefined;
+}
+
+/** The gate of `cp` now, with its live reasons. */
+function gateNow(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
+  return gateOf(cp, actions, edits, liveOf(ctx, cp, actions));
+}
+
+/**
+ * B2 (3.1 (7)): a Confirm the baseline send-back's note: the staged look-again actions, each
+ * with its item and note, then the shared draft's note as "General".
+ */
+function lookAgainNote(ctx: RunsContext, cp: CheckpointOut, staged: DraftActionRow[], note: string | null): string | null {
+  const looks = staged.filter((a) => a.kind === "look_again");
+  if (cp.kind !== "baseline_confirm" || !looks.length) return note;
+  const titles = ctx.baselineReview?.(cp.run_id, staged).titles ?? {};
+  const lines = looks.map((a) => {
+    const [type, key] = a.item_key.split(/:(.*)/);
+    const said = (a.value as { note?: string } | null)?.note ?? a.note ?? "";
+    return `- ${type} ${key} (${titles[a.item_key] ?? key})${said ? `: ${said}` : ""}`;
+  });
+  return ["Look again at these items:", ...lines, ...(note ? [`General: ${note}`] : [])].join("\n");
+}
+
 /**
  * The checkpoint with its gate, and Approve refused while the gate is closed (D3); D7: the
  * Approve button's words and the staged actions only the agents can carry out.
  */
 function gated(ctx: RunsContext, cp: CheckpointOut): CheckpointOut {
   const actions = ctx.db.drafts?.[cp.id]?.actions ?? [];
-  const gate = gateOf(cp, actions);
+  const gate = gateNow(ctx, cp, actions);
   const closed = gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null;
   return { ...cp, gate, cannot_approve: cp.cannot_approve ?? closed, approve_label: approveLabel(editsOf(cp, actions).length), needs_agents: needsAgentsOf(cp, actions) };
 }
@@ -1728,7 +1771,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const confirming = decision === "confirm" && cp.console?.needs === "confirm" && cp.console.verdict === "MERGE";
     if (decision === "confirm" && !confirming) return fail(422, "nothing recorded in SwarmCloud's console waits to be confirmed here");
     // W5: a console approval applies no staged edits, so its gate reads none.
-    const gate = gateOf(cp, draft.actions, !confirming);
+    const gate = gateNow(ctx, cp, draft.actions, !confirming);
     if ((decision === "approved" || confirming) && gate && !gate.open) {
       const n = gate.blocking_open + gate.file_problems;
       if (edits.length) {
@@ -1749,14 +1792,17 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return json(409, { detail: { code: "edits_leave_problems", message, left: [] } });
     }
     // D8: the note defaults to the shared draft's.
-    const text = (note ?? draft.note)?.trim() || null;
+    const general = (note ?? draft.note)?.trim() || null;
+    // D4: a send-back says something: a staged action or a note.
+    const staged = draft.actions.filter((a) => a.state === "staged");
+    // B2: Confirm the baseline sends its staged look-again actions as one structured note.
+    const text = decision === "changes_requested" ? lookAgainNote(ctx, cp, staged, general) : general;
     // D10: a run review sends back the document's own feedback; the note is optional.
     const reviewed = reviewedVersion(cp);
     if (decision === "changes_requested" && !text && reviewed && !sendBackEntries(ctx, reviewed.document_id, reviewed.version)) {
       return fail(422, "Nothing to send back: comment, request changes on a section, or write a note.");
     }
     // D4: any other send-back says something: a staged action or a note.
-    const staged = draft.actions.filter((a) => a.state === "staged");
     if (decision === "changes_requested" && !text && !reviewed && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
@@ -2187,6 +2233,46 @@ export function seedEngReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   return r;
 }
 
+/** The run the "baseline-review" scenarios seed (B2). */
+export const BASELINE_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
+
+/**
+ * The "baseline-review" scenarios (B2): a Build the baseline run of Oct 20 waiting at Confirm
+ * the baseline (./from-run.ts seeds what it wrote to the baseline). `consoleHeld`: approved in
+ * SwarmCloud's console while its goals are undecided, so Oracle holds it (D3 "Console gate").
+ */
+export function seedBaselineReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">, consoleHeld = false): RunOut {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline", "", {}, "2026-10-20T16:14:00Z");
+  r.id = BASELINE_REVIEW_RUN;
+  Object.assign(r, { document_id: null, document_slug: null });
+  from(r.created_at);
+  launch(full, r);
+  tick(full);
+  const cp = r.checkpoints.find((c) => c.status === "pending")!;
+  cp.run_id = r.id;
+  if (consoleHeld) {
+    cp.console = {
+      answered_by: "lead@example.com",
+      answered_at: "2026-10-20T17:00:00Z",
+      via: null,
+      verdict: "MERGE",
+      findings: [],
+      counted: true,
+      reason: CONSOLE_HELD,
+      needs: "confirm",
+      revise: false,
+      can_redo: false,
+    };
+    r.token_read_only = true;
+  }
+  refresh(r);
+  db.runs.push(r);
+  return r;
+}
+
 /** D10 "run-review" scenario: a Baseline to PRD run waiting at its PRD review of the Usage alerts PRD's v2. */
 export const RUN_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000da";
 
@@ -2203,6 +2289,41 @@ export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   refresh(r);
   db.runs.push(r);
   return r;
+}
+
+/** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */
+export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schemas["ProposalRun"]; checkpoint: Schemas["FromRunCheckpoint"] | null; actions: Schemas["ReviewAction"][] } | null {
+  const r = ctx.db.runs.find((x) => x.id === runId);
+  if (!r) return null;
+  const run = { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at };
+  const cp = r.checkpoints.filter((c) => c.kind === "baseline_confirm").pop();
+  if (!cp) return { run, checkpoint: null, actions: [] };
+  const role = ctx.member?.role ?? ctx.userRole ?? null;
+  const draft = draftOf(ctx, cp.id);
+  const review = reviewOut(ctx, r, cp, draft, role);
+  const people = new Map((ctx.members ?? []).map((x) => [x.id, x]));
+  const decider = cp.decided_by ? people.get(cp.decided_by) : undefined;
+  const pending = cp.status === "pending";
+  return {
+    run,
+    checkpoint: {
+      id: cp.id,
+      kind: cp.kind,
+      status: cp.status,
+      approver_role: cp.approver_role,
+      revision: draft.revision,
+      can_suggest: review.can_suggest,
+      can_stage: review.can_stage,
+      can_decide: review.can_decide && (!ctx.mayDecide || ctx.mayDecide(cp, r.flow)),
+      gate: review.gate,
+      note: draft.note,
+      wait: review.wait,
+      decided_by_name: cp.decided_by ? displayName(decider?.email ?? ctx.userName ?? "admin@example.com") : null,
+      decided_at: cp.decided_at ?? null,
+      review_note: !pending && cp.status === "changes_requested" ? (cp.note ?? null) : null,
+    },
+    actions: pending ? review.items.flatMap((i) => i.actions) : [],
+  };
 }
 
 /** The runs the "priority-order" scenario seeds (C8). */
@@ -2806,6 +2927,11 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
       if ((a.answers ?? []).some((code) => !waivable(cp.kind, code))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
       if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
+      // B2: Leave proposed is for a goal from this run nobody decided, with a reason.
+      if (cp.kind === "baseline_confirm") {
+        if (!liveOf(ctx, cp, draft.actions)?.some((x) => x.item === a.item_key)) return fail(422, "only an undecided goal from this run is waived (Leave proposed)");
+        if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
+      }
     }
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
@@ -2903,7 +3029,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     can_suggest: pending && atLeast(role, "commenter"),
     can_stage: stages,
     can_decide: stages,
-    gate: gateOf(cp, draft.actions),
+    gate: gateNow(ctx, cp, draft.actions),
     diff: check?.diff ?? null,
   };
 }
@@ -3048,9 +3174,17 @@ function determined(kind: string, field: string | null | undefined, value: unkno
 
 /** As oracle.runs.actions.inbox_summary: the review's tally and up to three items still needing me, blocking first. */
 function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["InboxSummary"] | null {
-  if (cp.kind !== "roadmap_items") return null;
+  if (cp.kind !== "roadmap_items" && cp.kind !== "baseline_confirm") return null;
   const role = ctx.member?.role ?? ctx.userRole ?? null;
-  const review = reviewOut(ctx, r, cp, ctx.db.drafts?.[cp.id] ?? { revision: 0, note: null, actions: [], log: [] }, role);
+  const draft = ctx.db.drafts?.[cp.id] ?? { revision: 0, note: null, actions: [], log: [] };
+  const review = reviewOut(ctx, r, cp, draft, role);
+  if (cp.kind === "baseline_confirm") {
+    // B2: Confirm the baseline's counts, read from the run's rows.
+    const t = ctx.baselineReview?.(r.id, draft.actions).summary;
+    if (!t) return null;
+    const none = { waiting_on: 0, children: [], more: 0, title: null, source: null, sections: null };
+    return { ...t, ...none, wait: review.wait, console_held: cp.console?.needs === "confirm" && t.blocking > 0 };
+  }
   const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
     a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code));
   const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];

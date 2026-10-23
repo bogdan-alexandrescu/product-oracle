@@ -93,8 +93,20 @@ def _priority_order(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return _problems((cp.payload or {}).get("priority_check"))
 
 
+def _live(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
+    """A kind whose reasons are read live, not stored (:data:`LIVE_KINDS`)."""
+    return [], 0
+
+
+# B2 Baseline review from this run: the goals a run proposed are its blocking reasons, read
+# as of now (oracle.baseline.from_run.gate_reasons: a goal confirmed anywhere clears its
+# reason), so every reader passes them as ``reasons``.
+LIVE_KINDS = frozenset({"baseline_confirm"})
+GOAL_NOT_WAIVED = "only an undecided goal from this run is waived (Leave proposed)"
+
 # The spec owning each checkpoint kind registers its blocking reasons here.
 BLOCKING_SOURCES: dict[str, Source] = {
+    "baseline_confirm": Source(_live, frozenset(), GOAL_NOT_WAIVED),
     "roadmap_items": Source(_roadmap_items, DATE_CODES, DATE_NOT_WAIVED),
     # C6 (as last re-checked at approval, oracle.runs.service._recheck_scope).
     "feature_set": Source(_feature_set, UNKNOWN_CODES, UNKNOWN_NOT_WAIVED),

@@ -1001,7 +1001,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       ? summary.need_you === 0 && summary.blocking === 0
         ? "Roadmap items · ready to approve"
         : `Roadmap items · ${summary.need_you} need you`
-      : CHECKPOINT_LABEL[c.kind];
+      : c.kind === "baseline_confirm" && summary
+        ? // B2: Confirm the baseline's counts, read from the run's rows.
+          `${CHECKPOINT_LABEL[c.kind]} · ${summary.need_you} need you · ${summary.blocking} not decided`
+        : CHECKPOINT_LABEL[c.kind];
     const from = counted && summary.source ? `from ${summary.source.title} v${summary.source.version}` : null;
     const wait = summary?.wait;
     const review = `/runs/${c.run_id}#decide`;
@@ -1055,7 +1058,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       run: shortId(c.run_id),
       at: c.created_at,
       left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
-      action: isHeld(c) ? (
+      action: c.kind === "baseline_confirm" ? (
+        // B2: the run's review opens in the Baseline, filtered to the run.
+        <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
+      ) : isHeld(c) ? (
         // The run page's checkpoint row, until the kind's review screen ships (D1).
         <LinkButton href={review}>Review</LinkButton>
       ) : counted ? (

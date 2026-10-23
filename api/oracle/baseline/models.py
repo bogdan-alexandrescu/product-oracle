@@ -227,6 +227,8 @@ class EntityRevision(TenantScoped, Base):
     # Audit actor string: "user:<uuid>", "token:<uuid>", "run:<uuid>" or "system".
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text)
+    # The run whose write made it (B2: a run's merge); null for a person's edits.
+    run_id: Mapped[uuid.UUID | None] = _run_fk()
 
 
 class Proposal(TenantScoped, Base):

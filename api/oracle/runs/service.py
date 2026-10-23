@@ -811,16 +811,18 @@ def _checkpoint_out(
     flow: str,
     leads: frozenset[uuid.UUID],
     staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
+    live: dict[uuid.UUID, list[dict[str, Any]]] | None = None,
     open_questions: set[uuid.UUID] | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
     ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
     ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate);
+    ``live``: :func:`_live_reasons` of the checkpoints read;
     ``open_questions``: :func:`_open_questions` of those (D7: what needs the agents)."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
     mine = (staged or {}).get(cp.id, []) if cp.status == "pending" else []
-    shut = gate.approve_gate(cp, None, mine) if cp.status == "pending" else None
+    shut = gate.approve_gate(cp, (live or {}).get(cp.id), mine) if cp.status == "pending" else None
     edits = cp.kind in apply_edits.FILES
     blocked = apply_edits.needs_agents(mine, open_questions or set()) if edits else []
     return CheckpointOut(
@@ -886,10 +888,25 @@ async def _staged_actions(
     return out
 
 
+async def _live_reasons(
+    db: AsyncSession, checkpoints: list[Checkpoint]
+) -> dict[uuid.UUID, list[dict[str, Any]]]:
+    """The blocking reasons of the pending checkpoints whose kind reads them live (B2:
+    the goals a run proposed and nobody decided, at Confirm the baseline)."""
+    from oracle.baseline import from_run
+
+    out: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for c in checkpoints:
+        if c.status == "pending" and c.kind in gate.LIVE_KINDS:
+            out[c.id] = await from_run.gate_reasons(db, c.run_id)
+    return out
+
+
 async def approve_gate_of(db: AsyncSession, cp: Checkpoint) -> Gate | None:
-    """The approve gate of ``cp`` now (D3): its stored blocking reasons and staged actions."""
+    """The approve gate of ``cp`` now (D3): its blocking reasons and staged actions."""
     staged = await _staged_actions(db, [cp])
-    return gate.approve_gate(cp, None, staged.get(cp.id, []))
+    live = await _live_reasons(db, [cp])
+    return gate.approve_gate(cp, live.get(cp.id), staged.get(cp.id, []))
 
 
 def blocking_open(shut: Gate) -> RunError:
@@ -1071,6 +1088,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
+    live = await _live_reasons(db, checkpoints)
     asked = await _open_questions(db, staged)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
@@ -1111,7 +1129,14 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
             _checkpoint_out(
-                c, principal, names, flow=run.flow, leads=leads, staged=staged, open_questions=asked
+                c,
+                principal,
+                names,
+                flow=run.flow,
+                leads=leads,
+                staged=staged,
+                live=live,
+                open_questions=asked,
             )
             for c in checkpoints
         ],
@@ -9293,6 +9318,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
+    live = await _live_reasons(db, mine)
     asked = await _open_questions(db, staged)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
@@ -9319,6 +9345,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 flow=run.flow,
                 leads=leads,
                 staged=staged,
+                live=live,
                 open_questions=asked,
             ).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]

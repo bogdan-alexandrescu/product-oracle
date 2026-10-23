@@ -17,24 +17,30 @@ import { goalTags, KPI_PHONE } from "./_components/common";
 import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
+import { FromRunBand, FromRunTab, RowActions, WhyCard } from "./_components/FromRunTab";
 import { fillNotice } from "./_components/goal-fields";
 import { GraphTab } from "./_components/GraphTab";
 import { ItemsTab } from "./_components/ItemsTab";
 import { fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
-type Tab = "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
-const TABS: readonly Tab[] = ["graph", "items", "flagged", "conflicts", "proposals", "blockers"];
+type Tab = "from-run" | "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
+const TABS: readonly Tab[] = ["from-run", "graph", "items", "flagged", "conflicts", "proposals", "blockers"];
 
-/** ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review links here). */
-function TabFromUrl({ onTab, onFrom }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void }) {
+/**
+ * ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review
+ * links here) and, without a tab, opens From this run (B2: the Inbox's and the run page's Review).
+ */
+function TabFromUrl({ onTab, onFrom, onRun }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void; onRun: (run: string) => void }) {
   const params = useSearchParams();
   const tab = params.get("tab");
   const run = params.get("run") ?? "";
   useEffect(() => {
     if (tab && (TABS as readonly string[]).includes(tab)) onTab(tab as Tab);
-  }, [tab, onTab]);
+    else if (!tab && run && run !== "none") onTab("from-run");
+  }, [tab, run, onTab]);
   useEffect(() => onFrom(run), [run, onFrom]);
+  useEffect(() => onRun(run && run !== "none" ? run : ""), [run, onRun]);
   return null;
 }
 
@@ -75,6 +81,13 @@ export default function BaselinePage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("graph");
   const [from, setFrom] = useState<FromFilter>("");
+  // B2: the run whose review this is (?run=), and what it wrote to the baseline.
+  const [runId, setRunId] = useState("");
+  const fromRun = useQuery(
+    `baseline-from-run:${runId}`,
+    () => (runId ? unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })) : Promise.resolve(null)),
+    { keepPrevious: true },
+  );
   // Every open proposal (the tab's count and the From select's runs), and the From filter's.
   const proposals = useQuery("baseline-proposals", () =>
     unwrap(api.GET("/v1/baseline/proposals", { params: { query: { status: "open" } } })),
@@ -122,9 +135,10 @@ export default function BaselinePage() {
   const { reload: reloadProposals } = proposals;
   const { reload: reloadFiltered } = filtered;
   const { reload: reloadBlockers } = blockers;
+  const { reload: reloadFromRun } = fromRun;
   const refresh = useCallback(() => {
-    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers()]);
-  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers]);
+    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers(), reloadFromRun()]);
+  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers, reloadFromRun]);
   // #337: Add item, on the kind the button that opened it names.
   const [adding, setAdding] = useState<AddKind | null>(null);
   const added = (message: string) => {
@@ -226,7 +240,9 @@ export default function BaselinePage() {
     });
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
+  const view = runId ? fromRun.data : null;
   const tabs: TabItem<Tab>[] = [
+    ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
@@ -235,6 +251,7 @@ export default function BaselinePage() {
     { id: "blockers", label: "Blockers", count: blockers.data?.length, kind: "warn" },
   ];
   const openEntity = openId ? graph.data?.entities.find((e) => e.id === openId) : undefined;
+  const openRow = openEntity && view ? view.rows.find((r) => r.entity.id === openEntity.id) : undefined;
   const low = trace.data?.low;
   const tags = useMemo(() => goalTags(graph.data), [graph.data]);
   // The From select's runs: each run with open proposals, newest first, and the one chosen.
@@ -271,7 +288,7 @@ export default function BaselinePage() {
     <Page>
       <Suspense fallback={null}>
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
-        <TabFromUrl onTab={setTab} onFrom={setFrom} />
+        <TabFromUrl onTab={setTab} onFrom={setFrom} onRun={setRunId} />
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
       {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
@@ -333,6 +350,15 @@ export default function BaselinePage() {
               onChanged={refresh}
               promote={promoteId === openEntity.id}
               onOpenBlocker={blockers.data?.some((b) => b.id === openEntity.id) ? () => openBlocker(openEntity.id) : undefined}
+              why={
+                openRow &&
+                view && (
+                  <WhyCard
+                    row={openRow}
+                    fixes={<RowActions view={view} row={openRow} entities={graph.data?.entities ?? []} busy={busy} act={act} onOpen={openItem} inDrawer />}
+                  />
+                )
+              }
             />
             )
           )
@@ -343,6 +369,8 @@ export default function BaselinePage() {
         </div>
 
         {build && <BuildBanner build={build} />}
+        {view && <FromRunBand view={view} />}
+        {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
 
         <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
 
@@ -350,6 +378,9 @@ export default function BaselinePage() {
         {notice && <Notice>{notice}</Notice>}
 
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="flex min-w-0 flex-col gap-4">
+          {tab === "from-run" && view && (
+            <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
+          )}
           {tab === "graph" && (
             <>
               {graph.error && <Notice tone="error">{graph.error}</Notice>}

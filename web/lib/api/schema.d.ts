@@ -3368,6 +3368,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{entity_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Entity
+         * @description Merge into… (B2): a duplicate a run created goes into an item of the same type (its
+         *     evidence and edges move, its open proposals are rejected, it is deleted). Returns the
+         *     target.
+         */
+        post: operations["merge_entity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/from-run/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Baseline From Run
+         * @description What a run wrote to the baseline, for a person to review (B2): every item it
+         *     created, changed or proposed a change to, with the reasons each needs a person and the
+         *     shared draft's actions on it; the run's Confirm the baseline stop with its gate; the
+         *     other proposed goals.
+         */
+        get: operations["get_baseline_from_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/entities/{entity_id}/unlock": {
         parameters: {
             query?: never;
@@ -17368,6 +17413,197 @@ export interface components {
             /** Stale */
             stale: number;
         };
+        /**
+         * FromRunCheckpoint
+         * @description The run's latest Confirm the baseline stop, as the caller may use it.
+         */
+        FromRunCheckpoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /** Approver Role */
+            approver_role: string;
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+            /**
+             * Can Suggest
+             * @default false
+             */
+            can_suggest: boolean;
+            /**
+             * Can Stage
+             * @default false
+             */
+            can_stage: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            gate?: components["schemas"]["Gate"] | null;
+            /** Note */
+            note?: string | null;
+            wait: components["schemas"]["WaitInfo"];
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Review Note */
+            review_note?: string | null;
+        };
+        /** FromRunEdges */
+        FromRunEdges: {
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Changed
+             * @default 0
+             */
+            changed: number;
+        };
+        /** FromRunMerge */
+        FromRunMerge: {
+            /** Allowed */
+            allowed: boolean;
+            /** Why Not */
+            why_not?: string | null;
+        };
+        /**
+         * FromRunOut
+         * @description GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+         *     person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
+         *     baseline.
+         */
+        FromRunOut: {
+            run: components["schemas"]["ProposalRun"];
+            checkpoint?: components["schemas"]["FromRunCheckpoint"] | null;
+            summary: components["schemas"]["FromRunSummary"];
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["FromRunRow"][];
+            /**
+             * Other Proposed Goals
+             * @default []
+             */
+            other_proposed_goals: components["schemas"]["EntityOut"][];
+        };
+        /** FromRunProposal */
+        FromRunProposal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * FromRunRow
+         * @description One baseline item a run created (``new``), changed (``changed``) or proposed a
+         *     change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+         *     (recomputed on every read), the shared draft's actions on its key and its state.
+         */
+        FromRunRow: {
+            /** Key */
+            key: string;
+            entity: components["schemas"]["EntityOut"];
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "new" | "changed" | "proposal";
+            /**
+             * Proposal Ids
+             * @default []
+             */
+            proposal_ids: string[];
+            /**
+             * Proposals
+             * @default []
+             */
+            proposals: components["schemas"]["FromRunProposal"][];
+            /**
+             * Conflict Ids
+             * @default []
+             */
+            conflict_ids: string[];
+            /**
+             * @default {
+             *       "new": 0,
+             *       "changed": 0
+             *     }
+             */
+            edges: components["schemas"]["FromRunEdges"];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["RowReason"][];
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["ReviewAction"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "needs_you" | "handled" | "waiting" | "fine";
+            merge: components["schemas"]["FromRunMerge"];
+        };
+        /** FromRunSummary */
+        FromRunSummary: {
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
+            /**
+             * Need You
+             * @default 0
+             */
+            need_you: number;
+            /**
+             * Not Decided
+             * @default 0
+             */
+            not_decided: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Left Proposed
+             * @default 0
+             */
+            left_proposed: number;
+            /**
+             * Other Proposed Goals
+             * @default 0
+             */
+            other_proposed_goals: number;
+        };
         /** GapCreate */
         GapCreate: {
             /**
@@ -20992,16 +21228,6 @@ export interface components {
             role?: ("viewer" | "commenter" | "approver" | "owner") | null;
             /** Engineering Lead */
             engineering_lead?: boolean | null;
-        };
-        /** MergeIn */
-        MergeIn: {
-            /** Lock Version */
-            lock_version: number;
-            /**
-             * Into Id
-             * Format: uuid
-             */
-            into_id: string;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -25283,6 +25509,7 @@ export interface components {
              * @enum {string}
              */
             state: "needs_you" | "handled" | "waiting" | "fine";
+            baseline?: components["schemas"]["FromRunRow"] | null;
             resolution?: components["schemas"]["ResolutionEntry"] | null;
             /**
              * Diff
@@ -25638,6 +25865,8 @@ export interface components {
             actor: string;
             /** Reason */
             reason?: string | null;
+            /** Run Id */
+            run_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -26013,6 +26242,44 @@ export interface components {
             position?: number | null;
             /** Created At */
             created_at?: string | null;
+        };
+        /**
+         * RowReason
+         * @description B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's
+         *     reasons read as they are stored.
+         */
+        RowReason: {
+            /** Item */
+            item: string;
+            /** Item Title */
+            item_title?: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "confirm";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /**
+             * Data
+             * @default {}
+             */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Fixes
+             * @default []
+             */
+            fixes: components["schemas"]["ReasonFix"][];
+            /** Waivable */
+            waivable?: boolean | null;
+            /** Detail */
+            detail?: string | null;
         };
         /** RunCreate */
         RunCreate: {
@@ -31601,6 +31868,19 @@ export interface components {
              */
             notes: components["schemas"]["ImportIssue"][];
         };
+        /**
+         * MergeIn
+         * @description Merge into… (B2): the item to merge the duplicate into, and why.
+         */
+        oracle__baseline__schemas__MergeIn: {
+            /**
+             * Into
+             * Format: uuid
+             */
+            into: string;
+            /** Reason */
+            reason?: string | null;
+        };
         /** AuthorizeOut */
         oracle__claude_accounts__router__AuthorizeOut: {
             /** Authorize Url */
@@ -31671,6 +31951,16 @@ export interface components {
             predicted_value?: number | null;
             /** Threshold Value */
             threshold_value?: number | null;
+        };
+        /** MergeIn */
+        oracle__requests__schemas__MergeIn: {
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Into Id
+             * Format: uuid
+             */
+            into_id: string;
         };
         /**
          * GoalAttrs
@@ -38357,6 +38647,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["oracle__baseline__schemas__MergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Not mergeable: the detail says why */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_baseline_from_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FromRunOut"];
                 };
             };
             /** @description Validation Error */
@@ -49472,7 +49835,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MergeIn"];
+                "application/json": components["schemas"]["oracle__requests__schemas__MergeIn"];
             };
         };
         responses: {
