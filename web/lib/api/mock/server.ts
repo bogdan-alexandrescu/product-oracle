@@ -37,7 +37,7 @@ import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, typ
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { ALERTS_ROADMAP_SLUG, DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -1487,7 +1487,7 @@ function load(): Db {
           ? seedBigPrd
           : scenario === "feature-set"
             ? seedFeatureSet
-          : scenario === "eng-review"
+          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
@@ -2832,8 +2832,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     userId: me.id,
     role: me.role,
     engineeringLead: engineeringLeads(db).includes(me.id),
+    leadNamed: engineeringLeads(db).length > 0,
     documents: db.documents,
     versions: db.versions,
+    approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
   };
   db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
   db.plan_edits ??= emptyPlanEdits();
@@ -2903,6 +2905,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     const strategy = inboxStrategy(db.strategy, me.role);
     const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
     const open = did.filter((a) => a.counts).length;
+    // F3: proposed date bases, for the engineering leads (and owners while none is named).
+    const leads = engineeringLeads(db);
+    const verifiesDates = (leads.includes(me.id) && atLeast(me.role, "commenter")) || (me.role === "owner" && !leads.length);
+    const dates =
+      verifiesDates && db.roadmap
+        ? db.roadmap.bases
+            .filter((b) => b.status === "proposed")
+            .flatMap((b) => {
+              const prd = db.documents.find((d) => d.id === b.prd_document_id);
+              return prd ? [{ ...b, prd: { id: prd.id, slug: prd.slug, title: prd.title } }] : [];
+            })
+        : [];
     return json(200, {
       ...inbox,
       revoke_failures: failures,
@@ -2911,7 +2925,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       report_failures: reported.report_failures,
       strategy,
       oracle_actions: did,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open,
+      dates,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length,
     });
   }
   if (runs) return runs;

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
+import { DateMarker } from "@/components/DateMarker";
 import { withCodes } from "@/components/ds/CodeChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
 import type { CitationOut, DateMarkOut } from "@/lib/api/client";
@@ -139,23 +140,8 @@ function escapeRe(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** The marker after a date that rests on no verified basis (not part of the anchored text). */
-export function DateMarker({ mark }: { mark: DateMarkOut }) {
-  return (
-    <span
-      {...ignore}
-      className="date-mark"
-      data-date-mark={mark.status}
-      title={
-        mark.status === "withdrawn"
-          ? `The basis of this date (${mark.bases.join(", ")}) was withdrawn`
-          : "No verified estimate, capacity or commitment of the PRD supports this date"
-      }
-    >
-      {mark.label}
-    </span>
-  );
-}
+// F3: the marker opens a popover (./DateMarker).
+export { DateMarker };
 
 /**
  * Text (prose, a code span or a code block) with the marker after each flagged date (O4

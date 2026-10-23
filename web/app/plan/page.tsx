@@ -126,7 +126,7 @@ export default function PlanPage() {
       }}
     />
   ) : item ? (
-    <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} links={links} />
+    <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} links={links} onChanged={reload} />
   ) : undefined;
 
   return (

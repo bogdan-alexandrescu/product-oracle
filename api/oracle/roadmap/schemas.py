@@ -14,7 +14,7 @@ TrackStatus = Literal["active", "paused", "closed"]
 TrackHealth = Literal["on_track", "at_risk", "off_track", "no_roadmap", "paused", "closed"]
 MilestoneStatus = Literal["planned", "done", "dropped"]
 BasisKind = Literal["estimate", "capacity", "commitment"]
-BasisStatus = Literal["verified", "withdrawn"]
+BasisStatus = Literal["verified", "proposed", "withdrawn", "rejected"]
 Tracker = Literal["linear", "jira", "github", "other"]
 TrackerState = Literal["todo", "in_progress", "done", "cancelled", "unknown"]
 ItemView = Literal["brief", "full"]
@@ -39,9 +39,10 @@ class DocumentRef(BaseModel):
 
 
 class ScheduleBasisCreate(BaseModel):
-    """A verified estimate, capacity figure or commitment. Recording it is the
-    verification: the approver says this source supports this date, for this PRD's
-    roadmap items (O4)."""
+    """An estimate, capacity figure or commitment supporting a date for this PRD's roadmap
+    items (O4). The recorder's rights decide its status (F3): an engineering lead or an
+    owner (an approver while no lead is named) verifies it by recording it; an approver's
+    waits as proposed for a lead."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -56,6 +57,7 @@ class ScheduleBasisCreate(BaseModel):
     item_key: str | None = Field(None, min_length=1, max_length=200, pattern=r"\S")
     tracker_key: str | None = Field(None, min_length=1, max_length=200, pattern=r"\S")
     tracker_record_id: uuid.UUID | None = None
+    note: str | None = Field(None, max_length=2000)
 
     @model_validator(mode="after")
     def _one_key(self) -> "ScheduleBasisCreate":
@@ -70,6 +72,18 @@ class ScheduleBasisWithdraw(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+class ScheduleBasisVerify(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(None, max_length=2000)
+
+
+class ScheduleBasisReject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000, pattern=r"\S")
+
+
 class ScheduleBasisOut(ORM):
     id: uuid.UUID
     kind: BasisKind
@@ -81,11 +95,61 @@ class ScheduleBasisOut(ORM):
     tracker_key: str | None
     tracker_record_id: uuid.UUID | None
     status: BasisStatus
+    note: str | None = None
+    proposed_by: uuid.UUID | None = None
+    proposed_at: datetime | None = None
     verified_by: uuid.UUID | None
-    verified_at: datetime
+    verified_at: datetime | None
     withdrawn_by: uuid.UUID | None
     withdrawn_at: datetime | None
+    withdrawn_reason: str | None = None
+    rejected_by: uuid.UUID | None = None
+    rejected_at: datetime | None = None
+    rejected_reason: str | None = None
     created_at: datetime
+
+
+class InboxDateBasis(ScheduleBasisOut):
+    """A proposed basis in the Inbox of those who verify it (F3), with its PRD."""
+
+    prd: DocumentRef
+
+
+class ImpactMilestone(BaseModel):
+    id: uuid.UUID
+    track_id: uuid.UUID
+    name: str
+    target_date: date | None
+    # Whether another verified basis still supports its date.
+    keeps_date: bool
+
+
+class ImpactItem(BaseModel):
+    id: uuid.UUID
+    roadmap: str
+    version: int
+    item_key: str
+
+
+class ImpactDocument(BaseModel):
+    slug: str
+    version: int
+    # Places that will show "date withdrawn".
+    marks: int
+
+
+class DateRightsOut(BaseModel):
+    rights: Literal["verify", "propose"] | None
+    lead_named: bool
+
+
+class BasisImpactOut(BaseModel):
+    """What withdrawing a basis would change (F3), computed as the withdrawal would."""
+
+    basis_id: uuid.UUID
+    milestones: list[ImpactMilestone]
+    items: list[ImpactItem]
+    documents: list[ImpactDocument]
 
 
 class WithdrawOut(BaseModel):

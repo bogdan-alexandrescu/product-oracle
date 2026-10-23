@@ -7705,14 +7705,36 @@ export interface paths {
         put?: never;
         /**
          * Create Schedule Basis
-         * @description Record a verified estimate, capacity figure or commitment supporting a date for
-         *     one PRD's roadmap items (O4), optionally only one item (``item_key``) or the items a
-         *     tracker issue is matched to (``tracker_key``). The approver or engineering lead
-         *     recording it verifies it.
+         * @description Record an estimate, capacity figure or commitment supporting a date for one PRD's
+         *     roadmap items (O4), optionally only one item (``item_key``) or the items a tracker
+         *     issue is matched to (``tracker_key``). The recorder's rights decide its status (F3):
+         *     an engineering lead or an owner (an approver while no lead is named) verifies it by
+         *     recording it; an approver's waits as ``proposed`` until a lead verifies it.
          *     From a tracker record, the record's own target date must be that date, and the record
          *     must be this PRD's.
          */
         post: operations["create_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/rights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Basis Rights
+         * @description The caller's date rights (F3): ``verify``, ``propose`` or null, and whether an
+         *     engineering lead is named (the Record basis dialog's submit label).
+         */
+        get: operations["get_schedule_basis_rights"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7735,6 +7757,71 @@ export interface paths {
          *     stale. 409 when already withdrawn.
          */
         post: operations["withdraw_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Schedule Basis
+         * @description Verify a proposed basis (F3): from now on it supports its date. Milestones of its
+         *     tracker key are re-checked and its PRD's tracks monitored again. 409 unless proposed.
+         */
+        post: operations["verify_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Schedule Basis
+         * @description Reject a proposed basis, with a reason (F3): it never supports a date. 409 unless
+         *     proposed.
+         */
+        post: operations["reject_schedule_basis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/schedule-bases/{basis_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Basis Impact
+         * @description What withdrawing this basis would change (F3), computed as the withdrawal does and
+         *     writing nothing: the milestones it dates (and whether another basis keeps the date),
+         *     the roadmap items whose date rests on it, and the roadmap versions' places that would
+         *     show "date withdrawn".
+         */
+        get: operations["get_schedule_basis_impact"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10136,6 +10223,23 @@ export interface components {
             evidence_ids: string[];
             /** Source */
             source?: string | null;
+        };
+        /**
+         * BasisImpactOut
+         * @description What withdrawing a basis would change (F3), computed as the withdrawal would.
+         */
+        BasisImpactOut: {
+            /**
+             * Basis Id
+             * Format: uuid
+             */
+            basis_id: string;
+            /** Milestones */
+            milestones: components["schemas"]["ImpactMilestone"][];
+            /** Items */
+            items: components["schemas"]["ImpactItem"][];
+            /** Documents */
+            documents: components["schemas"]["ImpactDocument"][];
         };
         /** BatchState */
         BatchState: {
@@ -12983,6 +13087,13 @@ export interface components {
              * @enum {string}
              */
             where: "title" | "heading" | "body";
+        };
+        /** DateRightsOut */
+        DateRightsOut: {
+            /** Rights */
+            rights: ("verify" | "propose") | null;
+            /** Lead Named */
+            lead_named: boolean;
         };
         /** DecideIn */
         DecideIn: {
@@ -16331,6 +16442,48 @@ export interface components {
              */
             created_at: string;
         };
+        /** ImpactDocument */
+        ImpactDocument: {
+            /** Slug */
+            slug: string;
+            /** Version */
+            version: number;
+            /** Marks */
+            marks: number;
+        };
+        /** ImpactItem */
+        ImpactItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Roadmap */
+            roadmap: string;
+            /** Version */
+            version: number;
+            /** Item Key */
+            item_key: string;
+        };
+        /** ImpactMilestone */
+        ImpactMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Name */
+            name: string;
+            /** Target Date */
+            target_date: string | null;
+            /** Keeps Date */
+            keeps_date: boolean;
+        };
         /** ImpactReport */
         ImpactReport: {
             subject: components["schemas"]["ImpactSubject"];
@@ -16567,6 +16720,75 @@ export interface components {
              * @default 0
              */
             done: number;
+        };
+        /**
+         * InboxDateBasis
+         * @description A proposed basis in the Inbox of those who verify it (F3), with its PRD.
+         */
+        InboxDateBasis: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "estimate" | "capacity" | "commitment";
+            /** Reference */
+            reference: string;
+            /**
+             * Supports Date
+             * Format: date
+             */
+            supports_date: string;
+            /** Detail */
+            detail: string | null;
+            /**
+             * Prd Document Id
+             * Format: uuid
+             */
+            prd_document_id: string;
+            /** Item Key */
+            item_key: string | null;
+            /** Tracker Key */
+            tracker_key: string | null;
+            /** Tracker Record Id */
+            tracker_record_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "verified" | "proposed" | "withdrawn" | "rejected";
+            /** Note */
+            note?: string | null;
+            /** Proposed By */
+            proposed_by?: string | null;
+            /** Proposed At */
+            proposed_at?: string | null;
+            /** Verified By */
+            verified_by: string | null;
+            /** Verified At */
+            verified_at: string | null;
+            /** Withdrawn By */
+            withdrawn_by: string | null;
+            /** Withdrawn At */
+            withdrawn_at: string | null;
+            /** Withdrawn Reason */
+            withdrawn_reason?: string | null;
+            /** Rejected By */
+            rejected_by?: string | null;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected Reason */
+            rejected_reason?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            prd: components["schemas"]["DocumentRef"];
         };
         /**
          * InboxDecision
@@ -16861,6 +17083,11 @@ export interface components {
              * @default []
              */
             oracle_actions: components["schemas"]["InboxOracleAction"][];
+            /**
+             * Dates
+             * @default []
+             */
+            dates: components["schemas"]["InboxDateBasis"][];
             /** Total */
             total: number;
             /**
@@ -20261,6 +20488,11 @@ export interface components {
             date: string | null;
             /** Date Status */
             date_status: ("verified" | "unverified" | "withdrawn") | null;
+            /**
+             * Basis Ids
+             * @default []
+             */
+            basis_ids: string[];
             /** Slip Days */
             slip_days: number | null;
             /** Tracked */
@@ -23896,9 +24128,10 @@ export interface components {
         };
         /**
          * ScheduleBasisCreate
-         * @description A verified estimate, capacity figure or commitment. Recording it is the
-         *     verification: the approver says this source supports this date, for this PRD's
-         *     roadmap items (O4).
+         * @description An estimate, capacity figure or commitment supporting a date for this PRD's roadmap
+         *     items (O4). The recorder's rights decide its status (F3): an engineering lead or an
+         *     owner (an approver while no lead is named) verifies it by recording it; an approver's
+         *     waits as proposed for a lead.
          */
         ScheduleBasisCreate: {
             /**
@@ -23923,6 +24156,8 @@ export interface components {
             tracker_key?: string | null;
             /** Tracker Record Id */
             tracker_record_id?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** ScheduleBasisOut */
         ScheduleBasisOut: {
@@ -23960,23 +24195,44 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "verified" | "withdrawn";
+            status: "verified" | "proposed" | "withdrawn" | "rejected";
+            /** Note */
+            note?: string | null;
+            /** Proposed By */
+            proposed_by?: string | null;
+            /** Proposed At */
+            proposed_at?: string | null;
             /** Verified By */
             verified_by: string | null;
-            /**
-             * Verified At
-             * Format: date-time
-             */
-            verified_at: string;
+            /** Verified At */
+            verified_at: string | null;
             /** Withdrawn By */
             withdrawn_by: string | null;
             /** Withdrawn At */
             withdrawn_at: string | null;
+            /** Withdrawn Reason */
+            withdrawn_reason?: string | null;
+            /** Rejected By */
+            rejected_by?: string | null;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected Reason */
+            rejected_reason?: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ScheduleBasisReject */
+        ScheduleBasisReject: {
+            /** Reason */
+            reason: string;
+        };
+        /** ScheduleBasisVerify */
+        ScheduleBasisVerify: {
+            /** Note */
+            note?: string | null;
         };
         /** ScheduleBasisWithdraw */
         ScheduleBasisWithdraw: {
@@ -43456,7 +43712,8 @@ export interface operations {
         parameters: {
             query?: {
                 prd?: string | null;
-                status?: ("verified" | "withdrawn") | null;
+                status?: ("verified" | "proposed" | "withdrawn" | "rejected") | null;
+                item_key?: string | null;
             };
             header?: never;
             path?: never;
@@ -43517,6 +43774,26 @@ export interface operations {
             };
         };
     };
+    get_schedule_basis_rights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateRightsOut"];
+                };
+            };
+        };
+    };
     withdraw_schedule_basis: {
         parameters: {
             query?: never;
@@ -43539,6 +43816,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WithdrawOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_schedule_basis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleBasisReject"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBasisOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_basis_impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasisImpactOut"];
                 };
             };
             /** @description Validation Error */

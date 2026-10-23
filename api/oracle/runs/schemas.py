@@ -9,6 +9,7 @@ from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
+from oracle.roadmap.schemas import InboxDateBasis
 
 Flow = Literal[
     "baseline_to_prd",
@@ -1030,6 +1031,9 @@ class InboxOut(BaseModel):
     strategy: InboxStrategy | None = None
     # Those it notified: what Oracle did on its own (H11), newest first; open ones count.
     oracle_actions: list[InboxOracleAction] = []
+    # Engineering leads, and owners while no lead is named (F3 Date bases): proposed
+    # schedule bases to verify or reject, each in ``total``.
+    dates: list[InboxDateBasis] = []
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.
