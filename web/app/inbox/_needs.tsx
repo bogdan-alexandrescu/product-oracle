@@ -649,7 +649,11 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     kind: "Checkpoint",
     item: (
       <>
-        <span className="truncate">{CHECKPOINT_LABEL[c.kind]}</span>
+        <span className="truncate">
+          {CHECKPOINT_LABEL[c.kind]}
+          {/* B2: Confirm the baseline's counts, read from the run's rows. */}
+          {c.kind === "baseline_confirm" && c.summary && ` · ${c.summary.need_you} need you · ${c.summary.blocking} not decided`}
+        </span>
         {held(c) ? (
           <Chip kind="warn" title={CONSOLE_HELD}>
             Console approval held
@@ -673,7 +677,10 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     ),
     run: shortId(c.run_id),
     at: c.created_at,
-    action: held(c) ? (
+    action: c.kind === "baseline_confirm" ? (
+      // B2: the run's review opens in the Baseline, filtered to the run.
+      <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
+    ) : held(c) ? (
       // The run page's checkpoint row, until the kind's review screen ships (D1).
       <LinkButton href={`/runs/${c.run_id}#decide`}>Review</LinkButton>
     ) : (

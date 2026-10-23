@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from oracle.baseline.schemas import EntityOut, ProposalRun
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.priorities.schemas import PriorityCheck
@@ -314,6 +315,10 @@ class ItemReason(BaseModel):
     text: str
     data: dict[str, Any] = {}
     fixes: list[ReasonFix] = []
+    # B2: whether an approver may waive it (a blocking reason), and a detail line (the
+    # chip's tooltip, "Missing: target, owner").
+    waivable: bool | None = None
+    detail: str | None = None
 
 
 class ReasonBase(BaseModel):
@@ -751,11 +756,24 @@ class TickOut(BaseModel):
     member_follow_ups: int = 0
 
 
+class CheckpointSummary(BaseModel):
+    """What the Inbox row of a checkpoint counts (D9): rows needing a person, blocking
+    reasons open, rows with only to-confirm reasons open, rows handled. B2 fills it for
+    ``baseline_confirm``; ``children`` are D9's per-item rows (none yet)."""
+
+    need_you: int = 0
+    blocking: int = 0
+    to_confirm: int = 0
+    handled: int = 0
+    children: list[dict[str, Any]] = []
+
+
 class InboxCheckpoint(CheckpointOut):
     flow: Flow
     flow_title: str
     document_slug: str | None = None
     segment_title: str | None = None
+    summary: CheckpointSummary | None = None
 
 
 # C1e Inbox states: new (open, raised after my last Inbox visit), open, staged (accepted,
@@ -1114,6 +1132,41 @@ class ReviewMilestone(BaseModel):
     date: str | None = None
 
 
+class FromRunEdges(BaseModel):
+    new: int = 0
+    changed: int = 0
+
+
+class FromRunMerge(BaseModel):
+    allowed: bool
+    why_not: str | None = None
+
+
+class FromRunProposal(BaseModel):
+    id: uuid.UUID
+    status: str
+
+
+class FromRunRow(BaseModel):
+    """One baseline item a run created (``new``), changed (``changed``) or proposed a
+    change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+    (recomputed on every read), the shared draft's actions on its key and its state."""
+
+    key: str
+    entity: EntityOut
+    change: Literal["new", "changed", "proposal"]
+    # The run's open proposals on it, and every one it made (with its status).
+    proposal_ids: list[uuid.UUID] = []
+    proposals: list[FromRunProposal] = []
+    # Open material conflicts on it.
+    conflict_ids: list[uuid.UUID] = []
+    edges: FromRunEdges = FromRunEdges()
+    reasons: list["ItemReason"] = []
+    actions: list["ReviewAction"] = []
+    state: Literal["needs_you", "handled", "waiting", "fine"]
+    merge: FromRunMerge
+
+
 class ReviewItem(BaseModel):
     """One item of the reviewed file, its reasons (recomputed on every read) and its
     actions. ``state``: ``needs_you`` (an open reason no staged action answers),
@@ -1134,6 +1187,8 @@ class ReviewItem(BaseModel):
     reasons: list[ItemReason] = []
     actions: list[ReviewAction] = []
     state: Literal["needs_you", "handled", "waiting", "fine"]
+    # B2: a baseline_confirm checkpoint's row, as GET /v1/baseline/from-run/{run_id} has it.
+    baseline: FromRunRow | None = None
 
 
 class WaitingOn(BaseModel):
@@ -1179,3 +1234,49 @@ class CheckpointReview(BaseModel):
     can_decide: bool = False
     # The approve gate, as decide reads it (D3); None for a kind with no blocking reasons.
     gate: Gate | None = None
+
+
+# --------------------------------------------------------------------------- B2 from-run
+
+
+class FromRunSummary(BaseModel):
+    items: int = 0
+    need_you: int = 0
+    # Goals from the run still proposed with no staged waiver.
+    not_decided: int = 0
+    handled: int = 0
+    # Goals from the run left proposed by a staged waiver (Leave proposed).
+    left_proposed: int = 0
+    other_proposed_goals: int = 0
+
+
+class FromRunCheckpoint(BaseModel):
+    """The run's latest Confirm the baseline stop, as the caller may use it."""
+
+    id: uuid.UUID
+    kind: CheckpointKind
+    status: CheckpointStatus
+    approver_role: str
+    revision: int = 0
+    can_suggest: bool = False
+    can_stage: bool = False
+    can_decide: bool = False
+    gate: Gate | None = None
+    note: str | None = None
+    wait: WaitInfo
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+    # The send-back note the agents got (3.1 (7)), once sent back.
+    review_note: str | None = None
+
+
+class FromRunOut(BaseModel):
+    """GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+    person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
+    baseline."""
+
+    run: ProposalRun
+    checkpoint: FromRunCheckpoint | None = None
+    summary: FromRunSummary
+    rows: list[FromRunRow] = []
+    other_proposed_goals: list[EntityOut] = []

@@ -248,8 +248,43 @@ def _feature_set(body: ActionIn, ctx: ValidationContext) -> None:
     _waive_reason(body)
 
 
+LOOK_AGAIN_NOTE = 2000
+
+
+def _baseline_confirm(body: ActionIn, ctx: ValidationContext) -> None:
+    """B2 Baseline review from this run: on a row of the run (``<type>:<key>``), Look again
+    (``{"note"}``) or, on a goal of the run, Leave proposed (a ``waive`` with a reason).
+    Every other change is a baseline write, applied at once through the baseline routes."""
+    if body.kind not in ("look_again", "waive"):
+        raise InvalidAction(
+            f"{body.kind} does not apply to the baseline: confirm, reject, edit or merge it "
+            "through the baseline"
+        )
+    if body.item_key not in ctx.item_keys:
+        raise InvalidAction(f"{body.item_key} is not an item from this run")
+    if body.kind == "waive":
+        if (ctx.items.get(body.item_key) or {}).get("type") != "goal":
+            raise InvalidAction("only a goal from this run is left proposed")
+        _waive_reason(body)
+        return
+    v = body.value if isinstance(body.value, dict) else {}
+    note = v.get("note")
+    if (
+        body.field is not None
+        or set(v) != {"note"}
+        or not isinstance(note, str)
+        or not note.strip()
+        or len(note) > LOOK_AGAIN_NOTE
+    ):
+        raise InvalidAction(f"look_again needs a note of 1 to {LOOK_AGAIN_NOTE} characters")
+
+
 # The spec owning each checkpoint kind registers its vocabulary here.
-VOCABULARY: dict[str, Validator] = {"roadmap_items": _roadmap_items, "feature_set": _feature_set}
+VOCABULARY: dict[str, Validator] = {
+    "roadmap_items": _roadmap_items,
+    "feature_set": _feature_set,
+    "baseline_confirm": _baseline_confirm,
+}
 
 
 def validate(checkpoint_kind: str, body: ActionIn, ctx: ValidationContext) -> None:
@@ -303,6 +338,15 @@ def _context(found: _File | None) -> ValidationContext:
         dropped_keys=frozenset(dropped),
         items=items,
     )
+
+
+async def _baseline_context(db: AsyncSession, run: Run) -> ValidationContext:
+    """B2: the run's baseline rows (``<type>:<key>``), each with its type."""
+    from oracle.baseline import from_run
+
+    found = await from_run.members(db, run.id)
+    items = {from_run.item_key(e): {"type": e.type} for e in found.entities.values()}
+    return ValidationContext(item_keys=frozenset(items), items=items)
 
 
 def _gate_context(cp: Checkpoint) -> ValidationContext:
@@ -472,7 +516,10 @@ async def put_action(
 
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     found = await _file(db, run, cp) if cp.kind in VOCABULARY else None
-    ctx = _context(found) if cp.kind in ITEM_FILES else _gate_context(cp)
+    if cp.kind == "baseline_confirm":
+        ctx = await _baseline_context(db, run)
+    else:
+        ctx = _context(found) if cp.kind in ITEM_FILES else _gate_context(cp)
     try:
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
@@ -877,6 +924,9 @@ async def read(
             )
         )
     tally.waiting_on = list(waiting.values())
+    live = None
+    if cp.kind == "baseline_confirm":
+        items, tally, live = await _baseline_items(db, run, by_item)
 
     pending = cp.status == "pending"
     stages = pending and _stages(principal, cp) and not principal.read_only
@@ -905,5 +955,40 @@ async def read(
         and not principal.read_only,
         can_stage=stages,
         can_decide=stages,
-        gate=gate.approve_gate(cp, None, staged) if pending else None,
+        gate=gate.approve_gate(cp, live, staged) if pending else None,
     )
+
+
+async def _baseline_items(
+    db: AsyncSession, run: Run, by_item: dict[str, list[ReviewAction]]
+) -> tuple[list[ReviewItem], ReviewTally, list[dict[str, Any]]]:
+    """B2: a Confirm the baseline checkpoint's items are the run's baseline rows (the same
+    code as GET /v1/baseline/from-run), its tally and the gate's live reasons."""
+    from oracle.baseline import from_run
+
+    built = await from_run.build(db, run.id, [a for acts in by_item.values() for a in acts])
+    tally = ReviewTally()
+    items: list[ReviewItem] = []
+    live: list[dict[str, Any]] = []
+    for row in built.rows:
+        open_reasons = [
+            r for r in row.reasons if not any(from_run._answers(a, r) for a in row.actions)
+        ]
+        tally.need_you += row.state == "needs_you"
+        tally.handled += row.state == "handled"
+        if row.state == "needs_you":
+            tally.blocking_open += sum(1 for r in open_reasons if r.severity == gate.BLOCKING)
+            tally.to_confirm_open += sum(1 for r in open_reasons if r.severity != gate.BLOCKING)
+        tally.suggested += sum(1 for a in row.actions if a.state == "suggested")
+        live += [r.model_dump() for r in row.reasons if r.code == from_run.GOAL_UNDECIDED]
+        items.append(
+            ReviewItem(
+                key=row.key,
+                title=row.entity.title,
+                reasons=row.reasons,
+                actions=row.actions,
+                state=row.state,
+                baseline=row,
+            )
+        )
+    return items, tally, live

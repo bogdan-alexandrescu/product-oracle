@@ -781,6 +781,30 @@ export async function routeBaseline(
         }
         return json(200, entityOut(e));
       }
+      if (action === "merge" && m === "POST") {
+        // B2 Merge into…: a duplicate the run created goes into an item of the same type.
+        const input = await body<{ into: string; reason?: string | null }>();
+        const into = findEntity(input.into);
+        if (!into || into.id === e.id) return fail(404, "Entity not found");
+        if (e.locked) return fail(409, "Locked: a person edited it");
+        if (!e.run_id) return fail(409, "Only items this run created can be merged here");
+        if (e.type !== into.type) return fail(409, "Only items of the same type can be merged");
+        for (const ev of s.evidence) if (ev.entity_id === e.id) ev.entity_id = into.id;
+        const has = (x: EdgeRow) => s.edges.some((y) => y !== x && y.src_id === x.src_id && y.dst_id === x.dst_id && y.type === x.type);
+        for (const x of s.edges) {
+          if (x.src_id === e.id) x.src_id = into.id;
+          if (x.dst_id === e.id) x.dst_id = into.id;
+        }
+        s.edges = s.edges.filter((x, i) => !(has(x) && s.edges.findIndex((y) => y.src_id === x.src_id && y.dst_id === x.dst_id && y.type === x.type) !== i));
+        for (const p of s.proposals) {
+          if (p.entity_id === e.id && p.status === "open") {
+            Object.assign(p, { status: "rejected", decided_by: caller.userId, decided_at: now(), payload: { ...p.payload, note: `Merged into ${into.title}` } });
+          }
+        }
+        s.entities = s.entities.filter((x) => x !== e);
+        into.updated_at = now();
+        return json(200, entityOut(into));
+      }
       if (action === "unlock" && m === "POST") {
         Object.assign(e, { locked: false, locked_by: null, locked_at: null });
         return json(200, entityOut(e));

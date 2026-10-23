@@ -137,7 +137,9 @@ def test_a_file_problem_keeps_the_gate_closed_whatever_is_staged():
 def test_a_kind_without_blocking_reasons_has_no_gate():
     """protects=kinds no spec registered are untouched; fails_when=they get a gate;
     no_claim=the later specs' sources."""
-    assert set(gate.BLOCKING_SOURCES) == {"roadmap_items", "feature_set", "priority_order"}
+    assert set(gate.BLOCKING_SOURCES) == {
+        "roadmap_items", "feature_set", "priority_order", "baseline_confirm",
+    }  # fmt: skip
     assert gate.approve_gate(cp([SECTION], kind="prd_review"), None, []) is None
 
 

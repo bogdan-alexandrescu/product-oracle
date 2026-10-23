@@ -1381,6 +1381,18 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
   );
 }
 
+/** B2: "Review in Baseline · 3 need you", the run's rows in the Baseline (the files stay below). */
+function FromRunLink({ runId }: { runId: string }) {
+  const q = useQuery(`baseline-from-run:${runId}`, () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })));
+  return (
+    <p className="mt-2">
+      <LinkButton href={`/baseline?run=${runId}`} icon="baseline">
+        Review in Baseline{q.data ? ` · ${q.data.summary.need_you} need you` : ""}
+      </LinkButton>
+    </p>
+  );
+}
+
 /** D4: "Sent back · 3 entries · View review": the review.yaml the agents got, opened in place. */
 function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
   const [text, setText] = useState<string | null>(null);
@@ -1396,6 +1408,12 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
   }
   return (
     <div data-testid="sent-review">
+      {cp.kind === "baseline_confirm" && cp.note && (
+        // B2: the structured note the agents got (3.1 (7)).
+        <pre className="mb-1.5 font-sans whitespace-pre-wrap text-text2" data-testid="sent-back-note">
+          {cp.note}
+        </pre>
+      )}
       <p className="text-text2">
         Sent back · {entries} {entries === 1 ? "entry" : "entries"} ·{" "}
         <button type="button" className="font-medium text-accent-ink hover:underline" aria-expanded={text != null} onClick={() => void toggle()}>
@@ -1575,6 +1593,7 @@ function CheckpointRow({
         </Chip>
         {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
+      {cp.kind === "baseline_confirm" && <FromRunLink runId={run.id} />}
       {cp.note && <p className="mt-1.5 text-text2">{cp.note}</p>}
       {answer && <ConsolePanel answer={answer} held={answer.needs === "confirm" && answer.verdict === "MERGE" && !!closed} />}
       {other && (

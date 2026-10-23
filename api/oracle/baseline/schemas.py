@@ -150,6 +150,7 @@ class RevisionOut(ORM):
     after: dict[str, Any] | None = None
     actor: str
     reason: str | None = None
+    run_id: uuid.UUID | None = None
     created_at: datetime
 
 
@@ -333,6 +334,13 @@ class ProposalOut(ORM):
 
 class ProposalDecision(BaseModel):
     note: str | None = None
+
+
+class MergeIn(BaseModel):
+    """Merge into… (B2): the item to merge the duplicate into, and why."""
+
+    into: uuid.UUID
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class EntityWriteOut(BaseModel):
