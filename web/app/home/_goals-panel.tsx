@@ -1,6 +1,7 @@
 "use client";
 
-import { Chip, GoalTag, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
+import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
+import { namedText } from "@/lib/codes";
 
 import { amount, assess, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
 
@@ -17,9 +18,8 @@ function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined })
       className="flex min-w-0 flex-col gap-2 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3"
     >
       <div className="flex min-w-0 items-start gap-2">
-        <GoalTag id={g.tag} proposed={g.proposed} title={g.proposed ? `${g.tag} · proposed` : g.tag} />
-        <span className="line-clamp-2 min-w-0 flex-1 font-semibold" title={g.metric ?? g.title}>
-          {g.title}
+        <span className="flex min-w-0 flex-1 font-semibold">
+          <CodeChip kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} wrap />
         </span>
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -49,7 +49,7 @@ function GoalCard({ g, history }: { g: GoalView; history: Point[] | undefined })
             target={p.state === "raw" ? undefined : g.target?.value}
             width={240}
             height={40}
-            label={`${g.tag} trend`}
+            label={`${namedText(g)} trend`}
           />
         </div>
       )}
@@ -109,7 +109,7 @@ export function GoalsPanel({
             {confirmed.length > 0 && <Chip kind="pass">{confirmed.length} confirmed</Chip>}
             {proposed.length > 0 && (
               <Chip kind="warn" data-testid="goals-proposed">
-                {proposed.length === 1 ? `${proposed[0].tag} proposed` : `${proposed.length} proposed`}
+                {proposed.length === 1 ? `${proposed[0].code ?? proposed[0].name} proposed` : `${proposed.length} proposed`}
               </Chip>
             )}
             {more > 0 && (

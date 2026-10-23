@@ -6,6 +6,7 @@ import { memo, useMemo, useState, type ReactNode } from "react";
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { AskTeammate } from "@/components/AskTeammate";
 import { Button, Chip } from "@/components/ds";
+import type { CodeIndex } from "@/lib/code-index";
 import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
@@ -51,6 +52,7 @@ export const SectionView = memo(function SectionView({
   dateMarks,
   onDiscuss,
   placeholder = false,
+  codes,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -83,6 +85,8 @@ export const SectionView = memo(function SectionView({
   onDiscuss?: (section: SectionOut) => void;
   /** H8: the section still holds the template's "Owner to fill" text (an update's Asks). */
   placeholder?: boolean;
+  /** #305: the codes this version names, built once per version. */
+  codes?: CodeIndex;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
@@ -261,6 +265,7 @@ export const SectionView = memo(function SectionView({
           expand={expand}
           markers={markers.size ? markers : undefined}
           dateMarks={dateMarks}
+          codes={codes}
         />
       </div>
       {!nested && (
