@@ -51,6 +51,7 @@ export function StartDiscussion({
             subject: subject.subject,
             title: title.trim() || null,
             visibility,
+            origin: "discuss",
             participants: visibility === "private" ? people.map((p) => p.user_id) : [],
             message: first.trim() ? { body: first.trim(), mention_oracle: false } : null,
           },
