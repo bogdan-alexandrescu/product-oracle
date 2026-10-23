@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /**
  * F4 Engineering review stop, lane A (issue #181, review fix 1): the Engineering check of
@@ -22,6 +22,16 @@ import { login } from "./helpers";
  * - "approver, lead named" (AC24): protects=read-only for those who do not decide;
  *   fails_when=verdict, size or Approve controls show, or the waits-for line is missing;
  *   no_claim=commenter suggestions (staged by the lead, api/tests/test_eng_review_screen.py).
+ * - "inspector per feature" (fix 2): protects=a note half typed for one feature stays with it;
+ *   fails_when=selecting another feature keeps the open note, so Save verdict would save it
+ *   against that feature; no_claim=the verdict route (api/tests/test_eng_review_stop.py).
+ * - "check once" (fix 2): protects=the run page names the check on its line only, and the
+ *   lead's Waiting chip counts it; fails_when=a non-decider sees it twice (a chip and the line)
+ *   or the lead's row has no Waiting chip; no_claim=other stops' rows.
+ * - "commenter suggests" (fix 2, AC6): protects=a commenter suggests from the screen, an
+ *   approver (no lead named) stages it, the screen names only who decides; fails_when=the
+ *   commenter has no controls, a suggestion counts before it is staged, or the screen says it
+ *   waits for a lead nobody is; no_claim=AC24's approver with a lead named (view only).
  * - "phone" (AC26): protects=the screen at 390 px; fails_when=rows are not cards, the decision
  *   bar is off screen, or the page scrolls sideways; no_claim=other phone layouts.
  */
@@ -170,4 +180,56 @@ test("phone: at 390 px the rows are cards, the decision bar stays on screen and 
   await expect(bar(page).getByRole("button", { name: "Approve" })).toBeInViewport();
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(sideways).toBeLessThanOrEqual(0);
+});
+
+test("inspector per feature: a note typed for one feature never saves against another", async ({ page }) => {
+  await openCheckAsLead(page);
+  await row(page, "f.sample-data").getByRole("button").first().click();
+  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
+  await inspector(page).getByRole("textbox", { name: "Note: what changes" }).fill("Ship a smaller catalogue first");
+  await row(page, "f.saved-carts").getByRole("button").first().click();
+  await expect(inspector(page)).toHaveAccessibleName("Brief: Saved carts");
+  await expect(inspector(page).getByRole("textbox", { name: "Note: what changes" })).toHaveCount(0);
+  await expect(inspector(page).getByRole("button", { name: "Save verdict" })).toHaveCount(0);
+  await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Decide");
+});
+
+test("check once: the lead's row says Waiting, an approver sees the check on its line only", async ({ page }) => {
+  await withScenario(page, "eng-check");
+  await login(page, "commenter@example.com");
+  await page.goto("/runs/7a11c0de-0000-4000-8000-0000000000f4");
+  const segment = page.getByTestId("segment-eng_review");
+  await expect(segment.getByTestId("review-screen-line")).toContainText("Waiting for you");
+  await expect(segment.getByTestId("checkpoint-waiting")).toBeVisible();
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto("/runs/7a11c0de-0000-4000-8000-0000000000f4");
+  await expect(segment.getByTestId("review-screen-line")).toHaveCount(1);
+  await expect(segment.getByTestId("checkpoint-eng_review")).toHaveCount(0);
+  await expect(segment.getByTestId("checkpoint-waiting")).toHaveCount(0);
+});
+
+test("commenter suggests: with no lead named a commenter suggests, an approver stages it, and the screen waits for an approver", async ({ page }) => {
+  await withScenario(page, "eng-check-no-lead");
+  await login(page, "commenter@example.com");
+  await page.goto("/runs/7a11c0de-0000-4000-8000-0000000000f4");
+  await page.getByTestId("segment-eng_review").getByTestId("review-screen-line").getByRole("link", { name: "View" }).click();
+  await expect(page.getByTestId("view-only")).toContainText("Waits for an approver");
+  await expect(page.getByTestId("view-only")).not.toContainText("engineering lead");
+  await row(page, "f.sample-data").getByRole("button").first().click();
+  await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
+  await expect(inspector(page).getByTestId("verdict-now")).toContainText("Feasible (suggested)");
+  await expect(inspector(page).getByTestId("suggestion")).toContainText("Feasible");
+  await expect(row(page, "f.sample-data").getByTestId("brief-verdict")).toHaveText("Decide");
+  await expect(bar(page).getByTestId("eng-tally")).toHaveText("0 of 3 decided · 1 blocking question");
+  await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
+  const screen = page.url();
+
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto(screen);
+  await row(page, "f.sample-data").getByRole("button").first().click();
+  await inspector(page).getByTestId("suggestion").getByRole("button", { name: "Stage" }).click();
+  await expect(row(page, "f.sample-data").getByTestId("brief-verdict")).toHaveText("Feasible");
+  await expect(bar(page).getByTestId("eng-tally")).toHaveText("1 of 3 decided · 1 blocking question");
 });

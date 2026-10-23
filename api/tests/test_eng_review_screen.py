@@ -15,7 +15,7 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from tests.fixtures import seed_auth
 from tests.review_v2_helpers import person
 from tests.test_eng_review_stop import BRIEFS, _act, _at_check, _url
-from tests.test_runs import pending
+from tests.test_runs import get, pending
 
 
 @pytest.fixture
@@ -107,3 +107,19 @@ async def test_the_lead_stages_a_suggestion_sets_the_note_and_undoes(client, own
     undo = _url(run, pending(run)) + f"/actions/{suggestion['id']}"
     resp = await client.delete(undo, headers=lead.headers)
     assert resp.status_code in (200, 204), resp.text
+
+
+async def test_the_checkpoint_says_whether_it_waits_for_a_lead(client, owner, runtime):
+    # protects=the screen's "Waits for" names only who can decide (review fix 2);
+    # fails_when=a check with no lead named says it waits for a lead, or one with a lead
+    # named does not; no_claim=who may decide (test_eng_review_stop).
+    tenant_id, auth = owner
+    run = await _at_check(client, auth)
+    commenter = await person(tenant_id, "commenter")
+    seen = await get(client, commenter.headers, run["id"])
+    assert pending(seen)["lead_stop"] is False and not pending(seen)["can_decide"]
+    await _lead(client, tenant_id, auth)
+    seen = await get(client, commenter.headers, run["id"])
+    assert pending(seen)["lead_stop"] is True
+    done = next(c for c in seen["checkpoints"] if c["kind"] == "feature_set")
+    assert done["lead_stop"] is False
