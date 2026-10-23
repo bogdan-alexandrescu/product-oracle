@@ -46,7 +46,18 @@ export const HORIZONS = [
   { value: "medium", label: "Medium" },
   { value: "long", label: "Long" },
 ] as const;
-export const HORIZON_TIP = "Short: this quarter · Medium: the next two quarters · Long: 12–24 months";
+/** The company's planning_horizons (Settings › Company); B2's defaults until set. */
+export type PlanningHorizons = { short_quarters: number; medium_quarters: number; long_from_months: number; long_to_months: number };
+export const DEFAULT_HORIZONS: PlanningHorizons = { short_quarters: 1, medium_quarters: 2, long_from_months: 12, long_to_months: 24 };
+const QUARTERS = ["", "", "two", "three", "four"];
+
+/** "Short: this quarter · Medium: the next two quarters · Long: 12–24 months", by the company's horizons. */
+export function horizonTip(h: PlanningHorizons | null | undefined): string {
+  const { short_quarters: s, medium_quarters: m, long_from_months: from, long_to_months: to } = h ?? DEFAULT_HORIZONS;
+  const short = s === 1 ? "this quarter" : s === 2 ? "this quarter and the next" : `this quarter and the next ${s - 1}`;
+  const medium = m === 1 ? "the next quarter" : `the next ${QUARTERS[m] ?? m} quarters`;
+  return `Short: ${short} · Medium: ${medium} · Long: ${from}–${to} months`;
+}
 export const WEIGHT_TIP = "How much this goal counts in priority scores, relative to the others";
 
 const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -298,10 +309,13 @@ export function GoalFields({
   draft,
   onChange,
   problems,
+  horizons,
 }: {
   draft: GoalDraft;
   onChange: (d: GoalDraft) => void;
   problems: GoalProblem[];
+  /** The company's horizons, from the goal's goal_check. */
+  horizons?: PlanningHorizons | null;
 }) {
   const set = (patch: Partial<GoalDraft>) => onChange({ ...draft, ...patch });
   return (
@@ -365,7 +379,7 @@ export function GoalFields({
       <div className="flex min-w-0 flex-wrap items-end gap-3">
         <div className={LABEL}>
           <span className="flex items-center gap-1.5">
-            Horizon <InfoTip label="horizons">{HORIZON_TIP}</InfoTip>
+            Horizon <InfoTip label="horizons">{horizonTip(horizons)}</InfoTip>
           </span>
           <SegmentedControl
             label="Horizon"

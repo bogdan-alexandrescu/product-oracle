@@ -6,6 +6,8 @@
 import { direction, parseFigure } from "@/app/home/_goals";
 import type { Schemas } from "@/lib/api/client";
 
+import { mockSettingValue } from "./connections";
+
 type Attrs = Record<string, unknown>;
 export type GoalProblem = { code: string; message: string; where: string };
 export type GoalCheck = Schemas["GoalCheck"];
@@ -104,16 +106,25 @@ function addMonths(on: Date, months: number): string {
   return todayIso(new Date(on.getFullYear(), on.getMonth() + months, Math.min(on.getDate(), 28)));
 }
 
-/** Decision B2 Company goals: short = this quarter, medium = the next two, long = 12 to 24 months. */
-function horizonWindow(h: string, on: Date): [string, string] {
-  if (h === "short") return [todayIso(new Date(on.getFullYear(), Math.floor(on.getMonth() / 3) * 3, 1)), quarterEnd(on)];
-  if (h === "medium") return [quarterEnd(on), quarterEnd(on, 2)];
-  return [addMonths(on, 12), addMonths(on, 24)];
+type Horizons = { short_quarters: number; medium_quarters: number; long_from_months: number; long_to_months: number };
+
+/** The company's planning_horizons setting (Settings › Company), as goals.horizon_window reads it. */
+function companyHorizons(): Horizons {
+  return mockSettingValue("planning_horizons") as Horizons;
+}
+
+/** tenant_settings_api.horizon_windows: each horizon's span on ``on`` by the company's horizons. */
+function horizonWindow(h: string, on: Date, hz = companyHorizons()): [string, string] {
+  const start = new Date(on.getFullYear(), Math.floor(on.getMonth() / 3) * 3, 1);
+  const shortEnd = quarterEnd(on, hz.short_quarters - 1);
+  if (h === "short") return [todayIso(start), shortEnd];
+  if (h === "medium") return [quarterEnd(on, hz.short_quarters - 1), quarterEnd(on, hz.short_quarters + hz.medium_quarters - 1)];
+  return [addMonths(on, hz.long_from_months), addMonths(on, hz.long_to_months)];
 }
 
 function horizonOf(due: string, on: Date): string {
-  if (due <= quarterEnd(on)) return "short";
-  return due < addMonths(on, 12) ? "medium" : "long";
+  if (due <= horizonWindow("short", on)[1]) return "short";
+  return due < horizonWindow("long", on)[0] ? "medium" : "long";
 }
 
 const meets = (v: number, c: string, t: number) => ({ at_least: v >= t, above: v > t, at_most: v <= t, below: v < t })[c] ?? false;
@@ -136,7 +147,7 @@ export function goalCheck(a: Attrs, status: string, isMember: (id: string) => bo
   }
   if (isDate(a.due) && (a.due as string) < on && status === "confirmed") warnings.push("due_past");
   if (isDate(a.current_as_of) && (now.getTime() - Date.parse(a.current_as_of as string)) / 86_400_000 > STALE_DAYS) warnings.push("stale_current");
-  return { measurable: missing.length === 0, missing: [...missing], warnings, problems: found };
+  return { measurable: missing.length === 0, missing: [...missing], warnings, problems: found, horizons: companyHorizons() };
 }
 
 const CURRENCY: Record<string, string> = { $: "USD", "€": "EUR", "£": "GBP" };

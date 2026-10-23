@@ -42,6 +42,12 @@ const STEPS: Record<string, { label: string; href: string; status: (s: Step) => 
     href: "/settings/company?from=setup#horizons",
     status: (s) => (s.done ? "Checked" : "Not checked"),
   },
+  // H2: done once an owner stored the Company time zone; detail is the zone.
+  timezone: {
+    label: "Time zone",
+    href: "/settings/company?from=setup#timezone",
+    status: (s) => (s.done ? (s.detail ?? "Set") : "Not set"),
+  },
   // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
   build_baseline: {
     label: "Build baseline",
@@ -90,6 +96,7 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
       <ul>
         {steps.map((s) => {
           const copy = STEPS[s.key];
+          if (!copy) return null;
           const status = copy.status(s);
           return (
             <li

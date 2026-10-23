@@ -12,7 +12,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
-import { GoalFields, goalDraft, goalPatch, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem } from "./goal-fields";
+import { GoalFields, goalDraft, goalPatch, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import {
   ConfidenceRing,
@@ -592,7 +592,7 @@ function EditForm({
         Description
         <textarea className={INPUT} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
-      {isGoal && <GoalFields draft={goal} onChange={setGoal} problems={problems} />}
+      {isGoal && <GoalFields draft={goal} onChange={setGoal} problems={problems} horizons={entity.goal_check?.horizons as PlanningHorizons | null | undefined} />}
       {fields.map((f) => (
         <label key={f.key} className={label}>
           {f.label}

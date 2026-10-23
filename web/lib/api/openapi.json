@@ -51140,6 +51140,20 @@
             "type": "array",
             "title": "Problems",
             "default": []
+          },
+          "horizons": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizons"
           }
         },
         "type": "object",
