@@ -4,28 +4,19 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { LinkButton, ScrollStrip } from "@/components/ds";
+import { useSettingsTabs } from "@/lib/settings-tabs";
 
-const ITEMS = [
-  { label: "Members", href: "/settings/members", testId: "nav-members" },
-  { label: "Company", href: "/settings/company", testId: "nav-company" },
-  { label: "API tokens", href: "/settings/api-tokens", testId: "nav-api-tokens" },
-  { label: "Connections", href: "/settings/connections", testId: "nav-connections" },
-  { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts" },
-  { label: "Sources", href: "/settings/sources", testId: "nav-sources" },
-  { label: "Notifications", href: "/settings/notifications", testId: "nav-notifications" },
-  { label: "Templates", href: "/settings/templates", testId: "nav-templates" },
-  { label: "Themes", href: "/settings/themes", testId: "nav-themes" },
-  { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy" },
-];
 
 /**
  * Settings' own sections: a strip under the page title (PageHeader draws it, see the
  * settings layout). Evidence search (/sources) lives under Sources. Opened from Home's Set
  * up checklist (?from=setup), it ends with the way back to Home; another tab drops it.
+ * Only the tabs the signed-in role can read show (#370).
  */
 export function SettingsNav() {
   const pathname = usePathname();
   const fromSetup = useSearchParams().get("from") === "setup";
+  const { tabs } = useSettingsTabs();
   return (
     <nav
       aria-label="Settings"
@@ -33,7 +24,7 @@ export function SettingsNav() {
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
       <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
-        {ITEMS.map((it) => {
+        {tabs.map((it) => {
           const on =
             pathname === it.href ||
             pathname.startsWith(`${it.href}/`) ||
