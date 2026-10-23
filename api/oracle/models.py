@@ -36,7 +36,6 @@ class AuditEvent(TenantScoped, Base):
 
 
 from oracle.auth.models import ApiToken, User  # noqa: E402
-from oracle.autonomy_models import OracleAction  # noqa: E402
 from oracle.baseline.models import (  # noqa: E402
     Conflict,
     Edge,
@@ -118,6 +117,7 @@ from oracle.strategy.models import StrategyCheck, StrategyFinding  # noqa: E402
 from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
+from oracle.trash.models import TrashEntry  # noqa: E402
 from oracle.v2.models import (  # noqa: E402
     ArtifactDependency,
     ArtifactOutput,
@@ -251,11 +251,14 @@ __all__ = [
     "TemplateModuleAssignment",
     "TemplateVersion",
     "Tenant",
-    "OracleAction",
     "TenantSetting",
+    "TrashEntry",
     "Theme",
     "TrackMilestone",
     "TrackerRecord",
     "User",
     "UserPreference",
 ]
+
+# Trash (#482): every read leaves trashed rows out; registered with the models.
+import oracle.trash.filter  # noqa: E402,F401

@@ -295,6 +295,8 @@ ORACLE_KNOBS = (
     "target_goals",
     # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
     "draft_roadmap_id",
+    # #482: a Regenerate's note to the agents (oracle.trash.regenerate).
+    "regenerate_note",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 

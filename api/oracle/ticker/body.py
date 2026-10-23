@@ -37,6 +37,8 @@ class CompanyTick:
     # Code map refresh runs started (F5-2).
     code_map_refreshes: int = 0
     invite_emails: int = 0
+    # Trash entries purged after their 30 days (#482).
+    trash_purged: int = 0
     # What raised, step by step (logged); the other steps still ran.
     errors: list[BaseException] = field(default_factory=list)
 
@@ -44,7 +46,8 @@ class CompanyTick:
 async def tick_company(
     db: AsyncSession, tenant_id: uuid.UUID, principal: "Principal | None" = None
 ) -> CompanyTick:
-    """The company's runs, its code map refreshes, then its account sweep when due."""
+    """The company's runs, its code map refreshes, the Trash purge, then its account
+    sweep when due."""
     from oracle.runs import service as runs_service
 
     out = CompanyTick()
@@ -61,6 +64,15 @@ async def tick_company(
         out.code_map_refreshes = await codemaps.refresh_due(db)
     except Exception as exc:
         log.exception("tick: code map refreshes failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
+    try:
+        # #482: what has waited in Trash for its 30 days goes for good.
+        from oracle.trash import service as trash
+
+        out.trash_purged = await trash.purge_due(db)
+    except Exception as exc:
+        log.exception("tick: the Trash purge failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
     try:

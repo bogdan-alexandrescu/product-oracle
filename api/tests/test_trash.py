@@ -8,15 +8,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from oracle.trash import service as trash_service
 from sqlalchemy import func, select
 
+from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.service import create_user, make_session_cookie
+from oracle.config import get_settings
 from oracle.docs.models import Document, DocumentVersion
 from oracle.models import AuditEvent
 from oracle.runs.models import Checkpoint, Run
 from oracle.runtokens import mint_run_token
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
+from oracle.trash import service as trash_service
 from oracle.v2.models import ProductIntake
 from tests.fixtures import seed_auth
 from tests.test_mcp import api_token, mcp_client
@@ -28,6 +31,7 @@ from tests.test_roadmap import (
     approved_prd,
     as_user,
     built_roadmap,
+    decide,
     get,
     seed_baseline,
     tick,
@@ -277,9 +281,12 @@ async def test_regenerate_a_roadmap_estimates_runs_and_imports_the_next_version(
     assert started.status_code == 200, started.text
     run = started.json()
     assert run["status"] == "running"
-    await tick(client, auth)
-    await tick(client, auth)
-    run = await get(client, auth, run["id"])
+    for _ in range(6):
+        await tick(client, auth)
+        run = await get(client, auth, run["id"])
+        if run["status"] != "awaiting_checkpoint":
+            continue
+        run = await decide(client, auth, run)
     assert run["status"] == "succeeded", run
     versions = (await client.get(f"/v1/documents/{ROADMAP}/versions", headers=auth)).json()
     assert [v["number"] for v in versions] == [1, 2]
@@ -346,19 +353,22 @@ async def test_the_ticker_purges_trash_after_30_days(client, owner, monkeypatch)
 # --------------------------------------------------------------------------- done when 5
 
 
-async def test_run_tokens_never_delete_restore_purge_or_regenerate(client, owner):
+async def test_run_tokens_never_delete_restore_purge_or_regenerate(client, owner, runtime):
     tenant_id, auth = owner
     await approved_prd(client, auth)
     entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)).json()
+    # A run's REST calls carry its creator's session and the run token (an owner's run).
     async with tenant_session(tenant_id) as s:
-        created_by = (await s.scalar(select(AuditEvent.actor_token_id).limit(1))) or None
-        r = Run(flow="baseline_to_prd", created_by=created_by, status="running")
+        user = await create_user(s, "run-owner@example.com", "pw")
+        user.role = "owner"
+        r = Run(flow="baseline_to_prd", created_by=user.id, status="running")
         s.add(r)
         await s.flush()
         raw = await mint_run_token(s, r.id, ["read:documents", "write:drafts"], 600)
         await s.commit()
         run_id = r.id
-    run_auth = {"Authorization": f"Bearer {raw}"}
+    cookie = f"{get_settings().session_cookie_name}={make_session_cookie(user)}"
+    run_auth = {"Cookie": cookie, RUN_TOKEN_HEADER: raw}
     calls = [
         ("DELETE", f"/v1/documents/{PRD}"),
         ("POST", f"/v1/documents/{PRD}/restore"),
