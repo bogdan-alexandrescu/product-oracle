@@ -4,11 +4,15 @@ at $0, nothing is submitted for it, and its stop opens at once on the draft's it
 knob ``reuse_draft_items: false`` derives them again as before. Against Postgres with the
 FakeRuntime."""
 
+from decimal import Decimal
+
 import pytest
 from sqlalchemy import select
 
+from oracle import safe_yaml
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
+from oracle.runs import service
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, import_draft, seed_auth
@@ -18,7 +22,7 @@ from tests.test_draft_roadmaps import (
     rows,
 )
 from tests.test_draft_roadmaps import tick as tick_ok
-from tests.test_roadmap import ROADMAP_MD, create, get, pending, verified_estimate
+from tests.test_roadmap import ROADMAP_MD, create, decide, get, pending, verified_estimate
 
 PRD = "checkout-redesign"
 
@@ -158,3 +162,105 @@ async def test_derive_again_or_no_ready_draft_runs_the_items_step(client, owner,
     run = await create(client, auth, source=PRD)
     est = await estimate(client, auth, run)
     assert est["total_usd"] == 14.5 and not est["segments"][0]["reused"]
+
+
+async def started_on_reused_items(client, auth, runtime, tenant_id, **body) -> dict:
+    """A Build roadmap run on checkout-redesign v1 started on its reused draft items."""
+    await approved_with_draft_items(client, auth, runtime, tenant_id)
+    run = await create(client, auth, source=PRD, **body)
+    assert (await estimate(client, auth, run))["total_usd"] == 9.0
+    resp = await client.post(f"/v1/runs/{run['id']}/start", headers=auth)
+    assert resp.status_code == 200, resp.text
+    return await get(client, auth, run["id"])
+
+
+async def test_a_send_back_after_reuse_stays_under_the_ceiling(client, owner, runtime):
+    """protects: the spending ceiling of a run reusing the draft items counts the items
+    step's nominal $5.50 (1.5 x $14.50), so one send-back of the items (a paid items step)
+    and the roadmap draft do not pause it; fails_when: the ceiling is 1.5 x the $9.00
+    estimate and the run pauses at paused_overrun; no_claim: a second send-back."""
+    tenant_id, auth = owner
+    run = await started_on_reused_items(client, auth, runtime, tenant_id)
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_items"
+    runtime.script["roadmap_items"] = [
+        Outcome(artifacts={"roadmap_items.yaml": items_file(1)}, cost_usd=Decimal("5.50"))
+    ]
+    runtime.script["roadmap_draft"] = [
+        Outcome(artifacts={"roadmap.md": ROADMAP_MD}, cost_usd=Decimal("9.00"))
+    ]
+    run = await decide(client, auth, run, "changes_requested", "Move the shipping step to now")
+    assert [s.outputs for s in runtime.submitted] == [("roadmap_items.yaml",)]
+    await tick_ok(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_items"
+    run = await decide(client, auth, run)
+    await tick_ok(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] != "paused_overrun", run
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_review"
+
+
+async def test_the_reused_note_goes_once_the_items_are_derived_again(client, owner, runtime):
+    """protects: the items step's "Reused: the roadmap items of v1" note shows only while
+    the step holds the reused items; fails_when: it still shows after a send-back derived
+    the items again; no_claim: the estimate's note."""
+    tenant_id, auth = owner
+    run = await started_on_reused_items(client, auth, runtime, tenant_id)
+    assert run["segments"][0]["note"].startswith("Reused: the roadmap items of v1")
+    run = await decide(client, auth, run, "changes_requested", "Move the shipping step to now")
+    assert (await get(client, auth, run["id"]))["segments"][0]["note"] is None
+    await tick_ok(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["waiting_on"] == "roadmap_items" and run["segments"][0]["note"] is None
+
+
+async def test_a_busy_parse_pool_at_start_is_retried_by_the_tick(
+    client, owner, runtime, monkeypatch
+):
+    """protects: Start on reused items when the parse pool is busy for the items check
+    answers 200 and leaves the run running, and the next tick opens the items stop;
+    fails_when: Start answers 429/503, or the run never reaches its stop; no_claim: how
+    long the pool waits."""
+    tenant_id, auth = owner
+    await approved_with_draft_items(client, auth, runtime, tenant_id)
+    real = service._check_items
+    calls = {"n": 0}
+
+    async def busy_once(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise safe_yaml.ParseBusy("parse_busy")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_check_items", busy_once)
+    run = await create(client, auth, source=PRD)
+    await estimate(client, auth, run)
+    resp = await client.post(f"/v1/runs/{run['id']}/start", headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "running" and runtime.submitted == []
+    await tick_ok(client, auth)
+    run = await get(client, auth, run["id"])
+    assert calls["n"] == 2
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_items"
+    assert pending(run)["payload"]["items_check"]["by_horizon"]["now"] == 1
+    assert runtime.submitted == []
+
+
+async def test_with_the_items_stop_off_it_goes_straight_to_the_roadmap_draft(
+    client, owner, runtime
+):
+    """protects: spec 3.7, with the roadmap_items stop off a run reusing the draft items
+    queues the roadmap draft at Start; fails_when: it waits at a stop or submits an items
+    step; no_claim: the roadmap review stop."""
+    tenant_id, auth = owner
+    run = await started_on_reused_items(
+        client, auth, runtime, tenant_id, knobs={"checkpoints": {"roadmap_items": False}}
+    )
+    assert run["status"] == "running"
+    assert [c for c in run["checkpoints"] if c["status"] == "pending"] == []
+    assert run["segments"][0]["status"] == "succeeded"
+    assert [s.outputs for s in runtime.submitted] == [("roadmap.md",)]
+    await tick_ok(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "roadmap_review"
