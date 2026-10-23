@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 
-import { Button, Chip, FilterChips, InfoTip, InspectorSection, Panel, Sheet, Split, type Column } from "@/components/ds";
+import { Button, FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -13,8 +13,9 @@ import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { baseName, CompareBar } from "./CompareBar";
-import { HORIZONS, horizonLabel, needsAttention, sectionFor, toItemRow, type ItemRow } from "./item-row";
-import { CHANGED, changeChips, changeLine, useItemsDiff, type Compare, type ItemChange } from "./useItemsDiff";
+import { HORIZONS, needsAttention, sectionFor, toItemRow, type ItemRow } from "./item-row";
+import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
+import { CHANGED, useItemsDiff, type Compare } from "./useItemsDiff";
 
 type Filter = "all" | "changed" | "attention";
 type Item = Schemas["RoadmapItemOut"];
@@ -150,36 +151,8 @@ export function RoadmapItemsPane({
         ) : undefined
       }
     >
-      {change && (
-        <InspectorSection label={`What changed since ${since}`} testId="item-what-changed">
-          <ul className="flex flex-col gap-1 text-[15px]">
-            {change.change === "added" && <li>New since {since}</li>}
-            {change.change === "dropped" && <li>Dropped since {since}</li>}
-            {change.change === "unchanged" && !change.notes.length && <li>No change</li>}
-            {change.fields.map((f) => (
-              <li key={f.field}>{changeLine(f, titles)}</li>
-            ))}
-            {change.notes.map((f) => (
-              <li key={`note-${f.field}`} className="text-text2">
-                {changeLine(f, titles)}
-              </li>
-            ))}
-          </ul>
-        </InspectorSection>
-      )}
-      {!r.ghost && !!historyQ.data?.entries.length && (
-        <InspectorSection label="History" testId="item-history">
-          <ol className="flex flex-col gap-1 text-[15px]">
-            {historyQ.data.entries.map((e) => (
-              <li key={e.ref}>
-                {e.present
-                  ? `${e.label} · ${horizonLabel(e.horizon ?? "")}${e.approved ? " · approved" : ""}`
-                  : `${e.label} · dropped`}
-              </li>
-            ))}
-          </ol>
-        </InspectorSection>
-      )}
+      {change && <WhatChanged change={change} since={since} titles={titles} />}
+      {!r.ghost && <ItemHistory history={historyQ.data} />}
     </ItemInspector>
   );
 
@@ -301,22 +274,5 @@ function StalenessActions({
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
-  );
-}
-
-/** At most two change chips, then "+N" (E3 Change column). */
-function ChangeChips({ change }: { change?: ItemChange }) {
-  if (!change) return null;
-  const chips = changeChips(change);
-  if (!chips.length) return <span className="text-text2">—</span>;
-  return (
-    <span data-testid="item-change" data-change={change.change} className="inline-flex min-w-0 flex-wrap items-center gap-1">
-      {chips.slice(0, 2).map((c) => (
-        <Chip key={c.label} kind={c.kind}>
-          {c.label}
-        </Chip>
-      ))}
-      {chips.length > 2 && <Chip kind="line">+{chips.length - 2}</Chip>}
-    </span>
   );
 }

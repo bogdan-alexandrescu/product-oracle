@@ -187,6 +187,41 @@ export function seedDraftRoadmaps(ctx: DraftRoadmapContext): DraftRoadmapDb {
   return db;
 }
 
+/**
+ * E3b "approved-plan": usage-alerts v2's ready draft items, against the approved
+ * usage-alerts-roadmap v1 (Behaviour in Now, Success metrics in Next): Spend limits new in Now,
+ * Behaviour moved to Next, Success metrics as it was. Shaped like the roadmap's own items (no
+ * outcome, rank or confidence), so only those changes show.
+ */
+export function seedApprovedPlanDraft(ctx: DraftRoadmapContext, db: DraftRoadmapDb) {
+  const doc = ctx.documents.find((d) => d.slug === "usage-alerts");
+  const v = doc && ctx.versions.find((x) => x.document_id === doc.id && x.number === 2);
+  if (!doc || !v) return;
+  const title = (key: string) => (v.sections.find((x) => x.section_key === key)?.heading ?? key).replace(/^[\d.]+\s+/, "");
+  const plain = (key: string, horizon: Item["horizon"], position: number): Item => ({
+    ...item(ctx, doc, v, { key: `item-${key}`, title: title(key), outcome: "", horizon, section: key, rank: 0, confidence: "" }, position),
+    outcome: null,
+    priority: null,
+    confidence: null,
+    milestone: (horizon === "now" || key === "behaviour" ? { name: "First release" } : null) as Item["milestone"],
+  });
+  const items = [plain("limits", "now", 0), plain("behaviour", "next", 1), plain("metrics", "next", 2)];
+  db.rows.push({
+    document_id: doc.id,
+    version: 2,
+    status: "ready",
+    requested_via: "auto",
+    requested_by: null,
+    requested_at: "2026-10-21T09:01:00Z",
+    run_id: null,
+    ready_at: "2026-10-21T09:08:00Z",
+    error: null,
+    depth: "standard",
+    check: checkOf(items),
+    items,
+  });
+}
+
 /** Canned items for a derivation that finishes: the seed's for checkout-redesign v1/v2, else one per subsection. */
 function cannedItems(ctx: DraftRoadmapContext, doc: Doc, v: Version): { items: Item[]; problems: DraftRoadmapCheck["problems"] } {
   if (doc.slug === SEED_PRD && (v.number === 1 || v.number === 2)) {

@@ -81,13 +81,18 @@ export function changeLine(f: FieldChange, titles: ReadonlyMap<string, string>):
 }
 
 /**
- * The diff of a roadmap version's items against the previous version or the approved plan
- * (E3), with its changes by key and its dropped items as ghost rows to add to the table.
+ * The diff of a roadmap version's items, or a PRD draft's (E3b), against the previous
+ * version or draft or the approved plan (E3), with its changes by key and its dropped items
+ * as ghost rows to add to the table. `stamp` is read again when it changes; null asks
+ * nothing (a draft whose items are not ready).
  */
-export function useItemsDiff(doc: string, n: number, compare: Compare) {
+export function useItemsDiff(doc: string, n: number, compare: Compare, stamp: string | null = "") {
   const q = useQuery(
-    `roadmap-items-diff|${doc}|${n}|${compare}`,
-    () => unwrap(api.GET("/v1/roadmap-items/diff", { params: { query: { head: `${doc}@${n}`, base: compare } } })),
+    `roadmap-items-diff|${doc}|${n}|${compare}|${stamp ?? "-"}`,
+    () =>
+      stamp === null
+        ? Promise.resolve(null)
+        : unwrap(api.GET("/v1/roadmap-items/diff", { params: { query: { head: `${doc}@${n}`, base: compare } } })),
     { keepPrevious: true },
   );
   const diff = q.data;

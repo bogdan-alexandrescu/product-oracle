@@ -200,4 +200,13 @@ filter and `?compare=previous|approved&filter=all|changed|attention` in the URL.
 tokens are refused; code in `api/oracle/roadmap/diff_views.py`). Dates compare as they
 stand now on both sides. A prd_to_roadmap run that writes the next version of an existing
 roadmap lists that roadmap's latest items as "Known items" so the agents keep their ids.
-A PRD version's own draft items (E1) are not stored yet: a PRD ref answers 409.
+
+**Roadmap diffs for PRD drafts (E3b).** A PRD version's ref (`<prd>@<n>`) names its draft
+items (E1) once they are `ready`; until then it answers 409. A draft's Roadmap tab has the
+same compare bar, Changed filter (the default when there is something to compare with),
+change column, struck dropped rows and inspector sections: "previous" is the nearest
+earlier ready draft, "approved" the latest approved roadmap version whose items trace to
+the PRD (its product track's roadmap first). A draft's ref base is a draft of the same PRD
+or a roadmap version tracing to it. History runs across the PRD's ready drafts and those
+roadmap versions, in the order their items were stored ("Draft v1 · Next", "Roadmap v1 ·
+Now · approved").
