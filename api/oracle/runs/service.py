@@ -9429,6 +9429,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     oracle_actions = await inbox_actions(db, principal)
     dates = await _date_rows(db, principal, leads)
+    from oracle.roadmap.alerts import inbox_rows as track_rows
+
+    track_groups = await track_rows(db, principal, seen)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9467,7 +9470,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + (1 if strategy else 0)
         + sum(1 for r in launch_rows if r.counted)
         + sum(a.counts for a in oracle_actions)
+        + sum(t.counts.new + t.counts.open for t in track_groups)
         + counted,
+        tracks=track_groups,
         launches=launch_rows,
         items=states,
         counts=counts,

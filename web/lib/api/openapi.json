@@ -28614,6 +28614,338 @@
         }
       }
     },
+    "/v1/track-alerts": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Track Alerts",
+        "description": "A track's situations that need someone (F2): slips, drift both ways, blockers,\nstale items, a moved PRD. ``actions``: only what the caller may do now.",
+        "operationId": "list_track_alerts",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "kept",
+                    "resolved"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "all",
+                  "type": "string"
+                }
+              ],
+              "default": "open",
+              "title": "State"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackAlertOut"
+                  },
+                  "title": "Response List Track Alerts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/track-alerts/{alert_id}/keep": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Keep Track Alert",
+        "description": "Keep watching: the alert leaves the Inbox until its facts change (the people it\ngoes to). 409 when it is not open.",
+        "operationId": "keep_track_alert",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TrackAlertKeep"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackAlertOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/track-alerts/{alert_id}/reopen": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Reopen Track Alert",
+        "description": "Put a kept alert back in the Inbox. 409 when it is not kept.",
+        "operationId": "reopen_track_alert",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackAlertOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/track-alerts/{alert_id}/accept-date": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Accept Track Alert Date",
+        "description": "Accept a slipped date, in one transaction: a verified basis from the tracker\nrecord, the planned Now milestones resting on the old date moved to the new one, the\nold bases withdrawn, the track monitored again. Engineering leads and owners; approvers\nwhile no lead is named (F3). 409 when the alert is not an open date slip or the\ntracker date changed since it opened; 422 when the new date breaks Now's rules.",
+        "operationId": "accept_track_alert_date",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TrackAlertAccept"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptDateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracker/records/{record_id}/events": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Tracker Record Events",
+        "description": "What an import changed on a tracker record: state, target date, estimate and the\ntracker's own status, before and after (F2).",
+        "operationId": "list_tracker_record_events",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Record Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerRecordEventOut"
+                  },
+                  "title": "Response List Tracker Record Events"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/alignment-reports": {
       "get": {
         "tags": [
@@ -33259,6 +33591,48 @@
   },
   "components": {
     "schemas": {
+      "AcceptDateOut": {
+        "properties": {
+          "alert": {
+            "$ref": "#/components/schemas/TrackAlertOut"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/ScheduleBasisOut"
+          },
+          "withdrawn_basis_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Withdrawn Basis Ids"
+          },
+          "milestones_moved": {
+            "items": {
+              "$ref": "#/components/schemas/MilestoneMoved"
+            },
+            "type": "array",
+            "title": "Milestones Moved"
+          },
+          "stale_item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Stale Item Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alert",
+          "basis",
+          "withdrawn_basis_ids",
+          "milestones_moved",
+          "stale_item_ids"
+        ],
+        "title": "AcceptDateOut"
+      },
       "AcceptSuggestionIn": {
         "properties": {
           "lock_version": {
@@ -55428,6 +55802,14 @@
               }
             ],
             "title": "Last Seen At"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/InboxTrack"
+            },
+            "type": "array",
+            "title": "Tracks",
+            "default": []
           }
         },
         "type": "object",
@@ -56004,6 +56386,96 @@
         "type": "object",
         "title": "InboxSummary",
         "description": "What a pending checkpoint needs of the caller and how much (D9), from the same read\nas ``GET \u2026/review`` (oracle.runs.actions.inbox_summary): its counts, the wait, up to\nthree child rows (blocking first, then in position order) and ``more`` items needing\nthe caller beyond them. A kind's review spec registers its own (``SUMMARIES``)."
+      },
+      "InboxTrack": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/TrackAlertPrd"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/InboxTrackCounts"
+          },
+          "newest_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest At"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/TrackAlertOut"
+            },
+            "type": "array",
+            "title": "Alerts"
+          },
+          "more": {
+            "type": "integer",
+            "title": "More",
+            "default": 0
+          },
+          "done": {
+            "items": {
+              "$ref": "#/components/schemas/TrackAlertOut"
+            },
+            "type": "array",
+            "title": "Done",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_id",
+          "prd",
+          "health",
+          "counts",
+          "newest_at",
+          "alerts"
+        ],
+        "title": "InboxTrack",
+        "description": "One track's Inbox row (F2): its open alerts for the caller (up to three, newest\nfirst), how many more, and the kept and resolved ones of the last 30 days (Done)."
+      },
+      "InboxTrackCounts": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open",
+            "default": 0
+          },
+          "new": {
+            "type": "integer",
+            "title": "New",
+            "default": 0
+          },
+          "kept": {
+            "type": "integer",
+            "title": "Kept",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "InboxTrackCounts"
       },
       "InspectedModule": {
         "properties": {
@@ -61822,6 +62294,39 @@
           "name"
         ],
         "title": "MilestoneCreate"
+      },
+      "MilestoneMoved": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "from",
+          "to"
+        ],
+        "title": "MilestoneMoved"
       },
       "MilestoneOut": {
         "properties": {
@@ -87192,6 +87697,247 @@
         "title": "TraceUpstreamRef",
         "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nbaseline entity."
       },
+      "TrackAlertAccept": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "TrackAlertAccept"
+      },
+      "TrackAlertKeep": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "TrackAlertKeep"
+      },
+      "TrackAlertOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/TrackAlertPrd"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "date_slip",
+              "overdue",
+              "cancelled",
+              "ahead",
+              "unplanned",
+              "blocked",
+              "stale",
+              "prd_moved"
+            ],
+            "title": "Kind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "kept",
+              "resolved"
+            ],
+            "title": "State"
+          },
+          "inbox_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "open",
+                  "done"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbox State"
+          },
+          "opened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Opened At"
+          },
+          "kept_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kept By"
+          },
+          "kept_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kept By Name"
+          },
+          "kept_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kept At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "actions": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "accept_date",
+                "replan",
+                "review",
+                "reconcile",
+                "open_blocker",
+                "link",
+                "keep",
+                "reopen"
+              ]
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "track_id",
+          "prd",
+          "item_key",
+          "item_title",
+          "kind",
+          "detail",
+          "data",
+          "state",
+          "opened_at",
+          "kept_by",
+          "kept_at",
+          "note",
+          "resolved_at",
+          "actions"
+        ],
+        "title": "TrackAlertOut",
+        "description": "One situation on one track. ``actions``: only what the caller may do now.\n``inbox_state``: in the Inbox only (new, open, done; C1e)."
+      },
+      "TrackAlertPrd": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title"
+        ],
+        "title": "TrackAlertPrd"
+      },
       "TrackChange": {
         "properties": {
           "id": {
@@ -88016,6 +88762,55 @@
         ],
         "title": "TrackerPlanOut",
         "description": "What a two-way connector would create: a preview only, never written."
+      },
+      "TrackerRecordEventOut": {
+        "properties": {
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "state",
+              "target_date",
+              "estimate",
+              "raw_status"
+            ],
+            "title": "Field"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "observed_at",
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "TrackerRecordEventOut"
       },
       "TrackerRecordIn": {
         "properties": {

@@ -39,7 +39,7 @@ import { publishRefusal, routeQuality, seedQuality, type QualityContext, type Qu
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, DATE_BASES_SCENARIO, DIFF_SCENARIO, dateMarks, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -2931,6 +2931,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     role: me.role,
     engineeringLead: engineeringLeads(db).includes(me.id),
     leadNamed: engineeringLeads(db).length > 0,
+    userName: me.email,
     documents: db.documents,
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
@@ -3026,8 +3027,11 @@ async function route(db: Db, req: Request): Promise<Response> {
               return prd ? [{ ...b, prd: { id: prd.id, slug: prd.slug, title: prd.title } }] : [];
             })
         : [];
+    // F2: the track group (the track's owner, else every owner); its new and open alerts count.
+    const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
     return json(200, {
       ...inbox,
+      tracks: tracked.tracks,
       revoke_failures: failures,
       access_failures: accessFailures,
       reports: reported.reports,
@@ -3035,7 +3039,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       strategy,
       oracle_actions: did,
       dates,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total,
     });
   }
   if (runs) return runs;

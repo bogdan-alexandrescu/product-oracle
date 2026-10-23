@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from oracle.v2.schemas import Freshness
 
@@ -612,6 +612,8 @@ class TrackSummary(TrackOut):
 class TrackOverview(TrackSummary):
     """One calm overview per track: health, the next milestone, what needs attention."""
 
+    # What it was computed from (oracle.roadmap.views.TrackRead), for the alerts sync.
+    _found: Any = PrivateAttr(default=None)
     counts: dict[str, int]
     next_milestone: NextMilestone | None
     at_risk: list[AtRiskItem]
@@ -835,3 +837,91 @@ class RoadmapItemHistoryOut(BaseModel):
     prd: DocumentRef
     item_key: str
     entries: list[RoadmapItemHistoryEntry]
+
+
+# --- track alerts (F2 Track health) ------------------------------------------------------
+
+AlertKind = Literal[
+    "date_slip", "overdue", "cancelled", "ahead", "unplanned", "blocked", "stale", "prd_moved"
+]
+AlertState = Literal["open", "kept", "resolved"]
+AlertAction = Literal[
+    "accept_date", "replan", "review", "reconcile", "open_blocker", "link", "keep", "reopen"
+]
+
+
+class TrackAlertPrd(BaseModel):
+    slug: str
+    title: str
+
+
+class TrackAlertOut(BaseModel):
+    """One situation on one track. ``actions``: only what the caller may do now.
+    ``inbox_state``: in the Inbox only (new, open, done; C1e)."""
+
+    id: uuid.UUID
+    track_id: uuid.UUID
+    prd: TrackAlertPrd
+    item_key: str | None
+    item_title: str | None
+    kind: AlertKind
+    detail: str
+    data: dict[str, Any]
+    state: AlertState
+    inbox_state: Literal["new", "open", "done"] | None = None
+    opened_at: datetime
+    kept_by: uuid.UUID | None
+    kept_by_name: str | None = None
+    kept_at: datetime | None
+    note: str | None
+    resolved_at: datetime | None
+    actions: list[AlertAction]
+
+
+class TrackAlertKeep(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class TrackAlertAccept(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class MilestoneMoved(BaseModel):
+    id: uuid.UUID
+    from_: date | None = Field(serialization_alias="from")
+    to: date
+
+
+class AcceptDateOut(BaseModel):
+    alert: TrackAlertOut
+    basis: ScheduleBasisOut
+    withdrawn_basis_ids: list[uuid.UUID]
+    milestones_moved: list[MilestoneMoved]
+    stale_item_ids: list[uuid.UUID]
+
+
+class TrackerRecordEventOut(ORM):
+    observed_at: datetime
+    field: Literal["state", "target_date", "estimate", "raw_status"]
+    before: str | None
+    after: str | None
+
+
+class InboxTrackCounts(BaseModel):
+    open: int = 0
+    new: int = 0
+    kept: int = 0
+
+
+class InboxTrack(BaseModel):
+    """One track's Inbox row (F2): its open alerts for the caller (up to three, newest
+    first), how many more, and the kept and resolved ones of the last 30 days (Done)."""
+
+    track_id: uuid.UUID
+    prd: TrackAlertPrd
+    health: str | None
+    counts: InboxTrackCounts
+    newest_at: datetime | None
+    alerts: list[TrackAlertOut]
+    more: int = 0
+    done: list[TrackAlertOut] = []

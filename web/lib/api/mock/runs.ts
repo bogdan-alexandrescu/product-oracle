@@ -1304,6 +1304,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // Launch rows (H6) are added by the server (./launches.ts); date rows (F3) too.
     launches: [],
     dates: [],
+    // Track rows (F2) are added by the server (./roadmap.ts).
+    tracks: [],
     checkpoints,
     deliveries,
     approvals,

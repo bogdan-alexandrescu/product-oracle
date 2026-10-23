@@ -32,6 +32,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -56,6 +57,12 @@ DRAFT_STATUSES = ("queued", "running", "ready", "failed", "superseded", "off", "
 DRAFT_DEPTHS = ("quick", "standard", "deep")
 # new_draft: queued by the version's import; derive: a person's Derive (never superseded).
 DRAFT_VIA = ("new_draft", "derive")
+# F2 Track health: the situations an alert names (oracle.roadmap.alerts), its states, and
+# the tracker record fields whose changes are kept.
+ALERT_KINDS = ("date_slip", "overdue", "cancelled", "ahead", "unplanned", "blocked", "stale",
+               "prd_moved")  # fmt: skip
+ALERT_STATES = ("open", "kept", "resolved")
+RECORD_FIELDS = ("state", "target_date", "estimate", "raw_status")
 
 
 class ProductTrack(TenantScoped, Base):
@@ -359,3 +366,62 @@ class RoadmapChangeSet(TenantScoped, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     lock_version: Mapped[int] = _lock_version()
     updated_at: Mapped[datetime] = _updated_at()
+
+
+class TrackAlert(TenantScoped, Base):
+    """One situation on one track (F2 Track health): a slip, drift either way, a blocker,
+    a stale item or a moved PRD, synced by every monitoring check (oracle.roadmap.alerts).
+    ``item_key`` is ``''`` for a track-level alert; a new ``fingerprint`` (the facts it
+    rests on) opens a new alert."""
+
+    __tablename__ = "track_alerts"
+    __table_args__ = (
+        UniqueConstraint("track_id", "item_key", "kind", "fingerprint"),
+        CheckConstraint(_in("kind", ALERT_KINDS), name="kind"),
+        CheckConstraint(_in("state", ALERT_STATES), name="state"),
+        CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note"),
+        Index(
+            "ix_track_alerts_open",
+            "tenant_id",
+            "state",
+            postgresql_where=text("state <> 'resolved'"),
+        ),
+    )
+
+    track_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("product_tracks.id", ondelete="CASCADE"), nullable=False
+    )
+    item_key: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict[str, Any]] = _json()
+    state: Mapped[str] = mapped_column(Text, nullable=False, default="open", server_default="open")
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    opened_change_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("change_events.id", ondelete="SET NULL")
+    )
+    kept_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    kept_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TrackerRecordEvent(TenantScoped, Base):
+    """One field of a tracker record changed by an import: before and after (F2)."""
+
+    __tablename__ = "tracker_record_events"
+    __table_args__ = (
+        CheckConstraint(_in("field", RECORD_FIELDS), name="field"),
+        Index("ix_tracker_record_events_record", "record_id", "observed_at"),
+    )
+
+    record_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tracker_records.id", ondelete="CASCADE"), nullable=False
+    )
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    field: Mapped[str] = mapped_column(Text, nullable=False)
+    before: Mapped[str | None] = mapped_column(Text)
+    after: Mapped[str | None] = mapped_column(Text)

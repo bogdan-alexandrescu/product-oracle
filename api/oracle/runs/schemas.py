@@ -1081,6 +1081,7 @@ class InboxStrategy(BaseModel):
 
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
+from oracle.roadmap.schemas import InboxTrack  # noqa: E402
 
 
 class InboxOut(BaseModel):
@@ -1137,6 +1138,10 @@ class InboxOut(BaseModel):
     launches: list[InboxLaunch] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
+    # F2 Track health: one row per track with alerts for me (the track's owner, else the
+    # owners; slips and overdue items also the engineering leads); new and open ones
+    # count in ``total``.
+    tracks: list[InboxTrack] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

@@ -16,6 +16,7 @@ previews what a connector would create, without writing.
 
 import uuid
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select, text
@@ -25,7 +26,13 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.config import get_settings
 from oracle.roadmap import schedule
-from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord
+from oracle.roadmap.models import (
+    RECORD_FIELDS,
+    ProductTrack,
+    RoadmapItem,
+    TrackerRecord,
+    TrackerRecordEvent,
+)
 from oracle.roadmap.schemas import (
     DriftEntry,
     TrackerConnectorOut,
@@ -110,6 +117,7 @@ async def import_records(
     now = datetime.now(UTC)
     created = updated = 0
     rows = []
+    history: list[TrackerRecordEvent] = []
     for rec in records:
         values: dict[str, Any] = rec.model_dump()
         values["observed_at"] = rec.observed_at or now
@@ -119,11 +127,13 @@ async def import_records(
             db.add(row)
             created += 1
         else:
+            history += _changes(row, values)
             for k, v in values.items():
                 setattr(row, k, v)
             row.recorded_by = principal.id
             updated += 1
         rows.append(row)
+    db.add_all(history)
     await db.flush()
     # A basis for one of these issues now covers the items it is matched to now: the
     # track milestones resting on it are checked again.
@@ -143,6 +153,33 @@ async def import_records(
         },
     )
     return created, updated, rows
+
+
+def _text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, (int, float, Decimal)):
+        return format(Decimal(str(value)).normalize(), "f")
+    return str(value)
+
+
+def _changes(row: TrackerRecord, values: dict[str, Any]) -> list[TrackerRecordEvent]:
+    """The tracker history (F2): one event per changed field of an existing record."""
+    out = []
+    for name in RECORD_FIELDS:
+        if name not in values:
+            continue
+        before, after = _text(getattr(row, name)), _text(values[name])
+        if before != after:
+            out.append(
+                TrackerRecordEvent(
+                    record_id=row.id, observed_at=values["observed_at"], field=name,
+                    before=before, after=after,
+                )
+            )  # fmt: skip
+    return out
 
 
 def ref(r: TrackerRecord) -> TrackerRecordRef:

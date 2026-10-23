@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { LinkIssueDialog } from "@/components/LinkIssueDialog";
@@ -64,6 +64,8 @@ function BuildRoadmaps() {
  * state, engineering status and the next decision, with the selected item in the inspector.
  * One call (GET /v1/plan) plus the goals band's; the inspector reads the item's history.
  */
+const noSubscribe = () => () => {};
+
 export default function PlanPage() {
   const { me, role, engineeringLead } = useMe();
   const userId = me?.user_id ?? null;
@@ -80,6 +82,9 @@ export default function PlanPage() {
   const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
   const tags = useMemo(() => new Map((goals ?? []).map((g) => [g.id, g])), [goals]);
   const [by, setBy] = useState<GroupBy>("horizon");
+  // F2: /plan?item=<key> (an Inbox track alert's Open) selects that item.
+  // Read on each render: a client navigation updates the URL after the first one.
+  const wanted = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("item"), () => null);
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
@@ -90,7 +95,7 @@ export default function PlanPage() {
   const data = q.data;
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
   const ordered = data ? grouped(data.items, by, tags, prdOrder).rows : [];
-  const item = ordered.find((i) => i.id === picked) ?? ordered[0] ?? null;
+  const item = ordered.find((i) => i.id === picked) ?? (picked == null ? ordered.find((i) => i.key === wanted) : undefined) ?? ordered[0] ?? null;
   const onSelect = useCallback((id: string) => {
     setPicked(id);
     setMilestone(null);

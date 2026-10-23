@@ -737,7 +737,21 @@ def assess(
     return out, risks
 
 
-async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
+class TrackRead:
+    """What one overview read: the overview, each item's risk by item id, and the items,
+    their context, the track's milestones and tracker records it was computed from (the
+    alerts sync reads the same, oracle.roadmap.alerts)."""
+
+    def __init__(self, **kw: Any) -> None:
+        self.overview: TrackOverview = kw["overview"]
+        self.risks: dict[uuid.UUID, ItemRisk] = kw["risks"]
+        self.rows: list[RoadmapItem] = kw["rows"]
+        self.ctx: ItemContext = kw["ctx"]
+        self.milestones: list[TrackMilestone] = kw["milestones"]
+        self.records: list[TrackerRecord] = kw["records"]
+
+
+async def read(db: AsyncSession, track: ProductTrack) -> TrackRead:
     base = await track_out(db, track)
     roadmap = (
         await db.get(Document, track.roadmap_document_id) if track.roadmap_document_id else None
@@ -750,7 +764,7 @@ async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
     source_number = None
     if version is not None and version.source_version_id:
         source_number = await _number(db, version.source_version_id)
-    out, _ = assess(
+    out, risks = assess(
         track,
         base,
         rows,
@@ -761,7 +775,16 @@ async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
         source_number,
         today(),
     )
-    return out
+    return TrackRead(
+        overview=out, risks=risks, rows=rows, ctx=ctx, milestones=milestones, records=records
+    )
+
+
+async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
+    """The track's overview; the read it came from rides along for :func:`monitor`."""
+    found = await read(db, track)
+    found.overview._found = found
+    return found.overview
 
 
 async def summary(db: AsyncSession, track: ProductTrack) -> TrackSummary:
@@ -786,8 +809,12 @@ async def monitor(
     db: AsyncSession, track: ProductTrack, actor: Any
 ) -> tuple[TrackOverview, uuid.UUID | None, list[str]]:
     """Compute the overview, store its snapshot, and record a ``product_track`` change
-    when health, at-risk items or the next milestone changed. The caller commits."""
+    when health, at-risk items or the next milestone changed, then sync the track's alerts
+    (oracle.roadmap.alerts) whether or not it changed. The caller commits."""
+    from oracle.roadmap import alerts
+
     o = await overview(db, track)
+    found = o._found or await read(db, track)
     after = snapshot(o)
     before = dict(track.monitor or {})
     changed = [
@@ -810,6 +837,7 @@ async def monitor(
     track.monitor = after
     track.monitored_at = datetime.now(UTC)
     await db.flush()
+    await alerts.sync(db, track, found, event_id)
     o = o.model_copy(update={"monitored_at": track.monitored_at})
     return o, event_id, changed
 
