@@ -74,7 +74,9 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # 0028_company_timezone chains on it; one head.
+    assert script.get_heads() == ["0028_company_timezone"]
+    assert script.get_revision("0028_company_timezone").down_revision == REVISION
 
 
 def _record(t: uuid.UUID, goal: uuid.UUID, prediction: dict) -> uuid.UUID:
