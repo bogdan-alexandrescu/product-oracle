@@ -232,6 +232,11 @@ class DecisionOut(DecisionSummary):
     decided_by: uuid.UUID | None = None
     decided_by_email: str | None = None
     decided_actor: str | None = None
+    # Who withdrew a withdrawn proposal, when and the reason they gave (#404).
+    withdrawn_at: datetime | None = None
+    withdrawn_by: uuid.UUID | None = None
+    withdrawn_by_email: str | None = None
+    withdrawn_reason: str | None = None
     created_by: uuid.UUID | None = None
     updated_at: datetime
     lock_version: int

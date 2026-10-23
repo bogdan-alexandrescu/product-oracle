@@ -382,6 +382,30 @@ async def test_withdraw_and_edit(client, ctx):
     assert resp.status_code == 409
 
 
+async def test_withdrawn_decision_reads_back_who_when_and_why(client, ctx):
+    """protects=#404: a withdrawn decision's record carries who withdrew it, when and the
+    reason they gave, on the withdraw response and on a later read; a proposal has none;
+    fails_when=the reason is only in the audit log, or the withdrawer is the approver;
+    no_claim=the inspector's sentence is the Playwright test's."""
+    d = await propose(client, ctx)
+    path = f"/v1/decisions/{d['number']}"
+    before = (await client.get(path, headers=ctx.as_("viewer"))).json()
+    assert before["withdrawn_at"] is None and before["withdrawn_reason"] is None
+    assert before["withdrawn_by"] is None and before["withdrawn_by_email"] is None
+    resp = await client.post(
+        f"{path}/withdraw",
+        json={"reason": "  Pricing moved to next quarter "},
+        headers=ctx.as_("commenter"),
+    )
+    assert resp.status_code == 200, resp.text
+    for body in (resp.json(), (await client.get(path, headers=ctx.as_("viewer"))).json()):
+        assert body["status"] == "withdrawn"
+        assert body["withdrawn_reason"] == "Pricing moved to next quarter"
+        assert body["withdrawn_by"] == str(ctx.users["commenter"].id)
+        assert body["withdrawn_by_email"] == "commenter@example.com"
+        assert body["withdrawn_at"] is not None
+
+
 async def test_reviews_reaffirm_revisit_reverse(client, ctx):
     """protects=the approver reviews a decided decision: reaffirm moves the review date,
     revisit opens a proposed decision that supersedes the original once decided, reverse

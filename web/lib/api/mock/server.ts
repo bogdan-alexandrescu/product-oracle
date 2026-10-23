@@ -318,6 +318,9 @@ export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
+/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later. */
+export const MOCK_SLOW_KEY = "po-mock-slow";
+export const MOCK_SLOW_MS = 1500;
 /**
  * D8: tests set this localStorage key to a member's email to have them change a checkpoint's
  * shared draft after the page loaded it: the next decide bumps the draft's revision by one
@@ -3161,5 +3164,8 @@ export async function mockFetch(req: Request): Promise<Response> {
     return res;
   });
   queue = next.catch(() => undefined);
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_SLOW_KEY)) {
+    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), MOCK_SLOW_MS)));
+  }
   return next;
 }

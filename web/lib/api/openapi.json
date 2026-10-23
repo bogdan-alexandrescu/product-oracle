@@ -43086,6 +43086,52 @@
             ],
             "title": "Decided Actor"
           },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn At"
+          },
+          "withdrawn_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn By"
+          },
+          "withdrawn_by_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn By Email"
+          },
+          "withdrawn_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn Reason"
+          },
           "created_by": {
             "anyOf": [
               {
