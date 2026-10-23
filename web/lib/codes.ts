@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api, unwrap, type EntityOut } from "@/lib/api/client";
+import { buildCodeIndex, type CodeEntity, type CodeIndex } from "@/lib/code-index";
 import { useMe } from "@/lib/me";
 
 /**
@@ -63,4 +64,30 @@ export function useNames(): Names | undefined {
     };
   }, [company]);
   return state && state.company === company ? state.names : undefined;
+}
+
+/**
+ * The company's goals and features that carry a code, for the codes in agent-written text
+ * (#305): "G-B Growth" is known as G-B, a feature keyed F-2 as F-2.
+ */
+export function useCodeEntities(): CodeEntity[] {
+  const names = useNames();
+  return useMemo(
+    () =>
+      names
+        ? [...names.byId.values()].flatMap((e) => {
+            const n = named(e.title, e.key);
+            return n.code ? [{ id: e.id, kind: e.type === "goal" ? ("Goal" as const) : ("Feature" as const), code: n.code, name: n.name, status: e.status }] : [];
+          })
+        : NO_ENTITIES,
+    [names],
+  );
+}
+
+const NO_ENTITIES: CodeEntity[] = [];
+
+/** The codes plain agent-written text can name: the company's goals and features. */
+export function useCompanyCodes(): CodeIndex {
+  const entities = useCodeEntities();
+  return useMemo(() => buildCodeIndex([], entities), [entities]);
 }

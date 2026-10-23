@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { named, useNames, type Named } from "@/lib/codes";
+import { splitCodes, type CodeEntry, type CodeIndex } from "@/lib/code-index";
+import { named, useCompanyCodes, useNames, type Named } from "@/lib/codes";
+import { sectionHash } from "@/lib/section-link";
 
 const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
@@ -327,4 +329,69 @@ function CodeCard({ kind, entityKey, entityId, title, proposed }: ChipProps) {
       )}
     </>
   );
+}
+
+/**
+ * A known code in agent-written text (#305): the code as written, with a dotted underline,
+ * and the same card as the app's own chips. The button's text is the text unchanged, so a
+ * PRD section's anchorable text (comments, highlights) stays the same.
+ */
+export function NamedCode({ text, entry }: { text: string; entry: CodeEntry }) {
+  return (
+    <HoverCard
+      unstyled
+      testId="named-code"
+      label={`${entry.code} ${entry.name}`}
+      className="named-code cursor-help rounded-goal underline decoration-text2 decoration-dotted underline-offset-[3px] outline-offset-2"
+      trigger={text}
+    >
+      <CardEyebrow>
+        {entry.kind}
+        {entry.from ? ` · ${entry.from}` : ""}
+      </CardEyebrow>
+      <span className="flex min-w-0 items-start gap-2">
+        <CodeTag code={entry.code} proposed={entry.from === "proposed"} />
+        <span className="min-w-0 font-semibold break-words" data-testid="card-name">
+          {entry.name}
+        </span>
+      </span>
+      {entry.line && (
+        <span className="mt-1.5 block text-text2" data-testid="card-line">
+          {entry.line}
+        </span>
+      )}
+      {entry.members && (
+        <ul className="mt-1.5 flex max-h-48 flex-col gap-0.5 overflow-y-auto text-text2" data-testid="card-members">
+          {entry.members.map((m) => (
+            <li key={m.code}>
+              <span className="font-mono text-[13px]">{m.code}</span> {m.name}
+            </li>
+          ))}
+        </ul>
+      )}
+      {entry.sectionKey ? (
+        <a href={sectionHash(entry.sectionKey)} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline">
+          Go to section
+        </a>
+      ) : entry.entityId ? (
+        <Link href={`/baseline?entity=${entry.entityId}`} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline">
+          Open
+        </Link>
+      ) : null}
+    </HoverCard>
+  );
+}
+
+/** Text with each known code drawn as a NamedCode; unknown codes stay plain. */
+export function withCodes(text: string, index: CodeIndex | undefined, key = "c"): ReactNode {
+  if (!index?.size) return text;
+  const pieces = splitCodes(text, index);
+  if (pieces.length === 1 && typeof pieces[0] === "string") return text;
+  return pieces.map((p, i) => (typeof p === "string" ? p : <NamedCode key={`${key}-${i}`} text={p.text} entry={p.entry} />));
+}
+
+/** Agent-written plain text (a proposal, a checkpoint note, an Inbox row) with the company's codes named. */
+export function CodeText({ text }: { text: string }) {
+  const index = useCompanyCodes();
+  return <>{withCodes(text, index)}</>;
 }
