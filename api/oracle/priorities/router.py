@@ -26,6 +26,7 @@ from oracle.priorities.schemas import (
     PrioritySnapshotSummary,
     PushbackOut,
 )
+from oracle.quality.schemas import CalibrationOut
 
 # Which snapshots a reader sees: saved by default (C8: a run's order is proposed until its
 # priority stop is approved, discarded when sent back).
@@ -52,6 +53,14 @@ async def get_priorities(
     each row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.
     """
     return await service.compute(db, method, principal, overrides=overrides)
+
+
+@router.get("/priorities/calibration", response_model=CalibrationOut)
+async def get_priority_calibration(db: TenantDB, principal: CurrentPrincipal) -> CalibrationOut:
+    """The track record (H3): how well assessed predictions held, per goal and company-wide,
+    and the factor (0.5 to 1.0) it puts on priority confidence. ``setting`` show: the
+    factor is displayed, not applied."""
+    return await service.calibration_out(db)
 
 
 @router.post(

@@ -209,7 +209,7 @@ test("the tab strip lists Plan's tabs in order; Roadmap documents keeps the list
   );
   await openPlan(page);
   const strip = page.getByTestId("plan-tabs").filter({ visible: true });
-  await expect(strip.getByRole("link")).toHaveText(["Plan", "Roadmap documents", "Dates"]);
+  await expect(strip.getByRole("link")).toHaveText(["Plan", "Roadmap documents", "Outcomes", "Dates"]);
   await expect(strip.getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
   await strip.getByRole("link", { name: "Roadmap documents" }).click();
   await expect(page).toHaveURL(/\/plan\/documents$/);

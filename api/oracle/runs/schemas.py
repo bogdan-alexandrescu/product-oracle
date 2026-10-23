@@ -881,6 +881,7 @@ class InboxStrategy(BaseModel):
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
 from oracle.rituals.schemas import InboxRitual  # noqa: E402
+from oracle.quality.schemas import InboxOutcome  # noqa: E402
 
 
 class InboxOut(BaseModel):
@@ -935,6 +936,9 @@ class InboxOut(BaseModel):
     # Launch rows (H6): Ready to launch and Notes to send (the launch's owner), Set tier
     # (approvers), counted in ``total``; Shipped (a member's personal note), shown only.
     launches: list[InboxLaunch] = []
+    # Outcome rows (H3): Add predictions and Outcome check due (counted in ``total``),
+    # Oracle recorded (shown only).
+    outcomes: list[InboxOutcome] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
 

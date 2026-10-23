@@ -73,7 +73,9 @@ def test_chains_on_b5s_head():
     fixed parent other than B5's; no_claim=later lanes' re-chaining."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # H3's 0027_outcome_tracking chains on it; one head.
+    assert script.get_heads() == ["0027_outcome_tracking"]
+    assert script.get_revision("0027_outcome_tracking").down_revision == REVISION
 
 
 def test_upgrade_and_downgrade(scratch_db):

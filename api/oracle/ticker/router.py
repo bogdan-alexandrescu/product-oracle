@@ -226,6 +226,17 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         log.exception("run ticker: launch Ready detection failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
+        # Outcomes (H3): predicted items that shipped start measuring, and due ones get
+        # Oracle's proposed assessment (deterministic, no model call).
+        from oracle.quality import shipping
+
+        async with tenant_session(tenant_id) as db:
+            await shipping.tick_due(db)
+            await db.commit()
+    except Exception:
+        log.exception("run ticker: outcome tracking failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
         # Requests (C1 "Triage runs"): once a day at 07:00 Pacific, a quick classify-only
         # triage run while a New request has no suggestion (the run itself is SwarmCloud's).
         async with tenant_session(tenant_id) as db:

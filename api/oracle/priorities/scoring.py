@@ -9,7 +9,10 @@ Methods (O3):
 - ``wsjf``: (business value + time criticality + risk reduction) / job size.
 
 Confidence is the feature's evidence confidence from the baseline (the mean of its
-scored evidence), falling back to the feature's stored confidence, then its attrs.
+scored evidence), falling back to the feature's stored confidence, then its attrs. The
+track record (H3, ``oracle.quality.calibration``) multiplies it by the smallest factor
+among the feature's confirmed goals, never above 1; with the company's
+``outcome_calibration`` at ``show`` the factor is explained but not applied.
 
 Order: features that serve a confirmed goal and could be scored first, by score;
 then those missing an input; then features that serve no confirmed goal (flagged).
@@ -28,7 +31,7 @@ from typing import Any
 
 METHODS = ("goal_weighted", "rice", "moscow", "wsjf")
 FORMULAS = {
-    "goal_weighted": "score = Σ(goal weight × contribution) × confidence ÷ effort",
+    "goal_weighted": "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     "rice": "score = reach × impact × confidence ÷ effort",
     "moscow": "rank = must (4) > should (3) > could (2) > won't (1); ties by goal value",
     "wsjf": "score = (business value + time criticality + risk reduction) ÷ job size",
@@ -50,6 +53,7 @@ class GoalLink:
     weight: float | None
     contribution: int | None
     edge_status: str
+    goal_id: str | None = None
 
 
 @dataclass
@@ -78,6 +82,12 @@ class FeatureInput:
     goals: list[GoalLink] = field(default_factory=list)
     # Keys of features this one depends on (depends_on, or the src of a blocks edge).
     depends_on: list[str] = field(default_factory=list)
+    # H3: the track record factor of its goals (None: too few assessed outcomes), why,
+    # how many outcomes it rests on, and whether it is applied or only shown.
+    calibration: float | None = None
+    calibration_basis: str | None = None
+    calibration_n: int | None = None
+    calibration_apply: bool = True
 
 
 @dataclass
@@ -125,7 +135,28 @@ def _round(x: float | None, n: int = 3) -> float | None:
 
 
 def confidence_of(f: FeatureInput) -> tuple[float, dict[str, Any]]:
-    """The confidence used for scoring, and where it came from."""
+    """The confidence used for scoring, and where it came from, times the track record
+    factor when one applies (the explanation keeps the value before it)."""
+    value, explain = _confidence(f)
+    if f.calibration is not None and f.calibration_apply:
+        explain = {**explain, "before_track_record": explain["value"]}
+        value = value * f.calibration
+        explain["value"] = _round(value)
+    return value, explain
+
+
+def calibration_of(f: FeatureInput) -> dict[str, Any] | None:
+    if f.calibration is None:
+        return None
+    return {
+        "factor": f.calibration,
+        "applied": f.calibration_apply,
+        "basis": f.calibration_basis,
+        "n": f.calibration_n,
+    }
+
+
+def _confidence(f: FeatureInput) -> tuple[float, dict[str, Any]]:
     scored = [e for e in f.evidence if e.confidence is not None]
     if scored:
         value = sum(e.confidence for e in scored) / len(scored)  # type: ignore[misc]
@@ -234,6 +265,11 @@ def score_feature(f: FeatureInput, method: str) -> Scored:
             return None
         return v
 
+    if f.calibration is not None and f.calibration_apply:
+        steps.append(
+            f"confidence = {conf_explain['before_track_record']} × track record "
+            f"{f.calibration:g} = {_round(confidence)}"
+        )
     if method == "goal_weighted":
         effort = need("effort", "effort", "effort_weeks", positive=True)
         inputs["goal_value"] = {"value": _round(value), "terms": terms}
@@ -290,6 +326,7 @@ def score_feature(f: FeatureInput, method: str) -> Scored:
         "formula": FORMULAS[method],
         "inputs": inputs,
         "confidence": conf_explain,
+        "calibration": calibration_of(f),
         "goals": terms,
         "missing": missing,
         "steps": steps,
