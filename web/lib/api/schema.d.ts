@@ -15535,6 +15535,41 @@ export interface components {
             /** Problems */
             problems: number;
         };
+        /**
+         * DraftedLearning
+         * @description A drafted learning on its assessment: drafted until the owner keeps or skips it.
+         */
+        DraftedLearning: {
+            /** Outcome Id */
+            outcome_id?: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "module" | "question_category" | "criterion";
+            /** Target */
+            target: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "recommend_more" | "recommend_less" | "note";
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+            /**
+             * State
+             * @default drafted
+             * @enum {string}
+             */
+            state: "drafted" | "kept" | "skipped";
+            /** Learning Id */
+            learning_id?: string | null;
+        };
         /** DriftEntry */
         DriftEntry: {
             /**
@@ -17054,7 +17089,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
             /** Title */
             title: string;
             /** Description */
@@ -17780,7 +17815,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -18424,20 +18459,6 @@ export interface components {
              */
             retry_until: string;
         };
-        /** InboxSections */
-        InboxSections: {
-            /** Total */
-            total: number;
-            /** Reviewed */
-            reviewed: number;
-        };
-        /** InboxSource */
-        InboxSource: {
-            /** Title */
-            title: string;
-            /** Version */
-            version: number;
-        };
         /**
          * InboxRitual
          * @description A ritual row of the Inbox: Pre-read ready (owner and attendees, until opened),
@@ -18474,6 +18495,20 @@ export interface components {
             state: "new" | "open" | "done";
             /** Counts */
             counts: boolean;
+        };
+        /** InboxSections */
+        InboxSections: {
+            /** Total */
+            total: number;
+            /** Reviewed */
+            reviewed: number;
+        };
+        /** InboxSource */
+        InboxSource: {
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
         };
         /**
          * InboxStaged
@@ -25790,7 +25825,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
             /** Document */
             document?: string | null;
             /** Source */
@@ -25879,7 +25914,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
             /** Flow Title */
             flow_title: string;
             /**
@@ -26033,7 +26068,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
             /** Flow Title */
             flow_title: string;
             /**

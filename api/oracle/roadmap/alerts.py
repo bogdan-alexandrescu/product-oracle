@@ -32,7 +32,7 @@ from oracle import audit
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
-from oracle.members.leads import engineering_leads, may_verify_dates
+from oracle.members.leads import date_rights, engineering_leads
 from oracle.roadmap import schedule, tracker, tracks
 from oracle.roadmap.models import (
     ProductTrack,
@@ -326,7 +326,7 @@ def actions(
         out += ["review", "reconcile"]
     if live and a.kind == "blocked":
         out.append("open_blocker")
-    if live and a.kind == "unplanned" and may_verify_dates(principal, leads):
+    if live and a.kind == "unplanned" and date_rights(principal, leads) is not None:
         out.append("link")
     if in_audience(principal, track, a.kind, leads):
         if a.state == "open":

@@ -3074,7 +3074,7 @@ export function finishDraftItemsRun(db: RunsDb, runId: string | null, args: { uu
   run.checkpoints.push({
     id: args.uuid(), run_id: run.id, kind: "roadmap_items", status: "skipped", approver_role: "approver",
     segment_seq: s.seq, decided_by: null, decided_at: args.now, note: "No checkpoint: draft items are reviewed on the Roadmap tab", payload: {},
-    created_at: args.now, can_decide: false, cannot_approve: null,
+    created_at: args.now, can_decide: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
   });
   Object.assign(run, { status: "succeeded", finished_at: args.now });
   refresh(run);

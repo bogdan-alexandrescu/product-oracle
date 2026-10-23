@@ -314,17 +314,15 @@ export function PlanInspector({
   me,
   onChanged,
   links,
-  onChanged,
 }: {
   item: PlanItem;
   goals: Map<string, GoalView>;
   history: Map<string, Point[]>;
   me: string | null | undefined;
-  /** A date basis was recorded from the inspector: the plan reloads. */
-  onChanged?: () => void;
-  links?: PlanLinks;
-  /** F2: an alert's action changed the plan (Accept new date); reload it. */
+  /** The plan changed from the inspector (F3: a date basis recorded; F2: an alert's
+   * action such as Accept new date): the plan reloads. */
   onChanged?: () => Promise<void> | void;
+  links?: PlanLinks;
 }) {
   const state = stateChip(item);
   const served = item.goal_ids.map((id) => goals.get(id)).filter((g): g is GoalView => !!g);

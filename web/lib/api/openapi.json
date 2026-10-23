@@ -50223,6 +50223,90 @@
         "title": "DraftRoadmapSummary",
         "description": "A PRD version's derivation on its version read (the Roadmap tab's label)."
       },
+      "DraftedLearning": {
+        "properties": {
+          "outcome_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Id"
+          },
+          "statement": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Statement"
+          },
+          "applies_to": {
+            "type": "string",
+            "enum": [
+              "module",
+              "question_category",
+              "criterion"
+            ],
+            "title": "Applies To"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "recommend_more",
+              "recommend_less",
+              "note"
+            ],
+            "title": "Direction"
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "default": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "drafted",
+              "kept",
+              "skipped"
+            ],
+            "title": "State",
+            "default": "drafted"
+          },
+          "learning_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "statement",
+          "applies_to",
+          "target",
+          "direction"
+        ],
+        "title": "DraftedLearning",
+        "description": "A drafted learning on its assessment: drafted until the owner keeps or skips it."
+      },
       "DriftEntry": {
         "properties": {
           "kind": {
@@ -54490,7 +54574,8 @@
               "baseline",
               "code_map",
               "update_draft",
-              "prd_draft_items"
+              "prd_draft_items",
+              "ritual_summary"
             ],
             "title": "Key"
           },
@@ -56488,7 +56573,8 @@
               "baseline",
               "code_map",
               "update_draft",
-              "prd_draft_items"
+              "prd_draft_items",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -58067,6 +58153,63 @@
         ],
         "title": "InboxRevokeFailure",
         "description": "A provider revoke a member's disable still owes, whose last attempt did not\nrevoke (C2): retried by the tick for 24 hours, then waiting for an owner."
+      },
+      "InboxRitual": {
+        "properties": {
+          "occurrence_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Occurrence Id"
+          },
+          "ritual_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ritual Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "pre_read",
+              "record_notes",
+              "failed"
+            ],
+            "title": "Reason"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "done"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occurrence_id",
+          "ritual_id",
+          "title",
+          "due_at",
+          "reason",
+          "state",
+          "counts"
+        ],
+        "title": "InboxRitual",
+        "description": "A ritual row of the Inbox: Pre-read ready (owner and attendees, until opened),\nRecord notes (the ritual's owner, after the end) and Ritual failed to prepare\n(owners). ``counts``: in needs_me and the badge."
       },
       "InboxSections": {
         "properties": {
@@ -78266,7 +78409,8 @@
               "baseline",
               "code_map",
               "update_draft",
-              "prd_draft_items"
+              "prd_draft_items",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -78538,7 +78682,8 @@
               "baseline",
               "code_map",
               "update_draft",
-              "prd_draft_items"
+              "prd_draft_items",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
@@ -79097,7 +79242,8 @@
               "baseline",
               "code_map",
               "update_draft",
-              "prd_draft_items"
+              "prd_draft_items",
+              "ritual_summary"
             ],
             "title": "Flow"
           },
