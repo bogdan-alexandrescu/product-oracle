@@ -128,12 +128,12 @@ test("Edit plan: a later proposal supersedes the waiting one, which can't be app
   await expect(changes(page).getByTestId("edit-cut")).toHaveCount(1);
   await changes(page).getByRole("button", { name: "Propose changes" }).click();
 
+  const superseded = changes(page).getByTestId("plan-superseded");
+  await expect(superseded).toContainText("Version 2 superseded by version 3 · it can't be approved");
+  await expect(superseded).toHaveCount(1);
   const waiting = changes(page).getByTestId("plan-proposal");
   await expect(waiting).toHaveCount(1);
   await expect(waiting).toContainText("Version 3 proposed from approved version 1 · waiting for the decider");
-  const superseded = changes(page).getByTestId("plan-superseded");
-  await expect(superseded).toHaveCount(1);
-  await expect(superseded).toContainText("Version 2 superseded by version 3 · it can't be approved");
   // The owner is not the decider: no Approve anywhere, not even a disabled one.
   await expect(changes(page).getByRole("button", { name: /Approve/ })).toHaveCount(0);
 

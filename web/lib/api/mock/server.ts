@@ -34,7 +34,7 @@ import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } fr
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { emptyPlanEdits, routeChangeSets, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
+import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { ALERTS_ROADMAP_SLUG, dateMarks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
@@ -2871,6 +2871,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     // H4: a vision or a product strategy is an owner's to approve.
     const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : null;
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
+    // #346: a proposal a later one superseded can't be approved, and says why.
+    const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
+    if (superseded) return json(409, { detail: superseded });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
       const latest = docVersions(db, doc).pop()!.number;
