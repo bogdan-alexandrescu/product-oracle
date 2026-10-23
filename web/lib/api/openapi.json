@@ -107,7 +107,39 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/me/capabilities": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Capabilities",
+        "description": "What the caller's role may do, from the routes' own role checks (#370): the web\napp reads it once per sign-in and hides the controls a role can never use.",
+        "operationId": "capabilities",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/preferences": {
@@ -136,7 +168,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -184,7 +217,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents": {
@@ -254,7 +288,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}": {
@@ -304,7 +339,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/visibility": {
@@ -371,7 +407,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/documents/{doc}/versions": {
@@ -472,7 +510,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -524,7 +563,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/scope": {
@@ -575,7 +615,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}": {
@@ -634,7 +675,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/markdown": {
@@ -699,7 +741,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/diff": {
@@ -769,7 +812,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/comments": {
@@ -838,7 +882,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       },
       "get": {
         "tags": [
@@ -900,7 +945,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/feedback": {
@@ -970,7 +1016,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/comments/{comment_id}/replies": {
@@ -1031,7 +1078,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/comments/{comment_id}": {
@@ -1092,7 +1140,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/documents/{doc}/versions/{n}/sections/{key}/review": {
@@ -1181,7 +1230,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/feedback": {
@@ -1273,7 +1323,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/feedback/{feedback_id}": {
@@ -1334,7 +1385,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/feedback/{feedback_id}/stage-for-agents": {
@@ -1386,7 +1438,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "delete": {
         "tags": [
@@ -1436,7 +1489,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/feedback-package": {
@@ -1495,7 +1549,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/resolution-report": {
@@ -1554,7 +1609,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/approve": {
@@ -1624,7 +1680,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/discussions": {
@@ -1677,7 +1735,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       },
       "get": {
         "tags": [
@@ -1831,7 +1890,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/discussions/{discussion_id}": {
@@ -1889,7 +1949,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -1965,7 +2026,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/discussions/{discussion_id}/messages": {
@@ -2052,7 +2115,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -2134,7 +2198,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
@@ -2198,7 +2264,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/discussions/{discussion_id}/messages/{reply_id}/cancel": {
@@ -2266,7 +2333,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/discussions/{discussion_id}/messages/{reply_id}/retry": {
@@ -2340,7 +2409,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/discussions/{discussion_id}/messages/{message_id}": {
@@ -2418,7 +2489,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       },
       "delete": {
         "tags": [
@@ -2477,7 +2550,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/discussions/{discussion_id}/participants": {
@@ -2549,7 +2624,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
       }
     },
     "/v1/discussions/{discussion_id}/participants/{user_id}": {
@@ -2610,7 +2687,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/discussions/{discussion_id}/read": {
@@ -2671,7 +2749,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/discussions/{discussion_id}/changes": {
@@ -2757,7 +2836,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/staging": {
@@ -2836,7 +2916,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/next-draft-changes/{change_id}/unstage": {
@@ -2898,7 +2979,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/section-states": {
@@ -2958,7 +3040,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/section-assignments": {
@@ -3012,7 +3095,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/sections/{key}/assignment": {
@@ -3092,7 +3176,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/me/review-queue": {
@@ -3126,7 +3211,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/review-policy": {
@@ -3177,7 +3263,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "put": {
         "tags": [
@@ -3246,7 +3333,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/documents/{doc}/sections/{key}": {
@@ -3336,7 +3424,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/documents/{doc}/section-patches": {
@@ -3413,7 +3503,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/section-patches/{patch_id}": {
@@ -3465,7 +3556,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/section-patches/{patch_id}/accept": {
@@ -3537,7 +3629,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/section-patches/{patch_id}/reject": {
@@ -3608,7 +3701,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/campaigns": {
@@ -3669,7 +3763,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -3721,7 +3816,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/campaigns/{campaign_id}": {
@@ -3772,7 +3868,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -3842,7 +3939,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/me/notifications": {
@@ -3910,7 +4008,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/notifications/{notification_id}/read": {
@@ -3961,7 +4060,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/notifications/read-all": {
@@ -3990,7 +4090,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/publish-check": {
@@ -4050,7 +4151,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/publish": {
@@ -4130,7 +4232,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/publications": {
@@ -4184,7 +4287,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/publications/{p}": {
@@ -4244,7 +4348,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/publications/{p}/export": {
@@ -4338,7 +4443,8 @@
           "422": {
             "description": "Format not offered for the layer, or no brief"
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/export": {
@@ -4439,7 +4545,8 @@
           "422": {
             "description": "Format not offered for the layer, or the version has no brief"
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/deck": {
@@ -4499,7 +4606,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/llm-jobs": {
@@ -4554,7 +4662,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -4613,7 +4722,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/llm-jobs/settings": {
@@ -4663,7 +4773,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "put": {
         "tags": [
@@ -4722,7 +4833,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/llm-jobs/{job_id}": {
@@ -4773,7 +4885,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/llm-jobs/{job_id}/cancel": {
@@ -4824,7 +4937,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/llm-jobs/{job_id}/retry": {
@@ -4875,7 +4989,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/sections/{key}/refine": {
@@ -4954,7 +5069,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/llm-jobs/{job_id}/preview": {
@@ -5006,7 +5122,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/llm-jobs/{job_id}/apply": {
@@ -5068,7 +5185,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/staged-changes": {
@@ -5131,7 +5249,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/next-draft/plan": {
@@ -5192,7 +5311,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/next-draft/run": {
@@ -5253,7 +5373,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/next-draft": {
@@ -5317,7 +5438,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/next-draft/{job_id}": {
@@ -5378,7 +5500,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/next-draft/{job_id}/apply": {
@@ -5449,7 +5572,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/next-draft/{job_id}/discard": {
@@ -5510,7 +5634,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/suggestions": {
@@ -5603,7 +5728,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/suggestions/{suggestion_id}": {
@@ -5664,7 +5790,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/suggestions/{suggestion_id}/accept": {
@@ -5726,7 +5853,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/suggestions/{suggestion_id}/dismiss": {
@@ -5787,7 +5915,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/reports": {
@@ -5847,7 +5976,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/reports/export": {
@@ -5925,7 +6055,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/members": {
@@ -5959,7 +6090,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/members/{user_id}": {
@@ -6024,7 +6156,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       },
       "delete": {
         "tags": [
@@ -6074,7 +6207,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/members/{user_id}/disable": {
@@ -6132,7 +6266,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/members/{user_id}/restore": {
@@ -6187,7 +6322,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/api-tokens": {
@@ -6276,7 +6412,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/api-tokens/{token_id}": {
@@ -6324,7 +6461,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/api-tokens/{token_id}/approvals": {
@@ -6383,7 +6521,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/invites": {
@@ -6452,7 +6591,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       },
       "post": {
         "tags": [
@@ -6496,7 +6636,8 @@
           "422": {
             "description": "Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS)"
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/invites/{invite_id}/access": {
@@ -6554,7 +6695,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/invites/{invite_id}/email": {
@@ -6615,7 +6757,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/invites/{invite_id}": {
@@ -6660,7 +6803,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/member-follow-ups/{follow_up_id}/retry": {
@@ -6718,7 +6862,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/member-follow-ups/{follow_up_id}/dismiss": {
@@ -6776,7 +6921,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/people": {
@@ -6872,7 +7018,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/account": {
@@ -6902,7 +7049,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/password": {
@@ -6957,7 +7105,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/sign-out-everywhere": {
@@ -6990,7 +7139,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/tokens": {
@@ -7024,7 +7174,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -7075,7 +7226,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/tokens/{token_id}": {
@@ -7126,7 +7278,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/oauth-clients": {
@@ -7160,7 +7313,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/me/oauth-clients/{grant_id}": {
@@ -7211,7 +7365,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections": {
@@ -7244,7 +7399,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/providers": {
@@ -7277,7 +7433,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/google/picker-config": {
@@ -7310,7 +7467,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{provider}/token": {
@@ -7366,7 +7524,8 @@
           "422": {
             "description": "A token Oracle will not use (a Slack bot token)"
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{provider}/authorize": {
@@ -7419,7 +7578,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{provider}/callback": {
@@ -7521,7 +7681,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}": {
@@ -7566,7 +7727,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/reconnect": {
@@ -7631,7 +7793,8 @@
           "422": {
             "description": "A token Oracle will not use (a Slack bot token)"
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/slack/channels": {
@@ -7733,7 +7896,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/github/repos": {
@@ -7825,7 +7989,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/google/files": {
@@ -7941,7 +8106,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/google/shared-drives": {
@@ -8005,7 +8171,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/notion/pages": {
@@ -8097,7 +8264,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/settings": {
@@ -8130,7 +8298,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/settings/{key}": {
@@ -8180,7 +8349,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       },
       "put": {
         "tags": [
@@ -8234,7 +8404,8 @@
           "422": {
             "description": "Invalid value"
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/setup": {
@@ -8267,7 +8438,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/autonomy": {
@@ -8297,7 +8469,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/autonomy/{key}": {
@@ -8354,7 +8527,8 @@
           "422": {
             "description": "Above the ceiling, a bad or fixed limit, or no reason"
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/oracle-actions/{action_id}/open": {
@@ -8406,7 +8580,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/oracle-actions/{action_id}/undo": {
@@ -8461,7 +8637,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/claude-accounts": {
@@ -8491,7 +8669,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -8539,7 +8718,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/authorize": {
@@ -8589,7 +8769,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/exchange": {
@@ -8642,7 +8823,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/fallback": {
@@ -8692,7 +8874,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       },
       "delete": {
         "tags": [
@@ -8712,7 +8895,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/sweep": {
@@ -8742,7 +8926,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/{account_id}/state": {
@@ -8803,7 +8988,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/{account_id}/refresh": {
@@ -8854,7 +9040,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/{account_id}": {
@@ -8905,7 +9092,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/claude-accounts/{account_id}/holders": {
@@ -8956,7 +9144,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/claude-accounts/{account_id}/history": {
@@ -9068,7 +9257,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/sources": {
@@ -9101,7 +9291,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -9151,7 +9342,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "commenter"
       }
     },
     "/v1/sources/kinds": {
@@ -9185,7 +9377,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/sources/coverage": {
@@ -9215,7 +9408,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/sources/coverage/company": {
@@ -9248,7 +9442,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/sources/{source_id}/coverage": {
@@ -9323,7 +9518,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/sources/{source_id}": {
@@ -9374,7 +9570,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -9440,7 +9637,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       },
       "delete": {
         "tags": [
@@ -9482,7 +9680,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/sources/{source_id}/pause": {
@@ -9533,7 +9732,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/sources/{source_id}/resume": {
@@ -9584,7 +9784,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/sources/{source_id}/sync": {
@@ -9632,7 +9833,8 @@
           "422": {
             "description": "No connector registered for the kind"
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/sources/{source_id}/uploads": {
@@ -9694,7 +9896,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/sources/{source_id}/items": {
@@ -9783,7 +9986,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/source-items/{item_id}": {
@@ -9834,7 +10038,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/snapshots": {
@@ -9868,7 +10073,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -9917,7 +10123,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/snapshots/{snapshot_id}": {
@@ -9969,7 +10176,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/snapshots/{snapshot_id}/items": {
@@ -10043,7 +10251,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/search": {
@@ -10164,7 +10373,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/fireflies/meetings": {
@@ -10290,7 +10500,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/connections/{connection_id}/fireflies/series": {
@@ -10388,7 +10599,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/graph": {
@@ -10418,7 +10630,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/review-status": {
@@ -10448,7 +10661,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/entities": {
@@ -10544,7 +10758,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -10594,7 +10809,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/entities/{entity_id}": {
@@ -10645,7 +10861,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -10707,7 +10924,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "delete": {
         "tags": [
@@ -10790,7 +11008,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/entities/{entity_id}/confirm": {
@@ -10859,7 +11078,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/entities/{entity_id}/reject": {
@@ -10927,7 +11147,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/entities/{entity_id}/unlock": {
@@ -10979,7 +11200,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/entities/{entity_id}/revisions": {
@@ -11053,7 +11275,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/edges": {
@@ -11142,7 +11365,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -11192,7 +11416,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/edges/{edge_id}": {
@@ -11243,7 +11468,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -11305,7 +11531,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "delete": {
         "tags": [
@@ -11388,7 +11615,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/edges/{edge_id}/unlock": {
@@ -11439,7 +11667,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/edges/{edge_id}/revisions": {
@@ -11494,7 +11723,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/evidence": {
@@ -11573,7 +11803,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/entities/{entity_id}/evidence": {
@@ -11635,7 +11866,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/edges/{edge_id}/evidence": {
@@ -11696,7 +11928,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/evidence/link/preview": {
@@ -11766,7 +11999,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "commenter"
       }
     },
     "/v1/baseline/evidence/link": {
@@ -11836,7 +12070,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "commenter"
       }
     },
     "/v1/baseline/evidence/{evidence_id}/refresh": {
@@ -11908,7 +12143,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/baseline/evidence/{evidence_id}": {
@@ -11952,7 +12188,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/baseline/rescore": {
@@ -11982,7 +12220,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/proposals": {
@@ -12066,7 +12305,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -12114,7 +12354,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/baseline/proposals/{proposal_id}/accept": {
@@ -12183,7 +12424,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/proposals/{proposal_id}/reject": {
@@ -12251,7 +12493,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/conflicts": {
@@ -12333,7 +12576,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -12381,7 +12625,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/conflicts/{conflict_id}/resolve": {
@@ -12442,7 +12687,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/trace": {
@@ -12472,7 +12718,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/yaml": {
@@ -12507,7 +12754,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -12587,7 +12835,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/priorities": {
@@ -12657,7 +12906,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/priorities/overrides": {
@@ -12717,7 +12967,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -12800,7 +13051,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/priorities/overrides/{override_id}": {
@@ -12869,7 +13121,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/priorities/snapshots": {
@@ -12918,7 +13171,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -12989,7 +13243,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/priorities/snapshots/{snapshot_id}": {
@@ -13056,7 +13311,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/priorities/snapshots/{snapshot_id}/compare": {
@@ -13108,7 +13364,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/decisions": {
@@ -13368,7 +13625,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -13418,7 +13676,8 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/decisions/people": {
@@ -13452,7 +13711,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/decisions/{decision}": {
@@ -13504,7 +13764,8 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -13565,7 +13826,9 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/decisions/{decision}/decide": {
@@ -13628,7 +13891,9 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/decisions/{decision}/reassign": {
@@ -13690,7 +13955,9 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/decisions/{decision}/withdraw": {
@@ -13752,7 +14019,9 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/decisions/{decision}/reviews": {
@@ -13815,7 +14084,9 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/decisions/{decision}/options-job": {
@@ -13868,7 +14139,8 @@
           "422": {
             "description": "Invalid options, rationale, expected outcome or review date"
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/templates": {
@@ -13947,7 +14219,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -13997,7 +14270,8 @@
           "409": {
             "description": "Key taken"
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/templates/validate": {
@@ -14047,7 +14321,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/templates/{key}": {
@@ -14098,7 +14373,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -14157,7 +14433,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "delete": {
         "tags": [
@@ -14206,7 +14483,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/templates/{key}/versions/{n}": {
@@ -14265,7 +14543,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/templates/{key}/restore": {
@@ -14315,7 +14594,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/themes": {
@@ -14396,7 +14676,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -14448,7 +14729,8 @@
           "409": {
             "description": "Key taken"
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/themes/validate": {
@@ -14498,7 +14780,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/themes/preview": {
@@ -14549,7 +14832,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/themes/{key}": {
@@ -14600,7 +14884,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -14659,7 +14944,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "delete": {
         "tags": [
@@ -14709,7 +14995,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/themes/{key}/restore": {
@@ -14760,7 +15047,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/drafts/recommend": {
@@ -14811,7 +15099,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/drafts": {
@@ -14865,7 +15154,9 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/drafts/defaults": {
@@ -14896,7 +15187,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "put": {
         "tags": [
@@ -14944,7 +15236,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/runtime/status": {
@@ -14974,7 +15267,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/runtime/mcp-server": {
@@ -15004,7 +15298,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/flows": {
@@ -15034,7 +15329,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/runs": {
@@ -15105,7 +15401,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -15153,7 +15450,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}": {
@@ -15204,7 +15503,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -15264,7 +15564,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/runs/{run_id}/decisions": {
@@ -15320,7 +15621,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/runs/{run_id}/estimate": {
@@ -15372,7 +15674,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/runs/{run_id}/start": {
@@ -15424,7 +15727,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/runs/{run_id}/approve": {
@@ -15476,7 +15780,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/runs/{run_id}/resume": {
@@ -15528,7 +15833,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/runs/{run_id}/retry": {
@@ -15580,7 +15886,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/cancel": {
@@ -15631,7 +15939,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/stop-cancelling": {
@@ -15683,7 +15993,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/retry-lookup": {
@@ -15735,7 +16047,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/retry-import": {
@@ -15787,7 +16101,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
@@ -15848,7 +16164,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/cancel-again": {
@@ -15910,7 +16228,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/dismiss-overrun": {
@@ -15962,7 +16282,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide": {
@@ -16034,7 +16356,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review": {
@@ -16096,7 +16420,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml": {
@@ -16158,7 +16484,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions": {
@@ -16230,7 +16557,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage": {
@@ -16302,7 +16631,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}": {
@@ -16374,7 +16705,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note": {
@@ -16446,7 +16779,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
@@ -16533,7 +16868,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/runs/{run_id}/scope": {
@@ -16585,7 +16921,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/inbox": {
@@ -16639,7 +16976,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/internal/tick": {
@@ -16669,7 +17007,9 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/modules": {
@@ -16770,7 +17110,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/modules/{item_id}": {
@@ -16822,7 +17163,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/module-versions": {
@@ -16908,7 +17250,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/module-versions/{item_id}": {
@@ -16960,7 +17303,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/template-module-assignments": {
@@ -17062,7 +17406,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/template-module-assignments/{item_id}": {
@@ -17114,7 +17459,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/compositions": {
@@ -17200,7 +17546,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/compositions/{item_id}": {
@@ -17252,7 +17599,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/composition-revisions": {
@@ -17360,7 +17708,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/composition-revisions/{item_id}": {
@@ -17412,7 +17761,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes": {
@@ -17522,7 +17872,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -17570,7 +17921,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{item_id}": {
@@ -17622,7 +17975,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -17682,7 +18036,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/gaps": {
@@ -17868,7 +18224,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -17916,7 +18273,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/gaps/{item_id}": {
@@ -17968,7 +18326,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -18028,7 +18387,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/questions": {
@@ -18190,7 +18551,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -18238,7 +18600,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/questions/{item_id}": {
@@ -18290,7 +18653,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/answers": {
@@ -18376,7 +18740,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/answers/{item_id}": {
@@ -18428,7 +18793,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/assumption-decisions": {
@@ -18548,7 +18914,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/assumption-decisions/{item_id}": {
@@ -18600,7 +18967,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/blocker-options": {
@@ -18709,7 +19077,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/blocker-options/{item_id}": {
@@ -18761,7 +19130,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -18821,7 +19191,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/feasibility-experiments": {
@@ -18948,7 +19319,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/feasibility-experiments/{item_id}": {
@@ -19000,7 +19372,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -19060,7 +19433,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/blocker-events": {
@@ -19146,7 +19520,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/blocker-events/{item_id}": {
@@ -19198,7 +19573,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/change-events": {
@@ -19330,7 +19706,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/change-events/{item_id}": {
@@ -19382,7 +19759,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/section-links": {
@@ -19518,7 +19896,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/section-links/{item_id}": {
@@ -19570,7 +19949,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "delete": {
         "tags": [
@@ -19613,7 +19993,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/artifact-dependencies": {
@@ -19772,7 +20153,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-dependencies/{item_id}": {
@@ -19824,7 +20206,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/evaluation-reports": {
@@ -19927,7 +20310,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/evaluation-reports/{item_id}": {
@@ -19979,7 +20363,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/evaluation-findings": {
@@ -20087,7 +20472,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/evaluation-findings/{item_id}": {
@@ -20139,7 +20525,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-requests": {
@@ -20276,7 +20663,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-requests/{item_id}": {
@@ -20328,7 +20716,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-versions": {
@@ -20436,7 +20825,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-versions/{item_id}": {
@@ -20488,7 +20878,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-outputs": {
@@ -20574,7 +20965,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-outputs/{item_id}": {
@@ -20626,7 +21018,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-review-events": {
@@ -20712,7 +21105,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/artifact-review-events/{item_id}": {
@@ -20764,7 +21158,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/summary": {
@@ -20816,7 +21211,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/analyze": {
@@ -20868,7 +21264,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/intakes/{intake_id}/new-evidence": {
@@ -20920,7 +21317,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/repin": {
@@ -20972,7 +21370,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/intakes/{intake_id}/evidence": {
@@ -21047,7 +21446,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/question-batch": {
@@ -21116,7 +21516,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/next-batch": {
@@ -21180,7 +21581,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/question-batches": {
@@ -21261,7 +21664,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/composition-inputs": {
@@ -21313,7 +21718,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/runs": {
@@ -21385,7 +21791,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/proposals": {
@@ -21441,7 +21849,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intake-proposals/{proposal_id}/accept": {
@@ -21493,7 +21902,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "approver"
       }
     },
     "/v1/intake-proposals/{proposal_id}/dismiss": {
@@ -21561,7 +21972,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/intakes/{intake_id}/findings": {
@@ -21617,7 +22029,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/findings/{finding_id}": {
@@ -21689,7 +22102,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/findings/{finding_id}/summary": {
@@ -21761,7 +22175,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/intakes/{intake_id}/findings/sharing": {
@@ -21827,7 +22242,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/gaps/{gap_id}/decisions": {
@@ -21889,7 +22305,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/gaps/{gap_id}/research": {
@@ -21941,7 +22359,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/questions/{question_id}": {
@@ -22003,7 +22422,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/inbox/questions": {
@@ -22037,7 +22458,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/questions/{question_id}/answers": {
@@ -22099,7 +22521,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/quality/criteria": {
@@ -22133,7 +22557,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/readiness": {
@@ -22207,7 +22632,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/evaluations": {
@@ -22267,7 +22693,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/documents/{doc}/versions/{n}/evaluations/human": {
@@ -22337,7 +22764,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/documents/{doc}/versions/{n}/quality-review": {
@@ -22397,7 +22825,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/outcomes": {
@@ -22447,7 +22876,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -22570,7 +23000,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/outcomes/{outcome_id}": {
@@ -22621,7 +23052,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/outcomes/{outcome_id}/assessments": {
@@ -22683,7 +23115,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/learnings": {
@@ -22732,7 +23165,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -22855,7 +23289,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/learnings/signals": {
@@ -22922,7 +23357,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/learnings/{learning_id}/retire": {
@@ -22983,7 +23419,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/module-catalog": {
@@ -23055,7 +23492,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -23103,7 +23541,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/module-catalog/{key}": {
@@ -23154,7 +23593,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/module-catalog/{key}/versions": {
@@ -23218,7 +23658,8 @@
           "404": {
             "description": "No such module"
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/module-packs": {
@@ -23252,7 +23693,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/module-policy": {
@@ -23282,7 +23724,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "put": {
         "tags": [
@@ -23330,7 +23773,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/template-manifests/{template}": {
@@ -23381,7 +23825,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "put": {
         "tags": [
@@ -23440,7 +23885,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/compositions/recommend": {
@@ -23490,7 +23936,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/composition": {
@@ -23541,7 +23988,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/composition/revisions": {
@@ -23605,7 +24053,8 @@
           "409": {
             "description": "Changed since loaded, or not in a state that allows this"
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/composition/publish": {
@@ -23669,7 +24118,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/trace": {
@@ -23729,7 +24179,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/evidence": {
@@ -23806,7 +24257,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/impact": {
@@ -23866,7 +24318,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/versions/{n}/section-links": {
@@ -23940,7 +24393,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/baseline/entities/{entity_id}/trace": {
@@ -23992,7 +24446,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/baseline/entities/{entity_id}/impact": {
@@ -24044,7 +24499,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/trace/changes/{change_id}/impact": {
@@ -24096,7 +24552,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/trace/staleness": {
@@ -24200,7 +24657,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/trace/staleness/actions": {
@@ -24250,7 +24708,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver"
       }
     },
     "/v1/trace/dependencies": {
@@ -24304,7 +24763,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver"
       }
     },
     "/v1/tech-briefs": {
@@ -24386,7 +24846,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/tech-briefs/{artifact_version_id}": {
@@ -24438,7 +24899,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/code-maps": {
@@ -24526,7 +24988,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -24574,7 +25037,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/code-maps/{code_map_id}": {
@@ -24626,7 +25090,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/code-maps/{code_map_id}/sharing": {
@@ -24688,7 +25153,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/blockers": {
@@ -24864,7 +25330,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -24912,7 +25379,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/blockers/{blocker_id}": {
@@ -24964,7 +25432,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -25024,7 +25493,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/status": {
@@ -25086,7 +25557,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/accept-risk": {
@@ -25148,7 +25621,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/feasibility-scope": {
@@ -25210,7 +25685,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/blockers/{blocker_id}/options": {
@@ -25272,7 +25749,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/blocker-options/{item_id}/select": {
@@ -25334,7 +25812,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/blocker-options/{item_id}/fallback": {
@@ -25396,7 +25875,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/blocker-options/{item_id}/reject": {
@@ -25458,7 +25938,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/blockers/{blocker_id}/experiments": {
@@ -25520,7 +26001,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/documents/{doc}/blocker-strategy": {
@@ -25571,7 +26053,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/documents/{doc}/blocker-strategy/render": {
@@ -25622,7 +26105,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/spec-requests": {
@@ -25672,7 +26156,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       },
       "get": {
         "tags": [
@@ -25732,7 +26218,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/spec-requests/{request_id}": {
@@ -25784,7 +26271,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/spec-requests/{request_id}/regenerate": {
@@ -25846,7 +26334,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/design-artifacts/{version_id}": {
@@ -25898,7 +26388,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/design-artifacts/{version_id}/outputs/{name}": {
@@ -25956,7 +26447,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/design-artifacts/{version_id}/reviews": {
@@ -26018,7 +26510,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/roadmaps/{doc}/items": {
@@ -26100,7 +26594,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/roadmaps/{doc}/versions/{n}/items": {
@@ -26170,7 +26665,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/roadmaps/{doc}/items/staleness": {
@@ -26231,7 +26727,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/roadmap-items/diff": {
@@ -26296,7 +26793,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/roadmap-items/history": {
@@ -26360,7 +26858,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/roadmaps/{doc}/alignment": {
@@ -26428,7 +26927,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/schedule-bases": {
@@ -26509,7 +27009,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -26557,7 +27058,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/schedule-bases/{basis_id}/withdraw": {
@@ -26619,7 +27122,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/tracker/connector": {
@@ -26649,7 +27154,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/tracker/records": {
@@ -26734,7 +27240,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -26782,7 +27289,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/tracker/issues": {
@@ -26851,7 +27359,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/tracker/links": {
@@ -26907,7 +27417,9 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/tracker/links/{record_id}": {
@@ -26952,7 +27464,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-lead-role": "commenter"
       }
     },
     "/v1/tracks": {
@@ -27042,7 +27556,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -27093,7 +27608,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/tracks/{track_id}": {
@@ -27145,7 +27661,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -27204,7 +27721,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/tracks/{track_id}/monitor": {
@@ -27256,7 +27774,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/tracks/{track_id}/changes": {
@@ -27324,7 +27843,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/tracks/{track_id}/roadmap-run": {
@@ -27393,7 +27913,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/tracks/{track_id}/tracker-plan": {
@@ -27445,7 +27967,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/tracks/{track_id}/tracker-push": {
@@ -27501,7 +28024,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/tracks/{track_id}/milestones": {
@@ -27556,7 +28080,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -27616,7 +28141,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/milestones/{milestone_id}": {
@@ -27678,7 +28204,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/alignment-reports": {
@@ -27747,7 +28274,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -27798,7 +28326,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/alignment-reports/{report_id}": {
@@ -27850,7 +28379,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/alignment-reports/{report_id}/read": {
@@ -27902,7 +28432,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/alignment-reports/{report_id}/slack/retry": {
@@ -27957,7 +28488,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/alignment-reports/{report_id}/slack/dismiss": {
@@ -28012,7 +28544,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/company-integrations": {
@@ -28046,7 +28579,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/company-integrations/slack/install": {
@@ -28079,7 +28613,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/company-integrations/slack/callback": {
@@ -28156,7 +28691,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/company-integrations/slack/channels": {
@@ -28196,7 +28732,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/company-integrations/slack/test": {
@@ -28252,7 +28789,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/company-integrations/{integration_id}": {
@@ -28300,7 +28838,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/requests": {
@@ -28468,7 +29007,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -28516,7 +29056,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/requests/triage": {
@@ -28546,7 +29088,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -28594,7 +29137,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver"
       }
     },
     "/v1/requests/triage/daily": {
@@ -28644,7 +29188,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "approver"
       }
     },
     "/v1/requests/{request_id}": {
@@ -28696,7 +29241,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -28756,7 +29302,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/requests/{request_id}/qualify": {
@@ -28818,7 +29365,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/requests/{request_id}/merge": {
@@ -28880,7 +29428,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/requests/{request_id}/disqualify": {
@@ -28942,7 +29491,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/requests/{request_id}/reopen": {
@@ -29004,7 +29554,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/requests/{request_id}/suggestion/accept": {
@@ -29066,7 +29617,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/request-themes": {
@@ -29121,7 +29673,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -29168,7 +29721,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/request-themes/{theme_id}": {
@@ -29230,7 +29784,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/request-candidates": {
@@ -29297,7 +29852,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/request-candidates/{candidate_id}/file": {
@@ -29359,7 +29915,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/request-candidates/{candidate_id}/dismiss": {
@@ -29411,7 +29968,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/plan": {
@@ -29467,7 +30025,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/plan/items/history": {
@@ -29531,7 +30090,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/strategy/stack": {
@@ -29561,7 +30121,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/strategy/findings": {
@@ -29675,7 +30236,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/strategy/findings/{finding_id}/waive": {
@@ -29737,7 +30299,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/strategy/check": {
@@ -29767,7 +30331,8 @@
           {
             "APIKeyCookie": []
           }
-        ]
+        ],
+        "x-min-role": "owner"
       }
     },
     "/v1/launches": {
@@ -29870,7 +30435,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -29918,7 +30484,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/launches/{launch_id}": {
@@ -29970,7 +30537,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "patch": {
         "tags": [
@@ -30030,7 +30598,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/launches/{launch_id}/launched": {
@@ -30099,7 +30668,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/launches/{launch_id}/cancel": {
@@ -30161,7 +30731,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/launches/{launch_id}/draft": {
@@ -30213,7 +30784,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/launches/{launch_id}/tasks": {
@@ -30275,7 +30847,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/launch-tasks/{task_id}": {
@@ -30337,7 +30910,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/launches/{launch_id}/notes": {
@@ -30393,7 +30968,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -30453,7 +31029,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/requester-notes/{note_id}": {
@@ -30515,7 +31092,9 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/launches/{launch_id}/notify-members": {
@@ -30567,7 +31146,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/changelog": {
@@ -30683,7 +31263,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       },
       "post": {
         "tags": [
@@ -30731,7 +31312,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/changelog/export": {
@@ -30815,7 +31397,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/changelog/{entry_id}": {
@@ -30876,7 +31459,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/changelog/{entry_id}/publish": {
@@ -30928,7 +31512,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/changelog/{entry_id}/withdraw": {
@@ -30980,7 +31565,8 @@
               }
             }
           }
-        }
+        },
+        "x-min-role": "approver"
       }
     },
     "/.well-known/oauth-protected-resource": {
@@ -36931,6 +37517,65 @@
         ],
         "title": "CandidateSource",
         "description": "The item, as filing would share it: title, link, kind and excerpt."
+      },
+      "Capabilities": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
+          },
+          "operations": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Operations"
+          },
+          "decide_engineering_stops": {
+            "type": "boolean",
+            "title": "Decide Engineering Stops",
+            "default": false
+          },
+          "per_item": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "viewer",
+                    "commenter",
+                    "approver",
+                    "owner"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Per Item",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "operations"
+        ],
+        "title": "Capabilities",
+        "description": "#370: what the caller's role may do, per API operation (operationId)."
       },
       "CatalogModuleDetail": {
         "properties": {

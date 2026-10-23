@@ -11,6 +11,21 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+class Capabilities(BaseModel):
+    """#370: what the caller's role may do, per API operation (operationId)."""
+
+    role: Role
+    # A3: the engineering lead flag gates its own actions (date checks, engineering stops).
+    engineering_lead: bool = False
+    operations: dict[str, bool]
+    # Whether the caller decides the engineering stops (A3): owners, and once a lead is
+    # named, the leads; with none named, whoever the stop's role allows.
+    decide_engineering_stops: bool = False
+    # Operations the item decides too (oracle.capabilities.PER_ITEM): the role the handler
+    # never refuses on role grounds; below it, only the item's author, asker or approver.
+    per_item: dict[str, Role | None] = {}
+
+
 class Me(BaseModel):
     kind: Literal["user", "token"]
     tenant_id: uuid.UUID

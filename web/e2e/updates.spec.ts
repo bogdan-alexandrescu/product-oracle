@@ -153,7 +153,8 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(headline).toBeVisible();
   await expect(headline.getByRole("group", { name: /^Verdict for / })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
-  await expect(page.getByTestId("owner-approves-note")).toHaveText("Only an owner approves an update");
+  // #370: an approver can never approve an update, so no note about it either.
+  await expect(page.getByTestId("owner-approves-note")).toHaveCount(0);
   await selectText(page, "headline", "Usage alerts are ready for beta");
   await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
   const dialog = page.getByRole("dialog", { name: "New comment" });

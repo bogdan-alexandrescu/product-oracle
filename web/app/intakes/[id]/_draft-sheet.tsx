@@ -68,7 +68,7 @@ export function DraftSheet({ summary, onClose }: { summary: Summary; onClose: ()
 
 function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run | null; onClose: () => void }) {
   const router = useRouter();
-  const { role } = useMe();
+  const { can } = useMe();
   const id = useId();
   const intake = summary.intake;
   const prd = useMemo(() => intake.prd_answers ?? {}, [intake.prd_answers]);
@@ -203,7 +203,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
   }
 
   const rebuildUsd = status?.baseline_segment_usd?.[depth];
-  const ownerApproves = role === "owner" && !!estimate?.needs_approval;
+  const ownerApproves = can("approve_run") && !!estimate?.needs_approval;
 
   return (
     <Sheet open title="Draft with Oracle" onClose={onClose} testId="draft-sheet">

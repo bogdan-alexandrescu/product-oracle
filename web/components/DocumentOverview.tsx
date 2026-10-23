@@ -26,7 +26,7 @@ import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
@@ -102,7 +102,7 @@ function VersionInspector({
   v: VersionSummary;
   latest: number | null | undefined;
 }) {
-  const { role } = useMe();
+  const { can } = useMe();
   return (
     <Inspector
       testId="version-inspector"
@@ -157,7 +157,8 @@ function VersionInspector({
           </ul>
         </InspectorSection>
       )}
-      {hasRole(role, "approver") && (
+      {/* #370: Oracle's work is where its jobs are run (POST /v1/documents/{doc}/llm-jobs). */}
+      {can("create_llm_job") && (
         <InspectorSection>
           <Link href={`/documents/${doc}/v/${v.number}?tab=history#${ORACLE_WORK}`} className="text-sm font-medium text-accent-ink hover:underline">
             Oracle&apos;s work on v{v.number}

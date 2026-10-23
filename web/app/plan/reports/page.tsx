@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import { Button, Chip, DataTable, Empty, Notice, Page, PageHeader, Panel, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { inZone, type ReportItem } from "./_lib";
@@ -61,7 +61,7 @@ const COLUMNS: Column<ReportItem>[] = [
 /** Plan › Alignment reports: every report, newest first; owners Generate now. */
 export default function ReportsPage() {
   const q = useQuery("alignment-reports", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 200 } } })));
-  const { role } = useMe();
+  const { can } = useMe();
   const [open, setOpen] = useState(false);
   return (
     <Page>
@@ -69,7 +69,7 @@ export default function ReportsPage() {
         title="Alignment reports"
         back={<Link href="/roadmap" className="hover:underline">Roadmap</Link>}
         action={
-          hasRole(role, "owner") && (
+          can("create_alignment_report") && (
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
               Generate now
             </Button>

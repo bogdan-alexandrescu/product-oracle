@@ -45,7 +45,7 @@ export function DecisionInspector({
   /** Open the decide form at once (the Inbox's Decide). */
   autoDecide?: boolean;
 }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [mode, setMode] = useState<Mode>(autoDecide && d.can_decide ? "decide" : null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -138,7 +138,7 @@ export function DecisionInspector({
             label="Options"
             tools={
               d.status === "proposed" &&
-              hasRole(role, "approver") && (
+              can("recommend_decision_options") && (
                 <Button variant="ghost" disabled={busy} onClick={askOracle}>
                   {busy ? "Asking Oracle…" : "Ask Oracle for options"}
                 </Button>
@@ -303,10 +303,11 @@ function Actions({
   setMode: (m: Mode) => void;
   done: Done;
 }) {
-  const { role } = useMe();
-  // Edit is offered while proposed; a member who may not edit sees it disabled, with why.
-  const editable = d.status === "proposed";
-  const noEdit = hasRole(role, "commenter") ? "Only its creator, its approver or an owner edits a proposal" : "Editing needs the commenter role";
+  const { can } = useMe();
+  // Edit is offered while proposed; #370: a role that can never edit (a viewer) does not see
+  // it, and a member the decision does not let in sees it disabled, with why.
+  const editable = d.status === "proposed" && can("update_decision", true);
+  const noEdit = "Only its creator, its approver or an owner edits a proposal";
   const buttons = (
     <div className="flex flex-wrap gap-2">
       {editable && (

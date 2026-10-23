@@ -8,7 +8,7 @@ import { Button, Chip, DataTable, Empty, InfoTip, PageHeader, Panel, type Column
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { NewUpdateDialog } from "./_components/NewUpdateDialog";
@@ -23,9 +23,10 @@ import { byNewestPeriod, formatPeriod, templateOf, VISIBILITY_LABEL, type Update
  * "Not found". Owners start one (New update) and choose who sees it (a row's ⋯).
  */
 export default function UpdatesPage() {
-  const { role, loading } = useMe();
-  if (loading) return <Loading />;
-  if (!hasRole(role, "approver")) {
+  const { can, capsReady, capsError } = useMe();
+  if (!capsReady && !capsError) return <Loading />;
+  // #370: the Updates tab's own read (company/_tabs.ts), for any item.
+  if (!can("start_draft", true)) {
     return (
       <>
         <PageHeader title="Company" />
@@ -35,10 +36,15 @@ export default function UpdatesPage() {
       </>
     );
   }
-  return <Updates isOwner={hasRole(role, "owner")} />;
+  return <Updates />;
 }
 
-function Updates({ isOwner }: { isOwner: boolean }) {
+function Updates() {
+  const { can } = useMe();
+  // #370: New update starts an update_draft run, which only the run's handler role may; a
+  // row's ⋯ changes who sees the update.
+  const mayCreate = can("create_run");
+  const mayShare = can("set_document_visibility");
   const q = useQuery("documents|update", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "update" } } })));
   const rows = useMemo(() => [...(q.data ?? [])].sort(byNewestPeriod), [q.data]);
   const [creating, setCreating] = useState(false);
@@ -92,7 +98,7 @@ function Updates({ isOwner }: { isOwner: boolean }) {
       phone: "hide",
       cell: (u) => <span className="tnum text-sm">{formatDate(u.updated_at)}</span>,
     },
-    ...(isOwner
+    ...(mayShare
       ? [
           {
             key: "actions",
@@ -123,7 +129,7 @@ function Updates({ isOwner }: { isOwner: boolean }) {
       <PageHeader
         title="Company"
         action={
-          isOwner && (
+          mayCreate && (
             <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
               New update
             </Button>
@@ -156,8 +162,8 @@ function Updates({ isOwner }: { isOwner: boolean }) {
           />
         )}
       </Panel>
-      {creating && isOwner && <NewUpdateDialog updates={rows} onClose={() => setCreating(false)} />}
-      {changing && isOwner && (
+      {creating && mayCreate && <NewUpdateDialog updates={rows} onClose={() => setCreating(false)} />}
+      {changing && mayShare && (
         <VisibilityDialog
           update={changing}
           onClose={() => setChanging(null)}
