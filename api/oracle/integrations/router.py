@@ -32,6 +32,8 @@ from oracle.tenant_settings import TenantSetting
 router = APIRouter(prefix="/v1", tags=["company integrations"])
 
 SETTINGS_PAGE = "/settings/notifications"
+# A ``close`` dropped at Disconnect when the install's token cannot be decrypted.
+CLOSE_DROPPED_REASON = "Disconnected: the Slack token could not be read"
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
@@ -278,15 +280,18 @@ async def slack_status(principal: Viewer, db: TenantDB) -> SlackStatusOut:
     responses={409: {"description": "Slack is not connected"}, 502: {"description": "Slack"}},
 )
 async def list_slack_notification_channels(
-    principal: Commenter, db: TenantDB
+    principal: Commenter,
+    db: TenantDB,
+    mirror: Annotated[bool, Query()] = False,
 ) -> list[NotificationChannelOut]:
     """The channels the report can post to, or a discussion can be mirrored to (G8:
     commenters and up): public ones, and the private ones the bot was invited to when
-    the install can read them."""
+    the install can read them. ``mirror`` keeps only the ones the bot is in, the only
+    ones whose replies come back."""
     row = await _install(db)
     try:
         async with slack_api.http_client() as http:
-            found = await slack_oauth.channels(http, row)
+            found = await slack_oauth.channels(http, row, member_only=mirror)
     except slack_api.SlackError as e:
         raise _slack_failed(e) from None
     return [NotificationChannelOut(**c) for c in found]
@@ -341,6 +346,10 @@ async def delete_company_integration(
         async with slack_api.http_client() as http:
             await outbox.deliver_closes(db, http, row, closed)
             revoked = await slack_oauth.revoke(http, token)
+    else:
+        # No token to post them with: dropped, so a later reconnect does not replay them.
+        for item in closed:
+            item.status, item.error = "dropped", CLOSE_DROPPED_REASON
     setting = await db.scalar(select(TenantSetting).where(TenantSetting.key == "alignment_report"))
     if (
         setting is not None

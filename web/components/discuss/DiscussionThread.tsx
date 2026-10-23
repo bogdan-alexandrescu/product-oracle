@@ -297,7 +297,7 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
   const ref = useRef<HTMLDivElement>(null);
   const title = useId();
   useFocusTrap(ref, true, onCancel);
-  const channels = useQuery("slack-channels|mirror", () => unwrap(api.GET("/v1/company-integrations/slack/channels")));
+  const channels = useQuery("slack-channels|mirror", () => unwrap(api.GET("/v1/company-integrations/slack/channels", { params: { query: { mirror: true } } })));
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<Channel | null>(null);
   const [busy, setBusy] = useState(false);

@@ -31720,18 +31720,38 @@
           "company integrations"
         ],
         "summary": "List Slack Notification Channels",
-        "description": "The channels the report can post to, or a discussion can be mirrored to (G8:\ncommenters and up): public ones, and the private ones the bot was invited to when\nthe install can read them.",
+        "description": "The channels the report can post to, or a discussion can be mirrored to (G8:\ncommenters and up): public ones, and the private ones the bot was invited to when\nthe install can read them. ``mirror`` keeps only the ones the bot is in, the only\nones whose replies come back.",
         "operationId": "list_slack_notification_channels",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mirror",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mirror"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/NotificationChannelOut"
                   },
-                  "type": "array",
                   "title": "Response List Slack Notification Channels"
                 }
               }
@@ -31742,16 +31762,18 @@
           },
           "502": {
             "description": "Slack"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
         "x-min-role": "commenter"
       }
     },

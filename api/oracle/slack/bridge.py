@@ -137,7 +137,7 @@ def queue(
 async def _channel(db: AsyncSession, row: CompanyIntegration, channel_id: str) -> dict[str, Any]:
     try:
         async with slack_api.http_client() as http:
-            found = await slack_oauth.channels(http, row)
+            found = await slack_oauth.channels(http, row, member_only=True)
     except slack_api.SlackError as e:
         raise service.DiscussionError(502, f"Slack answered {e.code}") from None
     for ch in found:

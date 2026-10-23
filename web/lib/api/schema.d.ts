@@ -9030,7 +9030,8 @@ export interface paths {
          * List Slack Notification Channels
          * @description The channels the report can post to, or a discussion can be mirrored to (G8:
          *     commenters and up): public ones, and the private ones the bot was invited to when
-         *     the install can read them.
+         *     the install can read them. ``mirror`` keeps only the ones the bot is in, the only
+         *     ones whose replies come back.
          */
         get: operations["list_slack_notification_channels"];
         put?: never;
@@ -49295,7 +49296,9 @@ export interface operations {
     };
     list_slack_notification_channels: {
         parameters: {
-            query?: never;
+            query?: {
+                mirror?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -49317,6 +49320,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
             /** @description Slack */
             502: {

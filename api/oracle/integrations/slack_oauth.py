@@ -168,9 +168,13 @@ async def revoke(http: httpx.AsyncClient, token: str) -> bool:
     return True
 
 
-async def channels(http: httpx.AsyncClient, row: CompanyIntegration) -> list[dict[str, Any]]:
+async def channels(
+    http: httpx.AsyncClient, row: CompanyIntegration, *, member_only: bool = False
+) -> list[dict[str, Any]]:
     """Public channels, and the private ones the bot was invited to (``groups:read``, in
-    :data:`BOT_SCOPES`; an install made without it lists public ones only), by name."""
+    :data:`BOT_SCOPES`; an install made without it lists public ones only), by name.
+    ``member_only`` keeps the ones the bot is in (G8 mirroring: Slack sends a channel's
+    ``message.channels`` events only to apps in it, so replies elsewhere never come back)."""
     types = "public_channel,private_channel" if "groups:read" in row.scopes else "public_channel"
     token = token_of(row)
     out: dict[str, dict[str, Any]] = {}
@@ -181,6 +185,8 @@ async def channels(http: httpx.AsyncClient, row: CompanyIntegration) -> list[dic
             fields["cursor"] = cursor
         body = await slack_api.call(http, "conversations.list", token=token, data=fields)
         for ch in body.get("channels") or []:
+            if member_only and not (isinstance(ch, dict) and ch.get("is_member")):
+                continue
             if isinstance(ch, dict) and ch.get("id") and ch.get("name"):
                 out[str(ch["id"])] = {
                     "id": str(ch["id"]),
