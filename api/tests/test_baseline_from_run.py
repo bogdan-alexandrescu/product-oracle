@@ -277,7 +277,8 @@ async def test_waive_rules(client, owner, runtime):
     await act(client, auth, run, expect=422, **{**WAIVE, "value": {"reason": " "}})
     await act(client, auth, run, expect=422, **{**WAIVE, "item_key": "goal:g.confirmed"})
     await act(client, auth, run, expect=422, **{**WAIVE, "item_key": "feature:f.cart-save"})
-    first = await act(client, auth, run, **WAIVE)
+    review = await act(client, auth, run, **WAIVE)
+    first = next(a for i in review["items"] for a in i["actions"] if a["kind"] == "waive")
     await act(client, auth, run, **{**WAIVE, "item_key": "goal:g.activation"})
     run = await get(client, auth, run["id"])
     assert pending(run)["gate"]["open"] is True

@@ -415,7 +415,14 @@ async def test_every_baseline_route_requires_auth(client):
             url = path.format(
                 **{
                     k: uuid.uuid4()
-                    for k in ("entity_id", "edge_id", "evidence_id", "proposal_id", "conflict_id")
+                    for k in (
+                        "entity_id",
+                        "edge_id",
+                        "evidence_id",
+                        "proposal_id",
+                        "conflict_id",
+                        "run_id",
+                    )
                 }
             )
             resp = await client.request(method.upper(), url)
