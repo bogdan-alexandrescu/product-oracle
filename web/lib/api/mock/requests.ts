@@ -194,6 +194,27 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
 }
 
 /**
+ * C3: a need from a customer interview's snapshot, filed as a request: New, channel and origin
+ * Interview, the customer's name as given, unverified, linked to the interview and to its
+ * intake or theme (oracle.requests.service). Returns its id.
+ */
+export function addInterviewRequest(
+  db: RequestsDb,
+  input: { title: string; body: string; requester_name: string; interview_id: string; intake_id: string | null; theme_id: string | null },
+): string {
+  const at = now();
+  const row: Row = {
+    id: mockUuid(), title: input.title, body: input.body, channel: "interview", origin: "interview",
+    requester_name: input.requester_name, requester_kind: "customer", verified: false, state: "new",
+    merged_into_id: null, disqualify_reason: null, decision_note: null, theme_id: input.theme_id, goal_ids: [],
+    feature_id: null, document_id: null, intake_id: input.intake_id, interview_id: input.interview_id, source: null,
+    suggestion: null, filed_by: null, decided_by: null, decided_at: null, created_at: at, updated_at: at, lock_version: 1,
+  };
+  db.requests.push(row);
+  return row.id;
+}
+
+/**
  * The daily triage's switch: off unless someone turned it on (the "triage-skipped" scenario has
  * it on with no one to run as). While on it runs as whoever turned it on, while an active
  * approver or owner, else as the longest-standing active owner.

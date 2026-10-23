@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 
-import { Empty, Page, PageHeader, Panel } from "@/components/ds";
+import { Button, Empty, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FoundInSources } from "./_components/FoundInSources";
+import { InterviewDialog } from "./_components/InterviewDialog";
 import { NewRequestButton } from "./_components/NewRequest";
 import { RequestList } from "./_components/RequestList";
 import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_components/Triage";
@@ -18,7 +19,8 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * (approvers and owners; others see the switch's state) and its status line, and
  * the requests Oracle found in your own sources, yours alone until you file one. New request
  * (#329) files one in the app; it lands in the queue below, selected, with its goal chips.
- * The queue's tabs, facets and inspector come with the Requests screen lane.
+ * Interview a customer (C3, commenters and up). The queue's tabs, facets and inspector come
+ * with the Requests screen lane.
  */
 export default function RequestsPage() {
   const { role } = useMe();
@@ -32,6 +34,7 @@ export default function RequestsPage() {
     requests.setData((list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 });
     setSelected(request.id);
   };
+  const [interviewing, setInterviewing] = useState(false);
   return (
     <Page>
       <PageHeader
@@ -41,6 +44,7 @@ export default function RequestsPage() {
           <>
             <DailyTriageSwitch triage={triage} canChange={hasRole(role, "approver")} />
             {hasRole(role, "approver") && <ClassifyNow triage={triage} />}
+            {hasRole(role, "commenter") && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
             <NewRequestButton onFiled={filed} />
           </>
         }
@@ -69,6 +73,7 @@ export default function RequestsPage() {
           )}
         </Panel>
       </div>
+      {interviewing && <InterviewDialog onClose={() => setInterviewing(false)} />}
     </Page>
   );
 }

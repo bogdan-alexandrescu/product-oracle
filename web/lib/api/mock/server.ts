@@ -31,7 +31,8 @@ import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
-import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
+import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
+import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
@@ -111,6 +112,8 @@ export interface Db {
   code_maps?: CodeMapRow[];
   /** Requests, their themes and the found items of the seed owner (./requests.ts, C1). */
   requests?: RequestsDb;
+  /** C3 customer interviews (./interviews.ts); the fixture's link is `i-mock-token`. */
+  interviews?: InterviewsDb;
   /** The decision log (./decisions.ts, H1); absent in data saved before it. */
   decisions?: DecisionsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
@@ -2264,6 +2267,24 @@ function ensureRequests(db: Db): RequestsDb {
   return db.requests;
 }
 
+/** The interviews, seeded on first use with the fixture's invited interview (`i-mock-token`). */
+function ensureInterviews(db: Db): InterviewsDb {
+  db.interviews ??= seeded("interviews", () => seedInterviews({ ownerId: db.user_id }));
+  return db.interviews;
+}
+
+function interviewsContext(db: Db, userId: string, role: Role): InterviewsContext {
+  return {
+    userId,
+    role,
+    company: MOCK_COMPANY,
+    memberEmail: (id) => db.members.find((m) => m.id === id)?.email ?? null,
+    intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+    themeTitle: (id) => ensureRequests(db).themes.find((t) => t.id === id && !t.archived_at)?.title ?? null,
+    fileRequest: (input) => addInterviewRequest(ensureRequests(db), input),
+  };
+}
+
 function ensureBlockers(db: Db): BlockersDb {
   if (!db.blockers) {
     const v2 = ensureV2(db);
@@ -2369,6 +2390,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "auth" && p[2] === "logout" && m === "POST") {
     setSession(db, null);
     return json(204, undefined);
+  }
+  // C3: the customer page's routes carry no member credential, only the link's token and cookie.
+  if (p[1] === "public" && p[2] === "interviews") {
+    const out = await routePublicInterviews(ensureInterviews(db), interviewsContext(db, db.user_id, "viewer"), req, p);
+    if (out) return out;
   }
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
@@ -2577,6 +2603,35 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (modules) return modules;
+  // Team interviews (C3 lane 2): the member's interview on an intake and its turns, which
+  // record answers through the intake mock's answer path.
+  if ((p[1] === "intakes" && p[3] === "interview") || (p[1] === "interviews" && p[3] === "turns")) {
+    const recordAnswer = async (id: string, body: string) => {
+      const answer = new Request(new URL(`/v1/questions/${id}/answers`, req.url), {
+        method: "POST",
+        body: JSON.stringify({ kind: "answer", body, knowledge_state: "user_decision", evidence_ids: [] }),
+      });
+      const ctx = { userId: me.id, role: me.role, people: db.members, createRun: async () => notFound("Route") };
+      return (await routeIntake(v2db, ctx, answer, ["v1", "questions", id, "answers"], new URLSearchParams())) ?? notFound("Route");
+    };
+    const nextQuestion = (intakeId: string, after: string) =>
+      v2db.questions
+        .filter((x) => x.intake_id === intakeId && x.asked_to === me.id && (x.status === "asked" || x.status === "delegated") && x.id !== after)
+        .sort((a, b) => (a.batch ?? 0) - (b.batch ?? 0) || a.created_at.localeCompare(b.created_at))[0]?.id ?? null;
+    const team = await routeTeamInterviews(
+      ensureInterviews(db),
+      {
+        ...interviewsContext(db, me.id, me.role),
+        intakeExists: (id) => v2db.intakes.some((i) => i.id === id),
+        question: (id) => v2db.questions.find((x) => x.id === id) ?? null,
+        nextQuestion,
+        recordAnswer,
+      },
+      req,
+      p,
+    );
+    if (team) return team;
+  }
   // Intake, gaps, questions and answers (CR-03) check roles themselves: commenters
   // answer and propose, approvers decide, owners accept a critical risk.
   // Questions to people (C2): Ask a teammate, reassign or withdraw, the Inbox's questions
@@ -2626,6 +2681,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
     if (intake) return intake;
+  }
+  // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.
+  if (p[1] === "interviews") {
+    const interviews = await routeInterviews(ensureInterviews(db), interviewsContext(db, me.id, me.role), req, p, q);
+    if (interviews) return interviews;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
   if (["requests", "request-themes", "request-candidates"].includes(p[1])) {
