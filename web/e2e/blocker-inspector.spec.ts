@@ -41,7 +41,7 @@ test("blockers tab: status counts, and a status change moves the count", async (
   const insp = await openBlocker(page, DEPOSITS);
   await expect(insp.getByTestId("blocker-status")).toHaveText("Open");
   const form = insp.getByRole("form", { name: "Change status" });
-  await form.getByLabel("Status").selectOption("resolved");
+  await form.getByLabel("Status", { exact: true }).selectOption("resolved");
   await form.getByRole("button", { name: "Set status" }).click();
   await expect(form).toContainText("Say why the blocker is resolved");
   await form.getByLabel("Reason").fill("The processor confirmed same-day refunds in writing");
@@ -211,7 +211,12 @@ test.describe("phone", () => {
 
   test("the inspector stacks under the list, no side scroll", async ({ page }) => {
     await openBlockers(page);
+    // Five tabs wrap on a phone: none is cut off.
+    const tab = await page.getByRole("tab", { name: /Blockers/ }).boundingBox();
+    expect(tab!.x + tab!.width).toBeLessThanOrEqual(390);
     const insp = await openBlocker(page, LOOKUP);
+    const title = await insp.getByTestId("blocker-option").first().getByText("Batch address lookups within the published quota").boundingBox();
+    expect(title!.width).toBeGreaterThan(200);
     await expect(insp.getByTestId("blocker-option").first()).toBeVisible();
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(width).toBeLessThanOrEqual(390);

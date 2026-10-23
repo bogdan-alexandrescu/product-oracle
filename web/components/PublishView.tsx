@@ -22,6 +22,7 @@ import {
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
+import { useRiskPolicy } from "@/lib/risk-policy";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -29,7 +30,6 @@ type Readiness = Schemas["ReadinessDashboard"];
 type Item = Schemas["ReadinessItem"];
 type Strategy = Schemas["BlockerStrategy"];
 type Question = Schemas["StakeholderQuestionOut"];
-type Role = Schemas["Me"]["role"];
 /** Why the confirm dialog's Publish was refused: the API's 409, a newer version, or an error. */
 type Refusal = { detail: string; blocking: Schemas["PublishBlock"][]; stale?: boolean };
 
@@ -41,8 +41,6 @@ const CHECK_KIND: Record<string, string> = {
 };
 const PHONE = "(max-width: 600px)";
 const DAY = 86_400_000;
-/** B4 defaults (api/oracle/tenant_settings_api.py), used when the caller cannot read the settings. */
-const RISK_DEFAULTS = { role: "owner" as Role, maxDays: 90 };
 
 /** One reason the API refuses the publish: a gating blocker, or another critical hard check. */
 type Block = {
@@ -142,24 +140,6 @@ function OnPublish({ n }: { n: number }) {
       ))}
     </ul>
   );
-}
-
-/**
- * The company's B4 settings: who may accept a critical blocker's risk, and how far out its
- * review date may be. Settings are owner-readable; anyone else gets the defaults.
- */
-function useRiskPolicy(): { role: Role; maxDays: number } {
-  const { role } = useMe();
-  const q = useQuery(`risk-policy|${role}`, async () => {
-    if (!hasRole(role, "approver")) return RISK_DEFAULTS;
-    const read = (key: string) => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key } } })).then((s) => s.value);
-    const [who, days] = await Promise.all([read("blocker_risk_acceptance_role"), read("blocker_risk_review_max_days")]).catch(() => [null, null]);
-    return {
-      role: who === "approver" || who === "owner" ? (who as Role) : RISK_DEFAULTS.role,
-      maxDays: typeof days === "number" && days >= 1 ? days : RISK_DEFAULTS.maxDays,
-    };
-  });
-  return q.data ?? RISK_DEFAULTS;
 }
 
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -302,6 +282,16 @@ function BlockInspector({
             <Icon name="ask" size={20} className="flex-none text-accent-ink" />
             <span className="min-w-0 flex-1">{question.prompt}</span>
             <span className="tnum flex-none text-text2">{age(question.created_at)}</span>
+          </div>
+        </InspectorSection>
+      )}
+      {block.blocker && (
+        <InspectorSection label="Blocker strategy">
+          <div className="flex flex-wrap items-center gap-2">
+            <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
+              Open blocker
+            </LinkButton>
+            <span className="text-sm text-text2">Status, options, feasibility scope and experiments</span>
           </div>
         </InspectorSection>
       )}

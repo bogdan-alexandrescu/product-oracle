@@ -47,7 +47,7 @@ export function Tabs<V extends string>({
       role="tablist"
       aria-label={label}
       onKeyDown={onKey}
-      className="inline-flex max-w-full flex-none self-start overflow-hidden rounded-button border border-line-strong bg-surface max-[600px]:flex max-[600px]:self-stretch"
+      className="inline-flex max-w-full flex-none self-start overflow-hidden rounded-button border border-line-strong bg-surface max-[600px]:flex max-[600px]:flex-wrap max-[600px]:self-stretch"
     >
       {items.map((t) => {
         const on = t.id === value;

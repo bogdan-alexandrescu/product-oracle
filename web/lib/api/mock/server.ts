@@ -2515,7 +2515,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const need: Role | null =
     m === "GET" || draftWrite
       ? null
-      : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST")
+      : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
+          // As the API: commenters propose a blocker's solution options.
+          (p[1] === "blockers" && p[3] === "options" && m === "POST")
         ? "commenter"
         : "approver";
   if (need && !atLeast(me.role, need)) return forbidden(need);

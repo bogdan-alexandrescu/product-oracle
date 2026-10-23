@@ -76,6 +76,8 @@ type Props = {
   onChanged: () => void;
   /** Open on the Promote to blocker form (a suggested blocker's Promote, B4). */
   promote?: boolean;
+  /** For a blocker: opens its blocker inspector (#340). */
+  onOpenBlocker?: () => void;
 };
 
 /**
@@ -94,6 +96,7 @@ export function EntityDrawer({
   onOpen,
   onChanged,
   promote = false,
+  onOpenBlocker,
 }: Props) {
   const q = useQuery(`baseline-entity:${entity.id}`, () =>
     unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: entity.id } } })),
@@ -200,7 +203,7 @@ export function EntityDrawer({
                 Suggested blocker
               </Chip>
             )}
-            {blocker && (
+            {(blocker || onOpenBlocker) && (
               <Chip kind="crit" hero>
                 Blocker
               </Chip>
@@ -250,6 +253,12 @@ export function EntityDrawer({
                   </span>
                   <InfoTip label="the lock">A person&apos;s edit locks the item: agents can only propose changes to it.</InfoTip>
                 </p>
+              </InspectorSection>
+            )}
+
+            {onOpenBlocker && (
+              <InspectorSection label="Blocker strategy" tools={<Button onClick={onOpenBlocker}>Open blocker</Button>}>
+                <p className="text-text2">Status, options, feasibility scope and experiments.</p>
               </InspectorSection>
             )}
 
