@@ -10732,6 +10732,18 @@ export interface components {
             operations: {
                 [key: string]: boolean;
             };
+            /**
+             * Decide Engineering Stops
+             * @default false
+             */
+            decide_engineering_stops: boolean;
+            /**
+             * Per Item
+             * @default {}
+             */
+            per_item: {
+                [key: string]: ("viewer" | "commenter" | "approver" | "owner") | null;
+            };
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {

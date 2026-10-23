@@ -3,7 +3,9 @@
 Each operation that resolves the caller needs the highest role any of its
 :func:`oracle.authz.require_role` dependencies names (a router's and the route's own).
 A route that checks no role is listed below, so a new route without one fails
-tests/test_capabilities.py. ``GET /v1/me/capabilities`` answers, per operation, whether
+tests/test_capabilities.py. A route whose check also lets the engineering lead through
+names ``lead_role`` too (the date checks), and the handlers' own role checks are listed in
+:data:`PER_ITEM`. ``GET /v1/me/capabilities`` answers, per operation, whether
 the caller's role reaches it; the web app hides what it does not, and the OpenAPI
 document carries each operation's role as ``x-min-role`` for the web app's mock.
 """
@@ -89,13 +91,12 @@ EVERY_MEMBER = frozenset(
     }
 )
 
-# Decided in the handler against the item: a checkpoint's approver role, an engineering
-# lead, the author, the role Oracle acted with. Any role may hold the item, so the page
-# reads the item's own state to show or hide these.
+# Decided in the handler against the item: a checkpoint's approver role, the author, the
+# role Oracle acted with. Any role may hold the item, so the page reads the item's own
+# state to show or hide these.
 DECIDED_PER_ITEM = frozenset(
     {
         "create_checkpoint_action",
-        "create_schedule_basis",
         "decide_checkpoint",
         "delete_checkpoint_action",
         "get_checkpoint_draft",
@@ -105,9 +106,53 @@ DECIDED_PER_ITEM = frozenset(
         "stage_checkpoint_action",
         "tick",
         "undo_oracle_action",
-        "withdraw_schedule_basis",
     }
 )
+
+# Operations whose handler can still refuse a role the route lets in, for this item or this
+# input (the intake's author, the person asked, a critical gap, the checkpoint's own role).
+# Each names the role the handler never refuses on role grounds; below it the item decides
+# (None: only the item does, e.g. the decision's named approver). The capabilities answer
+# carries this as ``per_item``, so the web app's can() asks the item too.
+# tests/test_capabilities.py finds every role check made in a handler and fails if one is
+# missing here.
+PER_ITEM: dict[str, Role | None] = {
+    "accept_intake_proposal": "approver",
+    "answer_question": "owner",
+    "ask_next_question_batch": "approver",
+    "create_checkpoint_action": "owner",
+    "create_discussion_message": None,
+    "create_intake": "approver",
+    "create_run": "owner",
+    "create_spec_request": "owner",
+    "create_track_roadmap_run": "owner",
+    "decide_checkpoint": "owner",
+    "decide_decision": None,
+    "decide_knowledge_gap": "owner",
+    "delete_checkpoint_action": "owner",
+    "delete_discussion_message": None,
+    "edit_document_section": "approver",
+    "get_checkpoint_draft": "owner",
+    "get_next_question_batch": "approver",
+    "get_plan": "viewer",
+    "get_plan_item_history": "viewer",
+    "open_oracle_action": "owner",
+    "reassign_decision": "owner",
+    "regenerate_spec": "owner",
+    "retry_draft_import": "owner",
+    "set_checkpoint_note": "owner",
+    "set_document_visibility": "owner",
+    "stage_checkpoint_action": "owner",
+    "start_intake_run": "approver",
+    "tick": "owner",
+    "undo_oracle_action": "owner",
+    "update_discussion_message": None,
+    "update_intake": "owner",
+    "update_knowledge_gap": "owner",
+    "update_question": "approver",
+    "update_requester_note": "approver",
+    "waive_strategy_finding": "owner",
+}
 
 
 def _calls(dependant: Any) -> Iterator[Callable[..., Any]]:
@@ -126,6 +171,7 @@ def _routes(routes: list[Any]) -> Iterator[APIRoute]:
 
 
 _cache: dict[int, dict[str, Role]] = {}
+_lead_cache: dict[int, dict[str, Role]] = {}
 
 
 def operation_roles(app: FastAPI) -> dict[str, Role]:
@@ -144,8 +190,26 @@ def operation_roles(app: FastAPI) -> dict[str, Role]:
     return _cache[key]
 
 
-def capabilities(app: FastAPI, role: str) -> dict[str, bool]:
-    return {op: has_role(role, need) for op, need in operation_roles(app).items()}
+def lead_roles(app: FastAPI) -> dict[str, Role]:
+    """operationId -> the least role an engineering lead needs, for routes whose check also
+    lets the engineering lead through (``lead_role`` beside ``min_role``: the date checks)."""
+    key = id(app)
+    if key not in _lead_cache:
+        _lead_cache[key] = {
+            route.name: lead
+            for route in _routes(app.router.routes)
+            for c in _calls(route.dependant)
+            if (lead := getattr(c, "lead_role", None))
+        }
+    return _lead_cache[key]
+
+
+def capabilities(app: FastAPI, role: str, engineering_lead: bool = False) -> dict[str, bool]:
+    leads = lead_roles(app) if engineering_lead else {}
+    return {
+        op: has_role(role, need) or (op in leads and has_role(role, leads[op]))
+        for op, need in operation_roles(app).items()
+    }
 
 
 def stamp_openapi(app: FastAPI) -> None:
@@ -156,11 +220,15 @@ def stamp_openapi(app: FastAPI) -> None:
         if app.openapi_schema:
             return app.openapi_schema
         schema = build()
-        roles = operation_roles(app)
+        roles, leads = operation_roles(app), lead_roles(app)
         for ops in schema["paths"].values():
             for op in ops.values():
                 if op.get("operationId") in roles:
                     op["x-min-role"] = roles[op["operationId"]]
+                if op.get("operationId") in leads:
+                    op["x-lead-role"] = leads[op["operationId"]]
+                if op.get("operationId") in PER_ITEM:
+                    op["x-per-item"] = PER_ITEM[op["operationId"]]
         return schema
 
     app.openapi = openapi  # type: ignore[method-assign]

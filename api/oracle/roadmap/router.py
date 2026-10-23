@@ -88,6 +88,9 @@ async def date_verifier(principal: CurrentPrincipal, db: TenantDB) -> Principal:
     return principal
 
 
+# Read by oracle.capabilities (#370): approvers, or an engineering lead from commenter up.
+date_verifier.min_role = "approver"  # type: ignore[attr-defined]
+date_verifier.lead_role = "commenter"  # type: ignore[attr-defined]
 DateVerifier = Annotated[Principal, Depends(date_verifier)]
 
 changes.register_handler(staleness.HANDLER, staleness.mark_items, subjects=staleness.SUBJECTS)
