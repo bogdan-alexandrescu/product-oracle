@@ -635,7 +635,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["TrackPatch"]>();
       if (b.lock_version !== t.lock_version) return json(409, { detail: "The track changed since it was loaded" });
-      Object.assign(t, { title: b.title ?? t.title, status: b.status ?? t.status, owner_id: b.owner_id ?? t.owner_id, lock_version: t.lock_version + 1 });
+      Object.assign(t, { title: b.title ?? t.title, status: b.status ?? t.status, owner_id: "owner_id" in b ? b.owner_id ?? null : t.owner_id, lock_version: t.lock_version + 1 });
       return json(200, overview(ctx, db, t));
     }
     return null;
