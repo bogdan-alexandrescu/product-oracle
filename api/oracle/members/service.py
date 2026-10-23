@@ -1454,6 +1454,23 @@ def _own(principal: "Principal | None") -> list:
     return [Invite.invited_by == principal.id]
 
 
+async def _may_act_on(
+    session: AsyncSession, principal: "Principal", invite: Invite | None, invite_id: uuid.UUID
+) -> Invite:
+    """The invite, when the caller may act on it: an approver only on the invites they sent
+    (404 otherwise), and on another's only an owner, re-read under the gate the caller
+    holds (an owner demoted while waiting is refused)."""
+    from oracle.auth.service import caller_refusal
+
+    if invite is None or (_own(principal) and invite.invited_by != principal.id):
+        raise MemberError("not_found", f"Invite {invite_id} not found")
+    if invite.invited_by != principal.id:
+        refusal = await caller_refusal(session, principal, "owner")
+        if refusal is not None:
+            raise MemberError("forbidden", refusal)
+    return invite
+
+
 async def list_invites(
     session: AsyncSession, status: str, principal: "Principal | None" = None
 ) -> list[Invite]:
@@ -1483,7 +1500,7 @@ async def create_invite(
     message: str | None = None,
 ) -> Invite:
     from oracle.auth.service import ReservedEmailError, check_email_allowed
-    from oracle.members.access import invite_roles
+    from oracle.members.access import invite_roles, least_inviter
     from oracle.members.leads import VIEWER_REFUSED
 
     if role not in invite_roles(principal):
@@ -1505,7 +1522,7 @@ async def create_invite(
     except ReservedEmailError as e:
         raise MemberError("invalid", str(e)) from None
     await check_invite_domain(session, email)
-    await _gate(session, principal, shared=True, role="approver")
+    await _gate(session, principal, shared=True, role=least_inviter(role, engineering_lead))
     member = await session.scalar(select(User).where(User.email == email))
     if member is not None and member.disabled_at is not None:
         raise MemberError("conflict", f"{email} is a removed member; restore them instead")
@@ -1574,9 +1591,9 @@ async def resend_invite(
     """Give an open or expired invite 14 more days (A5). An approver resends only the
     invites they sent (404 otherwise)."""
     await _gate(session, principal, shared=True, role="approver")
-    invite = await session.get(Invite, invite_id, with_for_update=True)
-    if invite is None or (_own(principal) and invite.invited_by != principal.id):
-        raise MemberError("not_found", f"Invite {invite_id} not found")
+    invite = await _may_act_on(
+        session, principal, await session.get(Invite, invite_id, with_for_update=True), invite_id
+    )
     if invite.accepted_at is not None or invite.revoked_at is not None:
         raise MemberError("conflict", f"This invite was {invite_status(invite)}; invite them again")
     now = datetime.now(UTC)
@@ -1603,9 +1620,9 @@ async def revoke_invite(
     session: AsyncSession, principal: "Principal", invite_id: uuid.UUID
 ) -> Invite:
     await _gate(session, principal, shared=True, role="approver")
-    invite = await session.get(Invite, invite_id, with_for_update=True)
-    if invite is None or (_own(principal) and invite.invited_by != principal.id):
-        raise MemberError("not_found", f"Invite {invite_id} not found")
+    invite = await _may_act_on(
+        session, principal, await session.get(Invite, invite_id, with_for_update=True), invite_id
+    )
     if invite.accepted_at is not None:
         raise MemberError("conflict", "This invite was already accepted; change the role instead")
     if invite.revoked_at is None:

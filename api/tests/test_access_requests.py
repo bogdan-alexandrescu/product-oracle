@@ -325,6 +325,37 @@ async def test_approvers_approve_as_viewer_or_commenter_only(client, fetches):
     assert ok.status_code == 200, ok.text
 
 
+async def test_an_owner_demoted_while_waiting_cannot_approve_an_approver(
+    client, fetches, monkeypatch
+):
+    """The approve authenticates the owner, then waits on the gate; a demotion to approver
+    commits meanwhile. Re-read under the gate, they may no longer approve an approver."""
+    from oracle.review import publish
+
+    r = await _seed_request()
+    await client.get("/v1/me", headers=_as(NEW))
+    [req] = await _requests(r.tenant_id)
+    owner = await _owner(r.tenant_id)
+    real = publish.gate_lock
+    fired: list[bool] = []
+
+    async def spy(db, *, shared):
+        if not fired:
+            fired.append(True)
+            async with tenant_session(r.tenant_id) as s:
+                (await s.get(User, owner.user_id)).role = "approver"
+                await s.commit()
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    url = f"/v1/access-requests/{req.id}/approve"
+    resp = await client.post(url, json={"role": "approver"}, headers=owner.headers)
+    assert fired, "the approve did not take the gate"
+    assert resp.status_code == 403, resp.text
+    [req] = await _requests(r.tenant_id)
+    assert req.status == "pending"
+
+
 async def test_an_approve_for_someone_already_a_member_closes_the_request(client, fetches):
     r = await _seed_request()
     await client.get("/v1/me", headers=_as(NEW))

@@ -42,9 +42,10 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 
 # The reads of one ``GET /v1/inbox`` with 20 Roadmap items checkpoints of 3 distinct items
-# each: about 50 when batched (most of them the Inbox's other rows), about 170 when each
-# item's trace is read on its own.
-MAX_INBOX_READS = 60
+# each: 63 when batched (most of them the Inbox's other rows, a fixed few per section:
+# discussions, access requests and member follow-ups added theirs in train I), about 170
+# when each item's trace is read on its own.
+MAX_INBOX_READS = 64
 # The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
 WARM_UP = 3
 SAMPLES = 40

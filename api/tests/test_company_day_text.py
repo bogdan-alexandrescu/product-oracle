@@ -155,6 +155,7 @@ ORACLE = Path(oracle.__file__).parent
 HELPERS = {"company_time.py"}
 EXCEPTIONS = {
     ("reports/alignment.py", "short_day"): "words a date already in the Company zone",
+    ("discussions/kinds.py", "_measure"): "a goal's due day: a calendar date, no time of day",
     ("priorities/service.py", "_cited_as"): "machine field: a citation's ISO date",
     ("requests/triage.py", "prompt_lines"): "agent prompt, labelled UTC",
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",
