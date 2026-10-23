@@ -21,6 +21,7 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.connections.router import ProviderHttp
+from oracle.discussions import replies as discussion_replies
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import actions, service
 from oracle.runs.schemas import (
@@ -472,6 +473,9 @@ async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) ->
         # claimed, and no call started, that could not finish inside it.
         budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
         llm_jobs = await run_llm_jobs(principal.tenant_id, budget_seconds=budget)
+        # G2: Oracle's replies nobody streamed, within the same time budget.
+        budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
+        await discussion_replies.run_pending(principal.tenant_id, budget_seconds=budget)
     finally:
         # Last, within their own time budget: they never hold up runs and jobs, and a
         # failure of those never skips them.

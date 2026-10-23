@@ -2,13 +2,15 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { CitationChip } from "@/components/CitationChip";
 import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
 import { Button, Chip, confirmInPage, Icon, Notice, useFocusTrap } from "@/components/ds";
 import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
 import { Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type CitationOut, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
+import { openStream } from "@/lib/stream";
 import { errorMessage } from "@/lib/use-query";
 
 import { plural } from "./DiscussionList";
@@ -127,6 +129,149 @@ function MakeOpenWarning({
   );
 }
 
+type Cite = { n: number; kind: string; ref: string; title: string; url?: string | null; excerpt?: string | null; confidence?: number | null; low_confidence?: boolean };
+
+/** A discussion citation as the document citation chip reads it. */
+function chipCitation(c: Cite): CitationOut {
+  const link = c.kind === "public_link" && !!c.url;
+  return {
+    id: `c${c.n}`,
+    cite_key: `c:${c.n}`,
+    source: link ? "web" : "oracle",
+    ref: link ? c.url! : c.title,
+    title: c.title,
+    excerpt: c.excerpt ?? null,
+    added: false,
+    confidence: c.confidence ?? null,
+    low_confidence: !!c.low_confidence,
+  } as CitationOut;
+}
+
+/** Oracle's text with each `[c:n]` drawn as a citation chip. */
+function ReplyBody({ text, citations }: { text: string; citations: Cite[] }) {
+  const parts = text.split(/(\[c:\d{1,4}\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const n = /^\[c:(\d+)\]$/.exec(part)?.[1];
+        if (!n) return <span key={i}>{part}</span>;
+        const c = citations.find((x) => x.n === Number(n));
+        return c ? <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} /> : null;
+      })}
+    </>
+  );
+}
+
+/**
+ * Oracle's reply (G2): "Oracle is thinking…" while pending, the text growing with a caret
+ * while it streams (Stop for the person who asked), citations as chips, an amber "Oracle
+ * pushes back" label, and a failed or stopped reply's copy with Retry.
+ */
+function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: string; asker: boolean }) {
+  const [msg, setMsg] = useState<Message>(m);
+  const [text, setText] = useState(m.body);
+  const [live, setLive] = useState(m.status === "pending" || m.status === "streaming");
+  const [error, setError] = useState<string | null>(m.error ?? null);
+  const [run, setRun] = useState(0);
+  const { role } = useMe();
+
+  useEffect(() => {
+    if (!live) return;
+    const abort = new AbortController();
+    // The stream sends the text from its start: the first piece replaces what was loaded.
+    let fresh = true;
+    void openStream(`/v1/discussions/${discussionId}/messages/${m.id}/stream`, {
+      signal: abort.signal,
+      onReset: () => {
+        fresh = true;
+      },
+      onDelta: (t) => {
+        const first = fresh;
+        fresh = false;
+        setText((x) => (first ? "" : x) + t);
+        setMsg((x) => (x.status === "pending" ? { ...x, status: "streaming" } : x));
+      },
+      onDone: (out) => {
+        const done = out as Message;
+        setMsg(done);
+        setText(done.body);
+        setError(null);
+        setLive(false);
+      },
+      onError: (e) => {
+        if (abort.signal.aborted) return;
+        setMsg((x) => ({ ...x, status: "failed", error_reason: e.reason }));
+        setError(e.message || "Oracle can't reply right now.");
+        setLive(false);
+      },
+    }).catch(() => setLive(false));
+    return () => abort.abort();
+  }, [live, run, discussionId, m.id]);
+
+  const stop = async () => {
+    try {
+      await unwrap(api.POST("/v1/discussions/{discussion_id}/messages/{reply_id}/cancel", { params: { path: { discussion_id: discussionId, reply_id: m.id } } }));
+    } catch (e) {
+      setError(detail(e));
+    }
+  };
+  const retry = async () => {
+    try {
+      const out = await unwrap(
+        api.POST("/v1/discussions/{discussion_id}/messages/{reply_id}/retry", { params: { path: { discussion_id: discussionId, reply_id: m.id } } }),
+      );
+      setMsg(out);
+      setText("");
+      setError(null);
+      setLive(true);
+      setRun((r) => r + 1);
+    } catch (e) {
+      setError(detail(e));
+    }
+  };
+  const canRetry = asker || hasRole(role, "approver");
+  const citations = (msg.citations ?? []) as unknown as Cite[];
+  const thinking = live && !text;
+  return (
+    <div className="flex min-w-0 flex-col gap-1" data-testid="oracle-reply" data-status={msg.status}>
+      {msg.pushback && (
+        <span data-testid="oracle-pushback">
+          <Chip kind="warn">Oracle pushes back</Chip>
+        </span>
+      )}
+      <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text" data-testid="oracle-reply-text">
+        {thinking ? (
+          <span className="text-text2 italic">Oracle is thinking…</span>
+        ) : live ? (
+          <>
+            {text}
+            <span aria-hidden className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-text align-middle" data-testid="oracle-caret" />
+          </>
+        ) : (
+          <ReplyBody text={text} citations={citations} />
+        )}
+      </p>
+      {msg.status === "failed" && error && (
+        <p className="text-sm text-text2" data-testid="oracle-reply-error">
+          {error}
+        </p>
+      )}
+      <span className="flex gap-1">
+        {live && asker && (
+          <Button variant="ghost" onClick={() => void stop()}>
+            Stop
+          </Button>
+        )}
+        {!live && (msg.status === "failed" || msg.status === "cancelled") && canRetry && (
+          <Button variant="ghost" onClick={() => void retry()}>
+            Retry
+          </Button>
+        )}
+      </span>
+    </div>
+  );
+}
+
 type Draft = { user_id: string; name: string };
 
 /**
@@ -135,8 +280,14 @@ type Draft = { user_id: string; name: string };
  * else's mention of an outsider turns amber, says so, and keeps Send disabled until it is
  * removed.
  */
-function Composer({ d, onSent }: { d: Discussion; onSent: () => Promise<void> }) {
+function Composer({ d, messages, onSent }: { d: Discussion; messages: Message[]; onSent: () => Promise<void> }) {
+  const { me } = useMe();
   const [text, setText] = useState("");
+  // B6 Goals interview's discussions start with "Ask Oracle" on (the entity's interview flag).
+  const [askOracle, setAskOracle] = useState(!!(d.subject as { interview?: unknown }).interview);
+  const others = new Set([...d.participants.map((p) => p.user_id), ...messages.flatMap((x) => (x.author_kind === "person" && x.author ? [x.author.user_id] : []))]);
+  if (me?.user_id) others.delete(me.user_id);
+  const solo = others.size === 0;
   const [mentions, setMentions] = useState<Draft[]>([]);
   const [query, setQuery] = useState<string | null>(null);
   const [found, setFound] = useState<Person[]>([]);
@@ -180,7 +331,7 @@ function Composer({ d, onSent }: { d: Discussion; onSent: () => Promise<void> })
       await unwrap(
         api.POST("/v1/discussions/{discussion_id}/messages", {
           params: { path: { discussion_id: d.id } },
-          body: { body: text.trim(), mention_oracle: false, mentions: mentions.filter((m) => text.includes(`@${m.name}`)).map((m) => m.user_id) },
+          body: { body: text.trim(), mention_oracle: askOracle, mentions: mentions.filter((m) => text.includes(`@${m.name}`)).map((m) => m.user_id) },
         }),
       );
       setText("");
@@ -230,7 +381,7 @@ function Composer({ d, onSent }: { d: Discussion; onSent: () => Promise<void> })
         aria-label="Message"
         rows={3}
         maxLength={8000}
-        placeholder="Write to the team…"
+        placeholder="Reply to Oracle and the team"
         value={text}
         onChange={(e) => onChange(e.target.value, e.target.selectionStart)}
         onKeyDown={(e) => {
@@ -263,10 +414,17 @@ function Composer({ d, onSent }: { d: Discussion; onSent: () => Promise<void> })
       )}
       {anyBlocked && <p className="text-sm font-medium text-warn">{blockedWhy}</p>}
       {error && <InlineError>{error}</InlineError>}
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="solid" disabled={sending || !text.trim() || anyBlocked}>
           Send
         </Button>
+        <label className="inline-flex items-center gap-1.5 text-sm text-text">
+          <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+          Ask Oracle
+        </label>
+        <span className="text-[13px] text-text2" data-testid="oracle-rule">
+          {solo || askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
+        </span>
       </div>
     </form>
   );
@@ -591,15 +749,19 @@ export function DiscussionThread({
               {m.body}
             </li>
           ) : (
-            <li key={m.id} data-testid="discussion-message" className="min-w-0">
+            <li key={m.id} data-testid="discussion-message" data-author-kind={m.author_kind} className="min-w-0">
               <p className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-text2">
                 <span className="font-semibold text-text">{m.author?.name ?? "Oracle"}</span>
                 <span className="tnum">{formatDateTime(m.created_at)}</span>
                 {m.edited_at && !m.deleted && <span>edited</span>}
               </p>
-              <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
-                {m.deleted ? <span className="text-text2 italic">Message deleted</span> : <Body m={m} />}
-              </p>
+              {m.author_kind === "oracle" && !m.deleted ? (
+                <OracleReply m={m} discussionId={d.id} asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)} />
+              ) : (
+                <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+                  {m.deleted ? <span className="text-text2 italic">Message deleted</span> : <Body m={m} />}
+                </p>
+              )}
               {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
                 <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
               )}
@@ -608,11 +770,21 @@ export function DiscussionThread({
         )}
       </ol>
 
+      {d.me.private_findings && (
+        <Notice testId="private-findings-notice">
+          {d.me.private_findings.count} of your private findings bear on this. Share them to let Oracle use them here.{" "}
+          <a className="font-semibold text-accent-ink hover:underline" href={`/intakes/${d.me.private_findings.intake_id}`}>
+            Review sharing
+          </a>
+        </Notice>
+      )}
+
       {!open ? (
         <p className="text-sm text-text2">This discussion is closed.</p>
       ) : d.me.can_write ? (
         <Composer
           d={d}
+          messages={messages}
           onSent={async () => {
             await reload();
             onChanged?.();

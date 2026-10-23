@@ -17,7 +17,7 @@ import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
+import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
@@ -1463,7 +1463,12 @@ function load(): Db {
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.
-  db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
+  db.discussions =
+    scenario === "discussions"
+      ? seedDiscussionsScenario(db)
+      : scenario === "discussion-replies"
+        ? seedDiscussionsScenario(db, seedDiscussionReplies)
+        : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
@@ -1485,10 +1490,10 @@ function addRoadmapVersion(db: Db) {
 }
 
 /** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
-function seedDiscussionsScenario(db: Db): DiscussionsDb {
+function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDiscussions): DiscussionsDb {
   const doc = findDocument(db, "team-workspaces")!;
   const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
-  return seedDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+  return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -2399,6 +2404,17 @@ async function route(db: Db, req: Request): Promise<Response> {
       resolve: (kind, subject) => discussionSubject(db, kind, subject),
       uuid,
       now,
+      // A streaming reply writes after its response: in turn with every other request.
+      persist: (change) => {
+        const next = queue.then(() => {
+          const saved = load();
+          change((saved.discussions ??= emptyDiscussions()));
+          save(saved);
+        });
+        queue = next.catch(() => undefined);
+        return next;
+      },
+      current: () => load().discussions ?? emptyDiscussions(),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;

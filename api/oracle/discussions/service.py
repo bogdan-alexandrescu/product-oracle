@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
-from oracle.discussions import access, kinds
+from oracle.discussions import access, kinds, replies
 from oracle.discussions.models import (
     MAX_BODY,
     MAX_SUMMARY,
@@ -46,6 +46,8 @@ from oracle.discussions.schemas import (
     DiscussionStarter,
     DiscussionSummary,
     HiddenDiscussion,
+    PrivateFindings,
+    ReplyUsage,
 )
 from oracle.members.names import display_name
 from oracle.v2.concurrency import expect_version, flush_or_conflict
@@ -660,7 +662,39 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
     if d.visibility == "private" and seat.starter:
         messages, people = await exposure(db, d)
         out.exposure = DiscussionExposure(messages=messages, people=people)
+    out.me.private_findings = await private_findings(db, principal, d)
     return out
+
+
+async def private_findings(
+    db: AsyncSession, principal: "Principal", d: Discussion
+) -> PrivateFindings | None:
+    """G1 §3.4.6: the caller's own findings below Summary on the subject's intake, for
+    the intake's author only."""
+    from oracle.intake import sharing
+    from oracle.v2.models import KnowledgeGap, ProductIntake
+
+    intake: ProductIntake | None = None
+    if d.subject_kind == "intake":
+        intake = await db.get(ProductIntake, uuid.UUID(d.subject["intake_id"]))
+    elif d.subject_kind == "gap":
+        gap = await db.get(KnowledgeGap, uuid.UUID(d.subject["gap_id"]))
+        if gap is not None and gap.intake_id is not None:
+            intake = await db.get(ProductIntake, gap.intake_id)
+    elif d.subject_kind == "document" and d.document_id is not None:
+        intake = await db.scalar(
+            select(ProductIntake).where(ProductIntake.document_id == d.document_id).limit(1)
+        )
+    if intake is None or not sharing.is_author(principal, intake):
+        return None
+    reg = sharing.registry(intake)
+    below = [
+        e
+        for e in reg.values()
+        if not sharing.is_open(e)
+        and sharing.RANK[e.get("sharing", sharing.DEFAULT)] < sharing.RANK["summary"]
+    ]
+    return PrivateFindings(count=len(below), intake_id=intake.id) if below else None
 
 
 async def list_discussions(
@@ -736,7 +770,9 @@ async def list_discussions(
     return out
 
 
-def message_out(m: DiscussionMessage, users: dict[uuid.UUID, User]) -> DiscussionMessageOut:
+def message_out(
+    m: DiscussionMessage, users: dict[uuid.UUID, User], role: str | None = None
+) -> DiscussionMessageOut:
     def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
         return DiscussionPerson(user_id=uid, name=display_name(user.email) if user else "Someone")
@@ -757,15 +793,30 @@ def message_out(m: DiscussionMessage, users: dict[uuid.UUID, User]) -> Discussio
         created_at=m.created_at,
         edited_at=m.edited_at,
         deleted=deleted,
+        error_reason=m.error_reason,
+        error=replies.error_copy(m, role),
+        pushback=m.pushback,
+        usage=ReplyUsage(
+            model=m.model,
+            input_tokens=m.input_tokens,
+            output_tokens=m.output_tokens,
+            cost_usd=float(m.cost_usd) if m.cost_usd is not None else None,
+            account_label=m.account_label,
+            llm_via=m.llm_via,
+            attempts=m.attempts,
+        )
+        if m.author_kind == "oracle" and role == "owner"
+        else None,
     )
 
 
 async def messages_out(
-    db: AsyncSession, rows: list[DiscussionMessage]
+    db: AsyncSession, rows: list[DiscussionMessage], principal: "Principal | None" = None
 ) -> list[DiscussionMessageOut]:
     ids = {m.author_id for m in rows if m.author_id} | {u for m in rows for u in m.mentions}
     users = await users_by_id(db, ids)
-    return [message_out(m, users) for m in rows]
+    role = principal.role if principal is not None else None
+    return [message_out(m, users, role) for m in rows]
 
 
 async def list_messages(
