@@ -11,12 +11,14 @@ its Roadmap items checkpoint on the FakeRuntime against Postgres.
 Test cards (protects / fails_when / no_claim) head each test. Synthetic placeholders only.
 """
 
+import math
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import event
 
+from oracle import safe_yaml
 from oracle.db import get_engine
 from oracle.runs import actions
 from oracle.runs.models import Checkpoint
@@ -43,6 +45,9 @@ from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 # each: about 50 when batched (most of them the Inbox's other rows), about 170 when each
 # item's trace is read on its own.
 MAX_INBOX_READS = 60
+# The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
+WARM_UP = 3
+SAMPLES = 40
 
 # --- unit: actions.summarize -------------------------------------------------------------
 
@@ -354,14 +359,7 @@ async def test_a_held_console_approval_marks_the_summary(client, owner, runtime)
     assert c["console"]["needs"] == "confirm"
 
 
-async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, runtime):  # noqa: F811
-    """protects=the Inbox reads the company-wide inputs once per call and the traces of all
-    its checkpoints' items together, so it stays quick when every checkpoint has its own
-    items; fails_when=p95 over 300 ms with 20 pending Roadmap items checkpoints whose items
-    all differ, on the test database; no_claim=production data volume."""
-    tenant_id, auth = owner
-    await approved_prd(client, auth)
-    await seed_baseline(tenant_id)
+async def twenty_checkpoints(client, auth, runtime) -> None:  # noqa: F811
     for n in range(20):
         # Distinct items in every checkpoint: nothing is shared between them but the
         # company-wide reads.
@@ -369,6 +367,18 @@ async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, run
         for key in ("payment-step", "mobile-push", "gift-cards"):
             items = items.replace(f"id: {key}", f"id: {key}-{n}")
         await roadmap_items_check(client, auth, runtime, items)
+
+
+async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, runtime):  # noqa: F811
+    """protects=the Inbox reads the company-wide inputs once per call and the traces of all
+    its checkpoints' items together, so it stays quick when every checkpoint has its own
+    items; fails_when=more than MAX_INBOX_READS reads, or p95 over 300 ms (after a warm-up,
+    over SAMPLES calls) with 20 pending Roadmap items checkpoints whose items all differ, on
+    the test database; no_claim=production data volume."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await twenty_checkpoints(client, auth, runtime)
     statements: list[str] = []
 
     def count(conn, cursor, statement, *args):
@@ -386,11 +396,42 @@ async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, run
     reads = [st for st in statements if "SAVEPOINT" not in st]
     assert len(reads) <= MAX_INBOX_READS, len(reads)
     assert got["total"] >= 20  # the badge: one per checkpoint, children add nothing
+    for _ in range(WARM_UP):
+        await inbox_of(client, auth)
     times = []
-    for _ in range(10):
+    for _ in range(SAMPLES):
         start = time.perf_counter()
         await inbox_of(client, auth)
         times.append(time.perf_counter() - start)
-    p95 = sorted(times)[int(len(times) * 0.95) - 1]
+    # The nearest-rank p95: of 40 samples the 38th, so two slow calls do not fail it.
+    p95 = sorted(times)[math.ceil(len(times) * 0.95) - 1]
     print(f"GET /v1/inbox with 20 roadmap checkpoints: p95 {p95 * 1000:.0f} ms")
     assert p95 < 0.3, f"p95 {p95 * 1000:.0f} ms"
+
+
+async def test_the_inbox_parses_each_items_file_once(client, owner, runtime, monkeypatch):  # noqa: F811
+    """protects=an Inbox call parses each checkpoint's roadmap_items.yaml at most once, and
+    a file already parsed (the same text) is not parsed again by later calls; the counts
+    stay those of the file; fails_when=a file is parsed twice in one call, or a warm Inbox
+    call parses any of its 20 unchanged files; no_claim=timing (see the test above)."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await twenty_checkpoints(client, auth, runtime)
+    parsed: list[str] = []
+    load = safe_yaml.load
+
+    def counted(text, **kw):
+        parsed.append(text)
+        return load(text, **kw)
+
+    monkeypatch.setattr(safe_yaml, "load", counted)
+    first = await inbox_of(client, auth)
+    assert len(parsed) == len(set(parsed)) <= 20
+    parsed.clear()
+    again = await inbox_of(client, auth)
+    assert parsed == []
+    assert [c["summary"] for c in again["checkpoints"]] == [
+        c["summary"] for c in first["checkpoints"]
+    ]
+    assert sum(1 for c in again["checkpoints"] if c["summary"]) == 20
