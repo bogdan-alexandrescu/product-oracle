@@ -4,6 +4,8 @@
 
     version: 1
     prd: {document: checkout-redesign, version: 3}
+    # After a send-back with a review (D6): one answer per review entry.
+    resolutions: [{id: bulk-import, action: change, status: declined, note: "..."}]
     items:
       - id: bulk-import
         title: Bulk import
@@ -51,6 +53,7 @@ from oracle.roadmap.schedule import Basis, supporting
 
 HORIZONS = ("now", "next", "later")
 CONFIDENCES = ("high", "medium", "low")
+RESOLUTION_STATUSES = ("done", "declined")
 REQUIRED = ("id", "title", "outcome", "horizon", "prd_section")
 # Optional trace fields: a key, or a list of keys, of baseline entities.
 KEY_LISTS = ("requirements", "blockers")
@@ -72,6 +75,8 @@ DOC_LINK = re.compile(
 class ItemsCheck:
     items: list[dict[str, Any]] = field(default_factory=list)
     problems: list[dict[str, str]] = field(default_factory=list)
+    # D6: the agents' answers to a send-back's review entries, as validated.
+    resolutions: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -155,6 +160,7 @@ def check_items(
             out.add("wrong_prd", f"prd.document is {prd.get('document')!r}, not {prd_slug!r}")
         if prd_version and prd.get("version") not in (None, prd_version):
             out.add("wrong_prd", f"prd.version is {prd.get('version')!r}, not {prd_version}")
+    _check_resolutions(out, data)
     items = data.get("items")
     if not isinstance(items, list) or not items:
         out.add("no_items", "roadmap_items.yaml lists no items")
@@ -272,6 +278,33 @@ async def check_items_async(text: str, **kwargs: Any) -> ItemsCheck:
         name = type(exc).__name__
         out.add("unreadable_yaml", f"roadmap_items.yaml could not be checked ({name})")
         return out
+
+
+def _check_resolutions(out: ItemsCheck, data: dict[str, Any]) -> None:
+    """D6: ``resolutions`` (optional) is a list of mappings with an ``id`` and a ``status``
+    of done or declined; anything else is a problem of the whole file, never ignored."""
+    value = data.get("resolutions")
+    if value is None:
+        return
+    if not isinstance(value, list) or not all(
+        isinstance(r, dict) and _text(r.get("id")) and r.get("status") in RESOLUTION_STATUSES
+        for r in value
+    ):
+        out.add(
+            "invalid_resolutions",
+            "resolutions must be a list of mappings, each with an id and a status of done or "
+            "declined",
+        )
+        return
+    out.resolutions = [
+        {
+            "id": _text(r["id"]),
+            "action": _text(r.get("action")),
+            "status": r["status"],
+            "note": _text(r.get("note")),
+        }
+        for r in value
+    ]
 
 
 def _check_trace_fields(out: ItemsCheck, item_id: str, raw: dict[str, Any]) -> None:

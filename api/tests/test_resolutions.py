@@ -14,8 +14,6 @@ back from its Roadmap items checkpoint on the FakeRuntime and harvest attempt 2,
 Postgres. Test cards (protects / fails_when / no_claim) head each test. Made-up names only.
 """
 
-import pytest
-
 from oracle.runs import reasons, resolutions, review_file, roadmap, workflow
 from oracle.swarm import Outcome
 from tests.test_checkpoint_review import Review, item_of, review  # noqa: F401 - fixtures
@@ -128,9 +126,12 @@ def test_drop_is_done_when_the_id_is_gone_and_not_applied_when_it_stays():
 def test_restore_is_done_when_the_id_is_back():
     """protects=restore is checked; fails_when=a restore stays absent unnoticed; no_claim=—."""
     restore = {"id": "w", "action": "restore"}
-    assert entry_of(resolutions.resolve(sent(restore), BEFORE, [*BEFORE, item("w")], []), "w")[
-        "outcome"
-    ] == "done"
+    assert (
+        entry_of(resolutions.resolve(sent(restore), BEFORE, [*BEFORE, item("w")], []), "w")[
+            "outcome"
+        ]
+        == "done"
+    )
     assert entry_of(resolutions.resolve(sent(restore), BEFORE, BEFORE, []), "w")["outcome"] == (
         "not_applied"
     )
@@ -162,7 +163,10 @@ def test_questions_and_accepts_have_nothing_to_check():
     """protects=only checkable entries can fail; fails_when=a question is "not applied";
     no_claim=what the agents did with the answer."""
     got = resolutions.resolve(
-        sent({"id": "x", "action": "question", "question": "Why now?"}, {"id": "z", "action": "accept"}),
+        sent(
+            {"id": "x", "action": "question", "question": "Why now?"},
+            {"id": "z", "action": "accept"},
+        ),
         BEFORE,
         BEFORE,
         [],
@@ -239,8 +243,8 @@ def test_item_diff_counts_confidence_and_one_place_rank_moves():
     after = [item("x", confidence="low", priority={"rank": 2})]
     [row] = resolutions.item_diff(before, after, 1)["items"]
     assert row["changes"] == [
-        {"field": "priority.rank", "from": 1, "to": 2},
         {"field": "confidence", "from": "high", "to": "low"},
+        {"field": "priority.rank", "from": 1, "to": 2},
     ]
 
 
@@ -354,7 +358,10 @@ ATTEMPT2 = """\
 version: 1
 prd: {document: checkout-redesign, version: 1}
 resolutions:
-  - {id: mobile-push, action: change, status: declined, note: "Push waits for the app release, so it stays in Later"}
+  - id: mobile-push
+    action: change
+    status: declined
+    note: Push waits for the app release, so it stays in Later
   - {id: gift-cards, action: drop, status: done}
 items:
   - id: payment-step
@@ -494,8 +501,8 @@ async def test_attempt_2_that_applies_every_entry_is_done_with_a_diff(review, ru
     assert not codes & {"declined_change", "change_not_applied", "unrequested_change"}
     # Attempt 1 had neither.
     first = next(c for c in run["checkpoints"] if c["id"] == review.cp["id"])
-    assert "resolution" not in first["payload"]["items_check"]
-    assert "diff" not in first["payload"]["items_check"]
+    assert first["payload"]["items_check"]["resolution"] is None
+    assert first["payload"]["items_check"]["diff"] is None
 
 
 async def test_malformed_resolutions_keep_the_gate_closed_with_send_back_only(review, runtime):  # noqa: F811

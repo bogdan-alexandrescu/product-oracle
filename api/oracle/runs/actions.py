@@ -43,8 +43,11 @@ from oracle.runs.models import ACTION_KINDS, Checkpoint, CheckpointAction, Run, 
 from oracle.runs.schemas import (
     ActionIn,
     CheckpointReview,
+    FieldDiff,
     ItemReason,
+    ItemsAttemptDiff,
     ItemsProblem,
+    ResolutionEntry,
     ReviewAction,
     ReviewAnswer,
     ReviewAnswerer,
@@ -288,7 +291,11 @@ async def _file(db: AsyncSession, run: Run, cp: Checkpoint) -> _File | None:
     text = ((segment.artifacts or {}).get("files") or {}).get(name) if segment else None
     if not isinstance(text, str):
         return _File(seq, name, None)
-    return _File(seq, name, await service.checked_items(db, run, text))
+    attempt = (cp.payload or {}).get("attempt")
+    prior = await service.prior_review(
+        db, run, segment, attempt if isinstance(attempt, int) else None
+    )
+    return _File(seq, name, await service.checked_items(db, run, text, prior))
 
 
 def _context(found: _File | None) -> ValidationContext:
@@ -820,6 +827,16 @@ async def read(
         reasons_of.setdefault(reason["item"], []).append(reason)
     titles = {r["item"]: r.get("item_title") for r in all_reasons}
 
+    resolution = checked.resolution if checked else None
+    attempt_diff = checked.diff if checked else None
+    answered: dict[str, ResolutionEntry] = {}
+    for e in (resolution or {}).get("entries") or []:
+        answered.setdefault(e["id"], ResolutionEntry(**e))
+    changed = {
+        d["id"]: [FieldDiff(**c) for c in d["changes"]]
+        for d in (attempt_diff or {}).get("items") or []
+    }
+
     tally = ReviewTally()
     waiting: dict[uuid.UUID, WaitingOn] = {}
     items: list[ReviewItem] = []
@@ -874,6 +891,8 @@ async def read(
                 reasons=[ItemReason(**x) for x in found_reasons],
                 actions=mine,
                 state=state,  # type: ignore[arg-type]
+                resolution=answered.get(key),
+                diff=changed.get(key, []),
             )
         )
     tally.waiting_on = list(waiting.values())
@@ -906,4 +925,5 @@ async def read(
         can_stage=stages,
         can_decide=stages,
         gate=gate.approve_gate(cp, None, staged) if pending else None,
+        diff=ItemsAttemptDiff(**attempt_diff) if attempt_diff else None,
     )
