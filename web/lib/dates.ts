@@ -114,3 +114,21 @@ const NAIVE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+)?$/;
 export function shownDay(value: string, opts: Intl.DateTimeFormatOptions, locale = "en-US"): string {
   return NAIVE.test(value) ? calendarDay(value, opts, locale) : formatInZone(value, displayZone(), opts, locale);
 }
+
+/** "Sun Oct 25, 2:59 PM PDT": a moment in `zone` with its weekday, as the API words a refusal (api/oracle/company_time.py in_words). */
+export function inWords(iso: string, zone: string): string {
+  try {
+    const parts = fmt("en-US", zone, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).formatToParts(new Date(iso));
+    const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
+    return `${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`;
+  } catch {
+    return zoneDateTime(iso, zone);
+  }
+}

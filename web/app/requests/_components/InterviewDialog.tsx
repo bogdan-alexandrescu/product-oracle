@@ -8,6 +8,7 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { interviewsCall, LIMITS, type InterviewCreate, type InterviewLink, type InterviewOut, type InterviewPatch } from "@/lib/api/interviews";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { formatDateTime } from "@/lib/format";
 
 type About = "intake" | "theme" | "topic";
 type Step = "subject" | "guide" | "link";
@@ -19,16 +20,8 @@ const ABOUT: { value: About; label: string }[] = [
   { value: "topic", label: "A topic" },
 ];
 
-const ptFmt = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "America/Los_Angeles",
-});
-/** "Oct 29, 2026, 9:14 AM PT": a link's expiry, in the company's time. */
-const formatPt = (iso: string) => `${ptFmt.format(new Date(iso))} PT`;
+/** A link's expiry in the Company time zone, labelled ("Oct 29, 9:14 AM PDT", #447). */
+const formatPt = (iso: string) => formatDateTime(iso);
 
 /**
  * Interview a customer (C3): who and what about; then Oracle drafts the questions (a queued

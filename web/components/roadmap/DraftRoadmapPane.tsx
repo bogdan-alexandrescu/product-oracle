@@ -17,6 +17,7 @@ import {
 } from "@/lib/api/draft-roadmap";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { formatDateTime } from "@/lib/format";
 
 import { HORIZONS, toItemRow, type ItemRow } from "./item-row";
 
@@ -36,8 +37,6 @@ const PROBLEM_LABEL: Record<string, string> = {
 };
 export const problemLabel = (code: string) => PROBLEM_LABEL[code] ?? "Check problem";
 
-// "20 Oct, 10:09".
-const derivedFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 function ago(iso: string | null): string {
   if (!iso) return "just now";
@@ -313,7 +312,7 @@ function StatusRow({
             {data.items.length} item{data.items.length === 1 ? "" : "s"}
           </b>
           {horizons}
-          {data.ready_at ? ` · derived ${derivedFmt.format(new Date(data.ready_at))}` : ""}
+          {data.ready_at ? ` · derived ${formatDateTime(data.ready_at)}` : ""}
           {p ? ` · ${p} problem${p === 1 ? "" : "s"}` : ""}
         </span>
       );
