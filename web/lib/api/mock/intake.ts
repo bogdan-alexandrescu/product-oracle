@@ -3,9 +3,9 @@
  * New product idea, the Opportunity and Gaps summary, question batches, answers,
  * decisions and proposals. It works on the v2 mock tables (./v2.ts) and keeps the API's
  * shapes and role rules; its analysis is a fixed, simplified stand-in for the engine
- * (one gap per category, ranked by importance and impact). It has no source items, so it
- * has no S6 findings of its own: GET .../findings is empty and only the author may set a level;
- * a scenario may mark gaps private (V2Db.private_gap_ids), and their questions are then asked
+ * (one gap per category, ranked by importance and impact). It has no source items: S6
+ * findings are only those a scenario seeds (V2Db.intake_findings); GET .../findings shows
+ * them as the API does, and only the author sets a level (#343); a scenario may mark gaps private (V2Db.private_gap_ids), and their questions are then asked
  * of, reassigned or delegated to the intake's author only, as in the API.
  * B4 (owners clear critical gaps) and the author-only repin and re-analysis hold here too.
  * C2 Questions to people: every asked question has a person (the intake's author unless
@@ -423,6 +423,28 @@ function cards(db: V2Db, questions: Question[]): Schemas["QuestionCard"][] {
   }));
 }
 
+const SEES: Schemas["FindingOut"]["sharing"][] = ["private", "counts", "summary", "full"];
+
+/** An intake's findings as `userId` sees them (S6): the author every one; anyone else those
+ * shared at counts or above, the summary from the summary level, the sources in full. */
+function findingsFor(db: V2Db, intake: Intake, userId: string): Schemas["FindingOut"][] {
+  const all = db.intake_findings?.[intake.id] ?? [];
+  if (intake.author_id === userId) return all;
+  return all
+    .filter((f) => f.sharing !== "private")
+    .map((f) => {
+      const at = SEES.indexOf(f.sharing);
+      return {
+        ...f,
+        draft_summary: null,
+        unshared_item_ids: [],
+        summary: at >= 2 ? f.summary : null,
+        gap_id: at >= 2 ? f.gap_id : null,
+        source_item_ids: at >= 3 ? f.source_item_ids : [],
+      };
+    });
+}
+
 function proposeResearch(db: V2Db, intake: Intake, gap: Gap, userId: string, questionId: string | null, investigate: boolean): Proposal {
   db.intake_proposals ??= [];
   const open = db.intake_proposals.find((p) => p.gap_id === gap.id && p.kind === "research_run" && p.status === "proposed");
@@ -512,10 +534,23 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       });
     }
     if (leaf === "proposals" && m === "GET") return json(200, (db.intake_proposals ?? []).filter((x) => x.intake_id === intake.id));
-    if (leaf === "findings" && m === "GET") return json(200, [] satisfies Schemas["FindingOut"][]);
+    if (leaf === "findings" && m === "GET") return json(200, findingsFor(db, intake, ctx.userId));
     if (leaf === "findings" && (m === "PATCH" || m === "POST")) {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can share its findings");
-      return fail(404, "Finding not found");
+      const all = db.intake_findings?.[intake.id] ?? [];
+      const changes =
+        m === "PATCH" && p.length === 5
+          ? [{ finding_id: p[4], sharing: (await body<Schemas["SharingIn"]>()).sharing }]
+          : m === "POST" && p[4] === "sharing"
+            ? (await body<Schemas["SharingBulkIn"]>()).changes
+            : null;
+      if (!changes) return null;
+      const missing = changes.find((c) => !all.some((f) => f.id === c.finding_id));
+      if (missing) return fail(404, `Finding ${missing.finding_id} not found`);
+      for (const c of changes) all.find((f) => f.id === c.finding_id)!.sharing = c.sharing;
+      const set = new Set(changes.map((c) => c.finding_id));
+      const out = findingsFor(db, intake, ctx.userId).filter((f) => set.has(f.id));
+      return json(200, m === "PATCH" ? out[0] : out);
     }
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     if (leaf === "analyze" && m === "POST") {
@@ -611,6 +646,9 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const input = await body<Schemas["GapCreate"]>();
       const intake = findIntake(input.intake_id);
       if (!intake) return fail(404, "Intake not found");
+      if (!input.statement || input.statement.length > 500) return fail(422, "A gap needs a statement of 1 to 500 characters");
+      if ((input.section_keys ?? []).length > 20) return fail(422, "At most 20 sections");
+      if (input.owner_id && !(ctx.people ?? []).some((x) => x.id === input.owner_id)) return fail(422, "Unknown owner");
       const cat = CATEGORIES.find((c) => c[0] === input.category);
       const gap: Gap = {
         id: uuid(), intake_id: intake.id, document_id: intake.document_id, category: input.category, statement: input.statement,
@@ -631,10 +669,17 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (gap.importance === "critical" && patch.importance && patch.importance !== "critical" && !atLeast(ctx.role, "owner")) {
         return fail(403, "Lowering a critical gap's importance needs an owner");
       }
+      if (patch.owner_id && !(ctx.people ?? []).some((x) => x.id === patch.owner_id)) return fail(422, "Unknown owner");
+      if ((patch.section_keys ?? []).length > 20 || (patch.stop_condition ?? "").length > 500) return fail(422, "At most 20 sections, and a stop condition of at most 500 characters");
       if (patch.importance) gap.importance = patch.importance;
       if (patch.status) gap.status = patch.status;
       if (patch.owner_id) gap.owner_id = patch.owner_id;
+      if (patch.section_keys) gap.section_keys = patch.section_keys;
+      if (patch.stop_condition != null) gap.stop_condition = patch.stop_condition;
       gap.lock_version += 1;
+      gap.updated_at = now();
+      const intake = gap.intake_id ? findIntake(gap.intake_id) : undefined;
+      if (intake) syncQuestions(db, intake);
       return json(200, gap);
     }
     if (p[3] === "decisions" && m === "POST") {
@@ -910,4 +955,28 @@ export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: strin
   ask("goal_alignment", 2, authorId, "2026-10-21T09:00:00Z");
   reply("customer_user", "Returning buyers on the web shop, signed in.", "2026-10-20T11:00:00Z", "answered");
   reply("blockers", "The address lookup API has a rate limit that could block pre-fill.", "2026-10-20T12:00:00Z", "answered_pending_review");
+  // #343: a PRD patch from the customer answer, and two findings from the author's own sources.
+  const customer = question("customer_user");
+  db.intake_proposals = [
+    ...(db.intake_proposals ?? []),
+    {
+      id: uuid(), intake_id: intake.id, gap_id: gap("customer_user").id, question_id: customer.id,
+      answer_id: db.answers.find((a) => a.question_id === customer.id)?.id ?? null, kind: "prd_patch",
+      title: `Add to the PRD: ${LABEL.customer_user}`,
+      detail: { document: "saved-addresses", base_version: 2, section_key: "context.users", text: `${customer.prompt} Returning buyers on the web shop, signed in.` },
+      status: "proposed", result: {}, created_by: approverId, decided_by: null, decided_at: null, decision_note: null,
+      created_at: "2026-10-20T11:00:00Z", updated_at: "2026-10-20T11:00:00Z",
+    },
+  ];
+  const finding = (kind: Schemas["FindingOut"]["kind"], category: string, sharing: Schemas["FindingOut"]["sharing"], draft: string): Schemas["FindingOut"] => ({
+    id: uuid(), kind, origin: "rules", category, sharing, summary: sharing === "private" ? null : `A ${kind} about ${category.replace(/_/g, " ")}`,
+    summary_confirmed: false, draft_summary: draft, gap_id: null, source_item_ids: [uuid()], unshared_item_ids: [],
+  });
+  db.intake_findings = {
+    ...db.intake_findings,
+    [intake.id]: [
+      finding("gap", "pain_evidence", "private", "Support tickets mention retyping the address at every order."),
+      finding("item", "constraints", "counts", "A team note limits address storage to one region."),
+    ],
+  };
 }
