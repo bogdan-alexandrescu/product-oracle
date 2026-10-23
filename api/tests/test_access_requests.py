@@ -471,6 +471,12 @@ async def test_a_run_token_gets_403_on_every_new_route(client, fetches):
     invite_id = invite.json()["id"]
     admin_id = await _admin_id(r.tenant_id)
     run = await _run_token(r.tenant_id, admin_id, ["read:documents"])
+    domains = await client.put(
+        "/v1/settings/company_email_domains",
+        json={"value": ["example.com"]},
+        headers=owner_headers,
+    )
+    assert domains.status_code == 200, domains.text
     url = f"/v1/access-requests/{req.id}"
     routes = [
         ("GET", "/v1/access-requests", None),
@@ -480,6 +486,9 @@ async def test_a_run_token_gets_403_on_every_new_route(client, fetches):
         ("GET", "/v1/sign-in-rules", None),
         ("PUT", "/v1/settings/sign_in_without_invite", {"value": "refuse"}),
         ("PUT", "/v1/settings/iap_default_role", {"value": "viewer"}),
+        # Who may join under ``join`` or ask under ``request`` (sign_in_domains).
+        ("PUT", "/v1/settings/company_email_domains", {"value": ["outside-co.test"]}),
+        ("PUT", "/v1/settings/company_email_domains", {"value": None}),
         ("GET", "/v1/invites", None),
         ("POST", "/v1/invites", {"email": "kai@example.com", "role": "viewer"}),
         ("POST", f"/v1/invites/{invite_id}/resend", None),
@@ -502,3 +511,8 @@ async def test_a_run_token_gets_403_on_every_new_route(client, fetches):
             select(TenantSetting.value).where(TenantSetting.key == "sign_in_without_invite")
         )
         assert rules == "request"
+        stored = dict(
+            (await s.execute(select(TenantSetting.key, TenantSetting.value))).tuples().all()
+        )
+        assert stored.get("iap_default_role") != "viewer"
+        assert stored["company_email_domains"] == ["example.com"]
