@@ -387,7 +387,25 @@ async def propose(
     Oracle's pushback once when its target is already met."""
     await recheck_caller(db, principal, "commenter")
     c, d = await _actable(db, principal, change_id)
-    goal = await db.get(Entity, uuid.UUID(c.target["entity_id"]))
+    return await propose_version(db, principal, c, d, body)
+
+
+async def propose_version(
+    db: AsyncSession,
+    principal: Principal,
+    c: DiscussionChange,
+    d: Discussion,
+    body: GoalMeasureAct,
+    reason: str | None = None,
+) -> DiscussionChange | GoalMeasurePushback:
+    """The one path a goal version takes to a baseline proposal, from B6's route and from
+    G3's Propose (``oracle.discussions.changes.propose``), the caller having checked who may
+    act on ``c``: B5's checks, Oracle's pushback once when the target is already met (the
+    kept target logged as the override), and the typed values clearing their ``*_text``.
+    The goal is the change's target. ``reason``: the proposal's, "From discussion <title>"
+    when None."""
+    goal_id = (c.target or {}).get("entity_id")
+    goal = await db.get(Entity, uuid.UUID(str(goal_id))) if goal_id else None
     if goal is None or goal.type != "goal":
         raise HTTPException(404, "Goal not found")
     raw = dict(body.payload if body.payload is not None else (c.edited_payload or c.payload))
@@ -425,7 +443,7 @@ async def propose(
         _note_in_summary(d, c.override_reason)
     # The typed value replaces the text it was read from (as Fill from text does).
     fields = {**attrs, **{f"{k}_text": None for k in attrs if f"{k}_text" in before}}
-    writer = service.Writer(principal, "agent", reason=f"From discussion {d.title}")
+    writer = service.Writer(principal, "agent", reason=reason or f"From discussion {d.title}")
     proposal = await service.submit_proposal(
         db, writer, op="update", kind="entity", fields={"attrs": fields},
         entity_id=goal.id, edge_id=None,
@@ -577,7 +595,7 @@ async def propose_goal_measure(
     if isinstance(out, GoalMeasurePushback):
         return JSONResponse(out.model_dump(), status.HTTP_409_CONFLICT)
     await db.refresh(out)
-    return discussions.change_out(out)
+    return await discussions.change_out(db, principal, out)
 
 
 @router.post(
@@ -592,4 +610,4 @@ async def dismiss_goal_measure(
     c = await dismiss(db, principal, change_id)
     await db.commit()
     await db.refresh(c)
-    return discussions.change_out(c)
+    return await discussions.change_out(db, principal, c)

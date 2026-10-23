@@ -43,7 +43,7 @@ from sqlalchemy.orm import aliased
 
 from oracle import audit
 from oracle.authz import has_role
-from oracle.discussions import context
+from oracle.discussions import changes, context
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.jobs import prompting
 from oracle.jobs.worker import _cost, _tokens
@@ -364,14 +364,17 @@ async def _produce(
             live.visible = goal_interview.visible
         reply.prompt = name
         await db.commit()
+        notes = await changes.prompt_notes(db, d)
     asked = "Open the interview." if ctx.opening else "Reply to the last person's message."
     user = (
-        f"{ctx.text()}\n\nThe pushback threshold is {ctx.pushback:.2f}; the low-confidence "
-        f"threshold is {ctx.low:.2f}. {asked}"
+        f"{ctx.text()}\n\n{notes}\n\nThe pushback threshold is {ctx.pushback:.2f}; the "
+        f"low-confidence threshold is {ctx.low:.2f}. {asked}"
     )
     shown = live.visible
     saved = 0
     last_save = time.monotonic()
+    # G3: the delimiter and the changes after it never reach the chat.
+    held = changes.HoldBack()
 
     async def save_partial() -> None:
         nonlocal saved, last_save
@@ -381,6 +384,11 @@ async def _produce(
         )
 
     async def on_text(text: str) -> None:
+        await show(held.feed(text))
+
+    async def show(text: str) -> None:
+        if not text:
+            return
         before = shown(live.text)
         live.text += text
         delta = shown(live.text)[len(before) :]
@@ -423,6 +431,8 @@ async def _produce(
         if time.monotonic() - last_save >= SAVE_SECONDS:
             await save_partial()
     end: dict[str, Any] = {"stream_lease_until": None}
+    # A stopped or failed reply keeps its text so far, the held-back end included.
+    await show(held.flush())
     if cancelled:
         await _save(tenant_id, reply_id, body=shown(live.text), status="cancelled", **end)
         return "cancelled"
@@ -436,9 +446,15 @@ async def _produce(
             error_reason=reason, **end,
         )  # fmt: skip
         return "failed"
-    if not live.text and done.text:
+    if not held.seen and done.text:
         await on_text(done.text)
-    text, versions = goal_interview.take_changes(live.text) if goal is not None else (live.text, [])
+    await show(held.flush())
+    # B6 and G3 share the delimiter: on a goal, the versions block (a JSON array) stays for
+    # goal_interview and G3's changes (a JSON object) are taken out.
+    text, tail = live.text, held.tail
+    if goal is not None and tail is not None:
+        text, tail = changes.split_goal_reply(f"{text}{changes.DELIMITER}{tail}")
+    text, versions = goal_interview.take_changes(text) if goal is not None else (text, [])
     body, cites = citations_of(text, ctx)
     inp, out = _tokens(done.usage)
     await _save(
@@ -449,7 +465,20 @@ async def _produce(
     )  # fmt: skip
     if versions:
         await goal_interview.keep_versions(tenant_id, reply_id, versions, ctx.entries)
+    if tail is not None:
+        await _extract(tenant_id, reply_id, tail, ctx)
     return "complete"
+
+
+async def _extract(tenant_id: uuid.UUID, reply_id: uuid.UUID, tail: str, ctx: Any) -> None:
+    """G3: the reply's changes, written before its stream sends ``done``."""
+    async with tenant_session(tenant_id) as db:
+        reply = await db.get(DiscussionMessage, reply_id)
+        d = await db.get(Discussion, reply.discussion_id) if reply else None
+        if reply is None or d is None:
+            return
+        await changes.extract(db, d, reply, tail, ctx)
+        await db.commit()
 
 
 def start(
@@ -560,6 +589,10 @@ async def stream(
             yield sse("delta", {"text": row.body[sent:]})
         if row.citations:
             yield sse("citations", row.citations)
+        if row.status == "complete":
+            made = await _changes_of(db, principal, row)
+            if made:
+                yield sse("changes", [c.model_dump(mode="json") for c in made])
         [out] = await service.messages_out(db, [row], principal)
         if row.status == "failed":
             yield sse(
@@ -568,6 +601,21 @@ async def stream(
             )
         else:
             yield sse("done", out.model_dump(mode="json"))
+
+
+async def _changes_of(db: AsyncSession, principal: "Principal", reply: DiscussionMessage) -> list:
+    from oracle.discussions import service
+    from oracle.discussions.models import DiscussionChange
+
+    ids = list(
+        await db.scalars(
+            select(DiscussionChange.id).where(DiscussionChange.from_message_id == reply.id)
+        )
+    )
+    if not ids:
+        return []
+    d, _parts, seat = await service.readable(db, principal, reply.discussion_id)
+    return await changes.list_changes(db, principal, d, seat, ids=ids)
 
 
 # --- Stop and Retry ---------------------------------------------------------------------
