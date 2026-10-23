@@ -131,7 +131,7 @@ async def test_the_pre_read_has_the_kinds_blocks_and_markdown(client, ctx, at):
     occ = await ready_occurrence(client, ctx, at)
     keys = [b["key"] for b in occ["pre_read"]["blocks"]]
     assert keys == ["tracks", "slips", "stale_items", "done_items", "priority_changes",
-                    "suggested_next"]  # fmt: skip
+                    "new_requests", "suggested_next"]  # fmt: skip
     assert occ["pre_read"]["built_at"] and occ["period"]["to"] == occ["due_at"]
     md = await client.get(f"/v1/ritual-occurrences/{occ['id']}/pre-read.md",
                           headers=ctx.as_("viewer"))  # fmt: skip
@@ -217,6 +217,51 @@ async def test_the_feature_gated_kinds_have_their_blocks(client, ctx, at):
     assert resp.status_code == 200, resp.text
     assert list(rows(resp.json())) == ["update_draft"]
     assert rows(resp.json())["update_draft"][0]["text"] == "No update draft yet"
+
+
+async def test_new_requests_and_blockers_since_last_time(client, ctx, at):
+    """protects=the monthly refresh's new_requests block (C1 requests filed in the
+    window, not merged) and since_last's blockers opened and resolved in the window;
+    fails_when=either is missing, a request outside the window or merged is listed, or a
+    blocker opened earlier is counted; no_claim=the requests screen's own filters."""
+    from datetime import UTC, datetime
+
+    from oracle.baseline.models import Entity
+    from oracle.requests.models import ProductRequest
+    from oracle.v2.models import BlockerResolutionEvent
+
+    inside = datetime(2026, 10, 21, 10, tzinfo=UTC)
+    before = datetime(2026, 9, 1, 10, tzinfo=UTC)
+    async with tenant_session(ctx.tenant_id) as db:
+        db.add(ProductRequest(title="Export to spreadsheet", channel="support",
+                              origin="person", created_at=inside))
+        db.add(ProductRequest(title="Dark mode", channel="sales", origin="person",
+                              created_at=before))
+        opened = Entity(type="constraint", key="vendor-limit", title="Vendor rate limit",
+                        attrs={"blocker": {"type": "hard"}}, status="confirmed",
+                        origin="user", created_at=inside)
+        old = Entity(type="constraint", key="legal-review", title="Legal review",
+                     attrs={"blocker": {"type": "soft"}}, status="confirmed", origin="user",
+                     created_at=before)
+        db.add_all([opened, old])
+        await db.flush()
+        db.add(BlockerResolutionEvent(blocker_id=old.id, kind="status_changed",
+                                      from_status="open", to_status="resolved",
+                                      actor="user:test", created_at=inside))
+        await db.commit()  # fmt: skip
+
+    occ = await ready_occurrence(client, ctx, at, "goals_checkin")
+    rows = {r["label"]: r for b in occ["pre_read"]["blocks"] if b["key"] == "since_last"
+            for r in b["rows"]}  # fmt: skip
+    assert rows["Blockers opened"]["count"] == 1
+    assert rows["Blockers resolved"]["count"] == 1
+
+    occ = await ready_occurrence(client, ctx, at, "roadmap_refresh")
+    got = {b["key"]: b["rows"] for b in occ["pre_read"]["blocks"]}
+    keys = list(got)
+    assert keys.index("new_requests") == keys.index("priority_changes") + 1
+    assert [r["title"] for r in got["new_requests"]] == ["Export to spreadsheet"]
+    assert got["new_requests"][0]["href"].startswith("/requests")
 
 
 async def test_the_goals_block_shows_homes_distance(client, ctx, at):
