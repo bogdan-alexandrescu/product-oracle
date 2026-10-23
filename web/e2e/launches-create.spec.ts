@@ -138,21 +138,20 @@ test("344c: an approver writes a changelog entry with New entry, then edits and 
   await expect(edited).toHaveAttribute("data-status", "published");
 });
 
-test("344d: a viewer sees New launch, Add task, Add note and New entry disabled, with the reason", async ({ page }) => {
-  // protects=the approver gate on every new create control, shown rather than hidden;
-  // fails_when=a viewer can open a create form, or the control gives no reason;
-  // no_claim=the API's 403 (API tests).
+test("344d: a viewer, who can never create, does not see New launch, Add task, Add note or New entry", async ({ page }) => {
+  // protects=the owner rule (#370): a control a role can never use is hidden, not disabled;
+  // fails_when=a viewer sees any of the four create controls, disabled or not, or the approvers-only reason;
+  // no_claim=the API's 403 (API tests); the View only label (#370).
   await start(page, "viewer");
   await openDigest(page);
+  await expect(page.getByTestId("launch-row").first()).toBeVisible();
   for (const id of ["new-launch", "add-task", "add-note"]) {
-    const button = page.getByTestId(id).filter({ visible: true });
-    await expect(button).toBeDisabled();
-    await expect(button).toHaveAttribute("title", "Approvers plan launches and add tasks, notes and changelog entries");
+    await expect(page.getByTestId(id)).toHaveCount(0);
   }
-  await expect(page.getByText("Approvers plan launches and add tasks, notes and changelog entries").first()).toBeVisible();
+  await expect(page.getByText("Approvers plan launches and add tasks, notes and changelog entries")).toHaveCount(0);
   await page.goto("/roadmap/changelog");
-  await expect(page.getByTestId("new-entry")).toBeDisabled();
-  await expect(page.getByTestId("new-entry")).toHaveAttribute("title", "Approvers plan launches and add tasks, notes and changelog entries");
+  await expect(page.getByTestId("changelog-entry").first()).toBeVisible();
+  await expect(page.getByTestId("new-entry")).toHaveCount(0);
 });
 
 test.describe("phone", () => {
@@ -183,4 +182,83 @@ test.describe("phone", () => {
     await entry.getByRole("button", { name: "Add entry" }).click();
     await expect(page.getByTestId("changelog-entry").filter({ hasText: "Phone entry" })).toBeVisible();
   });
+});
+
+
+/** WCAG contrast of an element's text on the first opaque background behind it. */
+async function contrastOf(locator: ReturnType<Page["locator"]>) {
+  return locator.evaluate((el) => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]: number[]) => {
+      const ch = (v: number) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+    };
+    let bg: number[] | null = null;
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      const c = rgb(getComputedStyle(n).backgroundColor);
+      if (c.length >= 3 && (c.length === 3 || c[3] > 0.9)) {
+        bg = c;
+        break;
+      }
+    }
+    const fg = lum(rgb(getComputedStyle(el).color));
+    const back = lum(bg ?? [255, 255, 255]);
+    return { ratio: (Math.max(fg, back) + 0.05) / (Math.min(fg, back) + 0.05), dark: back < 0.2 };
+  });
+}
+
+test("344f: in the dark theme New launch, Add task, Add note and New entry read well", async ({ page }) => {
+  // protects=the four create forms in the dark theme, picked from the user menu as a person would: dark surfaces,
+  // labels, fields and buttons at WCAG AA (4.5:1) or better;
+  // fails_when=a form keeps a light surface, or any of its text drops below 4.5:1 on its background;
+  // no_claim=pixel-level design review; the light theme's contrast (the design system's tokens).
+  await page.emulateMedia({ colorScheme: "light" });
+  await start(page);
+  await page.getByTestId("user-menu").click();
+  await page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.keyboard.press("Escape");
+
+  const readsWell = async (form: ReturnType<Page["locator"]>, what: string) => {
+    await expect(form).toBeVisible();
+    expect((await contrastOf(form)).dark, `${what}: the form sits on a dark surface`).toBe(true);
+    const texts = form
+      .locator("h2, legend, label, p, input:not([type=checkbox]), select, textarea, button")
+      .filter({ visible: true });
+    const n = await texts.count();
+    expect(n, `${what}: has fields`).toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      const el = texts.nth(i);
+      const { ratio } = await contrastOf(el);
+      const name = await el.evaluate((e) => `${e.tagName.toLowerCase()} "${(e.textContent ?? "").trim().slice(0, 40)}"`);
+      expect(ratio, `${what}: ${name} contrast`).toBeGreaterThanOrEqual(4.5);
+    }
+  };
+
+  await openLaunches(page);
+  await page.getByTestId("new-launch").click();
+  const launch = page.getByTestId("new-launch-dialog");
+  await launch.getByTestId("launch-item-option").nth(0).getByRole("checkbox").check();
+  await readsWell(launch, "New launch");
+  await launch.getByRole("button", { name: "Cancel" }).click();
+  await expect(launch).toBeHidden();
+
+  await page.getByTestId("launch-filters").getByRole("button", { name: /^Planned/ }).click();
+  await page.getByTestId("launch-row").filter({ hasText: "Weekly usage digest" }).click();
+  await inspector(page).getByTestId("add-task").click();
+  await readsWell(inspector(page).getByTestId("add-task-form"), "Add task");
+  await inspector(page).getByTestId("add-note").click();
+  await readsWell(inspector(page).getByTestId("add-note-form"), "Add note");
+
+  await page.goto("/roadmap/changelog");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByTestId("new-entry").click();
+  const entry = page.getByTestId("new-entry-dialog");
+  await entry.getByLabel("Title").fill("Dark theme entry");
+  await readsWell(entry, "New entry");
+  await entry.getByRole("button", { name: "Add entry" }).click();
+  await expect(page.getByTestId("changelog-entry").filter({ hasText: "Dark theme entry" })).toBeVisible();
 });
