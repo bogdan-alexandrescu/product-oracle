@@ -51337,6 +51337,14 @@
               }
             ],
             "title": "Line"
+          },
+          "refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Refs",
+            "default": {}
           }
         },
         "type": "object",
@@ -85407,6 +85415,14 @@
             "type": "array",
             "title": "Section Keys",
             "default": []
+          },
+          "refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Refs",
+            "default": {}
           }
         },
         "type": "object",
