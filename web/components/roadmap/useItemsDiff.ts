@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { calendarDay } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import { horizonLabel, type Horizon, type ItemRow } from "./item-row";
@@ -15,10 +16,9 @@ type FieldChange = Schemas["ItemFieldChange"];
 export const CHANGED = new Set(["added", "dropped", "moved", "changed"]);
 export const GHOST_PREFIX = "dropped:";
 
+/** A milestone date: a calendar day, the same in every zone ("30 Nov 2026"). */
 const day = (d: unknown, year = true) =>
-  typeof d === "string" && d
-    ? new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: year ? "numeric" : undefined, timeZone: "UTC" })
-    : null;
+  typeof d === "string" && d ? calendarDay(d, { day: "numeric", month: "short", year: year ? "numeric" : undefined }, "en-GB") : null;
 const deps = (n: number) => `${n} ${n === 1 ? "dependency" : "dependencies"}`;
 
 /** "v1" for a roadmap version's ref; "Approved v1" for the approved plan (E3 Screen and copy). */

@@ -103,8 +103,9 @@ async def test_meetings_lists_the_owners_meetings_paged(fake, alice, conn):
         assert [m["id"] for m in resp.json()["meetings"]] == ["S3", "S2"]
     listed = fake.list_variables()[-1]
     assert listed["keyword"] == "standup"
-    assert listed["fromDate"] == "2026-10-01T00:00:00Z"
-    assert listed["toDate"] == "2026-10-31T23:59:59.999Z"
+    # #401: from/to are whole days in the Company time zone (Los Angeles by default).
+    assert listed["fromDate"] == "2026-10-01T07:00:00Z"
+    assert listed["toDate"] == "2026-11-01T06:59:59.999Z"
 
 
 async def test_meetings_cursor_pages(fake, alice, conn, monkeypatch):

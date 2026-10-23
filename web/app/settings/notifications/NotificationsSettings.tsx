@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { useCompanyZone } from "@/lib/dates";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -214,9 +215,7 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The report runs in the Company time zone (Settings › Company), not a zone of its own.
-  const zoneQ = useQuery("settings|company_timezone", () =>
-    unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })),
-  );
+  const zone = useCompanyZone();
 
   async function save() {
     setBusy(true);
@@ -263,7 +262,7 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
           <div className="flex h-9 items-center gap-2 text-sm">
             <span className="font-semibold text-text2">Company time zone</span>
             <span data-testid="report-zone" className="tnum">
-              {zoneQ.data ? String(zoneQ.data.value) : "…"}
+              {zone}
             </span>
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
               Change

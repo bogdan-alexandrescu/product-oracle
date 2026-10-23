@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "rea
 
 import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
+import { calendarDay, dayIn, todayIn, useCompanyZone, zoneDay, zoneTime, zoneWeekday } from "@/lib/dates";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
@@ -16,6 +17,8 @@ export type FirefliesConfig = {
   mode: "all" | "selected";
   date_from?: string;
   date_to?: string;
+  /** #401: the zone the days are whole days in, the Company time zone when they were picked (UTC when absent). */
+  timezone?: string;
   series: string[];
   meetings: string[];
   /** What the picker showed for each picked series key and meeting id. */
@@ -48,6 +51,7 @@ export function readFirefliesConfig(config: Record<string, unknown>): { value: F
         mode: config.mode,
         date_from: typeof config.date_from === "string" ? config.date_from : undefined,
         date_to: typeof config.date_to === "string" ? config.date_to : undefined,
+        timezone: typeof config.timezone === "string" ? config.timezone : undefined,
         series: strings(config.series),
         meetings: strings(config.meetings),
         labels: (config.labels as Record<string, string> | undefined) ?? {},
@@ -68,7 +72,7 @@ export function readFirefliesConfig(config: Record<string, unknown>): { value: F
   };
 }
 
-/** The config to save: empty dates dropped, labels only for what is picked. */
+/** The config to save: empty dates dropped (their zone with them), labels only for what is picked. */
 export function firefliesConfigToSave(c: FirefliesConfig): Record<string, unknown> {
   const picked = c.mode === "selected";
   const keep = new Set(picked ? [...c.series, ...c.meetings] : []);
@@ -76,6 +80,7 @@ export function firefliesConfigToSave(c: FirefliesConfig): Record<string, unknow
     mode: c.mode,
     ...(c.date_from ? { date_from: c.date_from } : {}),
     ...(c.date_to ? { date_to: c.date_to } : {}),
+    ...((c.date_from || c.date_to) && c.timezone ? { timezone: c.timezone } : {}),
     series: picked ? c.series : [],
     meetings: picked ? c.meetings : [],
     labels: Object.fromEntries(Object.entries(c.labels ?? {}).filter(([k]) => keep.has(k))),
@@ -88,13 +93,11 @@ export function firefliesReady(c: FirefliesConfig): boolean {
   return picked > 0 && c.series.length <= MAX_SERIES && c.meetings.length <= MAX_MEETINGS;
 }
 
+/** A picked day (YYYY-MM-DD) as "Sep 1", with the year when it is not this year. */
 function shortDay(day: string): string {
-  const d = new Date(`${day.slice(0, 10)}T00:00:00Z`);
-  const sameYear = d.getUTCFullYear() === new Date().getUTCFullYear();
+  const sameYear = day.slice(0, 4) === String(new Date().getFullYear());
   // A no-break space keeps "Sep 1" on one line.
-  return d
-    .toLocaleDateString("en-US", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }), timeZone: "UTC" })
-    .replace(" ", "\u00a0");
+  return calendarDay(day, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).replace(" ", "\u00a0");
 }
 
 /** "Sep 1 – Oct 31" · "since Sep 1" · "until Oct 31" · "". */
@@ -115,14 +118,6 @@ export function firefliesSummary(c: FirefliesConfig): string {
   ];
   if (!parts.length) return "Nothing picked yet";
   return [...parts, ...(range ? [range] : [])].join(", ");
-}
-
-function dayHeading(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
-}
-
-function timeOf(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 }
 
 function useDebounced<T>(value: T, ms = 300): T {
@@ -268,6 +263,7 @@ export function FirefliesPicker({
   titleRule?: string[] | null;
 }) {
   const ids = useId();
+  const zone = useCompanyZone();
   const choosing = value.mode === "selected";
   const ongoing = !value.date_to;
   const [search, setSearch] = useState("");
@@ -279,11 +275,12 @@ export function FirefliesPicker({
   const to = useDebounced(value.date_to, 400);
   const labels = useMemo(() => value.labels ?? {}, [value.labels]);
 
-  const set = (patch: Partial<FirefliesConfig>) => onChange({ ...value, ...patch });
+  // Days picked here are days in the Company time zone: the config says which (#401).
+  const set = (patch: Partial<FirefliesConfig>) => onChange({ ...value, ...patch, timezone: zone });
 
   // The series list spends the same browse budget: its limit alert waits out the 429 too.
   const [seriesRetryAt, setSeriesRetryAt] = useState<number | null>(null);
-  const series = useQuery(`ff-series|${connectionId}|${from ?? ""}|${to ?? ""}|${choosing}`, () =>
+  const series = useQuery(`ff-series|${connectionId}|${from ?? ""}|${to ?? ""}|${zone}|${choosing}`, () =>
     choosing
       ? unwrap(
           api.GET("/v1/connections/{connection_id}/fireflies/series", {
@@ -326,11 +323,11 @@ export function FirefliesPicker({
   const groups = useMemo(() => {
     const byDay = new Map<string, Meeting[]>();
     for (const m of meetings.rows) {
-      const day = m.date ? m.date.slice(0, 10) : "";
+      const day = m.date ? dayIn(m.date, zone) : "";
       byDay.set(day, [...(byDay.get(day) ?? []), m]);
     }
     return [...byDay.entries()];
-  }, [meetings.rows]);
+  }, [meetings.rows, zone]);
   const listedIds = new Set(meetings.rows.map((m) => m.id));
   const earlier = query ? [] : value.meetings.filter((id) => !listedIds.has(id));
 
@@ -453,14 +450,15 @@ export function FirefliesPicker({
               type="checkbox"
               className={CHECK}
               checked={ongoing}
-              onChange={(e) => set({ date_to: e.target.checked ? undefined : new Date().toISOString().slice(0, 10) })}
+              onChange={(e) => set({ date_to: e.target.checked ? undefined : todayIn(zone) })}
             />
             Ongoing
           </label>
           <span className="flex h-9 items-center gap-1 text-sm text-text2" data-testid="fireflies-timezone">
-            UTC
+            {zone}
             <InfoTip label="time zone" align="end">
-              Dates are whole days in UTC, and meeting times are shown in UTC: Oracle does not know your time zone.
+              Dates are whole days in the Company time zone, and meeting times are shown in it. An owner sets it on Settings ›
+              Company.
             </InfoTip>
           </span>
         </div>
@@ -543,9 +541,9 @@ export function FirefliesPicker({
                       {s.meeting_count > 0 && (
                         <span
                           className="tnum flex-none text-sm text-text2"
-                          title={`${s.meeting_count} meetings${s.last_date ? `, last ${shortDay(s.last_date)}` : ""}`}
+                          title={`${s.meeting_count} meetings${s.last_date ? `, last ${zoneDay(s.last_date, zone)}` : ""}`}
                         >
-                          {s.meeting_count} · {s.last_date ? shortDay(s.last_date) : "—"}
+                          {s.meeting_count} · {s.last_date ? zoneDay(s.last_date, zone) : "—"}
                         </span>
                       )}
                     </label>
@@ -610,14 +608,14 @@ export function FirefliesPicker({
                 </MeetingGroup>
               )}
               {groups.map(([day, rows]) => (
-                <MeetingGroup key={day} heading={day ? dayHeading(rows[0].date!) : "Undated"} id={`${ids}-${day}`}>
+                <MeetingGroup key={day} heading={day ? zoneWeekday(rows[0].date!, zone) : "Undated"} id={`${ids}-${day}`}>
                   {rows.map((m) => {
                     const bySeries = m.series_key != null && pickedSeries.has(m.series_key);
                     return (
                       <MeetingRow
                         key={m.id}
                         title={m.title}
-                        meta={[m.date ? timeOf(m.date) : null, m.duration ? `${Math.round(m.duration)} min` : null]
+                        meta={[m.date ? zoneTime(m.date, zone) : null, m.duration ? `${Math.round(m.duration)} min` : null]
                           .filter(Boolean)
                           .join(" · ")}
                         checked={bySeries || pickedMeetings.has(m.id)}

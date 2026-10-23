@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { Button, InfoTip, InspectorSection, Notice, SegmentedControl } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EntityDetail, type EntityOut, type Schemas } from "@/lib/api/client";
+import { calendarDay } from "@/lib/dates";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -82,10 +83,7 @@ export function typedTarget(attrs: Attrs): { short: string; words: string } | nu
 }
 
 /** "Dec 31" from 2026-12-31. */
-export function shortDay(iso: string): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-}
+export const shortDay = (iso: string): string => calendarDay(iso);
 
 /** "Short · Dec 31"; null when the goal has no typed horizon. */
 export function horizonLabel(attrs: Attrs): string | null {

@@ -15,7 +15,7 @@ processes; past it the routes answer 429 "Fireflies limit reached, try later". A
 are also cached for CACHE_SECONDS in the API process; a cached answer costs nothing, but
 is only served while the connection is still active.
 
-The picker's dates are whole days in UTC: the API does not know the person's time zone.
+The picker's dates are whole days in the Company time zone (#401).
 """
 
 import hashlib
@@ -40,6 +40,7 @@ from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
 from oracle.sources.service import InvalidError, _read_credential, redact
+from oracle.tenant_settings_api import company_timezone
 
 router = APIRouter(prefix="/v1", tags=["connections"])
 
@@ -253,15 +254,16 @@ async def list_fireflies_meetings(
     cursor: Annotated[str | None, Query(pattern=r"^\d{1,6}$")] = None,
 ) -> FirefliesMeetingPage:
     """Your meetings in Fireflies, newest first, a page at a time (search: in titles;
-    from/to: whole days in UTC)."""
+    from/to: whole days in the Company time zone)."""
     _check_range(date_to)
+    zone = await company_timezone(db)
     # As the connector sends it, so one search is one cache entry.
     search = search.strip()[: fireflies.MAX_SEARCH]
     conn = await _fireflies_connection(db, connection_id, principal)
     page = await _cached(
         db,
         conn,
-        ("meetings", search, date_from, date_to, int(cursor or 0)),
+        ("meetings", search, date_from, date_to, zone.key, int(cursor or 0)),
         1,
         lambda credential: FirefliesConnector(http).browse_meetings(
             credential,
@@ -269,6 +271,7 @@ async def list_fireflies_meetings(
             date_from=date_from,
             date_to=date_to,
             skip=int(cursor or 0),
+            zone=zone,
         ),
     )
     return FirefliesMeetingPage(
@@ -291,19 +294,24 @@ async def list_fireflies_series(
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> FirefliesSeriesList:
     """Your meetings grouped into their calendar series, with counts, the last date and
-    the same-title meetings outside each (from/to: whole days in UTC). The window's
-    pages are read, one browse call each, up to the newest 300 meetings or until the
+    the same-title meetings outside each (from/to: whole days in the Company time zone).
+    The window's pages are read, one browse call each, up to the newest 300 meetings or until the
     budget stops it (truncated).
     Meetings on no calendar are in no series."""
     _check_range(date_to)
+    zone = await company_timezone(db)
     conn = await _fireflies_connection(db, connection_id, principal)
     result = await _cached(
         db,
         conn,
-        ("series", date_from, date_to),
+        ("series", date_from, date_to, zone.key),
         1,
         lambda credential: FirefliesConnector(http).browse_series(
-            credential, date_from=date_from, date_to=date_to, more=lambda: _more(db, conn)
+            credential,
+            date_from=date_from,
+            date_to=date_to,
+            more=lambda: _more(db, conn),
+            zone=zone,
         ),
     )
     return FirefliesSeriesList(

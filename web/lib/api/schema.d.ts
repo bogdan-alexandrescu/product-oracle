@@ -3125,7 +3125,7 @@ export interface paths {
         /**
          * List Fireflies Meetings
          * @description Your meetings in Fireflies, newest first, a page at a time (search: in titles;
-         *     from/to: whole days in UTC).
+         *     from/to: whole days in the Company time zone).
          */
         get: operations["list_fireflies_meetings"];
         put?: never;
@@ -3146,8 +3146,8 @@ export interface paths {
         /**
          * List Fireflies Series
          * @description Your meetings grouped into their calendar series, with counts, the last date and
-         *     the same-title meetings outside each (from/to: whole days in UTC). The window's
-         *     pages are read, one browse call each, up to the newest 300 meetings or until the
+         *     the same-title meetings outside each (from/to: whole days in the Company time zone).
+         *     The window's pages are read, one browse call each, up to the newest 300 meetings or until the
          *     budget stops it (truncated).
          *     Meetings on no calendar are in no series.
          */
@@ -20699,6 +20699,11 @@ export interface components {
             token_id?: string | null;
             /** Token Name */
             token_name?: string | null;
+            /**
+             * Company Timezone
+             * @default America/Los_Angeles
+             */
+            company_timezone: string;
         };
         /** MeasurementCreate */
         MeasurementCreate: {
@@ -27592,7 +27597,7 @@ export interface components {
             connection_id?: string | null;
             /**
              * Config
-             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
+             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "timezone"?: IANA zone the days are in (the Company time zone; UTC without one), "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
              */
             config?: {
                 [key: string]: unknown;
@@ -27705,7 +27710,7 @@ export interface components {
             connection_id?: string | null;
             /**
              * Config
-             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
+             * @description What the source reads, by kind. github: {"repos": ["owner/name"]}. slack: {"channels": [channel id], "since"?: "YYYY-MM-DD", "until"?: "YYYY-MM-DD", "timezone"?: IANA zone the days are in (the Company time zone; UTC without one), "labels"?: {channel id: "#name"}}. notion: {"roots": [page id], "labels"?: {page id: title}}. labels only name the picks for people to read (at most 200 characters each; names of ids not picked are dropped): a save that changes labels alone reads nothing again and asks the provider nothing. Pick ids from the browse lists (list_slack_channels, list_notion_pages). Never secrets.
              */
             config?: {
                 [key: string]: unknown;

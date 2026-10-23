@@ -3,12 +3,15 @@
 credential ``{"api_key"}``; config, as the browse screen saves it (S5, owner 2026-10-19)::
 
     {"mode": "all" | "selected", "date_from"?: ISO date, "date_to"?: ISO date,
-     "series": [series keys], "meetings": [transcript ids], "labels"?: {key or id: title}}
+     "timezone"?: IANA zone, "series": [series keys], "meetings": [transcript ids],
+     "labels"?: {key or id: title}}
 
 ``all`` takes every meeting in the date range; ``selected`` takes every meeting of the
 picked recurring series (past and future, so a new one is picked up on the next sync)
 plus the picked meetings, within the date range when one is set. ``date_to`` is
-inclusive (whole UTC day); no ``date_to`` means ongoing. ``labels`` only remembers what
+inclusive; the days are whole days in ``timezone`` (#401: the Company time zone, which
+the picker saves beside them; UTC for configs saved without one); no ``date_to`` means
+ongoing. ``labels`` only remembers what
 the picker showed, for the web UI.
 
 Configs saved before the picker still work and read as a *title rule*: a config without
@@ -63,7 +66,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -80,8 +83,10 @@ from oracle.sources.base import (
     ItemUpsert,
     Scope,
     SyncEvent,
+    config_zone,
     register,
     scope_narrows,
+    zone_midnight,
 )
 
 log = logging.getLogger(__name__)
@@ -227,8 +232,10 @@ def _config_date(config: dict[str, Any], key: str) -> datetime | None:
 _DAY_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
-def _config_day(config: dict[str, Any], key: str) -> datetime | None:
-    """A picker date: a plain YYYY-MM-DD day, read as its start in UTC."""
+def _config_day(config: dict[str, Any], key: str, next_day: bool = False) -> datetime | None:
+    """A picker date: a plain YYYY-MM-DD day, read as its start (or, ``next_day``, the
+    start of the day after it) in the config's zone (``timezone``, the Company time zone
+    the picker saved; UTC without one)."""
     value = config.get(key)
     if value is None or value == "":
         return None
@@ -241,7 +248,7 @@ def _config_day(config: dict[str, Any], key: str) -> datetime | None:
     # date_to is used as the day after it: the last representable day cannot be.
     if day >= date.max:
         raise ConnectorConfigError(f"{key} is out of range")
-    return datetime.combine(day, datetime.min.time(), UTC)
+    return zone_midnight(day + timedelta(days=1) if next_day else day, config_zone(config))
 
 
 def _retry_after(value: str | None) -> float | None:
@@ -376,10 +383,13 @@ def selection(config: dict[str, Any]) -> Selection:
     mode = config.get("mode")
     if mode not in ("all", "selected"):
         raise ConnectorConfigError("mode must be 'all' or 'selected'")
+    config_zone(config)
     date_from = _config_day(config, "date_from") or _config_date(config, "from_date")
     date_to = _config_day(config, "date_to")
     if date_from and date_to and date_to < date_from:
         raise ConnectorConfigError("date_to must be on or after date_from")
+    # The start of the day after date_to in the zone (a DST day is not 24 hours).
+    date_to_end = _config_day(config, "date_to", next_day=True)
     series = frozenset(_strings(config, "series", MAX_SERIES, MAX_SERIES_KEY))
     if not all(key.startswith("cal:") for key in series):
         raise ConnectorConfigError("series takes calendar series keys (cal:...)")
@@ -402,7 +412,7 @@ def selection(config: dict[str, Any]) -> Selection:
     return Selection(
         mode=mode,
         date_from=date_from,
-        date_to_end=date_to + timedelta(days=1) if date_to else None,
+        date_to_end=date_to_end,
         series=series if mode == "selected" else frozenset(),
         meetings=meetings if mode == "selected" else frozenset(),
         titles=tuple(t.lower() for t in titles),
@@ -467,14 +477,15 @@ def _meeting(entry: dict[str, Any]) -> Meeting:
     )
 
 
-def _range(date_from: date | None, date_to: date | None) -> dict[str, Any]:
+def _range(date_from: date | None, date_to: date | None, zone: tzinfo = UTC) -> dict[str, Any]:
+    """Fireflies' fromDate/toDate for whole days in ``zone`` (the Company time zone)."""
     variables: dict[str, Any] = {}
     if date_from:
-        variables["fromDate"] = _iso(datetime.combine(date_from, datetime.min.time(), UTC))
+        variables["fromDate"] = _iso(zone_midnight(date_from, zone))
     if date_to:
         if date_to >= date.max:
             raise ConnectorConfigError("the end date is out of range")
-        end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), UTC)
+        end = zone_midnight(date_to + timedelta(days=1), zone)
         variables["toDate"] = _iso(end - timedelta(milliseconds=1))
     return variables
 
@@ -915,9 +926,15 @@ class FirefliesConnector:
         date_from: date | None,
         date_to: date | None,
         skip: int,
+        zone: tzinfo = UTC,
     ) -> MeetingPage:
-        """One page of the key's meetings, newest first, for the picker."""
-        variables: dict[str, Any] = {"limit": PAGE_SIZE, "skip": skip, **_range(date_from, date_to)}
+        """One page of the key's meetings, newest first, for the picker (from/to: whole
+        days in ``zone``)."""
+        variables: dict[str, Any] = {
+            "limit": PAGE_SIZE,
+            "skip": skip,
+            **_range(date_from, date_to, zone),
+        }
         keyword = search.strip()[:MAX_SEARCH]
         if keyword:
             variables.update(keyword=keyword, scope="title")
@@ -935,6 +952,7 @@ class FirefliesConnector:
         date_from: date | None,
         date_to: date | None,
         more: Callable[[], Awaitable[bool]] | None = None,
+        zone: tzinfo = UTC,
     ) -> SeriesList:
         """The key's meetings grouped into their calendar series, newest first, over the
         window's pages up to SERIES_PAGES: before each page after the first ``more()`` is
@@ -945,7 +963,7 @@ class FirefliesConnector:
         by_title: dict[str, list[Meeting]] = {}
         scanned = 0
         truncated = False
-        variables = _range(date_from, date_to)
+        variables = _range(date_from, date_to, zone)
         async with self._session(credential) as fireflies:
             skip = 0
             while True:

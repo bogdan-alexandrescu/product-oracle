@@ -191,8 +191,9 @@ function zones(current: string): string[] {
   return [...new Set([current, ...ZONES, ...all])];
 }
 
-/** The Company time zone (one setting, UTC by default): goals' today, the weekly report and rituals. */
+/** The Company time zone (one setting, America/Los_Angeles by default): every date and time on screen, goals' today, the weekly report and rituals. */
 function TimezonePanel() {
+  const { refresh } = useMe();
   const settingQ = useQuery("settings|company_timezone", () =>
     unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })),
   );
@@ -214,6 +215,8 @@ function TimezonePanel() {
       );
       settingQ.setData(() => out);
       setEdit(null);
+      // Every screen reads the zone from GET /v1/me.
+      void refresh();
       setSaved(true);
     } catch (e) {
       setError(errorMessage(e));
@@ -228,7 +231,8 @@ function TimezonePanel() {
         title="Time zone"
         tools={
           <InfoTip label="time zone" side="bottom">
-            Goals&apos; today, the weekly alignment report and rituals use it. Rituals on the old zone move with it.
+            Every date and time Oracle shows is in it, as are goals&apos; today, the weekly alignment report and rituals.
+            Rituals on the old zone move with it.
           </InfoTip>
         }
       >
