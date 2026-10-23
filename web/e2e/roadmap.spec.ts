@@ -67,7 +67,9 @@ for (const role of ["viewer", "commenter"] as const) {
     await asRole(page, role);
     await openRoadmap(page);
     await expect(approvedPrd(page)).toBeVisible();
-    await expect(page.getByText("Approvers and owners start these runs.")).toBeVisible();
+    // #370: no role note; the page says View only.
+    await expect(page.getByText("Approvers and owners start these runs.")).toHaveCount(0);
+    await expect(page.getByTestId("view-only")).toHaveText("View only");
     await expect(page.getByRole("button", { name: "Build roadmap" })).toHaveCount(0);
     await page.goto("/documents/usage-alerts/v/1");
     await openSection(page, "behaviour");
