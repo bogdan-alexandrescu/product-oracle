@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, InfoTip } from "@/components/ds";
+import { Button, Chip, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
@@ -116,20 +116,27 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
           {error}
         </span>
       )}
-      <label
-        className={`inline-flex items-center gap-2 text-sm font-semibold text-text ${canChange ? "cursor-pointer" : ""}`}
-      >
-        <input
-          type="checkbox"
-          role="switch"
-          className="size-4 accent-[var(--accent)]"
-          checked={status?.daily_on ?? false}
-          disabled={!canChange || busy || !status}
-          onChange={(e) => void turn(e.target.checked)}
-          data-testid="daily-triage-switch"
-        />
-        Daily triage at 07:00 PT
-      </label>
+      {canChange ? (
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
+          <input
+            type="checkbox"
+            role="switch"
+            className="size-4 accent-[var(--accent)]"
+            checked={status?.daily_on ?? false}
+            disabled={busy || !status}
+            onChange={(e) => void turn(e.target.checked)}
+            data-testid="daily-triage-switch"
+          />
+          Daily triage at 07:00 PT
+        </label>
+      ) : (
+        // #370: commenters and viewers can never turn it, so they read its state, no switch.
+        status && (
+          <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state">
+            Daily triage {status.daily_on ? "on" : "off"}
+          </Chip>
+        )
+      )}
       <InfoTip label="Daily triage">
         While this is on, Oracle classifies new requests every day at 07:00 PT, about $1.50 a run. It runs as whoever
         turned it on, while they are an approver or owner, otherwise as the longest-standing owner. Approvers and owners
@@ -166,7 +173,13 @@ export function ClassifyNow({ triage }: { triage: Query<Status> }) {
           {error}
         </span>
       )}
-      <Button variant="secondary" disabled={busy || active} onClick={start} data-testid="classify-now">
+      <Button
+        variant="secondary"
+        disabled={busy || active}
+        title={active ? "Oracle is classifying now" : undefined}
+        onClick={start}
+        data-testid="classify-now"
+      >
         Classify now
       </Button>
       <InfoTip label="Classify now">

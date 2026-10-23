@@ -19,13 +19,14 @@ import {
   Panel,
   SegmentedControl,
   Split,
+  ViewOnly,
   type Column,
 } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 const COLUMNS: Column<DocumentSummary>[] = [
@@ -181,7 +182,8 @@ export default function DocumentsPage() {
   const q = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const router = useRouter();
-  const { role } = useMe();
+  const { can, capsReady } = useMe();
+  const canPropose = can("create_intake");
   const [picked, setPicked] = useState<string | null>(null);
   const selected = documents.find((d) => d.slug === picked) ?? documents[0] ?? null;
   const inReview = documents.filter((d) => d.status === "in_review").length;
@@ -196,15 +198,19 @@ export default function DocumentsPage() {
         status={
           q.data && (
             <>
+              {capsReady && !canPropose && <ViewOnly />}
               <Chip kind="acc">{documents.length} PRDs</Chip>
               {inReview > 0 && <Chip kind="line">{inReview} in review</Chip>}
             </>
           )
         }
         action={
-          <LinkButton href="/documents/new?kind=prd" variant="primary" icon="plus">
-            New PRD
-          </LinkButton>
+          // #370: a commenter writes the brief, an approver drafts; a viewer has no New PRD.
+          canPropose && (
+            <LinkButton href="/documents/new?kind=prd" variant="primary" icon="plus">
+              New PRD
+            </LinkButton>
+          )
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
@@ -236,7 +242,7 @@ export default function DocumentsPage() {
           />
         </Panel>
       ) : (
-      <Split inspector={selected ? <DocInspector d={selected} canPublish={hasRole(role, "approver")} /> : undefined}>
+      <Split inspector={selected ? <DocInspector d={selected} canPublish={can("publish_version")} /> : undefined}>
         <Panel
           title="PRDs"
           count={q.data ? documents.length : undefined}

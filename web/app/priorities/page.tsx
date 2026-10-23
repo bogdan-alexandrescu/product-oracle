@@ -21,13 +21,14 @@ import {
   Panel,
   Ring,
   Split,
+  ViewOnly,
   type ChipKind,
   type Column,
 } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
@@ -638,11 +639,12 @@ function Priorities() {
   const [changed, setChanged] = useState<string | null>(null);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changesKey, setChangesKey] = useState(0);
-  const { role } = useMe();
-  const canSnapshot = hasRole(role, "approver");
+  const { can, capsReady } = useMe();
+  const canSnapshot = can("create_priority_snapshot");
   // C9: approvers and owners move and pin features; everyone sees the changes. Not in run
   // mode (C8): a move or pin changes the live ranking, never a run's order.
-  const canChange = hasRole(role, "approver") && !snapshotId;
+  const canOverride = can("create_priority_override");
+  const canChange = canOverride && !snapshotId;
   const withChanges = order === "changes";
 
   const q = useQuery(`priorities|${method}|${order}`, () =>
@@ -897,6 +899,7 @@ function Priorities() {
         status={
           counts && (
             <>
+              {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
               <Chip kind="acc">{counts.features} ranked</Chip>
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
@@ -905,14 +908,9 @@ function Priorities() {
           )
         }
         action={
-          !snapshotId && (
-            <Button
-              variant="primary"
-              icon="check"
-              onClick={saveSnapshot}
-              disabled={!canSnapshot || saving || !r}
-              title={canSnapshot ? "Keep a dated copy of this ranking" : "Approvers and owners can save snapshots"}
-            >
+          !snapshotId &&
+          canSnapshot && (
+            <Button variant="primary" icon="check" onClick={saveSnapshot} disabled={saving || !r} title="Keep a dated copy of this ranking">
               {saving ? "Saving…" : "Save snapshot"}
             </Button>
           )

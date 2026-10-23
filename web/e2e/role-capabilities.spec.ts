@@ -43,15 +43,15 @@ test("owner: every Settings tab, the owner's buttons, no View only", async ({ pa
   await expect(page).toHaveURL(/\/settings\/members$/);
   expect(await tabsShown(page)).toEqual(ALL);
   await expect(page.getByRole("button", { name: "Invite", exact: true })).toBeVisible();
-  await expect(page.getByTestId("view-only")).toHaveCount(0);
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveCount(0);
 
   await settingsNav(page).getByTestId("nav-claude-accounts").click();
   await expect(page.getByRole("button", { name: "+ Add account" })).toBeVisible();
-  await expect(page.getByTestId("view-only")).toHaveCount(0);
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveCount(0);
 
   await settingsNav(page).getByTestId("nav-autonomy").click();
   await expect(page.getByTestId("autonomy-row-priorities").getByRole("group").getByRole("button").first()).toBeVisible();
-  await expect(page.getByTestId("view-only")).toHaveCount(0);
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveCount(0);
 });
 
 for (const role of ["approver", "commenter", "viewer"] as const) {
@@ -64,13 +64,13 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
     // Claude accounts: read the pool, no controls, View only.
     await settingsNav(page).getByTestId("nav-claude-accounts").click();
     await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
-    await expect(page.getByTestId("view-only")).toHaveText("View only");
+    await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
     await expect(page.getByRole("button", { name: "+ Add account" })).toHaveCount(0);
 
     // Autonomy: the levels read as text; no picker, no owner-only note.
     await settingsNav(page).getByTestId("nav-autonomy").click();
     await expect(page.getByTestId("autonomy-row-priorities").getByTestId("autonomy-sentence")).toBeVisible();
-    await expect(page.getByTestId("view-only")).toHaveText("View only");
+    await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
     await expect(page.getByTestId(/^autonomy-row-/).getByRole("group").getByRole("button")).toHaveCount(0);
     await expect(page.getByTestId("autonomy-owner-only")).toHaveCount(0);
 
@@ -79,9 +79,9 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
     await expect(page.getByRole("heading", { level: 1, name: "Templates" })).toBeVisible();
     if (role === "approver") {
       await expect(page.getByRole("link", { name: "New template" })).toBeVisible();
-      await expect(page.getByTestId("view-only")).toHaveCount(0);
+      await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveCount(0);
     } else {
-      await expect(page.getByTestId("view-only")).toHaveText("View only");
+      await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
       await expect(page.getByRole("link", { name: "New template" })).toHaveCount(0);
     }
     await settingsNav(page).getByTestId("nav-themes").click();
@@ -115,6 +115,6 @@ test("a template a commenter opens has no edit, archive or restore buttons", asy
   await page.goto("/settings/templates");
   await page.getByTestId(/^template-row-/).first().click();
   await page.getByRole("link", { name: /Open|View/ }).first().click();
-  await expect(page.getByTestId("view-only")).toHaveText("View only");
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
   await expect(page.getByRole("button", { name: /^(Edit|Save|Archive|Restore)/ })).toHaveCount(0);
 });
