@@ -1,0 +1,172 @@
+"use client";
+
+import { useRef, useState, type FormEvent } from "react";
+
+import { Button, useFocusTrap } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { hasRole, useMe } from "@/lib/me";
+import { displayName } from "@/lib/names";
+import { errorMessage, useQuery } from "@/lib/use-query";
+
+type Request = Schemas["RequestOut"];
+
+const VIEWER_REASON = "Commenters and above file requests";
+
+/**
+ * New request (#329): the button on the Requests header and in its empty state. A viewer sees
+ * it disabled, with the reason.
+ */
+export function NewRequestButton({
+  onFiled,
+  variant = "primary",
+}: {
+  onFiled: (request: Request) => void;
+  /** The header's is the page's primary action; the empty state's is secondary. */
+  variant?: "primary" | "secondary";
+}) {
+  const { role } = useMe();
+  const [open, setOpen] = useState(false);
+  const can = hasRole(role, "commenter");
+  return (
+    <>
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <Button variant={variant} icon="plus" disabled={!can} title={can ? undefined : VIEWER_REASON} onClick={() => setOpen(true)}>
+          New request
+        </Button>
+        {role && !can && (
+          <span data-testid="new-request-reason" className="text-sm text-text2">
+            {VIEWER_REASON}
+          </span>
+        )}
+      </span>
+      {open && (
+        <NewRequestDialog
+          onClose={() => setOpen(false)}
+          onFiled={(request) => {
+            setOpen(false);
+            onFiled(request);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Files a request in the In app channel, as New, through POST /v1/requests: a title, what it
+ * is and why, any of the company's confirmed goals, and the requester (the signed-in member;
+ * an owner can name someone else). On a phone it is a full-height sheet.
+ */
+function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: (request: Request) => void }) {
+  const { me, role } = useMe();
+  const panel = useRef<HTMLDivElement>(null);
+  useFocusTrap(panel, true, onClose);
+  const goals = useQuery("new-request-goals", () =>
+    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+  );
+  const myName = me?.email ? displayName(me.email) : "";
+  const owner = hasRole(role, "owner");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [goalIds, setGoalIds] = useState<string[]>([]);
+  const [requester, setRequester] = useState(myName);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return setError("Give the request a title");
+    if (!body.trim()) return setError("Say what it is and why");
+    setBusy(true);
+    setError(null);
+    try {
+      const request = await unwrap(
+        api.POST("/v1/requests", {
+          body: {
+            title: title.trim(),
+            body: body.trim(),
+            channel: "in_app",
+            goal_ids: goalIds,
+            requester_name: owner ? requester.trim() || null : null,
+            requester_kind: "unknown",
+          },
+        }),
+      );
+      onFiled(request);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const toggle = (id: string, on: boolean) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)));
+  return (
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-request-title"
+        tabIndex={-1}
+        className="w-full max-w-xl min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0"
+      >
+        <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
+          <h2 id="new-request-title" className="font-display text-xl font-bold tracking-heading">
+            New request
+          </h2>
+        </div>
+        <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+            Title
+            <input data-autofocus className={INPUT} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+            What it is and why
+            <textarea className={INPUT} rows={4} value={body} maxLength={4000} onChange={(e) => setBody(e.target.value)} />
+          </label>
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-sm font-semibold text-text2">Goal (optional)</legend>
+            {(goals.data ?? []).length === 0 ? (
+              <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No confirmed goals yet"}</p>
+            ) : (
+              (goals.data ?? []).map((g) => (
+                <label key={g.id} className="flex items-center gap-2 text-[15px]">
+                  <input type="checkbox" checked={goalIds.includes(g.id)} onChange={(e) => toggle(g.id, e.target.checked)} />
+                  {g.title}
+                </label>
+              ))
+            )}
+          </fieldset>
+          <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+              Requester
+              <input
+                className={INPUT}
+                value={requester}
+                maxLength={200}
+                readOnly={!owner}
+                title={owner ? undefined : "Only an owner files a request in someone else's name"}
+                onChange={(e) => setRequester(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+              Channel
+              <input className={INPUT} value="In app" readOnly />
+            </label>
+          </div>
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={busy}>
+              File request
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

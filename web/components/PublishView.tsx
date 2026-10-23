@@ -22,6 +22,7 @@ import {
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
+import { useRiskPolicy } from "@/lib/risk-policy";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -29,7 +30,6 @@ type Readiness = Schemas["ReadinessDashboard"];
 type Item = Schemas["ReadinessItem"];
 type Strategy = Schemas["BlockerStrategy"];
 type Question = Schemas["StakeholderQuestionOut"];
-type Role = Schemas["Me"]["role"];
 /** Why the confirm dialog's Publish was refused: the API's 409, a newer version, or an error. */
 type Refusal = { detail: string; blocking: Schemas["PublishBlock"][]; stale?: boolean };
 
@@ -41,8 +41,6 @@ const CHECK_KIND: Record<string, string> = {
 };
 const PHONE = "(max-width: 600px)";
 const DAY = 86_400_000;
-/** B4 defaults (api/oracle/tenant_settings_api.py), used when the caller cannot read the settings. */
-const RISK_DEFAULTS = { role: "owner" as Role, maxDays: 90 };
 
 /** One reason the API refuses the publish: a gating blocker, or another critical hard check. */
 type Block = {
@@ -142,24 +140,6 @@ function OnPublish({ n }: { n: number }) {
       ))}
     </ul>
   );
-}
-
-/**
- * The company's B4 settings: who may accept a critical blocker's risk, and how far out its
- * review date may be. Settings are owner-readable; anyone else gets the defaults.
- */
-function useRiskPolicy(): { role: Role; maxDays: number } {
-  const { role } = useMe();
-  const q = useQuery(`risk-policy|${role}`, async () => {
-    if (!hasRole(role, "approver")) return RISK_DEFAULTS;
-    const read = (key: string) => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key } } })).then((s) => s.value);
-    const [who, days] = await Promise.all([read("blocker_risk_acceptance_role"), read("blocker_risk_review_max_days")]).catch(() => [null, null]);
-    return {
-      role: who === "approver" || who === "owner" ? (who as Role) : RISK_DEFAULTS.role,
-      maxDays: typeof days === "number" && days >= 1 ? days : RISK_DEFAULTS.maxDays,
-    };
-  });
-  return q.data ?? RISK_DEFAULTS;
 }
 
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -306,6 +286,16 @@ function BlockInspector({
         </InspectorSection>
       )}
       {block.blocker && (
+        <InspectorSection label="Blocker strategy">
+          <div className="flex flex-wrap items-center gap-2">
+            <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
+              Open blocker
+            </LinkButton>
+            <span className="text-sm text-text2">Status, options, feasibility scope and experiments</span>
+          </div>
+        </InspectorSection>
+      )}
+      {block.blocker && (
         <InspectorSection label="Risk" testId="block-risk">
           <AcceptRisk key={block.id} blocker={block.blocker} onDone={onChanged} />
         </InspectorSection>
@@ -433,6 +423,12 @@ export function PublishView({ doc }: { doc: string }) {
       ? Promise.resolve(undefined)
       : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n }, query: { purpose: "publish" } } })),
   );
+  // #254: the confirm names how many sections are not reviewed.
+  const versionQ = useQuery(`version|${doc}|${n}`, () =>
+    n == null ? Promise.resolve(undefined) : unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch(() => undefined),
+  );
+  const sections = versionQ.data?.sections ?? [];
+  const unreviewed = sections.filter((s) => !s.verdict).length;
   // Optional reads: without them the blocks fall back to the verdict's own rows.
   const strategyQ = useQuery(`blocker-strategy|${doc}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/blocker-strategy", { params: { path: { doc } } })).catch(() => undefined),
@@ -663,6 +659,11 @@ export function PublishView({ doc }: { doc: string }) {
               </h2>
             </div>
             <div className="px-5 py-3.5 max-[600px]:px-4">
+              {unreviewed > 0 && (
+                <p data-testid="unreviewed-sections" className="mb-2 font-semibold text-warn">
+                  {unreviewed} of {sections.length} sections {unreviewed === 1 ? "is" : "are"} not reviewed
+                </p>
+              )}
               <OnPublish n={n} />
             </div>
             {refusal && (

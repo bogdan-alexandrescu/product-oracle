@@ -11,7 +11,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
-import { mockUuid, seeded } from "./ids";
+import { mockUuid, seeded, stableUuid } from "./ids";
+import { diffItems, snapshot } from "./roadmap-diff";
 import itemsFixture from "./roadmap-items.json";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -35,6 +36,7 @@ interface Version {
   document_id: string;
   number: number;
   approved_at?: string | null;
+  created_at?: string;
   source?: Schemas["VersionSource"] | null;
   sections: { section_key: string; heading: string; level: number; content_hash: string }[];
 }
@@ -68,6 +70,8 @@ const DATE_UNVERIFIED =
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 /** The mock scenario (MOCK_SCENARIO_KEY) whose roadmap items carry every field the Items tab shows (E2). */
 export const ITEMS_SCENARIO = "roadmap-items";
+/** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
+export const DIFF_SCENARIO = "roadmap-diff";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -143,7 +147,8 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
  */
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
-  return seeded(withItems ? `roadmap:${ITEMS_SCENARIO}` : "roadmap", () => {
+  const withDiff = scenario === DIFF_SCENARIO;
+  return seeded(withItems || withDiff ? `roadmap:${scenario}` : "roadmap", () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -171,9 +176,104 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
       item_keys: (rv ? db.items[rv.id] : []).filter((i) => i.horizon === "now").map((i) => i.item_key),
       status: "planned", lock_version: 1, created_at: AT, updated_at: AT,
     });
+    // F7: acme/app#418 is already linked to "Spend forecast for the month" (the move flow).
+    db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
+    if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     return db;
   });
+}
+
+/**
+ * "roadmap-diff" (E3): the approved v1 has Behaviour (Now), Success metrics (Next) and Usage
+ * exports (Later); the draft v2 adds Spend limits (Now), moves Behaviour to Next and drops
+ * Usage exports.
+ */
+function seedDiff(ctx: RoadmapContext, db: RoadmapDb, roadmapId: string, trackId: string) {
+  const v1 = ctx.versions.find((v) => v.document_id === roadmapId && v.number === 1);
+  const v2 = ctx.versions.find((v) => v.document_id === roadmapId && v.number === 2);
+  if (!v1 || !v2) return;
+  const extra = (like: Item, key: string, title: string, horizon: Item["horizon"]): Item => ({
+    ...structuredClone(like), id: mockUuid(), item_key: key, title, horizon, milestone: horizon === "now" ? { name: "First release" } : null,
+    prd: { ...like.prd, section_key: null, section_hash: null },
+  });
+  const first = itemsFor(ctx, v1, trackId);
+  db.items[v1.id] = [...first, extra(first[0], "item-exports", "Usage exports", "later")].map((i, position) => ({ ...i, position }));
+  const second = itemsFor(ctx, v2, trackId).map((i) => (i.item_key === "item-behaviour" ? { ...i, horizon: "next" as const } : i));
+  db.items[v2.id] = [extra(second[0], "item-limits", "Spend limits", "now"), ...second].map((i, position) => ({ ...i, position }));
+}
+
+/** E3: GET /v1/roadmap-items/diff, a roadmap version's items against another's (api/oracle/roadmap/diff_views.py). */
+function itemsDiff(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Response {
+  const parse = (ref: string | null) => {
+    const m = /^([^@\s]+)@([1-9][0-9]{0,5})$/.exec(ref ?? "");
+    if (!m) return json(422, { detail: `'${ref}' is not a ref: write <slug>@<version>` });
+    const doc = ctx.documents.find((d) => d.slug === m[1]);
+    const v = doc && ctx.versions.find((x) => x.document_id === doc.id && x.number === Number(m[2]));
+    if (!doc || !v) return notFound(doc ? `version ${m[2]} of '${doc.slug}'` : `document '${m[1]}'`);
+    if (doc.kind === "prd") return json(409, { detail: `Roadmap items for v${v.number} are not ready yet` });
+    if (doc.kind !== "roadmap") return json(422, { detail: `'${doc.slug}' is a ${doc.kind}: it has no roadmap items` });
+    return { doc, v };
+  };
+  const head = parse(q.get("head"));
+  if (head instanceof Response) return head;
+  const side = (v: Version): Schemas["ItemsRef"] => ({
+    ref: `${head.doc.slug}@${v.number}`, kind: "roadmap", label: `Roadmap v${v.number}`, document: docRef(head.doc, v),
+  });
+  const others = ctx.versions
+    .filter((v) => v.document_id === head.doc.id && v.id !== head.v.id && db.items[v.id]?.length)
+    .sort((a, b) => b.number - a.number);
+  const previous = others.find((v) => v.number < head.v.number);
+  const approved = others.find((v) => v.approved_at);
+  const base = q.get("base") ?? "previous";
+  let against: Version | undefined;
+  if (base === "previous") against = previous;
+  else if (base === "approved") against = approved;
+  else {
+    if (!base.includes("@")) return json(422, { detail: `base must be previous, approved or a ref, not '${base}'` });
+    const named = parse(base);
+    if (named instanceof Response) return named.status === 404 ? named : json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
+    if (named.doc.id !== head.doc.id) return json(422, { detail: `'${base}' is not a version of '${head.doc.slug}'` });
+    against = named.v;
+  }
+  const option = (v?: Version) => (v ? { ref: side(v).ref, label: side(v).label } : null);
+  const out: Schemas["ItemsDiffOut"] = {
+    head: side(head.v), base: null, options: { previous: option(previous), approved: option(approved) }, summary: null, items: [],
+  };
+  if (!against) return json(200, out);
+  const live = (v: Version) => (db.items[v.id] ?? []).map((i) => liveItem(db, i));
+  const diff = diffItems(live(against), live(head.v));
+  return json(200, { ...out, base: side(against), summary: diff.summary, items: diff.items });
+}
+
+/** E3: GET /v1/roadmap-items/history, an item across the roadmap versions tracing to a PRD. */
+function itemHistory(ctx: RoadmapContext, db: RoadmapDb, q: URLSearchParams): Response {
+  const prd = ctx.documents.find((d) => d.slug === q.get("prd"));
+  if (!prd) return notFound(`document '${q.get("prd")}'`);
+  const key = q.get("item_key") ?? "";
+  const versions = ctx.versions
+    .filter((v) => (db.items[v.id] ?? []).some((i) => i.prd.document?.id === prd.id))
+    .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.number - b.number)
+    .slice(-50);
+  const entries: Schemas["RoadmapItemHistoryEntry"][] = [];
+  let last: Item | null = null;
+  for (const v of versions) {
+    const found = (db.items[v.id] ?? []).find((i) => i.item_key === key);
+    const item = found ? liveItem(db, found) : null;
+    if (!item && !last) continue;
+    const doc = ctx.documents.find((d) => d.id === v.document_id)!;
+    const common = { ref: `${doc.slug}@${v.number}`, kind: "roadmap" as const, label: `Roadmap v${v.number}`, approved: !!v.approved_at, at: v.created_at ?? AT };
+    if (!item) {
+      entries.push({ ...common, present: false, title: null, horizon: null, milestone_name: null, milestone_date: null, change: "dropped" });
+      last = null;
+      continue;
+    }
+    const s = snapshot(item);
+    const change = last ? diffItems([last], [item]).items[0].change : "added";
+    entries.push({ ...common, present: true, title: s.title, horizon: s.horizon, milestone_name: s.milestone_name, milestone_date: s.milestone_date, change });
+    last = item;
+  }
+  return json(200, { prd: { id: prd.id, slug: prd.slug, title: prd.title, version: null, approved: null }, item_key: key, entries });
 }
 
 /** The fixture's item in place of `seed`, keeping the mock's ids; its basis named by reference. */
@@ -218,7 +318,7 @@ function itemsVersion(ctx: RoadmapContext, db: RoadmapDb, doc: Doc, n: number | 
 function withEngineering(db: RoadmapDb, item: Item, view: string): Item {
   const engineering = db.records
     .filter((r) => r.track_id === item.track_id && r.item_key === item.item_key)
-    .map((r) => ({ tracker: r.tracker, external_ref: r.external_ref, state: r.state, raw_status: r.raw_status, target_date: r.target_date, estimate: r.estimate, url: r.url }));
+    .map((r) => ({ id: r.id, tracker: r.tracker, external_ref: r.external_ref, state: r.state, raw_status: r.raw_status, target_date: r.target_date, estimate: r.estimate, url: r.url }));
   if (view === "brief") return { ...item, feature: null, requirements: [], blockers: [], trace: [], depends_on: [], validation_gates: [], economics: {}, priority: null, confidence: null, engineering: [] };
   return { ...item, engineering };
 }
@@ -333,6 +433,13 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
   const findDoc = (ref: string) => ctx.documents.find((d) => d.id === ref || d.slug === ref);
   const findTrack = (id: string) => db.tracks.find((t) => t.id === id);
 
+  // E3: /v1/roadmap-items/diff | /history
+  if (p[1] === "roadmap-items" && m === "GET") {
+    if (p[2] === "diff" && !p[3]) return itemsDiff(ctx, db, q);
+    if (p[2] === "history" && !p[3]) return itemHistory(ctx, db, q);
+    return null;
+  }
+
   // /v1/roadmaps/{doc}/items | /alignment | /items/staleness | /versions/{n}/items
   if (p[1] === "roadmaps" && p[2]) {
     const doc = findDoc(p[2]);
@@ -436,8 +543,12 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
     return null;
   }
 
-  // /v1/tracker/connector | /v1/tracker/records
+  // /v1/tracker/connector | /v1/tracker/records | /v1/tracker/issues | /v1/tracker/links (F7)
   if (p[1] === "tracker") {
+    if (p[2] === "issues" || p[2] === "links") {
+      if (!verifies()) return notVerifier();
+      return trackerLinks(ctx, db, m, p, q, body);
+    }
     if (p[2] === "connector" && m === "GET") return json(200, connector());
     if (p[2] === "records" && m === "GET") return json(200, db.records.filter((r) => !q.get("track_id") || r.track_id === q.get("track_id")));
     if (p[2] === "records" && m === "POST") {
@@ -524,7 +635,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       if (!can("approver")) return forbidden();
       const b = await body<Schemas["TrackPatch"]>();
       if (b.lock_version !== t.lock_version) return json(409, { detail: "The track changed since it was loaded" });
-      Object.assign(t, { title: b.title ?? t.title, status: b.status ?? t.status, owner_id: b.owner_id ?? t.owner_id, lock_version: t.lock_version + 1 });
+      Object.assign(t, { title: b.title ?? t.title, status: b.status ?? t.status, owner_id: "owner_id" in b ? b.owner_id ?? null : t.owner_id, lock_version: t.lock_version + 1 });
       return json(200, overview(ctx, db, t));
     }
     return null;
@@ -770,15 +881,21 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     change: Schemas["ItemChange"] | null,
     horizon: Horizon = s.horizon,
   ): PlanItem => {
-    const records = (s.records ?? []).map((r) => ({
-      tracker: "linear" as const, external_ref: r.ref, state: r.state, raw_status: null, target_date: r.target ?? null,
-      estimate: null, url: `https://tracker.example.com/${r.ref}`,
-    }));
+    const records = [
+      ...(s.records ?? []).map((r) => ({
+        id: seeded(`plan:record:${r.ref}`, mockUuid), tracker: "linear" as const, external_ref: r.ref, state: r.state, raw_status: null,
+        target_date: r.target ?? null, estimate: null, url: `https://tracker.example.com/${r.ref}`,
+      })),
+      // F7: issues linked to this item (matched by PRD and item key; the mock's rows carry no track).
+      ...(db.records as LinkedRecord[])
+        .filter((r) => r.prd_document_id === prd.id && r.item_key === s.key)
+        .map((r) => ({ id: r.id, tracker: r.tracker, external_ref: r.external_ref, state: r.state, raw_status: r.raw_status, target_date: r.target_date, estimate: r.estimate, url: r.url })),
+    ];
     const href = `/documents/${prd.slug}/v/${prdVersion}`;
     const next: Schemas["PlanNext"] =
       origin === "draft"
         ? { action: "review_prd", label: "PRD review", who: { role: "approver", user_id: null }, href, viewer_may: may("approver") }
-        : s.next
+        : s.next && !(s.next.action === "link_issue" && records.length)
           ? { action: s.next.action, label: NEXT_LABEL[s.next.action], who: { role: s.next.who, user_id: null }, href: null, viewer_may: may(s.next.who) }
           : { action: null, label: "—", who: null, href: null, viewer_may: false };
     return {
@@ -866,4 +983,128 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     prds,
     items,
   };
+}
+
+// --- F7 Link tracker issues: GET /v1/tracker/issues, POST /v1/tracker/links, DELETE /v1/tracker/links/{id}
+
+/** A tracker record with F7's link columns (TrackerRecordOut gains them with the API). */
+type LinkedRecord = TrackerRecord & {
+  prd_document_id?: string | null;
+  source_item_id?: string | null;
+  linked_by?: string | null;
+  linked_at?: string | null;
+  refresh_lost_at?: string | null;
+};
+/** One of the signed-in person's synced GitHub issues (a source item of kind issue), as its text reads. */
+type SyncedIssue = { id: string; repo: string; number: number; title: string; raw: string; milestone: { title: string; due: string | null } | null; updated_at: string };
+
+/** The signed-in person's synced GitHub issues (mock rows: GitHub is never called). */
+const SYNCED_ISSUES: SyncedIssue[] = [
+  { id: stableUuid("tracker-issue/acme/app#412"), repo: "acme/app", number: 412, title: "Saved cards checkout", raw: "open",
+    milestone: { title: "Beta", due: "2026-11-30" }, updated_at: "2026-10-20T15:00:00Z" },
+  { id: stableUuid("tracker-issue/acme/app#418"), repo: "acme/app", number: 418, title: "Monthly spend forecast", raw: "open",
+    milestone: { title: "Beta", due: "2026-11-30" }, updated_at: "2026-10-19T11:00:00Z" },
+  { id: stableUuid("tracker-issue/acme/app#425"), repo: "acme/app", number: 425, title: "Usage dashboard charts", raw: "open",
+    milestone: null, updated_at: "2026-10-18T09:30:00Z" },
+  { id: stableUuid("tracker-issue/acme/app#397"), repo: "acme/app", number: 397, title: "Alert rules endpoint", raw: "closed (completed)",
+    milestone: { title: "Alpha", due: "2026-10-15" }, updated_at: "2026-10-15T17:00:00Z" },
+];
+
+const issueRef = (i: SyncedIssue) => `${i.repo}#${i.number}`;
+const issueUrl = (i: SyncedIssue) => `https://github.com/${i.repo}/issues/${i.number}`;
+/** The API's github_issue_facts mapping of the "- State:" line. */
+function issueState(raw: string): TrackerRecord["state"] {
+  if (raw === "open") return "todo";
+  if (raw === "closed" || raw === "closed (completed)") return "done";
+  if (raw === "closed (not planned)") return "cancelled";
+  return "unknown";
+}
+
+/** The plan item a PRD's key names (the mock's Plan rows), with its title. */
+function planItem(prdSlug: string, key: string): PlanSeedItem | undefined {
+  if (prdSlug === "usage-alerts") return ALERTS_APPROVED.find((i) => i.key === key);
+  if (prdSlug === "checkout-redesign") return CHECKOUT_DRAFT.find((i) => i.key === key);
+  return undefined;
+}
+
+function issueRecord(i: SyncedIssue, prdId: string, itemKey: string, by: string, at = AT): LinkedRecord {
+  return {
+    id: mockUuid(), tracker: "github", external_ref: issueRef(i), title: i.title, url: issueUrl(i), track_id: null, item_key: itemKey,
+    state: issueState(i.raw), raw_status: i.raw, estimate: null, estimate_unit: null, target_date: i.milestone?.due ?? null,
+    observed_at: i.updated_at, recorded_by: by, created_at: at, updated_at: at,
+    prd_document_id: prdId, source_item_id: i.id, linked_by: by, linked_at: at, refresh_lost_at: null,
+  };
+}
+
+/** True when `q` names the issue: "#412", "acme/app#412", its URL, or words of its title. */
+function issueMatches(i: SyncedIssue, q: string): boolean {
+  const t = q.trim().toLowerCase();
+  if (!t) return true;
+  const url = /github\.com\/([^/\s]+\/[^/\s]+)\/issues\/(\d+)/.exec(t);
+  if (url) return i.repo === url[1] && i.number === Number(url[2]);
+  const ref = /^(?:([\w.-]+\/[\w.-]+))?#?(\d+)$/.exec(t);
+  if (ref) return i.number === Number(ref[2]) && (!ref[1] || ref[1] === i.repo);
+  const title = i.title.toLowerCase();
+  return t.split(/\s+/).every((w) => title.includes(w));
+}
+
+function trackerLinks(
+  ctx: RoadmapContext,
+  db: RoadmapDb,
+  m: string,
+  p: string[],
+  q: URLSearchParams,
+  body: <T>() => Promise<T>,
+): Promise<Response | null> | Response | null {
+  const records = db.records as LinkedRecord[];
+  const linkedOf = (i: SyncedIssue) => records.find((r) => r.source_item_id === i.id && r.item_key && r.prd_document_id);
+  const linkOut = (r: LinkedRecord) => {
+    const doc = ctx.documents.find((d) => d.id === r.prd_document_id);
+    return { prd: doc?.slug ?? "", item_key: r.item_key!, record_id: r.id, item_title: (doc && planItem(doc.slug, r.item_key!)?.title) ?? null };
+  };
+  if (p[2] === "issues" && !p[3] && m === "GET") {
+    const limit = Math.min(Number(q.get("limit") ?? 20) || 20, 50);
+    const out = SYNCED_ISSUES.filter((i) => issueMatches(i, q.get("q") ?? "")).slice(0, limit).map((i) => {
+      const r = linkedOf(i);
+      return {
+        source_item_id: i.id, external_ref: issueRef(i), title: i.title, url: issueUrl(i), state: issueState(i.raw), raw_status: i.raw,
+        milestone: i.milestone && { title: i.milestone.title, due: i.milestone.due }, linked: r ? linkOut(r) : null,
+      };
+    });
+    return json(200, out);
+  }
+  if (p[2] === "links" && !p[3] && m === "POST") {
+    return (async () => {
+      const b = await body<{ prd: string; item_key: string; source_item_id?: string | null; url?: string | null; move?: boolean }>();
+      const doc = ctx.documents.find((d) => d.slug === b.prd || d.id === b.prd);
+      if (!doc) return notFound(`document '${b.prd}'`);
+      if (!planItem(doc.slug, b.item_key)) return json(422, { detail: `'${b.item_key}' is not an item of '${doc.slug}'` });
+      const issue = b.source_item_id
+        ? SYNCED_ISSUES.find((i) => i.id === b.source_item_id)
+        : b.url
+          ? SYNCED_ISSUES.find((i) => issueMatches(i, b.url!))
+          : undefined;
+      if (!issue) return notFound("source item");
+      const had = records.find((r) => r.source_item_id === issue.id) ?? records.find((r) => r.tracker === "github" && r.external_ref === issueRef(issue));
+      const elsewhere = had?.item_key && had.prd_document_id && !(had.prd_document_id === doc.id && had.item_key === b.item_key);
+      if (had && elsewhere && !b.move) {
+        const l = linkOut(had);
+        return json(409, { detail: { message: `${issueRef(issue)} is linked to ${l.item_title ?? l.item_key}`, linked: { prd: l.prd, item_key: l.item_key, item_title: l.item_title } } });
+      }
+      const fresh = issueRecord(issue, doc.id, b.item_key, ctx.userId, now());
+      if (had) {
+        Object.assign(had, { ...fresh, id: had.id, created_at: had.created_at });
+        return json(201, had);
+      }
+      records.push(fresh);
+      return json(201, fresh);
+    })();
+  }
+  if (p[2] === "links" && p[3] && !p[4] && m === "DELETE") {
+    const r = records.find((x) => x.id === p[3]);
+    if (!r) return notFound("tracker record");
+    Object.assign(r, { item_key: null, track_id: null, prd_document_id: null, updated_at: now() });
+    return new Response(null, { status: 204 });
+  }
+  return null;
 }

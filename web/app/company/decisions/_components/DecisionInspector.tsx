@@ -7,7 +7,7 @@ import { Button, Chip, Inspector, InspectorRow, InspectorSection, LinkButton } f
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
   ORIGIN_LABEL,
@@ -23,6 +23,7 @@ import {
   type DecisionOption,
   type Person,
 } from "./lib";
+import { OptionsEditor, People, optionsOf, type Draft } from "./ProposeDialog";
 
 type Done = (updated?: Decision) => Promise<void> | void;
 const path = (d: Decision) => ({ params: { path: { decision: String(d.number) } } });
@@ -45,7 +46,7 @@ export function DecisionInspector({
   autoDecide?: boolean;
 }) {
   const { role } = useMe();
-  const [mode, setMode] = useState<null | "decide" | "review" | "reassign" | "withdraw">(autoDecide && d.can_decide ? "decide" : null);
+  const [mode, setMode] = useState<Mode>(autoDecide && d.can_decide ? "decide" : null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const checkpoint = isCheckpoint(d);
@@ -286,7 +287,7 @@ function Lines({ label, lines }: { label: string; lines: string[] }) {
   );
 }
 
-type Mode = null | "decide" | "review" | "reassign" | "withdraw";
+type Mode = null | "edit" | "decide" | "review" | "reassign" | "withdraw";
 
 /** The actions the member may take on this decision, each opening its own short form. */
 function Actions({
@@ -302,8 +303,17 @@ function Actions({
   setMode: (m: Mode) => void;
   done: Done;
 }) {
+  const { role } = useMe();
+  // Edit is offered while proposed; a member who may not edit sees it disabled, with why.
+  const editable = d.status === "proposed";
+  const noEdit = hasRole(role, "commenter") ? "Only its creator, its approver or an owner edits a proposal" : "Editing needs the commenter role";
   const buttons = (
     <div className="flex flex-wrap gap-2">
+      {editable && (
+        <Button onClick={() => setMode("edit")} disabled={!d.can_edit} title={d.can_edit ? undefined : noEdit} aria-expanded={mode === "edit"}>
+          Edit
+        </Button>
+      )}
       {d.can_decide && (
         <Button variant="solid" onClick={() => setMode("decide")} aria-expanded={mode === "decide"}>
           Decide
@@ -326,10 +336,12 @@ function Actions({
       )}
     </div>
   );
-  if (!d.can_decide && !d.can_review && !d.can_reassign && !d.can_withdraw) return null;
+  if (!editable && !d.can_decide && !d.can_review && !d.can_reassign && !d.can_withdraw) return null;
   return (
     <InspectorSection label="Actions" testId="decision-actions">
       {buttons}
+      {editable && !d.can_edit && <p className="mt-2 text-sm text-text2">{noEdit}</p>}
+      {mode === "edit" && <EditForm d={d} people={people} onDone={done} onCancel={() => setMode(null)} />}
       {mode === "decide" && <DecideForm d={d} onDone={done} onCancel={() => setMode(null)} />}
       {mode === "review" && <ReviewForm d={d} onDone={done} onCancel={() => setMode(null)} />}
       {mode === "reassign" && <ReassignForm d={d} people={people} onDone={done} onCancel={() => setMode(null)} />}
@@ -405,12 +417,139 @@ function useSubmit(onDone: Done) {
   return { busy, error, setError, run };
 }
 
+const draftOf = (o: DecisionOption): Draft => ({
+  key: o.key,
+  label: o.label,
+  summary: o.summary ?? "",
+  pros: o.pros.join("\n"),
+  cons: o.cons.join("\n"),
+  cost: o.cost_if_wrong ?? "",
+});
+const text = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+
+/** Edit a proposal: every field PATCH takes, saved against the lock_version it was opened at. */
+function EditForm({ d, people, onDone, onCancel }: { d: Decision; people: Person[]; onDone: Done; onCancel: () => void }) {
+  const goalsQ = useQuery("decisions|goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
+  const goals = (goalsQ.data ?? []).filter((g) => g.status !== "rejected");
+  const p = d.prediction ?? {};
+  const [title, setTitle] = useState(d.title);
+  const [question, setQuestion] = useState(d.question ?? "");
+  const [context, setContext] = useState(d.context ?? "");
+  const [options, setOptions] = useState<Draft[]>(d.options.map(draftOf));
+  const [reversibility, setReversibility] = useState(d.reversibility);
+  const [contributors, setContributors] = useState<string[]>(d.contributor_ids);
+  const [informed, setInformed] = useState<string[]>(d.informed_ids);
+  const [review, setReview] = useState(d.review_at ?? "");
+  const [expected, setExpected] = useState(d.expected_outcome ?? "");
+  const [goal, setGoal] = useState(text(p.goal_id));
+  const [metric, setMetric] = useState(text(p.metric));
+  const [baseline, setBaseline] = useState(text(p.baseline));
+  const [predicted, setPredicted] = useState(text(p.predicted));
+  const [threshold, setThreshold] = useState(text(p.threshold));
+  const [by, setBy] = useState(text(p.by));
+  const { busy, error, setError, run } = useSubmit(onDone);
+  const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  return (
+    <FormShell
+      name="Edit decision"
+      submit="Save changes"
+      busy={busy}
+      error={error}
+      onCancel={onCancel}
+      onSubmit={async () => {
+        if (!title.trim()) return setError("Write the decision in one sentence");
+        if (goal && (!metric.trim() || !predicted.trim())) return setError("A prediction needs its metric and the predicted value");
+        await run(() =>
+          unwrap(
+            api.PATCH("/v1/decisions/{decision}", {
+              ...path(d),
+              body: {
+                lock_version: d.lock_version,
+                title: title.trim(),
+                question: question.trim() || null,
+                context: context.trim() || null,
+                options: optionsOf(options, d.options),
+                reversibility,
+                contributor_ids: contributors,
+                informed_ids: informed,
+                review_at: review || null,
+                expected_outcome: expected.trim() || null,
+                prediction: goal
+                  ? { goal_id: goal, metric: metric.trim(), baseline: baseline.trim() || null, predicted: predicted.trim(), threshold: threshold.trim() || null, by: by || null }
+                  : null,
+              },
+            }),
+          ),
+        );
+      }}
+    >
+      <Field label="Decision">
+        <input className={INPUT} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+      </Field>
+      <Field label="Question">
+        <input className={INPUT} value={question} maxLength={1000} onChange={(e) => setQuestion(e.target.value)} />
+      </Field>
+      <Field label="Context">
+        <textarea className={INPUT} rows={3} value={context} maxLength={4000} onChange={(e) => setContext(e.target.value)} />
+      </Field>
+      <OptionsEditor options={options} setOptions={setOptions} />
+      <Field label="Reversibility">
+        <select aria-label="Reversibility" className={INPUT} value={reversibility} onChange={(e) => setReversibility(e.target.value as Decision["reversibility"])}>
+          <option value="reversible">Reversible</option>
+          <option value="irreversible">Hard to reverse</option>
+        </select>
+      </Field>
+      <People label="Contributors" people={people} chosen={contributors} onToggle={(id) => setContributors((c) => toggle(c, id))} />
+      <People label="Informed" people={people} chosen={informed} onToggle={(id) => setInformed((c) => toggle(c, id))} />
+      <Field label="Review date">
+        <input type="date" className={INPUT} value={review} min={isoDay(0)} max={isoDay(365)} onChange={(e) => setReview(e.target.value)} />
+      </Field>
+      <Field label="Expected outcome">
+        <input className={INPUT} value={expected} maxLength={2000} onChange={(e) => setExpected(e.target.value)} placeholder="What should happen if it is right" />
+      </Field>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-semibold text-text2">Prediction</legend>
+        <Field label="Goal">
+          <select aria-label="Goal" className={INPUT} value={goal} onChange={(e) => setGoal(e.target.value)}>
+            <option value="">No prediction</option>
+            {goal && !goals.some((g) => g.id === goal) && <option value={goal}>The current goal</option>}
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {goal && (
+          <div className="grid grid-cols-2 gap-2 max-[600px]:grid-cols-1">
+            <Field label="Metric">
+              <input className={INPUT} value={metric} maxLength={300} onChange={(e) => setMetric(e.target.value)} />
+            </Field>
+            <Field label="By">
+              <input type="date" className={INPUT} value={by} onChange={(e) => setBy(e.target.value)} />
+            </Field>
+            <Field label="Baseline">
+              <input className={INPUT} value={baseline} maxLength={300} onChange={(e) => setBaseline(e.target.value)} />
+            </Field>
+            <Field label="Predicted">
+              <input className={INPUT} value={predicted} maxLength={300} onChange={(e) => setPredicted(e.target.value)} />
+            </Field>
+            <Field label="Threshold">
+              <input className={INPUT} value={threshold} maxLength={300} onChange={(e) => setThreshold(e.target.value)} />
+            </Field>
+          </div>
+        )}
+      </fieldset>
+    </FormShell>
+  );
+}
+
 /** Decide: an option, why, the reversibility confirmed, a review date (+90 days) and what should happen. */
 function DecideForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCancel: () => void }) {
   const [option, setOption] = useState<string>(d.options.find((o) => o.recommended)?.key ?? "");
   const [why, setWhy] = useState("");
   const [reversibility, setReversibility] = useState(d.reversibility);
-  const [review, setReview] = useState(isoDay(90));
+  const [review, setReview] = useState(d.review_at && d.review_at >= isoDay(0) ? d.review_at : isoDay(90));
   const [expected, setExpected] = useState(d.expected_outcome ?? "");
   const { busy, error, setError, run } = useSubmit(onDone);
   return (

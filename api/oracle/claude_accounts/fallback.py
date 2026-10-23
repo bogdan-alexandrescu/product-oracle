@@ -7,6 +7,7 @@ Messages API), encrypted with oracle.crypto. It is used ONLY when the pool answe
 must not quietly fall back to one shared credential.
 """
 
+import os
 import uuid
 from dataclasses import dataclass
 
@@ -19,7 +20,8 @@ from oracle.claude_accounts.models import ClaudeFallbackCredential
 # Built from parts so the source holds no credential-shaped literal.
 PLAN_TOKEN_PREFIX = "-".join(("sk", "ant", "oat"))
 API_KEY_PREFIX = "-".join(("sk", "ant", "api"))
-ANTHROPIC_API = "https://api.anthropic.com"
+# ``ORACLE_ANTHROPIC_API_URL``: where the Messages API is (a fake one in the real-stack test).
+ANTHROPIC_API = os.environ.get("ORACLE_ANTHROPIC_API_URL", "https://api.anthropic.com").rstrip("/")
 ANTHROPIC_VERSION = "2023-06-01"
 
 

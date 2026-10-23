@@ -24,6 +24,7 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
+import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime, formatDayUtc } from "@/lib/format";
@@ -203,6 +204,12 @@ export function RunDetail({ id }: { id: string }) {
               <Chip kind="line">
                 template {run.template}
                 {run.theme && `, theme ${run.theme}`}
+              </Chip>
+            )}
+            {/* #260: the goals a PRD run serves. */}
+            {!!run.knobs.goals?.length && (
+              <Chip kind="line" wrap data-testid="run-goals">
+                Serves {run.knobs.goals.map((g) => g.title).join(", ")}
               </Chip>
             )}
             {/* H1: the stops this run had approved or sent back, in the decision log. */}
@@ -586,7 +593,10 @@ function SegmentItem({
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
+  // D4: the structured reviews sent back from this segment's checkpoints.
+  const sentReviews = checkpoints.filter((c) => c.status === "changes_requested" && c.review);
   const details =
+    sentReviews.length > 0 ||
     s.error ||
     s.autonomy_note ||
     s.items_check ||
@@ -778,7 +788,12 @@ function SegmentItem({
             </p>
           )}
           {s.items_check && <ItemsCheckLine check={s.items_check} draft={draftActs} />}
+          {/* G4: everything staged at the waiting checkpoint, from rows and discussions. */}
+          {waitingCp && shared && <StagingBar runId={run.id} checkpointId={waitingCp.id} revision={shared.revision} />}
           {shared && deciding.length === 0 && <SharedDraftLine review={shared} />}
+          {sentReviews.map((cp) => (
+            <SentReviewLine key={cp.id} runId={run.id} cp={cp} />
+          ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
           {s.draft_import && (
             <DraftImportLine
@@ -1292,6 +1307,36 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
   );
 }
 
+/** D4: "Sent back · 3 entries · View review": the review.yaml the agents got, opened in place. */
+function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
+  const [text, setText] = useState<string | null>(null);
+  const entries = Array.isArray(cp.review?.items) ? cp.review.items.length : 0;
+  async function toggle() {
+    if (text != null) return setText(null);
+    setText("Loading…");
+    const { data, response } = await api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml", {
+      params: { path: { run_id: runId, checkpoint_id: cp.id } },
+      parseAs: "text",
+    });
+    setText(response.ok ? (data as string) : `Could not load the review (${response.status}).`);
+  }
+  return (
+    <div data-testid="sent-review">
+      <p className="text-text2">
+        Sent back · {entries} {entries === 1 ? "entry" : "entries"} ·{" "}
+        <button type="button" className="font-medium text-accent-ink hover:underline" aria-expanded={text != null} onClick={() => void toggle()}>
+          View review
+        </button>
+      </p>
+      {text != null && (
+        <pre className="mt-1.5 max-h-96 overflow-auto rounded-button border border-line bg-surface2 p-2.5 font-mono text-[13px] whitespace-pre-wrap" data-testid="sent-review-yaml">
+          {text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function Artifacts({
   runId,
   seq,
@@ -1415,6 +1460,8 @@ function CheckpointRow({
   const answer = cp.console;
   // A counted console change request the workflow went on past: Redo or Continue only.
   const redoOrContinue = answer?.needs === "redo_or_continue";
+  // D4: a send-back carries the staged actions as a structured review; with none, the note.
+  const staged = !!review?.items.some((i) => i.actions.some((a) => a.state === "staged"));
   // Redo carries the console's findings, else the note: the API refuses it without either.
   const redoBlocked = !answer?.can_redo && !note.trim();
   // The draft was not imported: approving is refused until Retry import imports it.
@@ -1462,7 +1509,7 @@ function CheckpointRow({
       <textarea
         ref={noteRef}
         aria-label="Note for the agents"
-        placeholder={redoOrContinue ? "Note (optional, added to the findings)" : "Note (required to request changes)"}
+        placeholder={redoOrContinue ? "Note (optional, added to the findings)" : staged ? "Note (optional with staged changes)" : "Note (required to request changes)"}
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
@@ -1532,7 +1579,11 @@ function CheckpointRow({
             >
               Approve and continue
             </Button>
-            <Button disabled={busy || !note.trim()} onClick={() => decideWith("changes_requested")}>
+            <Button
+              disabled={busy || (!note.trim() && !staged)}
+              title={!note.trim() && !staged ? "Stage a change, ask a question, or write a note to send back." : undefined}
+              onClick={() => decideWith("changes_requested")}
+            >
               Request changes
             </Button>
             {(answer?.needs === "unreadable" || answer?.needs === "unread") && (

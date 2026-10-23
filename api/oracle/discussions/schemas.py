@@ -110,8 +110,17 @@ class DiscussionMeSummary(BaseModel):
     unread: int
 
 
+class PrivateFindings(BaseModel):
+    """G1 §3.4.6: the caller's own findings below Summary that bear on the subject."""
+
+    count: int = Field(ge=1)
+    intake_id: uuid.UUID
+
+
 class DiscussionMe(DiscussionMeSummary):
     can_manage: bool
+    # The author of the subject's intake only; the key is absent for anyone else.
+    private_findings: PrivateFindings | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class DiscussionSummary(BaseModel):
@@ -180,6 +189,31 @@ class DiscussionMessageOut(BaseModel):
     created_at: datetime
     edited_at: datetime | None
     deleted: bool
+    # Oracle's replies (G2): why one failed, and what it says to this reader.
+    error_reason: str | None = None
+    error: str | None = None
+    # C1b: {"reason", "sources": [n]}.
+    pushback: dict[str, Any] | None = None
+    # Owners only (P3d: no screen shows cost).
+    usage: "ReplyUsage | None" = None
+
+
+class ReplyUsage(BaseModel):
+    model: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    cost_usd: float | None
+    account_label: str | None
+    llm_via: str | None
+    attempts: int
+
+
+class DiscussionMessagePosted(BaseModel):
+    """A person's message, and Oracle's ``pending`` reply when the rule calls for one
+    (``complete`` or ``failed`` with ``wait``)."""
+
+    message: DiscussionMessageOut
+    reply: DiscussionMessageOut | None = None
 
 
 class DiscussionMessagePage(BaseModel):

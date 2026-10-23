@@ -548,8 +548,81 @@ export interface paths {
          *     text with Markdown links, at most 8,000 characters. ``mentions`` (member ids from
          *     ``GET /v1/people``) add people to an open discussion; in a private one only the
          *     starter adds people.
+         *
+         *     Oracle replies to every message while only one person is in the discussion, and
+         *     after that when addressed (``@Oracle`` or ``mention_oracle``): ``reply`` is its
+         *     ``pending`` reply, whose text streams from ``GET …/messages/{reply_id}/stream``.
+         *     ``wait``: the reply runs here, without streaming, for at most 120 s, and comes back
+         *     ``complete`` or ``failed``. 429 when Oracle has answered a lot here in a short time
+         *     (the message is stored).
          */
         post: operations["create_discussion_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Discussion Reply
+         * @description Oracle's reply as it is written (``text/event-stream``): ``delta`` events with
+         *     the new text, then ``citations`` and ``done`` (the message), or ``error``
+         *     (``reason``, ``message``, ``retry``); ``: ping`` every 15 s. The first reader runs
+         *     the reply; every other reader (another tab, another person, a reload) tails it.
+         */
+        get: operations["stream_discussion_reply"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Discussion Reply
+         * @description Stop Oracle's reply (the person who asked, or an approver): it ends ``cancelled``
+         *     with the text written so far, within a second.
+         */
+        post: operations["cancel_discussion_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Discussion Reply
+         * @description Ask again for a failed or stopped reply (the person who asked, or an approver):
+         *     it is ``pending`` again, with no text; open its stream to run it. 429 when Oracle
+         *     has answered a lot here in a short time (each Retry counts as an answer).
+         */
+        post: operations["retry_discussion_reply"];
         delete?: never;
         options?: never;
         head?: never;
@@ -657,6 +730,50 @@ export interface paths {
         get: operations["list_discussion_changes"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/staging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staging
+         * @description Everything staged for one target, from every origin: for a document, the accepted
+         *     review suggestions (C1e) and the section changes staged from discussions; for a
+         *     checkpoint, its shared draft's actions from rows and from discussions. A row from a
+         *     private discussion the caller is not in names no discussion.
+         */
+        get: operations["list_staging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/next-draft-changes/{change_id}/unstage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unstage Next Draft Change
+         * @description Take a discussion's section change out of the next draft; its discussion change
+         *     goes back to the discussion. 409 "Already in draft <n>" once applied.
+         */
+        post: operations["unstage_next_draft_change"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3023,8 +3140,11 @@ export interface paths {
         };
         /**
          * List Fireflies Series
-         * @description Your meetings grouped into their calendar series, with counts and the last date
-         *     (from/to: whole days in UTC). Meetings on no calendar are in no series.
+         * @description Your meetings grouped into their calendar series, with counts, the last date and
+         *     the same-title meetings outside each (from/to: whole days in UTC). The window's
+         *     pages are read, one browse call each, up to the newest 300 meetings or until the
+         *     budget stops it (truncated).
+         *     Meetings on no calendar are in no series.
          */
         get: operations["list_fireflies_series"];
         put?: never;
@@ -4562,6 +4682,27 @@ export interface paths {
          *     the SwarmCloud wait has left and what I may do. Kinds with no item file: ``items: []``.
          */
         get: operations["get_checkpoint_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Checkpoint Review File
+         * @description The structured review a send-back delivered to the agents (D4), any member: the
+         *     ``review.yaml`` of a decided checkpoint. 404 while pending or when none was sent.
+         */
+        get: operations["get_checkpoint_review_file"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7392,6 +7533,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmap-items/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diff Roadmap Items
+         * @description What changed, item by item, between two sets of roadmap items: ``head`` and
+         *     ``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also
+         *     ``previous`` (the nearest earlier version with items, the default) or ``approved``
+         *     (the roadmap's latest approved version other than the head). Plan changes count
+         *     (oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD
+         *     section's text are notes. Nothing to compare with: ``base`` null and no items. A PRD
+         *     version's draft items are not stored yet (409).
+         */
+        get: operations["diff_roadmap_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmap-items/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Roadmap Item History
+         * @description One item across the roadmap versions whose items trace to the PRD, oldest first
+         *     (the latest 50), each entry against the one before; ``present: false`` where it
+         *     left. Follows the key only: a rename starts a new history.
+         */
+        get: operations["get_roadmap_item_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/roadmaps/{doc}/alignment": {
         parameters: {
             query?: never;
@@ -7500,6 +7689,71 @@ export interface paths {
          */
         post: operations["import_tracker_records"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Tracker Issues
+         * @description Your own synced GitHub issues matching ``q`` ("#412", "org/app#412", an issue URL
+         *     or words of the title), with the item each is linked to. Reads nothing from GitHub.
+         */
+        get: operations["search_tracker_issues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Tracker Issue
+         * @description Link one of your synced GitHub issues to a roadmap item of a PRD (F7): a tracker
+         *     record kept fresh from the sync, read-only toward GitHub. Everyone who can see the
+         *     Plan sees its number, title, state and link. 409 when it is linked to another item
+         *     and ``move`` is false.
+         */
+        post: operations["link_tracker_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tracker/links/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unlink Tracker Issue
+         * @description Unlink a tracker record from its item: it stays (with its history) and counts for
+         *     no item.
+         */
+        delete: operations["unlink_tracker_issue"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10608,7 +10862,7 @@ export interface components {
             /** Body */
             body?: string | null;
             /** Channel */
-            channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other") | null;
+            channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
             /** Requester Name */
             requester_name?: string | null;
             /** Requester Kind */
@@ -11047,6 +11301,10 @@ export interface components {
             decided_at?: string | null;
             /** Note */
             note?: string | null;
+            /** Review */
+            review?: {
+                [key: string]: unknown;
+            } | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -11114,6 +11372,12 @@ export interface components {
             tally: components["schemas"]["ReviewTally"];
             /** Note */
             note?: string | null;
+            /** Sent Review */
+            sent_review?: {
+                [key: string]: unknown;
+            } | null;
+            /** Sent Review Yaml */
+            sent_review_yaml?: string | null;
             /**
              * Can Read
              * @default true
@@ -13149,6 +13413,7 @@ export interface components {
             unread: number;
             /** Can Manage */
             can_manage: boolean;
+            private_findings?: components["schemas"]["PrivateFindings"] | null;
         };
         /** DiscussionMeSummary */
         DiscussionMeSummary: {
@@ -13227,6 +13492,15 @@ export interface components {
             edited_at: string | null;
             /** Deleted */
             deleted: boolean;
+            /** Error Reason */
+            error_reason?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            usage?: components["schemas"]["ReplyUsage"] | null;
         };
         /** DiscussionMessagePage */
         DiscussionMessagePage: {
@@ -13234,6 +13508,15 @@ export interface components {
             items: components["schemas"]["DiscussionMessageOut"][];
             /** Has More */
             has_more: boolean;
+        };
+        /**
+         * DiscussionMessagePosted
+         * @description A person's message, and Oracle's ``pending`` reply when the rule calls for one
+         *     (``complete`` or ``failed`` with ``wait``).
+         */
+        DiscussionMessagePosted: {
+            message: components["schemas"]["DiscussionMessageOut"];
+            reply?: components["schemas"]["DiscussionMessageOut"] | null;
         };
         /** DiscussionOut */
         DiscussionOut: {
@@ -15152,12 +15435,23 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** FirefliesSameTitleOut */
+        FirefliesSameTitleOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+        };
         /** FirefliesSeriesList */
         FirefliesSeriesList: {
             /** Series */
             series: components["schemas"]["FirefliesSeriesOut"][];
             /** Truncated */
             truncated: boolean;
+            /** Scanned */
+            scanned: number;
         };
         /** FirefliesSeriesOut */
         FirefliesSeriesOut: {
@@ -15171,6 +15465,8 @@ export interface components {
             last_date: string | null;
             /** Organizer */
             organizer: string | null;
+            /** Same Title */
+            same_title: components["schemas"]["FirefliesSameTitleOut"][];
         };
         /**
          * FixAction
@@ -15759,6 +16055,10 @@ export interface components {
             decided_at?: string | null;
             /** Note */
             note?: string | null;
+            /** Review */
+            review?: {
+                [key: string]: unknown;
+            } | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -16979,6 +17279,19 @@ export interface components {
             /** Version Count */
             version_count: number;
         };
+        /** ItemFieldChange */
+        ItemFieldChange: {
+            /** Field */
+            field: string;
+            /** Before */
+            before?: unknown;
+            /** After */
+            after?: unknown;
+            /** Added */
+            added?: string[] | null;
+            /** Removed */
+            removed?: string[] | null;
+        };
         /** ItemHistoryOut */
         ItemHistoryOut: {
             /** Roadmap */
@@ -17159,6 +17472,18 @@ export interface components {
              */
             reasons_partial: boolean;
         };
+        /** ItemsDiffOut */
+        ItemsDiffOut: {
+            head: components["schemas"]["ItemsRef"];
+            base: components["schemas"]["ItemsRef"] | null;
+            options: components["schemas"]["ItemsOptions"];
+            /** Summary */
+            summary: {
+                [key: string]: number;
+            } | null;
+            /** Items */
+            items: components["schemas"]["RoadmapItemChange"][];
+        };
         /**
          * ItemsImport
          * @description ``roadmap_items.yaml`` for a roadmap version (the format the run writes).
@@ -17185,6 +17510,18 @@ export interface components {
             /** Refused Dates */
             refused_dates: string[];
         };
+        /** ItemsOption */
+        ItemsOption: {
+            /** Ref */
+            ref: string;
+            /** Label */
+            label: string;
+        };
+        /** ItemsOptions */
+        ItemsOptions: {
+            previous: components["schemas"]["ItemsOption"] | null;
+            approved: components["schemas"]["ItemsOption"] | null;
+        };
         /** ItemsProblem */
         ItemsProblem: {
             /** Code */
@@ -17193,6 +17530,22 @@ export interface components {
             message: string;
             /** Item */
             item?: string | null;
+        };
+        /**
+         * ItemsRef
+         * @description A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's.
+         */
+        ItemsRef: {
+            /** Ref */
+            ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd_draft" | "roadmap";
+            /** Label */
+            label: string;
+            document: components["schemas"]["DocumentRef"];
         };
         /**
          * JobCreate
@@ -17272,6 +17625,8 @@ export interface components {
             budget_usd?: number | null;
             /** Reuse Baseline */
             reuse_baseline?: boolean | null;
+            /** Goals */
+            goals?: string[] | null;
         };
         /** KnobsOut */
         KnobsOut: {
@@ -17291,6 +17646,11 @@ export interface components {
             /** Budget Usd */
             budget_usd?: number | null;
             reuse_baseline?: components["schemas"]["ReusedBaseline"] | null;
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["TargetGoal"][];
         };
         /** KnowledgeGapOut */
         KnowledgeGapOut: {
@@ -18519,6 +18879,46 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * NextDraftChangeOut
+         * @description A discussion's section change waiting for the document's next draft.
+         */
+        NextDraftChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Section Key */
+            section_key: string;
+            /** Raised On Version */
+            raised_on_version: number;
+            /** Instruction */
+            instruction: string;
+            /** Text */
+            text?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "staged" | "unstaged" | "applied" | "superseded";
+            /** Applied In Version */
+            applied_in_version?: number | null;
+            /**
+             * From Private
+             * @default false
+             */
+            from_private: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** NextDraftDataPoint */
         NextDraftDataPoint: {
             /** Value */
@@ -18550,6 +18950,25 @@ export interface components {
             suggestion_ids?: string[] | null;
             /** Feedback Ids */
             feedback_ids?: string[] | null;
+            /** Next Draft Change Ids */
+            next_draft_change_ids?: string[] | null;
+        };
+        /**
+         * NextDraftInstruction
+         * @description G4: a discussion's change the section was built with.
+         */
+        NextDraftInstruction: {
+            /**
+             * Next Draft Change Id
+             * Format: uuid
+             */
+            next_draft_change_id: string;
+            /** Instruction */
+            instruction: string;
+            /** Text */
+            text?: string | null;
+            /** Origin */
+            origin: string;
         };
         /**
          * NextDraftPlan
@@ -18593,6 +19012,8 @@ export interface components {
             suggestion_ids?: string[] | null;
             /** Feedback Ids */
             feedback_ids?: string[] | null;
+            /** Next Draft Change Ids */
+            next_draft_change_ids?: string[] | null;
             /**
              * Depth
              * @default standard
@@ -18686,6 +19107,8 @@ export interface components {
             suggestion_ids?: string[] | null;
             /** Feedback Ids */
             feedback_ids?: string[] | null;
+            /** Next Draft Change Ids */
+            next_draft_change_ids?: string[] | null;
             /**
              * Depth
              * @default standard
@@ -18737,6 +19160,16 @@ export interface components {
              * @default []
              */
             feedback: components["schemas"]["NextDraftFeedback"][];
+            /**
+             * Next Draft Change Ids
+             * @default []
+             */
+            next_draft_change_ids: string[];
+            /**
+             * Instructions
+             * @default []
+             */
+            instructions: components["schemas"]["NextDraftInstruction"][];
         };
         /** NextMilestone */
         NextMilestone: {
@@ -19807,6 +20240,19 @@ export interface components {
             /** Decided At */
             decided_at?: string | null;
         };
+        /**
+         * PrivateFindings
+         * @description G1 §3.4.6: the caller's own findings below Summary that bear on the subject.
+         */
+        PrivateFindings: {
+            /** Count */
+            count: number;
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+        };
         /** Problem */
         Problem: {
             /** Code */
@@ -20208,7 +20654,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "version_not_approved" | "version_approval_lapsed" | "decider_not_current" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
+            code: "version_not_approved" | "version_approval_lapsed" | "decider_not_current" | "approval_not_by_decider" | "missing_required_section" | "stale_approval" | "missing_approval" | "mandatory_reviewer_pending" | "readiness_critical" | "source_permission_revoked" | "already_published" | "superseded_version" | "nothing_written" | "template_unresolved" | "open_critical_change_request" | "open_change_request" | "readiness_warning" | "approval_stale_optional" | "review_overdue";
             /** Message */
             message: string;
             /**
@@ -20946,6 +21392,23 @@ export interface components {
             /** Body */
             body: string;
         };
+        /** ReplyUsage */
+        ReplyUsage: {
+            /** Model */
+            model: string | null;
+            /** Input Tokens */
+            input_tokens: number | null;
+            /** Output Tokens */
+            output_tokens: number | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Account Label */
+            account_label: string | null;
+            /** Llm Via */
+            llm_via: string | null;
+            /** Attempts */
+            attempts: number;
+        };
         /** RepoRef */
         RepoRef: {
             /** Repo */
@@ -21187,7 +21650,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app";
             /** Requester Name */
             requester_name?: string | null;
             /**
@@ -21221,7 +21684,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app";
             /**
              * Origin
              * @enum {string}
@@ -21344,7 +21807,7 @@ export interface components {
              * Channel
              * @enum {string}
              */
-            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other";
+            channel: "support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app";
             /**
              * Origin
              * @enum {string}
@@ -22207,6 +22670,74 @@ export interface components {
             show_capacity?: boolean | null;
             /** Public Version */
             public_version?: boolean | null;
+        };
+        /** RoadmapItemChange */
+        RoadmapItemChange: {
+            /** Item Key */
+            item_key: string;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "added" | "dropped" | "moved" | "changed" | "unchanged";
+            /** Matched By */
+            matched_by: ("key" | "title") | null;
+            /** Title */
+            title: string;
+            /** Base Horizon */
+            base_horizon: string | null;
+            /** Head Horizon */
+            head_horizon: string | null;
+            /** Base Position */
+            base_position: number | null;
+            /** Head Position */
+            head_position: number | null;
+            /** Fields */
+            fields: components["schemas"]["ItemFieldChange"][];
+            /** Notes */
+            notes: components["schemas"]["ItemFieldChange"][];
+        };
+        /** RoadmapItemHistoryEntry */
+        RoadmapItemHistoryEntry: {
+            /** Ref */
+            ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "prd_draft" | "roadmap";
+            /** Label */
+            label: string;
+            /** Approved */
+            approved: boolean;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Present */
+            present: boolean;
+            /** Title */
+            title: string | null;
+            /** Horizon */
+            horizon: string | null;
+            /** Milestone Name */
+            milestone_name: string | null;
+            /** Milestone Date */
+            milestone_date: string | null;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "added" | "dropped" | "moved" | "changed" | "unchanged";
+        };
+        /** RoadmapItemHistoryOut */
+        RoadmapItemHistoryOut: {
+            prd: components["schemas"]["DocumentRef"];
+            /** Item Key */
+            item_key: string;
+            /** Entries */
+            entries: components["schemas"]["RoadmapItemHistoryEntry"][];
         };
         /** RoadmapItemOut */
         RoadmapItemOut: {
@@ -24554,6 +25085,203 @@ export interface components {
              * @default []
              */
             agent_items: components["schemas"]["AgentItem"][];
+            /**
+             * Next Draft Changes
+             * @default []
+             */
+            next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
+        };
+        /**
+         * StagedDiscussionChange
+         * @description G4: a discussion's section change staged for the next draft (``next_draft_changes``).
+         */
+        StagedDiscussionChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source
+             * @default next_draft_change
+             * @constant
+             */
+            source: "next_draft_change";
+            /** Section Key */
+            section_key: string;
+            /** Section Heading */
+            section_heading: string;
+            /** Instruction */
+            instruction: string;
+            /** Text */
+            text?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Origin Line */
+            origin_line: string;
+            /** Discussion Id */
+            discussion_id?: string | null;
+            /** Discussion Title */
+            discussion_title?: string | null;
+            /**
+             * From Private
+             * @default false
+             */
+            from_private: boolean;
+            /** Staged By Name */
+            staged_by_name?: string | null;
+            /** Staged At */
+            staged_at?: string | null;
+            /** Raised On Version */
+            raised_on_version: number;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** StagingCounts */
+        StagingCounts: {
+            /**
+             * Staged
+             * @default 0
+             */
+            staged: number;
+            /**
+             * Suggested
+             * @default 0
+             */
+            suggested: number;
+        };
+        /**
+         * StagingDiscussion
+         * @description The discussion a row came from. For a private discussion the reader is not in, only
+         *     that it is private: ``id`` and ``title`` are null. ``private`` is its visibility now.
+         */
+        StagingDiscussion: {
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
+        /** StagingItem */
+        StagingItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "suggestion" | "next_draft_change" | "checkpoint_action";
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Item Key */
+            item_key?: string | null;
+            /** Section Key */
+            section_key?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "staged" | "suggested";
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "row" | "discussion" | "review";
+            discussion?: components["schemas"]["StagingDiscussion"] | null;
+            /**
+             * From Private
+             * @default false
+             */
+            from_private: boolean;
+            /** Origin Line */
+            origin_line?: string | null;
+            staged_by?: components["schemas"]["StagingPerson"] | null;
+            suggested_by?: components["schemas"]["StagingPerson"] | null;
+            /** At */
+            at?: string | null;
+            /**
+             * Section Gone
+             * @default false
+             */
+            section_gone: boolean;
+            /**
+             * Section Locked
+             * @default false
+             */
+            section_locked: boolean;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
+        /** StagingList */
+        StagingList: {
+            target: components["schemas"]["StagingTarget"];
+            /** Items */
+            items: components["schemas"]["StagingItem"][];
+            counts: components["schemas"]["StagingCounts"];
+            /** Revision */
+            revision?: number | null;
+            /**
+             * Can Stage
+             * @default false
+             */
+            can_stage: boolean;
+        };
+        /** StagingPerson */
+        StagingPerson: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+        };
+        /** StagingTarget */
+        StagingTarget: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "document" | "checkpoint";
+            /** Label */
+            label: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Slug */
+            slug?: string | null;
+            /** Next Version */
+            next_version?: number | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Checkpoint Kind */
+            checkpoint_kind?: string | null;
         };
         /** StakeholderAnswerOut */
         StakeholderAnswerOut: {
@@ -25042,6 +25770,21 @@ export interface components {
             /** Unavailable */
             unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
+        };
+        /**
+         * TargetGoal
+         * @description A confirmed goal a PRD run serves (#260).
+         */
+        TargetGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /** TaskCounts */
         TaskCounts: {
@@ -26451,6 +27194,73 @@ export interface components {
             /** Records */
             records: components["schemas"]["TrackerRecordOut"][];
         };
+        /** TrackerIssueLinked */
+        TrackerIssueLinked: {
+            /** Prd */
+            prd: string | null;
+            /** Item Key */
+            item_key: string;
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Item Title */
+            item_title?: string | null;
+        };
+        /** TrackerIssueMilestone */
+        TrackerIssueMilestone: {
+            /** Title */
+            title: string;
+            /** Due */
+            due?: string | null;
+        };
+        /**
+         * TrackerIssueOut
+         * @description One of the caller's own synced GitHub issues, as a link would read it (F7).
+         */
+        TrackerIssueOut: {
+            /**
+             * Source Item Id
+             * Format: uuid
+             */
+            source_item_id: string;
+            /** External Ref */
+            external_ref: string;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "todo" | "in_progress" | "done" | "cancelled" | "unknown";
+            /** Raw Status */
+            raw_status: string | null;
+            milestone: components["schemas"]["TrackerIssueMilestone"] | null;
+            linked: components["schemas"]["TrackerIssueLinked"] | null;
+        };
+        /**
+         * TrackerLinkIn
+         * @description Link one of the caller's synced GitHub issues to a roadmap item of a PRD, by its
+         *     source item or its issue URL. ``move``: take it from the item it is linked to.
+         */
+        TrackerLinkIn: {
+            /** Prd */
+            prd: string;
+            /** Item Key */
+            item_key: string;
+            /** Source Item Id */
+            source_item_id?: string | null;
+            /** Url */
+            url?: string | null;
+            /**
+             * Move
+             * @default false
+             */
+            move: boolean;
+        };
         /** TrackerPlanEpic */
         TrackerPlanEpic: {
             /** Item Key */
@@ -26566,6 +27376,16 @@ export interface components {
             observed_at: string;
             /** Recorded By */
             recorded_by: string | null;
+            /** Prd Document Id */
+            prd_document_id?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+            /** Linked By */
+            linked_by?: string | null;
+            /** Linked At */
+            linked_at?: string | null;
+            /** Refresh Lost At */
+            refresh_lost_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -26579,6 +27399,8 @@ export interface components {
         };
         /** TrackerRecordRef */
         TrackerRecordRef: {
+            /** Id */
+            id?: string | null;
             /**
              * Tracker
              * @enum {string}
@@ -26599,6 +27421,8 @@ export interface components {
             estimate?: string | null;
             /** Url */
             url?: string | null;
+            /** Refresh Lost At */
+            refresh_lost_at?: string | null;
         };
         /**
          * TrackerRecordsImport
@@ -26716,6 +27540,11 @@ export interface components {
              * @enum {string}
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
+        };
+        /** UnstageIn */
+        UnstageIn: {
+            /** Lock Version */
+            lock_version: number;
         };
         /**
          * UpdatePeriod
@@ -28399,7 +29228,9 @@ export interface operations {
     };
     create_discussion_message: {
         parameters: {
-            query?: never;
+            query?: {
+                wait?: boolean;
+            };
             header?: never;
             path: {
                 discussion_id: string;
@@ -28418,7 +29249,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                    "application/json": components["schemas"]["DiscussionMessagePosted"];
                 };
             };
             /** @description This discussion is private */
@@ -28450,6 +29281,165 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Oracle has answered a lot here; the message is still stored */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stream_discussion_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reply's events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_discussion_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_discussion_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not failed or stopped */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Oracle has answered a lot here in a short time */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -28722,6 +29712,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staging: {
+        parameters: {
+            query?: {
+                /** @description A document's slug */
+                document?: string | null;
+                /** @description A checkpoint's id */
+                checkpoint?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagingList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unstage_next_draft_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnstageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextDraftChangeOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -36519,6 +37578,38 @@ export interface operations {
             };
         };
     };
+    get_checkpoint_review_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_checkpoint_action: {
         parameters: {
             query?: never;
@@ -41394,6 +42485,70 @@ export interface operations {
             };
         };
     };
+    diff_roadmap_items: {
+        parameters: {
+            query: {
+                head: string;
+                base?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemsDiffOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_roadmap_item_history: {
+        parameters: {
+            query: {
+                prd: string;
+                item_key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoadmapItemHistoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_roadmap_alignment: {
         parameters: {
             query?: {
@@ -41601,6 +42756,114 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TrackerImportOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_tracker_issues: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerIssueOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_tracker_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackerLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackerRecordOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_tracker_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -42440,7 +43703,7 @@ export interface operations {
                 /** @description A theme id, or `none` for requests with no theme */
                 theme_id?: string | null;
                 goal_id?: string | null;
-                channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other") | null;
+                channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
                 /** @description Title or body search */
                 q?: string | null;
                 limit?: number;

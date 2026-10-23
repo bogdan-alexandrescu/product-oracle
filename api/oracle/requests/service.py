@@ -22,9 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.auth.deps import Principal
+from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.members.names import display_name
 from oracle.requests.models import EXCERPT_MAX, ProductRequest, RequestTheme
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
@@ -53,6 +55,7 @@ from oracle.v2.concurrency import expect_version, flush_or_conflict
 NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'"
 INTERVIEW_ONLY = "Interview requests come from interviews"
 NOT_YOUR_ITEM = "source_item_id is not one of your own source items"
+OWNER_NAMES_REQUESTER = "Only an owner files a request in someone else's name"
 
 
 class RequestError(Exception):
@@ -493,14 +496,17 @@ async def create(db: AsyncSession, principal: Principal, body: RequestCreate) ->
     goal_ids = await _goal_ids(db, body.goal_ids)
     if body.theme_id:
         await _live_theme(db, body.theme_id)
+    requester_name, requester_kind = body.requester_name or None, body.requester_kind
+    if body.channel == "in_app":
+        requester_name, requester_kind = await _in_app_requester(db, principal, body)
     copied = await copy_source(db, principal, body.source_item_id) if body.source_item_id else {}
     row = ProductRequest(
         title=body.title,
         body=body.body or None,
         channel=body.channel,
         origin="person",
-        requester_name=body.requester_name or None,
-        requester_kind=body.requester_kind,
+        requester_name=requester_name,
+        requester_kind=requester_kind,
         verified=True,
         goal_ids=goal_ids,
         theme_id=body.theme_id,
@@ -514,6 +520,21 @@ async def create(db: AsyncSession, principal: Principal, body: RequestCreate) ->
         data |= {"shared": "full", "source_item_id": str(row.source_item_id)}
     await audit.record(db, principal, "request.created", "product_request", row.id, data)
     return row
+
+
+async def _in_app_requester(
+    db: AsyncSession, principal: Principal, body: RequestCreate
+) -> tuple[str | None, str]:
+    """New request in the app (#329): the requester is the signed-in member, by name, as
+    team; an owner may name someone else (403 for anyone else)."""
+    named = body.requester_name or None
+    email = await db.scalar(select(User.email).where(User.id == principal.user_id))
+    me = display_name(email) if email else None
+    if named and named != me:
+        if not has_role(principal.role, "owner"):
+            raise _forbidden(OWNER_NAMES_REQUESTER)
+        return named, body.requester_kind
+    return me, "team"
 
 
 TEXT_FIELDS = {"title", "body"}

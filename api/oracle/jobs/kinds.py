@@ -645,11 +645,37 @@ async def staged_suggestions(
 
 
 async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
-    """C1e: every section the chosen staged suggestions touch, revised in one call."""
+    """C1e: every section the chosen staged suggestions touch, revised in one call. G4:
+    with the discussions' section changes staged for the draft (``instructions``)."""
+    from oracle.staging.models import NextDraftChange
+
     ctx = await _context(s, job)
     suggestions = await staged_suggestions(s, ctx.document.id, job.input.get("suggestion_ids"))
+    row_ids = [uuid.UUID(str(i)) for i in job.input.get("next_draft_change_ids") or []]
+    rows = list(
+        await s.scalars(
+            select(NextDraftChange)
+            .where(
+                NextDraftChange.id.in_(row_ids),
+                NextDraftChange.document_id == ctx.document.id,
+                NextDraftChange.status == "staged",
+            )
+            .order_by(NextDraftChange.created_at, NextDraftChange.id)
+        )
+    )
     keys = {x.section_key for x in ctx.sections}
     skipped: list[dict[str, Any]] = []
+    for r in rows:
+        if r.section_key not in keys:
+            skipped.append(
+                {
+                    "section_key": r.section_key,
+                    "suggestion_ids": [],
+                    "next_draft_change_ids": [str(r.id)],
+                    "reason": f"the section is not in version {ctx.version.number}",
+                }
+            )
+    rows = [r for r in rows if r.section_key in keys]
     usable = []
     for x in suggestions:
         if x.section_key not in keys:
@@ -662,9 +688,11 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
             )
         else:
             usable.append(x)
-    if not usable:
+    if not usable and not rows:
         raise JobInputError("nothing to build: no staged suggestion is left for this draft")
-    locked = sorted({x.section_key for x in usable if x.section_key in ctx.locked})
+    locked = sorted(
+        {x.section_key for x in [*usable, *rows] if x.section_key in ctx.locked}  # type: ignore[attr-defined]
+    )
     if locked:
         names = ", ".join(
             f"{x.heading} ({x.section_key})" for x in ctx.sections if x.section_key in locked
@@ -676,7 +704,7 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
             select(FeedbackItem).where(FeedbackItem.id.in_([x.feedback_item_id for x in usable]))
         )
     }
-    affected = {x.section_key for x in usable}
+    affected = {x.section_key for x in usable} | {r.section_key for r in rows}
     payload = {
         "document": {**_doc(ctx), "next_version": ctx.version.number + 1},
         "sections": [
@@ -704,6 +732,16 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
             }
             for x in usable
         ],
+        "instructions": [
+            {
+                "next_draft_change_id": str(r.id),
+                "section_key": r.section_key,
+                "instruction": r.instruction,
+                **({"text": r.text} if r.text else {}),
+                "reason": r.reason,
+            }
+            for r in rows
+        ],
     }
     answer = await ask("refinement_batch", payload)
     entries: dict[str, dict[str, Any]] = {}
@@ -723,6 +761,7 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
         if key not in affected:
             continue
         mine = [x for x in usable if x.section_key == key]
+        mine_rows = [str(r.id) for r in rows if r.section_key == key]
         raw = entries.get(key)
         too_long = raw is not None and len(raw["body_md"]) > prompting.MAX_BODY_CHARS
         if raw is None or too_long:
@@ -730,6 +769,7 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
                 {
                     "section_key": key,
                     "suggestion_ids": [str(x.id) for x in mine],
+                    "next_draft_change_ids": mine_rows,
                     "reason": (
                         "Oracle's text for this section is longer than "
                         f"{prompting.MAX_BODY_CHARS:,} characters"
@@ -753,6 +793,7 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
                 "data_points": _data_points(raw.get("data_points")),
                 "notes": prompting.as_str(raw.get("notes"), 2000),
                 "suggestion_ids": [str(x.id) for x in mine],
+                "next_draft_change_ids": mine_rows,
                 "resolutions": _resolutions(
                     raw.get("resolutions"), asked, "Worked into the next draft"
                 ),
@@ -765,6 +806,7 @@ async def refinement_batch(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
         "sections": out_sections,
         "skipped": skipped,
         "suggestion_ids": [str(x.id) for x in usable],
+        "next_draft_change_ids": [str(r.id) for r in rows],
     }
 
 

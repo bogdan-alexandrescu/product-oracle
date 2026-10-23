@@ -809,6 +809,7 @@ async def import_draft(
     run_id: uuid.UUID | None = None,
     unverified_dates: Literal["refuse", "mark"] = "refuse",
     date_sections: set[str] | None = None,
+    template_only: bool = False,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
 
@@ -839,7 +840,8 @@ async def import_draft(
     import, Oracle's own revisions) refuses the draft; ``"mark"`` (a run's import) keeps
     it and records an ``unverified_date`` warning per date, which the views mark (and
     approval is refused until each is resolved). ``date_sections``: Oracle's own
-    revisions check only the sections they change (``""``: the title).
+    revisions check only the sections they change (``""``: the title). ``template_only``:
+    the draft is a template's skeleton (a ``template_only`` note on the version, #255).
 
     Raises :class:`DraftError` (422), :class:`NotFoundError` (404, ``doc`` is an
     unknown id) or :class:`ImportConflictError` (409, lost a concurrent import race,
@@ -979,6 +981,14 @@ async def import_draft(
                 code="base_version_missing",
                 message="imported without base_version: nothing checked that this draft "
                 "keeps the changes made since the version it was written on",
+            )
+        )
+    if template_only:
+        # #255: the template's skeleton, no content yet: the document offers Draft with
+        # Oracle before Publish until a draft replaces this version.
+        notes.append(
+            VersionWarning(
+                code="template_only", message="the template's skeleton, with no content yet"
             )
         )
     if document.kind in ("roadmap", "update"):

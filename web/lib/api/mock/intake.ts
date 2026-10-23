@@ -559,6 +559,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const review = baselineReviewStatus();
       if (wanted === true && !review.reusable) return json(409, { detail: { code: "baseline_not_reusable", reason: review.reason } });
       knobs.reuse_baseline = wanted ?? review.reusable;
+      // #260: the run serves the brief's goals unless the sheet names others.
+      knobs.goals ??= (intake as Intake).goal_ids ?? [];
+      // A goal of the brief rejected since is left out, not refused (as the API).
+      const confirmed = ctx.confirmedGoals?.() ?? new Map<string, string>();
+      const stale = ((intake as Intake).goal_ids ?? []).filter((g) => !confirmed.has(g));
+      knobs.goals = knobs.goals.filter((g) => !stale.includes(g));
       // Reopening the sheet after an estimate (C4): the intake's one draft run takes the new
       // choices; no second run is made.
       const existing = db.intake_runs?.[intake.id];
@@ -910,4 +916,19 @@ export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: strin
   ask("goal_alignment", 2, authorId, "2026-10-21T09:00:00Z");
   reply("customer_user", "Returning buyers on the web shop, signed in.", "2026-10-20T11:00:00Z", "answered");
   reply("blockers", "The address lookup API has a rate limit that could block pre-fill.", "2026-10-20T12:00:00Z", "answered_pending_review");
+}
+
+// --- the "brief-goal-rejected" scenario (#260) ---------------------------------------------
+
+/** The brief the "brief-goal-rejected" scenario seeds: a fixed id, so a test opens its page. */
+export const BRIEF_GOAL_REJECTED = { intakeId: "c2600000-0000-4000-8000-000000000001", title: "Gift cards for teams" } as const;
+
+/** A brief by `authorId` that serves `goalIds`; the scenario rejects one of them afterwards. */
+export function seedBriefGoalRejected(db: V2Db, authorId: string, goalIds: string[]) {
+  const intake: Intake = addIntake(
+    db, authorId, BRIEF_GOAL_REJECTED.title,
+    "Team buyers want to send gift cards to their staff. Let them buy several gift cards in one order.",
+    [], "2026-10-19T09:00:00Z", BRIEF_GOAL_REJECTED.intakeId,
+  );
+  intake.goal_ids = goalIds;
 }

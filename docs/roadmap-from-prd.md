@@ -158,3 +158,15 @@ tracks, and refuses run tokens (MCP: `get_plan`, `get_plan_item_history` for peo
 `GET /v1/plan/items/history?roadmap=<slug>&item=<key>` lists the item's horizon in each
 roadmap version that has it. "Approved + drafts" or "Approved only" is remembered per
 viewer in the browser.
+
+**Changed since the last roadmap (E3).** A roadmap version's Items tab compares its items
+with the previous version or with the approved plan (the roadmap's latest approved version
+other than this one), item by item, through the same item diff: New, Dropped (a muted,
+struck row in the horizon it had), Moved, Changed or Unchanged, with "Changed N" as a
+filter and `?compare=previous|approved&filter=all|changed|attention` in the URL.
+`GET /v1/roadmap-items/diff?head=<slug>@<n>&base=previous|approved|<slug>@<m>` and
+`GET /v1/roadmap-items/history?prd=<slug>&item_key=<key>` serve it (viewer and up; run
+tokens are refused; code in `api/oracle/roadmap/diff_views.py`). Dates compare as they
+stand now on both sides. A prd_to_roadmap run that writes the next version of an existing
+roadmap lists that roadmap's latest items as "Known items" so the agents keep their ids.
+A PRD version's own draft items (E1) are not stored yet: a PRD ref answers 409.

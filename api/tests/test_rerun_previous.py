@@ -183,7 +183,12 @@ async def test_a_send_back_starts_from_the_previous_file_and_its_problems(client
     spec = runtime.submitted[-1]
     assert spec.labels["attempt"] == "2"
     first, last = spec.steps[0].prompt, spec.steps[-1].prompt
-    assert "Attempt 2. The reviewer requested changes:\nKeep the shipping step next" in first
+    # D4: the agents get the structured review, the person's note in it verbatim.
+    assert (
+        "Attempt 2. The reviewer requested changes:\nThe reviewer sent roadmap_items.yaml back "
+        "with a structured review (review.yaml, below)." in first
+    )
+    assert "\ngeneral_note: Keep the shipping step next\n" in first
     assert HEADER in first and HEADER in last
     assert f"--- {ITEMS_FILE} ---\n{NO_SECTION}" in first
     assert "Oracle's check found these problems in attempt 1; fix each one:" in first

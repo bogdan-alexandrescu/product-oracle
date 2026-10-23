@@ -62,7 +62,7 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 DAILY_AT = time(7, 0)
 RATIONALE_MAX = 300
 ACTIVE = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
-FOUND_CHANNELS = tuple(c for c in CHANNELS if c != "interview")
+FOUND_CHANNELS = tuple(c for c in CHANNELS if c not in ("interview", "in_app"))
 # The company setting that turns the daily run on (``{"on": true}``; off when absent); its
 # ``updated_by`` is who turned it on.
 DAILY_SETTING = "request_triage_daily"

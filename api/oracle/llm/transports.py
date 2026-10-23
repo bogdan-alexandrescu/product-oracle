@@ -20,7 +20,7 @@ import re
 import signal
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -42,6 +42,9 @@ class LlmSettings(BaseSettings):
     # One call's limit. 180 s (with a job's 5 s around it) fits in a run ticker's 240 s,
     # so the scheduled tick and `oracle tick` run built-in jobs; over 235 no job fits.
     timeout_seconds: float = 180.0
+    # G2 Live replies: what a person waits for. Empty: ``model``.
+    chat_model: str = ""
+    chat_timeout_seconds: float = 120.0
 
 
 @lru_cache
@@ -101,8 +104,14 @@ class TransportResult:
     readings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
+#: Told each piece of text as it arrives (G2 Live replies).
+OnText = Callable[[str], Awaitable[None]]
+
+
 class Transport(Protocol):
     async def complete(self, token: str, request: LlmRequest) -> TransportResult: ...
+
+    async def stream(self, token: str, request: LlmRequest, on_text: OnText) -> TransportResult: ...
 
 
 def _text(content: Any) -> str:
@@ -191,6 +200,61 @@ class ClaudeCodeTransport:
             "DISABLE_AUTOUPDATER": "1",
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         }
+
+    async def _spawn(
+        self, token: str, request: LlmRequest, home: str, extra: tuple[str, ...] = ()
+    ) -> asyncio.subprocess.Process:
+        try:
+            return await asyncio.create_subprocess_exec(
+                *self.command(request),
+                *extra,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=home,
+                env=self.environment(token, request, home),
+                start_new_session=True,
+                preexec_fn=_die_with_parent(),
+            )
+        except FileNotFoundError:
+            raise LlmUnavailable(
+                f"Claude Code ({self.claude_bin}) is not installed on the server"
+            ) from None
+
+    async def stream(self, token: str, request: LlmRequest, on_text: OnText) -> TransportResult:
+        """As :meth:`complete`, reading stdout line by line: each ``text_delta`` of a
+        ``stream_event`` (``--include-partial-messages``) goes to ``on_text`` as it
+        arrives; the readings and the final ``result`` line are read as ``parse`` reads
+        them. A timeout or a cancel kills the process group first."""
+        with tempfile.TemporaryDirectory(prefix="oracle-claude-") as home:
+            proc = await self._spawn(token, request, home, ("--include-partial-messages",))
+            assert proc.stdin is not None and proc.stdout is not None
+            lines: list[bytes] = []
+
+            async def read() -> bytes:
+                assert proc.stdin is not None and proc.stdout is not None
+                proc.stdin.write(render_prompt(request.messages).encode())
+                await proc.stdin.drain()
+                proc.stdin.close()
+                async for raw in proc.stdout:
+                    lines.append(raw)
+                    text = _delta_text(raw)
+                    if text:
+                        await on_text(text)
+                assert proc.stderr is not None
+                stderr = await proc.stderr.read()
+                await proc.wait()
+                return stderr
+
+            try:
+                stderr = await asyncio.wait_for(read(), self.timeout)
+            except TimeoutError:
+                await _kill(proc)
+                raise LlmUnavailable(f"Claude Code did not answer in {self.timeout:.0f}s") from None
+            except BaseException:
+                await _kill(proc)
+                raise
+        return self.parse(b"".join(lines), stderr, request)
 
     async def complete(self, token: str, request: LlmRequest) -> TransportResult:
         with tempfile.TemporaryDirectory(prefix="oracle-claude-") as home:
@@ -282,6 +346,26 @@ class ClaudeCodeTransport:
             usage=usage,
             readings=readings,
         )
+
+
+def _delta_text(raw: bytes) -> str:
+    """The text of one ``stream_event`` line carrying a ``text_delta``, else ''."""
+    raw = raw.strip()
+    if not raw.startswith(b"{"):
+        return ""
+    try:
+        event = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return ""
+    if not isinstance(event, dict) or event.get("type") != "stream_event":
+        return ""
+    inner = event.get("event")
+    if not isinstance(inner, dict) or inner.get("type") != "content_block_delta":
+        return ""
+    delta = inner.get("delta")
+    if isinstance(delta, dict) and delta.get("type") == "text_delta":
+        return str(delta.get("text") or "")
+    return ""
 
 
 #: prctl(2) option: the signal the calling process gets when its parent dies.
@@ -391,3 +475,87 @@ class MessagesApiTransport:
             stop_reason=data.get("stop_reason"),
             usage=data.get("usage") or {},
         )
+
+    async def stream(self, token: str, request: LlmRequest, on_text: OnText) -> TransportResult:
+        """``"stream": true``: each ``content_block_delta`` text goes to ``on_text``; the
+        usage comes from ``message_start`` and ``message_delta``."""
+        body = {
+            "model": request.model,
+            "max_tokens": request.max_tokens,
+            "system": request.system,
+            "messages": request.messages,
+            "stream": True,
+        }
+        headers = {
+            "x-api-key": token,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        }
+        timeout = get_llm_settings().timeout_seconds
+        parts: list[str] = []
+        usage: dict[str, Any] = {}
+        model, stop_reason = request.model, None
+        own = self.http is None
+        http = httpx.AsyncClient(timeout=timeout) if own else self.http
+        assert http is not None
+        try:
+            async with http.stream(
+                "POST", f"{self.base_url}/v1/messages", json=body, headers=headers, timeout=timeout
+            ) as resp:
+                if resp.status_code in (401, 403):
+                    raise LlmAuthError(f"Claude rejected the API key ({resp.status_code})")
+                if resp.status_code >= 400:
+                    await resp.aread()
+                    raise LlmUnavailable(f"Claude API answered {resp.status_code}")
+                async for event, data in sse_events(resp.aiter_lines()):
+                    if event == "content_block_delta":
+                        delta = data.get("delta") or {}
+                        if delta.get("type") == "text_delta" and delta.get("text"):
+                            parts.append(delta["text"])
+                            await on_text(delta["text"])
+                    elif event == "message_start":
+                        message = data.get("message") or {}
+                        model = message.get("model") or model
+                        usage.update(message.get("usage") or {})
+                    elif event == "message_delta":
+                        usage.update(data.get("usage") or {})
+                        stop_reason = (data.get("delta") or {}).get("stop_reason") or stop_reason
+                    elif event == "error":
+                        error = data.get("error") or {}
+                        raise LlmUnavailable(f"Claude API failed: {error.get('message', '')}")
+                    elif event == "message_stop":
+                        break
+        except httpx.HTTPError as e:
+            raise LlmUnavailable(f"Cannot reach the Claude API: {e}") from e
+        finally:
+            if own:
+                await http.aclose()
+        return TransportResult(
+            text="".join(parts), model=model, stop_reason=stop_reason, usage=usage
+        )
+
+
+async def sse_events(lines: Any) -> Any:
+    """(event, data) of each server-sent event whose data is a JSON object."""
+    event, data = "", []
+    async for line in lines:
+        if line == "":
+            if data:
+                try:
+                    parsed = json.loads("\n".join(data))
+                except ValueError:
+                    parsed = None
+                if isinstance(parsed, dict):
+                    yield event or str(parsed.get("type") or ""), parsed
+            event, data = "", []
+        elif line.startswith("event:"):
+            event = line[6:].strip()
+        elif line.startswith("data:"):
+            data.append(line[5:].strip())
+    if data:
+        try:
+            parsed = json.loads("\n".join(data))
+        except ValueError:
+            return
+        if isinstance(parsed, dict):
+            yield event or str(parsed.get("type") or ""), parsed

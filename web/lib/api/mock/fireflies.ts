@@ -4,7 +4,10 @@
  * first like the API. Meetings on no calendar are in no series (series_key null), like
  * the ad hoc planning session that shares the planning series' title and organizer.
  * Searching "rate limit" answers 429, as the API does past its browsing budget; so
- * does the series list from 2000-01-01, until its Retry-After wait is over.
+ * does the series list from 2000-01-01, until its Retry-After wait is over. The series
+ * list from 2001-01-01 stands for a window larger than the list reads: it answers
+ * truncated, counted over the newest SERIES_CAP meetings, as the API does past its
+ * 6-page cap.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -92,6 +95,8 @@ declare global {
 }
 
 const SERIES_LIMITED_FROM = "2000-01-01";
+const SERIES_CUT_FROM = "2001-01-01";
+const SERIES_CAP = 300;
 const SERIES_LIMIT_WAIT = 60;
 let seriesLimitedUntil: number | undefined;
 
@@ -121,14 +126,29 @@ export function routeFirefliesBrowse(p: string[], q: URLSearchParams): Response 
     return json(200, { meetings: page, next_cursor: skip + PAGE < found.length ? String(skip + PAGE) : null });
   }
   if (p[4] === "series") {
+    const truncated = q.get("from") === SERIES_CUT_FROM;
     const groups = new Map<string, Schemas["FirefliesSeriesOut"]>();
     for (const m of rows) {
       if (m.series_key == null) continue;
       const g = groups.get(m.series_key);
       if (g) g.meeting_count += 1;
-      else groups.set(m.series_key, { key: m.series_key, title: m.series_title, meeting_count: 1, last_date: m.date, organizer: m.organizer });
+      else
+        groups.set(m.series_key, {
+          key: m.series_key,
+          title: m.series_title,
+          meeting_count: 1,
+          last_date: m.date,
+          organizer: m.organizer,
+          same_title: [],
+        });
     }
-    return json(200, { series: [...groups.values()], truncated: false });
+    // Meetings outside a series with its title, as the API lists them.
+    for (const g of groups.values()) {
+      g.same_title = rows
+        .filter((m) => m.series_key !== g.key && m.series_title.toLowerCase() === g.title.toLowerCase())
+        .map((m) => ({ id: m.id, title: m.title, date: m.date }));
+    }
+    return json(200, { series: [...groups.values()], truncated, scanned: truncated ? SERIES_CAP : rows.length });
   }
   return json(404, { detail: "Route not found" });
 }

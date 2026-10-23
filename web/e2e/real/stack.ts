@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 export const API_PORT = Number(process.env.E2E_API_PORT ?? 8100);
 export const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3200);
 export const API_URL = `http://127.0.0.1:${API_PORT}`;
+/** The fake Messages API discussion-stream.spec.ts starts; the API reads it as ORACLE_ANTHROPIC_API_URL. */
+export const FAKE_CLAUDE_PORT = Number(process.env.E2E_FAKE_CLAUDE_PORT ?? 8199);
 export const DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? "postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_e2e";
 export const STATE_FILE = path.resolve(__dirname, "../../test-results/e2e-real-state.json");

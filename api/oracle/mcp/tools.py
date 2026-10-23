@@ -25,6 +25,10 @@ from oracle.mcp.auth import McpCaller
 HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 # Signing in and out belongs to browsers; an MCP client already holds a credential.
 EXCLUDED_OPERATIONS = {"login", "logout"}
+# Live streams, and what a client that cannot read one calls instead.
+STREAM_OPERATIONS = {
+    "stream_discussion_reply": "a live stream; call create_discussion_message with wait=true",
+}
 # Only from the signed-in browser (AC1, owner 2026-10-20): a credential never mints
 # another, changes the password or signs its person out everywhere.
 BROWSER_ONLY_OPERATIONS = {"create_personal_token", "change_password", "sign_out_everywhere"}
@@ -113,6 +117,8 @@ def _exclusion(op_id: str, path: str, tags: Iterable[str], media: str | None) ->
         return "browser sign-in; MCP clients authenticate with a bearer token"
     if op_id in BROWSER_ONLY_OPERATIONS:
         return "from the signed-in browser only (My account)"
+    if op_id in STREAM_OPERATIONS:
+        return STREAM_OPERATIONS[op_id]
     segments = [s for s in path.split("/") if s]
     if segments[:1] == ["mcp"]:
         return "the MCP endpoint itself"

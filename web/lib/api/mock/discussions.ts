@@ -33,6 +33,8 @@ export type DiscussionRow = {
   lock_version: number;
   created_at: string;
   updated_at: string;
+  /** G2 (mock only): the intake author's private findings on the subject (G1 §3.4.6). */
+  private_findings?: { author: string; count: number; intake_id: string } | null;
 };
 type ParticipantRow = {
   discussion_id: string;
@@ -54,6 +56,11 @@ type MessageRow = {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  // G2 Live replies: an Oracle reply's state.
+  status?: Schemas["DiscussionMessageOut"]["status"];
+  citations?: Record<string, unknown>[];
+  error_reason?: string | null;
+  cancel_requested?: boolean;
 };
 
 export type DiscussionsDb = { discussions: DiscussionRow[]; participants: ParticipantRow[]; messages: MessageRow[] };
@@ -69,7 +76,21 @@ export type DiscussionsContext = {
   resolve: (kind: Kind, subject: Record<string, unknown>) => SubjectInfo | { status: number; detail: string };
   uuid: () => string;
   now: () => string;
+  /** Writes after the response (a streaming reply): applied to the saved state in turn. */
+  persist?: (change: (db: DiscussionsDb) => void) => Promise<void>;
+  /** The saved state now (a streaming reply checks for Stop). */
+  current?: () => DiscussionsDb;
 };
+
+/** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
+export const NO_ACCOUNT_MESSAGE =
+  "No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)";
+/** The mock's canned reply, citing the seed's "Raise activation" goal. */
+export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
+const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/baseline", confidence: 0.82, low_confidence: false }];
+/** The first piece waits a little ("Oracle is thinking…"), the rest come 150 ms apart. */
+const FIRST_MS = 500;
+const DELTA_MS = 150;
 
 export const emptyDiscussions = (): DiscussionsDb => ({ discussions: [], participants: [], messages: [] });
 
@@ -150,6 +171,38 @@ export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, docu
   return db;
 }
 
+/**
+ * The "discussion-replies" scenario (G2): the "discussions" seed, plus an open discussion
+ * whose Oracle reply failed for want of a Claude account, and one on the Problem whose
+ * intake has 2 of the commenter's private findings.
+ */
+export function seedDiscussionReplies(ctx: Omit<DiscussionsContext, "me" | "db">, documentId: string, label: string, url: string): DiscussionsDb {
+  const db = seedDiscussions(ctx, documentId, label, url);
+  const commenter = ctx.members.find((m) => m.email === "commenter@example.com")!.id;
+  const base = db.discussions[0];
+  const at = "2026-10-21T10:00:00Z";
+  const open = { visibility: "open" as const, summary_shared: true, created_at: at, updated_at: at };
+  const failed: DiscussionRow = { ...base, ...open, id: ctx.uuid(), title: "Caps: ship without detection?", last_message_at: at };
+  const notice: DiscussionRow = {
+    ...base,
+    ...open,
+    id: ctx.uuid(),
+    title: "Saved addresses: what the intake found",
+    last_message_at: null,
+    private_findings: { author: commenter, count: 2, intake_id: ctx.uuid() },
+  };
+  db.discussions.push(failed, notice);
+  for (const d of [failed, notice])
+    db.participants.push({ discussion_id: d.id, user_id: commenter, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  const asked = ctx.uuid();
+  const row = { discussion_id: failed.id, mentions: [], mentions_oracle: false, created_at: at, edited_at: null, deleted_at: null };
+  db.messages.push(
+    { ...row, id: asked, author_kind: "person", author_id: commenter, body: "Can caps ship without detection?", reply_to: null },
+    { ...row, id: ctx.uuid(), author_kind: "oracle", author_id: null, body: "", reply_to: asked, status: "failed", error_reason: "no_account" },
+  );
+  return db;
+}
+
 export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "discussions") return null;
   const { db, me } = ctx;
@@ -214,7 +267,11 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         const who = member(x.user_id);
         return { ...ref(x.user_id), role: who?.role ?? "viewer", can_write: writes(who), added_via: x.added_via };
       }),
-      me: { ...s.me, can_manage: starter(d) && readable(d) },
+      me: {
+        ...s.me,
+        can_manage: starter(d) && readable(d),
+        ...(d.private_findings?.author === me.id ? { private_findings: { count: d.private_findings.count, intake_id: d.private_findings.intake_id } } : {}),
+      },
       exposure: d.visibility === "private" && starter(d) ? exposure(d) : null,
     };
   };
@@ -228,11 +285,15 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     mentions: x.deleted_at ? [] : x.mentions.map(ref),
     mentions_oracle: x.mentions_oracle,
     reply_to: x.reply_to,
-    status: "complete",
-    citations: [],
+    status: x.status ?? "complete",
+    citations: x.citations ?? [],
     created_at: x.created_at,
     edited_at: x.edited_at,
     deleted: !!x.deleted_at,
+    error_reason: x.error_reason ?? null,
+    error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? NO_ACCOUNT_MESSAGE : "Oracle can't reply right now.") : null,
+    pushback: null,
+    usage: null,
   });
   const add = (d: DiscussionRow, user_id: string, added_via: ParticipantRow["added_via"]) => {
     const row = parts(d).find((x) => x.user_id === user_id);
@@ -276,6 +337,76 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       reply_to: input.reply_to ?? null,
     });
     return json(201, messageOut(row));
+  };
+  /** G2: always while it is just one person; else only when Oracle is addressed. */
+  const wantsReply = (d: DiscussionRow, x: MessageRow) => {
+    if (x.mentions_oracle || /(^|[^\w@])@oracle\b/i.test(x.body)) return true;
+    const people = new Set([
+      ...active(d).map((y) => y.user_id),
+      ...db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "person" && y.author_id).map((y) => y.author_id!),
+    ]);
+    return people.size <= 1;
+  };
+  const postWithReply = async (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Promise<Response> => {
+    const res = post(d, input);
+    if (!res.ok) return res;
+    const message = (await res.json()) as Schemas["DiscussionMessageOut"];
+    const row = db.messages.find((x) => x.id === message.id)!;
+    const reply = wantsReply(d, row)
+      ? push(d, { author_kind: "oracle", author_id: null, body: "", mentions: [], mentions_oracle: false, reply_to: row.id, status: "pending", citations: [] })
+      : null;
+    return json(201, { message, reply: reply ? messageOut(reply) : null });
+  };
+  /** GET …/stream: the canned answer in 5 deltas, then citations and done; Stop ends it. */
+  const streamReply = (x: MessageRow): Response => {
+    const enc = new TextEncoder();
+    const event = (name: string, data: unknown) => enc.encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+    const final = (r: MessageRow) =>
+      r.status === "failed" ? event("error", { reason: r.error_reason ?? "failed", message: messageOut(r).error, retry: true }) : event("done", messageOut(r));
+    const runs = x.status === "pending";
+    if (runs) x.status = "streaming";
+    const id = x.id;
+    const now = () => (ctx.current?.() ?? db).messages.find((y) => y.id === id) ?? x;
+    const write = (change: Partial<MessageRow>) => ctx.persist?.((saved) => Object.assign(saved.messages.find((y) => y.id === id)!, change));
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        if (!runs) {
+          // Another reader runs it, or it ended: what it has, then its end.
+          let sent = 0;
+          for (;;) {
+            const r = now();
+            if (r.body.length > sent) controller.enqueue(event("delta", { text: r.body.slice(sent) }));
+            sent = r.body.length;
+            if (r.status !== "pending" && r.status !== "streaming") {
+              if (r.citations?.length) controller.enqueue(event("citations", r.citations));
+              controller.enqueue(final(r));
+              break;
+            }
+            await new Promise((ok) => setTimeout(ok, 500));
+          }
+          controller.close();
+          return;
+        }
+        let text = "";
+        for (const [i, piece] of CANNED_REPLY.entries()) {
+          await new Promise((ok) => setTimeout(ok, i === 0 ? FIRST_MS : DELTA_MS));
+          if (now().cancel_requested) {
+            await write({ status: "cancelled", body: text, cancel_requested: false });
+            controller.enqueue(event("done", messageOut({ ...x, status: "cancelled", body: text })));
+            controller.close();
+            return;
+          }
+          text += piece;
+          controller.enqueue(event("delta", { text: piece }));
+          await write({ body: text });
+        }
+        await write({ status: "complete", body: text, citations: CANNED_CITATIONS });
+        controller.enqueue(event("citations", CANNED_CITATIONS));
+        controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations: CANNED_CITATIONS })));
+        controller.close();
+      },
+    });
+    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "x-accel-buffering": "no" } });
   };
 
   // GET/POST /v1/discussions
@@ -409,9 +540,25 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       const rows = db.messages.filter((x) => x.discussion_id === d.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
       return json(200, { items: rows.map(messageOut), has_more: false });
     }
-    if (!p[4] && m === "POST") return writer() ?? post(d, await body<Schemas["DiscussionMessageIn"]>());
+    if (!p[4] && m === "POST") return writer() ?? postWithReply(d, await body<Schemas["DiscussionMessageIn"]>());
     const row = db.messages.find((x) => x.id === p[4] && x.discussion_id === d.id && !x.deleted_at);
     if (!row) return refuse(404, "Message not found");
+    if (row.author_kind === "oracle" && p[5]) {
+      if (p[5] === "stream" && m === "GET") return streamReply(row);
+      const asked = db.messages.find((x) => x.id === row.reply_to);
+      if (!(asked?.author_id === me.id || atLeast(me.role, "approver"))) return refuse(403, "Only the person who asked, or an approver, can");
+      if (p[5] === "cancel" && m === "POST") {
+        if (row.status === "pending") row.status = "cancelled";
+        else if (row.status === "streaming") row.cancel_requested = true;
+        return json(200, messageOut(row));
+      }
+      if (p[5] === "retry" && m === "POST") {
+        if (row.status !== "failed" && row.status !== "cancelled") return refuse(409, "Only a failed or stopped reply can be retried");
+        Object.assign(row, { status: "pending", body: "", citations: [], error_reason: null, cancel_requested: false });
+        return json(200, messageOut(row));
+      }
+      return null;
+    }
     const refused = writer();
     if (refused) return refused;
     if (row.author_kind !== "person" || row.author_id !== me.id) return refuse(403, "Only its author can change a message");

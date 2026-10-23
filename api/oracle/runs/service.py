@@ -139,7 +139,7 @@ from oracle.baseline import yaml_io
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
-from oracle.docs import visibility
+from oracle.docs import visibility, written
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
@@ -164,8 +164,9 @@ from oracle.review.models import FeedbackItem
 from oracle.review.schemas import Resolution
 from oracle.review.service import locked_section_keys
 from oracle.roadmap import doc_dates, schedule
+from oracle.roadmap.views import items_version, version_items
 from oracle.runs import extensions, feature_set, flows, reasons, rejection, reuse, roadmap, workflow
-from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     AgentRoleOut,
     CheckpointDelivery,
@@ -202,6 +203,7 @@ from oracle.runs.schemas import (
     SegmentAttempt,
     SegmentEstimate,
     SegmentOut,
+    TargetGoal,
     TickOut,
 )
 from oracle.runs.scope_models import PrdScope
@@ -240,6 +242,8 @@ log = logging.getLogger(__name__)
 FINAL = ("succeeded", "failed", "cancelled")
 # A checkpoint decided by a person (the others: pending, skipped).
 DECIDED = ("approved", "changes_requested")
+# D4: a send-back with nothing staged and no note.
+NOTHING_TO_SEND = "Stage a change, ask a question, or write a note to send back."
 ACTIVE = ("running", "awaiting_checkpoint", "paused_overrun")
 # Run knobs Oracle sets (not the user's knobs): kept when a draft's knobs change.
 ORACLE_KNOBS = (
@@ -268,6 +272,8 @@ ORACLE_KNOBS = (
     # C4 (B1 "Reuse base"): a Baseline to PRD run that uses the current baseline: the
     # review it reuses, {"checkpoint_id", "approved_at"} (oracle.runs.reuse).
     "reuse_baseline",
+    # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
+    "target_goals",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -791,6 +797,7 @@ def _checkpoint_out(
         decided_by=cp.decided_by,
         decided_at=cp.decided_at,
         note=cp.note,
+        review=cp.review,
         payload=payload,
         created_at=cp.created_at,
         console=ConsoleAnswer.model_validate({**console, "can_redo": _can_redo(console)})
@@ -948,7 +955,7 @@ async def list_decisions(
                 via=via,
                 note=cp.note,
                 edits=extra.get("edits"),
-                review=extra.get("review"),
+                review=cp.review or extra.get("review"),
                 delivered=delivered,
                 summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered),
             )
@@ -989,6 +996,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             checkpoints=knobs.checkpoints,
             budget_usd=_usd(knobs.budget_usd),
             reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
+            goals=[TargetGoal(**g) for g in (run.knobs or {}).get("target_goals") or []],
         ),
         snapshot_id=run.snapshot_id,
         snapshot_as_of=snapshot.as_of if snapshot else None,
@@ -1447,18 +1455,21 @@ async def _resolve_source(
                 f"version {number} of '{document.slug}' is not approved: a {target} is built "
                 f"from an approved {name} version"
             )
-        return document, version
-    version = await db.scalar(
-        stmt.where(DocumentVersion.approved_at.is_not(None))
-        .order_by(DocumentVersion.number.desc())
-        .limit(1)
-    )
-    if version is None:
-        target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
-        raise Invalid(
-            f"'{document.slug}' has no approved version: approve a version of the {name} "
-            f"before building its {target}"
+    else:
+        version = await db.scalar(
+            stmt.where(DocumentVersion.approved_at.is_not(None))
+            .order_by(DocumentVersion.number.desc())
+            .limit(1)
         )
+        if version is None:
+            target = flows.KIND_NAMES.get(flow.target_kind or "", "roadmap")
+            raise Invalid(
+                f"'{document.slug}' has no approved version: approve a version of the {name} "
+                f"before building its {target}"
+            )
+    # #254: nothing is built from a version that is still only its template's text.
+    if await written.nothing_written(db, document, version):
+        raise Invalid(f"version {version.number} of '{document.slug}': {written.NOTHING_WRITTEN}")
     return document, version
 
 
@@ -1700,6 +1711,9 @@ async def create_run(
     extra.pop("reuse_baseline", None)
     if body.knobs.reuse_baseline:
         extra["reuse_baseline"] = await _reuse_knob(db, flow)
+    extra.pop("target_goals", None)
+    if goals := await _target_goals(db, flow, body.knobs.goals):
+        extra["target_goals"] = goals
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
             raise Invalid("only a Vision or strategy draft run takes a brief")
@@ -1730,6 +1744,34 @@ async def create_run(
     if commit:
         await db.commit()
     return run.id
+
+
+async def _target_goals(
+    db: AsyncSession, flow: flows.FlowDef, refs: list[str] | None
+) -> list[dict[str, str]]:
+    """The ``target_goals`` knob (#260): each named goal (key or id), confirmed, once, in
+    the order named. Only a Baseline to PRD run names goals."""
+    if not refs:
+        return []
+    if flow.key != "baseline_to_prd":
+        raise Invalid("only a Baseline to PRD run names the goals it serves")
+    refs = list(dict.fromkeys(r.strip() for r in refs))
+    ids = [uuid.UUID(r) for r in refs if is_uuid(r)]
+    rows = (
+        await db.scalars(
+            select(Entity).where(
+                Entity.type == "goal",
+                Entity.status == "confirmed",
+                or_(Entity.key.in_(refs), Entity.id.in_(ids)),
+            )
+        )
+    ).all()
+    found = {e.key: e for e in rows} | {str(e.id): e for e in rows}
+    missing = [r for r in refs if r not in found]
+    if missing:
+        raise Invalid(f"not a confirmed goal: {', '.join(missing)}")
+    goals = list({found[r].id: found[r] for r in refs}.values())
+    return [{"id": str(g.id), "key": g.key, "title": g.title} for g in goals]
 
 
 async def _current_inputs(db: AsyncSession, run: Run) -> _Inputs:
@@ -1772,7 +1814,9 @@ async def update_run(
             if getattr(body, k) is not None:
                 setattr(current, k, getattr(body, k))
         intake = {
-            k: v for k, v in oracle.items() if k.startswith("intake_") or k == "reuse_baseline"
+            k: v
+            for k, v in oracle.items()
+            if k.startswith("intake_") or k in ("reuse_baseline", "target_goals")
         }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
@@ -1780,6 +1824,10 @@ async def update_run(
         oracle.pop("reuse_baseline", None)
         if body.knobs.reuse_baseline:
             oracle["reuse_baseline"] = await _reuse_knob(db, flow)
+    if body.knobs is not None and body.knobs.goals is not None:
+        oracle.pop("target_goals", None)
+        if goals := await _target_goals(db, flow, body.knobs.goals):
+            oracle["target_goals"] = goals
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -2142,6 +2190,7 @@ async def _prompt_context(
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
+        target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
         baseline_reused=reuse.short_date(reused["approved_at"])
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
@@ -2255,7 +2304,10 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         if e.type == "goal" and e.status == "confirmed"
     ]
     bases = await schedule.verified_bases(db, version.document_id)
+    known_from, known = await _known_roadmap_items(db, run)
     return flows.SourceContext(
+        known_items=known,
+        known_from=known_from,
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
         slug=document.slug if document else str(version.document_id),
@@ -2268,6 +2320,22 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         edges=edges,
         goals=goals,
     )
+
+
+async def _known_roadmap_items(db: AsyncSession, run: Run) -> tuple[str, list[dict[str, str]]]:
+    """E3: the latest items of the roadmap a prd_to_roadmap run writes the next version
+    of, so the agents keep their ids; none for a new roadmap."""
+    doc = await db.get(Document, run.document_id) if run.document_id else None
+    if doc is None and run.knobs.get("document_slug"):
+        doc = await db.scalar(select(Document).where(Document.slug == run.knobs["document_slug"]))
+    if doc is None or doc.kind != "roadmap":
+        return "", []
+    version = await items_version(db, doc)
+    rows = await version_items(db, version)
+    if not rows or version is None:
+        return "", []
+    known = [{"id": r.item_key, "title": r.title, "horizon": r.horizon} for r in rows]
+    return f"roadmap v{version.number}", known
 
 
 async def _intake_title(db: AsyncSession, run: Run) -> str | None:
@@ -2786,6 +2854,8 @@ async def _submit_now(
     # A retry after the runtime refused a re-run keeps the reviewer's note; it stays
     # recorded until a submission succeeds (:func:`_accepted`).
     change_request = change_request or art.get("pending_note")
+    # What the agents get: the structured review of a send-back (D4), else the note.
+    agents_request = art.get("pending_review") or change_request
     if segment.estimate_usd is None:
         segment.estimate_usd = flows.segment_estimate(sdef, knobs)
     tag = workflow.label(run.id, segment.name, attempt)
@@ -2870,7 +2940,7 @@ async def _submit_now(
                 s,
                 segments,
                 attempt if own else 1,
-                change_request if own else None,
+                agents_request if own else None,
                 runtime,
                 attached=mode.attach,
                 planned=list(planned),
@@ -3030,6 +3100,7 @@ def _accepted(
     art.pop("decision", None)
     art.pop("claim", None)
     art.pop("pending_note", None)
+    art.pop("pending_review", None)
     art["attempts"].append(
         {
             # The number in its key: submissions given up on (Retry) keep theirs.
@@ -3090,15 +3161,25 @@ async def _submit(
     segment: RunSegment,
     segments: list[RunSegment],
     change_request: str | None = None,
+    review: str | None = None,
 ) -> None:
     """Queue the segment for submission (the caller commits): the runtime is not called,
     the segment waits (:data:`QUEUED`) for :func:`submit_queued` to submit it after the
     caller commits, with neither the review gate nor the run's row lock held across the
-    call. Every path that starts a segment queues; none submits under a lock."""
+    call. Every path that starts a segment queues; none submits under a lock.
+
+    ``change_request`` is the person's note (the attempt's note, kept until a submission
+    succeeds); ``review``, the structured review a send-back delivers (D4), is what the
+    agents get instead when given."""
     art = _art(segment)
-    if change_request:
+    if change_request or review:
         _keep_previous(art)
+    if change_request:
         art["pending_note"] = change_request
+    if review:
+        art["pending_review"] = review
+    elif change_request:
+        art.pop("pending_review", None)
     art.pop("claim", None)
     _set_art(segment, art)
     segment.status = "pending"
@@ -3975,6 +4056,7 @@ async def _advance(
                 # document from now on.
                 await feature_set.fill_document(db, run.id, run.document_id)
                 await run_order.fill_document(db, run.id, run.document_id)
+                _check_goal_trace(run, art, imported, markdown)
         art["import"] = imported
     if sdef.importer:
         # Committed first: the importer runs in its own transaction.
@@ -4118,6 +4200,22 @@ async def _advance(
             )
     await _next(db, run, segment, segments)
     return True
+
+
+def _check_goal_trace(
+    run: Run, art: dict[str, Any], imported: dict[str, Any], markdown: str
+) -> None:
+    """#260: the imported PRD's Goal trace covers every target goal of the run; one it
+    leaves out is a warning on the import and a note on the run."""
+    targets = {g["key"]: g["title"] for g in (run.knobs or {}).get("target_goals") or []}
+    missing = flows.goal_trace_missing(markdown, list(targets.items()))
+    if not missing:
+        return
+    imported["warnings"] = [*imported.get("warnings", []), "goal_trace_incomplete"]
+    named = ", ".join(f"{k} ({targets[k]})" for k in missing)
+    _note_art(
+        art, f"The PRD's Goal trace leaves out target goal{'s' * (len(missing) > 1)}: {named}"
+    )
 
 
 async def _check_feature_set(
@@ -6276,6 +6374,9 @@ async def decide_checkpoint(
         raise await actions.review_changed(db, cp, expected_revision)
     # The note defaults to the shared draft's (D8).
     note = (note if note is not None else cp.draft_note or "").strip() or None
+    # D4: an Inbox send-back delivers a structured review of the shared draft (a console
+    # Redo carries the console's findings instead).
+    send_back = decision == "changes_requested"
     wait = (cp.payload or {}).get("wait") or {}
     redo = False
     # A choice about an answer SwarmCloud's console recorded is decided through it (H1).
@@ -6318,7 +6419,15 @@ async def decide_checkpoint(
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
     if decision == "changes_requested" and not note:
-        raise Invalid("say what to change: a note is required to request changes")
+        if not send_back:
+            raise Invalid("say what to change: a note is required to request changes")
+        staged = await db.scalar(
+            select(func.count())
+            .select_from(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+        )
+        if not staged:
+            raise Invalid(NOTHING_TO_SEND)
     segments = await _segments(db, run.id)
     seq = (cp.payload or {}).get("segment_seq")
     segment = next((s for s in segments if s.seq == seq), None)
@@ -6333,6 +6442,10 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    if send_back:
+        from oracle.runs import review_file
+
+        cp.review = await review_file.sent_review(db, principal, run, cp, note)
     _record_decider(cp, *decider)
     data: dict[str, Any] = {"run_id": str(run.id), "kind": cp.kind}
     if cp.kind in ENGINEERING_KINDS and run.flow != SPEC_FLOW:
@@ -6342,6 +6455,10 @@ async def decide_checkpoint(
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
+    # G4: the discussion changes behind the shared draft's actions follow the decision.
+    from oracle.staging import hooks as staging_hooks
+
+    await staging_hooks.decided(db, cp, decision)
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.
@@ -6398,6 +6515,21 @@ async def decide_checkpoint(
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
 
+async def read_review_file(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID) -> str:
+    """The ``review.yaml`` a send-back at the checkpoint delivered (D4)."""
+    from oracle.runs import review_file
+
+    run = await _get_run(db, run_id)
+    cp = await db.scalar(
+        select(Checkpoint).where(Checkpoint.id == checkpoint_id, Checkpoint.run_id == run.id)
+    )
+    if cp is None:
+        raise NotFound(f"checkpoint {checkpoint_id} not found")
+    if cp.status == "pending" or not cp.review:
+        raise NotFound("no review was sent back at this checkpoint")
+    return review_file.render_yaml(cp.review, cp.decided_at)
+
+
 async def _continue_decided(
     db: AsyncSession,
     run: Run,
@@ -6431,7 +6563,12 @@ async def _continue_decided(
         "restore": restore,
     }
     _set_art(target, art)
-    await _submit(db, run, target, segments, change_request=note)
+    review = None
+    if decision != "approved" and cp.review:
+        from oracle.runs import review_file
+
+        review = review_file.change_request(cp.review, cp.decided_at)
+    await _submit(db, run, target, segments, change_request=note, review=review)
 
 
 def _owes(cp: Checkpoint) -> bool:
@@ -6707,6 +6844,7 @@ async def _void_owed(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    cp.review = None
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await _scope_reopened(db, cp)
@@ -6815,6 +6953,7 @@ async def void_decision(
     unqueue(segment)
     art = _art(segment)
     art.pop("pending_note", None)
+    art.pop("pending_review", None)
     _set_art(segment, art)
     segment.status = decision.get("restore") or "pending"
     decided_by, kind = cp.decided_by, cp.status
@@ -6822,6 +6961,7 @@ async def void_decision(
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    cp.review = None
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await _scope_reopened(db, cp)
@@ -6877,6 +7017,7 @@ async def _undecide(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
     cp.decided_by = None
     cp.decided_at = None
     cp.note = None
+    cp.review = None
     # H1: a decision voided before it reached the run is not in the decision log.
     await decisions_capture.checkpoint_voided(db, cp.id)
     await _scope_reopened(db, cp)
@@ -7079,7 +7220,7 @@ async def _decide_in_workflow(
         if approved
         else {
             "verdict": NOT_YET,
-            "findings": ([cp.note] if cp.note else []) + await _problem_findings(db, run, cp),
+            "findings": await _send_back_findings(db, run, cp),
         }
     )
     on_behalf_of = await _email(db, user_id)
@@ -7135,6 +7276,17 @@ async def _decide_in_workflow(
     ):
         raise _unconfirmed("end the run")
     return True
+
+
+async def _send_back_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[str]:
+    """What a send-back posts to the revise step: the structured review (D4), one line per
+    entry, with Oracle's check; the note and the check for a decision stored without one."""
+    problems = await _problem_findings(db, run, cp)
+    if cp.review:
+        from oracle.runs import review_file
+
+        return review_file.findings(cp.review, problems)
+    return ([cp.note] if cp.note else []) + problems
 
 
 async def _problem_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[str]:

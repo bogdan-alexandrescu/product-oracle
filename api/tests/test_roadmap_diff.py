@@ -145,3 +145,64 @@ def test_snapshots_from_the_file_and_from_a_row():
     live = {"name": "Beta", "date": None, "refused_date": "2026-11-30"}
     assert snapshot_from_row(row, live).date_state == "refused"
     assert normalize("Ünïcode — Step!!") == "unicode step"
+
+
+def test_the_e3_fixture_as_the_route_shows_it():
+    """protects: the roadmap item diff route's rows (E3): five classes on a known pair,
+    dropped rows placed by horizon, the section's text and date state as notes only;
+    fails_when: an item lands in the wrong class or place, or a field is missing;
+    no_claim: how agents choose ids."""
+    from oracle.roadmap.diff_views import item_rows
+
+    base = [
+        snap("cart-review", 0, title="Cart review shows the full price", horizon="now", rank=1),
+        snap("shipping-step", 1, title="Shipping step on one screen", horizon="now", rank=2,
+             milestone_date="2026-11-30", date_state="verified"),
+        snap("guest-checkout", 2, title="Guest checkout", horizon="next", rank=3),
+        snap("wallet-pay", 3, title="One-tap wallet pay", horizon="later", rank=4),
+    ]  # fmt: skip
+    head = [
+        snap("cart-review", 0, title="Cart review shows the full price", horizon="now", rank=1),
+        snap("guest-checkout", 1, title="Guest checkout", horizon="now", rank=2),
+        snap("shipping-step", 2, title="Shipping step on one screen", horizon="now", rank=3),
+        snap("saved-addresses", 3, title="Saved addresses", horizon="next", rank=4),
+    ]
+    diff = diff_items(base, head)
+    assert diff.summary == {"added": 1, "dropped": 1, "moved": 1, "changed": 1, "unchanged": 1}
+    rows = item_rows(diff)
+    assert [(r["item_key"], r["change"]) for r in rows] == [
+        ("cart-review", "unchanged"),
+        ("guest-checkout", "moved"),
+        ("shipping-step", "changed"),
+        ("saved-addresses", "added"),
+        ("wallet-pay", "dropped"),
+    ]
+    cart, guest, ship, saved, wallet = rows
+    assert cart == {
+        "item_key": "cart-review", "change": "unchanged", "matched_by": "key",
+        "title": "Cart review shows the full price", "base_horizon": "now",
+        "head_horizon": "now", "base_position": 0, "head_position": 0, "fields": [],
+        "notes": [],
+    }  # fmt: skip
+    assert guest["fields"] == [{"field": "horizon", "before": "next", "after": "now"}]
+    assert guest["notes"] == [{"field": "rank", "before": 3, "after": 2}]
+    assert (guest["base_position"], guest["head_position"]) == (2, 1)
+    # The date's state follows the date: no separate note.
+    assert ship["fields"] == [{"field": "milestone_date", "before": "2026-11-30", "after": None}]
+    assert ship["notes"] == [{"field": "rank", "before": 2, "after": 3}]
+    assert saved["matched_by"] is None and saved["base_horizon"] is None
+    assert saved["head_horizon"] == "next" and saved["head_position"] == 3
+    assert wallet["title"] == "One-tap wallet pay" and wallet["base_horizon"] == "later"
+    assert wallet["head_horizon"] is None and wallet["head_position"] is None
+
+    # A rename is matched by title, with an item_key field; a section's text change and
+    # a date state alone are notes.
+    renamed = item_rows(
+        diff_items(
+            [snap("pay", 0, title="Pay step", section_hash="a", date_state="refused")],
+            [snap("payment", 0, title="pay STEP.", section_hash="b")],
+        )
+    )
+    assert renamed[0]["matched_by"] == "title" and renamed[0]["change"] == "changed"
+    assert renamed[0]["fields"][0] == {"field": "item_key", "before": "pay", "after": "payment"}
+    assert {n["field"] for n in renamed[0]["notes"]} == {"prd_section_text", "date_state"}

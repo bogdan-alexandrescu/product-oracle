@@ -465,9 +465,17 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (d.status !== "proposed") return fail(409, `${ref(d.number)} is ${d.status}; it is not edited`);
     if (!(me.id === d.approver_id || me.id === d.created_by || me.role === "owner")) return fail(403, "Only its creator, its approver or an owner edits a proposal");
     if (b.lock_version !== d.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
+    if (b.review_at) {
+      const bad = checkReviewAt(b.review_at);
+      if (bad) return fail(422, bad);
+    }
     for (const k of ["title", "question", "context", "options", "reversibility", "contributor_ids", "informed_ids", "subjects"] as const) {
       if (b[k] !== undefined && b[k] !== null) Object.assign(d, { [k]: b[k] });
     }
+    // Clearable: null empties them. The prediction waits for the decision to make its outcome record.
+    if (b.expected_outcome !== undefined) d.expected_outcome = b.expected_outcome?.trim() || null;
+    if (b.review_at !== undefined) d.review_at = b.review_at ?? null;
+    if (b.prediction !== undefined) d.prediction = b.prediction ?? null;
     touch();
     return json(200, outOf(ctx, db, d));
   }
@@ -486,7 +494,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       const role = (mockSetting("decision_irreversible_role") as Role | undefined) ?? "owner";
       if (!atLeast(me.role, role)) return fail(403, `Only an ${role} can decide a hard-to-reverse decision`);
     }
-    const review = b.review_at ?? day(REVIEW_DAYS);
+    const kept = d.review_at && d.review_at >= day() ? d.review_at : null;
+    const review = b.review_at ?? kept ?? day(REVIEW_DAYS);
     const bad = checkReviewAt(review);
     if (bad) return fail(422, bad);
     Object.assign(d, {
@@ -496,8 +505,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       expected_outcome: b.expected_outcome.trim(),
       reversibility,
       review_at: review,
-      prediction: b.prediction ?? null,
-      outcome_id: b.prediction ? ctx.uuid() : null,
+      prediction: b.prediction ?? d.prediction ?? null,
+      outcome_id: (b.prediction ?? d.prediction) ? ctx.uuid() : null,
       decided_by: me.id,
       decided_actor: "user",
       decided_at: ctx.now(),

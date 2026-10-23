@@ -129,14 +129,14 @@ class DelegatedTokenMinter:
                 timeout=TIMEOUT,
             )
             if signed.status_code != 200:
-                raise MailError(google_refusal(signed.status_code))
+                raise MailError(google_refusal(signed.status_code, signed.text))
             exchanged = await http.post(
                 TOKEN_URL,
                 data={"grant_type": JWT_BEARER, "assertion": signed.json()["signedJwt"]},
                 timeout=TIMEOUT,
             )
             if exchanged.status_code != 200:
-                raise MailError(google_refusal(exchanged.status_code))
+                raise MailError(google_refusal(exchanged.status_code, exchanged.text))
             body = exchanged.json()
             token, ttl = body["access_token"], float(body.get("expires_in", 3600))
         except MailError:
@@ -194,7 +194,7 @@ class GmailApiMailer:
         except httpx.HTTPError as exc:
             raise MailError(f"Google could not be reached ({type(exc).__name__})") from None
         if resp.status_code != 200:
-            raise MailError(google_refusal(resp.status_code))
+            raise MailError(google_refusal(resp.status_code, resp.text))
 
 
 _mailers: dict[str, GmailApiMailer] = {}

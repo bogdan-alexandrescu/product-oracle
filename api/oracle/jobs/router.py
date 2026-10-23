@@ -175,13 +175,14 @@ async def apply_refinement(
 async def list_staged_changes(
     doc: str,
     db: TenantDB,
+    principal: Viewer,
     include_gone: Annotated[
         bool, Query(description="Also list staged items whose section is gone")
     ] = False,
 ) -> StagedChanges:
     """Accepted suggestions waiting for the next draft, from whichever draft they were
     raised on, with who accepted them and when, and the build in progress if any."""
-    return await _call(next_draft.staged_changes(db, doc, include_gone))
+    return await _call(next_draft.staged_changes(db, doc, include_gone, principal))
 
 
 @router.post(DOC + "/next-draft/plan", response_model=NextDraftPlan)
@@ -192,7 +193,11 @@ async def plan_next_draft(
     ``oracle`` (Oracle rewrites the sections itself and shows a preview) or ``agents`` (a
     feedback-loop run writes the draft, with its estimate and whether an owner must
     approve it). ``refused`` says why a built-in build cannot start."""
-    return await _call(next_draft.plan(db, doc, body.suggestion_ids, body.feedback_ids, body.depth))
+    return await _call(
+        next_draft.plan(
+            db, doc, body.suggestion_ids, body.feedback_ids, body.depth, body.next_draft_change_ids
+        )
+    )
 
 
 @router.post(DOC + "/next-draft/run", response_model=RunOut, status_code=201)
@@ -226,7 +231,9 @@ async def build_next_draft(doc: str, body: NextDraftIn, principal: Approver, db:
     (409, naming them); so are items that need the agents (409 ``needs_agents``, with
     why: build them with ``next-draft/run``)."""
     try:
-        job = await next_draft.build(db, principal, doc, body.suggestion_ids, body.feedback_ids)
+        job = await next_draft.build(
+            db, principal, doc, body.suggestion_ids, body.feedback_ids, body.next_draft_change_ids
+        )
     except next_draft.NeedsAgents as e:
         return JSONResponse(
             status_code=409,

@@ -16,10 +16,11 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
-import { emptyDiscussions, routeDiscussions, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
+import { routeStaging } from "./staging";
+import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
-import { laneF, type LaneFState } from "./lane-f";
+import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
@@ -28,13 +29,13 @@ import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngRe
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup } from "./intake";
+import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
 import { routeReviewV2, seedReviewV2, type ReviewV2Db } from "./review-v2";
-import { dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { DIFF_SCENARIO, dateMarks, routePlan, routeRoadmap, seedRoadmap, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStates, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -277,17 +278,21 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * signed-in owner (./autonomy.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
- * ./roadmap-items.json);
+ * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
+ * a draft whose items moved, added and dropped one each since the approved v1 (E3);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
+ * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
  * "mail-off" as the default company with no invite sender configured (invites are not
  * emailed); "mail-fails" where every first invite email fails (Resend sends it);
- * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242);
+ * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242; a plus
+ * address never gets it, in any scenario: Google answers 400, #330);
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
  * tick retries it).
  */
@@ -498,6 +503,16 @@ function seedBeforeDraftingScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
+  return db;
+}
+
+/** The default company plus a brief whose second goal was rejected since (#260). */
+function seedBriefGoalRejectedScenario(): Db {
+  const db = seed();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  const goal = (key: string) => db.baseline.entities.find((e) => e.type === "goal" && e.key === key)!;
+  seedBriefGoalRejected(ensureV2(db), approver.id, [goal("g.activation").id, goal("g.early-churn").id]);
+  goal("g.early-churn").status = "rejected";
   return db;
 }
 
@@ -1133,6 +1148,13 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
     importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
     memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
+    discussion: (id) => {
+      const d = db.discussions?.discussions.find((x) => x.id === id);
+      if (!d) return null;
+      const inIt = db.discussions!.participants.some((x) => x.discussion_id === id && x.user_id === userId && !x.left_at);
+      const priv = d.visibility === "private";
+      return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
+    },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
@@ -1285,6 +1307,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     feedback: db.feedback,
     documents: db.documents,
+    confirmedGoals: () =>
+      db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
     openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
@@ -1302,9 +1326,11 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
         const v = vs.find((x) => x.number === number);
         if (!v) return `version ${number} of '${doc.slug}' not found`;
         if (!v.approved_at) return `version ${number} of '${doc.slug}' is not approved: a roadmap is built from an approved PRD version`;
+        if (nothingWritten(db, doc, v.sections)) return `version ${number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
         return versionSource(doc, v);
       }
       const v = vs.filter((x) => x.approved_at).pop();
+      if (v && nothingWritten(db, doc, v.sections)) return `version ${v.number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
       return v ? versionSource(doc, v) : `'${doc.slug}' has no approved version: approve a version of the PRD before building its roadmap`;
     },
     // A run's draft becomes the next version: a copy of the latest one (or of the first
@@ -1414,6 +1440,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "brief-goal-rejected"
+            ? seedBriefGoalRejectedScenario
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
@@ -1435,18 +1463,37 @@ function load(): Db {
   db.autonomy = emptyAutonomy();
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.
-  db.discussions = scenario === "discussions" ? seedDiscussionsScenario(db) : emptyDiscussions();
+  db.discussions =
+    scenario === "discussions"
+      ? seedDiscussionsScenario(db)
+      : scenario === "discussion-replies"
+        ? seedDiscussionsScenario(db, seedDiscussionReplies)
+        : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   save(db);
   return db;
 }
 
+/** E3 "roadmap-diff": usage-alerts-roadmap v1 approved, then v2, a draft (./roadmap.ts gives each its items). */
+function addRoadmapVersion(db: Db) {
+  const doc = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+  const v1 = doc && db.versions.find((v) => v.document_id === doc.id && v.number === 1);
+  if (!doc || !v1) return;
+  v1.approved_at ??= "2026-10-05T09:00:00Z";
+  const v2 = structuredClone(v1);
+  Object.assign(v2, { id: uuid(), number: 2, created_at: "2026-10-20T09:00:00Z", approved_at: null });
+  v2.sections = v2.sections.map((s) => ({ ...s, id: uuid() }));
+  db.versions.push(v2);
+  doc.updated_at = v2.created_at;
+}
+
 /** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
-function seedDiscussionsScenario(db: Db): DiscussionsDb {
+function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDiscussions): DiscussionsDb {
   const doc = findDocument(db, "team-workspaces")!;
   const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
-  return seedDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+  return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -1884,6 +1931,15 @@ const SIGN_IN_DOMAINS = ["example.com"];
 /** A queued invite email goes out (or fails) this long after it was queued. */
 const MAIL_DELAY_MS = 400;
 
+/** How long a Retry of an invite's access takes (Google's IAP API). */
+const RETRY_DELAY_MS = 600;
+/** What Oracle records of Google refusing an invite's IAP access (#330): a plus address is
+ * no Google account of its own, so Google answers 400 with its own message. */
+const iapRefusal = (email: string) =>
+  email.includes("+")
+    ? `oracle-api-be: Google returned 400 (bad request): User ${email} does not exist.`
+    : "oracle-api-be: Google returned 403 (permission denied)";
+
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
   const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
@@ -1981,8 +2037,8 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         created_at: now(),
         accepted_at: null,
         revoked_at: null,
-        ...(scenario === "iap-pending"
-          ? { access: "pending", access_error: "oracle-api-be: Google returned 403 (permission denied)" }
+        ...(scenario === "iap-pending" || email.includes("+")
+          ? { access: "pending", access_error: iapRefusal(email) }
           : { access: "granted", access_error: null }),
         access_at: now(),
         email_status: scenario === "mail-off" ? "not_sent" : "queued",
@@ -1996,7 +2052,16 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     if (!invite) return notFound("Invite");
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
-      if (p[3] === "access") Object.assign(invite, { access: "granted", access_error: null, access_at: now() });
+      if (p[3] === "access") {
+        // The grant is Google's IAP API under way: it takes a moment.
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        Object.assign(
+          invite,
+          invite.email.includes("+")
+            ? { access: "pending", access_error: iapRefusal(invite.email), access_at: now() }
+            : { access: "granted", access_error: null, access_at: now() },
+        );
+      }
       else if (invite.email_status === "queued") return json(409, { detail: "Oracle is sending this invite's email" });
       else if (invite.email_status === "sent" && invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000) {
         const wait = Math.ceil((60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000);
@@ -2339,6 +2404,17 @@ async function route(db: Db, req: Request): Promise<Response> {
       resolve: (kind, subject) => discussionSubject(db, kind, subject),
       uuid,
       now,
+      // A streaming reply writes after its response: in turn with every other request.
+      persist: (change) => {
+        const next = queue.then(() => {
+          const saved = load();
+          change((saved.discussions ??= emptyDiscussions()));
+          save(saved);
+        });
+        queue = next.catch(() => undefined);
+        return next;
+      },
+      current: () => load().discussions ?? emptyDiscussions(),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
@@ -2415,6 +2491,23 @@ async function route(db: Db, req: Request): Promise<Response> {
   const llm = llmContext(db, me.id, me.role);
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
+  // G4 One staging list (./staging.ts) checks roles itself.
+  if (p[1] === "staging" || p[1] === "next-draft-changes") {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const runs = db.runs;
+    const staged = await routeStaging(
+      {
+        llm,
+        role: me.role,
+        checkpoint: (id) => runs.runs.flatMap((r) => r.checkpoints).find((c) => c.id === id) ?? null,
+        draft: (id) => runs.drafts?.[id] ?? null,
+      },
+      req,
+      p,
+      q,
+    );
+    if (staged) return staged;
+  }
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
   db.quality ??= seedQuality();
@@ -2510,12 +2603,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   const launches = await routeLaunches(launchesContext(db, me), ensureLaunches(db), req, p, q);
   if (launches) return launches;
   // The API's role checks: viewers read, commenters comment, approvers decide. A checkpoint's
-  // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage.
+  // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
+  // the decision log (./decisions.ts): commenters propose, edit and withdraw.
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note");
   const need: Role | null =
-    m === "GET" || draftWrite
+    m === "GET" || draftWrite || p[1] === "decisions"
       ? null
-      : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST")
+      : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
+          // As the API: commenters propose a blocker's solution options.
+          (p[1] === "blockers" && p[3] === "options" && m === "POST")
         ? "commenter"
         : "approver";
   if (need && !atLeast(me.role, need)) return forbidden(need);
@@ -2819,6 +2915,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
+      // #254: a version that is still only its template's text is never approved.
+      if (!v.approved_at && nothingWritten(db, doc, v.sections)) return json(409, { detail: NOTHING_WRITTEN, blocking: [], dates: [] });
       const latest = docVersions(db, doc).pop()!.number;
       const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
         ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,

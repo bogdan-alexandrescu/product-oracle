@@ -1673,6 +1673,32 @@ function slugify(text: string) {
   return s.slice(0, 60).replace(/-+$/, "") || "draft";
 }
 
+/** One section per heading of a template body; its body is the text up to the next heading,
+ * with the template's <!-- hints --> kept as italic prompts. */
+function skeleton(body: string) {
+  const check = checkTemplate(body);
+  const lines = check.rest.split("\n");
+  const offset = check.offset;
+  return check.headings.map((h, i, all) => {
+    const start = h.line - offset;
+    const end = i + 1 < all.length ? all[i + 1].line - offset - 1 : lines.length;
+    const raw = lines.slice(start, end).join("\n");
+    const md = raw.replace(/<!--\s*([\s\S]*?)\s*-->/g, "_$1_").trim() || "_To write._";
+    return { h, i, raw, md };
+  });
+}
+
+export const NOTHING_WRITTEN = "Nothing is written yet: every section still holds only the template's text";
+
+/** #254, as the API (oracle.docs.written): every section still reads as its template's. */
+export function nothingWritten(db: Db, doc: { template?: string | null; template_version?: string | null }, sections: { section_key: string; body_md: string }[]): boolean {
+  const t = state(db).templates.find((x) => x.key === doc.template);
+  const tv = t?.versions.find((v) => String(v.version) === doc.template_version);
+  if (!tv || !sections.length) return false;
+  const bodies = new Map(skeleton(tv.body).map(({ h, i, md }) => [h.key ?? `s-${i + 1}`, md]));
+  return sections.every((s) => !s.body_md.trim() || bodies.get(s.section_key) === s.body_md);
+}
+
 function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Response {
   const t = st.templates.find((x) => x.key === input.template);
   if (!t) return notFound("Template");
@@ -1713,15 +1739,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
   };
   const check = checkTemplate(tv.body);
   const briefKeys = new Set(check.brief);
-  const lines = check.rest.split("\n");
-  const offset = check.offset;
-  // One section per heading; its body is the text up to the next heading, with the
-  // template's <!-- hints --> kept as italic prompts.
-  const sections = check.headings.map((h, i, all) => {
-      const start = h.line - offset;
-      const end = i + 1 < all.length ? all[i + 1].line - offset - 1 : lines.length;
-      const raw = lines.slice(start, end).join("\n");
-      const md = raw.replace(/<!--\s*([\s\S]*?)\s*-->/g, "_$1_").trim() || "_To write._";
+  const sections = skeleton(tv.body).map(({ h, i, raw, md }) => {
       const heading = h.level === 1 ? title : h.text;
       const key = h.key ?? `s-${i + 1}`;
       return {
@@ -1745,7 +1763,8 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     content_hash: hash(sections.map((s) => s.content_hash).join("")),
     snapshot: null,
     warnings: [],
-    notes: [],
+    // #255: as the API, the skeleton has no content yet.
+    notes: [{ code: "template_only", message: "the template's skeleton, with no content yet", section_keys: [] }],
     imported_by: "4a1c8e6f-2d93-4b57-9e0a-c3f6d81b2a75",
     imported_by_name: "draft-picker",
     approved_at: null,

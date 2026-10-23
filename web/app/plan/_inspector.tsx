@@ -1,9 +1,11 @@
 "use client";
 
-import { Chip, GoalTag, Inspector, InspectorSection, LinkButton, ToGo } from "@/components/ds";
+import { useState } from "react";
+
+import { Button, Chip, GoalTag, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
-import { useQuery } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { assess, type GoalView, type Point } from "../home/_goals";
 import { HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanItem } from "./_lib";
@@ -27,17 +29,85 @@ function History({ item }: { item: PlanItem }) {
   );
 }
 
+const RECORD_STATE: Record<PlanItem["engineering"]["records"][number]["state"], string> = {
+  todo: "Open",
+  in_progress: "In progress",
+  done: "Done",
+  cancelled: "Cancelled",
+  unknown: "Unknown",
+};
+
+/** F7 What the actions need: set only for approvers, owners and engineering leads. */
+export type PlanLinks = { onLink: (item: PlanItem) => void; onChanged: () => Promise<void> | void };
+
+/** The item's tracker issues, one per line; Link issue and Unlink for those who may (F7). */
+function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const records = item.engineering.records;
+  async function unlink(id: string) {
+    setBusy(id);
+    setError(null);
+    try {
+      await unwrap(api.DELETE("/v1/tracker/links/{record_id}", { params: { path: { record_id: id } } }));
+      await links?.onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {records.length === 0 && <span className="text-[15px] text-text2">No tracker issue</span>}
+      {records.length > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {records.map((r) => (
+            <li key={`${r.tracker}|${r.external_ref}`} data-testid="plan-record" className="flex min-w-0 items-center gap-2 text-[15px]">
+              <span className="tnum min-w-0 flex-1 truncate">
+                {r.url ? (
+                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="font-semibold underline-offset-2 hover:underline">
+                    {r.external_ref}
+                  </a>
+                ) : (
+                  <b className="font-semibold">{r.external_ref}</b>
+                )}
+                <span className="text-text2">
+                  {` · ${RECORD_STATE[r.state]} · ${r.target_date ? formatDay(`${r.target_date}T12:00:00Z`) : "no date"}`}
+                </span>
+              </span>
+              {links && r.tracker === "github" && r.id && (
+                <Button className="flex-none" disabled={busy === r.id} onClick={() => unlink(r.id!)}>
+                  Unlink
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {links && item.prd && (
+        <Button variant="ghost" className="self-start" onClick={() => links.onLink(item)}>
+          + Link issue
+        </Button>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+    </div>
+  );
+}
+
 /** The selected item (F1 §8): why it needs someone, its history, its goals, and where to open it. */
 export function PlanInspector({
   item,
   goals,
   history,
   me,
+  links,
 }: {
   item: PlanItem;
   goals: Map<string, GoalView>;
   history: Map<string, Point[]>;
   me: string | null | undefined;
+  links?: PlanLinks;
 }) {
   const state = stateChip(item);
   const served = item.goal_ids.map((id) => goals.get(id)).filter((g): g is GoalView => !!g);
@@ -76,6 +146,9 @@ export function PlanInspector({
             item.reasons.length === 0 && <p className="text-[15px] text-text2">Nothing to decide</p>
           )}
         </div>
+      </InspectorSection>
+      <InspectorSection label="Engineering" testId="plan-item-engineering">
+        <Engineering item={item} links={links} />
       </InspectorSection>
       <InspectorSection label="History" testId="plan-history">
         <History key={`${item.roadmap.slug}|${item.key}`} item={item} />

@@ -482,8 +482,11 @@ async def test_changes_requested_reruns_the_segment_with_the_note(client, owner,
     assert run["status"] == "running"
     seg = run["segments"][0]
     assert seg["status"] == "running" and len(seg["attempts"]) == 2
+    # The person sees their own note; the agents get it inside the structured review (D4).
     assert seg["attempts"][1]["note"] == "Goal G2 needs a target"
-    assert "Goal G2 needs a target" in runtime.submitted[1].steps[0].prompt
+    prompt = runtime.submitted[1].steps[0].prompt
+    assert "with a structured review (review.yaml, below)" in prompt
+    assert "\ngeneral_note: Goal G2 needs a target\n" in prompt
     assert runtime.submitted[1].labels["attempt"] == "2"
 
     await tick(client, auth)
@@ -899,7 +902,9 @@ async def test_a_refused_rerun_keeps_the_reviewers_note(client, owner, runtime):
     run = await get(client, auth, run["id"])
     assert run["segments"][0]["status"] == "running"
     assert run["segments"][0]["attempts"][-1]["note"] == "Cite G1"
-    assert "Cite G1" in runtime.submitted[-1].steps[0].prompt
+    prompt = runtime.submitted[-1].steps[0].prompt
+    assert "with a structured review (review.yaml, below)" in prompt
+    assert "\ngeneral_note: Cite G1\n" in prompt
 
 
 # --------------------------------------------------------------------------- baseline.yaml

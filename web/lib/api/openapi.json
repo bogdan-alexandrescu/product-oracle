@@ -2059,7 +2059,7 @@
           "discussions"
         ],
         "summary": "Create Discussion Message",
-        "description": "Write in a discussion (commenters and up; in a private one, its people). Plain\ntext with Markdown links, at most 8,000 characters. ``mentions`` (member ids from\n``GET /v1/people``) add people to an open discussion; in a private one only the\nstarter adds people.",
+        "description": "Write in a discussion (commenters and up; in a private one, its people). Plain\ntext with Markdown links, at most 8,000 characters. ``mentions`` (member ids from\n``GET /v1/people``) add people to an open discussion; in a private one only the\nstarter adds people.\n\nOracle replies to every message while only one person is in the discussion, and\nafter that when addressed (``@Oracle`` or ``mention_oracle``): ``reply`` is its\n``pending`` reply, whose text streams from ``GET \u2026/messages/{reply_id}/stream``.\n``wait``: the reply runs here, without streaming, for at most 120 s, and comes back\n``complete`` or ``failed``. 429 when Oracle has answered a lot here in a short time\n(the message is stored).",
         "operationId": "create_discussion_message",
         "security": [
           {
@@ -2079,6 +2079,16 @@
               "format": "uuid",
               "title": "Discussion Id"
             }
+          },
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Wait"
+            }
           }
         ],
         "requestBody": {
@@ -2097,7 +2107,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                  "$ref": "#/components/schemas/DiscussionMessagePosted"
                 }
               }
             }
@@ -2110,6 +2120,215 @@
           },
           "409": {
             "description": "This discussion is closed"
+          },
+          "429": {
+            "description": "Oracle has answered a lot here; the message is still stored"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Stream Discussion Reply",
+        "description": "Oracle's reply as it is written (``text/event-stream``): ``delta`` events with\nthe new text, then ``citations`` and ``done`` (the message), or ``error``\n(``reason``, ``message``, ``retry``); ``: ping`` every 15 s. The first reader runs\nthe reply; every other reader (another tab, another person, a reload) tails it.",
+        "operationId": "stream_discussion_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The reply's events",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/cancel": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Cancel Discussion Reply",
+        "description": "Stop Oracle's reply (the person who asked, or an approver): it ends ``cancelled``\nwith the text written so far, within a second.",
+        "operationId": "cancel_discussion_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/discussions/{discussion_id}/messages/{reply_id}/retry": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Retry Discussion Reply",
+        "description": "Ask again for a failed or stopped reply (the person who asked, or an approver):\nit is ``pending`` again, with no text; open its stream to run it. 429 when Oracle\nhas answered a lot here in a short time (each Retry counts as an answer).",
+        "operationId": "retry_discussion_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          },
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Not failed or stopped"
+          },
+          "429": {
+            "description": "Oracle has answered a lot here in a short time"
           },
           "422": {
             "description": "Validation Error",
@@ -2527,6 +2746,147 @@
           },
           "404": {
             "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/staging": {
+      "get": {
+        "tags": [
+          "staging"
+        ],
+        "summary": "List Staging",
+        "description": "Everything staged for one target, from every origin: for a document, the accepted\nreview suggestions (C1e) and the section changes staged from discussions; for a\ncheckpoint, its shared draft's actions from rows and from discussions. A row from a\nprivate discussion the caller is not in names no discussion.",
+        "operationId": "list_staging",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A document's slug",
+              "title": "Document"
+            },
+            "description": "A document's slug"
+          },
+          {
+            "name": "checkpoint",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A checkpoint's id",
+              "title": "Checkpoint"
+            },
+            "description": "A checkpoint's id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagingList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/next-draft-changes/{change_id}/unstage": {
+      "post": {
+        "tags": [
+          "staging"
+        ],
+        "summary": "Unstage Next Draft Change",
+        "description": "Take a discussion's section change out of the next draft; its discussion change\ngoes back to the discussion. 409 \"Already in draft <n>\" once applied.",
+        "operationId": "unstage_next_draft_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextDraftChangeOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -9939,7 +10299,7 @@
           "connections"
         ],
         "summary": "List Fireflies Series",
-        "description": "Your meetings grouped into their calendar series, with counts and the last date\n(from/to: whole days in UTC). Meetings on no calendar are in no series.",
+        "description": "Your meetings grouped into their calendar series, with counts, the last date and\nthe same-title meetings outside each (from/to: whole days in UTC). The window's\npages are read, one browse call each, up to the newest 300 meetings or until the\nbudget stops it (truncated).\nMeetings on no calendar are in no series.",
         "operationId": "list_fireflies_series",
         "security": [
           {
@@ -15722,6 +16082,68 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CheckpointReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Checkpoint Review File",
+        "description": "The structured review a send-back delivered to the agents (D4), any member: the\n``review.yaml`` of a decided checkpoint. 404 while pending or when none was sent.",
+        "operationId": "get_checkpoint_review_file",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -25812,6 +26234,135 @@
         }
       }
     },
+    "/v1/roadmap-items/diff": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Diff Roadmap Items",
+        "description": "What changed, item by item, between two sets of roadmap items: ``head`` and\n``base`` are refs (``<slug>@<n>``, a roadmap version's items); ``base`` is also\n``previous`` (the nearest earlier version with items, the default) or ``approved``\n(the roadmap's latest approved version other than the head). Plan changes count\n(oracle.roadmap.diff.COUNTED_FIELDS); confidence, one-place rank moves and the PRD\nsection's text are notes. Nothing to compare with: ``base`` null and no items. A PRD\nversion's draft items are not stored yet (409).",
+        "operationId": "diff_roadmap_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "head",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "title": "Head"
+            }
+          },
+          {
+            "name": "base",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "default": "previous",
+              "title": "Base"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemsDiffOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roadmap-items/history": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Roadmap Item History",
+        "description": "One item across the roadmap versions whose items trace to the PRD, oldest first\n(the latest 50), each entry against the one before; ``present: false`` where it\nleft. Follows the key only: a rename starts a new history.",
+        "operationId": "get_roadmap_item_history",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "item_key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Item Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapItemHistoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/roadmaps/{doc}/alignment": {
       "get": {
         "tags": [
@@ -26220,6 +26771,176 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracker/issues": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Search Tracker Issues",
+        "description": "Your own synced GitHub issues matching ``q`` (\"#412\", \"org/app#412\", an issue URL\nor words of the title), with the item each is linked to. Reads nothing from GitHub.",
+        "operationId": "search_tracker_issues",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2000,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerIssueOut"
+                  },
+                  "title": "Response Search Tracker Issues"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tracker/links": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Link Tracker Issue",
+        "description": "Link one of your synced GitHub issues to a roadmap item of a PRD (F7): a tracker\nrecord kept fresh from the sync, read-only toward GitHub. Everyone who can see the\nPlan sees its number, title, state and link. 409 when it is linked to another item\nand ``move`` is false.",
+        "operationId": "link_tracker_issue",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackerLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerRecordOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/tracker/links/{record_id}": {
+      "delete": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Unlink Tracker Issue",
+        "description": "Unlink a tracker record from its item: it stays (with its history) and counts for\nno item.",
+        "operationId": "unlink_tracker_issue",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Record Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -27671,7 +28392,8 @@
                     "slack",
                     "meeting",
                     "doc",
-                    "other"
+                    "other",
+                    "in_app"
                   ],
                   "type": "string"
                 },
@@ -35914,7 +36636,8 @@
                   "slack",
                   "meeting",
                   "doc",
-                  "other"
+                  "other",
+                  "in_app"
                 ]
               },
               {
@@ -37237,6 +37960,18 @@
             ],
             "title": "Note"
           },
+          "review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
           "payload": {
             "additionalProperties": true,
             "type": "object",
@@ -37396,6 +38131,29 @@
               }
             ],
             "title": "Note"
+          },
+          "sent_review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Review"
+          },
+          "sent_review_yaml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Review Yaml"
           },
           "can_read": {
             "type": "boolean",
@@ -42732,6 +43490,16 @@
           "can_manage": {
             "type": "boolean",
             "title": "Can Manage"
+          },
+          "private_findings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrivateFindings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -42924,6 +43692,50 @@
           "deleted": {
             "type": "boolean",
             "title": "Deleted"
+          },
+          "error_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Reason"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "pushback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushback"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -42965,6 +43777,29 @@
           "has_more"
         ],
         "title": "DiscussionMessagePage"
+      },
+      "DiscussionMessagePosted": {
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/DiscussionMessageOut"
+          },
+          "reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionMessageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "DiscussionMessagePosted",
+        "description": "A person's message, and Oracle's ``pending`` reply when the rule calls for one\n(``complete`` or ``failed`` with ``wait``)."
       },
       "DiscussionOut": {
         "properties": {
@@ -48381,6 +49216,37 @@
         ],
         "title": "FirefliesMeetingPage"
       },
+      "FirefliesSameTitleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "date"
+        ],
+        "title": "FirefliesSameTitleOut"
+      },
       "FirefliesSeriesList": {
         "properties": {
           "series": {
@@ -48393,12 +49259,17 @@
           "truncated": {
             "type": "boolean",
             "title": "Truncated"
+          },
+          "scanned": {
+            "type": "integer",
+            "title": "Scanned"
           }
         },
         "type": "object",
         "required": [
           "series",
-          "truncated"
+          "truncated",
+          "scanned"
         ],
         "title": "FirefliesSeriesList"
       },
@@ -48438,6 +49309,13 @@
               }
             ],
             "title": "Organizer"
+          },
+          "same_title": {
+            "items": {
+              "$ref": "#/components/schemas/FirefliesSameTitleOut"
+            },
+            "type": "array",
+            "title": "Same Title"
           }
         },
         "type": "object",
@@ -48446,7 +49324,8 @@
           "title",
           "meeting_count",
           "last_date",
-          "organizer"
+          "organizer",
+          "same_title"
         ],
         "title": "FirefliesSeriesOut"
       },
@@ -50150,6 +51029,18 @@
               }
             ],
             "title": "Note"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
           },
           "payload": {
             "additionalProperties": true,
@@ -53217,6 +54108,53 @@
         ],
         "title": "ItemDetail"
       },
+      "ItemFieldChange": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "after": {
+            "title": "After"
+          },
+          "added": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added"
+          },
+          "removed": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field"
+        ],
+        "title": "ItemFieldChange"
+      },
       "ItemHistoryOut": {
         "properties": {
           "roadmap": {
@@ -53689,6 +54627,56 @@
         "title": "ItemsCheck",
         "description": "The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons\n(oracle.runs.reasons). Checks stored before reasons existed read with none."
       },
+      "ItemsDiffOut": {
+        "properties": {
+          "head": {
+            "$ref": "#/components/schemas/ItemsRef"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "$ref": "#/components/schemas/ItemsOptions"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemChange"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "head",
+          "base",
+          "options",
+          "summary",
+          "items"
+        ],
+        "title": "ItemsDiffOut"
+      },
       "ItemsImport": {
         "properties": {
           "yaml": {
@@ -53775,6 +54763,54 @@
         ],
         "title": "ItemsImportOut"
       },
+      "ItemsOption": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "label"
+        ],
+        "title": "ItemsOption"
+      },
+      "ItemsOptions": {
+        "properties": {
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "previous",
+          "approved"
+        ],
+        "title": "ItemsOptions"
+      },
       "ItemsProblem": {
         "properties": {
           "code": {
@@ -53803,6 +54839,38 @@
           "message"
         ],
         "title": "ItemsProblem"
+      },
+      "ItemsRef": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd_draft",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "document": {
+            "$ref": "#/components/schemas/DocumentRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "kind",
+          "label",
+          "document"
+        ],
+        "title": "ItemsRef",
+        "description": "A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's."
       },
       "JobCreate": {
         "properties": {
@@ -53962,6 +55030,21 @@
               }
             ],
             "title": "Reuse Baseline"
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
           }
         },
         "type": "object",
@@ -54015,6 +55098,14 @@
                 "type": "null"
               }
             ]
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/TargetGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
           }
         },
         "type": "object",
@@ -57314,6 +58405,96 @@
         "type": "object",
         "title": "NextDraftApply"
       },
+      "NextDraftChangeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "raised_on_version": {
+            "type": "integer",
+            "title": "Raised On Version"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "unstaged",
+              "applied",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "applied_in_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied In Version"
+          },
+          "from_private": {
+            "type": "boolean",
+            "title": "From Private",
+            "default": false
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "section_key",
+          "raised_on_version",
+          "instruction",
+          "status",
+          "lock_version"
+        ],
+        "title": "NextDraftChangeOut",
+        "description": "A discussion's section change waiting for the document's next draft."
+      },
       "NextDraftDataPoint": {
         "properties": {
           "value": {
@@ -57387,10 +58568,61 @@
               }
             ],
             "title": "Feedback Ids"
+          },
+          "next_draft_change_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Draft Change Ids"
           }
         },
         "type": "object",
         "title": "NextDraftIn"
+      },
+      "NextDraftInstruction": {
+        "properties": {
+          "next_draft_change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Next Draft Change Id"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "next_draft_change_id",
+          "instruction",
+          "origin"
+        ],
+        "title": "NextDraftInstruction",
+        "description": "G4: a discussion's change the section was built with."
       },
       "NextDraftPlan": {
         "properties": {
@@ -57496,6 +58728,21 @@
               }
             ],
             "title": "Feedback Ids"
+          },
+          "next_draft_change_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Draft Change Ids"
           },
           "depth": {
             "type": "string",
@@ -57708,6 +58955,21 @@
             ],
             "title": "Feedback Ids"
           },
+          "next_draft_change_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Draft Change Ids"
+          },
           "depth": {
             "type": "string",
             "enum": [
@@ -57795,6 +59057,23 @@
             },
             "type": "array",
             "title": "Feedback",
+            "default": []
+          },
+          "next_draft_change_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Next Draft Change Ids",
+            "default": []
+          },
+          "instructions": {
+            "items": {
+              "$ref": "#/components/schemas/NextDraftInstruction"
+            },
+            "type": "array",
+            "title": "Instructions",
             "default": []
           }
         },
@@ -60927,6 +62206,27 @@
         ],
         "title": "PrioritySnapshotSummary"
       },
+      "PrivateFindings": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Count"
+          },
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "intake_id"
+        ],
+        "title": "PrivateFindings",
+        "description": "G1 \u00a73.4.6: the caller's own findings below Summary that bear on the subject."
+      },
       "Problem": {
         "properties": {
           "code": {
@@ -61896,6 +63196,7 @@
               "source_permission_revoked",
               "already_published",
               "superseded_version",
+              "nothing_written",
               "template_unresolved",
               "open_critical_change_request",
               "open_change_request",
@@ -64092,6 +65393,91 @@
         ],
         "title": "ReplyCreate"
       },
+      "ReplyUsage": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Tokens"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "llm_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Via"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "cost_usd",
+          "account_label",
+          "llm_via",
+          "attempts"
+        ],
+        "title": "ReplyUsage"
+      },
       "RepoRef": {
         "properties": {
           "repo": {
@@ -64753,7 +66139,8 @@
               "slack",
               "meeting",
               "doc",
-              "other"
+              "other",
+              "in_app"
             ],
             "title": "Channel"
           },
@@ -64854,7 +66241,8 @@
               "slack",
               "meeting",
               "doc",
-              "other"
+              "other",
+              "in_app"
             ],
             "title": "Channel"
           },
@@ -65263,7 +66651,8 @@
               "slack",
               "meeting",
               "doc",
-              "other"
+              "other",
+              "in_app"
             ],
             "title": "Channel"
           },
@@ -67823,6 +69212,244 @@
         "type": "object",
         "title": "RoadmapAnswers",
         "description": "docs/research/roadmap-formats.md, questions the template picker should ask."
+      },
+      "RoadmapItemChange": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "added",
+              "dropped",
+              "moved",
+              "changed",
+              "unchanged"
+            ],
+            "title": "Change"
+          },
+          "matched_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "key",
+                  "title"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched By"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "base_horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Horizon"
+          },
+          "head_horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Horizon"
+          },
+          "base_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Position"
+          },
+          "head_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Position"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFieldChange"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFieldChange"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "change",
+          "matched_by",
+          "title",
+          "base_horizon",
+          "head_horizon",
+          "base_position",
+          "head_position",
+          "fields",
+          "notes"
+        ],
+        "title": "RoadmapItemChange"
+      },
+      "RoadmapItemHistoryEntry": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prd_draft",
+              "roadmap"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "milestone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Name"
+          },
+          "milestone_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Date"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "added",
+              "dropped",
+              "moved",
+              "changed",
+              "unchanged"
+            ],
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "kind",
+          "label",
+          "approved",
+          "at",
+          "present",
+          "title",
+          "horizon",
+          "milestone_name",
+          "milestone_date",
+          "change"
+        ],
+        "title": "RoadmapItemHistoryEntry"
+      },
+      "RoadmapItemHistoryOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/DocumentRef"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItemHistoryEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "item_key",
+          "entries"
+        ],
+        "title": "RoadmapItemHistoryOut"
       },
       "RoadmapItemOut": {
         "properties": {
@@ -74739,6 +76366,14 @@
             "type": "array",
             "title": "Agent Items",
             "default": []
+          },
+          "next_draft_changes": {
+            "items": {
+              "$ref": "#/components/schemas/StagedDiscussionChange"
+            },
+            "type": "array",
+            "title": "Next Draft Changes",
+            "default": []
           }
         },
         "type": "object",
@@ -74749,6 +76384,511 @@
           "items"
         ],
         "title": "StagedChanges"
+      },
+      "StagedDiscussionChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "const": "next_draft_change",
+            "title": "Source",
+            "default": "next_draft_change"
+          },
+          "section_key": {
+            "type": "string",
+            "title": "Section Key"
+          },
+          "section_heading": {
+            "type": "string",
+            "title": "Section Heading"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "origin_line": {
+            "type": "string",
+            "title": "Origin Line"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
+          },
+          "discussion_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Title"
+          },
+          "from_private": {
+            "type": "boolean",
+            "title": "From Private",
+            "default": false
+          },
+          "staged_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged By Name"
+          },
+          "staged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staged At"
+          },
+          "raised_on_version": {
+            "type": "integer",
+            "title": "Raised On Version"
+          },
+          "section_gone": {
+            "type": "boolean",
+            "title": "Section Gone",
+            "default": false
+          },
+          "section_locked": {
+            "type": "boolean",
+            "title": "Section Locked",
+            "default": false
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "section_key",
+          "section_heading",
+          "instruction",
+          "origin_line",
+          "raised_on_version",
+          "lock_version"
+        ],
+        "title": "StagedDiscussionChange",
+        "description": "G4: a discussion's section change staged for the next draft (``next_draft_changes``)."
+      },
+      "StagingCounts": {
+        "properties": {
+          "staged": {
+            "type": "integer",
+            "title": "Staged",
+            "default": 0
+          },
+          "suggested": {
+            "type": "integer",
+            "title": "Suggested",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "StagingCounts"
+      },
+      "StagingDiscussion": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "StagingDiscussion",
+        "description": "The discussion a row came from. For a private discussion the reader is not in, only\nthat it is private: ``id`` and ``title`` are null. ``private`` is its visibility now."
+      },
+      "StagingItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "suggestion",
+              "next_draft_change",
+              "checkpoint_action"
+            ],
+            "title": "Source"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "suggested"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "row",
+              "discussion",
+              "review"
+            ],
+            "title": "Origin"
+          },
+          "discussion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagingDiscussion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_private": {
+            "type": "boolean",
+            "title": "From Private",
+            "default": false
+          },
+          "origin_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Line"
+          },
+          "staged_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagingPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggested_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StagingPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "section_gone": {
+            "type": "boolean",
+            "title": "Section Gone",
+            "default": false
+          },
+          "section_locked": {
+            "type": "boolean",
+            "title": "Section Locked",
+            "default": false
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "kind",
+          "label",
+          "state",
+          "origin"
+        ],
+        "title": "StagingItem"
+      },
+      "StagingList": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/StagingTarget"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StagingItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/StagingCounts"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "can_stage": {
+            "type": "boolean",
+            "title": "Can Stage",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "items",
+          "counts"
+        ],
+        "title": "StagingList"
+      },
+      "StagingPerson": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "StagingPerson"
+      },
+      "StagingTarget": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "checkpoint"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "next_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Version"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "checkpoint_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "StagingTarget"
       },
       "StakeholderAnswerOut": {
         "properties": {
@@ -76220,6 +78360,31 @@
           "source"
         ],
         "title": "SyncResult"
+      },
+      "TargetGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "TargetGoal",
+        "description": "A confirmed goal a PRD run serves (#260)."
       },
       "TaskCounts": {
         "properties": {
@@ -80199,6 +82364,216 @@
         ],
         "title": "TrackerImportOut"
       },
+      "TrackerIssueLinked": {
+        "properties": {
+          "prd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Record Id"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "item_key",
+          "record_id"
+        ],
+        "title": "TrackerIssueLinked"
+      },
+      "TrackerIssueMilestone": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "TrackerIssueMilestone"
+      },
+      "TrackerIssueOut": {
+        "properties": {
+          "source_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Item Id"
+          },
+          "external_ref": {
+            "type": "string",
+            "title": "External Ref"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "done",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "State"
+          },
+          "raw_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Status"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrackerIssueMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "linked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrackerIssueLinked"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_item_id",
+          "external_ref",
+          "title",
+          "url",
+          "state",
+          "raw_status",
+          "milestone",
+          "linked"
+        ],
+        "title": "TrackerIssueOut",
+        "description": "One of the caller's own synced GitHub issues, as a link would read it (F7)."
+      },
+      "TrackerLinkIn": {
+        "properties": {
+          "prd": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "item_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Key"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "move": {
+            "type": "boolean",
+            "title": "Move",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prd",
+          "item_key"
+        ],
+        "title": "TrackerLinkIn",
+        "description": "Link one of the caller's synced GitHub issues to a roadmap item of a PRD, by its\nsource item or its issue URL. ``move``: take it from the item it is linked to."
+      },
       "TrackerPlanEpic": {
         "properties": {
           "item_key": {
@@ -80596,6 +82971,66 @@
             ],
             "title": "Recorded By"
           },
+          "prd_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Document Id"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          },
+          "linked_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked By"
+          },
+          "linked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked At"
+          },
+          "refresh_lost_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Lost At"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -80630,6 +83065,18 @@
       },
       "TrackerRecordRef": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "tracker": {
             "type": "string",
             "enum": [
@@ -80699,6 +83146,18 @@
               }
             ],
             "title": "Url"
+          },
+          "refresh_lost_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Lost At"
           }
         },
         "type": "object",
@@ -81007,6 +83466,19 @@
           "reason"
         ],
         "title": "UnavailableItem"
+      },
+      "UnstageIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "UnstageIn"
       },
       "UpdatePeriod": {
         "properties": {

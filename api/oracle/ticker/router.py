@@ -50,6 +50,8 @@ from oracle.claude_accounts import sweep as claude_sweep
 from oracle.config import get_settings
 from oracle.connections import service as connections_service
 from oracle.db import get_engine
+from oracle.discussions import replies as discussion_replies
+from oracle.discussions.replies import RepliesTick
 from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
 from oracle.models import Tenant
@@ -114,6 +116,8 @@ class TickerOut(BaseModel):
     runs: _Runs = Field(default_factory=_Runs)
     claude_accounts: _ClaudeAccounts = Field(default_factory=_ClaudeAccounts)
     llm_jobs: _LlmJobs = Field(default_factory=_LlmJobs)
+    # G2: Oracle's replies nobody streamed, completed here; leases that ran out.
+    discussion_replies: RepliesTick = Field(default_factory=RepliesTick)
     # Calls a member's disable or a run's cancel still owed (a provider revoke, a runtime
     # cancel), made.
     member_follow_ups: int = 0
@@ -268,6 +272,21 @@ async def _run_jobs(
     A company leaves the turn when it has nothing runnable, has run its
     ``max_per_tick`` or failed; the turn ends once no job fits in the time left.
     """
+    for tenant_id in tenant_ids:
+        # G2: replies nobody streams, next to the built-in jobs and inside the same budget.
+        budget = HARD_LIMIT_SECONDS - (time.monotonic() - started)
+        try:
+            got = await discussion_replies.run_pending(tenant_id, budget_seconds=budget)
+        except Exception:
+            log.exception("run ticker: discussion replies failed for company %s", tenant_id)
+            failures.add(tenant_id)
+            continue
+        for name in ("ran", "completed", "failed", "interrupted"):
+            setattr(
+                out.discussion_replies,
+                name,
+                getattr(out.discussion_replies, name) + getattr(got, name),
+            )
     limit = llm_jobs.get_worker_settings().max_per_tick
     if limit <= 0:
         return

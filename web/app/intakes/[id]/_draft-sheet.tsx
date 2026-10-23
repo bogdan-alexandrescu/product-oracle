@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button, InfoTip, Notice, SegmentedControl, Sheet } from "@/components/ds";
-import { TemplateThemePicker, useDraftChoice } from "@/components/NewDraft";
+import { GoalPicker, TemplateThemePicker, useConfirmedGoals, useDraftChoice } from "@/components/NewDraft";
 import { ErrorNote, Loading } from "@/components/ui";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
@@ -41,7 +41,8 @@ const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));
 
 /**
  * Draft with Oracle (C4): the template and theme chosen at the door (Change opens the same
- * picker), whether to reuse the current baseline or rebuild it (B1 "Reuse base"), the depth,
+ * picker), the goals the PRD serves (the brief's until changed, #260), whether to reuse the
+ * current baseline or rebuild it (B1 "Reuse base"), the depth,
  * the flow's stops (each on by default, W2), one estimate line (P3d), and Start drafting.
  * The first estimate makes the intake's draft run (POST /v1/intakes/{id}/runs); every later
  * change goes through the same route, which updates that run, and re-estimates it, so the
@@ -84,6 +85,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
 
   const [changing, setChanging] = useState(false);
   const [reuse, setReuse] = useState<boolean | null>(run ? !!run.knobs.reuse_baseline : null);
+  const [goals, setGoals] = useState<string[]>(run ? (run.knobs.goals ?? []).map((g) => g.id) : (intake.goal_ids ?? []));
   const [depth, setDepth] = useState<Depth>(run?.knobs.depth ?? "standard");
   const [stops, setStops] = useState<Record<string, boolean>>(run?.knobs.checkpoints ?? {});
   const [runId, setRunId] = useState<string | null>(run?.id ?? null);
@@ -91,6 +93,14 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // A goal of the brief rejected since is left out, and the sheet says so (#260).
+  const confirmed = useConfirmedGoals();
+  const leftOut = useMemo(
+    () => (confirmed.data ? goals.filter((g) => !confirmed.data!.some((c) => c.id === g)) : []),
+    [goals, confirmed.data],
+  );
+  const serving = useMemo(() => goals.filter((g) => !leftOut.includes(g)), [goals, leftOut]);
 
   const status = review.data;
   const reusable = !!status?.reusable;
@@ -110,8 +120,9 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
       roles: {},
       checkpoints: Object.fromEntries(checkpoints.map((c) => [c.kind, stops[c.kind] ?? true])),
       reuse_baseline: reusing,
+      goals: serving,
     }),
-    [depth, checkpoints, stops, reusing],
+    [depth, checkpoints, stops, reusing, serving],
   );
 
   async function runEstimate(current: SheetKnobs) {
@@ -217,6 +228,17 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
             <div className="mt-3 flex flex-col gap-6">
               <TemplateThemePicker choice={choice} />
             </div>
+          )}
+        </section>
+
+        <section className="min-w-0">
+          <GoalPicker value={goals} onChange={setGoals} legend="Goals this PRD serves" />
+          {leftOut.length > 0 && (
+            <p data-testid="draft-goals-left-out" className="mt-1.5 text-sm text-text2">
+              {leftOut.length === 1
+                ? "1 goal of this brief is no longer a confirmed goal: this PRD leaves it out."
+                : `${leftOut.length} goals of this brief are no longer confirmed goals: this PRD leaves them out.`}
+            </p>
           )}
         </section>
 

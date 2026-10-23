@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
 import { Button, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -8,11 +8,12 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
-import { optionKey, SUBJECT_LABEL, type Decision, type Person } from "./lib";
+import { optionKey, SUBJECT_LABEL, type Decision, type DecisionOption, type Person } from "./lib";
 
-type Draft = { label: string; summary: string; pros: string; cons: string; cost: string };
-const empty = (): Draft => ({ label: "", summary: "", pros: "", cons: "", cost: "" });
-const lines = (text: string) =>
+/** An option as typed; `key` keeps an existing option's key (and so its evidence and recommendation). */
+export type Draft = { key?: string; label: string; summary: string; pros: string; cons: string; cost: string };
+export const empty = (): Draft => ({ label: "", summary: "", pros: "", cons: "", cost: "" });
+export const lines = (text: string) =>
   text
     .split("\n")
     .map((l) => l.trim())
@@ -47,7 +48,6 @@ export function ProposeDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const set = (i: number, patch: Partial<Draft>) => setOptions((o) => o.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   async function submit(e: FormEvent) {
@@ -58,24 +58,10 @@ export function ProposeDialog({
     if (!approver) return setError("Name the approver");
     setBusy(true);
     setError(null);
-    const taken = new Set<string>();
     const body: Schemas["DecisionCreate"] = {
       title: title.trim(),
       question: question.trim() || null,
-      options: filled.map((o) => {
-        const key = optionKey(o.label, taken);
-        taken.add(key);
-        return {
-          key,
-          label: o.label.trim(),
-          summary: o.summary.trim() || null,
-          pros: lines(o.pros),
-          cons: lines(o.cons),
-          evidence_ids: [],
-          cost_if_wrong: o.cost.trim() || null,
-          recommended: false,
-        };
-      }),
+      options: optionsOf(filled),
       approver_id: approver,
       reversibility,
       contributor_ids: contributors,
@@ -122,39 +108,7 @@ export function ProposeDialog({
               About: {SUBJECT_LABEL[subject.kind] ?? subject.kind} {subject.ref ?? ""}
             </p>
           )}
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-semibold text-text2">Options</legend>
-            {options.map((o, i) => (
-              <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-line p-2.5">
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label={`Option ${i + 1}`}
-                    className={INPUT}
-                    value={o.label}
-                    maxLength={200}
-                    onChange={(e) => set(i, { label: e.target.value })}
-                    placeholder={`Option ${i + 1}`}
-                  />
-                  <Button variant="ghost" aria-label={`Remove option ${i + 1}`} onClick={() => setOptions((all) => all.filter((_, j) => j !== i))}>
-                    Remove
-                  </Button>
-                </div>
-                <input aria-label={`Option ${i + 1} summary`} className={INPUT} value={o.summary} onChange={(e) => set(i, { summary: e.target.value })} placeholder="Summary" />
-                <div className="grid grid-cols-2 gap-1.5 max-[600px]:grid-cols-1">
-                  <textarea aria-label={`Option ${i + 1} pros`} className={INPUT} rows={2} value={o.pros} onChange={(e) => set(i, { pros: e.target.value })} placeholder="Pros, one a line" />
-                  <textarea aria-label={`Option ${i + 1} cons`} className={INPUT} rows={2} value={o.cons} onChange={(e) => set(i, { cons: e.target.value })} placeholder="Cons, one a line" />
-                </div>
-                <input aria-label={`Option ${i + 1} cost if wrong`} className={INPUT} value={o.cost} onChange={(e) => set(i, { cost: e.target.value })} placeholder="Cost if wrong" />
-              </div>
-            ))}
-            {options.length < 6 && (
-              <div>
-                <Button icon="plus" onClick={() => setOptions((all) => [...all, empty()])}>
-                  Add option
-                </Button>
-              </div>
-            )}
-          </fieldset>
+          <OptionsEditor options={options} setOptions={setOptions} />
           <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Approver
@@ -192,7 +146,68 @@ export function ProposeDialog({
   );
 }
 
-function People({ label, people, chosen, onToggle }: { label: string; people: Person[]; chosen: string[]; onToggle: (id: string) => void }) {
+/** The typed options as the API takes them; an existing option keeps its key, evidence and recommendation. */
+export function optionsOf(drafts: Draft[], before: DecisionOption[] = []): DecisionOption[] {
+  const filled = drafts.filter((o) => o.label.trim());
+  const taken = new Set(filled.flatMap((o) => (o.key ? [o.key] : [])));
+  return filled.map((o) => {
+    const old = before.find((b) => b.key === o.key);
+    const key = o.key ?? optionKey(o.label, taken);
+    taken.add(key);
+    return {
+      key,
+      label: o.label.trim(),
+      summary: o.summary.trim() || null,
+      pros: lines(o.pros),
+      cons: lines(o.cons),
+      evidence_ids: old?.evidence_ids ?? [],
+      cost_if_wrong: o.cost.trim() || null,
+      recommended: old?.recommended ?? false,
+    };
+  });
+}
+
+/** Two to six options: a label, a summary, pros and cons one a line, the cost if wrong. */
+export function OptionsEditor({ options, setOptions }: { options: Draft[]; setOptions: Dispatch<SetStateAction<Draft[]>> }) {
+  const set = (i: number, patch: Partial<Draft>) => setOptions((o) => o.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1 text-sm font-semibold text-text2">Options</legend>
+      {options.map((o, i) => (
+        <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-line p-2.5">
+          <div className="flex items-center gap-2">
+            <input
+              aria-label={`Option ${i + 1}`}
+              className={INPUT}
+              value={o.label}
+              maxLength={200}
+              onChange={(e) => set(i, { label: e.target.value })}
+              placeholder={`Option ${i + 1}`}
+            />
+            <Button variant="ghost" aria-label={`Remove option ${i + 1}`} onClick={() => setOptions((all) => all.filter((_, j) => j !== i))}>
+              Remove
+            </Button>
+          </div>
+          <input aria-label={`Option ${i + 1} summary`} className={INPUT} value={o.summary} onChange={(e) => set(i, { summary: e.target.value })} placeholder="Summary" />
+          <div className="grid grid-cols-2 gap-1.5 max-[600px]:grid-cols-1">
+            <textarea aria-label={`Option ${i + 1} pros`} className={INPUT} rows={2} value={o.pros} onChange={(e) => set(i, { pros: e.target.value })} placeholder="Pros, one a line" />
+            <textarea aria-label={`Option ${i + 1} cons`} className={INPUT} rows={2} value={o.cons} onChange={(e) => set(i, { cons: e.target.value })} placeholder="Cons, one a line" />
+          </div>
+          <input aria-label={`Option ${i + 1} cost if wrong`} className={INPUT} value={o.cost} onChange={(e) => set(i, { cost: e.target.value })} placeholder="Cost if wrong" />
+        </div>
+      ))}
+      {options.length < 6 && (
+        <div>
+          <Button icon="plus" onClick={() => setOptions((all) => [...all, empty()])}>
+            Add option
+          </Button>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+export function People({ label, people, chosen, onToggle }: { label: string; people: Person[]; chosen: string[]; onToggle: (id: string) => void }) {
   return (
     <fieldset className="flex flex-col gap-1">
       <legend className="mb-1 text-sm font-semibold text-text2">{label}</legend>

@@ -8,11 +8,11 @@ from collections.abc import Awaitable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
-from oracle.discussions import service
+from oracle.discussions import replies, service
 from oracle.discussions.schemas import (
     ChangeStatus,
     DiscussionChangeOut,
@@ -22,6 +22,7 @@ from oracle.discussions.schemas import (
     DiscussionMessageIn,
     DiscussionMessageOut,
     DiscussionMessagePage,
+    DiscussionMessagePosted,
     DiscussionOut,
     DiscussionPage,
     DiscussionParticipantOut,
@@ -152,25 +153,127 @@ async def list_discussion_messages(
     messages older than that one."""
     d, _parts, _seat = await _call(service.readable(db, principal, discussion_id))
     rows, more = await _call(service.list_messages(db, d, before, limit))
-    return DiscussionMessagePage(items=await service.messages_out(db, rows), has_more=more)
+    return DiscussionMessagePage(
+        items=await service.messages_out(db, rows, principal), has_more=more
+    )
 
 
 @router.post(
     "/discussions/{discussion_id}/messages",
-    response_model=DiscussionMessageOut,
+    response_model=DiscussionMessagePosted,
     status_code=status.HTTP_201_CREATED,
-    responses={403: PRIVATE, 404: GONE, 409: {"description": "This discussion is closed"}},
+    responses={
+        403: PRIVATE,
+        404: GONE,
+        409: {"description": "This discussion is closed"},
+        429: {"description": "Oracle has answered a lot here; the message is still stored"},
+    },
 )
 async def create_discussion_message(
-    discussion_id: uuid.UUID, body: DiscussionMessageIn, principal: Viewer, db: TenantDB
-) -> DiscussionMessageOut:
+    discussion_id: uuid.UUID,
+    body: DiscussionMessageIn,
+    principal: Viewer,
+    db: TenantDB,
+    wait: bool = False,
+) -> DiscussionMessagePosted:
     """Write in a discussion (commenters and up; in a private one, its people). Plain
     text with Markdown links, at most 8,000 characters. ``mentions`` (member ids from
     ``GET /v1/people``) add people to an open discussion; in a private one only the
-    starter adds people."""
+    starter adds people.
+
+    Oracle replies to every message while only one person is in the discussion, and
+    after that when addressed (``@Oracle`` or ``mention_oracle``): ``reply`` is its
+    ``pending`` reply, whose text streams from ``GET …/messages/{reply_id}/stream``.
+    ``wait``: the reply runs here, without streaming, for at most 120 s, and comes back
+    ``complete`` or ``failed``. 429 when Oracle has answered a lot here in a short time
+    (the message is stored)."""
     message = await _call(service.post_message(db, principal, discussion_id, body))
+    d = await service.get_discussion(db, discussion_id)
+    reply = None
+    if await replies.wants_reply(db, d, message):
+        try:
+            reply = await replies.ask(db, d, message)
+        except replies.ReplyLimited as e:
+            await db.commit()
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(e)) from e
     await db.commit()
-    [out] = await service.messages_out(db, [message])
+    if reply is not None and wait:
+        await replies.wait(principal.tenant_id, reply.id)
+        await db.refresh(reply)
+    [out, *rest] = await service.messages_out(db, [message, *([reply] if reply else [])], principal)
+    return DiscussionMessagePosted(message=out, reply=rest[0] if rest else None)
+
+
+@router.get(
+    "/discussions/{discussion_id}/messages/{reply_id}/stream",
+    operation_id="stream_discussion_reply",
+    response_class=StreamingResponse,
+    responses={
+        200: {"content": {"text/event-stream": {}}, "description": "The reply's events"},
+        403: PRIVATE,
+        404: GONE,
+    },
+)
+async def stream_discussion_reply(
+    discussion_id: uuid.UUID, reply_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> StreamingResponse:
+    """Oracle's reply as it is written (``text/event-stream``): ``delta`` events with
+    the new text, then ``citations`` and ``done`` (the message), or ``error``
+    (``reason``, ``message``, ``retry``); ``: ping`` every 15 s. The first reader runs
+    the reply; every other reader (another tab, another person, a reload) tails it."""
+    d, _parts, _seat = await _call(service.readable(db, principal, discussion_id))
+    row = await db.get(service.DiscussionMessage, reply_id)
+    if row is None or row.discussion_id != d.id or row.author_kind != "oracle":
+        raise HTTPException(404, "Reply not found")
+    await db.commit()
+    return StreamingResponse(
+        replies.stream(principal.tenant_id, principal, discussion_id, reply_id),
+        media_type="text/event-stream",
+        # no-transform: Next's proxy (and any other) must not gzip, so buffer, the events.
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post(
+    "/discussions/{discussion_id}/messages/{reply_id}/cancel",
+    response_model=DiscussionMessageOut,
+    dependencies=[Depends(same_origin)],
+    responses={403: PRIVATE, 404: GONE},
+)
+async def cancel_discussion_reply(
+    discussion_id: uuid.UUID, reply_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> DiscussionMessageOut:
+    """Stop Oracle's reply (the person who asked, or an approver): it ends ``cancelled``
+    with the text written so far, within a second."""
+    reply = await _call(replies.cancel(db, principal, discussion_id, reply_id))
+    await db.commit()
+    [out] = await service.messages_out(db, [reply], principal)
+    return out
+
+
+@router.post(
+    "/discussions/{discussion_id}/messages/{reply_id}/retry",
+    response_model=DiscussionMessageOut,
+    dependencies=[Depends(same_origin)],
+    responses={
+        403: PRIVATE,
+        404: GONE,
+        409: {"description": "Not failed or stopped"},
+        429: {"description": "Oracle has answered a lot here in a short time"},
+    },
+)
+async def retry_discussion_reply(
+    discussion_id: uuid.UUID, reply_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> DiscussionMessageOut:
+    """Ask again for a failed or stopped reply (the person who asked, or an approver):
+    it is ``pending`` again, with no text; open its stream to run it. 429 when Oracle
+    has answered a lot here in a short time (each Retry counts as an answer)."""
+    try:
+        reply = await _call(replies.retry(db, principal, discussion_id, reply_id))
+    except replies.ReplyLimited as e:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(e)) from e
+    await db.commit()
+    [out] = await service.messages_out(db, [reply], principal)
     return out
 
 

@@ -139,6 +139,9 @@ class BlockerDependency(EntityRef):
 
 
 class TrackerRecordRef(BaseModel):
+    # The tracker record (Unlink names it: DELETE /v1/tracker/links/{id}); null on a
+    # preview that is no stored record.
+    id: uuid.UUID | None = None
     tracker: Tracker
     external_ref: str
     state: TrackerState
@@ -146,6 +149,8 @@ class TrackerRecordRef(BaseModel):
     target_date: date | None = None
     estimate: Decimal | None = None
     url: str | None = None
+    # When the synced issue it is refreshed from went away (F7): it shows as last read.
+    refresh_lost_at: datetime | None = None
 
 
 class DriftEntry(BaseModel):
@@ -269,8 +274,57 @@ class TrackerRecordOut(ORM):
     target_date: date | None
     observed_at: datetime
     recorded_by: uuid.UUID | None
+    prd_document_id: uuid.UUID | None = None
+    source_item_id: uuid.UUID | None = None
+    linked_by: uuid.UUID | None = None
+    linked_at: datetime | None = None
+    refresh_lost_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class TrackerIssueMilestone(BaseModel):
+    title: str
+    due: date | None = None
+
+
+class TrackerIssueLinked(BaseModel):
+    prd: str | None
+    item_key: str
+    record_id: uuid.UUID
+    item_title: str | None = None
+
+
+class TrackerIssueOut(BaseModel):
+    """One of the caller's own synced GitHub issues, as a link would read it (F7)."""
+
+    source_item_id: uuid.UUID
+    external_ref: str
+    title: str | None
+    url: str | None
+    state: TrackerState
+    raw_status: str | None
+    milestone: TrackerIssueMilestone | None
+    linked: TrackerIssueLinked | None
+
+
+class TrackerLinkIn(BaseModel):
+    """Link one of the caller's synced GitHub issues to a roadmap item of a PRD, by its
+    source item or its issue URL. ``move``: take it from the item it is linked to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prd: str = Field(min_length=1, max_length=200)
+    item_key: str = Field(min_length=1, max_length=200)
+    source_item_id: uuid.UUID | None = None
+    url: str | None = Field(None, max_length=2000)
+    move: bool = False
+
+    @model_validator(mode="after")
+    def _one_issue(self) -> "TrackerLinkIn":
+        if (self.source_item_id is None) == (self.url is None):
+            raise ValueError("name the issue by source_item_id or url, not both")
+        return self
 
 
 class TrackerImportOut(BaseModel):
@@ -457,3 +511,85 @@ class TrackChange(BaseModel):
     actor: str
     data: dict[str, Any]
     created_at: datetime
+
+
+# --- roadmap item diff (E3) ------------------------------------------------------------------
+
+ItemsKind = Literal["prd_draft", "roadmap"]
+RoadmapItemChangeKind = Literal["added", "dropped", "moved", "changed", "unchanged"]
+
+
+class ItemsRef(BaseModel):
+    """A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's."""
+
+    ref: str
+    kind: ItemsKind
+    # "Draft v2" or "Roadmap v3".
+    label: str
+    document: DocumentRef
+
+
+class ItemsOption(BaseModel):
+    ref: str
+    label: str
+
+
+class ItemsOptions(BaseModel):
+    previous: ItemsOption | None
+    approved: ItemsOption | None
+
+
+class ItemFieldChange(BaseModel):
+    # title | outcome | horizon | milestone_name | milestone_date | depends_on |
+    # prd_section | rank | item_key; notes: confidence | rank | prd_section_text | date_state.
+    field: str
+    before: Any = None
+    after: Any = None
+    # depends_on only: the ids added and removed (left out on other fields).
+    added: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
+    removed: list[str] | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
+class RoadmapItemChange(BaseModel):
+    item_key: str
+    change: RoadmapItemChangeKind
+    matched_by: Literal["key", "title"] | None
+    title: str
+    base_horizon: str | None
+    head_horizon: str | None
+    base_position: int | None
+    head_position: int | None
+    # What counts as a change (oracle.roadmap.diff.COUNTED_FIELDS); notes do not count.
+    fields: list[ItemFieldChange]
+    notes: list[ItemFieldChange]
+
+
+class ItemsDiffOut(BaseModel):
+    head: ItemsRef
+    # None (with summary None and no items) when there is nothing to compare with.
+    base: ItemsRef | None
+    options: ItemsOptions
+    summary: dict[str, int] | None
+    items: list[RoadmapItemChange]
+
+
+class RoadmapItemHistoryEntry(BaseModel):
+    ref: str
+    kind: ItemsKind
+    label: str
+    approved: bool
+    at: datetime
+    # False on the entry where the item left (change "dropped").
+    present: bool
+    title: str | None
+    horizon: str | None
+    milestone_name: str | None
+    milestone_date: str | None
+    # Against the previous entry.
+    change: RoadmapItemChangeKind
+
+
+class RoadmapItemHistoryOut(BaseModel):
+    prd: DocumentRef
+    item_key: str
+    entries: list[RoadmapItemHistoryEntry]

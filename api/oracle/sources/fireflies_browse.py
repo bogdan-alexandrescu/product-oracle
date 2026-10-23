@@ -7,8 +7,9 @@ browser.
 
 Browsing spends the person's Fireflies quota (the lower Fireflies plans allow 50 API
 calls a day), so its cost is bounded per connection: at most CALLS_PER_MINUTE and
-CALLS_PER_DAY Fireflies calls are made for browsing (a series list counts as
-SERIES_CALLS, the most it makes), the rest of the quota being left to syncs. The calls
+CALLS_PER_DAY Fireflies calls are made for browsing (a series list reads its window's
+pages, each one call, up to fireflies.SERIES_PAGES, and stops sooner where the budget
+does), the rest of the quota being left to syncs. The calls
 are counted in the database (``browse_calls``), so the budget holds across API
 processes; past it the routes answer 429 "Fireflies limit reached, try later". Answers
 are also cached for CACHE_SECONDS in the API process; a cached answer costs nothing, but
@@ -46,8 +47,6 @@ CACHE_SECONDS = 60.0
 CACHE_ENTRIES = 1000
 CALLS_PER_MINUTE = 10
 CALLS_PER_DAY = 25
-# The most Fireflies calls one series list makes.
-SERIES_CALLS = fireflies.SERIES_PAGES
 LIMIT_REACHED = "Fireflies limit reached, try later"
 UNREACHABLE = "Fireflies could not be reached: try again in a moment"
 _WINDOWS = (
@@ -94,18 +93,29 @@ class FirefliesMeetingPage(BaseModel):
     next_cursor: str | None
 
 
+class FirefliesSameTitleOut(BaseModel):
+    id: str
+    title: str
+    date: datetime | None
+
+
 class FirefliesSeriesOut(BaseModel):
     key: str
     title: str
     meeting_count: int
     last_date: datetime | None
     organizer: str | None
+    # Meetings of the window outside the series with its title (a reschedule, a one-off
+    # copy), newest first: picking the series does not take them.
+    same_title: list[FirefliesSameTitleOut]
 
 
 class FirefliesSeriesList(BaseModel):
     series: list[FirefliesSeriesOut]
-    # True when there were more meetings than the list reads (the newest 200).
+    # True when the page cap (the newest 300 meetings) or the browse budget stopped the
+    # list before the window's last meeting: the counts cover the newest ``scanned``.
     truncated: bool
+    scanned: int
 
 
 async def _fireflies_connection(db: TenantDB, connection_id: uuid.UUID, principal) -> Connection:
@@ -146,6 +156,13 @@ async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
             f"syncs keep the rest of your Fireflies quota. Try again in {_later(seconds)}.",
             seconds,
         )
+
+
+async def _more(db: TenantDB, conn: Connection) -> bool:
+    """Reserve one more Fireflies call for a series list's next page: False when the
+    browse budget refuses it."""
+    windows = tuple((window, limit) for window, limit, _ in _WINDOWS)
+    return await browse.reserve(db, conn.id, 1, windows, _now()) is None
 
 
 async def _cached(
@@ -273,20 +290,35 @@ async def list_fireflies_series(
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> FirefliesSeriesList:
-    """Your meetings grouped into their calendar series, with counts and the last date
-    (from/to: whole days in UTC). Meetings on no calendar are in no series."""
+    """Your meetings grouped into their calendar series, with counts, the last date and
+    the same-title meetings outside each (from/to: whole days in UTC). The window's
+    pages are read, one browse call each, up to the newest 300 meetings or until the
+    budget stops it (truncated).
+    Meetings on no calendar are in no series."""
     _check_range(date_to)
     conn = await _fireflies_connection(db, connection_id, principal)
     result = await _cached(
         db,
         conn,
         ("series", date_from, date_to),
-        SERIES_CALLS,
+        1,
         lambda credential: FirefliesConnector(http).browse_series(
-            credential, date_from=date_from, date_to=date_to
+            credential, date_from=date_from, date_to=date_to, more=lambda: _more(db, conn)
         ),
     )
     return FirefliesSeriesList(
-        series=[FirefliesSeriesOut(**s.__dict__) for s in result.series],
+        series=[
+            FirefliesSeriesOut(
+                **{
+                    **s.__dict__,
+                    "same_title": [
+                        FirefliesSameTitleOut(id=m.id, title=m.title, date=m.date)
+                        for m in s.same_title
+                    ],
+                }
+            )
+            for s in result.series
+        ],
         truncated=result.truncated,
+        scanned=result.scanned,
     )

@@ -32,6 +32,10 @@ type Kind = DocumentRow["kind"];
 type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" | "question"> & {
   created_by: string | null;
   updated_by: string | null;
+  /** G4: staged from a discussion (row actions have none), and whether it was private then. */
+  origin?: "row" | "discussion";
+  discussion_id?: string | null;
+  from_private?: boolean;
 };
 /** D8: a checkpoint's shared draft; `log` says who made each revision (the 409's names). */
 export interface DraftRow {
@@ -92,6 +96,8 @@ export interface RunsContext {
   undelivered?: boolean;
   feedback: FeedbackRow[];
   documents: DocumentRow[];
+  /** #260: the confirmed goals a Baseline to PRD run may name. */
+  confirmedGoals?: () => Schemas["TargetGoal"][];
   latestVersion: (documentId: string) => number | null;
   /** The status of Oracle's live suggestion on a feedback item, if it has one. */
   suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
@@ -370,9 +376,24 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
   }
   const checkpoints: Record<string, boolean> = {};
   for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
-  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null };
+  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [] };
   if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
   return knobs;
+}
+
+/** #260, as the API: the confirmed goals (ids or keys) a Baseline to PRD run names; null: none named. */
+function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetGoal"][] | string | null {
+  if (raw == null) return null;
+  if (!raw.length) return [];
+  if (flowKey !== "baseline_to_prd") return "only a Baseline to PRD run names the goals it serves";
+  const confirmed = ctx.confirmedGoals?.() ?? [];
+  const out: Schemas["TargetGoal"][] = [];
+  for (const ref of raw) {
+    const goal = confirmed.find((g) => g.id === ref || g.key === ref);
+    if (!goal) return `not a confirmed goal: ${ref}`;
+    if (!out.includes(goal)) out.push(goal);
+  }
+  return out;
 }
 
 function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string): SegmentOut[] {
@@ -1104,6 +1125,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (input.flow === "update_draft" && ctx.userRole !== "owner") return fail(403, "Only an owner can draft an update");
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
+    const goals = targetGoals(ctx, input.flow, input.knobs?.goals);
+    if (typeof goals === "string") return fail(422, goals);
+    knobs.goals = goals ?? [];
     const refused = buildUnderWay(ctx, input.flow);
     if (refused) return refused;
     // A flow that writes no document names none, reads none and takes no template.
@@ -1227,6 +1251,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (patch.knobs) {
       const knobs = resolveKnobs(r.flow, patch.knobs);
       if (typeof knobs === "string") return fail(422, knobs);
+      const goals = targetGoals(ctx, r.flow, patch.knobs.goals);
+      if (typeof goals === "string") return fail(422, goals);
+      knobs.goals = goals ?? r.knobs.goals ?? [];
       r.knobs = knobs;
     }
     if (patch.document) {
@@ -1360,6 +1387,12 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     Object.assign(r, { can_dismiss_overrun: false, stuck: null });
     return done();
   }
+  if (action === "checkpoints" && p[5] === "review.yaml" && m === "GET") {
+    const cp = r.checkpoints.find((c) => c.id === p[4]);
+    if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
+    if (cp.status === "pending" || !cp.review) return fail(404, "no review was sent back at this checkpoint");
+    return new Response(renderReview(cp.review, cp.decided_at), { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
   if (action === "checkpoints" && p[4] && p[5] !== "decide") {
     const cp = r.checkpoints.find((c) => c.id === p[4]);
     if (!cp) return fail(404, `checkpoint ${p[4]} not found`);
@@ -1385,8 +1418,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (decision === "approved" && blocked) return fail(409, blocked);
     // D8: the note defaults to the shared draft's.
     const text = (note ?? draft.note)?.trim() || null;
-    if (decision === "changes_requested" && !text) return fail(422, "say what to change: a note is required to request changes");
+    // D4: a send-back says something: a staged action or a note.
+    const staged = draft.actions.filter((a) => a.state === "staged");
+    if (decision === "changes_requested" && !text && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     Object.assign(cp, { status: decision, note: text, decided_by: ctx.userId, decided_at: ctx.now() });
+    if (decision === "changes_requested") cp.review = buildReview(ctx, r, cp, staged, text);
     if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
@@ -2270,9 +2306,110 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     items,
     tally,
     note: draft.note,
+    sent_review: pending ? null : (cp.review ?? null),
+    sent_review_yaml: !pending && cp.review ? renderReview(cp.review, cp.decided_at) : null,
     can_read: true,
     can_suggest: pending && atLeast(role, "commenter"),
     can_stage: stages,
     can_decide: stages,
   };
+}
+
+// --------------------------------------------------------------------------- review file (D4)
+
+type Review = Record<string, unknown> & { items: Record<string, unknown>[] };
+const REVIEW_KEYS = ["version", "checkpoint", "run", "segment", "attempt", "file", "items", "unchanged", "problems_open", "waived", "general_note"];
+const RENAMED: Record<string, [string, string]> = { milestone_date: ["milestone", "date"], milestone_name: ["milestone", "name"] };
+
+/** As oracle.runs.review_file.build_review, for roadmap_items (other kinds: the note alone). */
+function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: DraftActionRow[], note: string | null): Review {
+  const seg = r.segments.find((s) => s.seq === cp.segment_seq);
+  const items = cp.kind === "roadmap_items" ? [...(ctx.db.artifacts[`${r.id}|${cp.segment_seq}|roadmap_items.yaml`] ?? "").matchAll(/^\s*- \{?id: ([\w-]+)/gm)].map((x) => x[1]) : [];
+  const reasons = cp.kind === "roadmap_items" ? (seg?.items_check?.reasons ?? []) : [];
+  const entries: Record<string, unknown>[] = [];
+  const waived: Record<string, unknown>[] = [];
+  if (cp.kind === "roadmap_items") {
+    const keys = [...new Set(staged.map((a) => a.item_key))].sort((x, y) => (items.indexOf(x) + 1 || 1e9) - (items.indexOf(y) + 1 || 1e9));
+    for (const key of keys) {
+      const mine = staged.filter((a) => a.item_key === key);
+      const edits = mine.filter((a) => a.kind === "edit");
+      for (const a of mine) {
+        if (a.kind === "waive") {
+          const codes = a.answers?.length ? a.answers : reasons.filter((x) => x.item === key).map((x) => x.code);
+          for (const code of codes.length ? codes : [null]) waived.push({ id: key, code, reason: (a.value as { reason?: string } | null)?.reason ?? null });
+          continue;
+        }
+        if (a.kind === "edit" && a !== edits[0]) continue;
+        const group = a.kind === "edit" ? edits : [a];
+        const entry: Record<string, unknown> = { id: key, action: a.kind === "edit" ? "change" : a.kind };
+        if (a.kind === "edit") {
+          const changes: Record<string, unknown> = {};
+          for (const e of edits) {
+            const f = e.field ?? "";
+            if (f === "order") entry.reorder = true;
+            else if (f.startsWith("clear:")) changes[f.slice(6)] = null;
+            else if (RENAMED[f]) changes[RENAMED[f][0]] = { ...((changes[RENAMED[f][0]] as object | undefined) ?? {}), [RENAMED[f][1]]: e.value };
+            else changes[f] = e.value;
+          }
+          if (Object.keys(changes).length) entry.changes = changes;
+        }
+        const answers = [...new Set(group.flatMap((g) => g.answers ?? []))];
+        if (answers.length) entry.answers = answers;
+        const notes = group.map((g) => g.note).filter(Boolean);
+        if (notes.length) entry.note = notes.join(" ");
+        entries.push(entry);
+      }
+    }
+  }
+  const answers = (a: DraftActionRow, code: string) => a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(code));
+  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answers(a, x.code)));
+  const entered = new Set([...entries, ...waived].map((e) => e.id));
+  return {
+    version: 1,
+    checkpoint: cp.kind,
+    run: r.id,
+    segment: seg?.name ?? null,
+    attempt: (cp.payload?.attempt as number | undefined) ?? null,
+    file: cp.kind === "roadmap_items" ? "roadmap_items.yaml" : null,
+    items: entries,
+    unchanged: items.filter((k) => !entered.has(k) && !open.some((x) => x.item === k)),
+    problems_open: open.filter((x) => x.severity === "blocking").map((x) => ({ id: x.item, code: x.code, text: x.text })),
+    waived,
+    general_note: note,
+  };
+}
+
+function yamlScalar(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "string") return /^[\w][\w .,/-]*$/.test(v) && !/^(true|false|null|yes|no|on|off|[\d.+-]+)$/i.test(v) ? v : JSON.stringify(v);
+  return String(v);
+}
+
+function yamlLines(v: unknown, indent: string): string[] {
+  if (Array.isArray(v)) {
+    return v.flatMap((x) => {
+      if (x && typeof x === "object") {
+        const [first, ...rest] = yamlLines(x, indent + "  ");
+        return [`${indent}- ${first.trimStart()}`, ...rest];
+      }
+      return [`${indent}- ${yamlScalar(x)}`];
+    });
+  }
+  return Object.entries(v as Record<string, unknown>).flatMap(([k, x]) => {
+    if (Array.isArray(x)) return x.length ? [`${indent}${k}:`, ...yamlLines(x, indent)] : [`${indent}${k}: []`];
+    if (x && typeof x === "object") return Object.keys(x).length ? [`${indent}${k}:`, ...yamlLines(x, indent + "  ")] : [`${indent}${k}: {}`];
+    return [`${indent}${k}: ${yamlScalar(x)}`];
+  });
+}
+
+/** As oracle.runs.review_file.render_yaml: the two header comments, then the fixed keys. */
+function renderReview(review: Record<string, unknown>, decidedAt: string | null | undefined): string {
+  const words: Record<string, string> = { roadmap_items: "Roadmap items" };
+  const kind = String(review.checkpoint);
+  const what = (review.file as string | null) ?? `the ${review.segment ?? kind} output`;
+  const attempt = review.attempt ? `, attempt ${review.attempt}` : "";
+  const on = decidedAt ? ` on ${decidedAt.slice(0, 10)}` : "";
+  const label = words[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const ordered = Object.fromEntries(REVIEW_KEYS.map((k) => [k, review[k] ?? null]));
+  return [`# Review of ${what}${attempt}, at the ${label} checkpoint.`, `# Sent back by an approver${on}. Apply each entry; answer each in resolutions.`, ...yamlLines(ordered, ""), ""].join("\n");
 }

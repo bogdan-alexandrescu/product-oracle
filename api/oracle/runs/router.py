@@ -21,6 +21,7 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.connections.router import ProviderHttp
+from oracle.discussions import replies as discussion_replies
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import actions, service
 from oracle.runs.schemas import (
@@ -321,6 +322,21 @@ async def get_checkpoint_draft(
     return await _call(actions.read(db, principal, run_id, checkpoint_id))
 
 
+@router.get(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/review.yaml",
+    response_class=PlainTextResponse,
+    operation_id="get_checkpoint_review_file",
+    responses={200: {"content": {"text/plain": {"schema": {"type": "string"}}}}},
+)
+async def get_checkpoint_review_file(
+    run_id: uuid.UUID, checkpoint_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
+) -> PlainTextResponse:
+    """The structured review a send-back delivered to the agents (D4), any member: the
+    ``review.yaml`` of a decided checkpoint. 404 while pending or when none was sent."""
+    content = await _call(service.read_review_file(db, run_id, checkpoint_id))
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
+
+
 @router.post(
     "/runs/{run_id}/checkpoints/{checkpoint_id}/actions",
     response_model=CheckpointReview,
@@ -457,6 +473,9 @@ async def tick(principal: CurrentPrincipal, db: TenantDB, http: ProviderHttp) ->
         # claimed, and no call started, that could not finish inside it.
         budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
         llm_jobs = await run_llm_jobs(principal.tenant_id, budget_seconds=budget)
+        # G2: Oracle's replies nobody streamed, within the same time budget.
+        budget = scheduler_tick.HARD_LIMIT_SECONDS - (time.monotonic() - started)
+        await discussion_replies.run_pending(principal.tenant_id, budget_seconds=budget)
     finally:
         # Last, within their own time budget: they never hold up runs and jobs, and a
         # failure of those never skips them.
