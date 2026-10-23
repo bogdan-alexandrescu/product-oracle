@@ -10,7 +10,8 @@ export type CompanyTab = { key: string; label: string; href: string; testId: str
 export const COMPANY_TABS: CompanyTab[] = [
   { key: "strategy", label: "Strategy", href: "/company/strategy", testId: "company-tab-strategy" },
   { key: "decisions", label: "Decisions", href: "/company/decisions", testId: "company-tab-decisions" },
-  // H2 Cadence engine adds { key: "rituals", label: "Rituals", href: "/company/rituals", ... }
+  // H2 Cadence engine: everyone sees the rituals and their pre-reads; owners edit them.
+  { key: "rituals", label: "Rituals", href: "/company/rituals", testId: "company-tab-rituals" },
   // H8 Board and investor drafts: owners and approvers see updates (owner 2026-10-21, "Update view").
   { key: "updates", label: "Updates", href: "/company/updates", testId: "company-tab-updates", minRole: "approver" },
 ];

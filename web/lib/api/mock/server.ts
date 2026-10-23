@@ -30,6 +30,7 @@ import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import { publishRefusal, routeQuality, seedQuality, type QualityContext, type QualityDb } from "./quality";
@@ -112,6 +113,8 @@ export interface Db {
   requests?: RequestsDb;
   /** The decision log (./decisions.ts, H1); absent in data saved before it. */
   decisions?: DecisionsDb;
+  /** Rituals, their occurrences and the summaries mode (./rituals.ts, H2); seeded on first use. */
+  rituals?: RitualsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -275,6 +278,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * checklists, notes and changelog entries (./launches.ts);
  * "oracle-did" as the default company plus one thing Oracle did on its own, told to the
  * signed-in owner (./autonomy.ts);
+ * "rituals" as the default company plus a Monthly roadmap refresh pre-read prepared early
+ * (the owner and the approver attend) and last week's goals check-in, held, whose summary
+ * failed (H2, ./rituals.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json);
@@ -1205,6 +1211,15 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
     uuid,
     now,
+  };
+}
+
+/** What the rituals mock reads: the signed-in member and the members. */
+function ritualsContext(db: Db, me: MemberRow): RitualsContext {
+  return {
+    me: { id: me.id, email: me.email, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
+    uuid,
   };
 }
 
@@ -2615,6 +2630,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   });
   const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
   if (decided) return decided;
+  // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
+  const ritualsCtx = ritualsContext(db, me);
+  db.rituals ??= seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
+  const ritual = await routeRituals(ritualsCtx, db.rituals, req, p, q);
+  if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
@@ -2630,6 +2650,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
+    // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
+    const ritualRows = ritualInbox(ritualsCtx, db.rituals);
+    const ritualCounted = ritualRows.filter((r) => r.counts).length;
+    inbox.rituals = ritualRows;
+    inbox.total += ritualCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + ritualCounted;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")
