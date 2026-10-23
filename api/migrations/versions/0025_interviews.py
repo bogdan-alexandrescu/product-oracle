@@ -95,6 +95,9 @@ def upgrade() -> None:
         sa.Column("position", sa.Integer(), server_default="0", nullable=False),
         sa.Column("followed_up", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("customer_messages", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("turn_started_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("refusals_since", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("refusals", sa.Integer(), server_default="0", nullable=False),
         sa.Column(
             "snapshot", postgresql.JSONB(astext_type=sa.Text()), server_default="{}", nullable=False
         ),

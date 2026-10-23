@@ -14,10 +14,13 @@ tools (``oracle.mcp.tools.PUBLIC_OPERATIONS``). Rules (decision V2e):
 4. The shared connection pool: the link, cookie, status and pace checks run before any
    row lock; a message's model call (up to 25 s) holds no row lock and no connection
    (the turn is claimed and committed, the model is called, then the reply is written);
-   one turn per link runs at a time, and a message while it runs is 429.
+   one turn per link runs at a time, claimed on the interview row so it holds across API
+   instances (oracle.interviews.turns.claim_turn), and a message while it runs is 429.
+5. Audit: every request on a known interview is audited with the interview id, never
+   the token; refused requests at most :data:`REFUSED_AUDITS` a minute per interview
+   (counted on its row), so a flood of them cannot fill the audit log.
 
-The token is 32 random bytes, URL-safe; only its sha256 is stored (as ``runtokens``). Every
-request on a known interview is audited with the interview id, never the token.
+The token is 32 random bytes, URL-safe; only its sha256 is stored (as ``runtokens``).
 """
 
 import hashlib
@@ -29,7 +32,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import case, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -63,6 +66,9 @@ MAX_MESSAGES = 40
 ACTOR = "interviewee"
 CLOSING = "That was my last question. Press Send my answers when you're ready."
 SKIPPED = "(skipped)"
+#: Refused requests audited per interview per window; past it they are not audited.
+REFUSED_AUDITS = 20
+REFUSAL_WINDOW_SECONDS = 60.0
 REFUSALS: dict[int | str, dict[str, Any]] = {
     404: {
         "model": PublicInterviewRefusal,
@@ -194,11 +200,29 @@ async def _finish(db: AsyncSession, row: Interview) -> None:
 
 
 async def _refused(tenant_id: uuid.UUID, interview_id: uuid.UUID, action: str, r: Refused):
+    """The refusal's response, audited while this minute's count on the interview row is
+    under :data:`REFUSED_AUDITS` (counted and checked in one update)."""
+    now = _now()
+    fresh = or_(
+        Interview.refusals_since.is_(None),
+        Interview.refusals_since <= now - timedelta(seconds=REFUSAL_WINDOW_SECONDS),
+    )
     async with tenant_session(tenant_id) as db:
-        await audit.record(
-            db, ACTOR, f"interview.public_{action}", "interview", interview_id,
-            {"refused": r.body.get("reason") or r.status},
-        )  # fmt: skip
+        counted = await db.scalar(
+            update(Interview)
+            .where(Interview.id == interview_id, or_(fresh, Interview.refusals < REFUSED_AUDITS))
+            .values(
+                refusals=case((fresh, 1), else_=Interview.refusals + 1),
+                refusals_since=case((fresh, now), else_=Interview.refusals_since),
+                updated_at=Interview.updated_at,
+            )
+            .returning(Interview.id)
+        )
+        if counted is not None:
+            await audit.record(
+                db, ACTOR, f"interview.public_{action}", "interview", interview_id,
+                {"refused": r.body.get("reason") or r.status},
+            )  # fmt: skip
         await db.commit()
     return JSONResponse(r.body, status_code=r.status)
 
@@ -242,8 +266,6 @@ async def _within(
 
 
 WAIT: dict[str, Any] = {"detail": "Please wait a moment"}
-#: Interviews with a turn running in this process: one turn per link at a time.
-_turning: set[uuid.UUID] = set()
 
 
 async def _paced(db: AsyncSession, interview_id: uuid.UUID) -> None:
@@ -462,14 +484,14 @@ async def public_interview_message(
     tenant_id, interview_id = seen.tenant_id, seen.id
     cookie = request.cookies.get(COOKIE)
     try:
-        # The cheap checks, before any lock: the link, this browser and one turn at a
-        # time in this process (checked and taken with no await between them).
+        # The cheap check, before any lock: the link and this browser.
         _check(seen, cookie, opening=False)
-        if interview_id in _turning:
-            raise Refused(429, WAIT)
     except Refused as r:
         return await _refused(tenant_id, interview_id, "message", r)
-    _turning.add(interview_id)
+    # One turn per link at a time, claimed on the interview row (any API instance).
+    at = await turns.claim_turn(tenant_id, interview_id)
+    if at is None:
+        return await _refused(tenant_id, interview_id, "message", Refused(429, WAIT))
     try:
         try:
             async with tenant_session(tenant_id) as db:
@@ -484,7 +506,7 @@ async def public_interview_message(
             reply, spent = await turns.customer_turn(call, claimed.payload)
         return await _reply(tenant_id, claimed, reply, spent)
     finally:
-        _turning.discard(interview_id)
+        await turns.release_turn(tenant_id, interview_id, at)
 
 
 @router.post(

@@ -11,21 +11,30 @@ What the model says is checked before the customer sees it (rule 5, :func:`check
 plain text only, no links, length capped. A reply that fails is dropped whole, and the
 conversation moves to the next approved question. Every pattern here reads model output
 and must stay linear (see oracle.jobs.prompting).
+
+One turn per interview runs at a time (:func:`claim_turn`): the claim is a short,
+committed update of the interview row, so it holds across API instances; a claim older
+than the call's deadline and :data:`CLAIM_MARGIN_SECONDS` is from an instance that
+stopped mid-turn.
 """
 
 import asyncio
 import json
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.interviews.models import Interview, InterviewMessage
 from oracle.jobs import prompting
 from oracle.llm import gateway
+from oracle.tenancy import tenant_session
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +42,8 @@ JOB = "interview_turn"
 DEADLINE_SECONDS = 25.0
 ACK_MAX = 120
 FOLLOW_UP_MAX = 300
+#: Past the model call's deadline and a margin, a turn's claim has lapsed.
+CLAIM_MARGIN_SECONDS = 5.0
 
 # A link in any form: a scheme, www., or a dotted host followed by a path or a common TLD.
 _LINK = re.compile(
@@ -150,3 +161,33 @@ async def customer_turn(
     if ack is None:
         return None, spent
     return Reply(ack, follow_up, spent.model, spent.usage, spent.cost_usd), None
+
+
+async def claim_turn(tenant_id: uuid.UUID, interview_id: uuid.UUID) -> datetime | None:
+    """Claim the interview's one running turn in its own short transaction: the claim's
+    time (pass it to :func:`release_turn`), or None while another turn runs."""
+    now = datetime.now(UTC)
+    lapsed = now - timedelta(seconds=DEADLINE_SECONDS + CLAIM_MARGIN_SECONDS)
+    async with tenant_session(tenant_id) as db:
+        got = await db.scalar(
+            update(Interview)
+            .where(
+                Interview.id == interview_id,
+                or_(Interview.turn_started_at.is_(None), Interview.turn_started_at < lapsed),
+            )
+            .values(turn_started_at=now, updated_at=Interview.updated_at)
+            .returning(Interview.id)
+        )
+        await db.commit()
+    return now if got is not None else None
+
+
+async def release_turn(tenant_id: uuid.UUID, interview_id: uuid.UUID, at: datetime) -> None:
+    """Release a claim taken at ``at`` (a lapsed claim taken over since is left alone)."""
+    async with tenant_session(tenant_id) as db:
+        await db.execute(
+            update(Interview)
+            .where(Interview.id == interview_id, Interview.turn_started_at == at)
+            .values(turn_started_at=None, updated_at=Interview.updated_at)
+        )
+        await db.commit()

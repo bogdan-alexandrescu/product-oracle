@@ -5,7 +5,9 @@ Each member has one team interview per intake (:func:`open_for`); its messages a
 transcript. A turn (:func:`take_turn`) is one answer to one of the intake's questions:
 
 1. Oracle reads the answer against the gap's statement and stop condition (one inline
-   ``interview_turn`` call, 25-second deadline, oracle.interviews.turns).
+   ``interview_turn`` call, 25-second deadline, oracle.interviews.turns). The answer is
+   committed before the call, which holds no row lock and no connection; one turn per
+   interview runs at a time (a second is 429).
 2. When the answer does not meet it and Oracle has not followed up on this question yet,
    Oracle posts one follow-up and waits for the reply (or "Skip, record my answer").
 3. Otherwise, or after the reply, the answer is recorded through the answer path
@@ -32,6 +34,7 @@ from oracle.interviews import turns
 from oracle.interviews.models import Interview, InterviewMessage
 from oracle.interviews.schemas import ANSWER_MAX
 from oracle.interviews.service import InterviewError
+from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, StakeholderQuestion
 
 PROMPT = "interview_team_turn"
@@ -142,24 +145,19 @@ async def next_question(
     )
 
 
-async def take_turn(
-    db: AsyncSession,
-    principal: Principal,
-    interview_id: uuid.UUID,
-    question_id: uuid.UUID,
-    body: str | None,
-    skip_follow_up: bool,
-) -> tuple[list[InterviewMessage], dict[str, Any] | None]:
-    """One turn: (the messages it added, what :func:`answers.answer` did, or None while
-    Oracle waits for the reply). The caller commits."""
-    row = await db.get(Interview, interview_id, with_for_update=True)
+async def _checked(
+    db: AsyncSession, principal: Principal, interview_id: uuid.UUID, question_id: uuid.UUID
+) -> tuple[Interview, StakeholderQuestion, KnowledgeGap | None]:
+    """The interview, the question and its gap when the member may answer it now, read
+    fresh (a question may be answered elsewhere while Oracle's call runs)."""
+    row = await db.get(Interview, interview_id, populate_existing=True)
     if row is None:
         raise InterviewError(404, "Interview not found")
     if row.kind != "team":
         raise InterviewError(409, "Only a team interview takes team turns")
     if row.interviewee_user_id != principal.id or principal.read_only:
         raise InterviewError(403, "Only its interviewee answers in this interview")
-    question = await db.get(StakeholderQuestion, question_id)
+    question = await db.get(StakeholderQuestion, question_id, populate_existing=True)
     if question is None or question.intake_id != row.intake_id:
         raise InterviewError(404, "Question not found")
     intake = await service.get_intake(db, row.intake_id) if row.intake_id else None
@@ -173,7 +171,44 @@ async def take_turn(
         raise InterviewError(409, "This question is answered; it is not asked again")
     if question.asked_to is not None and question.asked_to != principal.id:
         raise InterviewError(403, "This question was asked of someone else")
+    return row, question, gap
 
+
+async def take_turn(
+    db: AsyncSession,
+    principal: Principal,
+    interview_id: uuid.UUID,
+    question_id: uuid.UUID,
+    body: str | None,
+    skip_follow_up: bool,
+) -> tuple[list[InterviewMessage], dict[str, Any] | None]:
+    """One turn: (the messages it added, what :func:`answers.answer` did, or None while
+    Oracle waits for the reply). The caller commits.
+
+    One turn per interview runs at a time (:func:`turns.claim_turn`; another is 429).
+    Oracle's call holds no row lock and no connection: the member's answer is written
+    and committed first, the model is called, then its result is written."""
+    row, question, gap = await _checked(db, principal, interview_id, question_id)
+    await db.commit()  # the reads' connection goes back before the claim takes one
+    at = await turns.claim_turn(row.tenant_id, row.id)
+    if at is None:
+        raise InterviewError(429, "Please wait a moment")
+    try:
+        return await _turn(db, principal, row, question, gap, body, skip_follow_up)
+    finally:
+        await turns.release_turn(row.tenant_id, row.id, at)
+
+
+async def _turn(
+    db: AsyncSession,
+    principal: Principal,
+    row: Interview,
+    question: StakeholderQuestion,
+    gap: KnowledgeGap | None,
+    body: str | None,
+    skip_follow_up: bool,
+) -> tuple[list[InterviewMessage], dict[str, Any] | None]:
+    question_id = question.id
     text = (body or "").strip()
     earlier = await _round(db, row, question_id)
     said = [m.body for m in earlier if m.role == "interviewee" and m.kind == "answer"]
@@ -192,6 +227,8 @@ async def take_turn(
     followed_up = any(m.kind == "follow_up" for m in earlier)
     closing = RECORDED
     call: dict[str, Any] = {}
+    db.add_all(added)
+    await db.flush()
     if not followed_up and not skip_follow_up:
         payload = {
             "question": question.prompt,
@@ -203,22 +240,26 @@ async def take_turn(
             "conversation": [{"role": "interviewee", "body": s} for s in said],
             "may_follow_up": True,
         }
-        reply, spent = await turns.customer_turn(db, payload, prompt=PROMPT)
+        # The answer is saved; the session's connection goes back to the pool and the
+        # call runs on a session of its own.
+        await db.commit()
+        async with tenant_session(row.tenant_id) as own:
+            reply, spent = await turns.customer_turn(own, payload, prompt=PROMPT)
+        row, question, gap = await _checked(db, principal, row.id, question_id)
         if reply is not None and reply.follow_up:
-            added.append(
-                _message(
-                    row,
-                    question_id,
-                    "oracle",
-                    "follow_up",
-                    reply.follow_up,
-                    model=reply.model,
-                    usage=reply.usage,
-                    cost_usd=reply.cost_usd,
-                )
+            note = _message(
+                row,
+                question_id,
+                "oracle",
+                "follow_up",
+                reply.follow_up,
+                model=reply.model,
+                usage=reply.usage,
+                cost_usd=reply.cost_usd,
             )
-            db.add_all(added)
+            db.add(note)
             await db.flush()
+            added.append(note)
             await audit.record(
                 db,
                 principal,
@@ -236,8 +277,6 @@ async def take_turn(
         if used is not None:
             call = {"model": used.model, "usage": used.usage, "cost_usd": used.cost_usd}
 
-    db.add_all(added)
-    await db.flush()
     try:
         result = await answers.answer(
             db,

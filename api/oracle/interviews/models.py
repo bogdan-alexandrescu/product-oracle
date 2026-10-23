@@ -6,8 +6,9 @@
   creates it, a private link: only the token's sha256 is kept (``link_token_hash``), and
   the first browser to open it is bound by the sha256 of its cookie (``session_hash``).
   ``position`` is the current guide question and ``followed_up`` whether Oracle has
-  asked its one follow-up on it. A team interview (lane 2) belongs to an intake and the
-  member answering.
+  asked its one follow-up on it; ``turn_started_at`` claims the running turn and
+  ``refusals``/``refusals_since`` count the refused requests audited this minute. A
+  team interview (lane 2) belongs to an intake and the member answering.
 - ``interview_messages``: the transcript, Oracle's messages with the model call's
   model, usage and cost.
 """
@@ -90,6 +91,12 @@ class Interview(TenantScoped, Base):
     customer_messages: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # The running turn's claim (one turn per interview at a time, across API instances);
+    # a claim older than the model call's deadline is from an instance that stopped.
+    turn_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Refused public requests audited in the window starting at ``refusals_since``.
+    refusals_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refusals: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # InterviewSnapshot: quick_facts, quotes, needs, insights; {} until written.
     snapshot: Mapped[dict[str, Any]] = _json()
     snapshot_job_id: Mapped[uuid.UUID | None] = mapped_column(
