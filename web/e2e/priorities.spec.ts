@@ -37,7 +37,7 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await login(page);
   await page.goto("/priorities");
 
-  await expect(page.getByTestId("cycles-banner")).toContainText("F-7 → F-8");
+  await expect(page.getByTestId("cycles-banner")).toContainText("F-7 Bulk export → F-8 Scheduled exports");
   const noGoal = page.getByTestId("priority-row-F-6");
   await expect(noGoal).toContainText("Serves no confirmed goal");
   await expect(page.getByTestId("priority-row-F-7")).toContainText("Dependency cycle");
@@ -57,9 +57,9 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await expect(ex.getByRole("cell", { name: "attrs.effort" })).toBeVisible();
 
   // Assumed goal weight, and an order note.
-  await page.getByTestId("priority-row-F-3").getByRole("button").click();
+  await page.getByTestId("priority-row-F-3").getByRole("button", { name: "Shared projects" }).click();
   await expect(page.getByTestId("explanation-F-3")).toContainText("assumed");
-  await page.getByTestId("priority-row-F-5").getByRole("button").click();
+  await page.getByTestId("priority-row-F-5").getByRole("button", { name: "Address lookup service" }).click();
   await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).toContainText("F-2");
   await expect(page.getByTestId("explanation-F-5")).not.toContainText("depend(s)");
 

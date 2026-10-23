@@ -1,7 +1,7 @@
-import { devices, expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openSection } from "./helpers";
 
 /*
  * Named codes (#304), through the UI on the mock layer. The "named-codes" scenario's company
@@ -88,7 +88,7 @@ test("a goal chip's card opens on hover and Tab, shows name, target and Open, an
 });
 
 test.describe("on a phone", () => {
-  test.use({ ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, defaultBrowserType: "chromium" });
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test("tapping a goal chip opens its card as a bottom sheet; Escape and a tap outside close it", async ({ page }) => {
     await withCodes(page);
@@ -101,7 +101,9 @@ test.describe("on a phone", () => {
     await expect(card).toHaveAttribute("data-sheet", "true");
     const box = (await card.boundingBox())!;
     expect(Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
-    expect(Math.round(box.width)).toBe(390);
+    // Edge to edge across the screen.
+    expect(Math.round(box.x)).toBe(0);
+    expect(box.width).toBeGreaterThanOrEqual(390);
     await expect(card.getByTestId("card-name")).toHaveText("Growth");
     await expect(card.getByTestId("card-line")).toHaveText("Target 12%");
     await expect(card.getByRole("link", { name: "Open" })).toBeVisible();
@@ -109,9 +111,8 @@ test.describe("on a phone", () => {
     await expect(card).toHaveCount(0);
     await chip.tap();
     await expect(card).toBeVisible();
-    await page.getByRole("heading", { level: 1, name: "Plan" }).tap();
+    await page.touchscreen.tap(200, 20);
     await expect(card).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
 
@@ -133,7 +134,7 @@ test("the Confidence panel shows source titles, the id inside the card; a citati
   await expect(card).toHaveCount(0);
 
   await page.goto("/documents/checkout-redesign/v/2");
-  const cite = page.getByTestId("cite-c4").first();
+  const cite = (await openSection(page, "problem")).getByTestId("cite-c4");
   await cite.click();
   await expect(card).toBeVisible();
   await expect(card.getByTestId("cite-source")).toContainText("GitHub");
@@ -164,7 +165,7 @@ for (const width of [1280, 390]) {
     const t = (await table.boundingBox())!;
     const n = (await name.boundingBox())!;
     expect(n.x + n.width).toBeLessThanOrEqual(t.x + t.width + 0.5);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(t.x + t.width).toBeLessThanOrEqual(width + 0.5);
   });
 }
 

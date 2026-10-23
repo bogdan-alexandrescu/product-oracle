@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip, DataTable, GoalTag, KpiStrip, Panel, type Column } from "@/components/ds";
+import { Chip, CodeChip, DataTable, KpiStrip, Panel, type Column } from "@/components/ds";
 import type { TraceFeature, TraceGoal, TraceReport } from "@/lib/api/client";
 
 import { ConfidenceRing, FlagBadges, KPI_PHONE, NodeStatusBadge } from "./common";
@@ -42,15 +42,15 @@ export function FlaggedTab({
     {
       key: "goals",
       header: "Goals",
-      width: "120px",
+      width: "160px",
       hideOnPhone: true,
       cell: (f) =>
         f.goals.length === 0 ? (
           <span className="text-text2">–</span>
         ) : (
-          <span className="flex gap-1">
+          <span className="flex min-w-0 gap-1">
             {f.goals.map((g) => (
-              <GoalTag key={g.goal_id} id={tags.get(g.goal_id) ?? "G"} title={g.title} />
+              <CodeChip key={g.goal_id} kind="goal" entityId={g.goal_id} entityKey={g.key} title={g.title} />
             ))}
           </span>
         ),
@@ -78,9 +78,9 @@ export function FlaggedTab({
       header: "Goal",
       cell: (g) => (
         <span className="flex min-w-0 items-center gap-2">
-          <GoalTag id={tags.get(g.id) ?? "G"} proposed={g.status === "proposed"} />
+          <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} proposed={g.status === "proposed"} codeOnly />
           <button type="button" onClick={open(g.id)} className="min-w-0 truncate text-left font-medium hover:underline">
-            {g.title}
+            {tags.get(g.id) ?? g.title}
           </button>
         </span>
       ),

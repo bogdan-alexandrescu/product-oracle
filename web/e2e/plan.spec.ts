@@ -247,7 +247,8 @@ test("phone: rows are cards, a tap opens the sheet, no sideways scroll", async (
   const [title, chip] = await Promise.all([first.getByTestId("plan-title").boundingBox(), first.getByTestId("plan-state").boundingBox()]);
   expect(chip!.y).toBeLessThan(title!.y + title!.height);
   await expect(first.getByTestId("plan-engineering")).toBeVisible();
-  await first.click();
+  // A tap on the title (a tap on the goal chip opens the goal's card instead).
+  await first.getByTestId("plan-title").click();
   const sheet = page.getByTestId("sheet-plan-item");
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("link", { name: "Open in PRD" })).toBeVisible();

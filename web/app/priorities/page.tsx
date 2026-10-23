@@ -6,9 +6,11 @@ import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent, type R
 
 import {
   Button,
+  CardEyebrow,
   Chip,
+  CodeChip,
   DataTable,
-  GoalTag,
+  HoverCard,
   Icon,
   InfoTip,
   Inspector,
@@ -26,7 +28,8 @@ import {
 } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { named, namedText } from "@/lib/codes";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -131,6 +134,65 @@ const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.r
 /** Confidence 0-1 as 0-100: the one scale the page shows it in (ring, bar, figures). */
 const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
 
+/** A goal as words: its code and name ("G-B Growth"), never its key. */
+const goalText = (key: string, title: string) => namedText(named(title, key));
+
+/** A feature key as words: the ranked feature's code and name, else the key as given. */
+function featureText(features: RankedFeature[], key: string): string {
+  const f = features.find((x) => x.key === key);
+  return f ? namedText(named(f.title, f.key)) : key;
+}
+
+const SOURCE_KIND: Record<string, string> = {
+  upload: "Upload",
+  google_docs: "Google Docs",
+  slack: "Slack",
+  github: "GitHub",
+  fireflies: "Meeting notes",
+  notion: "Notion",
+};
+
+type EvidenceUsed = Schemas["ConfidenceUsed"]["evidence"][number];
+
+/** An evidence item by its source's title and date; its id, confidence and link in the card (#304). */
+function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
+  const title = ev.title ?? ev.ref ?? "Evidence";
+  const date = ev.date ? formatDate(ev.date.length === 10 ? `${ev.date}T12:00:00Z` : ev.date) : null;
+  const kind = ev.source_kind ? (SOURCE_KIND[ev.source_kind.split(":")[0]] ?? ev.source_kind) : null;
+  return (
+    <HoverCard
+      testId="evidence-chip"
+      label={[title, date].filter(Boolean).join(", ")}
+      className="max-w-full"
+      trigger={
+        <>
+          <span className="min-w-0 truncate font-medium">{title}</span>
+          {date && <span className="tnum flex-none text-text2">{date}</span>}
+        </>
+      }
+    >
+      <CardEyebrow>{["Evidence", kind].filter(Boolean).join(" · ")}</CardEyebrow>
+      <span className="block font-semibold break-words">{title}</span>
+      <span className="tnum mt-1 block text-text2">
+        {[date, ev.confidence != null && `confidence ${pct(ev.confidence)}`].filter(Boolean).join(" · ")}
+      </span>
+      <span className="mt-1 block font-mono text-[13px] break-all text-text2" data-testid="card-id">
+        {ev.id}
+      </span>
+      {ev.ref && !ev.source_removed && (
+        <a
+          href={ev.ref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent-ink hover:underline"
+        >
+          Open source ↗
+        </a>
+      )}
+    </HoverCard>
+  );
+}
+
 /**
  * A score step with its confidence factor on the page's 0-100 scale: "score = 6 × 0.75 ÷ 2"
  * reads "score = 6 × 75% ÷ 2" (the same arithmetic).
@@ -199,8 +261,23 @@ function MethodSwitch({ value, onChange, locked = false }: { value: Method; onCh
 }
 
 /** The selected feature: rank, confidence, score, then how the score was worked out. */
-function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string; run?: CompareRow; change?: ReactNode }) {
+function FeatureInspector({
+  f,
+  id,
+  run,
+  change,
+  features,
+}: {
+  f: RankedFeature;
+  id: string;
+  run?: CompareRow;
+  change?: ReactNode;
+  features: RankedFeature[];
+}) {
   const e = f.explanation;
+  const code = named(f.title, f.key).code;
+  // The steps name each goal by its code and name, not its key (#304).
+  const words = (s: string) => e.goals.reduce((t, g) => t.split(`(${g.goal})`).join(`(${goalText(g.goal, g.title)})`), s);
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
   const live = !run || run.live_rank != null || f.entity_id !== "";
   const inputs = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
@@ -213,9 +290,11 @@ function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string
         testId="priority-inspector"
         chips={
           <>
-            <Chip hero kind="na">
-              {f.key}
-            </Chip>
+            {code && (
+              <Chip hero kind="na">
+                {code}
+              </Chip>
+            )}
             {f.flags.map((flag) => (
               <FlagChip key={flag} flag={flag} hero />
             ))}
@@ -262,7 +341,7 @@ function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string
           >
             <ol className="list-decimal space-y-1 pl-5 font-mono text-[13px] leading-5" aria-label="Steps">
               {e.steps.map((s, i) => (
-                <li key={i}>{stepText(s, e.confidence.value)}</li>
+                <li key={i}>{words(stepText(s, e.confidence.value))}</li>
               ))}
             </ol>
             {e.missing.length > 0 && (
@@ -310,7 +389,7 @@ function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string
             <InspectorSection label="Order">
               <ul className="space-y-1.5 text-sm">
                 {e.order.map((o, i) => (
-                  <OrderReason key={i} reason={o} />
+                  <OrderReason key={i} reason={o} features={features} />
                 ))}
               </ul>
             </InspectorSection>
@@ -332,25 +411,14 @@ function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string
               <ul className="mt-1.5 space-y-1 text-sm">
                 {e.confidence.evidence.map((ev) => (
                   <li key={ev.id} className="flex min-w-0 items-center gap-2">
-                    <span className="flex-none font-mono">{ev.id}</span>
+                    <span className="flex min-w-0 flex-1">
+                      <EvidenceChip ev={ev} />
+                    </span>
                     <span className="tnum flex-none text-text2">{pct(ev.confidence) ?? "—"}</span>
-                    {ev.ref && ev.source_removed && (
-                      <span className="min-w-0 truncate text-text2">{ev.ref}</span>
-                    )}
                     {ev.source_removed && (
                       <Chip kind="na" data-testid="source-removed">
                         source removed
                       </Chip>
-                    )}
-                    {ev.ref && !ev.source_removed && (
-                      <a
-                        href={ev.ref}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="min-w-0 truncate text-accent-ink underline-offset-2 hover:underline"
-                      >
-                        {ev.ref}
-                      </a>
                     )}
                   </li>
                 ))}
@@ -366,8 +434,7 @@ function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string
                 {e.goals.map((g) => (
                   <li key={g.goal} className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <GoalTag id={g.goal} />
-                      <span className="truncate">{g.title}</span>
+                      <CodeChip kind="goal" entityKey={g.goal} title={g.title} />
                     </div>
                     <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[13px] text-text2">
                       weight {g.weight}
@@ -412,7 +479,9 @@ function Snapshots({
   note,
   onNote,
   canSnapshot,
+  features,
 }: {
+  features: RankedFeature[];
   reloadKey: number;
   note: string;
   onNote: (v: string) => void;
@@ -463,7 +532,7 @@ function Snapshots({
               )}
               <span className="tnum text-text2">{s.feature_count} features</span>
               <span className="min-w-0 truncate font-mono text-[13px] text-text2">
-                top {s.top.join(", ") || "—"}
+                top {s.top.map((k) => featureText(features, k)).join(", ") || "—"}
               </span>
               {s.note && <span className="min-w-0 truncate text-text2">“{s.note}”</span>}
             </li>
@@ -803,9 +872,9 @@ function Priorities() {
         f.explanation.goals.length === 0 ? (
           <span className="text-text2">—</span>
         ) : (
-          <span className="flex gap-1">
+          <span className="flex min-w-0 gap-1">
             {f.explanation.goals.map((g) => (
-              <GoalTag key={g.goal} id={g.goal} title={`${g.goal} · ${g.title}`} />
+              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} />
             ))}
           </span>
         ),
@@ -841,7 +910,7 @@ function Priorities() {
       header: "Depends on",
       width: "96px",
       hideOnPhone: true,
-      cell: (f) => <span className="font-mono text-[13px] text-text2">{f.depends_on.join(", ") || "—"}</span>,
+      cell: (f) => <span className="text-[13px] text-text2">{f.depends_on.map((k) => featureText(features, k)).join(", ") || "—"}</span>,
     },
     {
       key: "flags",
@@ -923,7 +992,7 @@ function Priorities() {
         {saved && (
           <Notice tone="pass">
             Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {saved.feature_count} features, top{" "}
-            {saved.top.slice(0, 3).join(", ")}.
+            {saved.top.slice(0, 3).map((k) => featureText(features, k)).join(", ")}.
           </Notice>
         )}
         {saveError && <Notice tone="error">{saveError}</Notice>}
@@ -947,6 +1016,7 @@ function Priorities() {
               <FeatureInspector
                 key={current.key}
                 f={current}
+                features={features}
                 id={inspectorId}
                 run={cmp ? byKey.get(current.key) : undefined}
                 change={
@@ -1007,7 +1077,7 @@ function Priorities() {
                 {r.cycles.map((c, i) => (
                   <span key={i} className="font-mono font-medium">
                     {i > 0 && "; "}
-                    {c.join(" → ")}
+                    {c.map((k) => featureText(features, k)).join(" → ")}
                   </span>
                 ))}
                 <InfoTip label="Dependency cycle" align="start">
@@ -1034,8 +1104,12 @@ function Priorities() {
               <DataTable<GoalRow>
                 label="By goal"
                 columns={[
-                  { key: "id", header: "", width: "64px", phone: "meta", cell: (g) => <GoalTag id={g.id} /> },
-                  { key: "title", header: "Goal", phone: "title", cell: (g) => g.title },
+                  {
+                    key: "title",
+                    header: "Goal",
+                    phone: "title",
+                    cell: (g) => <CodeChip kind="goal" entityKey={g.id} title={g.title} />,
+                  },
                   {
                     key: "count",
                     header: "Ranked features",
@@ -1053,7 +1127,7 @@ function Priorities() {
             </Panel>
           )}
 
-          <Snapshots reloadKey={snapshotsKey} note={note} onNote={setNote} canSnapshot={canSnapshot} />
+          <Snapshots reloadKey={snapshotsKey} note={note} onNote={setNote} canSnapshot={canSnapshot} features={features} />
 
           <ChangesPanel reloadKey={changesKey} features={features} />
         </Split>
@@ -1094,7 +1168,7 @@ const ORDER_REASONS: { re: RegExp; label: string; tip: string }[] = [
   },
 ];
 
-function OrderReason({ reason }: { reason: string }) {
+function OrderReason({ reason, features }: { reason: string; features: RankedFeature[] }) {
   for (const r of ORDER_REASONS) {
     const m = reason.match(r.re);
     if (!m) continue;
@@ -1104,7 +1178,7 @@ function OrderReason({ reason }: { reason: string }) {
         <span className="font-semibold">{r.label}</span>
         {keys.map((k) => (
           <Chip key={k} kind="line">
-            <span className="font-mono">{k}</span>
+            {featureText(features, k)}
           </Chip>
         ))}
         <InfoTip label={r.label}>{r.tip}</InfoTip>
