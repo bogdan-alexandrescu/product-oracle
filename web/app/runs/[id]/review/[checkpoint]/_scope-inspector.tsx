@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button, Chip, Inspector, InspectorSection, Ring, SegmentedControl } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import {
@@ -199,6 +200,7 @@ function List({ title, items }: { title: string; items: string[] }) {
 
 /** A requirement: text on one line (full in the tooltip), acceptance count, decision, Keep · Cut · Edit · Enhance. */
 export function RequirementRow({ req, mode, ops, review, indent = true }: { req: Requirement; mode: Mode; ops: Ops; review: Review | null; indent?: boolean }) {
+  const { can } = useMe();
   const [editing, setEditing] = useState<string | null>(null);
   const [enhancing, setEnhancing] = useState(false);
   const text = req.text ?? req.title;
@@ -248,10 +250,12 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
             <Button className="h-8 px-2.5 text-sm" onClick={() => setEditing(editing == null ? text : null)}>
               Edit
             </Button>
-            <Button className="h-8 px-2.5 text-sm" disabled={enhancing} onClick={() => setEnhancing(true)}>
-              Enhance
-            </Button>
-            {req.added && (
+            {can("enhance_scope_requirement") && (
+              <Button className="h-8 px-2.5 text-sm" disabled={enhancing} onClick={() => setEnhancing(true)}>
+                Enhance
+              </Button>
+            )}
+            {req.added && can("delete_scope_item") && (
               <Button variant="ghost" className="h-8 px-2.5 text-sm" onClick={() => void ops.removeItem(req.id)}>
                 Remove
               </Button>
@@ -447,6 +451,7 @@ export function ScopeInspector({
   leavingOut: string | null | undefined;
   onLeaveOutDone: () => void;
 }) {
+  const { can } = useMe();
   const byKey = new Map(scope.features.map((x) => [x.key, x]));
   const actions = actionsOn(review, f.key);
   const staged = actions.filter((a) => a.state === "staged");
@@ -593,7 +598,7 @@ export function ScopeInspector({
             <RequirementRow key={q.id} req={q} mode={mode} ops={ops} review={review} indent={false} />
           ))}
         </div>
-        {mode === "approver" && <AddRequirement feature={f} ops={ops} />}
+        {mode === "approver" && can("add_scope_requirement") && <AddRequirement feature={f} ops={ops} />}
       </InspectorSection>
       <InspectorSection label="Evidence">
         {f.evidence_ids.length ? (

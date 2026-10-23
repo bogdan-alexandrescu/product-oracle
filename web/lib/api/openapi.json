@@ -18490,7 +18490,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       },
       "delete": {
         "tags": [
@@ -18544,7 +18545,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/prd-scopes/{scope_id}/items": {
@@ -18607,7 +18609,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance": {
@@ -18680,7 +18683,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept": {
@@ -18763,7 +18767,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/modules": {

@@ -72,7 +72,7 @@ const openReasons = (f: Feature): Reason[] => f.reasons.filter((r) => !r.answere
  */
 export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const router = useRouter();
-  const { role } = useMe();
+  const { role, can } = useMe();
   const phone = usePhone();
   const scopeQ = useQuery(`scope-review|${run.id}|${cp.id}`, async () => {
     const latest = await unwrap(api.GET("/v1/runs/{run_id}/scope", { params: { path: { run_id: run.id } } }));
@@ -99,7 +99,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const pending = cp.status === "pending" && scope?.status === "proposed";
   const mode: Mode = !pending
     ? "viewer"
-    : scope?.can_edit && hasRole(role, cp.approver_role)
+    : scope?.can_edit && can("patch_scope_item", hasRole(role, cp.approver_role))
       ? "approver"
       : review?.can_suggest && hasRole(role, "commenter")
         ? "commenter"

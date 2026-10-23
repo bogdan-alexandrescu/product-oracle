@@ -38,6 +38,7 @@ EVERY_MEMBER = frozenset(
         "get_preferences",
         "get_priorities",
         "get_priority_calibration",
+        "get_prd_scope_review",
         "get_priority_snapshot",
         "get_run",
         "get_run_artifact",
@@ -98,11 +99,16 @@ EVERY_MEMBER = frozenset(
 # state to show or hide these.
 DECIDED_PER_ITEM = frozenset(
     {
+        "accept_scope_enhancement",
+        "add_scope_requirement",
         "create_checkpoint_action",
         "decide_checkpoint",
         "delete_checkpoint_action",
+        "delete_scope_item",
+        "enhance_scope_requirement",
         "get_checkpoint_draft",
         "open_oracle_action",
+        "patch_scope_item",
         "retry_draft_import",
         "set_checkpoint_note",
         "stage_checkpoint_action",
@@ -119,7 +125,8 @@ DECIDED_PER_ITEM = frozenset(
 # the company's acceptance role's, an owner at most; a run an owner's or its creator's; a
 # request filed for someone else an owner's (a commenter files their own); a customer
 # interview its creator's or an approver's, a team interview its interviewee's alone; a
-# slipped date's acceptance the date rights' (F3), an owner's whoever is lead.
+# slipped date's acceptance the date rights' (F3), an owner's whoever is lead; a scope
+# review's rows (C7) the feature-set stop's approver role's.
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
@@ -127,8 +134,10 @@ DECIDED_PER_ITEM = frozenset(
 PER_ITEM: dict[str, Role | None] = {
     "accept_blocker_risk": "owner",
     "accept_intake_proposal": "approver",
+    "accept_scope_enhancement": "approver",
     "accept_track_alert_date": "owner",
     "add_discussion_participants": "commenter",
+    "add_scope_requirement": "approver",
     "answer_question": "owner",
     "approve_feasibility_scope": "owner",
     "approve_version": "owner",
@@ -149,12 +158,15 @@ PER_ITEM: dict[str, Role | None] = {
     "decide_knowledge_gap": "owner",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
+    "delete_scope_item": "approver",
     "dismiss_overrun_run": "owner",
     "edit_document_section": "approver",
+    "enhance_scope_requirement": "approver",
     "get_checkpoint_draft": "owner",
     "get_next_question_batch": "approver",
     "open_oracle_action": "owner",
     "patch_interview": "approver",
+    "patch_scope_item": "approver",
     "reassign_decision": "owner",
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
