@@ -27,7 +27,8 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(page.getByTestId("home-goal-G2").getByTestId("goal-to-go")).toHaveText("2.6 pts to go");
   const g3 = page.getByTestId("home-goal-G3");
   await expect(g3).toHaveAttribute("data-proposed", "true");
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("3 pts to go");
+  // B5: early churn holds its target as text and has no current value yet.
+  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value");
 });
 
 test("Home: needs you lists the inbox and the questions asked of me, one action each", async ({ page }) => {

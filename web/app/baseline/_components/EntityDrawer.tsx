@@ -12,6 +12,7 @@ import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
+import { GoalFields, goalDraft, goalPatch, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem } from "./goal-fields";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import {
   ConfidenceRing,
@@ -46,18 +47,14 @@ const EDIT_ATTRS: Partial<Record<EntityOut["type"], { key: string; label: string
     { key: "status", label: "Delivery status" },
     { key: "effort", label: "Effort" },
   ],
-  goal: [
-    { key: "weight", label: "Weight", numeric: true },
-    { key: "metric", label: "Metric" },
-    { key: "target", label: "Target" },
-    { key: "horizon", label: "Horizon" },
-  ],
 };
+
+/** A goal's typed fields (B5): the goal form edits them; current and its day follow the measurements. */
+const GOAL_TYPED = new Set(["metric", "unit", "comparison", "target", "start", "current", "current_as_of", "horizon", "due", "owner", "weight"]);
 
 /** Attributes the edit form offers to add when the entry lacks them, per entity type. */
 const KNOWN_ATTRS: Partial<Record<EntityOut["type"], string[]>> = {
   feature: ["milestone", "size", "evidence_gap", "confidence", "priority_note"],
-  goal: ["current"],
 };
 
 type Props = {
@@ -104,6 +101,8 @@ export function EntityDrawer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The goal fields the API refused on the last Save, shown under their fields (B5).
+  const [problems, setProblems] = useState<GoalProblem[] | null>(null);
   const d = q.data;
   const title = d?.title ?? entity.title;
   const tag = tags.get(entity.id);
@@ -157,6 +156,13 @@ export function EntityDrawer({
         params: { path: { entity_id: entity.id } },
         body: { ...patch, origin: "user" },
       });
+      const refused = res.response.status === 422 ? problemsOf(res.error) : null;
+      if (refused) {
+        // Nothing was written: the form stays open with each problem under its field.
+        setProblems(refused);
+        return null;
+      }
+      setProblems(null);
       if (res.response.status === 202) {
         setEditing(false);
         return "The item is locked, so your change was saved as a proposal for an approver.";
@@ -195,6 +201,11 @@ export function EntityDrawer({
             <NodeStatusBadge status={(d ?? entity).status} hero />
             <DeliveryChip value={(d ?? entity).type === "feature" ? (d ?? entity).attrs?.status : undefined} hero />
             <LockBadge entity={d ?? entity} meId={meId} hero />
+            {(d ?? entity).goal_check?.measurable === false && (
+              <Chip kind="warn" hero title={missingTip((d ?? entity).goal_check)}>
+                Not measurable
+              </Chip>
+            )}
             {suggestion && (
               <Chip kind="warn" hero data-testid="suggested-blocker">
                 Suggested blocker
@@ -267,7 +278,16 @@ export function EntityDrawer({
               </InspectorSection>
             ) : editing ? (
               <InspectorSection label="Edit">
-                <EditForm entity={d} busy={busy} onCancel={() => setEditing(false)} onSave={save} />
+                <EditForm
+                  entity={d}
+                  busy={busy}
+                  problems={problems ?? d.goal_check?.problems ?? []}
+                  onCancel={() => {
+                    setProblems(null);
+                    setEditing(false);
+                  }}
+                  onSave={save}
+                />
               </InspectorSection>
             ) : (
               <>
@@ -313,6 +333,17 @@ export function EntityDrawer({
                 )}
                 <Attrs attrs={d.attrs} />
               </>
+            )}
+
+            {d.type === "goal" && (
+              <Measurements
+                goal={d}
+                canWrite={canWrite}
+                onChanged={() => {
+                  void q.reload();
+                  onChanged();
+                }}
+              />
             )}
 
             <History entityId={d.id} updatedAt={d.updated_at} />
@@ -467,6 +498,7 @@ function attrFields(entity: EntityDetail): AttrField[] {
   const fields: AttrField[] = [...(EDIT_ATTRS[entity.type] ?? [])];
   for (const [key, v] of Object.entries(entity.attrs ?? {})) {
     if (key === "proposed_blocker" || fields.some((f) => f.key === key)) continue;
+    if (entity.type === "goal" && GOAL_TYPED.has(key)) continue;
     fields.push({ key, label: key, numeric: typeof v === "number", json: v != null && typeof v === "object" });
   }
   return fields;
@@ -477,11 +509,14 @@ const asText = (v: unknown) => (v == null ? "" : typeof v === "object" ? JSON.st
 function EditForm({
   entity,
   busy,
+  problems,
   onCancel,
   onSave,
 }: {
   entity: EntityDetail;
   busy: boolean;
+  /** The goal fields' problems, from the last Save's 422 or the goal's goal_check. */
+  problems: GoalProblem[];
   onCancel: () => void;
   onSave: (patch: { title: string; body: string | null; attrs: Record<string, unknown> }) => void;
 }) {
@@ -492,6 +527,8 @@ function EditForm({
     Object.fromEntries(fields.map((f) => [f.key, asText(entity.attrs?.[f.key])])),
   );
   const [invalid, setInvalid] = useState<string | null>(null);
+  const isGoal = entity.type === "goal";
+  const [goal, setGoal] = useState<GoalDraft>(() => goalDraft(entity.attrs ?? {}));
   const addable = (KNOWN_ATTRS[entity.type] ?? []).filter((k) => !fields.some((f) => f.key === k));
 
   function submit(e: FormEvent) {
@@ -521,6 +558,15 @@ function EditForm({
         out[f.key] = raw;
       }
     }
+    if (isGoal) {
+      for (const [label, raw] of [["Value", goal.target], ["Start value", goal.start], ["Weight", goal.weight]]) {
+        if (raw.trim() && !Number.isFinite(Number(raw))) {
+          setInvalid(`${label} must be a number.`);
+          return;
+        }
+      }
+      Object.assign(out, goalPatch(goal, entity.attrs ?? {}));
+    }
     if (!title.trim()) {
       setInvalid("Title cannot be empty.");
       return;
@@ -537,7 +583,7 @@ function EditForm({
 
   const label = "flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
   return (
-    <form onSubmit={submit} aria-label="Edit" className="flex flex-col gap-3">
+    <form onSubmit={submit} aria-label="Edit" noValidate className="flex flex-col gap-3">
       <label className={label}>
         Title
         <input className={INPUT} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -546,6 +592,7 @@ function EditForm({
         Description
         <textarea className={INPUT} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
+      {isGoal && <GoalFields draft={goal} onChange={setGoal} problems={problems} />}
       {fields.map((f) => (
         <label key={f.key} className={label}>
           {f.label}
