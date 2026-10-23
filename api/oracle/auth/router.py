@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import select
 
-from oracle.auth import service
-from oracle.auth.deps import CurrentPrincipal, TenantDB
+from oracle.auth import iap, service
+from oracle.auth.deps import CurrentPrincipal, TenantDB, iap_claims, same_origin
 from oracle.auth.models import ApiToken, User
-from oracle.auth.schemas import LoginRequest, Me
+from oracle.auth.schemas import AccessNote, AccessStateOut, LoginRequest, Me
 from oracle.config import get_settings
+from oracle.members import access
+from oracle.tenancy import tenant_session
 
 router = APIRouter(prefix="/v1", tags=["auth"])
 
@@ -32,7 +35,55 @@ async def login(body: LoginRequest, response: Response) -> Me:
         user_id=user.id,
         email=user.email,
         engineering_lead=user.engineering_lead,
+        name=user.name,
+        invite_roles=list(access.roles_for(user.role)),
     )
+
+
+@router.get("/auth/access", response_model=AccessStateOut)
+async def get_access_state(request: Request) -> AccessStateOut:
+    """Where the Google-signed person stands (A5), read from the Google sign-in alone (no
+    member needed) and creating nothing: ``member``, ``pending`` (an owner has not
+    decided their access request yet), ``approved`` (the next page load signs them in),
+    ``declined``, ``invite_expired``, ``invite_only``, ``outside_domains``, ``removed``;
+    ``no_google_sign_in`` without Google sign-in. Browser only: not an MCP tool."""
+    claims = await iap_claims(request)
+    if claims is None:
+        return AccessStateOut(state="no_google_sign_in")
+    state, company, details = await iap.access_state(claims)
+    return AccessStateOut(
+        state=state, email=claims["email"].strip().lower(), company=company, **details
+    )
+
+
+@router.post(
+    "/auth/access/note",
+    response_model=AccessStateOut,
+    dependencies=[Depends(same_origin)],
+    responses={409: {"description": "No pending access request"}},
+)
+async def send_access_note(body: AccessNote, request: Request) -> AccessStateOut:
+    """Set the note an owner reads on the caller's pending access request (A5). Browser
+    only: not an MCP tool."""
+    claims = await iap_claims(request)
+    if claims is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "You have no pending access request")
+    email = claims["email"].strip().lower()
+    tenant_id = await iap._default_tenant_id()
+    if tenant_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "You have no pending access request")
+    note = (body.note or "").strip() or None
+    async with tenant_session(tenant_id) as s:
+        try:
+            row = await access.set_note(s, email, note)
+        except access.AccessError as e:
+            raise HTTPException(status.HTTP_409_CONFLICT, e.message) from e
+        await s.commit()
+        company = await s.scalar(select(iap.Tenant.name).where(iap.Tenant.id == tenant_id))
+        return AccessStateOut(
+            state="pending", email=email, company=company,
+            requested_at=row.created_at, note=row.note,
+        )  # fmt: skip
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -56,6 +107,8 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
             engineering_lead=user.engineering_lead,
             token_id=token.id if token else None,
             token_name=token.name if token else None,
+            name=user.name,
+            invite_roles=list(access.invite_roles(principal)),
         )
     token = await db.get(ApiToken, principal.token_id)
     return Me(
@@ -64,4 +117,5 @@ async def me(principal: CurrentPrincipal, db: TenantDB) -> Me:
         role=principal.role,
         token_id=token.id,
         token_name=token.name,
+        invite_roles=list(access.invite_roles(principal)),
     )

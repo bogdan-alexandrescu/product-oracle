@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -22,3 +23,36 @@ class Me(BaseModel):
     engineering_lead: bool = False
     token_id: uuid.UUID | None = None
     token_name: str | None = None
+    # A5: the member's name, when they or an owner set one.
+    name: str | None = None
+    # A5: the roles the caller may invite people with and approve access requests as
+    # (owners all four, approvers viewer and commenter, others none).
+    invite_roles: list[Role] = []
+
+
+AccessStateName = Literal[
+    "member",
+    "pending",
+    "approved",
+    "declined",
+    "invite_expired",
+    "invite_only",
+    "outside_domains",
+    "removed",
+    "no_google_sign_in",
+]
+
+
+class AccessStateOut(BaseModel):
+    """Where a Google-signed person stands (A5): never anything about other people."""
+
+    state: AccessStateName
+    email: str | None = None
+    company: str | None = None
+    requested_at: datetime | None = None
+    note: str | None = None
+    invite_expired_at: datetime | None = None
+
+
+class AccessNote(BaseModel):
+    note: str | None = Field(default=None, max_length=500)

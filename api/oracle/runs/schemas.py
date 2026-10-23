@@ -846,6 +846,20 @@ class InboxRevokeFailure(BaseModel):
     retry_until: datetime
 
 
+class InboxAccessRequest(BaseModel):
+    """Someone from the company's email domains who signed in with Google without an
+    invite and waits for an owner, or an approver, to let them in (A5)."""
+
+    id: uuid.UUID
+    email: str
+    note: str | None = None
+    requested_at: datetime
+    last_seen_at: datetime
+    # The role the approve control starts on, and the roles the caller may approve as.
+    default_role: Role
+    roles: list[Role]
+
+
 class InboxAccessFailure(BaseModel):
     """A change to someone's Google IAP access still failing after 24 hours of retries
     (#245): retried once a day until it is done or no longer needed; Retry runs it now."""
@@ -966,6 +980,8 @@ class InboxOut(BaseModel):
     revoke_failures: list[InboxRevokeFailure] = []
     # Owners only (#245): access changes still failing after 24 hours.
     access_failures: list[InboxAccessFailure] = []
+    # Owners and approvers (A5): pending access requests, oldest first, in ``total``.
+    access_requests: list[InboxAccessRequest] = []
     # Owners only (F6): the newest weekly alignment reports, unread ones in ``total``; and
     # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
     reports: list[InboxReport] = []

@@ -1,4 +1,5 @@
-"""Members, invites and API tokens. Owners only; the member directory
+"""Members, invites and API tokens. Owners only, except invites and access requests
+(:data:`invites_router`: approvers too, A5); the member directory
 (``GET /v1/people``, :data:`people_router`) is every member's.
 
 Logic lives in :mod:`oracle.members.service`; each handler commits once.
@@ -15,10 +16,13 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.auth.models import User
 from oracle.authz import has_role, not_for_runs, require_role
+from oracle.config import get_settings
 from oracle.connections.router import ProviderHttp
-from oracle.members import delivery, service, tokens
+from oracle.members import access, delivery, service, tokens
 from oracle.members.names import display_name
 from oracle.members.schemas import (
+    AccessApprove,
+    AccessRequestOut,
     ApiTokenOut,
     FollowUpOut,
     InviteCreate,
@@ -27,6 +31,8 @@ from oracle.members.schemas import (
     MemberOut,
     MemberPatch,
     PersonOut,
+    SignInDomain,
+    SignInRulesOut,
     TokenApprovalOut,
     TokenKind,
 )
@@ -37,6 +43,14 @@ router = APIRouter(
     dependencies=[Depends(not_for_runs), Depends(require_role("owner"))],
 )
 Owner = Annotated[Principal, Depends(require_role("owner"))]
+# A5: invites and access requests, for owners and approvers (viewer and commenter roles
+# only for approvers: oracle.members.access.invite_roles).
+invites_router = APIRouter(
+    prefix="/v1",
+    tags=["members"],
+    dependencies=[Depends(not_for_runs), Depends(require_role("approver"))],
+)
+Approver = Annotated[Principal, Depends(require_role("approver"))]
 # The member directory: every person picker a non-owner uses reads it (C2).
 people_router = APIRouter(prefix="/v1", tags=["members"])
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
@@ -80,8 +94,9 @@ async def update_member(
     one change, role first. A viewer is never the engineering lead: naming one is a 422,
     and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
     decisions they gave that are not delivered yet to the Inbox."""
+    name = body.name if "name" in body.model_fields_set else ...
     user = await _call(
-        service.update_member(db, principal, user_id, body.role, body.engineering_lead)
+        service.update_member(db, principal, user_id, body.role, body.engineering_lead, name)
     )
     await db.commit()
     return (await service.members_out(db, [user]))[0]
@@ -193,36 +208,43 @@ async def token_approvals(token_id: uuid.UUID, db: TenantDB) -> list[TokenApprov
     return [TokenApprovalOut.model_validate(r) for r in rows]
 
 
-@router.get("/invites", response_model=list[InviteOut])
+@invites_router.get("/invites", response_model=list[InviteOut])
 async def list_invites(
-    db: TenantDB, status: InviteStatus | Literal["all"] = "open"
+    principal: Approver, db: TenantDB, status: InviteStatus | Literal["all"] = "open"
 ) -> list[InviteOut]:
-    """Invites, newest first: open ones unless ``status`` asks for others (or ``all``)."""
-    return [service.invite_out(i) for i in await service.list_invites(db, status)]
+    """Invites, newest first: open ones (expired included, as both still need an action)
+    unless ``status`` asks for others (or ``all``). Owners see every invite, approvers the
+    ones they sent."""
+    return await service.invites_out(db, await service.list_invites(db, status, principal))
 
 
-@router.post(
+@invites_router.post(
     "/invites",
     response_model=InviteOut,
     status_code=status.HTTP_201_CREATED,
     responses={
-        409: {"description": "Already a member, or an open invite exists"},
-        422: {"description": "Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS)"},
+        403: {"description": "A role the caller may not invite with"},
+        409: {"description": "Already a member, or an open or expired invite exists"},
+        422: {"description": "Outside the company's email domains (outside_company_domains)"},
     },
 )
-async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> InviteOut:
-    """Pre-assign a role to an email: its first Google sign-in lands with that role, and as
-    an engineering lead when ``engineering_lead`` (never with role viewer: 422).
+async def create_invite(body: InviteCreate, principal: Approver, db: TenantDB) -> InviteOut:
+    """Pre-assign a role (and a name) to an email: its first Google sign-in lands with
+    that role, and as an engineering lead when ``engineering_lead`` (never with role
+    viewer: 422). Owners invite with any role; approvers viewers and commenters (A5).
+    The invite expires in 14 days (``expires_at``; Resend gives 14 more).
 
     The invitee is granted Google IAP access on Oracle's backend services
     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
     ``access_error`` when the grant failed: the invite is kept, and
     ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
-    ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
-    for an address outside the domains that can sign in."""
+    ``not_sent`` with no sender configured: send them ``sign_in_url``). With Google
+    sign-in on, refused (422) for an address outside the company's email domains."""
     invite = await _call(
-        service.create_invite(db, principal, body.email, body.role, body.engineering_lead)
+        service.create_invite(
+            db, principal, body.email, body.role, body.engineering_lead, body.name
+        )
     )
     send = delivery.queue_email(invite)
     await db.commit()
@@ -230,7 +252,30 @@ async def create_invite(body: InviteCreate, principal: Owner, db: TenantDB) -> I
     if send:
         delivery.schedule(principal.tenant_id, invite.id)
     await db.refresh(invite)
-    return service.invite_out(invite)
+    return (await service.invites_out(db, [invite]))[0]
+
+
+@invites_router.post(
+    "/invites/{invite_id}/resend",
+    response_model=InviteOut,
+    responses={404: {"description": "No such invite"}, 409: {"description": "Accepted or revoked"}},
+)
+async def resend_invite(invite_id: uuid.UUID, principal: Approver, db: TenantDB) -> InviteOut:
+    """Give an open or expired invite 14 more days from now (A5): ``expires_at``,
+    ``resent_at`` and ``resend_count``; audited ``invite.resend``. Its email goes out
+    again when a sender is configured and its last one is over a minute old. Approvers
+    resend only the invites they sent."""
+    invite = await _call(service.resend_invite(db, principal, invite_id))
+    send = (
+        invite.email_status != "queued"
+        and not delivery.resend_wait(invite)
+        and delivery.queue_email(invite)
+    )
+    await db.commit()
+    if send:
+        delivery.schedule(principal.tenant_id, invite.id)
+    await db.refresh(invite)
+    return (await service.invites_out(db, [invite]))[0]
 
 
 @router.post(
@@ -245,7 +290,7 @@ async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: Tenant
     invite = await _call(service.get_open_invite(db, invite_id))
     await delivery.grant_invite_access(db, principal, invite)
     await db.refresh(invite)
-    return service.invite_out(invite)
+    return (await service.invites_out(db, [invite]))[0]
 
 
 @router.post(
@@ -280,12 +325,13 @@ async def resend_invite_email(invite_id: uuid.UUID, principal: Owner, db: Tenant
     if send:
         delivery.schedule(principal.tenant_id, invite.id)
     await db.refresh(invite)
-    return service.invite_out(invite)
+    return (await service.invites_out(db, [invite]))[0]
 
 
-@router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_invite(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
-    """Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.
+@invites_router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_invite(invite_id: uuid.UUID, principal: Approver, db: TenantDB) -> None:
+    """Revoke an open invite (approvers: one they sent). Revoking twice is a no-op; an
+    accepted invite is a 409.
     The invitee's Google IAP access is taken away, unless they are an active member or
     have another open invite (audited)."""
     invite = await _call(service.revoke_invite(db, principal, invite_id))
@@ -334,7 +380,7 @@ async def list_people(
     principal: Viewer,
     db: TenantDB,
     q: Annotated[str | None, Query(max_length=200)] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    limit: Annotated[int, Query(ge=1, le=500)] = 20,
     ids: Annotated[list[uuid.UUID] | None, Query(max_length=100)] = None,
 ) -> list[PersonOut]:
     """The company's active members for a person picker, matched on email (``q``):
@@ -350,13 +396,120 @@ async def list_people(
     else:
         stmt = select(User).where(User.disabled_at.is_(None))
         if q and q.strip():
-            stmt = stmt.where(func.lower(User.email).contains(q.strip().lower(), autoescape=True))
+            needle = q.strip().lower()
+            stmt = stmt.where(
+                func.lower(User.email).contains(needle, autoescape=True)
+                | func.lower(func.coalesce(User.name, "")).contains(needle, autoescape=True)
+            )
         stmt = stmt.limit(limit)
     rows = (await db.scalars(stmt.order_by(User.email))).all()
     return [
         PersonOut(
-            user_id=u.id, name=display_name(u.email), email=u.email, role=u.role,  # type: ignore[arg-type]
+            user_id=u.id, name=display_name(u.email, u.name), email=u.email, role=u.role,  # type: ignore[arg-type]
             can_write=u.disabled_at is None and has_role(u.role, "commenter"),
         )
         for u in rows
     ]  # fmt: skip
+
+
+# --- Access requests and sign-in rules (A5) ---------------------------------------------
+
+_ACCESS_STATUS = {**_STATUS}
+
+
+async def _access[T](op: Awaitable[T]) -> T:
+    try:
+        return await op
+    except access.AccessError as e:
+        raise HTTPException(_ACCESS_STATUS[e.kind], e.message) from e
+
+
+def _request_out(row) -> AccessRequestOut:
+    return AccessRequestOut.model_validate(row)
+
+
+@invites_router.get("/access-requests", response_model=list[AccessRequestOut])
+async def list_access_requests(
+    principal: Approver,
+    db: TenantDB,
+    status: Literal["pending", "approved", "declined", "closed", "all"] = "pending",
+) -> list[AccessRequestOut]:
+    """People from the company's email domains who signed in with Google without an
+    invite (rule ``request``), newest first: pending ones unless ``status`` asks for
+    others."""
+    if not access.invite_roles(principal):
+        raise HTTPException(403, "Requires the approver role")
+    return [_request_out(r) for r in await access.list_requests(db, status)]
+
+
+@invites_router.post(
+    "/access-requests/{request_id}/approve",
+    response_model=AccessRequestOut,
+    responses={
+        403: {"description": "A role the caller may not approve with"},
+        404: {"description": "No such request"},
+        409: {"description": "Not pending, or already a member"},
+    },
+)
+async def approve_access_request(
+    request_id: uuid.UUID, body: AccessApprove, principal: Approver, db: TenantDB
+) -> AccessRequestOut:
+    """Let them in with ``role`` (and a ``name``): an open invite is made for their email
+    (14 days), so their next page load signs them in. Owners approve with any role,
+    approvers as viewer or commenter. Audited."""
+    try:
+        row = await access.approve(db, principal, request_id, body.role, body.name)
+    except access.AccessError as e:
+        if e.kind == "conflict":
+            await db.commit()  # a request whose email became a member is closed
+        raise HTTPException(_ACCESS_STATUS[e.kind], e.message) from e
+    await db.commit()
+    return _request_out(row)
+
+
+@invites_router.post(
+    "/access-requests/{request_id}/decline",
+    response_model=AccessRequestOut,
+    responses={404: {"description": "No such request"}, 409: {"description": "Not pending"}},
+)
+async def decline_access_request(
+    request_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> AccessRequestOut:
+    """Turn the request down: later sign-ins stay refused (an invite still lets them in)."""
+    row = await _access(access.decline(db, principal, request_id))
+    await db.commit()
+    return _request_out(row)
+
+
+@invites_router.post(
+    "/access-requests/{request_id}/reopen",
+    response_model=AccessRequestOut,
+    responses={404: {"description": "No such request"}, 409: {"description": "Cannot reopen"}},
+)
+async def reopen_access_request(
+    request_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> AccessRequestOut:
+    """Undo: a declined request, or an approved one whose invite is not claimed yet (the
+    invite is revoked), is pending again."""
+    row = await _access(access.reopen(db, principal, request_id))
+    await db.commit()
+    return _request_out(row)
+
+
+@router.get("/sign-in-rules", response_model=SignInRulesOut)
+async def get_sign_in_rules(db: TenantDB) -> SignInRulesOut:
+    """Who becomes a member through Google sign-in: whether it is on, whether new
+    sign-ins are off where Oracle is deployed, the company's email domains and where
+    each is set, the rule for people without an invite and the default role. Change
+    them with ``PUT /v1/settings/{key}`` (``sign_in_without_invite``,
+    ``iap_default_role``, ``company_email_domains``)."""
+    from oracle.tenant_settings_api import get_setting
+
+    settings = get_settings()
+    return SignInRulesOut(
+        google_sign_in=bool(settings.iap_audiences),
+        new_sign_ins_off=not settings.iap_auto_provision,
+        domains=[SignInDomain(domain=d, source=f) for d, f in await access.domain_sources(db)],
+        without_invite=await access.sign_in_rule(db),
+        default_role=await get_setting(db, "iap_default_role"),
+    )

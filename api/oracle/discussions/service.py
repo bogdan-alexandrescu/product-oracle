@@ -613,7 +613,7 @@ async def _summary_fields(
         "origin": d.origin,
         "started_by": DiscussionStarter(
             user_id=d.started_by,
-            name=display_name(starter.email) if starter else "Someone",
+            name=display_name(starter.email, starter.name) if starter else "Someone",
             role=starter.role if starter else "viewer",  # type: ignore[arg-type]
         ),
         "started_on_version": _started_on(d),
@@ -650,7 +650,7 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
         participants=[
             DiscussionParticipantOut(
                 user_id=p.user_id,
-                name=display_name(users[p.user_id].email),
+                name=display_name(users[p.user_id].email, users[p.user_id].name),
                 role=users[p.user_id].role,  # type: ignore[arg-type]
                 can_write=_writes(users[p.user_id]),
                 added_via=p.added_via,  # type: ignore[arg-type]
@@ -775,7 +775,9 @@ def message_out(
 ) -> DiscussionMessageOut:
     def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
-        return DiscussionPerson(user_id=uid, name=display_name(user.email) if user else "Someone")
+        return DiscussionPerson(
+            user_id=uid, name=display_name(user.email, user.name) if user else "Someone"
+        )
 
     deleted = m.deleted_at is not None
     return DiscussionMessageOut(
@@ -1155,7 +1157,7 @@ async def _make_open(
     d.visibility = "open"
     users = await users_by_id(db, {principal.user_id}) if principal.user_id else {}
     starter = users.get(principal.user_id)  # type: ignore[arg-type]
-    name = display_name(starter.email) if starter else "The starter"
+    name = display_name(starter.email, starter.name) if starter else "The starter"
     today = datetime.now(UTC)
     await _system_line(db, d, f"{name} made this discussion open on {today:%b} {today.day}")
     await _record(
