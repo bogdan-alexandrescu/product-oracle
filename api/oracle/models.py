@@ -96,6 +96,7 @@ from oracle.review.models import (  # noqa: E402
 )
 from oracle.roadmap.models import (  # noqa: E402
     ProductTrack,
+    RoadmapChangeSet,
     RoadmapItem,
     ScheduleBasis,
     TrackerRecord,
@@ -217,6 +218,7 @@ __all__ = [
     "RequestTheme",
     "ReviewCampaign",
     "RequesterNote",
+    "RoadmapChangeSet",
     "RoadmapItem",
     "Run",
     "RunSegment",
