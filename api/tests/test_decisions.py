@@ -255,6 +255,61 @@ async def test_prediction_creates_one_outcome_record(client, ctx):
     assert records[0].goal_id == goal
 
 
+async def test_edit_keeps_a_proposals_review_date_and_prediction(client, ctx):
+    """protects=PATCH on a proposed decision stores every field it accepts, the review date
+    and the prediction included; deciding without them keeps the proposal's, and the
+    prediction then creates its outcome record; fails_when=review_at or prediction are
+    accepted and dropped, a past review date is stored, or an outcome record exists before
+    the decision; no_claim=none beyond protects."""
+    goal = await make_entity(ctx, "goal", "fewer-spend-incidents")
+    d = await propose(client, ctx)
+    path = f"/v1/decisions/{d['number']}"
+    prediction = {
+        "goal_id": str(goal),
+        "metric": "spend incidents per month",
+        "baseline": "6",
+        "predicted": "2",
+        "threshold": None,
+        "by": in_days(100),
+    }
+    past = await client.patch(
+        path, json={"lock_version": 1, "review_at": in_days(-1)}, headers=ctx.as_("commenter")
+    )
+    assert past.status_code == 422
+    resp = await client.patch(
+        path,
+        json={
+            "lock_version": 1,
+            "question": "Do caps wait for anomaly detection?",
+            "contributor_ids": [str(ctx.users["owner"].id)],
+            "review_at": in_days(30),
+            "expected_outcome": "Spend incidents drop below 2 a month",
+            "prediction": prediction,
+        },
+        headers=ctx.as_("commenter"),
+    )
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["review_at"] == in_days(30) and out["lock_version"] == 2
+    assert out["question"] == "Do caps wait for anomaly detection?"
+    assert out["contributor_ids"] == [str(ctx.users["owner"].id)]
+    assert out["prediction"]["metric"] == "spend incidents per month"
+    assert out["outcome_id"] is None
+    bad_goal = await client.patch(
+        path,
+        json={"lock_version": 2, "prediction": {**prediction, "goal_id": str(uuid.uuid4())}},
+        headers=ctx.as_("commenter"),
+    )
+    assert bad_goal.status_code == 422
+
+    decided = await decide(client, ctx, d["number"])
+    assert decided["review_at"] == in_days(30)
+    assert decided["outcome_id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        records = list(await s.scalars(select(OutcomeRecord)))
+    assert len(records) == 1 and records[0].goal_id == goal
+
+
 async def test_reassign_is_an_owners(client, ctx):
     """protects=only owners reassign the approver, to an active approver or above;
     fails_when=the approver or a commenter reassigns, or a commenter becomes approver;
