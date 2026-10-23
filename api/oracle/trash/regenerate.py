@@ -25,7 +25,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.runs import service as runs_service
 from oracle.runs.models import Run
 from oracle.runs.schemas import RunCreate
-from oracle.trash.service import Invalid, NotFound
+from oracle.trash.service import Forbidden, Invalid, NotFound
 
 FLOWS = {"prd": "baseline_to_prd", "roadmap": "prd_to_roadmap", "spec": "prd_to_spec",
          "update": "update_draft"}  # fmt: skip
@@ -38,6 +38,18 @@ async def _document(db: AsyncSession, doc: str) -> Document:
     if document is None:
         raise NotFound(f"document '{doc}' not found")
     return document
+
+
+async def _may_regenerate(db: AsyncSession, principal: Principal, document: Document) -> None:
+    """The document's decider (whatever their role) or any approver regenerates it."""
+    from oracle.authz import has_role
+    from oracle.review.state import effective_policy
+
+    if has_role(principal.role, "approver"):
+        return
+    decider = (await effective_policy(db, document)).decider_id
+    if decider is None or principal.user_id != decider:
+        raise Forbidden("Only the document's decider or an approver can regenerate it")
 
 
 async def _latest(db: AsyncSession, document: Document) -> DocumentVersion | None:
@@ -81,6 +93,12 @@ async def _spec_request_id(db: AsyncSession, document: Document) -> uuid.UUID:
     return request_id
 
 
+def _spec_error(exc: Exception) -> Exception:
+    error = Invalid(str(exc))
+    error.status = getattr(exc, "status", Invalid.status)
+    return error
+
+
 async def _regenerates(db: AsyncSession, document: Document, run: Run) -> bool:
     """Whether ``run`` is a draft regeneration of ``document``."""
     if run.flow != FLOWS.get(document.kind):
@@ -95,6 +113,7 @@ async def estimate(
     db: AsyncSession, principal: Principal, doc: str, note: str | None
 ) -> dict[str, Any]:
     document = await _document(db, doc)
+    await _may_regenerate(db, principal, document)
     flow = FLOWS.get(document.kind)
     if flow is None:
         raise Invalid(f"no flow regenerates a {document.kind}: edit it instead")
@@ -104,12 +123,15 @@ async def estimate(
         from oracle.specs import service as specs_service
         from oracle.specs.schemas import RegenerateIn
 
+        # Only the draft run to estimate: the regeneration is proposed when it starts.
         request_id = await _spec_request_id(db, document)
-        proposed = await specs_service.regenerate(
-            db, principal, request_id, RegenerateIn(reason=note)
-        )
-        run_id = proposed.run_id
-        inputs.append(f"The approved PRD, version {proposed.prd_version}")
+        try:
+            run_id, prd_version = await specs_service.regeneration_draft(
+                db, principal, request_id, RegenerateIn(reason=note)
+            )
+        except specs_service.SpecError as exc:
+            raise _spec_error(exc) from exc
+        inputs.append(f"The approved PRD, version {prd_version}")
     else:
         body: dict[str, Any] = {"flow": flow, "document": document.slug}
         if document.kind == "roadmap":
@@ -146,10 +168,26 @@ async def start(
     db: AsyncSession, principal: Principal, doc: str, run_id: uuid.UUID, note: str | None
 ) -> uuid.UUID:
     document = await _document(db, doc)
+    await _may_regenerate(db, principal, document)
     run = await db.scalar(select(Run).where(Run.id == run_id))
     if run is None or not await _regenerates(db, document, run):
         raise NotFound(f"no regeneration of '{document.slug}' with run {run_id}")
-    if note:
+    if document.kind == "spec":
+        from oracle.specs import service as specs_service
+        from oracle.specs.schemas import RegenerateIn
+
+        # The spec's own proposal (its reason reaches the agents): made only now.
+        try:
+            await specs_service.regenerate(
+                db,
+                principal,
+                uuid.UUID(run.knobs["artifact_request_id"]),
+                RegenerateIn(reason=note),
+                run_id=run_id,
+            )
+        except specs_service.SpecError as exc:
+            raise _spec_error(exc) from exc
+    elif note:
         run.knobs = {**(run.knobs or {}), "regenerate_note": note}
     await runs_service.start(db, principal, run_id)
     await audit.record(

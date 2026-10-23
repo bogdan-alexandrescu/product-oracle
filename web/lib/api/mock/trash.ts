@@ -34,7 +34,7 @@ export interface TrashVersion {
 
 /** One delete and the rows it took (put back as they were on Restore). */
 export interface TrashEntryRow {
-  out: Omit<Schemas["TrashEntryOut"], "days_left">;
+  out: Omit<Schemas["TrashEntryOut"], "days_left" | "not_restored">;
   documents: unknown[];
   versions: unknown[];
   runs: RunOut[];
@@ -109,7 +109,7 @@ function daysLeft(entry: TrashEntryRow, now: string): number {
   return Math.max(0, Math.ceil(ms / DAY_MS));
 }
 
-const entryOut = (e: TrashEntryRow, now: string): Schemas["TrashEntryOut"] => ({ ...e.out, days_left: daysLeft(e, now) });
+const entryOut = (e: TrashEntryRow, now: string): Schemas["TrashEntryOut"] => ({ ...e.out, days_left: daysLeft(e, now), not_restored: [] });
 
 function take<T>(rows: T[], keep: (row: T) => boolean): T[] {
   const taken = rows.filter((r) => !keep(r));

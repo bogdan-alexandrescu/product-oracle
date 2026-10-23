@@ -29,6 +29,13 @@ class DependentsOut(BaseModel):
     working_runs: list[uuid.UUID] = []
 
 
+class NotRestored(BaseModel):
+    """Something a restore could not bring back with the entry, and why."""
+
+    item: TrashItem
+    reason: str
+
+
 class TrashEntryOut(BaseModel):
     """One delete in Settings › Trash: restored together, purged after ``days_left``."""
 
@@ -42,6 +49,8 @@ class TrashEntryOut(BaseModel):
     published: bool
     purge_after: datetime
     days_left: int
+    # A restore's answer: what could not come back with it (empty in Trash's list).
+    not_restored: list[NotRestored] = []
 
 
 class RegenerateEstimateIn(BaseModel):

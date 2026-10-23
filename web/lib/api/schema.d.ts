@@ -284,7 +284,9 @@ export interface paths {
         put?: never;
         /**
          * Restore Trash Entry
-         * @description Restore everything the delete took, together.
+         * @description Restore everything the delete took, together; ``not_restored`` says what could not
+         *     come back with it (what it was built from, purged or still in Trash, and what was
+         *     trashed separately).
          */
         post: operations["restore_trash_entry"];
         delete?: never;
@@ -325,7 +327,8 @@ export interface paths {
         /**
          * Estimate Regeneration
          * @description A draft run of the document's flow, estimated: the inputs it will use and the cost.
-         *     422 for a kind no flow writes (edit it instead).
+         *     For the document's decider or an approver (403 otherwise); 422 for a kind no flow
+         *     writes (edit it instead).
          */
         post: operations["estimate_regeneration"];
         delete?: never;
@@ -21879,6 +21882,15 @@ export interface components {
             /** Limited */
             limited: number;
         };
+        /**
+         * NotRestored
+         * @description Something a restore could not bring back with the entry, and why.
+         */
+        NotRestored: {
+            item: components["schemas"]["TrashItem"];
+            /** Reason */
+            reason: string;
+        };
         /** NoteCounts */
         NoteCounts: {
             /**
@@ -30912,6 +30924,11 @@ export interface components {
             purge_after: string;
             /** Days Left */
             days_left: number;
+            /**
+             * Not Restored
+             * @default []
+             */
+            not_restored: components["schemas"]["NotRestored"][];
         };
         /**
          * TrashItem

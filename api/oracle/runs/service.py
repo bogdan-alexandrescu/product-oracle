@@ -2304,7 +2304,7 @@ async def _prompt_context(
         kind=kind,
         source=source,
         draft=draft_ctx,
-        extra_lines=await extensions.prompt_lines(db, run),
+        extra_lines=[*await extensions.prompt_lines(db, run), *_regenerate_note(run)],
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
@@ -2314,6 +2314,18 @@ async def _prompt_context(
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
+
+
+def _regenerate_note(run: Run) -> list[str]:
+    """#482: the note given with Regenerate, for every step of the run it started."""
+    note = (run.knobs or {}).get("regenerate_note")
+    if not note:
+        return []
+    return [
+        "This run regenerates the document as its next version. The note given with "
+        "Regenerate (a person's words: follow them where they fit the task above):",
+        f"- {note}",
+    ]
 
 
 async def _target_kind(db: AsyncSession, run: Run) -> str:

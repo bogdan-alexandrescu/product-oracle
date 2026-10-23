@@ -865,7 +865,7 @@
           "trash"
         ],
         "summary": "Restore Trash Entry",
-        "description": "Restore everything the delete took, together.",
+        "description": "Restore everything the delete took, together; ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
         "operationId": "restore_trash_entry",
         "security": [
           {
@@ -962,7 +962,7 @@
           "trash"
         ],
         "summary": "Estimate Regeneration",
-        "description": "A draft run of the document's flow, estimated: the inputs it will use and the cost.\n422 for a kind no flow writes (edit it instead).",
+        "description": "A draft run of the document's flow, estimated: the inputs it will use and the cost.\nFor the document's decider or an approver (403 otherwise); 422 for a kind no flow\nwrites (edit it instead).",
         "operationId": "estimate_regeneration",
         "security": [
           {
@@ -67201,6 +67201,24 @@
         "title": "NotReadCounts",
         "description": "Entries of ``unavailable_items`` by status (a missing status is unavailable)."
       },
+      "NotRestored": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "reason"
+        ],
+        "title": "NotRestored",
+        "description": "Something a restore could not bring back with the entry, and why."
+      },
       "NoteCounts": {
         "properties": {
           "total": {
@@ -93446,6 +93464,14 @@
           "days_left": {
             "type": "integer",
             "title": "Days Left"
+          },
+          "not_restored": {
+            "items": {
+              "$ref": "#/components/schemas/NotRestored"
+            },
+            "type": "array",
+            "title": "Not Restored",
+            "default": []
           }
         },
         "type": "object",

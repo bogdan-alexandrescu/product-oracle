@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import Text, cast, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -48,6 +48,10 @@ class TrashError(Exception):
 
 class NotFound(TrashError):
     status = 404
+
+
+class Forbidden(TrashError):
+    status = 403
 
 
 class Conflict(TrashError):
@@ -120,6 +124,36 @@ async def _derived(db: AsyncSession, document_ids: set[uuid.UUID]) -> list[Docum
         seen |= frontier
         found += rows
     return sorted(found, key=lambda d: (d.kind, d.slug))
+
+
+def _spec_document() -> Any:
+    from oracle.v2.models import ArtifactRequest
+
+    return ArtifactRequest.params["document_id"].astext
+
+
+async def _built_from(db: AsyncSession, document_ids: set[uuid.UUID]) -> list[Document]:
+    """The documents ``document_ids`` were built from, outside them: the source of any of
+    their versions, and a tech brief's PRD (its spec request's)."""
+    from oracle.v2.models import ArtifactRequest
+
+    if not document_ids:
+        return []
+    versions = select(DocumentVersion.document_id).where(
+        DocumentVersion.id.in_(
+            select(DocumentVersion.source_version_id).where(
+                DocumentVersion.document_id.in_(document_ids)
+            )
+        )
+    )
+    specs = select(ArtifactRequest.source_document_id).where(
+        _spec_document().in_([str(i) for i in document_ids])
+    )
+    stmt = select(Document).where(
+        or_(Document.id.in_(versions), Document.id.in_(specs)),
+        Document.id.not_in(document_ids),
+    )
+    return sorted(await db.scalars(stmt), key=lambda d: (d.kind, d.slug))
 
 
 async def _runs_of(db: AsyncSession, document_ids: set[uuid.UUID]) -> list[Run]:
@@ -219,11 +253,13 @@ async def delete_root(
         raise Conflict(PUBLISHED_WARNING)
     at = now()
     rows = resolved.rows()
+    sources = await _built_from(db, {d.id for d in resolved.documents})
     entry = TrashEntry(
         id=uuid.uuid4(),
         root_type=root_type,
         root_id=root.id,
-        root=describe(root),
+        # What it was built from outside this delete: Restore says if that is gone.
+        root={**describe(root), "built_from": [describe(d) for d in sources]},
         items=[describe(r) for r in rows if r is not root],
         deleted_by=principal.id,
         deleted_by_name=await _actor_name(db, principal),
@@ -262,8 +298,62 @@ async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
     return entry
 
 
-async def restore_entry(db: AsyncSession, principal: Principal, entry_id: uuid.UUID) -> TrashEntry:
-    """Bring the entry's root and everything that went with it back."""
+async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
+    """What did not come back with ``entry``: what it was built from, purged meanwhile or
+    still in Trash, and what was built from it and went to Trash in a separate delete."""
+    out: list[dict[str, Any]] = []
+    for source in entry.root.get("built_from") or []:
+        row = await db.scalar(
+            select(Document).where(Document.id == uuid.UUID(source["id"])).execution_options(**ALL)
+        )
+        if row is None:
+            reason = (
+                f"'{source['title']}', which it was built from, was deleted for good: it "
+                "is back without it"
+            )
+        elif row.deleted_at is not None:
+            reason = (
+                f"'{source['title']}', which it was built from, is still in Trash (deleted "
+                "separately): restore it from Trash to bring it back"
+            )
+        else:
+            continue
+        out.append({"item": source, "reason": reason})
+    ids = [uuid.UUID(i["id"]) for i in (entry.root, *entry.items) if i["type"] == "document"]
+    if ids:
+        from oracle.v2.models import ArtifactRequest
+
+        built = select(DocumentVersion.document_id).where(
+            DocumentVersion.source_version_id.in_(
+                select(DocumentVersion.id).where(DocumentVersion.document_id.in_(ids))
+            )
+        )
+        specs = select(_spec_document()).where(ArtifactRequest.source_document_id.in_(ids))
+        stmt = (
+            select(Document)
+            .where(
+                or_(Document.id.in_(built), cast(Document.id, Text).in_(specs)),
+                Document.deleted_at.is_not(None),
+                Document.trash_entry_id.is_distinct_from(entry.id),
+            )
+            .execution_options(**ALL)
+        )
+        for row in sorted(await db.scalars(stmt), key=lambda d: (d.kind, d.slug)):
+            out.append(
+                {
+                    "item": describe(row),
+                    "reason": f"'{row.title}' was deleted separately: it stays in Trash, "
+                    "restore it from there",
+                }
+            )
+    return out
+
+
+async def restore_entry(
+    db: AsyncSession, principal: Principal, entry_id: uuid.UUID
+) -> tuple[TrashEntry, list[dict[str, Any]]]:
+    """Bring the entry's root and everything that went with it back; with what could not
+    come back with it (:func:`_not_restored`)."""
     entry = await get_entry(db, entry_id)
     for model in _models():
         await db.execute(
@@ -272,22 +362,28 @@ async def restore_entry(db: AsyncSession, principal: Principal, entry_id: uuid.U
             .values(deleted_at=None, deleted_by=None, deleted_reason=None, trash_entry_id=None)
             .execution_options(synchronize_session=False)
         )
+    not_restored = await _not_restored(db, entry)
     await audit.record(
         db,
         principal,
         "trash.restore",
         entry.root_type,
         entry.root_id,
-        {"entry_id": str(entry.id), "root": entry.root, "items": entry.items},
+        {
+            "entry_id": str(entry.id),
+            "root": entry.root,
+            "items": entry.items,
+            "not_restored": not_restored,
+        },
     )
     await db.delete(entry)
     await db.flush()
-    return entry
+    return entry, not_restored
 
 
 async def restore_root(
     db: AsyncSession, principal: Principal, root_type: str, ref: str
-) -> TrashEntry:
+) -> tuple[TrashEntry, list[dict[str, Any]]]:
     """Restore whatever went to Trash with this document, intake or run."""
     row = await find_root(db, root_type, ref, trashed=True)
     if row.trash_entry_id is None:

@@ -36,6 +36,7 @@ class AuditEvent(TenantScoped, Base):
 
 
 from oracle.auth.models import ApiToken, User  # noqa: E402
+from oracle.autonomy_models import OracleAction  # noqa: E402
 from oracle.baseline.models import (  # noqa: E402
     Conflict,
     Edge,
@@ -213,6 +214,7 @@ __all__ = [
     "OAuthClient",
     "OAuthCode",
     "OAuthToken",
+    "OracleAction",
     "OutcomeRecord",
     "PriorityOverride",
     "PrioritySnapshot",

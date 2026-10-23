@@ -1,7 +1,8 @@
 """Delete, restore, Trash and Regenerate (#482).
 
 Roles: owners delete any document, intake or run, see Settings › Trash, restore and purge;
-a document's approvers (approver role and above) regenerate it. Commenters and viewers do
+a document's decider (whatever their role) and approvers (approver role and above)
+regenerate it, checked per document. Commenters and viewers do
 none of these. A run's agents never do any of them (``not_for_runs``), and every
 body-less write refuses another site's request (``same_origin``).
 """
@@ -29,7 +30,8 @@ from oracle.trash.schemas import (
 router = APIRouter(prefix="/v1", tags=["trash"], dependencies=[Depends(not_for_runs)])
 
 OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
-ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
+# Regenerate is checked per document (its decider, or an approver): any member here.
+MemberNow = Annotated[Principal, Depends(require_role_now("viewer"))]
 SAME_ORIGIN = [Depends(same_origin)]
 Reason = Annotated[str | None, Query(max_length=2000)]
 
@@ -41,7 +43,7 @@ async def _call[T](op: Awaitable[T]) -> T:
         raise HTTPException(exc.status, getattr(exc, "detail", None) or str(exc)) from exc
 
 
-def _entry_out(entry: TrashEntry) -> TrashEntryOut:
+def _entry_out(entry: TrashEntry, not_restored: list[dict] | None = None) -> TrashEntryOut:
     return TrashEntryOut(
         id=entry.id,
         root=entry.root,  # type: ignore[arg-type]
@@ -53,6 +55,7 @@ def _entry_out(entry: TrashEntry) -> TrashEntryOut:
         published=entry.published,
         purge_after=entry.purge_after,
         days_left=service.days_left(entry),
+        not_restored=not_restored or [],  # type: ignore[arg-type]
     )
 
 
@@ -80,8 +83,8 @@ async def _delete(
 
 
 async def _restore(db: TenantDB, principal: Principal, root_type: str, ref: str) -> TrashEntryOut:
-    entry = await _call(service.restore_root(db, principal, root_type, ref))
-    out = _entry_out(entry)
+    entry, not_restored = await _call(service.restore_root(db, principal, root_type, ref))
+    out = _entry_out(entry, not_restored)
     await db.commit()
     return out
 
@@ -172,9 +175,11 @@ async def list_trash(db: TenantDB, principal: OwnerNow) -> list[TrashEntryOut]:
 async def restore_trash_entry(
     entry_id: uuid.UUID, db: TenantDB, principal: OwnerNow
 ) -> TrashEntryOut:
-    """Restore everything the delete took, together."""
-    entry = await _call(service.restore_entry(db, principal, entry_id))
-    out = _entry_out(entry)
+    """Restore everything the delete took, together; ``not_restored`` says what could not
+    come back with it (what it was built from, purged or still in Trash, and what was
+    trashed separately)."""
+    entry, not_restored = await _call(service.restore_entry(db, principal, entry_id))
+    out = _entry_out(entry, not_restored)
     await db.commit()
     return out
 
@@ -195,17 +200,18 @@ async def purge_trash_entry(entry_id: uuid.UUID, db: TenantDB, principal: OwnerN
 
 @router.post("/documents/{doc}/regenerate/estimate", response_model=RegenerateEstimateOut)
 async def estimate_regeneration(
-    doc: str, body: RegenerateEstimateIn, db: TenantDB, principal: ApproverNow
+    doc: str, body: RegenerateEstimateIn, db: TenantDB, principal: MemberNow
 ) -> RegenerateEstimateOut:
     """A draft run of the document's flow, estimated: the inputs it will use and the cost.
-    422 for a kind no flow writes (edit it instead)."""
+    For the document's decider or an approver (403 otherwise); 422 for a kind no flow
+    writes (edit it instead)."""
     out = await _call(regenerate.estimate(db, principal, doc, body.note))
     return RegenerateEstimateOut(**out)
 
 
 @router.post("/documents/{doc}/regenerate", response_model=RunOut)
 async def start_regeneration(
-    doc: str, body: RegenerateIn, db: TenantDB, principal: ApproverNow
+    doc: str, body: RegenerateIn, db: TenantDB, principal: MemberNow
 ) -> RunOut:
     """Start the estimated run, through the same cost gates as starting any run. Its
     result is imported as the document's next version."""
