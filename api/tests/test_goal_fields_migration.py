@@ -86,7 +86,7 @@ def _tables() -> list[str]:
 def test_the_chain_ends_here_after_segment_skipped():
     script = ScriptDirectory.from_config(_cfg())
     # H2 Cadence engine's 0026_rituals chains on it; one head.
-    assert script.get_heads() == ["0027_outcome_tracking"]
+    assert script.get_heads() == ["0028_company_timezone"]
     assert script.get_revision("0026_rituals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 

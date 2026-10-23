@@ -63,9 +63,8 @@ async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
         assert (r.next_due_at is None) == off
         assert r.owner_id == ctx.users["owner"].id
         assert set(r.attendee_ids) == {ctx.users["owner"].id, ctx.users["approver"].id}
-        # The alignment report keeps F6's zone (its setting's default).
-        zone = "America/Los_Angeles" if r.kind == "alignment_report" else "UTC"
-        assert r.schedule["timezone"] == zone
+        # Every one, the alignment report too, is in the Company time zone (UTC by default).
+        assert r.schedule["timezone"] == "UTC"
     await tick(ctx.tenant_id)
     assert len(await rituals_of(ctx.tenant_id)) == 9
 

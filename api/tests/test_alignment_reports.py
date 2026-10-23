@@ -32,6 +32,7 @@ from oracle.rituals import service as rituals
 from oracle.rituals.models import Ritual
 from oracle.roadmap.models import ProductTrack
 from oracle.tenancy import tenant_session
+from oracle.tenant_settings_api import DEFAULTS
 from oracle.ticker import router as ticker
 from tests.roadmap_helpers import other_company
 from tests.test_mcp import mcp_client, run_token, text_of
@@ -53,6 +54,18 @@ CHANNEL = {"id": "C0PLAN", "name": "plan"}
 
 def la(*args: int) -> datetime:
     return datetime(*args, tzinfo=LA).astimezone(UTC)
+
+
+@pytest.fixture(autouse=True)
+def company_in_los_angeles(monkeypatch):
+    """These tests' company works in Los Angeles: its Company time zone, which the weekly
+    report reads (it has no zone of its own)."""
+    monkeypatch.setitem(DEFAULTS, "company_timezone", "America/Los_Angeles")
+
+
+async def company_zone(client, auth, zone: str) -> None:
+    resp = await client.put("/v1/settings/company_timezone", json={"value": zone}, headers=auth)
+    assert resp.status_code == 200, resp.text
 
 
 class FakeSlack:
@@ -190,8 +203,8 @@ async def install(client, auth) -> dict:
 
 
 async def set_report(client, auth, **value) -> dict:
-    body = {"enabled": True, "weekday": "mon", "time": "08:00",
-            "timezone": "America/Los_Angeles", "slack_channel": None, **value}  # fmt: skip
+    body = {"enabled": True, "weekday": "mon", "time": "08:00", "slack_channel": None,
+            **value}  # fmt: skip
     resp = await client.put(SETTING, json={"value": body}, headers=auth)
     assert resp.status_code == 200, resp.text
     return resp.json()["value"]
@@ -365,9 +378,9 @@ async def test_the_setting_is_validated(client, owner):
     channel is stored, or a commenter can change it; no_claim=the schedule itself."""
     tenant_id, auth = owner
     resp = await client.get(SETTING, headers=auth)
+    # No zone of its own: the report reads the Company time zone.
     assert resp.json()["value"] == {
-        "enabled": True, "weekday": "mon", "time": "08:00",
-        "timezone": "America/Los_Angeles", "slack_channel": None,
+        "enabled": True, "weekday": "mon", "time": "08:00", "slack_channel": None,
     }  # fmt: skip
     for bad in ({"weekday": "monday"}, {"time": "8am"}, {"time": "24:00"},
                 {"timezone": "Mars/Olympus"}, {"enabled": "yes"},
@@ -470,7 +483,8 @@ async def test_the_weekly_report_is_the_alignment_report_ritual(client, owner, r
     still builds the report; no_claim=Slack delivery (the tests below)."""
     tenant_id, auth = owner
     await a_track(client, auth, runtime)
-    await set_report(client, auth, weekday="fri", time="16:30", timezone="Europe/Paris")
+    await company_zone(client, auth, "Europe/Paris")
+    await set_report(client, auth, weekday="fri", time="16:30")
     at(la(2026, 10, 26, 9))
     assert await due(tenant_id) == []
     ritual = await report_ritual(tenant_id)
@@ -484,8 +498,11 @@ async def test_the_weekly_report_is_the_alignment_report_ritual(client, owner, r
     # Company › Rituals lists it.
     listed = (await client.get("/v1/rituals", headers=auth)).json()
     assert "alignment_report" in {r["kind"] for r in listed}
-    # The setting moves the ritual: Mondays 08:00 Los Angeles again.
+    # The setting moves the ritual: Mondays 08:00; the Company time zone moves it back to
+    # Los Angeles.
     await set_report(client, auth)
+    assert (await report_ritual(tenant_id)).schedule["timezone"] == "Europe/Paris"
+    await company_zone(client, auth, "America/Los_Angeles")
     ritual = await report_ritual(tenant_id)
     assert (ritual.schedule["weekday"], ritual.schedule["time"]) == (0, "08:00")
     assert ritual.schedule["timezone"] == "America/Los_Angeles"

@@ -111,14 +111,14 @@ async def test_refusals(client, ctx):
 
 async def _company_zone(client, ctx, zone: str) -> None:
     resp = await client.put(
-        "/v1/settings/alignment_report",
-        json={"value": {"timezone": zone}},
+        "/v1/settings/company_timezone",
+        json={"value": zone},
         headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
 
 
-# protects=review finding 2: "today" is the company's day (the time zone in Settings), so
+# protects=review finding 2: "today" is the company's day (Company time zone), so
 # an Oracle east of UTC records today's value in its morning; with no time zone set, UTC;
 # fails_when=today's value is refused as "in the future" before UTC's midnight;
 # no_claim=the date picker's default (the UI).
