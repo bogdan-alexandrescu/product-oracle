@@ -12870,6 +12870,305 @@
         }
       }
     },
+    "/v1/baseline/entities/{goal_id}/interview": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Start Goal Interview",
+        "description": "Start a goals interview on a vague goal (B6): a discussion on the goal with its\nowner in it, Oracle's opening turn pending (stream it from G2's\n``GET /v1/discussions/{id}/messages/{reply_id}/stream``). An open interview on the\ngoal is returned instead (200, ``created`` false).",
+        "operationId": "start_goal_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/InterviewIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalInterviewOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "An open interview on this goal exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalInterviewOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found"
+          },
+          "422": {
+            "description": "Only goals can be interviewed | This goal is already measurable"
+          }
+        }
+      }
+    },
+    "/v1/baseline/goals/interview": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Start Goal Interviews",
+        "description": "Start (or reopen) a goals interview per goal, in the order given; ``entity_ids``\nomitted: every vague goal. Each discussion's opening turn costs a model call, so the\nweb asks for one goal at a time as its stepper reaches it.",
+        "operationId": "start_goal_interviews",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/baseline/goals/vague": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "List Vague Goals",
+        "description": "The confirmed and proposed goals that are not measurable, with what each misses\nand the open interview on it (the Goals panel's Interview vague goals).",
+        "operationId": "list_vague_goals",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VagueGoalOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Vague Goals"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/v1/baseline/goal-measures/{change_id}/propose": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Propose Goal Measure",
+        "description": "Propose a measurable version of the goal: a baseline proposal (\"From discussion\n<title>\") an approver accepts. ``payload``: the person's Edit (it may set owner_id and\nweight). Its fields pass B5's checks first (422, nothing created). A target the start\nor current value already meets gets Oracle's pushback once (409); sending it again,\nor with ``keep``, proposes it and records the override in the summary.",
+        "operationId": "propose_goal_measure",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GoalMeasureAct"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionChangeOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Change not found"
+          },
+          "409": {
+            "description": "Oracle's pushback (once), closed, or the version was acted on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMeasurePushback"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Goal fields rejected (B5), every problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YamlImportError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/baseline/goal-measures/{change_id}/dismiss": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Dismiss Goal Measure",
+        "description": "Dismiss one of Oracle's versions (approvers).",
+        "operationId": "dismiss_goal_measure",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionChangeOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Change not found"
+          },
+          "409": {
+            "description": "Not proposed"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/priorities": {
       "get": {
         "tags": [
@@ -42340,6 +42639,17 @@
               }
             ],
             "title": "Review Link"
+          },
+          "vague_goals": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vague Goals"
           }
         },
         "type": "object",
@@ -47880,6 +48190,41 @@
           "lock_version": {
             "type": "integer",
             "title": "Lock Version"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "pushback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushback"
+          },
+          "override_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Reason"
           }
         },
         "type": "object",
@@ -55549,6 +55894,25 @@
         ],
         "title": "GoalCheck"
       },
+      "GoalInterviewOut": {
+        "properties": {
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discussion_id",
+          "created"
+        ],
+        "title": "GoalInterviewOut"
+      },
       "GoalLink": {
         "properties": {
           "entity_id": {
@@ -55598,6 +55962,48 @@
           "matched_on"
         ],
         "title": "GoalLink"
+      },
+      "GoalMeasureAct": {
+        "properties": {
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "keep": {
+            "type": "boolean",
+            "title": "Keep",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GoalMeasureAct"
+      },
+      "GoalMeasurePushback": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "pushback": {
+            "type": "boolean",
+            "const": true,
+            "title": "Pushback",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "GoalMeasurePushback"
       },
       "GoalProblem": {
         "properties": {
@@ -56665,6 +57071,17 @@
               }
             ],
             "title": "Review Link"
+          },
+          "vague_goals": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vague Goals"
           },
           "flow": {
             "type": "string",
@@ -60081,6 +60498,17 @@
         ],
         "title": "InterviewGuideItemIn"
       },
+      "InterviewIn": {
+        "properties": {
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "InterviewIn"
+      },
       "InterviewJobState": {
         "properties": {
           "id": {
@@ -60489,6 +60917,31 @@
         ],
         "title": "InterviewPatch"
       },
+      "InterviewRow": {
+        "properties": {
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discussion_id",
+          "created",
+          "entity_id"
+        ],
+        "title": "InterviewRow"
+      },
       "InterviewSubject": {
         "properties": {
           "intake_id": {
@@ -60636,6 +61089,44 @@
           "request_count"
         ],
         "title": "InterviewSummary"
+      },
+      "InterviewsIn": {
+        "properties": {
+          "entity_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Ids"
+          }
+        },
+        "type": "object",
+        "title": "InterviewsIn"
+      },
+      "InterviewsOut": {
+        "properties": {
+          "discussions": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewRow"
+            },
+            "type": "array",
+            "title": "Discussions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discussions"
+        ],
+        "title": "InterviewsOut"
       },
       "InviteCreate": {
         "properties": {
@@ -93379,6 +93870,38 @@
           "title"
         ],
         "title": "UsedItem"
+      },
+      "VagueGoalOut": {
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/EntityOut"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "missing"
+        ],
+        "title": "VagueGoalOut"
       },
       "ValidationError": {
         "properties": {

@@ -194,7 +194,14 @@ export default function HomePage() {
         {setupError && <Notice tone="error">{setupError}</Notice>}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 
-        <GoalsPanel goals={goals} history={history} error={goalsError} loading={goalsLoading} canImport={canWrite} />
+        <GoalsPanel
+          goals={goals}
+          history={history}
+          error={goalsError}
+          loading={goalsLoading}
+          canImport={canWrite}
+          canInterview={hasRole(role, "commenter")}
+        />
 
         <Panel
           title="Needs you"

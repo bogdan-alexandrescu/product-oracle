@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, type Kpi } from "@/components/ds";
+import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { Loading } from "@/components/ui";
+import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
@@ -18,6 +20,7 @@ import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
 import { fillNotice } from "./_components/goal-fields";
+import type { Stepper } from "./_components/GoalInterview";
 import { GraphTab } from "./_components/GraphTab";
 import { ItemsTab } from "./_components/ItemsTab";
 import { fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
@@ -58,6 +61,32 @@ function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBl
   useEffect(() => {
     if (blocker) onBlocker(blocker);
   }, [blocker, onBlocker]);
+  return null;
+}
+
+/**
+ * B6: ?interview=1 with ?entity=<goal> starts (or reopens) that goal's interview (Home's Make
+ * measurable); ?interview=vague steps through the vague goals (a run page's Interview).
+ */
+function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; onVague: () => void }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const interview = params.get("interview");
+  const entity = params.get("entity");
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    if (!interview) return;
+    const key = `${interview}:${entity ?? ""}`;
+    if (done.current === key) return;
+    done.current = key;
+    if (interview === "vague") onVague();
+    else if (entity) onGoal(entity);
+    // Once: a reload does not start another.
+    const next = new URLSearchParams(params.toString());
+    next.delete("interview");
+    const rest = next.toString();
+    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+  }, [interview, entity, onGoal, onVague, params, router]);
   return null;
 }
 
@@ -121,9 +150,16 @@ export default function BaselinePage() {
   const { reload: reloadProposals } = proposals;
   const { reload: reloadFiltered } = filtered;
   const { reload: reloadBlockers } = blockers;
+  // B6: the vague goals (the Goals panel's Interview vague goals), read only, nothing started.
+  const vague = useQuery("baseline-vague", vagueGoals);
+  const { reload: reloadVague } = vague;
   const refresh = useCallback(() => {
-    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers()]);
-  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers]);
+    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers(), reloadVague()]);
+  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers, reloadVague]);
+  // B6: the goal whose interview the drawer's Discuss view shows, and the stepper over the vague goals.
+  const [discuss, setDiscuss] = useState<{ entityId: string; discussionId: string } | null>(null);
+  const [steps, setSteps] = useState<{ ids: string[]; at: number } | null>(null);
+  const [starting, setStarting] = useState(false);
   // #337: Add item, on the kind the button that opened it names.
   const [adding, setAdding] = useState<AddKind | null>(null);
   const added = (message: string) => {
@@ -135,11 +171,79 @@ export default function BaselinePage() {
   const close = useCallback(() => {
     setOpenId(null);
     setPromoteId(null);
+    setDiscuss(null);
+    setSteps(null);
   }, []);
   const openItem = useCallback((id: string) => {
     setBlockerId(null);
     setOpenId(id);
+    setDiscuss((x) => (x && x.entityId !== id ? null : x));
   }, []);
+  const interview = useCallback(
+    async (start: () => Promise<{ entityId: string; discussionId: string }>) => {
+      setStarting(true);
+      setError(null);
+      try {
+        const next = await start();
+        setBlockerId(null);
+        setPromoteId(null);
+        setOpenId(next.entityId);
+        setDiscuss(next);
+        void reloadVague();
+      } catch (e) {
+        if (!onAuth(e)) setError(errorMessage(e));
+      } finally {
+        setStarting(false);
+      }
+    },
+    [onAuth, reloadVague],
+  );
+  /** Make measurable: the goal's open interview, or a new one. */
+  const makeMeasurable = useCallback(
+    (id: string) => {
+      setSteps(null);
+      void interview(async () => ({ entityId: id, discussionId: (await startInterview(id)).discussion_id }));
+    },
+    [interview],
+  );
+  /** The stepper reaches goal `at`: only now is its discussion created. */
+  const reach = useCallback(
+    (ids: string[], at: number) => {
+      setSteps({ ids, at });
+      void interview(async () => {
+        const [row] = await startInterviews([ids[at]]);
+        return { entityId: ids[at], discussionId: row.discussion_id };
+      });
+    },
+    [interview],
+  );
+  const interviewVague = useCallback(async () => {
+    try {
+      const ids = (await vagueGoals()).map((v) => v.entity.id);
+      if (ids.length === 0) return setNotice("Every goal is measurable.");
+      reach(ids, 0);
+    } catch (e) {
+      if (!onAuth(e)) setError(errorMessage(e));
+    }
+  }, [reach, onAuth]);
+  const stepper: Stepper | null = steps
+    ? {
+        at: steps.at,
+        of: steps.ids.length,
+        busy: starting,
+        next: steps.at + 1 < steps.ids.length ? () => reach(steps.ids, steps.at + 1) : undefined,
+        // Skip passes over the next goal: its discussion is never created.
+        skip: steps.at + 1 < steps.ids.length ? () => (steps.at + 2 < steps.ids.length ? reach(steps.ids, steps.at + 2) : setSteps(null)) : undefined,
+        done: () => setSteps(null),
+      }
+    : null;
+  // B6: the run the From filter names, for its after-review line.
+  const fromRun = useQuery(`baseline-from-run:${from}`, () =>
+    from && from !== "none" ? unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: from } } })) : Promise.resolve(null),
+  );
+  const reviewed = fromRun.data?.checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as
+    | { vague_goals?: number | null }
+    | undefined;
   const openBlocker = useCallback((id: string) => {
     setOpenId(null);
     setPromoteId(null);
@@ -245,6 +349,7 @@ export default function BaselinePage() {
       <Suspense fallback={null}>
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
         <TabFromUrl onTab={setTab} onFrom={setFrom} />
+        {canComment && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
       {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
@@ -313,6 +418,13 @@ export default function BaselinePage() {
               onChanged={refresh}
               promote={promoteId === openEntity.id}
               onOpenBlocker={blockers.data?.some((b) => b.id === openEntity.id) ? () => openBlocker(openEntity.id) : undefined}
+              discussionId={discuss?.entityId === openEntity.id ? discuss.discussionId : null}
+              stepper={discuss?.entityId === openEntity.id ? stepper : null}
+              onMakeMeasurable={canComment ? () => makeMeasurable(openEntity.id) : undefined}
+              onCloseDiscuss={() => {
+                setDiscuss(null);
+                setSteps(null);
+              }}
             />
             )
           )
@@ -346,6 +458,9 @@ export default function BaselinePage() {
                   onOpen={openItem}
                   onConfirm={confirmGoal}
                   onFill={fillFromText}
+                  onMakeMeasurable={canComment ? (g) => makeMeasurable(g.id) : undefined}
+                  vague={vague.data?.length ?? 0}
+                  onInterviewVague={canComment ? () => void interviewVague() : undefined}
                   onAdd={setAdding}
                 />
               )}
@@ -415,6 +530,12 @@ export default function BaselinePage() {
                   onOpen={openItem}
                   onDecide={decide}
                   onPromote={promote}
+                  afterReview={
+                    canComment && reviewed?.vague_goals ? (
+                      <VagueGoalsLine count={reviewed.vague_goals} busy={starting} onInterview={() => void interviewVague()} />
+                    ) : undefined
+                  }
+                  onMakeMeasurable={canComment ? makeMeasurable : undefined}
                 />
               )}
             </>

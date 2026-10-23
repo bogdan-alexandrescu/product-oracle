@@ -126,6 +126,8 @@ export interface RunsContext {
   ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
+  /** B6: the confirmed and proposed goals not measurable (an approved baseline_confirm's vague_goals). */
+  vagueGoals?: () => number;
   uuid: () => string;
   now: () => string;
 }
@@ -1533,6 +1535,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_decide:
         c.can_decide &&
         (ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind) ? ctx.mayDecide(c, r.flow) : atLeast(ctx.userRole, c.approver_role)),
+      // B6: Oracle offers a goals interview once the baseline is approved; it starts nothing itself.
+      ...(c.kind === "baseline_confirm" && c.status === "approved" && ctx.vagueGoals ? { vague_goals: ctx.vagueGoals() } : {}),
     }));
     return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };

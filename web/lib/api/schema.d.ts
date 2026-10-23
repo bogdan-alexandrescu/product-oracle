@@ -3775,6 +3775,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{goal_id}/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Goal Interview
+         * @description Start a goals interview on a vague goal (B6): a discussion on the goal with its
+         *     owner in it, Oracle's opening turn pending (stream it from G2's
+         *     ``GET /v1/discussions/{id}/messages/{reply_id}/stream``). An open interview on the
+         *     goal is returned instead (200, ``created`` false).
+         */
+        post: operations["start_goal_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goals/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Goal Interviews
+         * @description Start (or reopen) a goals interview per goal, in the order given; ``entity_ids``
+         *     omitted: every vague goal. Each discussion's opening turn costs a model call, so the
+         *     web asks for one goal at a time as its stepper reaches it.
+         */
+        post: operations["start_goal_interviews"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goals/vague": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vague Goals
+         * @description The confirmed and proposed goals that are not measurable, with what each misses
+         *     and the open interview on it (the Goals panel's Interview vague goals).
+         */
+        get: operations["list_vague_goals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goal-measures/{change_id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Goal Measure
+         * @description Propose a measurable version of the goal: a baseline proposal ("From discussion
+         *     <title>") an approver accepts. ``payload``: the person's Edit (it may set owner_id and
+         *     weight). Its fields pass B5's checks first (422, nothing created). A target the start
+         *     or current value already meets gets Oracle's pushback once (409); sending it again,
+         *     or with ``keep``, proposes it and records the override in the summary.
+         */
+        post: operations["propose_goal_measure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goal-measures/{change_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Goal Measure
+         * @description Dismiss one of Oracle's versions (approvers).
+         */
+        post: operations["dismiss_goal_measure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/priorities": {
         parameters: {
             query?: never;
@@ -12594,6 +12704,8 @@ export interface components {
             needs_agents: components["schemas"]["NeedsAgents"][];
             /** Review Link */
             review_link?: string | null;
+            /** Vague Goals */
+            vague_goals?: number | null;
         };
         /**
          * CheckpointReview
@@ -14702,6 +14814,16 @@ export interface components {
             created_at: string;
             /** Lock Version */
             lock_version: number;
+            /** Result Ref */
+            result_ref?: {
+                [key: string]: unknown;
+            } | null;
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            /** Override Reason */
+            override_reason?: string | null;
         };
         /** DiscussionCreate */
         DiscussionCreate: {
@@ -17418,6 +17540,16 @@ export interface components {
                 [key: string]: number;
             } | null;
         };
+        /** GoalInterviewOut */
+        GoalInterviewOut: {
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /** Created */
+            created: boolean;
+        };
         /** GoalLink */
         GoalLink: {
             /**
@@ -17441,6 +17573,29 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
+        };
+        /** GoalMeasureAct */
+        GoalMeasureAct: {
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Keep
+             * @default false
+             */
+            keep: boolean;
+        };
+        /** GoalMeasurePushback */
+        GoalMeasurePushback: {
+            /** Detail */
+            detail: string;
+            /**
+             * Pushback
+             * @default true
+             * @constant
+             */
+            pushback: true;
         };
         /** GoalProblem */
         GoalProblem: {
@@ -17842,6 +17997,8 @@ export interface components {
             needs_agents: components["schemas"]["NeedsAgents"][];
             /** Review Link */
             review_link?: string | null;
+            /** Vague Goals */
+            vague_goals?: number | null;
             /**
              * Flow
              * @enum {string}
@@ -19238,6 +19395,14 @@ export interface components {
             /** Purpose */
             purpose?: string | null;
         };
+        /** InterviewIn */
+        InterviewIn: {
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
         /** InterviewJobState */
         InterviewJobState: {
             /**
@@ -19368,6 +19533,21 @@ export interface components {
             /** Interviewee Company */
             interviewee_company?: string | null;
         };
+        /** InterviewRow */
+        InterviewRow: {
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /** Created */
+            created: boolean;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+        };
         /**
          * InterviewSubject
          * @description What the interview is about: exactly one of an intake, a request theme or a topic.
@@ -19419,6 +19599,16 @@ export interface components {
             finished_at?: string | null;
             /** Request Count */
             request_count: number;
+        };
+        /** InterviewsIn */
+        InterviewsIn: {
+            /** Entity Ids */
+            entity_ids?: string[] | null;
+        };
+        /** InterviewsOut */
+        InterviewsOut: {
+            /** Discussions */
+            discussions: components["schemas"]["InterviewRow"][];
         };
         /** InviteCreate */
         InviteCreate: {
@@ -30933,6 +31123,14 @@ export interface components {
             /** Title */
             title: string | null;
         };
+        /** VagueGoalOut */
+        VagueGoalOut: {
+            entity: components["schemas"]["EntityOut"];
+            /** Missing */
+            missing: string[];
+            /** Discussion Id */
+            discussion_id?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -39050,6 +39248,204 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["YamlImportError"];
+                };
+            };
+        };
+    };
+    start_goal_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterviewIn"] | null;
+            };
+        };
+        responses: {
+            /** @description An open interview on this goal exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalInterviewOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalInterviewOut"];
+                };
+            };
+            /** @description Entity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only goals can be interviewed | This goal is already measurable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    start_goal_interviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vague_goals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VagueGoalOut"][];
+                };
+            };
+        };
+    };
+    propose_goal_measure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GoalMeasureAct"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionChangeOut"];
+                };
+            };
+            /** @description Change not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oracle's pushback (once), closed, or the version was acted on */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMeasurePushback"];
+                };
+            };
+            /** @description Goal fields rejected (B5), every problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportError"];
+                };
+            };
+        };
+    };
+    dismiss_goal_measure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionChangeOut"];
+                };
+            };
+            /** @description Change not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not proposed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
