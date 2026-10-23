@@ -15,10 +15,12 @@ import { SETTINGS_WRITES, settingsTabOf, useSettingsTabs } from "@/lib/settings-
 export function SettingsGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { tabs, ready } = useSettingsTabs();
-  const { can } = useMe();
+  const { can, capsError } = useMe();
   const tab = settingsTabOf(pathname);
   const write = SETTINGS_WRITES[pathname];
   if (!tab || (tabs.includes(tab) && (!write || can(write)))) return children;
+  // A failed read says so in the shell, with Retry (#370 fixes 4); no Loading forever.
+  if (capsError) return null;
   if (!ready) return <Loading />;
   return (
     <>

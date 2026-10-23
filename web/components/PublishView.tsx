@@ -21,7 +21,7 @@ import {
 } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -149,9 +149,10 @@ function OnPublish({ n }: { n: number }) {
  * review date may be. Settings are owner-readable; anyone else gets the defaults.
  */
 function useRiskPolicy(): { role: Role; maxDays: number } {
-  const { role } = useMe();
-  const q = useQuery(`risk-policy|${role}`, async () => {
-    if (!hasRole(role, "approver")) return RISK_DEFAULTS;
+  const { can } = useMe();
+  const canRead = can("get_setting_endpoint");
+  const q = useQuery(`risk-policy|${canRead}`, async () => {
+    if (!canRead) return RISK_DEFAULTS;
     const read = (key: string) => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key } } })).then((s) => s.value);
     const [who, days] = await Promise.all([read("blocker_risk_acceptance_role"), read("blocker_risk_review_max_days")]).catch(() => [null, null]);
     return {
@@ -164,9 +165,9 @@ function useRiskPolicy(): { role: Role; maxDays: number } {
 
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
-/** Accept a blocker's risk: the company's acceptance role (B4, owners by default); others are told so. */
+/** Accept a blocker's risk: the company's acceptance role (B4, owners by default); hidden from anyone else. */
 function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: string) => void }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const [open, setOpen] = useState(false);
@@ -177,16 +178,11 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
   const review = picked ?? isoDay(today + Math.max(1, Math.min(30, policy.maxDays - 1)) * DAY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const who = policy.role === "owner" ? { only: "Only an owner", chip: "Owners only" } : { only: "Only approvers and owners", chip: "Approvers and owners" };
+  // #370: POST accept-risk, and the handler asks for the company's acceptance role too. When
+  // that is the owner, an owner-only call of the same settings (PUT /v1/settings) stands for it.
+  const canAccept = can("accept_blocker_risk") && (policy.role !== "owner" || can("put_setting"));
 
-  if (!hasRole(role, policy.role)) {
-    return (
-      <div data-testid="risk-owner-only" className="flex min-h-9 items-center gap-2 rounded-lg bg-surface2 px-2.5 font-medium">
-        <Icon name="lock" size={16} className="flex-none text-text2" />
-        <span className="min-w-0">{who.only} can accept this risk</span>
-      </div>
-    );
-  }
+  if (!canAccept) return null;
 
   async function accept() {
     setBusy(true);
@@ -215,10 +211,6 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
     return (
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={() => setOpen(true)}>Accept risk</Button>
-        <Chip kind="line">
-          <Icon name="lock" size={16} />
-          {who.chip}
-        </Chip>
       </div>
     );
   }
@@ -422,7 +414,7 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
 
 /** Publish (B1): blocks, hard checks and advisory on the left, the selected block right. */
 export function PublishView({ doc }: { doc: string }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const onAuth = useAuthRedirect();
   const phone = useIsPhone();
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
@@ -458,7 +450,8 @@ export function PublishView({ doc }: { doc: string }) {
   const blocks = readiness && n != null ? blocksOf(doc, n, readiness, strategyQ.data) : [];
   const selected = blocks.find((b) => b.id === picked) ?? blocks[0] ?? null;
   const published = n != null && d?.approved_version === n;
-  const canPublish = hasRole(role, "approver");
+  // #370: Publish is POST .../approve; anyone who may not call it never sees the button.
+  const canPublish = can("approve_version");
   const hard = readiness?.items.filter((i) => i.hard) ?? [];
   const advisory = readiness?.items.filter((i) => !i.hard) ?? [];
   const failing = hard.filter((i) => i.status === "critical").length;
@@ -531,18 +524,15 @@ export function PublishView({ doc }: { doc: string }) {
     ? "Checking"
     : readiness.blocked
       ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}`
-      : !canPublish
-        ? "Approvers only"
-        : null;
+      : null;
   const action =
     n == null ? null : published ? (
       <Chip kind="pass" className="h-10 px-4 text-[15px]" data-testid="published-chip">
         <Icon name="check" size={16} />
         Published v{n}
       </Chip>
-    ) : (
+    ) : !canPublish ? null : (
       <>
-        {reason === "Approvers only" && <Chip kind="line">{reason}</Chip>}
         <Button
           variant="primary"
           icon={reason ? "lock" : "check"}

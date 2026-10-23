@@ -7,7 +7,7 @@ import { InlineError, JobStatusChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from "@/lib/api/client";
 import { formatDateTime, formatUsd, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 /** The #hash of History's fold of Oracle's work, which the overview's version inspector links to. */
@@ -58,7 +58,11 @@ function summary(job: LlmJob): string | null {
   return `Revision of #${job.section_key} ready to review`;
 }
 
-function JobRow({ job, canAct, onChanged }: { job: LlmJob; canAct: boolean; onChanged: () => void }) {
+function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
+  // #370: Retry and Cancel show to whoever may call them.
+  const { can } = useMe();
+  const retry = (job.status === "failed" || job.status === "cancelled") && can("retry_llm_job");
+  const cancel = (job.status === "queued" || job.status === "running") && can("cancel_llm_job");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const act = async (what: "retry" | "cancel") => {
@@ -131,14 +135,14 @@ function JobRow({ job, canAct, onChanged }: { job: LlmJob; canAct: boolean; onCh
           </div>
         </dl>
       </details>
-      {canAct && (job.status === "failed" || job.status === "cancelled" || job.status === "queued" || job.status === "running") && (
+      {(retry || cancel) && (
         <div className="mt-2 flex gap-2">
-          {(job.status === "failed" || job.status === "cancelled") && (
+          {retry && (
             <Button disabled={busy} onClick={() => act("retry")}>
               Retry
             </Button>
           )}
-          {(job.status === "queued" || job.status === "running") && (
+          {cancel && (
             <Button variant="ghost" disabled={busy} onClick={() => act("cancel")}>
               Cancel
             </Button>
@@ -150,7 +154,7 @@ function JobRow({ job, canAct, onChanged }: { job: LlmJob; canAct: boolean; onCh
   );
 }
 
-function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
+function SettingsForm({ doc }: { doc: string }) {
   const q = useQuery(`llm-settings|${doc}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/llm-jobs/settings", { params: { path: { doc } } })),
   );
@@ -176,7 +180,7 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
       <legend className="flex items-center gap-1.5 px-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
         Oracle does on its own
         <InfoTip label="Oracle does on its own" align="start">
-          Oracle reads new feedback and writes reports by itself. Owners turn each off.
+          Oracle reads new feedback and writes reports by itself. Turn each off here.
         </InfoTip>
       </legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -186,7 +190,6 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
               type="checkbox"
               className="size-4 accent-[var(--accent)]"
               checked={q.data![k] ?? true}
-              disabled={!canEdit}
               onChange={(e) => toggle(k, e.target.checked)}
             />
             {JOB_SETTING_LABEL[k] ?? k}
@@ -200,8 +203,10 @@ function SettingsForm({ doc, canEdit }: { doc: string; canEdit: boolean }) {
 
 /** Oracle's work on a document (History): its switches, run-now buttons, and each job with retry and cancel. */
 export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; version?: number; refreshKey?: number }) {
-  const { role } = useMe();
-  const canAct = hasRole(role, "approver");
+  const { can } = useMe();
+  // #370: the switches show only to whoever may change them; the run-now buttons likewise.
+  const canSettings = can("put_llm_job_settings");
+  const canQueue = can("create_llm_job");
   const q = useQuery(`llm-jobs|${doc}|${refreshKey}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/llm-jobs", { params: { path: { doc } } })),
   );
@@ -223,8 +228,8 @@ export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; versi
 
   return (
     <div className="flex flex-col gap-3" data-testid="jobs-panel">
-      <SettingsForm doc={doc} canEdit={hasRole(role, "owner")} />
-      {canAct && (
+      {canSettings && <SettingsForm doc={doc} />}
+      {canQueue && (
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => queue("review_comments")}>Suggest changes now</Button>
           <Button onClick={() => queue("reporting")}>Write reports now</Button>
@@ -239,7 +244,7 @@ export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; versi
       {q.data && q.data.length > 0 && (
         <ol className="flex flex-col" aria-label="Oracle's work">
           {q.data.map((j) => (
-            <JobRow key={j.id} job={j} canAct={canAct} onChanged={() => void q.reload()} />
+            <JobRow key={j.id} job={j} onChanged={() => void q.reload()} />
           ))}
         </ol>
       )}

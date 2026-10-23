@@ -85,7 +85,7 @@ test("members: non-owners get no Members tab, and its address says it is not for
 test("roles: a viewer reads and exports but has no comment, verdict or approve controls", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(page.getByTestId("role-note")).toContainText("read-only access (viewer)");
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(section(page, "problem").getByTestId("verdict-state")).toBeVisible();
@@ -108,7 +108,7 @@ test("roles: a viewer reads and exports but has no comment, verdict or approve c
 test("roles: a commenter comments and resolves their own thread, not others'", async ({ page }) => {
   await login(page, "commenter@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(page.getByTestId("role-note")).toContainText("need the approver role");
+  await expect(page.getByTestId("view-only")).toHaveCount(0);
   await openSection(page, "problem");
   await expect(section(page, "problem").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);

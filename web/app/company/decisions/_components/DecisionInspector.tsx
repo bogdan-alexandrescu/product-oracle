@@ -44,7 +44,7 @@ export function DecisionInspector({
   /** Open the decide form at once (the Inbox's Decide). */
   autoDecide?: boolean;
 }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [mode, setMode] = useState<null | "decide" | "review" | "reassign" | "withdraw">(autoDecide && d.can_decide ? "decide" : null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -137,7 +137,7 @@ export function DecisionInspector({
             label="Options"
             tools={
               d.status === "proposed" &&
-              hasRole(role, "approver") && (
+              can("recommend_decision_options") && (
                 <Button variant="ghost" disabled={busy} onClick={askOracle}>
                   {busy ? "Asking Oracle…" : "Ask Oracle for options"}
                 </Button>

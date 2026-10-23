@@ -27,12 +27,21 @@ type MeState = {
   /** True until the first GET /v1/me has answered. */
   loading: boolean;
   /**
-   * #370: whether the signed-in role may call `op` (GET /v1/me/capabilities, derived from
-   * the API's own route roles). False until the capabilities have loaded.
+   * #370: whether the signed-in principal may call `op` (GET /v1/me/capabilities, derived
+   * from the API's own route roles, the engineering lead flag included). For an operation
+   * the item decides too (`per_item`), pass `onItem`: whether this item lets the caller in
+   * below the role the handler never refuses (the author, the person asked, a gap that is
+   * not critical). False until the capabilities have loaded.
    */
-  can: (op: Operation) => boolean;
+  can: (op: Operation, onItem?: boolean) => boolean;
+  /** A3: whether the signed-in principal decides the engineering stops. */
+  decideEngineeringStops: boolean;
   /** True once the capabilities of the signed-in principal have loaded. */
   capsReady: boolean;
+  /** Why the capabilities could not be read, or null. */
+  capsError: string | null;
+  /** Reads the capabilities again (after capsError). */
+  retryCaps: () => void;
   /** Re-reads GET /v1/me. */
   refresh: () => Promise<void>;
   /** Forgets the principal locally (after sign-out). */
@@ -65,19 +74,43 @@ export function MeProvider({ children }: { children: ReactNode }) {
   // Read once per signed-in principal and role: a new sign-in or a role change reloads them.
   const capsKey = state.me ? `${state.me.user_id ?? state.me.token_id}|${state.me.role}|${state.me.engineering_lead}` : null;
   const [caps, setCaps] = useState<{ key: string; caps: Schemas["Capabilities"] } | null>(null);
+  const [capsFailed, setCapsFailed] = useState<{ key: string; error: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!capsKey) return;
     let alive = true;
+    const failed = (error: string) => alive && setCapsFailed({ key: capsKey, error });
     api
       .GET("/v1/me/capabilities")
-      .then((res) => alive && res.data && setCaps({ key: capsKey, caps: res.data }))
-      .catch(() => undefined);
+      .then((res) => {
+        if (!alive) return;
+        if (res.data) {
+          setCapsFailed(null);
+          setCaps({ key: capsKey, caps: res.data });
+        } else failed("Oracle could not read what your role may do.");
+      })
+      .catch(() => failed("Oracle could not read what your role may do."));
     return () => {
       alive = false;
     };
-  }, [capsKey]);
-  const ops = caps && caps.key === capsKey ? caps.caps.operations : null;
-  const can = useCallback((op: Operation) => ops?.[op] === true, [ops]);
+  }, [capsKey, attempt]);
+  const current = caps && caps.key === capsKey ? caps.caps : null;
+  const ops = current?.operations ?? null;
+  const can = useCallback(
+    (op: Operation, onItem?: boolean) => {
+      if (ops?.[op] !== true) return false;
+      if (!current || !(op in current.per_item)) return true;
+      // The handler checks the item too: its role passes any item; below it, the item decides.
+      const role = current.per_item[op];
+      return (role != null && hasRole(current.role, role)) || onItem === true;
+    },
+    [ops, current],
+  );
+  const capsError = !current && capsFailed && capsFailed.key === capsKey ? capsFailed.error : null;
+  const retryCaps = useCallback(() => {
+    setCapsFailed(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
   const value = useMemo<MeState>(
     () => ({
@@ -86,11 +119,14 @@ export function MeProvider({ children }: { children: ReactNode }) {
       engineeringLead: state.me?.engineering_lead ?? false,
       loading: state.loading,
       can,
+      decideEngineeringStops: current?.decide_engineering_stops ?? false,
       capsReady: ops !== null,
+      capsError,
+      retryCaps,
       refresh,
       clear,
     }),
-    [state, refresh, clear, can, ops],
+    [state, refresh, clear, can, ops, current, capsError, retryCaps],
   );
   return <MeContext.Provider value={value}>{children}</MeContext.Provider>;
 }

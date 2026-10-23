@@ -23,8 +23,9 @@ import type { DocKind, FindingState } from "./_components/lib";
  * its next version with Oracle; the documents themselves open from the cards.
  */
 export default function StrategyPage() {
-  const { role, can, capsReady } = useMe();
-  const owner = role === "owner";
+  const { can, capsReady } = useMe();
+  // #370: a vision or a product strategy is an owner's to start (POST /v1/drafts by kind).
+  const owner = can("start_draft", false);
   // #370: approvers waive drift and owners draft; below that the strategy is read only.
   const readOnly = capsReady && !can("waive_strategy_finding");
   const [state, setState] = useState<FindingState>("open");

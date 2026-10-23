@@ -4,13 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ScrollStrip } from "@/components/ds";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 
 import { COMPANY_TABS, type CompanyTab } from "./_tabs";
 
 /** The tabs the signed-in member may see, in registry order. */
-export function visibleTabs(role: Parameters<typeof hasRole>[0]): CompanyTab[] {
-  return COMPANY_TABS.filter((t) => !t.minRole || hasRole(role, t.minRole));
+export function visibleTabs(can: ReturnType<typeof useMe>["can"]): CompanyTab[] {
+  return COMPANY_TABS.filter((t) => !t.read || can(t.read));
 }
 
 /**
@@ -19,11 +19,11 @@ export function visibleTabs(role: Parameters<typeof hasRole>[0]): CompanyTab[] {
  */
 export function CompanyNav() {
   const pathname = usePathname();
-  const { role } = useMe();
+  const { can } = useMe();
   return (
     <nav aria-label="Company" data-testid="company-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
       <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
-        {visibleTabs(role).map((t) => {
+        {visibleTabs(can).map((t) => {
           const on = pathname === t.href || pathname.startsWith(`${t.href}/`);
           return (
             <Link

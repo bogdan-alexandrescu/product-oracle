@@ -23,7 +23,7 @@ import {
 } from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { hasRole, useMe, type Role } from "@/lib/me";
+import { useMe, type Role } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 const ROLES: { role: Role; label: string; can: string }[] = [
@@ -73,14 +73,16 @@ const pageTip = (
 
 /** Settings > Members: the people of this company's Oracle, their roles and status, and invites. */
 export function MembersSettings() {
-  const { me, role, engineeringLead, loading } = useMe();
-  const isOwner = hasRole(role, "owner");
+  const { me, role, engineeringLead, loading, can, capsReady, capsError } = useMe();
+  // #370: managing members starts with reading them (GET /v1/members).
+  const canManage = can("list_members");
+  const ready = !loading && (capsReady || !!capsError);
 
-  if (!loading && isOwner) return <OwnerView selfId={me?.user_id ?? null} />;
+  if (ready && canManage) return <OwnerView selfId={me?.user_id ?? null} />;
   return (
     <>
       <PageHeader title="Members" status={pageTip} />
-      {!loading && (
+      {ready && (
         <Split inspector={<RolesInspector />}>
           <p
             role="note"
@@ -90,7 +92,6 @@ export function MembersSettings() {
             <span>
               Your role is <b>{role ? ROLE_LABEL[role].toLowerCase() : "unknown"}</b>.
             </span>
-            <span>Only owners manage members.</span>
             {engineeringLead && <span>You are an engineering lead.</span>}
           </p>
         </Split>

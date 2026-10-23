@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button, Chip, Empty, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Entry = Schemas["ChangelogEntryOut"];
@@ -41,8 +41,6 @@ function grouped(entries: Entry[]): [string, [Entry["category"], Entry[]][]][] {
  */
 export default function ChangelogPage() {
   const q = useQuery("changelog", () => unwrap(api.GET("/v1/changelog", { params: { query: { limit: 500 } } })));
-  const { role } = useMe();
-  const canApprove = hasRole(role, "approver");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const entries = q.data ?? [];
@@ -130,7 +128,7 @@ export default function ChangelogPage() {
                   <h3 className="text-[13px] font-semibold tracking-[0.02em] text-text2">{CATEGORY_LABEL[category]}</h3>
                   <ul className="mt-1 flex flex-col divide-y divide-line">
                     {rows.map((e) => (
-                      <EntryRow key={e.id} entry={e} canApprove={canApprove} busy={busy} act={act} />
+                      <EntryRow key={e.id} entry={e} busy={busy} act={act} />
                     ))}
                   </ul>
                 </div>
@@ -145,15 +143,14 @@ export default function ChangelogPage() {
 
 function EntryRow({
   entry,
-  canApprove,
   busy,
   act,
 }: {
   entry: Entry;
-  canApprove: boolean;
   busy: string | null;
   act: (key: string, call: () => Promise<unknown>) => Promise<void>;
 }) {
+  const { can } = useMe();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(entry.title);
   const [body, setBody] = useState(entry.body);
@@ -168,27 +165,28 @@ function EntryRow({
         </Chip>
       </div>
       {entry.body && <p className="text-[15px] leading-6 text-text2">{entry.body}</p>}
-      {canApprove && (
-        <div className="flex flex-wrap gap-1.5">
+      {/* #370: each action shows only for a role that may call it. */}
+      <div className="flex flex-wrap gap-1.5 empty:hidden">
+        {can("update_changelog_entry") && (
           <Button variant="ghost" onClick={() => setEditing((x) => !x)}>
             Edit
           </Button>
-          {entry.status === "draft" && (
-            <Button disabled={busy !== null} onClick={() => act(`publish-${entry.id}`, () => unwrap(api.POST("/v1/changelog/{entry_id}/publish", path)))}>
-              Publish
-            </Button>
-          )}
-          {entry.status === "published" && (
-            <Button
-              variant="ghost"
-              disabled={busy !== null}
-              onClick={() => act(`withdraw-${entry.id}`, () => unwrap(api.POST("/v1/changelog/{entry_id}/withdraw", path)))}
-            >
-              Withdraw
-            </Button>
-          )}
-        </div>
-      )}
+        )}
+        {entry.status === "draft" && can("publish_changelog_entry") && (
+          <Button disabled={busy !== null} onClick={() => act(`publish-${entry.id}`, () => unwrap(api.POST("/v1/changelog/{entry_id}/publish", path)))}>
+            Publish
+          </Button>
+        )}
+        {entry.status === "published" && can("withdraw_changelog_entry") && (
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => act(`withdraw-${entry.id}`, () => unwrap(api.POST("/v1/changelog/{entry_id}/withdraw", path)))}
+          >
+            Withdraw
+          </Button>
+        )}
+      </div>
       {editing && (
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1 text-sm font-medium">

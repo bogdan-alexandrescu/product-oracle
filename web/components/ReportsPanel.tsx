@@ -8,7 +8,7 @@ import { FeedbackStatusChip, JobStatusChip, TabBar } from "@/components/review/p
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type FeedbackStatus } from "@/lib/api/client";
 import { formatDate, formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -27,8 +27,8 @@ export function ReportsPanel({
   /** "changes" opens on What changed (where applying a next draft lands, C1e). */
   initialTab?: Tab;
 }) {
-  const { role } = useMe();
-  const canAct = hasRole(role, "approver");
+  const { can } = useMe();
+  const canAct = can("create_llm_job");
   const [tab, setTab] = useState<Tab>(initialTab);
   const [error, setError] = useState<string | null>(null);
   const q = useQuery(`reports|${doc}|${n}|${refreshKey}`, () =>

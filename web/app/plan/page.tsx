@@ -65,7 +65,11 @@ export default function PlanPage() {
   const userId = me?.user_id ?? null;
   // #370: approvers start PRDs and build the baseline; below that the Plan is read only.
   const canWrite = can("start_draft");
-  const canBuild = can("create_run");
+  // create_run's handler wants an owner only to update a draft run; any other run lets
+  // approvers in.
+  const canBuild = can("create_run", true);
+  // Import goes to /baseline?build=1, whose Build baseline shows with confirm_entity.
+  const canBaseline = can("confirm_entity");
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
@@ -137,7 +141,7 @@ export default function PlanPage() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
-        <GoalsBand canImport={canBuild} />
+        <GoalsBand canImport={canBaseline} />
         <PrdCards prds={data?.prds} canWrite={canWrite} />
         <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
           <Panel
