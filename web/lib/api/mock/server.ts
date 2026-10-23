@@ -17,7 +17,7 @@ import { claudeAccountsRoute } from "./claude-accounts";
 import { connectionsRoute, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
+import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, seedRunDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
@@ -25,7 +25,7 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
-import { ENGINEERING_KINDS, enlargeRuns, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
+import { ENGINEERING_KINDS, enlargeRuns, FEATURE_SET_RUN, lastBaselineBuild, routeRuns, seedEngReviewRun, seedFeatureSetRun, seedPriorityRuns, seedRuns, type RunsContext, type RunsDb } from "./runs";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, SOURCES_STORAGE_KEY } from "./sources";
@@ -299,6 +299,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
+ * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
+ * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
@@ -1444,7 +1446,7 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
-          : scenario === "feature-set"
+          : scenario === "feature-set" || scenario === "run-discussions"
             ? seedFeatureSet
           : scenario === "eng-review"
             ? seedEngReview
@@ -1492,7 +1494,9 @@ function load(): Db {
       ? seedDiscussionsScenario(db)
       : scenario === "discussion-replies"
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
-        : emptyDiscussions();
+        : scenario === "run-discussions"
+          ? seedRunDiscussionsScenario(db)
+          : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
@@ -1518,6 +1522,14 @@ function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDisc
   const doc = findDocument(db, "team-workspaces")!;
   const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
   return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
+}
+
+/** G5 "run-discussions": an open and a private discussion on the feature-set run's waiting checkpoint. */
+function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
+  const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
+  const cp = run.checkpoints.find((c) => c.status === "pending")!;
+  const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
+  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind });
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
