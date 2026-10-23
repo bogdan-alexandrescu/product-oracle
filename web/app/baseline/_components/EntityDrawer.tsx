@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
@@ -95,6 +95,8 @@ type Props = {
   onMakeMeasurable?: () => void;
   /** B6: back from the Discuss view to the goal's details. */
   onCloseDiscuss?: () => void;
+  /** B2: the "Why it needs you" card of a row from a run's review, shown first. */
+  why?: ReactNode;
 };
 
 /**
@@ -118,6 +120,7 @@ export function EntityDrawer({
   stepper,
   onMakeMeasurable,
   onCloseDiscuss,
+  why,
 }: Props) {
   const q = useQuery(`baseline-entity:${entity.id}`, () =>
     unwrap(api.GET("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: entity.id } } })),
@@ -373,6 +376,7 @@ export function EntityDrawer({
           { label: "Proposals", value: proposals ?? "–", tone: proposals ? "warn" : undefined },
         ]}
       >
+        {why}
         {(q.error || error || notice || (q.loading && !d)) && (
           <InspectorSection>
             <div className="flex flex-col gap-2">

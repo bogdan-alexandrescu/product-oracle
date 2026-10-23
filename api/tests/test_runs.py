@@ -965,6 +965,11 @@ edges:
 """
 
 
+async def confirm_goal(client, headers, entity_id):
+    resp = await client.post(f"/v1/baseline/entities/{entity_id}/confirm", headers=headers)
+    assert resp.status_code == 200, resp.text
+
+
 async def test_baseline_yaml_is_merged_through_the_import(client, owner, runtime):
     tenant_id, auth = owner
     # A person's locked feature: the run may not change it, only propose.
@@ -999,7 +1004,9 @@ async def test_baseline_yaml_is_merged_through_the_import(client, owner, runtime
         ("Checkout, as the agent sees it", run["id"])
     ]
 
-    # Approving the checkpoint moves on; the import is not repeated.
+    # Approving the checkpoint moves on once its goal is decided (B2: an undecided goal
+    # from the run blocks Approve); the import is not repeated.
+    await confirm_goal(client, auth, by_key["activation"]["id"])
     run = await decide(client, auth, run)
     assert run["status"] == "running"
     proposals = (await client.get("/v1/baseline/proposals", headers=auth)).json()

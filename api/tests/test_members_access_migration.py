@@ -61,7 +61,7 @@ def scratch_db():
 
 def test_one_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0043_invite_message"]
+    assert script.get_heads() == ["0044_revision_run"]
     assert script.get_revision(REVISION).down_revision == BEFORE
 
 

@@ -40,8 +40,8 @@ ITEM_FILES = {"roadmap_items": "roadmap_items.yaml"}
 # The order an entry's keys are written in (JSONB keeps no order: the stored review is put
 # back in this one, so the file reads the same however it was read).
 ENTRY_KEYS = (
-    "id", "action", "section", "summary", "accepted_text", "changes", "reorder", "after",
-    "into", "with", "question", "asked_to", "answer", "answers", "note",
+    "id", "title", "action", "section", "summary", "accepted_text", "changes", "reorder",
+    "after", "into", "with", "question", "asked_to", "answer", "answers", "note",
 )  # fmt: skip
 ROW_KEYS = ("id", "code", "reason", "text")
 
@@ -144,8 +144,49 @@ def _roadmap_items(
     return entries, waived
 
 
+# --------------------------------------------------------------------------- baseline_confirm
+
+
+def _baseline_confirm(
+    staged: list[ReviewAction], items: list[str], reasons: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """B2: each staged Look again is an entry ``action: question`` with its note; each
+    Leave proposed a waived goal. The baseline writes themselves already applied."""
+    entries: list[dict[str, Any]] = []
+    waived: list[dict[str, Any]] = []
+    for a in staged:
+        value = a.value if isinstance(a.value, dict) else {}
+        if a.kind == "look_again":
+            entries.append({"id": a.item_key, "action": "question", "note": value.get("note")})
+        elif a.kind == "waive":
+            codes = list(a.answers) or [r["code"] for r in reasons if r["item"] == a.item_key]
+            waived += [{"id": a.item_key, "code": c, "reason": value.get("reason")} for c in codes]
+    return entries, waived
+
+
+def look_again_note(review: dict[str, Any]) -> str | None:
+    """The Send back note of a Confirm the baseline stop (B2): the look-again items, then
+    the note to the agents."""
+    if review.get("checkpoint") != "baseline_confirm":
+        return None
+    lines: list[str] = []
+    looks = [e for e in review.get("items") or [] if e.get("action") == "question"]
+    if looks:
+        lines.append("Look again at these items:")
+        for e in looks:
+            kind, _, key = str(e["id"]).partition(":")
+            title = f" ({e['title']})" if e.get("title") else ""
+            lines.append(f"- {kind} {key}{title}: {e.get('note') or ''}")
+    if review.get("general_note"):
+        lines.append(f"General: {review['general_note']}")
+    return "\n".join(lines) + "\n" if lines else None
+
+
 # The spec owning each checkpoint kind registers its entry builder here (C7, F4, D10, B2).
-ENTRY_BUILDERS: dict[str, EntryBuilder] = {"roadmap_items": _roadmap_items}
+ENTRY_BUILDERS: dict[str, EntryBuilder] = {
+    "roadmap_items": _roadmap_items,
+    "baseline_confirm": _baseline_confirm,
+}
 
 
 # --------------------------------------------------------------------------- build
@@ -271,7 +312,8 @@ def change_request(
     (the same file the run page serves)."""
     what = _what(review)
     answer = f" {resolutions_instruction(review['file'])}" if review.get("file") else ""
-    return (
+    note = look_again_note(review)
+    return (note + "\n" if note else "") + (
         f"The reviewer sent {what} back with a structured review (review.yaml, below). "
         f"Start from your previous {what}. Apply every entry; do not change items under "
         "`unchanged` unless an entry forces it, and say so. Answer every entry under "
@@ -356,4 +398,10 @@ async def sent_review(db: Any, principal: Any, run: Any, cp: Any, note: str | No
     items = [i.key for i in draft.items if i.position is not None]
     reasons = [r.model_dump() for i in draft.items for r in i.reasons]
     staged = [a for i in draft.items for a in i.actions]
-    return build_review(cp, staged, items, reasons, note, draft.attempt)
+    review = build_review(cp, staged, items, reasons, note, draft.attempt)
+    if cp.kind == "baseline_confirm":
+        # B2: the Send back note names each item with its title.
+        titles = {i.key: i.title for i in draft.items}
+        for entry in review["items"]:
+            entry["title"] = titles.get(entry["id"])
+    return review

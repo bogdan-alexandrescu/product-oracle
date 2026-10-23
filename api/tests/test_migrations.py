@@ -188,7 +188,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     cfg = _cfg()
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
-    assert script.get_heads() == ["0043_invite_message"]
+    assert script.get_heads() == ["0044_revision_run"]
 
     command.upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()
@@ -218,3 +218,35 @@ def test_baseline_flow_check_up_down_up(scratch_db):
 
     command.upgrade(cfg, BASELINE_FLOW)
     assert "'baseline'" in _flow_check()
+
+
+REVISION_RUN = "0044_revision_run"
+
+
+def _columns(table: str) -> set[str]:
+    return {
+        r[0]
+        for r in _run(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = :t", t=table
+        )
+    }
+
+
+def test_revision_run_up_down_up(scratch_db):
+    # protects=B2 criterion 10: entity_revisions.run_id (and its index) comes and goes
+    # with 0042_revision_run, after main's head; fails_when=the column survives the
+    # downgrade, is missing after the upgrade, or the chain has two heads; no_claim=the
+    # application's writes (tests/test_baseline_from_run.py).
+    from alembic.script import ScriptDirectory
+
+    cfg = _cfg()
+    script = ScriptDirectory.from_config(cfg)
+    assert script.get_heads() == [REVISION_RUN]
+    previous = script.get_revision(REVISION_RUN).down_revision
+    assert previous == "0041_subgoals"
+    command.upgrade(cfg, REVISION_RUN)
+    assert "run_id" in _columns("entity_revisions")
+    command.downgrade(cfg, previous)
+    assert "run_id" not in _columns("entity_revisions")
+    command.upgrade(cfg, REVISION_RUN)
+    assert "run_id" in _columns("entity_revisions")

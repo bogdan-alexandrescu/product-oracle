@@ -30,16 +30,19 @@ import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContex
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
+import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
   approveRunReview,
   ENGINEERING_KINDS,
   enlargeRuns,
   FEATURE_SET_RUN,
+  fromRunCheckpoint,
   lastBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
   routeRuns,
   seedEngCheckRun,
+  seedBaselineReviewRun,
   seedEngReviewRun,
   seedFeatureSetRun,
   seedPriorityRuns,
@@ -827,6 +830,19 @@ function seedEngCheckNoLead(): Db {
 }
 
 /**
+ * B2 "baseline-review" scenario: the default seed plus a Build the baseline run waiting at
+ * Confirm the baseline with what it wrote to the baseline (./from-run.ts); "baseline-review-
+ * console": the same run approved in SwarmCloud's console while its goals are undecided.
+ */
+function seedBaselineReview(consoleHeld: boolean): Db {
+  const db = seed();
+  const run = seeded("baseline-review", () => seedBaselineReviewRun(db.runs!, runsContext(db), consoleHeld));
+  const lead = db.members.find((m) => m.email === "approver@example.com")!.id;
+  seeded("baseline-review-items", () => seedFromRun(db.baseline, run.id, uuid, lead));
+  return db;
+}
+
+/**
  * D3 "roadmap-items-console-held" scenario: the default company plus the roadmap review run
  * (usage-alerts-roadmap at its Roadmap items checkpoint) approved in SwarmCloud's console
  * while blocking reasons are open, so the approval is held (./runs.ts ROADMAP_REVIEW_HELD_RUN).
@@ -1483,6 +1499,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
+    baselineReview: (runId, actions) => baselineReviewOf(db.baseline, runId, actions as Schemas["ReviewAction"][]),
     stagedText: (id) => {
       const s = withSuggestion(db.llm, { id } as FeedbackRow).suggestion;
       return s?.text ?? null;
@@ -1619,6 +1636,8 @@ function load(): Db {
           ? seedBigPrd
           : scenario === "feature-set" || scenario === "run-discussions"
             ? seedFeatureSet
+          : scenario === "baseline-review" || scenario === "baseline-review-console"
+            ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
@@ -2976,6 +2995,13 @@ async function route(db: Db, req: Request): Promise<Response> {
       q,
     );
     if (traced) return traced;
+  }
+  // B2: what a run wrote to the baseline (viewer+), its rows read under its shared draft.
+  if (p[1] === "baseline" && p[2] === "from-run" && p[3] && req.method === "GET") {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
+    if (!found) return json(404, { detail: `run ${p[3]} not found` });
+    return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
