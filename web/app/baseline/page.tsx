@@ -17,7 +17,7 @@ import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
 import { GraphTab } from "./_components/GraphTab";
-import { noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
+import { fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
 type Tab = "graph" | "flagged" | "conflicts" | "proposals" | "blockers";
@@ -173,11 +173,13 @@ export default function BaselinePage() {
       return "Conflict resolved.";
     });
 
-  const decide = (proposal: ProposalOut, accept: boolean) =>
+  const decide = (proposal: ProposalOut, accept: boolean, skip: string[] = []) =>
     act(async () => {
       const params = { params: { path: { proposal_id: proposal.id } } };
-      if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", params));
+      if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", { ...params, body: { skip_fields: skip } }));
       else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
+      if (accept && skip.length > 0)
+        return `Proposal accepted without ${skip.map(fieldName).join(", ")}: the rest is applied and the item locked.`;
       if (accept) return "Proposal accepted: the change is applied and the item locked.";
       return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
     });
