@@ -2600,7 +2600,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       uses: () => itemUses(db),
     });
   }
-  const fireflies = routeFirefliesBrowse(p, q);
+  const fireflies = await routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
   // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
   db.autonomy ??= emptyAutonomy();

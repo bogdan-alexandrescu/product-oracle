@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
@@ -27,6 +27,10 @@ export type FirefliesConfig = {
 export const MAX_SERIES = 200;
 export const MAX_MEETINGS = 2000;
 const MAX_LABEL = 500;
+// The most one Tick all reads, as the Series list does (#252): each page is a call from
+// the small Fireflies browse budget (10 a minute, 25 a day).
+const TICK_ALL_PAGES = 6;
+const TICK_ALL_MEETINGS = 300;
 
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
@@ -152,22 +156,60 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
   const key = `${connectionId}|${search}|${from ?? ""}|${to ?? ""}`;
   const [state, setState] = useState<MeetingState>({ key: "", rows: [], next: null, loading: false, error: null, retryAt: null });
 
+  const page = (cursor: string | null) =>
+    unwrap(
+      api.GET("/v1/connections/{connection_id}/fireflies/meetings", {
+        params: {
+          path: { connection_id: connectionId },
+          query: { search: search || undefined, from: from || undefined, to: to || undefined, cursor: cursor ?? undefined },
+        },
+      }),
+    );
+
   async function load(cursor: string | null, reset: boolean) {
     setState((s) => ({ ...s, key, loading: true, error: null, retryAt: null, ...(reset ? { rows: [], next: null } : {}) }));
     try {
-      const page = await unwrap(
-        api.GET("/v1/connections/{connection_id}/fireflies/meetings", {
-          params: {
-            path: { connection_id: connectionId },
-            query: { search: search || undefined, from: from || undefined, to: to || undefined, cursor: cursor ?? undefined },
-          },
-        }),
-      );
+      const got = await page(cursor);
       setState((s) =>
-        s.key !== key ? s : { key, rows: reset ? page.meetings : [...s.rows, ...page.meetings], next: page.next_cursor ?? null, loading: false, error: null, retryAt: null },
+        s.key !== key ? s : { key, rows: reset ? got.meetings : [...s.rows, ...got.meetings], next: got.next_cursor ?? null, loading: false, error: null, retryAt: null },
       );
     } catch (e) {
       if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
+    }
+  }
+
+  /**
+   * Loads the pages not loaded yet, up to TICK_ALL_PAGES pages or TICK_ALL_MEETINGS
+   * meetings: the search's meetings loaded, and whether more are left; null on an error
+   * or once `stopped`.
+   */
+  async function loadAll(stopped: () => boolean): Promise<{ rows: Meeting[]; capped: boolean } | null> {
+    let rows = state.rows;
+    let cursor = state.next;
+    if (!cursor) return { rows, capped: false };
+    let pages = 0;
+    let read = 0;
+    setState((s) => ({ ...s, loading: true, error: null, retryAt: null }));
+    try {
+      while (cursor && pages < TICK_ALL_PAGES && read < TICK_ALL_MEETINGS) {
+        const got = await page(cursor);
+        pages += 1;
+        read += got.meetings.length;
+        if (stopped()) {
+          setState((s) => (s.key !== key ? s : { ...s, loading: false }));
+          return null;
+        }
+        rows = [...rows, ...got.meetings];
+        cursor = got.next_cursor ?? null;
+        const shown = rows;
+        const next = cursor;
+        const last = next == null || pages >= TICK_ALL_PAGES || read >= TICK_ALL_MEETINGS;
+        setState((s) => (s.key !== key ? s : { ...s, rows: shown, next, loading: !last }));
+      }
+      return { rows, capped: cursor != null };
+    } catch (e) {
+      if (!onAuth(e)) setState((s) => (s.key !== key ? s : { ...s, loading: false, error: errorMessage(e), retryAt: retryAtOf(e) }));
+      return null;
     }
   }
 
@@ -176,7 +218,7 @@ function useMeetings(connectionId: string, search: string, from?: string, to?: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled]);
 
-  return { ...state, more: () => (state.next ? load(state.next, false) : undefined), retry: () => load(null, true) };
+  return { ...state, more: () => (state.next ? load(state.next, false) : undefined), retry: () => load(null, true), loadAll };
 }
 
 /** Retry for a failed list, active once the limit's wait (if any) is over. Keyed by `retryAt`. */
@@ -306,6 +348,53 @@ export function FirefliesPicker({
     });
   }
 
+  // Tick all: the search's meetings not in a picked series, and what it added, so one
+  // click undoes it. Forgotten once the search or dates change.
+  const tickable = meetings.rows.filter((m) => m.series_key == null || !pickedSeries.has(m.series_key));
+  // `capped`: how many results it read when its page cap stopped it.
+  const [ticked, setTicked] = useState<{ key: string; ids: string[]; capped: number | null } | null>(null);
+  const tickKey = `${query}|${from ?? ""}|${to ?? ""}`;
+  const undo = ticked?.key === tickKey ? ticked.ids : null;
+  // Until the list shows what is typed, ticking all would tick another search's results.
+  const settled = search.trim() === query && value.date_from === from && value.date_to === to && !meetings.loading;
+
+  // While Tick all loads, the picker as it is now (the person may tick or search meanwhile),
+  // and the meetings they tick or untick: Tick all leaves those as they set them.
+  const typedKey = `${search.trim()}|${value.date_from ?? ""}|${value.date_to ?? ""}`;
+  const latest = useRef({ value, typedKey });
+  useEffect(() => {
+    latest.current = { value, typedKey };
+  });
+  const touched = useRef(new Set<string>());
+
+  async function tickAll() {
+    const started = typedKey;
+    touched.current = new Set();
+    // A search or dates typed meanwhile stop it: it ticks only the search it started on.
+    const stopped = () => latest.current.typedKey !== started;
+    const got = await meetings.loadAll(stopped);
+    const now = latest.current.value;
+    if (!got || stopped()) return;
+    const { rows, capped } = got;
+    const series = new Set(now.series);
+    const have = new Set(now.meetings);
+    const add = rows
+      .filter((m) => (m.series_key == null || !series.has(m.series_key)) && !have.has(m.id) && !touched.current.has(m.id))
+      .slice(0, Math.max(0, MAX_MEETINGS - now.meetings.length));
+    onChange({
+      ...now,
+      meetings: [...now.meetings, ...add.map((m) => m.id)],
+      labels: { ...now.labels, ...Object.fromEntries(add.map((m) => [m.id, m.title.slice(0, MAX_LABEL)])) },
+    });
+    setTicked({ key: tickKey, ids: add.map((m) => m.id), capped: capped ? rows.length : null });
+  }
+
+  function undoTickAll() {
+    const added = new Set(undo ?? []);
+    set({ meetings: value.meetings.filter((id) => !added.has(id)) });
+    setTicked(null);
+  }
+
   function tickSameTitle(missing: { id: string; title: string }[]) {
     const room = missing.slice(0, Math.max(0, MAX_MEETINGS - value.meetings.length));
     set({
@@ -315,6 +404,7 @@ export function FirefliesPicker({
   }
 
   function toggleMeeting(m: { id: string; title: string }, on: boolean) {
+    touched.current.add(m.id);
     set({
       meetings: on ? [...value.meetings, m.id] : value.meetings.filter((id) => id !== m.id),
       labels: { ...labels, [m.id]: m.title.slice(0, MAX_LABEL) },
@@ -465,7 +555,19 @@ export function FirefliesPicker({
             )}
           </Section>
 
-          <Section title="Meetings" count={value.meetings.length || undefined}>
+          <Section
+            title="Meetings"
+            count={value.meetings.length || undefined}
+            action={
+              undo ? (
+                <Button onClick={undoTickAll}>Undo tick all</Button>
+              ) : (meetings.next || tickable.some((m) => !pickedMeetings.has(m.id))) && !meetingsFull ? (
+                <Button onClick={() => void tickAll()} disabled={!settled}>
+                  {`Tick all ${tickable.length}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
+                </Button>
+              ) : null
+            }
+          >
             <input
               type="search"
               value={search}
@@ -480,6 +582,12 @@ export function FirefliesPicker({
                 action={<RetryButton key={meetings.retryAt ?? 0} retryAt={meetings.retryAt} onRetry={() => void meetings.retry()} />}
               >
                 {meetings.error}
+              </Notice>
+            )}
+            {undo && ticked?.capped != null && (
+              <Notice testId="fireflies-tick-all-cap">
+                Ticked the first {ticked.capped} results: Tick all reads at most {TICK_ALL_PAGES} pages ({TICK_ALL_MEETINGS}{" "}
+                meetings) at a time, to spare your Fireflies browsing limit. Load more to tick the rest.
               </Notice>
             )}
             {meetingsFull && (
