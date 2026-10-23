@@ -59,6 +59,8 @@ from oracle.models import Tenant
 from oracle.requests import triage as request_triage
 from oracle.rituals import service as rituals
 from oracle.roadmap import views as track_views
+from oracle.slack import outbox as slack_outbox
+from oracle.slack.outbox import OutboxTick
 from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
@@ -119,6 +121,8 @@ class TickerOut(BaseModel):
     llm_jobs: _LlmJobs = Field(default_factory=_LlmJobs)
     # G2: Oracle's replies nobody streamed, completed here; leases that ran out.
     discussion_replies: RepliesTick = Field(default_factory=RepliesTick)
+    # G8: mirrored discussions' new messages queued, and the Slack outbox delivered.
+    slack_outbox: OutboxTick = Field(default_factory=OutboxTick)
     # Calls a member's disable or a run's cancel still owed (a provider revoke, a runtime
     # cancel), made.
     member_follow_ups: int = 0
@@ -309,6 +313,16 @@ async def _run_jobs(
                 name,
                 getattr(out.discussion_replies, name) + getattr(got, name),
             )
+        # G8: after the replies, so a reply completed here is posted in the same tick.
+        budget = HARD_LIMIT_SECONDS - (time.monotonic() - started)
+        try:
+            sent = await slack_outbox.tick(tenant_id, budget_seconds=budget)
+        except Exception:
+            log.exception("run ticker: the Slack outbox failed for company %s", tenant_id)
+            failures.add(tenant_id)
+            continue
+        for name in ("queued", "sent", "retried", "failed"):
+            setattr(out.slack_outbox, name, getattr(out.slack_outbox, name) + getattr(sent, name))
     limit = llm_jobs.get_worker_settings().max_per_tick
     if limit <= 0:
         return

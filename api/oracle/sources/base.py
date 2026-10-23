@@ -67,6 +67,9 @@ from oracle.sources.models import ITEM_KINDS
 COMPANY_DOMAINS = "_company_domains"
 # The ids of the shared drives that are the company's, added the same way (S5).
 COMPANY_SHARED_DRIVES = "_company_shared_drives"
+# Oracle's own Slack app user (G8), added to a Slack source's config the same way: its
+# posts (mirrored discussions) are never ingested as a person's evidence.
+ORACLE_SLACK_USERS = "_oracle_slack_users"
 
 
 class ConnectorError(Exception):

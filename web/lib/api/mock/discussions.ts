@@ -37,6 +37,8 @@ export type DiscussionRow = {
   updated_at: string;
   /** G2 (mock only): the intake author's private findings on the subject (G1 §3.4.6). */
   private_findings?: { author: string; count: number; intake_id: string } | null;
+  /** G8: its live link to a Slack thread (./slack.ts), or none. */
+  slack?: Schemas["DiscussionSlackOut"] | null;
 };
 type ParticipantRow = {
   discussion_id: string;
@@ -63,6 +65,8 @@ type MessageRow = {
   citations?: Record<string, unknown>[];
   error_reason?: string | null;
   cancel_requested?: boolean;
+  /** Where it was written: "web" unless stored otherwise (G8: a reply in the Slack thread). */
+  via?: Schemas["DiscussionMessageOut"]["via"];
 };
 
 /** G3 (mock only): a typed change Oracle proposed in a discussion. */
@@ -85,6 +89,8 @@ export type DiscussionsContext = {
   persist?: (change: (db: DiscussionsDb) => void) => Promise<void>;
   /** The saved state now (a streaming reply checks for Stop). */
   current?: () => DiscussionsDb;
+  /** G8 POST/DELETE …/slack on a discussion the caller may read (./slack.ts). */
+  slack?: (d: DiscussionRow, req: Request) => Promise<Response | null>;
   /** The gateway's refusal while the Claude account pool is spent, worded; null otherwise. */
   refusal?: () => string | null;
   /** #406: the text of the document version a discussion is on, the section it is on first. */
@@ -312,6 +318,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         ...(d.private_findings?.author === me.id ? { private_findings: { count: d.private_findings.count, intake_id: d.private_findings.intake_id } } : {}),
       },
       exposure: d.visibility === "private" && starter(d) ? exposure(d) : null,
+      slack: d.slack ?? null,
     };
   };
   const messageOut = (x: MessageRow): Schemas["DiscussionMessageOut"] => ({
@@ -319,7 +326,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     discussion_id: x.discussion_id,
     author_kind: x.author_kind,
     author: x.author_kind === "person" && x.author_id ? ref(x.author_id) : null,
-    via: "web",
+    via: x.via ?? "web",
     body: x.deleted_at ? "" : x.body,
     mentions: x.deleted_at ? [] : x.mentions.map(ref),
     mentions_oracle: x.mentions_oracle,
@@ -596,6 +603,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       for (const x of active(d)) if (x.added_via === "followed" && !writers.has(x.user_id)) x.left_at = ctx.now();
       d.visibility = "private";
       d.summary_shared = false;
+      // G8: a private discussion never mirrors; the thread gets its closing line, without the link.
+      d.slack = null;
     }
     if (manages && !starter(d)) return refuse(403, "Only the starter can change this");
     if (patch.title) d.title = patch.title.trim().slice(0, 200) || d.title;
@@ -724,6 +733,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     push(shared, { author_kind: "person", author_id: me.id, body: input.first_message.trim(), mentions: [], mentions_oracle: false, reply_to: null });
     return json(201, out(shared));
   }
+  if (p[3] === "slack" && !p[4] && ctx.slack) return ctx.slack(d, req);
   return null;
 }
 

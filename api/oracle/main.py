@@ -66,6 +66,7 @@ from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
 from oracle.safe_yaml import ParseBusy
 from oracle.setup import router as setup_router
+from oracle.slack.events import router as slack_events_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
@@ -261,6 +262,8 @@ def create_app() -> FastAPI:
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
     app.include_router(ticker_router)
+    # G8: Slack's Events API (signed by Slack; not in OpenAPI, so no MCP tool).
+    app.include_router(slack_events_router)
     # Every REST operation above (and any added later) is also an MCP tool here.
     mount_mcp(app)
     # B5: MCP clients see a goal's typed attrs shape.
