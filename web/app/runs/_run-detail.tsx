@@ -1072,6 +1072,47 @@ function byItem(reasons: ItemReason[]): { item: string; title: string; reasons: 
   return out;
 }
 
+type Resolution = NonNullable<ItemsCheck["resolution"]>;
+type ResolutionEntry = Resolution["entries"][number];
+
+/** D6: "Attempt 2: 3 of 5 entries done · 1 declined · 1 not applied · 1 unrequested change". */
+function resolutionSummary(r: Resolution): string {
+  const c = r.counts;
+  const parts = [
+    `${c.done} of ${r.entries.length} entr${r.entries.length === 1 ? "y" : "ies"} done`,
+    c.declined > 0 && `${c.declined} declined`,
+    c.not_applied > 0 && `${c.not_applied} not applied`,
+    c.unrequested > 0 && `${c.unrequested} unrequested change${c.unrequested === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+  return `${r.attempt ? `Attempt ${r.attempt}: ` : ""}${parts.join(" · ")}`;
+}
+
+/** D6: how the attempt answered the item's review entry, as a chip (a decline with its note in full). */
+function ResolutionChip({ entry }: { entry: ResolutionEntry }) {
+  if (entry.outcome === "declined") {
+    return (
+      <Chip kind="warn" className={REASON_CHIP} data-testid="resolution-chip">
+        Declined: {entry.note}
+      </Chip>
+    );
+  }
+  if (entry.outcome === "not_applied") {
+    return (
+      <Chip kind="crit" className={REASON_CHIP} data-testid="resolution-chip">
+        Not applied
+      </Chip>
+    );
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <Chip kind="pass" className={REASON_CHIP} data-testid="resolution-chip">
+        Done
+      </Chip>
+      {entry.note && <span className="text-sm text-text2 break-words">{entry.note}</span>}
+    </span>
+  );
+}
+
 // Reason chips wrap instead of cutting their label short (a phone is 390 px wide).
 const REASON_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left";
 
@@ -1120,6 +1161,7 @@ function ItemsCheckLine({ check, draft }: { check: ItemsCheck; draft?: DraftActs
   // An item's problems read as its blocking reasons; the box keeps the file's own problems
   // (or every problem, for a check stored before reasons).
   const boxed = reasons.length > 0 ? check.problems.filter((p) => !p.item) : check.problems;
+  const resolution = check.resolution ?? null;
   const counts = [
     check.blocking > 0 && `${check.blocking} blocking`,
     check.to_confirm > 0 && `${check.to_confirm} to confirm`,
@@ -1142,6 +1184,11 @@ function ItemsCheckLine({ check, draft }: { check: ItemsCheck; draft?: DraftActs
           )
         )}
       </p>
+      {resolution && (
+        <p className="mt-1 tnum" data-testid="resolution-summary">
+          {resolutionSummary(resolution)}
+        </p>
+      )}
       {check.reasons_partial && (
         <p className="mt-1 text-sm text-text2">Only the rule problems are listed: Oracle could not load what the other reasons read.</p>
       )}
@@ -1149,7 +1196,12 @@ function ItemsCheckLine({ check, draft }: { check: ItemsCheck; draft?: DraftActs
         <ul className="mt-1.5 space-y-2" data-testid="items-reasons">
           {byItem(reasons).map((g) => (
             <li key={g.item} data-testid="item-reasons" data-item={g.item} className="min-w-0">
-              <p className="font-medium break-words">{g.title}</p>
+              <p className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="font-medium break-words">{g.title}</span>
+                {resolution?.entries
+                  .filter((e) => e.id === g.item)
+                  .map((e, i) => <ResolutionChip key={`${e.action}-${i}`} entry={e} />)}
+              </p>
               <ul className="mt-1 space-y-1.5">
                 {g.reasons.map((r, i) => (
                   <li key={`${r.code}-${i}`} className="flex min-w-0 flex-col items-start gap-0.5 text-sm" data-testid="item-reason" data-code={r.code}>

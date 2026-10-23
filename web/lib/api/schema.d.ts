@@ -11979,6 +11979,7 @@ export interface components {
              */
             can_decide: boolean;
             gate?: components["schemas"]["Gate"] | null;
+            diff?: components["schemas"]["ItemsAttemptDiff"] | null;
         };
         /** Choice */
         Choice: {
@@ -16042,6 +16043,18 @@ export interface components {
             /** Severity */
             severity?: ("critical" | "major" | "minor") | null;
         };
+        /**
+         * FieldDiff
+         * @description One field of an item that differs from the previous attempt (D6).
+         */
+        FieldDiff: {
+            /** Field */
+            field: string;
+            /** From */
+            from?: unknown;
+            /** To */
+            to?: unknown;
+        };
         /** FieldProblem */
         FieldProblem: {
             /** Field */
@@ -18487,6 +18500,13 @@ export interface components {
             /** Removed */
             removed?: string[] | null;
         };
+        /** ItemFieldsDiff */
+        ItemFieldsDiff: {
+            /** Id */
+            id: string;
+            /** Changes */
+            changes: components["schemas"]["FieldDiff"][];
+        };
         /** ItemHistoryOut */
         ItemHistoryOut: {
             /** Roadmap */
@@ -18627,6 +18647,30 @@ export interface components {
             approved_at: string | null;
         };
         /**
+         * ItemsAttemptDiff
+         * @description Each item's field changes since ``against_attempt``, and the ids added and removed
+         *     (D6).
+         */
+        ItemsAttemptDiff: {
+            /** Against Attempt */
+            against_attempt?: number | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ItemFieldsDiff"][];
+            /**
+             * Added
+             * @default []
+             */
+            added: string[];
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+        };
+        /**
          * ItemsCheck
          * @description The check of roadmap_items.yaml (oracle.runs.roadmap) and every item's reasons
          *     (oracle.runs.reasons). Checks stored before reasons existed read with none.
@@ -18666,6 +18710,8 @@ export interface components {
              * @default false
              */
             reasons_partial: boolean;
+            resolution?: components["schemas"]["ItemsResolution"] | null;
+            diff?: components["schemas"]["ItemsAttemptDiff"] | null;
         };
         /** ItemsDiffOut */
         ItemsDiffOut: {
@@ -18741,6 +18787,35 @@ export interface components {
             /** Label */
             label: string;
             document: components["schemas"]["DocumentRef"];
+        };
+        /**
+         * ItemsResolution
+         * @description The answers of ``attempt`` to the review of ``review_attempt`` (D6).
+         */
+        ItemsResolution: {
+            /** Review Attempt */
+            review_attempt?: number | null;
+            /** Attempt */
+            attempt?: number | null;
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["ResolutionEntry"][];
+            /**
+             * @default {
+             *       "done": 0,
+             *       "declined": 0,
+             *       "not_applied": 0,
+             *       "unrequested": 0
+             *     }
+             */
+            counts: components["schemas"]["ResolutionCounts"];
+            /**
+             * Unrequested
+             * @default []
+             */
+            unrequested: components["schemas"]["UnrequestedChange"][];
         };
         /**
          * JobCreate
@@ -23473,6 +23548,72 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** ResolutionCounts */
+        ResolutionCounts: {
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /**
+             * Declined
+             * @default 0
+             */
+            declined: number;
+            /**
+             * Not Applied
+             * @default 0
+             */
+            not_applied: number;
+            /**
+             * Unrequested
+             * @default 0
+             */
+            unrequested: number;
+        };
+        /**
+         * ResolutionEntry
+         * @description How the next attempt answered one review entry (D6): Oracle's check (``outcome``)
+         *     and what the agents said in ``resolutions`` (``said``, ``missing`` for no answer).
+         */
+        ResolutionEntry: {
+            /** Id */
+            id: string;
+            /** Action */
+            action: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "done" | "declined" | "not_applied";
+            /**
+             * Said
+             * @enum {string}
+             */
+            said: "done" | "declined" | "missing";
+            /** Note */
+            note?: string | null;
+            /**
+             * Fields
+             * @default []
+             */
+            fields: components["schemas"]["ResolutionField"][];
+        };
+        /**
+         * ResolutionField
+         * @description One requested field of a ``change`` entry: what was asked, whether the file shows
+         *     it, and its value in the file now (D6).
+         */
+        ResolutionField: {
+            /** Field */
+            field: string;
+            /** Requested */
+            requested?: unknown;
+            /** Applied */
+            applied: boolean;
+            /** Current */
+            current?: unknown;
+        };
         /** ResolutionNarrative */
         ResolutionNarrative: {
             /** Summary */
@@ -23635,6 +23776,12 @@ export interface components {
              * @enum {string}
              */
             state: "needs_you" | "handled" | "waiting" | "fine";
+            resolution?: components["schemas"]["ResolutionEntry"] | null;
+            /**
+             * Diff
+             * @default []
+             */
+            diff: components["schemas"]["FieldDiff"][];
         };
         /** ReviewMilestone */
         ReviewMilestone: {
@@ -28998,6 +29145,20 @@ export interface components {
              * @enum {string}
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
+        };
+        /**
+         * UnrequestedChange
+         * @description A field of an item the review left alone (``unchanged``) that changed anyway.
+         */
+        UnrequestedChange: {
+            /** Field */
+            field: string;
+            /** From */
+            from?: unknown;
+            /** To */
+            to?: unknown;
+            /** Id */
+            id: string;
         };
         /** UnstageIn */
         UnstageIn: {

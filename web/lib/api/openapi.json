@@ -40182,6 +40182,16 @@
                 "type": "null"
               }
             ]
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsAttemptDiff"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -51295,6 +51305,26 @@
         "type": "object",
         "title": "FeedbackPatch"
       },
+      "FieldDiff": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "from": {
+            "title": "From"
+          },
+          "to": {
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field"
+        ],
+        "title": "FieldDiff",
+        "description": "One field of an item that differs from the previous attempt (D6)."
+      },
       "FieldProblem": {
         "properties": {
           "field": {
@@ -57864,6 +57894,27 @@
         ],
         "title": "ItemFieldChange"
       },
+      "ItemFieldsDiff": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/FieldDiff"
+            },
+            "type": "array",
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "changes"
+        ],
+        "title": "ItemFieldsDiff"
+      },
       "ItemHistoryOut": {
         "properties": {
           "roadmap": {
@@ -58268,6 +58319,48 @@
         ],
         "title": "ItemVersion"
       },
+      "ItemsAttemptDiff": {
+        "properties": {
+          "against_attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Against Attempt"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemFieldsDiff"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added",
+            "default": []
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "ItemsAttemptDiff",
+        "description": "Each item's field changes since ``against_attempt``, and the ids added and removed\n(D6)."
+      },
       "ItemsCheck": {
         "properties": {
           "items": {
@@ -58325,6 +58418,26 @@
             "type": "boolean",
             "title": "Reasons Partial",
             "default": false
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemsAttemptDiff"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -58580,6 +58693,60 @@
         ],
         "title": "ItemsRef",
         "description": "A set of items: ``<slug>@<n>``, a PRD version's draft items or a roadmap version's."
+      },
+      "ItemsResolution": {
+        "properties": {
+          "review_attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Attempt"
+          },
+          "attempt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ResolutionEntry"
+            },
+            "type": "array",
+            "title": "Entries",
+            "default": []
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ResolutionCounts",
+            "default": {
+              "done": 0,
+              "declined": 0,
+              "not_applied": 0,
+              "unrequested": 0
+            }
+          },
+          "unrequested": {
+            "items": {
+              "$ref": "#/components/schemas/UnrequestedChange"
+            },
+            "type": "array",
+            "title": "Unrequested",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "ItemsResolution",
+        "description": "The answers of ``attempt`` to the review of ``review_attempt`` (D6)."
       },
       "JobCreate": {
         "properties": {
@@ -71774,6 +71941,115 @@
         "title": "Resolution",
         "description": "One entry of a draft's front-matter ``resolutions`` list."
       },
+      "ResolutionCounts": {
+        "properties": {
+          "done": {
+            "type": "integer",
+            "title": "Done",
+            "default": 0
+          },
+          "declined": {
+            "type": "integer",
+            "title": "Declined",
+            "default": 0
+          },
+          "not_applied": {
+            "type": "integer",
+            "title": "Not Applied",
+            "default": 0
+          },
+          "unrequested": {
+            "type": "integer",
+            "title": "Unrequested",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ResolutionCounts"
+      },
+      "ResolutionEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "done",
+              "declined",
+              "not_applied"
+            ],
+            "title": "Outcome"
+          },
+          "said": {
+            "type": "string",
+            "enum": [
+              "done",
+              "declined",
+              "missing"
+            ],
+            "title": "Said"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ResolutionField"
+            },
+            "type": "array",
+            "title": "Fields",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "outcome",
+          "said"
+        ],
+        "title": "ResolutionEntry",
+        "description": "How the next attempt answered one review entry (D6): Oracle's check (``outcome``)\nand what the agents said in ``resolutions`` (``said``, ``missing`` for no answer)."
+      },
+      "ResolutionField": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "requested": {
+            "title": "Requested"
+          },
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "current": {
+            "title": "Current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "applied"
+        ],
+        "title": "ResolutionField",
+        "description": "One requested field of a ``change`` entry: what was asked, whether the file shows\nit, and its value in the file now (D6)."
+      },
       "ResolutionNarrative": {
         "properties": {
           "summary": {
@@ -72210,6 +72486,24 @@
               "fine"
             ],
             "title": "State"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/FieldDiff"
+            },
+            "type": "array",
+            "title": "Diff",
+            "default": []
           }
         },
         "type": "object",
@@ -87908,6 +88202,31 @@
           "reason"
         ],
         "title": "UnavailableItem"
+      },
+      "UnrequestedChange": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "from": {
+            "title": "From"
+          },
+          "to": {
+            "title": "To"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "id"
+        ],
+        "title": "UnrequestedChange",
+        "description": "A field of an item the review left alone (``unchanged``) that changed anyway."
       },
       "UnstageIn": {
         "properties": {

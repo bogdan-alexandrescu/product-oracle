@@ -235,14 +235,24 @@ def render_yaml(review: dict[str, Any], sent_on: datetime | None = None) -> str:
     return header + body
 
 
+def resolutions_instruction(file: str) -> str:
+    """How the agents answer each entry (D6): Oracle checks every answer against the file."""
+    return (
+        f"At the top of {file}, write `resolutions:` with one entry per review entry: "
+        "`{id, action, status: done | declined, note}`. Declining is allowed with a reason in "
+        "`note`."
+    )
+
+
 def change_request(review: dict[str, Any], sent_on: datetime | None = None) -> str:
     """What a segment re-run gets as its change request: the instructions, then the YAML."""
     what = _what(review)
+    answer = f" {resolutions_instruction(review['file'])}" if review.get("file") else ""
     return (
         f"The reviewer sent {what} back with a structured review (review.yaml, below). "
         f"Start from your previous {what}. Apply every entry; do not change items under "
         "`unchanged` unless an entry forces it, and say so. Answer every entry under "
-        "`resolutions`.\n\n" + render_yaml(review, sent_on)
+        f"`resolutions`.{answer}\n\n" + render_yaml(review, sent_on)
     )
 
 

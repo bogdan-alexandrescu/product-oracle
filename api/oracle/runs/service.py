@@ -176,6 +176,7 @@ from oracle.runs import (
     roadmap,
     workflow,
 )
+from oracle.runs import resolutions as answers
 from oracle.runs.batch import batched, once
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
@@ -4031,7 +4032,9 @@ async def _advance(
             # reads only, and the tick's transaction (the segment, the run's row lock)
             # stays usable.
             async with db.begin_nested():
-                items_check = await _check_items(db, run, art["files"].get(ITEMS_FILE))
+                items_check = await _check_items(
+                    db, run, art["files"].get(ITEMS_FILE), segment, number
+                )
         except safe_yaml.ParseBusy:
             raise  # no worker for it: this tick gives up, the next retries
         except Exception as exc:  # noqa: BLE001 - a bad file fails the check, never the tick
@@ -4612,9 +4615,16 @@ def _resume_error(run_id: uuid.UUID, segment: RunSegment, failed: dict[str, Any]
     )
 
 
-async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
+async def _check_items(
+    db: AsyncSession,
+    run: Run,
+    text: str | None,
+    segment: RunSegment | None = None,
+    attempt: int | None = None,
+) -> dict[str, Any]:
     """roadmap_items.yaml checked against the run's PRD version (oracle.runs.roadmap),
-    with every item's reasons (oracle.runs.reasons)."""
+    with every item's reasons (oracle.runs.reasons); after a send-back with a review (D6),
+    how this attempt answered it (``resolution``) and its diff (``diff``)."""
     if text is None:
         missing = {
             "items": 0,
@@ -4622,10 +4632,53 @@ async def _check_items(db: AsyncSession, run: Run, text: str | None) -> dict[str
             "problems": [{"code": "missing_file", "message": f"the segment left no {ITEMS_FILE}"}],
         }
         return reasons.summarize(missing, [], None)
-    checked = await checked_items(db, run, text)
+    prior = await prior_review(db, run, segment, attempt) if segment is not None else None
+    checked = await checked_items(db, run, text, prior)
     return reasons.summarize(
-        checked.check.as_json(), checked.reasons, checked.base, checked.partial
+        checked.check.as_json(),
+        checked.reasons,
+        checked.base,
+        checked.partial,
+        checked.resolution,
+        checked.diff,
     )
+
+
+@dataclass(frozen=True)
+class PriorReview:
+    """D6: the review a send-back delivered (D4) and the attempt it reviewed (D5)."""
+
+    review: dict[str, Any]
+    attempt: int
+    text: str
+    # The attempt that answers it.
+    answered_by: int
+
+
+async def prior_review(
+    db: AsyncSession, run: Run, segment: RunSegment, attempt: int | None
+) -> PriorReview | None:
+    """The review the segment's ``attempt`` answers: the send-back of the previous attempt
+    (``artifacts["previous"]``, D5) whose checkpoint stored a review (D4); None for a first
+    attempt, a note-only send-back's kept file, or a kind with no item file."""
+    previous = (segment.artifacts or {}).get("previous")
+    if not isinstance(previous, dict):
+        return None
+    text = (previous.get("files") or {}).get(ITEMS_FILE)
+    number = previous.get("attempt")
+    if not isinstance(text, str) or not isinstance(number, int):
+        return None
+    if attempt is not None and attempt <= number:
+        return None
+    for cp in reversed(await _checkpoints(db, [run.id])):
+        if (
+            (cp.payload or {}).get("segment_seq") == segment.seq
+            and cp.status == "changes_requested"
+            and isinstance(cp.review, dict)
+            and cp.review.get("attempt") == number
+        ):
+            return PriorReview(cp.review, number, text, attempt or number + 1)
+    return None
 
 
 @dataclass
@@ -4639,6 +4692,9 @@ class CheckedItems:
     partial: bool
     # The section keys of the run's PRD version; None without one.
     prd_sections: set[str] | None
+    # D6: how the attempt answered the review it was sent back with, and its diff.
+    resolution: dict[str, Any] | None = None
+    diff: dict[str, Any] | None = None
 
 
 async def _version_source(db: AsyncSession, source_id: uuid.UUID) -> Any:
@@ -4687,7 +4743,9 @@ async def _checked(
     return check, slug, version, keys
 
 
-async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
+async def checked_items(
+    db: AsyncSession, run: Run, text: str, prior: PriorReview | None = None
+) -> CheckedItems:
     check, slug, version, keys = await once(
         ("items_check", _source_id(run), text), lambda: _checked(db, run, text)
     )
@@ -4704,7 +4762,16 @@ async def checked_items(db: AsyncSession, run: Run, text: str) -> CheckedItems:
         context = reasons.ReasonContext(prd_title=slug, prd_version=version, advisory=False)
         partial = True
     found = reasons.reasons_for(check.items, check.problems, context)
-    return CheckedItems(check, found, context.base, partial, keys)
+    if prior is None:
+        return CheckedItems(check, found, context.base, partial, keys)
+    before = await roadmap.check_items_async(prior.text)
+    resolution = answers.resolve(prior.review, before.items, check.items, check.resolutions)
+    resolution["attempt"] = prior.answered_by
+    found = reasons.with_resolutions(
+        found, reasons.resolution_reasons(resolution, check.items), check.items
+    )
+    diff = answers.item_diff(before.items, check.items, prior.attempt)
+    return CheckedItems(check, found, context.base, partial, keys, resolution, diff)
 
 
 # --------------------------------------------------------------------------- tick
