@@ -1,7 +1,7 @@
 """The company's time zone, and a moment in it as a person reads it.
 
-Until Oracle has a Company time zone setting, the company's zone is the one its weekly
-alignment report is set up in (Settings > Notifications), as the invite rows show it.
+The company's zone is the Company time zone (Settings › Company, ``company_timezone``),
+which the weekly alignment report also runs in.
 Times a person reads are worded, "Sun Oct 25, 2:59 PM PDT", never ISO.
 """
 
@@ -17,7 +17,8 @@ DEFAULT_ZONE = "America/Los_Angeles"
 
 
 async def company_time_zone(db: AsyncSession) -> str:
-    """The zone the alignment report uses; the default when it cannot be read."""
+    """The Company time zone (read through the alignment report's settings, which carry
+    it); the default when it cannot be read."""
     from oracle.reports.alignment import load_settings
 
     try:

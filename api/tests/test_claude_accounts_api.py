@@ -483,9 +483,7 @@ async def test_with_no_account_the_pool_takes_calls_only_through_a_fallback(
 
 async def test_the_page_gives_the_company_time_zone(client, tenant_id, owner):
     put = await client.put(
-        "/v1/settings/alignment_report",
-        json={"value": {"timezone": "Europe/Berlin"}},
-        headers=owner.headers,
+        "/v1/settings/company_timezone", json={"value": "Europe/Berlin"}, headers=owner.headers
     )
     assert put.status_code == 200, put.text
     viewer = await make_person(tenant_id, "viewer@example.com", "viewer")

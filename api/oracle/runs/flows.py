@@ -606,7 +606,7 @@ FLOWS: dict[str, FlowDef] = {
                     + " Keep the id of every known item listed below while it is still the "
                     "same item in this draft; give new ids only to new items, and leave out "
                     "items this draft no longer supports. Write roadmap_items.yaml: "
-                    "version: 1, prd: {document, version}, items: [...].",
+                    "version: 1, prd: {document, version}, items: [...]." + DECISIONS_TASK,
                     tools=ROADMAP_ITEM_TOOLS,
                 ),
             ),
