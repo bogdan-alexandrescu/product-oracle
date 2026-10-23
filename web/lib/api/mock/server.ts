@@ -265,7 +265,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
- * next tick (recorded, the decide call answers 503; ./runs.ts); "questions" as the default
+ * next tick (recorded, the decide call answers 503; ./runs.ts); "slow-agents" as the default
+ * company where a segment's agents take two ticks: the first reads them working (#258); "questions" as the default
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
@@ -1283,6 +1284,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return who;
     },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
+    slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
     feedback: db.feedback,
     documents: db.documents,
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,

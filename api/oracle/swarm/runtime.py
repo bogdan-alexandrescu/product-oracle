@@ -36,6 +36,8 @@ DEPENDENCY_INCOMPLETE = "DEPENDENCY_INCOMPLETE"
 # LEASED, DISPATCHED, STARTING, RUNNING; it has no retry or backoff state) plus PENDING,
 # the adapter's default for a row with no state. An allow-list: FAILED, CANCELLED,
 # DEAD_LETTERED, an unknown string, or a padded or re-cased one does not release the hold.
+# #258: the states of a step whose agent is working (not queued, parked or ended).
+WORKING: frozenset[str] = frozenset({"LEASED", "DISPATCHED", "STARTING", "RUNNING"})
 DEPENDENCY_IN_PROGRESS: frozenset[str] = frozenset(
     {
         "PENDING",
@@ -143,6 +145,12 @@ class StepStatus:
     # reached); wait_opened when metadata.await_input.opened_at is set (a wait is open).
     task_read: bool = False
     wait_opened: bool = False
+    # #258: who the step's agent is and how it is doing, for the run page: its role, when
+    # it started, its last heartbeat and what it has cost so far (None when not read).
+    role: str | None = None
+    started_at: datetime | None = None
+    heartbeat_at: datetime | None = None
+    cost_usd: Decimal | None = None
 
 
 @dataclass(frozen=True)

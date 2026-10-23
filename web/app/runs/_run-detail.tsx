@@ -88,6 +88,8 @@ export function RunDetail({ id }: { id: string }) {
   const { me, role } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // #258: what the last "Check agents now" checked, said once it answers.
+  const [checked, setChecked] = useState<string | null>(null);
   const run = q.data;
   const { reload } = q;
 
@@ -327,6 +329,7 @@ export function RunDetail({ id }: { id: string }) {
             </span>
           </Notice>
         )}
+        {checked && <Notice testId="tick-result">{checked}</Notice>}
         <Panel
           title={
             <>
@@ -339,7 +342,18 @@ export function RunDetail({ id }: { id: string }) {
                 {done}/{run.segments.length} segments
               </span>
               {owner && open && (
-                <Button variant="ghost" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/internal/tick")))}>
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    setChecked(null);
+                    void act(async () => {
+                      const out = await unwrap(api.POST("/v1/internal/tick"));
+                      setChecked(tickResult(out));
+                      return out;
+                    });
+                  }}
+                >
                   Check agents now
                 </Button>
               )}
@@ -386,6 +400,17 @@ export function RunDetail({ id }: { id: string }) {
       </Split>
     </Page>
   );
+}
+
+/** #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished." */
+function tickResult(out: Schemas["TickOut"]): string {
+  const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  if (out.runs_checked === 0 && out.errors.length === 0) return `Checked at ${at}: no run is active.`;
+  const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
+  if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);
+  if (out.errors.length) parts.push(`${plural(out.errors.length, "run")} could not be checked`);
+  return `Checked ${plural(out.runs_checked, "active run")} at ${at}: ${parts.join(", ")}.`;
 }
 
 /**
@@ -557,6 +582,52 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
 const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
+/** "45s", "12m", "1h 05m": a duration for a running agent. */
+function duration(ms: number): string {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m`;
+}
+
+/** #258: a running segment's agents as Oracle last read them, and what it has spent so far. */
+function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
+  // The elapsed times count on between reads.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const since = (at: string) => duration(now - new Date(at).getTime());
+  return (
+    <div data-testid="segment-progress" className="space-y-1 text-text2">
+      <p className="tnum">
+        {usd(s.cost_usd)} spent so far ·{" "}
+        {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: Oracle reads the agents on each check"}
+      </p>
+      {s.checked_at &&
+        (s.agents.length > 0 ? (
+          <ul className="space-y-0.5">
+            {s.agents.map((a, i) => (
+              <li key={i} data-testid="segment-agent" className="tnum">
+                <span data-testid="agent-role" className="font-medium text-text">
+                  {a.role ?? "Agent"}
+                </span>{" "}
+                · {a.state.charAt(0).toUpperCase() + a.state.slice(1)} ·{" "}
+                <span data-testid="agent-elapsed">{a.started_at ? `${since(a.started_at)} elapsed` : "start not read"}</span> ·{" "}
+                <span data-testid="agent-heartbeat">{a.heartbeat_at ? `last heartbeat ${since(a.heartbeat_at)} ago` : "no heartbeat yet"}</span>
+                {a.cost_usd != null && <> · {usd(a.cost_usd)}</>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No agent is working yet: they wait their turn.</p>
+        ))}
+    </div>
+  );
+}
+
 const CP_LABEL = { pending: "Waiting", approved: "Approved", changes_requested: "Changes requested", skipped: "Skipped" } as const;
 
 function SegmentItem({
@@ -595,6 +666,7 @@ function SegmentItem({
     s.artifacts.length > 0 ||
     deciding.length > 0 ||
     delivering.length > 0 ||
+    s.status === "running" ||
     !!shared;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
@@ -768,6 +840,7 @@ function SegmentItem({
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
           {s.error && <p className="text-crit">{s.error}</p>}
+          {s.status === "running" && <SegmentProgress segment={s} />}
           {s.autonomy_note && (
             // H11: the baseline's level changed this segment's merge.
             <p data-testid="autonomy-note" className="text-text2">
