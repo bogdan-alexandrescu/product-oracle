@@ -200,7 +200,7 @@ async def test_the_feature_gated_kinds_have_their_blocks(client, ctx, at):
     assert list(got) == ["decisions_due", "decisions_made"]
     assert [r["title"] for r in got["decisions_due"]] == ["Price the starter plan monthly"]
     assert [r["title"] for r in got["decisions_made"]] == ["Price the starter plan monthly"]
-    assert got["decisions_due"][0]["href"] == "/company/decisions/1"
+    assert got["decisions_due"][0]["href"] == "/company/decisions?d=1"
 
     occ = await ready_occurrence(client, ctx, at, "changelog")
     assert [r["title"] for r in rows(occ)["changelog_drafts"]] == ["Bulk export"]
@@ -479,3 +479,85 @@ async def test_another_companys_ids_are_404(client, ctx, at):
     for method, url, body in calls:
         resp = await client.request(method, url, json=body, headers=h)
         assert resp.status_code == 404, (method, url, resp.status_code)
+
+
+async def _decision(tenant_id, approver_id, number: int, title: str, subjects=()) -> str:
+    from datetime import UTC, date, datetime
+
+    from oracle.decisions.models import Decision
+
+    async with tenant_session(tenant_id) as db:
+        d = Decision(
+            number=number, title=title, status="decided", approver_id=approver_id,
+            driver="Ada Example", origin="manual", chosen_option="a", rationale="Simpler",
+            decided_at=datetime(2026, 10, 20, tzinfo=UTC), review_at=date(2027, 1, 20),
+            subjects=list(subjects),
+        )  # fmt: skip
+        db.add(d)
+        await db.commit()
+        return str(d.id)
+
+
+async def test_a_held_occurrence_lists_the_decisions_recorded_with_it(client, ctx, at):
+    """protects=H2 review (major): "Held occurrences list the decisions recorded with
+    them": a decision recorded from the occurrence (Record decision: its subject is the
+    occurrence) and one named on Mark held are both listed, each with its number, title
+    and a link to it on Company › Decisions; fails_when=the occurrence lists none, or
+    a link opens no page; no_claim=the web page (web/e2e/rituals.spec.ts)."""
+    occ = await ready_occurrence(client, ctx, at)
+    owner = ctx.users["owner"].id
+    subject = {"kind": "ritual_occurrence", "id": occ["id"], "ref": occ["title"]}
+    recorded = await _decision(ctx.tenant_id, owner, 1, "Ship the importer first", [subject])
+    named = await _decision(ctx.tenant_id, owner, 2, "Drop the legacy export")
+    await _decision(ctx.tenant_id, owner, 3, "Unrelated decision")
+    at(rituals.parse_time(occ["ends_at"]) + timedelta(minutes=1))
+    url = f"/v1/ritual-occurrences/{occ['id']}/held"
+    stranger = {"notes": "", "decision_ids": [str(rituals.uuid.uuid4())]}
+    assert (await client.post(url, json=stranger, headers=ctx.as_("owner"))).status_code == 422
+    resp = await client.post(url, json={"notes": "Done", "decision_ids": [named]},
+                             headers=ctx.as_("owner"))  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    assert sorted(resp.json()["decision_ids"]) == sorted([recorded, named])
+    got = await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=ctx.as_("viewer"))
+    assert got.json()["decisions"] == [
+        {"id": recorded, "number": 1, "title": "Ship the importer first",
+         "href": "/company/decisions?d=1"},
+        {"id": named, "number": 2, "title": "Drop the legacy export",
+         "href": "/company/decisions?d=2"},
+    ]  # fmt: skip
+
+
+def test_every_pre_read_link_opens_a_web_page():
+    """protects=H2 review (major): every figure's link in a pre-read
+    (oracle/rituals/blocks.py) opens a page the web app has (a ``page.tsx`` route, or the
+    ``/roadmap`` redirect to ``/plan``); ``/v1/`` hrefs are the suggested_next buttons'
+    API calls; fails_when=a link points at a page that does not exist, such as
+    /company/decisions/<n>, /baseline/outcomes or /plan/changelog; no_claim=that the
+    page opens the linked row (the query string is not checked)."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).parents[2]
+    source = (root / "api/oracle/rituals/blocks.py").read_text()
+    hrefs = re.findall(r'"href": f?"(/[^"?]*)', source)
+    assert len(hrefs) > 15
+    app = root / "web/app"
+    redirects = {"/roadmap": "/plan"}
+
+    def page_exists(path: str) -> bool:
+        path = redirects.get(path, path)
+        here = app
+        for part in [p for p in path.split("/") if p]:
+            if "{" in part:
+                dynamic = [d for d in here.iterdir() if d.name.startswith("[")]
+                if not dynamic:
+                    return False
+                here = dynamic[0]
+            elif (here / part).is_dir():
+                here = here / part
+            else:
+                return False
+        return (here / "page.tsx").exists()
+
+    missing = sorted({h for h in hrefs if not h.startswith("/v1/") and not page_exists(h)})
+    assert missing == []
