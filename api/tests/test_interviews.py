@@ -514,6 +514,60 @@ async def test_a_burst_on_one_link_never_holds_the_pool_for_other_companies(clie
     assert sum(1 for kind, _ in fake.calls if kind == "interview_turn") == 1
 
 
+async def test_one_turn_per_link_is_kept_in_the_database(client, ctx, fake, no_wait):
+    """protects=the one-turn-per-link limit holds across API instances (fifth review of
+    #380): the running turn is claimed on the interview row, not in one process's
+    memory; fails_when=a message is taken while another instance's turn runs, or a
+    claim left by a crashed instance blocks the link for good; no_claim=a second
+    process (its claim is written to the row as that instance would)."""
+    iv, token = await invited(client, ctx, fake)
+    _, cookie = await open_link(client, token)
+
+    async def claim(at):
+        async with tenant_session(ctx.tenant_id) as s:
+            await s.execute(
+                update(Interview)
+                .where(Interview.id == uuid.UUID(iv["id"]))
+                .values(turn_started_at=at)
+            )
+            await s.commit()
+
+    await claim(datetime.now(UTC))
+    busy = await client.post(
+        f"/v1/public/interviews/{token}/messages", json={"body": LONG}, headers=cookie
+    )
+    assert busy.status_code == 429 and busy.json()["detail"] == "Please wait a moment"
+    assert not [k for k, _ in fake.calls if k == "interview_turn"]
+    # A claim older than the model call's deadline is from an instance that stopped.
+    await claim(datetime.now(UTC) - timedelta(seconds=turns.DEADLINE_SECONDS + 10))
+    ask(fake)
+    await say(client, token, cookie, LONG)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Interview, uuid.UUID(iv["id"]))
+        assert row.turn_started_at is None
+
+
+async def test_refused_requests_are_audited_up_to_a_limit(client, ctx, fake):
+    """protects=the audit log against a flood of refused requests on a known link
+    (fifth review of #380); fails_when=every refused request writes an audit row, or
+    none is audited; no_claim=the one-minute window's exact edge."""
+    iv, token = await invited(client, ctx, fake)
+    await open_link(client, token)
+    client.cookies.clear()
+    for _ in range(public.REFUSED_AUDITS + 10):
+        resp = await client.get(f"/v1/public/interviews/{token}")
+        assert resp.status_code == 410 and resp.json() == {"reason": "used"}
+    async with tenant_session(ctx.tenant_id) as s:
+        refused = [
+            e
+            for e in await s.scalars(
+                select(AuditEvent).where(AuditEvent.entity_id == uuid.UUID(iv["id"]))
+            )
+            if "refused" in (e.data or {})
+        ]
+    assert len(refused) == public.REFUSED_AUDITS
+
+
 async def test_snapshot_needs_to_requests(client, ctx, fake, no_wait):
     """protects=rule 6-7 (criterion 8): Finish queues the snapshot, invented quotes are
     dropped, each need becomes one New, unverified, interview-channel request linked to

@@ -11,15 +11,19 @@ only.
 """
 
 import asyncio
+import time
+import uuid
+from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from oracle.interviews import turns
-from oracle.interviews.models import InterviewMessage
+from oracle.interviews.models import Interview, InterviewMessage
 from oracle.llm import gateway
 from oracle.tenancy import tenant_session
 from oracle.v2.models import StakeholderAnswer
+from tests.baseline_helpers import make_ctx
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import company, create_intake
 from tests.test_llm_jobs import FakeClaude
@@ -221,3 +225,86 @@ async def test_only_the_interviewee_takes_team_turns(client, ctx, fake):
     assert resp.status_code == 201, resp.text
     await turn(client, ctx, resp.json()["id"], expect=409, question_id=q, body=FULL)
     assert not [k for k, _ in fake.calls if k == "interview_team_turn"]
+
+
+async def test_a_burst_of_team_turns_never_holds_the_pool_for_other_companies(client, ctx, fake):
+    """protects=the shared connection pool (fifth review of #380): a team turn claims
+    the turn and commits, calls the model with no session or row lock held, then writes
+    the result; one turn per interview runs at a time; fails_when=20 concurrent turns
+    on one interview stall a member route of another company, or more than one turn
+    reaches the model; no_claim=a real model's latency (the fake call waits until the
+    member route has answered)."""
+    intake_id, asked = await intake_and_questions(client, ctx)
+    iv = await team_interview(client, ctx, intake_id)
+    other = await make_ctx("Other Co")
+    in_flight, release = asyncio.Event(), asyncio.Event()
+
+    async def slow(kind, _payload):
+        if kind == "interview_team_turn":
+            in_flight.set()
+            await release.wait()
+
+    fake.on_call = slow
+    follow_up(fake)
+    burst = asyncio.gather(
+        *(
+            client.post(
+                f"/v1/interviews/{iv['id']}/turns",
+                json={"question_id": asked[0]["id"], "body": f"Answer {i}"},
+                headers=ctx.as_("commenter"),
+            )
+            for i in range(20)
+        )
+    )
+    try:
+        await asyncio.wait_for(in_flight.wait(), 10)
+        await asyncio.sleep(0.5)  # the rest of the burst arrives while the call runs
+        started = time.monotonic()
+        member = await asyncio.wait_for(
+            client.get("/v1/interviews", headers=other.as_("viewer")), 5
+        )
+        assert member.status_code == 200, member.text
+        assert time.monotonic() - started < 2
+    finally:
+        release.set()
+        replies = await burst
+    codes = sorted(r.status_code for r in replies)
+    assert codes == [200] + [429] * 19, codes
+    assert sum(1 for kind, _ in fake.calls if kind == "interview_team_turn") == 1
+    # The one turn's answer and Oracle's follow-up, nothing of the refused ones.
+    shown = await team_interview(client, ctx, intake_id)
+    assert [(m["role"], m["kind"]) for m in shown["messages"]] == [
+        ("interviewee", "answer"),
+        ("oracle", "follow_up"),
+    ]
+
+
+async def test_a_team_turn_waits_for_another_instances_turn(client, ctx, fake):
+    """protects=one team turn per interview across API instances (the claim is on the
+    interview row); fails_when=a turn runs while another's claim is fresh, or the claim
+    is left behind after a turn; no_claim=a second process (its claim is written to
+    the row as that instance would)."""
+    intake_id, asked = await intake_and_questions(client, ctx)
+    iv = await team_interview(client, ctx, intake_id)
+    async with tenant_session(ctx.tenant_id) as db:
+        await db.execute(
+            update(Interview)
+            .where(Interview.id == uuid.UUID(iv["id"]))
+            .values(turn_started_at=datetime.now(UTC))
+        )
+        await db.commit()
+    await turn(client, ctx, iv["id"], expect=429, question_id=asked[0]["id"], body=FULL)
+    assert not [k for k, _ in fake.calls if k == "interview_team_turn"]
+    async with tenant_session(ctx.tenant_id) as db:
+        await db.execute(
+            update(Interview)
+            .where(Interview.id == uuid.UUID(iv["id"]))
+            .values(turn_started_at=None)
+        )
+        await db.commit()
+    follow_up(fake, None)
+    out = await turn(client, ctx, iv["id"], question_id=asked[0]["id"], body=FULL)
+    assert out["recorded"]["answer"]["body"] == FULL
+    async with tenant_session(ctx.tenant_id) as db:
+        row = await db.get(Interview, uuid.UUID(iv["id"]))
+        assert row.turn_started_at is None
