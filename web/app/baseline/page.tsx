@@ -163,6 +163,32 @@ export default function BaselinePage() {
       return `Confirmed “${goal.title}”.`;
     });
 
+  /** #345: a new subgoal under `parent`, proposed like any goal; its target is set in its drawer. */
+  async function addSubgoal(parent: EntityOut, title: string): Promise<boolean> {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "subgoal";
+      const taken = new Set((graph.data?.entities ?? []).filter((e) => e.type === "goal").map((e) => e.key));
+      let key = `${parent.key}.${slug}`.slice(0, 120);
+      for (let n = 2; taken.has(key); n++) key = `${parent.key}.${slug}-${n}`.slice(0, 120);
+      await unwrap(
+        api.POST("/v1/baseline/entities", {
+          body: { type: "goal", key, title, attrs: {}, parent_id: parent.id, origin: "user" },
+        }),
+      );
+      setNotice(`Added “${title}” under “${parent.title}”.`);
+      refresh();
+      return true;
+    } catch (e) {
+      if (!onAuth(e)) setError(errorMessage(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const fillFromText = () =>
     act(async () => fillNotice(await unwrap(api.POST("/v1/baseline/goals/fill-from-text"))));
 
@@ -323,6 +349,7 @@ export default function BaselinePage() {
                   onOpen={openItem}
                   onConfirm={confirmGoal}
                   onFill={fillFromText}
+                  onAddSubgoal={canWrite ? addSubgoal : undefined}
                 />
               )}
             </>

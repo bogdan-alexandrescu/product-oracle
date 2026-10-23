@@ -406,6 +406,11 @@ function FeatureInspector({ f, id, run, change }: { f: RankedFeature; id: string
                       <GoalTag id={g.goal} />
                       <span className="truncate">{g.title}</span>
                     </div>
+                    {g.parent && (
+                      <div className="mt-0.5 text-[13px] text-text2" data-testid="goal-via-parent">
+                        Subgoal of {g.parent_title ?? g.parent}: its weight is its share of the parent&apos;s
+                      </div>
+                    )}
                     <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[13px] text-text2">
                       weight {g.weight}
                       {g.weight_assumed && <AssumedMark />} × contribution {g.contribution}

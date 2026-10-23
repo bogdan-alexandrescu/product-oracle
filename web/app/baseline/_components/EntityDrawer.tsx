@@ -14,6 +14,7 @@ import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { EvidenceChip } from "./EvidenceChip";
 import { GoalFields, goalDraft, goalPatch, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
+import { LinkToGoal, SubgoalActions } from "./subgoal-actions";
 import {
   ConfidenceRing,
   contributionOf,
@@ -173,6 +174,37 @@ export function EntityDrawer({
       await unwrap(Promise.resolve(res));
       setEditing(false);
       return "Saved. The item is now locked against agent changes.";
+    });
+
+  // #345: move a subgoal under another goal, or promote it (null).
+  const moveGoal = (parentId: string | null) =>
+    write(async () => {
+      const res = await api.PATCH("/v1/baseline/entities/{entity_id}", {
+        params: { path: { entity_id: entity.id } },
+        body: { parent_id: parentId, origin: "user" },
+      });
+      await unwrap(Promise.resolve(res));
+      if (res.response.status === 202) return "The item is locked, so your change was saved as a proposal for an approver.";
+      if (!parentId) return "Promoted to a goal.";
+      return `Moved under “${titleOf(graph, parentId)}”.`;
+    });
+
+  const archiveGoal = () =>
+    write(async () => {
+      await unwrap(
+        api.POST("/v1/baseline/entities/{entity_id}/reject", { params: { path: { entity_id: entity.id } }, body: {} }),
+      );
+      return "Archived. Its parent no longer counts it.";
+    });
+
+  const linkGoal = (goalId: string, contribution: number) =>
+    write(async () => {
+      await unwrap(
+        api.POST("/v1/baseline/edges", {
+          body: { src_id: entity.id, dst_id: goalId, type: "supports", attrs: { contribution }, origin: "user" },
+        }),
+      );
+      return `Linked to “${titleOf(graph, goalId)}”.`;
     });
 
   const promoteBlocker = (body: Schemas["BlockerCreate"]) =>
@@ -354,6 +386,11 @@ export function EntityDrawer({
                 }}
               />
             )}
+
+            {canWrite && d.type === "goal" && (
+              <SubgoalActions goal={d} graph={graph} busy={busy} onMove={moveGoal} onArchive={archiveGoal} />
+            )}
+            {canWrite && d.type === "feature" && <LinkToGoal feature={d} graph={graph} busy={busy} onLink={linkGoal} />}
 
             <History entityId={d.id} updatedAt={d.updated_at} />
 

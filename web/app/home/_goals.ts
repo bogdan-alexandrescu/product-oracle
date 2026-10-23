@@ -1,4 +1,4 @@
-import { byTitle } from "@/app/baseline/_components/order";
+import { goalTree } from "@/lib/goal-tree";
 import type { EntityOut, Schemas } from "@/lib/api/client";
 
 type RevisionOut = Schemas["RevisionOut"];
@@ -153,6 +153,12 @@ export type GoalView = {
   missing: string[] | null;
   /** The current value is typed with its day: the goal may have dated measurements for its trend. */
   measured: boolean;
+  /** #345: the parent goal's id for a subgoal; null for a goal. */
+  parentId: string | null;
+  /** #345: how many subgoals it has. */
+  subgoals: number;
+  /** #345: progress 0-1, its own measurement ("own") or rolled up from its subgoals ("subgoals"). */
+  progress: { value: number | null; source: "own" | "subgoals" | null } | null;
 };
 
 /** B5 typed units as Home's figures: "%" and time units as is, currencies as a symbol, else a counted noun. */
@@ -177,38 +183,38 @@ function typedText(f: Figure): string {
 
 const text = (v: unknown) => (v == null || v === "" ? null : String(v));
 
-/** Live goals, heaviest first, tagged G1, G2… as the Baseline tags them. */
+/** Live goals, heaviest first, each followed by its subgoals, tagged G1, G1.1, G2… as the Baseline tags them. */
 export function goalViews(entities: EntityOut[]): GoalView[] {
-  return entities
-    .filter((e) => e.type === "goal" && e.status !== "rejected")
-    .sort((a, b) => Number(b.attrs?.weight ?? 0) - Number(a.attrs?.weight ?? 0) || byTitle(a, b))
-    .map((g, i) => {
-      const a = g.attrs ?? {};
-      const titled = TITLE_DOWN.test(g.title) ? "down" : TITLE_UP.test(g.title) ? "up" : null;
-      // B5: typed values first; the text parser is the fallback for goals still on `*_text`.
-      const target = COMPARISON_WAY[a.comparison as string] ? typedFigure(a.target, a.unit) : null;
-      const current = typedFigure(a.current, a.unit);
-      const targetRaw = a.target_text ?? a.target;
-      const currentRaw = a.current_text ?? a.current;
-      return {
-        id: g.id,
-        tag: `G${i + 1}`,
-        title: g.title,
-        metric: typeof a.metric === "string" ? a.metric : null,
-        proposed: g.status === "proposed",
-        confidence: g.confidence == null ? null : Math.round(g.confidence * 100),
-        current: current ?? parseFigure(currentRaw),
-        currentText: current ? typedText(current) : text(currentRaw),
-        target: target ?? parseFigure(targetRaw),
-        targetText: target ? typedText(target) : text(targetRaw),
-        said: target
-          ? COMPARISON_WAY[a.comparison as string]
-          : (direction(targetRaw) ?? (titled ? { way: titled, strict: false } : null)),
-        typed: !!target,
-        missing: g.goal_check?.missing ?? null,
-        measured: !!current && typeof a.current_as_of === "string",
-      };
-    });
+  return goalTree(entities).map(({ goal: g, tag, parentId, children }) => {
+    const a = g.attrs ?? {};
+    const titled = TITLE_DOWN.test(g.title) ? "down" : TITLE_UP.test(g.title) ? "up" : null;
+    // B5: typed values first; the text parser is the fallback for goals still on `*_text`.
+    const target = COMPARISON_WAY[a.comparison as string] ? typedFigure(a.target, a.unit) : null;
+    const current = typedFigure(a.current, a.unit);
+    const targetRaw = a.target_text ?? a.target;
+    const currentRaw = a.current_text ?? a.current;
+    return {
+      id: g.id,
+      tag,
+      parentId,
+      subgoals: children,
+      progress: g.progress ? { value: g.progress.value ?? null, source: g.progress.source ?? null } : null,
+      title: g.title,
+      metric: typeof a.metric === "string" ? a.metric : null,
+      proposed: g.status === "proposed",
+      confidence: g.confidence == null ? null : Math.round(g.confidence * 100),
+      current: current ?? parseFigure(currentRaw),
+      currentText: current ? typedText(current) : text(currentRaw),
+      target: target ?? parseFigure(targetRaw),
+      targetText: target ? typedText(target) : text(targetRaw),
+      said: target
+        ? COMPARISON_WAY[a.comparison as string]
+        : (direction(targetRaw) ?? (titled ? { way: titled, strict: false } : null)),
+      typed: !!target,
+      missing: g.goal_check?.missing ?? null,
+      measured: !!current && typeof a.current_as_of === "string",
+    };
+  });
 }
 
 /** A noun's one spelling for comparing units: "clinics" and "clinic" match. */
@@ -345,7 +351,8 @@ export function formatFigure(f: Figure): string {
 /** Home shows this many goals, one row on a desktop; the rest are in the Baseline. */
 export const MAX_GOALS = 4;
 
-/** The goals Home shows: confirmed first, then proposed, each in baseline order. Only these load a trend. */
+/** The goals Home shows: confirmed first, then proposed, each in baseline order; subgoals show inside their goal's card. Only these load a trend. */
 export function shownGoals(goals: GoalView[]): GoalView[] {
-  return [...goals.filter((g) => !g.proposed), ...goals.filter((g) => g.proposed)].slice(0, MAX_GOALS);
+  const top = goals.filter((g) => !g.parentId);
+  return [...top.filter((g) => !g.proposed), ...top.filter((g) => g.proposed)].slice(0, MAX_GOALS);
 }
