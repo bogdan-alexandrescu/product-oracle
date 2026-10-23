@@ -194,6 +194,8 @@ _ROUTE_ROLE = (require_role, require_role_now)
 NOT_PER_ITEM = {
     # The starter adds the people they pick; only a viewer is refused, as the route does.
     "create_discussion",
+    # G7 Share as discussion starts one the same way; the panel chat is its starter's alone.
+    "share_discussion",
     # The 403 refuses a run's token; the role check picks whom the daily run acts as.
     "set_request_triage_daily",
     # F3: the route's own date rights (min_role and lead_role), re-read at write time.

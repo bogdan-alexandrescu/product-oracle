@@ -1050,7 +1050,7 @@ async def share(
     if not seat.starter:
         raise DiscussionError(403, STARTER_SHARES)
     _check_body(body.first_message)
-    d = await start(
+    d, _first = await start(
         db, principal,
         DiscussionCreate(
             subject_kind=chat.subject_kind, subject=chat.subject, title=body.title,
