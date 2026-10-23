@@ -62988,6 +62988,18 @@
             "type": "boolean",
             "title": "Engineering Lead",
             "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
           }
         },
         "type": "object",
@@ -63200,6 +63212,17 @@
           "sign_in_url": {
             "type": "string",
             "title": "Sign In Url"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
           }
         },
         "type": "object",

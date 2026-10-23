@@ -20103,6 +20103,8 @@ export interface components {
              * @default false
              */
             engineering_lead: boolean;
+            /** Message */
+            message?: string | null;
         };
         /** InviteOut */
         InviteOut: {
@@ -20179,6 +20181,8 @@ export interface components {
             email_at?: string | null;
             /** Sign In Url */
             sign_in_url: string;
+            /** Message */
+            message?: string | null;
         };
         /**
          * ItemChange

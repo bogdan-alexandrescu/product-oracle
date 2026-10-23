@@ -243,7 +243,7 @@ async def create_invite(body: InviteCreate, principal: Approver, db: TenantDB) -
     sign-in on, refused (422) for an address outside the company's email domains."""
     invite = await _call(
         service.create_invite(
-            db, principal, body.email, body.role, body.engineering_lead, body.name
+            db, principal, body.email, body.role, body.engineering_lead, body.name, body.message
         )
     )
     send = delivery.queue_email(invite)

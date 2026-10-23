@@ -1,5 +1,7 @@
-"""The invite email (#242): one plain message to the invitee naming the company's Oracle,
-the role, who invited them and the sign-in link.
+"""The invite email (#242): one message to the invitee naming the company's Oracle, the
+role, who invited them and the sign-in link; since #203, template B (owner decisions,
+2026-10-23): a designed HTML part with the Oracle mark inline (cid) beside a plain-text
+part saying the same, the owner's note when there is one, and Reply-To the inviter.
 
 Sent through a small :class:`Mailer`, its provider set by configuration; only from the
 background send (``oracle.members.delivery``), never on a request. The one provider is
@@ -16,11 +18,15 @@ import json
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from email.message import EmailMessage
+from pathlib import Path
+from string import Template
 from typing import Protocol
 
 import httpx
 
+from oracle.company_time import DEFAULT_ZONE, in_words
 from oracle.config import get_settings
 from oracle.members.iap_access import google_refusal
 from oracle.members.schemas import plain_address
@@ -46,6 +52,8 @@ class InviteEmail:
     subject: str
     text: str
     html: str
+    # The inviter's own address (#203): replies reach them; None when they have none.
+    reply_to: str | None = None
 
 
 class Mailer(Protocol):
@@ -59,29 +67,112 @@ ROLE_NAMES = {
     "viewer": "Viewer",
 }
 
+# The Oracle mark (web/app/apple-icon.png), attached inline: Oracle's host is behind IAP,
+# so a hosted image would not load in a mail client.
+MARK_PNG = Path(__file__).with_name("oracle-mark.png")
+MARK_CID = "oracle-mark@product-oracle"
+# A company name this short keeps its words on one line in the heading.
+NOWRAP_COMPANY = 24
 
-def invite_email(*, to: str, company: str, role: str, inviter: str, link: str) -> InviteEmail:
-    """The invite: only what the owner typed (the address and role), the company's name,
-    the inviter and the sign-in link."""
+_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+
+# Template B (owner decision, 2026-10-23), beside this file. ``$`` fields are filled in
+# escaped; the note and the expiry line are whole fragments, or empty.
+_PAGE = Template(Path(__file__).with_name("invite-email.html").read_text("utf-8"))
+
+_NOTE = Template(Path(__file__).with_name("invite-note.html").read_text("utf-8"))
+
+_EXPIRY = Template(
+    """<br>
+      <span class="t2"><strong class="t1" style="color:#0d1724;">Expires $when</strong></span>"""
+)
+
+
+def _first_name(inviter: str | None) -> str:
+    """Who the note is from: the first word of the inviter's name, or their address."""
+    if inviter is None:
+        return "the owner"
+    return inviter if "@" in inviter else (inviter.split() or [inviter])[0]
+
+
+def _reply_address(value: str | None) -> str | None:
+    """The inviter's address as one plain address, or None (never a list or a header)."""
+    try:
+        return plain_address(value) if value else None
+    except ValueError:
+        return None
+
+
+def invite_email(
+    *,
+    to: str,
+    company: str,
+    role: str,
+    inviter: str | None,
+    link: str,
+    reply_to: str | None = None,
+    message: str | None = None,
+    expires_at: datetime | None = None,
+    zone: str = DEFAULT_ZONE,
+) -> InviteEmail:
+    """The invite, template B (#203): the company, the inviter (their name, else their
+    address; None for no person), the role's name, the sign-in link, the address to sign
+    in with, the expiry in the Company time zone when there is one, and the owner's note
+    when there is one. The note is plain text: escaped, its line breaks kept. Replies go
+    to ``reply_to`` (the inviter's address), when it is one plain address."""
     role_name = ROLE_NAMES.get(role, role)
-    oracle = f"{company} Product Oracle"
-    lines = [
-        f"{inviter} invited you to {oracle} as {role_name}.",
-        "",
-        f"Sign in here: {link}",
-        f"Sign in with Google using {to}.",
-    ]
+    reply_to = _reply_address(reply_to)
+    note = (message or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    when = in_words(expires_at, zone) if expires_at is not None else None
+    who = inviter or "An owner"
+    first = _first_name(inviter)
+    owner = f"an owner of Product Oracle at {company}"
+    because = f"{inviter}, {owner}," if inviter else owner
+
     e = html.escape
-    body = (
-        f"<p>{e(inviter)} invited you to {e(oracle)} as {e(role_name)}.</p>"
-        f'<p><a href="{e(link)}">Sign in here: {e(link)}</a></p>'
-        f"<p>Sign in with Google using {e(to)}.</p>"
+    company_heading = e(company)
+    if len(company) <= NOWRAP_COMPANY:
+        company_heading = company_heading.replace(" ", "&nbsp;")
+    preheader = f"{who} invited you to join {company} on Product Oracle as {role_name}."
+    if when:
+        preheader += f" Expires {when}."
+    page = _PAGE.substitute(
+        font=_FONT,
+        cid=MARK_CID,
+        company=e(company),
+        company_heading=company_heading,
+        preheader=e(preheader),
+        inviter=e(who),
+        role=e(role_name),
+        note=_NOTE.substitute(font=_FONT, first=e(first), message=e(note).replace("\n", "<br>"))
+        if note
+        else "",
+        link=e(link),
+        to=e(to),
+        expiry=_EXPIRY.substitute(when=e(when)) if when else "",
+        because=e(because),
+        questions=f"Questions? Reply to this email and it reaches {e(first)}. " if reply_to else "",
     )
+
+    lines = [f"{who} invited you to join {company} on Product Oracle as {role_name}.", ""]
+    if note:
+        lines += [f"Message from {first}:", f'"{note}"', ""]
+    lines += [f"Open Oracle: {link}", f"Sign in with Google using {to}."]
+    if when:
+        lines.append(f"Expires {when} ({company} time).")
+    lines += [
+        "",
+        f"You got this email because {because}",
+        f"invited {to}."
+        + (f" Questions? Reply to this email and it reaches {first}." if reply_to else ""),
+        "Not expecting it? Ignore this email: nothing happens unless you sign in.",
+    ]
     return InviteEmail(
         to=to,
-        subject=f"You're invited to {oracle} as {role_name}",
+        subject=f"You're invited to join {company} on Product Oracle as {role_name}",
         text="\n".join(lines) + "\n",
-        html=f"<html><body>{body}</body></html>",
+        html=page,
+        reply_to=reply_to,
     )
 
 
@@ -167,18 +258,35 @@ class GmailApiMailer:
             to = plain_address(message.to)
         except ValueError:
             raise MailError("not one plain email address") from None
+        reply_to = _reply_address(message.reply_to)
         msg = EmailMessage()
         msg["From"] = self.sender
         msg["To"] = to
+        if reply_to:
+            # Replies reach the inviter (#203); From stays the company mailbox.
+            msg["Reply-To"] = reply_to
         msg["Subject"] = message.subject
         msg.set_content(message.text)
         msg.add_alternative(message.html, subtype="html")
+        # The HTML and the Oracle mark it shows by cid: multipart/related.
+        msg.get_payload()[1].add_related(
+            MARK_PNG.read_bytes(),
+            "image",
+            "png",
+            cid=f"<{MARK_CID}>",
+            disposition="inline",
+            filename="oracle-mark.png",
+        )
         raw = msg.as_bytes()
         # The header policy parses and re-renders what it is given (an RFC 2047 word
-        # becomes the address it encodes): send only if the To line is ``to`` itself.
+        # becomes the address it encodes): send only if the To line is ``to`` itself,
+        # and the Reply-To line the inviter's address itself.
         head = re.sub(rb"\r?\n[ \t]+", b" ", raw.split(b"\n\n", 1)[0]).splitlines()
         if [line for line in head if line[:3].lower() == b"to:"] != [f"To: {to}".encode()]:
             raise MailError("not one plain email address")
+        replies = [line for line in head if line[:9].lower() == b"reply-to:"]
+        if replies != ([f"Reply-To: {reply_to}".encode()] if reply_to else []):
+            raise MailError("not one plain reply address")
         return base64.urlsafe_b64encode(raw).decode()
 
     async def send(self, http: httpx.AsyncClient, message: InviteEmail) -> None:

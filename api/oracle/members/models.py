@@ -70,6 +70,8 @@ class AccessRequest(TenantScoped, Base):
     invite_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("invites.id", ondelete="SET NULL")
     )
+# The owner's note to the invitee (#203): plain text, never HTML.
+INVITE_MESSAGE_MAX = 500
 
 
 class Invite(TenantScoped, Base):
@@ -83,6 +85,10 @@ class Invite(TenantScoped, Base):
         CheckConstraint(_in("access", INVITE_ACCESS), name="access"),
         CheckConstraint(_in("email_status", INVITE_EMAIL), name="email_status"),
         CheckConstraint(NAME_LENGTH, name="name_length"),
+        CheckConstraint(
+            f"message IS NULL OR char_length(message) <= {INVITE_MESSAGE_MAX}",
+            name="message_length",
+        ),
         # One open invite per email; accepted and revoked ones are history.
         Index(
             "uq_invites_tenant_id_email_open",
@@ -128,6 +134,8 @@ class Invite(TenantScoped, Base):
     access_request_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("access_requests.id", ondelete="SET NULL", use_alter=True)
     )
+    # The owner's note to the invitee (#203): sent in the email and by Resend.
+    message: Mapped[str | None] = mapped_column(Text)
 
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "iap_revoke", "iap_grant")

@@ -76,6 +76,7 @@ def invite_out(invite: Invite, invited_by_name: str | None = None) -> InviteOut:
         email_error=invite.email_error,
         email_at=invite.email_at,
         sign_in_url=sign_in_url(),
+        message=invite.message,
     )
 
 
@@ -1479,6 +1480,7 @@ async def create_invite(
     role: Role,
     engineering_lead: bool = False,
     name: str | None = None,
+    message: str | None = None,
 ) -> Invite:
     from oracle.auth.service import ReservedEmailError, check_email_allowed
     from oracle.members.access import invite_roles
@@ -1521,6 +1523,7 @@ async def create_invite(
         engineering_lead=engineering_lead,
         invited_by=principal.id,
         expires_at=datetime.now(UTC) + INVITE_TTL,
+        message=message,
     )
     session.add(invite)
     try:

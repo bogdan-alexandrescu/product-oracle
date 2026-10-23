@@ -121,6 +121,8 @@ class InviteCreate(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     # A3: their first sign-in lands as an engineering lead (never with role viewer).
     engineering_lead: bool = False
+    # A personal note sent in the email (#203): plain text; blank is none.
+    message: str | None = Field(default=None, max_length=500)
 
     @field_validator("email")
     @classmethod
@@ -131,6 +133,11 @@ class InviteCreate(BaseModel):
     @classmethod
     def _name(cls, v: str | None) -> str | None:
         return clean_name(v)
+
+    @field_validator("message")
+    @classmethod
+    def _trim(cls, v: str | None) -> str | None:
+        return (v or "").strip() or None
 
 
 class InviteOut(BaseModel):
@@ -163,6 +170,8 @@ class InviteOut(BaseModel):
     email_at: datetime | None = None
     # Where the invitee signs in with Google (the link the email carries).
     sign_in_url: str
+    # The owner's note to the invitee, sent in the email (#203).
+    message: str | None = None
 
 
 # personal: an API token acting as a member (po_); service: an API token acting with its
