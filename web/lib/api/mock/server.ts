@@ -19,7 +19,7 @@ import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type De
 import { routeStaging } from "./staging";
 import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, type DiscussionsContext, type DiscussionsDb, type SubjectInfo } from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
-import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
@@ -75,6 +75,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** A5: access requests (Settings › Members). */
+  access_requests?: Schemas["AccessRequestOut"][];
   /** Invites an owner resent (the "mail-fails" scenario sends those). */
   invites_resent?: string[];
   documents: DocumentRow[];
@@ -949,6 +951,9 @@ function seed(): Db {
     email_status: "sent",
     email_at: i.created_at,
     sign_in_url: signInUrl(),
+    // A5: 14 days from creation.
+    expires_at: new Date(Date.parse(i.created_at) + 14 * 86_400_000).toISOString(),
+    resend_count: 0,
   }));
   const docs = new Map<string, DocumentRow>();
   for (const d of DOCUMENTS as DocumentSeed[]) {
@@ -1903,7 +1908,9 @@ const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDE
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
-  return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role, engineering_lead: !!m.engineering_lead };
+  // A5: the roles they may invite with (owners any, approvers viewer and commenter).
+  const invite_roles: Role[] = m.role === "owner" ? ROLE_ORDER : m.role === "approver" ? ["viewer", "commenter"] : [];
+  return { kind: "user", tenant_id: db.tenant_id, user_id: m.id, email: m.email, role: m.role, engineering_lead: !!m.engineering_lead, name: m.name ?? null, invite_roles };
 }
 
 /** A3, as oracle.members.leads: the active members carrying the engineering lead flag. */
@@ -2029,6 +2036,57 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       return json(200, out(target));
     }
   }
+  if (p[1] === "access-requests") {
+    // A5, as oracle.members.access: approve makes an open invite (14 days), decline
+    // turns it down, reopen (Undo) puts it back to pending and revokes an unclaimed invite.
+    const rows = (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
+    if (!p[2] && m === "GET") {
+      const status = new URL(req.url).searchParams.get("status") ?? "pending";
+      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+    }
+    const row = rows.find((r) => r.id === p[2]);
+    if (!row) return notFound("Access request");
+    if (p[3] === "approve" && m === "POST") {
+      if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
+      const { role, name } = await body<Schemas["AccessApprove"]>();
+      const invite: InviteRow = {
+        id: uuid(),
+        email: row.email,
+        name: name ?? null,
+        role,
+        engineering_lead: false,
+        status: "open",
+        invited_by: me.id,
+        created_at: now(),
+        accepted_at: null,
+        revoked_at: null,
+        access: "granted",
+        access_error: null,
+        access_at: now(),
+        email_status: "queued",
+        email_at: now(),
+        sign_in_url: signInUrl(),
+        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        resend_count: 0,
+        access_request_id: row.id,
+      };
+      db.invites.unshift(invite);
+      Object.assign(row, { status: "approved", role, invite_id: invite.id, decided_by: me.id, decided_at: now() });
+      return json(200, row);
+    }
+    if (p[3] === "decline" && m === "POST") {
+      if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
+      Object.assign(row, { status: "declined", decided_by: me.id, decided_at: now() });
+      return json(200, row);
+    }
+    if (p[3] === "reopen" && m === "POST") {
+      if (row.status !== "approved" && row.status !== "declined") return json(409, { detail: `This request is ${row.status}` });
+      const invite = db.invites.find((i) => i.id === row.invite_id);
+      if (invite) Object.assign(invite, { status: "revoked", revoked_at: now() });
+      Object.assign(row, { status: "pending", role: null, invite_id: null, decided_by: null, decided_at: null });
+      return json(200, row);
+    }
+  }
   if (p[1] === "invites") {
     settleInviteEmails(db);
     const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
@@ -2068,6 +2126,8 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         email_status: scenario === "mail-off" ? "not_sent" : "queued",
         email_at: now(),
         sign_in_url: signInUrl(),
+        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        resend_count: 0,
       };
       db.invites.push(invite);
       return json(201, invite);
@@ -2443,7 +2503,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
   }
-  if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  if (p[1] === "members" || p[1] === "invites" || p[1] === "access-requests") return membersRoute(db, req, p, me);
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
