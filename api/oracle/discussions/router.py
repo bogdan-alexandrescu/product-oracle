@@ -31,11 +31,14 @@ from oracle.discussions.schemas import (
     DiscussionPatch,
     DiscussionReadIn,
     DiscussionShareIn,
+    DiscussionSlackIn,
+    DiscussionSlackOut,
     DiscussionStarted,
     Origin,
     RunDiscussionsOut,
     Status,
 )
+from oracle.slack import bridge
 
 router = APIRouter(
     prefix="/v1", tags=["discussions"], dependencies=[Depends(require_role("viewer"))]
@@ -441,4 +444,41 @@ async def dismiss_inbox_discussion_item(item_id: str, principal: Viewer, db: Ten
         await inbox.dismiss(db, principal, item_id)
     except inbox.InboxItemNotFound:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Inbox row not found") from None
+    await db.commit()
+
+
+@router.post(
+    "/discussions/{discussion_id}/slack",
+    response_model=DiscussionSlackOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        403: {"description": "Not the starter or an approver"},
+        404: GONE,
+        409: {"description": "Already mirrored, closed, or Slack is not connected"},
+        422: {"description": "Private discussions stay in Oracle"},
+    },
+)
+async def mirror_discussion_to_slack(
+    discussion_id: uuid.UUID, body: DiscussionSlackIn, principal: Commenter, db: TenantDB
+) -> DiscussionSlackOut:
+    """Mirror an open discussion to a new thread in a Slack channel Oracle's Slack app is
+    in (the starter or an approver). Oracle posts the root message (title, subject, link,
+    summary or first message), then every new message; replies in the thread from members
+    who can write come back as messages. Earlier messages are not copied."""
+    link = await _call(bridge.mirror(db, principal, discussion_id, body.channel_id))
+    await db.commit()
+    out = await bridge.slack_out(db, link)
+    assert out is not None
+    return out
+
+
+@router.delete(
+    "/discussions/{discussion_id}/slack",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={403: {"description": "Not the starter or an approver"}, 404: GONE},
+)
+async def stop_slack_mirror(discussion_id: uuid.UUID, principal: Commenter, db: TenantDB) -> None:
+    """Stop mirroring: Oracle posts a closing line with a link to the discussion, and
+    replies in the thread no longer come back. What was posted stays in Slack."""
+    await _call(bridge.unmirror(db, principal, discussion_id))
     await db.commit()

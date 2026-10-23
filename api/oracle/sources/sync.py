@@ -60,6 +60,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.connections.models import Connection
 from oracle.engineering import codemaps
+from oracle.integrations.models import CompanyIntegration
 from oracle.sources import base, service, store
 from oracle.sources.connectors import github
 from oracle.sources.models import Source, SourceItem
@@ -385,6 +386,15 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     if start.company is not None:
         run_config[base.COMPANY_DOMAINS] = list(start.company[0])
         run_config[base.COMPANY_SHARED_DRIVES] = list(start.company[1])
+    if kind == "slack":
+        oracle_users: set[str] = set()
+        for bot, former in await db.execute(
+            select(CompanyIntegration.bot_user_id, CompanyIntegration.former_bot_user_ids).where(
+                CompanyIntegration.provider == "slack"
+            )
+        ):
+            oracle_users.update([bot] if bot else [], former or [])
+        run_config[base.ORACLE_SLACK_USERS] = sorted(oracle_users)
 
     attentions: list[str] = []
     held = False  # this transaction holds the source row (see _hold)

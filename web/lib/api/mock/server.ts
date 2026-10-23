@@ -70,6 +70,7 @@ import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
@@ -1724,9 +1725,11 @@ function load(): Db {
       ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
       : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
-        : scenario === "run-discussions"
-          ? seedRunDiscussionsScenario(db)
-          : emptyDiscussions();
+        : scenario === SLACK_SCENARIO
+          ? seedDiscussionsScenario(db, seedSlackBridge)
+          : scenario === "run-discussions"
+            ? seedRunDiscussionsScenario(db)
+            : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
@@ -3012,6 +3015,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
       replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)),
+      // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
+      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
@@ -3104,6 +3109,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   if (pool) return pool;
+  // G8: the Slack install's status (every member) and its channels (commenters and up).
+  const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
+  if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);
   if (reports) return reports;
@@ -3768,6 +3776,47 @@ async function route(db: Db, req: Request): Promise<Response> {
 
 /** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
 let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * G8 test hook (mock mode only): `globalThis.__poMockSlack.reply({title, email, text})` stores
+ * a reply from the mirrored Slack thread of the discussion titled `title`, as the events
+ * endpoint would, from the member with `email`. The page shows it on its next load.
+ * `__poMockSlack.fail({title, error})` makes that discussion's mirror failed, as when Slack
+ * gives up on its first post; `__poMockSlack.posting({title})` makes it wait for its first
+ * post (no thread yet).
+ */
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
+  (globalThis as { __poMockSlack?: unknown }).__poMockSlack = {
+    reply: (input: { title: string; email: string; text: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        const id = injectSlackReply((db.discussions ??= emptyDiscussions()), db.members, input, now(), uuid());
+        save(db);
+        return id;
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    fail: (input: { title: string; error: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        failSlackMirror((db.discussions ??= emptyDiscussions()), input);
+        save(db);
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    posting: (input: { title: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        holdSlackMirror((db.discussions ??= emptyDiscussions()), input);
+        save(db);
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+  };
+}
 
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).

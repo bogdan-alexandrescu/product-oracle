@@ -154,6 +154,7 @@ PER_ITEM: dict[str, Role | None] = {
     "edit_document_section": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
     "estimate_regeneration": "approver",
+    "mirror_discussion_to_slack": "approver",
     "get_checkpoint_draft": "owner",
     "get_next_question_batch": "approver",
     "open_oracle_action": "owner",
@@ -178,6 +179,7 @@ PER_ITEM: dict[str, Role | None] = {
     "start_regeneration": "approver",
     "start_intake_run": "approver",
     "stop_cancelling_run": "owner",
+    "stop_slack_mirror": "approver",
     "take_team_turn": None,
     "tick": "owner",
     "undo_oracle_action": "owner",

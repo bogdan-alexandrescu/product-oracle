@@ -108,6 +108,11 @@ from oracle.roadmap.models import (  # noqa: E402
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
+from oracle.slack.models import (  # noqa: E402
+    DiscussionSlackLink,
+    SlackEventSeen,
+    SlackOutbox,
+)
 from oracle.sources.models import (  # noqa: E402
     Snapshot,
     Source,
@@ -182,6 +187,9 @@ __all__ = [
     "ClaudeSweepLease",
     "Comment",
     "CompanyIntegration",
+    "DiscussionSlackLink",
+    "SlackEventSeen",
+    "SlackOutbox",
     "CompositionRevision",
     "Conflict",
     "Connection",

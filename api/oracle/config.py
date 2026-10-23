@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # to its PRD's sections) into absolute URLs under it. Empty: ORACLE_PUBLIC_URL, where
     # the app and the API share a host behind the load balancer.
     app_url: str = ""
+    # G8 Slack bridge: Oracle's Slack app's signing secret (Secret Manager
+    # oracle-slack-signing-secret). Empty: the events endpoint refuses every request.
+    slack_signing_secret: str = ""
     # Google IAP single sign-on. Empty audiences = off: the IAP header is ignored.
     # Audience: /projects/<PROJECT_NUMBER>/global/backendServices/<BACKEND_SERVICE_ID>.
     iap_audiences: list[str] = []
