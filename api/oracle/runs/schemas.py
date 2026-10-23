@@ -575,6 +575,9 @@ class CheckpointOut(BaseModel):
     console: ConsoleAnswer | None = None
     # A decided checkpoint whose decision Oracle has not delivered to the run yet.
     delivery: CheckpointDelivery | None = None
+    # B6: on an approved baseline_confirm, the confirmed and proposed goals that are not
+    # measurable ("2 goals are not measurable · Interview"); None on every other.
+    vague_goals: int | None = None
 
 
 class RunDecision(BaseModel):

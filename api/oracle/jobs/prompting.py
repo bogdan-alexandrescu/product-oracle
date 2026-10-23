@@ -35,6 +35,8 @@ CURRENT = {
     "refinement_batch": "refinement_batch.v2",
     "decision_options": "decision_options.v1",
     "discussion_reply": "discussion_reply.v1",
+    # B6: appended to discussion_reply's for a discussion on a goal.
+    "discussion_reply_goal": "discussion_reply_goal.v1",
 }
 
 

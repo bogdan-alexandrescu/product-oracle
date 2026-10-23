@@ -29,7 +29,7 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 JOB = "discussion_reply"
+GOAL_JOB = "discussion_reply_goal"
 MAX_TOKENS = 1500
 LEASE = timedelta(seconds=150)
 PENDING_GRACE = timedelta(seconds=10)
@@ -202,6 +203,21 @@ async def ask(db: AsyncSession, d: Discussion, message: DiscussionMessage) -> Di
     return reply
 
 
+async def opening(
+    db: AsyncSession, d: Discussion, person: uuid.UUID, via: str = "web"
+) -> DiscussionMessage:
+    """Oracle's ``pending`` first turn in a discussion a person started for it to open
+    (B6's goals interview): there is no message to answer yet."""
+    await check_limits(db, d, person)
+    reply = DiscussionMessage(
+        created_at=datetime.now(UTC), discussion_id=d.id, author_kind="oracle", via=via,
+        body="", status="pending",
+    )  # fmt: skip
+    db.add(reply)
+    await db.flush()
+    return reply
+
+
 # --- in-process listeners ---------------------------------------------------------------
 
 
@@ -211,6 +227,8 @@ class _Live:
 
     text: str = ""
     queues: list[asyncio.Queue] = field(default_factory=list)
+    # What readers see of the text (a goal reply's change block is not shown, B6).
+    visible: Callable[[str], str] = field(default=lambda text: text)
 
     def publish(self, item: tuple[str, str]) -> None:
         for q in self.queues:
@@ -228,7 +246,7 @@ def _listen(reply_id: uuid.UUID) -> tuple[asyncio.Queue, str] | None:
         return None
     q: asyncio.Queue = asyncio.Queue()
     live.queues.append(q)
-    return q, live.text
+    return q, live.visible(live.text)
 
 
 # --- running a reply --------------------------------------------------------------------
@@ -324,6 +342,8 @@ async def _produce(
     transports: gateway.Transports | None,
     timeout: float | None,
 ) -> str:
+    from oracle.baseline import goal_interview
+
     settings = get_llm_settings()
     async with tenant_session(tenant_id) as db:
         reply = await db.get(DiscussionMessage, reply_id)
@@ -332,23 +352,36 @@ async def _produce(
         assert d is not None
         ctx = await context.build(db, d, reply.id)
         name, system = prompting.current(JOB)
+        # B6: on a goal, the goals interview's instructions follow the house rules.
+        goal = await goal_interview.goal_of(db, d)
+        if goal is not None:
+            extra, more = prompting.current(GOAL_JOB)
+            name, system = f"{name}+{extra}", f"{system}\n\n{more}"
+            live.visible = goal_interview.visible
         reply.prompt = name
         await db.commit()
+    asked = "Open the interview." if ctx.opening else "Reply to the last person's message."
     user = (
         f"{ctx.text()}\n\nThe pushback threshold is {ctx.pushback:.2f}; the low-confidence "
-        f"threshold is {ctx.low:.2f}. Reply to the last person's message."
+        f"threshold is {ctx.low:.2f}. {asked}"
     )
+    shown = live.visible
     saved = 0
     last_save = time.monotonic()
 
     async def save_partial() -> None:
         nonlocal saved, last_save
         saved, last_save = len(live.text), time.monotonic()
-        await _save(tenant_id, reply_id, body=live.text, stream_lease_until=func.now() + LEASE)
+        await _save(
+            tenant_id, reply_id, body=shown(live.text), stream_lease_until=func.now() + LEASE
+        )
 
     async def on_text(text: str) -> None:
+        before = shown(live.text)
         live.text += text
-        live.publish(("delta", text))
+        delta = shown(live.text)[len(before) :]
+        if delta:
+            live.publish(("delta", delta))
         if len(live.text) - saved >= SAVE_CHARS:
             await save_partial()
 
@@ -382,7 +415,7 @@ async def _produce(
             await save_partial()
     end: dict[str, Any] = {"stream_lease_until": None}
     if cancelled:
-        await _save(tenant_id, reply_id, body=live.text, status="cancelled", **end)
+        await _save(tenant_id, reply_id, body=shown(live.text), status="cancelled", **end)
         return "cancelled"
     try:
         done = call.result()
@@ -390,13 +423,14 @@ async def _produce(
         reason = _reason(e)
         log.info("discussion reply %s failed: %s", reply_id, reason)
         await _save(
-            tenant_id, reply_id, body=live.text, status="failed", error=str(e)[:1000],
+            tenant_id, reply_id, body=shown(live.text), status="failed", error=str(e)[:1000],
             error_reason=reason, **end,
         )  # fmt: skip
         return "failed"
     if not live.text and done.text:
         await on_text(done.text)
-    body, cites = citations_of(live.text, ctx)
+    text, versions = goal_interview.take_changes(live.text) if goal is not None else (live.text, [])
+    body, cites = citations_of(text, ctx)
     inp, out = _tokens(done.usage)
     await _save(
         tenant_id, reply_id, body=body[:8000], status="complete", citations=cites,
@@ -404,6 +438,8 @@ async def _produce(
         cost_usd=_cost(done.usage), account_label=done.account_label, llm_via=done.via,
         error=None, error_reason=None, **end,
     )  # fmt: skip
+    if versions:
+        await goal_interview.keep_versions(tenant_id, reply_id, versions, ctx.entries)
     return "complete"
 
 
@@ -536,7 +572,9 @@ async def _reply_for(
     if reply is None or reply.discussion_id != d.id or reply.author_kind != "oracle":
         raise service.DiscussionError(404, "Reply not found")
     asked = await db.get(DiscussionMessage, reply.reply_to) if reply.reply_to else None
-    mine = asked is not None and asked.author_id == principal.user_id
+    # An opening turn (B6) answers nobody: it is its starter's.
+    asker = asked.author_id if asked is not None else d.started_by
+    mine = principal.user_id is not None and asker == principal.user_id
     if not (mine or has_role(seat.role, "approver")):
         raise service.DiscussionError(403, "Only the person who asked, or an approver, can")
     return reply

@@ -5,7 +5,8 @@ One entry per kind: its payload model, the subjects it may appear on, its action
 the lowest role that acts on it (``suggest``: commenters suggest it for an approver to
 stage, c6), where it lands, and ``available``, false until the pick that applies it has
 landed. Oracle is only ever offered the kinds available for the subject (G3). In G1 the
-changes are listed read-only, so no kind is available yet.
+changes are listed read-only; ``goal_measure`` is available since B6 Goals interview
+(oracle.baseline.goal_interview proposes it).
 """
 
 import uuid
@@ -16,6 +17,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from oracle.baseline import goals
 from oracle.discussions.models import CHANGE_KINDS, SUBJECT_KINDS
 
 Text = Field(min_length=1, max_length=2000)
@@ -32,13 +34,29 @@ class SectionEdit(_Payload):
 
 
 class GoalMeasure(_Payload):
+    """A measurable version of a goal (B6): B5 Typed goal fields' fields, ``owner`` as
+    ``owner_id``. Oracle's never carry ``owner_id`` or ``weight`` (:func:`goal_measure`)."""
+
     entity_id: uuid.UUID
     metric: str | None = Field(default=None, max_length=200)
     unit: str | None = Field(default=None, max_length=50)
-    target: float | str | None = None
-    horizon: str | None = Field(default=None, max_length=100)
+    comparison: Literal["at_least", "above", "at_most", "below"] | None = None
+    target: float | None = None
+    start: float | None = None
+    horizon: Literal["short", "medium", "long"] | None = None
+    due: date | None = None
     owner_id: uuid.UUID | None = None
     weight: float | None = None
+
+
+# The goal attrs a goal_measure payload sets (payload key -> attrs key).
+GOAL_FIELDS = {
+    "metric": "metric", "unit": "unit", "comparison": "comparison", "target": "target",
+    "start": "start", "horizon": "horizon", "due": "due", "owner_id": "owner",
+    "weight": "weight",
+}  # fmt: skip
+# Ranking and ownership are a person's call (B6 3.1 (6)).
+PEOPLE_ONLY = ("owner_id", "weight")
 
 
 class EntityEdit(_Payload):
@@ -181,12 +199,20 @@ def _requirement(p: dict[str, Any]) -> str:
 
 
 def _measure(p: dict[str, Any]) -> str:
-    parts = [p.get("metric") or "a metric"]
-    if p.get("target") is not None:
-        parts.append(f"to {p['target']}")
-    if p.get("horizon"):
-        parts.append(f"by {p['horizon']}")
-    return f"Make {p['entity_id']} measurable: {' '.join(parts)}"
+    """Reads "Make Cut early churn measurable: less than 8% by Jun 30"."""
+    if p.get("comparison") in goals.COMPARISONS and p.get("target") is not None and p.get("unit"):
+        what = goals.comparison_words(p["comparison"], float(p["target"]), p["unit"])
+    else:
+        what = p.get("metric") or "a metric"
+        if p.get("target") is not None:
+            what += f" to {p['target']}"
+    due = p.get("due")
+    if due:
+        day = due if isinstance(due, date) else date.fromisoformat(str(due))
+        what += f" by {day:%b} {day.day}"
+    elif p.get("horizon"):
+        what += f" within the {p['horizon']} horizon"
+    return f"Make {p.get('title') or p['entity_id']} measurable: {what}"
 
 
 _KINDS = [
@@ -194,7 +220,7 @@ _KINDS = [
          "the document's next draft",
          lambda p: f"Change {p['section_key']}: {p['instruction']}", suggest=True),
     Kind("goal_measure", GoalMeasure, ("entity", "intake", "gap"), "Propose", "commenter",
-         "a baseline proposal", _measure),
+         "a baseline proposal", _measure, available=lambda _db: True),
     Kind("entity_edit", EntityEdit, ("entity", "conflict"), "Propose", "commenter",
          "a baseline proposal",
          lambda p: f"Change {p['entity_id']}'s {p['field']} to {p['value']}"),
@@ -246,9 +272,29 @@ def validate_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
     return model.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
-def label(kind: str, payload: dict[str, Any]) -> str:
-    """The plain sentence a change reads as ("Move R-1 to Next")."""
+def label(kind: str, payload: dict[str, Any], target: dict[str, Any] | None = None) -> str:
+    """The plain sentence a change reads as ("Move R-1 to Next"); a ``title`` in its
+    target names what it changes ("Make Cut early churn measurable: ...")."""
+    if target and target.get("title") and "title" not in payload:
+        payload = {**payload, "title": target["title"]}
     return REGISTRY[kind].label(payload)
+
+
+def goal_attrs(payload: dict[str, Any]) -> dict[str, Any]:
+    """The goal attrs a goal_measure payload sets."""
+    return {a: payload[k] for k, a in GOAL_FIELDS.items() if payload.get(k) is not None}
+
+
+def goal_measure(payload: dict[str, Any], proposed_by_kind: str) -> dict[str, Any]:
+    """A goal_measure payload as stored: Oracle's cut down to the fields it may propose,
+    refused by B5's checks on its own fields (``goals.GoalFieldsError``) or by the kind's
+    model (``pydantic.ValidationError``)."""
+    if proposed_by_kind == "oracle":
+        payload = {k: v for k, v in payload.items() if k not in PEOPLE_ONLY}
+    found = goals.field_problems(goal_attrs(payload))
+    if found:
+        raise goals.GoalFieldsError(found)
+    return validate_payload("goal_measure", payload)
 
 
 def available_for(subject_kind: str, db: Any = None) -> list[str]:

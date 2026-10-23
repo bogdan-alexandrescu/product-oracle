@@ -44,7 +44,7 @@ type ParticipantRow = {
   last_read_at: string | null;
   created_at: string;
 };
-type MessageRow = {
+export type MessageRow = {
   id: string;
   discussion_id: string;
   author_kind: "person" | "oracle" | "system";
@@ -61,9 +61,35 @@ type MessageRow = {
   citations?: Record<string, unknown>[];
   error_reason?: string | null;
   cancel_requested?: boolean;
+  /** Pushback (G2, B6): the reason Oracle pushed back. */
+  pushback?: { reason: string } | null;
+  /** The mock's scripted reply for this message (a goals interview), in the pieces it streams. */
+  script?: string[];
+  script_citations?: Record<string, unknown>[];
 };
 
-export type DiscussionsDb = { discussions: DiscussionRow[]; participants: ParticipantRow[]; messages: MessageRow[] };
+/** G3/B6: a change Oracle or a person offered in a discussion (a goal_measure version). */
+export type ChangeRow = {
+  id: string;
+  discussion_id: string;
+  kind: string;
+  label: string;
+  target: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  edited_payload: Record<string, unknown> | null;
+  rationale: string | null;
+  proposed_by_kind: "oracle" | "person";
+  proposed_by: string | null;
+  suggested_by: string | null;
+  status: Schemas["DiscussionChangeOut"]["status"];
+  created_at: string;
+  lock_version: number;
+  result_ref: { proposal_id: string } | null;
+  pushback: { reason: string } | null;
+  override_reason: string | null;
+};
+
+export type DiscussionsDb = { discussions: DiscussionRow[]; participants: ParticipantRow[]; messages: MessageRow[]; changes?: ChangeRow[] };
 
 /** A subject as the mock resolves it: its key, label, link and document or run. */
 export type SubjectInfo = { key: string; label: string; url: string; document_id?: string | null; run_id?: string | null };
@@ -80,6 +106,8 @@ export type DiscussionsContext = {
   persist?: (change: (db: DiscussionsDb) => void) => Promise<void>;
   /** The saved state now (a streaming reply checks for Stop). */
   current?: () => DiscussionsDb;
+  /** B6: Oracle's scripted reply to a person's message (a goals interview); null: the canned one. */
+  replyScript?: (d: DiscussionRow, asked: MessageRow) => { pieces: string[]; citations: Record<string, unknown>[] } | null;
 };
 
 /** G2: the gateway's message when no Claude account can take a call (approvers and owners). */
@@ -292,7 +320,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     deleted: !!x.deleted_at,
     error_reason: x.error_reason ?? null,
     error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? NO_ACCOUNT_MESSAGE : "Oracle can't reply right now.") : null,
-    pushback: null,
+    pushback: x.pushback ?? null,
     usage: null,
   });
   const add = (d: DiscussionRow, user_id: string, added_via: ParticipantRow["added_via"]) => {
@@ -352,8 +380,19 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (!res.ok) return res;
     const message = (await res.json()) as Schemas["DiscussionMessageOut"];
     const row = db.messages.find((x) => x.id === message.id)!;
+    const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? null) : null;
     const reply = wantsReply(d, row)
-      ? push(d, { author_kind: "oracle", author_id: null, body: "", mentions: [], mentions_oracle: false, reply_to: row.id, status: "pending", citations: [] })
+      ? push(d, {
+          author_kind: "oracle",
+          author_id: null,
+          body: "",
+          mentions: [],
+          mentions_oracle: false,
+          reply_to: row.id,
+          status: "pending",
+          citations: [],
+          ...(script ? { script: script.pieces, script_citations: script.citations } : {}),
+        })
       : null;
     return json(201, { message, reply: reply ? messageOut(reply) : null });
   };
@@ -388,7 +427,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           return;
         }
         let text = "";
-        for (const [i, piece] of CANNED_REPLY.entries()) {
+        const pieces = x.script ?? CANNED_REPLY;
+        const cites = x.script ? (x.script_citations ?? []) : CANNED_CITATIONS;
+        for (const [i, piece] of pieces.entries()) {
           await new Promise((ok) => setTimeout(ok, i === 0 ? FIRST_MS : DELTA_MS));
           if (now().cancel_requested) {
             await write({ status: "cancelled", body: text, cancel_requested: false });
@@ -400,9 +441,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           controller.enqueue(event("delta", { text: piece }));
           await write({ body: text });
         }
-        await write({ status: "complete", body: text, citations: CANNED_CITATIONS });
-        controller.enqueue(event("citations", CANNED_CITATIONS));
-        controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations: CANNED_CITATIONS })));
+        await write({ status: "complete", body: text, citations: cites });
+        controller.enqueue(event("citations", cites));
+        controller.enqueue(event("done", messageOut({ ...x, status: "complete", body: text, citations: cites })));
         controller.close();
       },
     });
@@ -612,6 +653,16 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (row && mine && (!mine.last_read_at || mine.last_read_at < row.created_at)) mine.last_read_at = row.created_at;
     return json(204, null);
   }
-  if (p[3] === "changes" && m === "GET") return json(200, []);
+  if (p[3] === "changes" && m === "GET")
+    return json(
+      200,
+      (db.changes ?? [])
+        .filter((c) => c.discussion_id === d.id)
+        .map((c) => {
+          const rest: Partial<ChangeRow> = { ...c };
+          delete rest.discussion_id;
+          return rest;
+        }),
+    );
   return null;
 }

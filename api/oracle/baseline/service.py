@@ -520,6 +520,11 @@ async def decide_proposal(
         proposal.id,
         {"note": note} if note else None,
     )
+    if accept:
+        # B6: a goals interview's proposal that leaves its goal measurable closes it.
+        from oracle.baseline import goal_interview
+
+        await goal_interview.on_proposal_accepted(db, proposal, principal)
     await db.flush()
     return proposal
 

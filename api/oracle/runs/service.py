@@ -796,10 +796,12 @@ def _checkpoint_out(
     flow: str,
     leads: frozenset[uuid.UUID],
     staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
+    vague_goals: int | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
     ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
-    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate)."""
+    ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate);
+    ``vague_goals``: :func:`_vague_goals` of the checkpoints read."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
     shut = (
@@ -830,7 +832,22 @@ def _checkpoint_out(
         or (gate.message(shut) if shut is not None and not shut.open else None),
         gate=shut,
         delivery=delivery,
+        vague_goals=vague_goals if _offers_interviews(cp) else None,
     )
+
+
+def _offers_interviews(cp: Checkpoint) -> bool:
+    return cp.kind == "baseline_confirm" and cp.status == "approved"
+
+
+async def _vague_goals(db: AsyncSession, checkpoints: list[Checkpoint]) -> int | None:
+    """B6: how many goals are not measurable, when an approved Confirm the baseline is
+    read (the after-review line offers an interview; nothing starts one here)."""
+    if not any(_offers_interviews(c) for c in checkpoints):
+        return None
+    from oracle.baseline.goal_interview import vague_count
+
+    return await vague_count(db)
 
 
 async def _staged_actions(
@@ -1035,6 +1052,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
+    vague = await _vague_goals(db, checkpoints)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
@@ -1073,7 +1091,15 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         notes=notes,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
-            _checkpoint_out(c, principal, names, flow=run.flow, leads=leads, staged=staged)
+            _checkpoint_out(
+                c,
+                principal,
+                names,
+                flow=run.flow,
+                leads=leads,
+                staged=staged,
+                vague_goals=vague,
+            )  # fmt: skip
             for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,

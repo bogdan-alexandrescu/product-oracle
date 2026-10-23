@@ -12,6 +12,7 @@ from sqlalchemy import text
 from oracle.account.router import router as account_router
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
+from oracle.baseline.goal_interview import router as goal_interview_router
 from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router
 from oracle.baseline.service import GoalFieldsInvalid
@@ -215,6 +216,7 @@ def create_app() -> FastAPI:
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)
     app.include_router(baseline_router)
+    app.include_router(goal_interview_router)
     app.include_router(priorities_router)
     app.include_router(decisions_router)
     app.include_router(rituals_router)
