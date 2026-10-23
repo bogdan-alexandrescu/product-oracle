@@ -13,6 +13,11 @@ import { login } from "./helpers";
  * - criteria 11: protects=the approver sees the check and cannot approve past a blocking
  *   problem; fails_when=the counts or the problem text are missing, Approve is enabled, or
  *   Request changes is blocked; no_claim=the server's gate (api/tests/test_prd_scope.py).
+ * - D3 criterion 8a: protects=the feature set's blocking problem is a reason of the one
+ *   approve gate: listed under the decision with Waive…, and a waiver with a reason enables
+ *   Approve and continue; fails_when=the problem is refused outside the gate (no Waive…) or
+ *   Approve stays disabled after the waiver; no_claim=the server's gate
+ *   (api/tests/test_checkpoint_gate_kinds.py).
  * - criterion 12: protects=the problem text is readable on a phone; fails_when=it is
  *   truncated or the page scrolls sideways at 390 px; no_claim=other viewports.
  */
@@ -22,7 +27,7 @@ import { login } from "./helpers";
 const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 const LINE = "Feature set: 6 features, 14 requirements, 2 left out · 1 problem";
 const PROBLEM = "bulk-address-edit depends on shared-address-book-export, which is excluded";
-const REASON = "The feature set has 1 blocking problem; send it back with Request changes.";
+const REASON = "1 blocking problem left: fix or waive them, or send back to the agents.";
 
 async function seeded(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "feature-set"), MOCK_SCENARIO_KEY);
@@ -52,9 +57,9 @@ test("the feature-set line shows the check, and a blocking problem disables Appr
   await expect(flags.filter({ hasText: "bulk-address-edit" })).toContainText("serves no goal, low confidence");
   await expect(flags.filter({ hasText: "saved-addresses" })).toContainText("new feature");
 
-  // The checkpoint: Approve and continue is disabled with the server's reason.
+  // The checkpoint: Approve and continue is disabled with the approve gate's reason.
   const cp = page.getByTestId("checkpoint-feature_set");
-  await expect(cp.getByTestId("cannot-approve")).toHaveText(REASON);
+  await expect(cp.getByTestId("approve-gate").getByText(REASON)).toBeVisible();
   const approve = cp.getByRole("button", { name: "Approve and continue" });
   await expect(approve).toBeDisabled();
   await expect(approve).toHaveAttribute("title", REASON);
@@ -65,6 +70,26 @@ test("the feature-set line shows the check, and a blocking problem disables Appr
   await expect(segment).toContainText("attempt 2");
   await expect(page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" })).toHaveCount(0);
   await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Running");
+});
+
+test("the feature set's blocking problem is waived under the decision, and Approve and continue is enabled", async ({ page }) => {
+  await seeded(page);
+  await page.getByTestId("nav-runs").click();
+  await page.getByTestId("run-row").filter({ hasText: "saved-addresses" }).getByRole("link").click();
+  const cp = page.getByTestId("checkpoint-feature_set");
+  const approve = cp.getByRole("button", { name: "Approve and continue" });
+  await expect(approve).toBeDisabled();
+  const gate = cp.getByTestId("approve-gate");
+  await expect(gate.getByTestId("gate-reason")).toHaveCount(1);
+  const row = gate.getByTestId("gate-reason").filter({ hasText: "bulk-address-edit" });
+  await expect(row).toContainText(PROBLEM);
+  await row.getByRole("button", { name: "Waive…" }).click();
+  await row.getByLabel(`Reason to waive: ${PROBLEM}`).fill("The export ships in the same release");
+  await row.getByRole("button", { name: "Waive", exact: true }).click();
+  await expect(cp.getByTestId("approve-gate")).toHaveCount(0);
+  await expect(approve).toBeEnabled();
+  await approve.click();
+  await expect(page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" })).toHaveCount(0);
 });
 
 test("at 390 px the problem text wraps: nothing truncated, no sideways scroll", async ({ page }) => {

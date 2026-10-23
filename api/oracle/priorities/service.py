@@ -466,9 +466,9 @@ async def _deciding(
     db: AsyncSession, s: PrioritySnapshot, principal: Principal
 ) -> tuple[CompareRun | None, CompareCheckpoint | None]:
     from oracle.authz import has_role
-    from oracle.runs import flows
+    from oracle.runs import flows, gate
     from oracle.runs.models import Checkpoint, Run
-    from oracle.runs.service import _cannot_approve
+    from oracle.runs.service import _cannot_approve, approve_gate_of
 
     run = await db.get(Run, s.run_id) if s.run_id else None
     if run is None:
@@ -488,11 +488,14 @@ async def _deciding(
     cp = await db.get(Checkpoint, s.checkpoint_id) if s.checkpoint_id else None
     if cp is None:
         return out, None
+    # As the run page: not imported, else the approve gate's blocking problems (D3).
+    shut = await approve_gate_of(db, cp) if cp.status == "pending" else None
     return out, CompareCheckpoint(
         id=cp.id,
         status=cp.status,
         approver_role=cp.approver_role,
-        cannot_approve=_cannot_approve(cp),
+        cannot_approve=_cannot_approve(cp)
+        or (gate.message(shut) if shut is not None and not shut.open else None),
         can_decide=cp.status == "pending" and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
     )
 

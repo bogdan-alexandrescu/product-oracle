@@ -38,7 +38,7 @@ from oracle.authz import has_role
 from oracle.docs.models import DocumentVersion
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
-from oracle.runs import reasons, roadmap, service
+from oracle.runs import gate, reasons, roadmap, service
 from oracle.runs.models import ACTION_KINDS, Checkpoint, CheckpointAction, Run, RunSegment
 from oracle.runs.schemas import (
     ActionIn,
@@ -229,13 +229,27 @@ def _roadmap_items(body: ActionIn, ctx: ValidationContext) -> None:
                 f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
             )
     elif body.kind == "waive":
-        reason = body.value.get("reason") if isinstance(body.value, dict) else None
-        if not isinstance(reason, str) or not reason.strip() or len(reason) > WAIVE_REASON:
-            raise InvalidAction("waive needs a reason")
+        _waive_reason(body)
+
+
+def _waive_reason(body: ActionIn) -> None:
+    reason = body.value.get("reason") if isinstance(body.value, dict) else None
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > WAIVE_REASON:
+        raise InvalidAction("waive needs a reason")
+
+
+def _feature_set(body: ActionIn, ctx: ValidationContext) -> None:
+    """C6 Feature set: until C7 Scope review adds its edits, a waiver of a feature's
+    blocking problem (D3) is the one action."""
+    if body.kind != "waive":
+        raise InvalidAction("a feature set checkpoint takes only waivers")
+    if body.item_key not in ctx.item_keys | {WHOLE_FILE}:
+        raise InvalidAction(f"{body.item_key} has no problem in the feature set")
+    _waive_reason(body)
 
 
 # The spec owning each checkpoint kind registers its vocabulary here.
-VOCABULARY: dict[str, Validator] = {"roadmap_items": _roadmap_items}
+VOCABULARY: dict[str, Validator] = {"roadmap_items": _roadmap_items, "feature_set": _feature_set}
 
 
 def validate(checkpoint_kind: str, body: ActionIn, ctx: ValidationContext) -> None:
@@ -289,6 +303,13 @@ def _context(found: _File | None) -> ValidationContext:
         dropped_keys=frozenset(dropped),
         items=items,
     )
+
+
+def _gate_context(cp: Checkpoint) -> ValidationContext:
+    """A kind with no item file: its items are those its approve gate's reasons name."""
+    source = gate.BLOCKING_SOURCES.get(cp.kind)
+    reasons = source.read(cp)[0] if source is not None else []
+    return ValidationContext(item_keys=frozenset(r["item"] for r in reasons))
 
 
 # --------------------------------------------------------------------------- writes
@@ -436,12 +457,14 @@ async def put_action(
 
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     found = await _file(db, run, cp) if cp.kind in VOCABULARY else None
-    ctx = _context(found)
+    ctx = _context(found) if cp.kind in ITEM_FILES else _gate_context(cp)
     try:
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
         raise service.Invalid(str(exc)) from None
     stages = _stages(principal, cp)
+    if body.kind == "waive":
+        _waivable(cp, body, found, stages)
     if stages:
         # A staged action counts: the approver role, re-read under the gate.
         refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
@@ -479,6 +502,22 @@ async def put_action(
     event = STAGED if stages else SUGGESTED
     await _bump(db, principal, run, cp, event, body.item_key, _snapshot(action))
     await db.commit()
+
+
+def _waivable(cp: Checkpoint, body: ActionIn, found: _File | None, stages: bool) -> None:
+    """D3: a waiver is the approver's (a commenter cannot even suggest one), and never of
+    a date reason or a problem of the whole file."""
+    file_codes = {
+        p["code"]
+        for p in (found.checked.check.problems if found and found.checked else [])
+        if not p.get("item")
+    }
+    if body.item_key == WHOLE_FILE or any(a in file_codes for a in body.answers):
+        raise service.Invalid(gate.FILE_NOT_WAIVED)
+    if any(not gate.waivable(cp.kind, a) for a in body.answers):
+        raise service.Invalid(gate.BLOCKING_SOURCES[cp.kind].refusal)
+    if not stages:
+        raise service.Forbidden(f"Only the {cp.approver_role} role or above waives a problem")
 
 
 async def stage_action(
@@ -804,6 +843,7 @@ async def read(
     stages = pending and _stages(principal, cp) and not principal.read_only
     attempt = (cp.payload or {}).get("attempt")
     problems = checked.check.problems if checked else []
+    staged = [r for r in rows if r.state == "staged"]
     return CheckpointReview(
         checkpoint_id=cp.id,
         run_id=run.id,
@@ -824,4 +864,5 @@ async def read(
         and not principal.read_only,
         can_stage=stages,
         can_decide=stages,
+        gate=gate.approve_gate(cp, None, staged) if pending else None,
     )
