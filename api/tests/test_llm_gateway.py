@@ -609,3 +609,48 @@ async def test_a_spent_pool_refuses_in_the_company_time_zone_never_iso(tenant_id
     assert "T" not in message.split("clears ")[1].split(",")[0]
     assert "+00:00" not in message
     assert info.value.next_reset_at is not None
+
+
+# --- a spent pool and the fallback credential (#403, owner decision 2026-10-23) ------
+
+
+async def test_a_spent_pool_with_a_fallback_runs_the_call_on_the_fallback(tenant_id, fakes):
+    from oracle.claude_accounts import fallback
+
+    weekly = await add_account(
+        tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))}
+    )
+    async with tenant_session(tenant_id) as s:
+        await fallback.store(s, PLAN_TOKEN_PREFIX + "01-spare", None)
+        await s.commit()
+    told: list[tuple[str | None, str]] = []
+    async with tenant_session(tenant_id) as s:
+        out = await gateway.complete(
+            s,
+            "Be brief.",
+            MESSAGES,
+            256,
+            job="reporting",
+            transports=fakes,
+            on_call=lambda label, via: told.append((label, via)),
+        )
+    # Which credential ran it: the fallback, never the spent account.
+    assert (out.via, out.account_id, out.account_label) == ("fallback_plan", None, None)
+    assert told == [(None, "fallback_plan")]
+    assert [t for t, _ in fakes.plan.calls] == [PLAN_TOKEN_PREFIX + "01-spare"]
+    assert (await get_account(tenant_id, weekly.account_id)).assigned == 0
+
+
+async def test_a_spent_pool_without_a_fallback_still_refuses_with_the_worded_time(tenant_id, fakes):
+    await add_account(tenant_id, "weekly", windows={"seven_day": window(0.97, timedelta(days=2))})
+    with pytest.raises(NoClaudeAccount) as info:
+        await _call(tenant_id, fakes)
+    assert info.value.reason == "no_account_available"
+    message = str(info.value)
+    assert message.startswith(
+        "No Claude account can take this call: every Claude account is spent; "
+        "the earliest window clears "
+    )
+    assert message.endswith((" PDT", " PST")), message
+    assert "+00:00" not in message
+    assert fakes.plan.calls == []

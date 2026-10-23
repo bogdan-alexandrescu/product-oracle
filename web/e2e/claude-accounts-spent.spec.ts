@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { POOL_SPENT_SCENARIO } from "../lib/api/mock/claude-accounts";
+import { POOL_SPENT_SCENARIO, SETUP_TOKEN_PREFIX } from "../lib/api/mock/claude-accounts";
 
 import { login, openTab } from "./helpers";
 
@@ -14,7 +14,8 @@ import { login, openTab } from "./helpers";
  *
  * Card (E2E): protects=the page says what the gateway does (Spent until, not Available),
  * the owner's AI-off notice, and the refusal's worded time; fails_when=a spent account
- * reads Available, no notice, or an ISO time; no_claim=the pool's rule (pytest:
+ * reads Available, no notice, or an ISO time, or a fallback set on a spent pool leaves the
+ * notice saying the AI is off; no_claim=the pool's rule (pytest:
  * test_claude_accounts_api.py).
  */
 
@@ -62,10 +63,41 @@ test("a spent account reads Spent until a worded time, and the owner is told Ora
   await expect(notice(page)).toHaveCount(1);
   await expect(notice(page)).toContainText("Every Claude account is spent");
   await expect(notice(page)).toContainText(WORDED);
+  await expect(notice(page)).toContainText("set a fallback credential (used while no account is added or every account is spent)");
+  await expect(notice(page)).not.toContainText("used only while no account is added");
   await notice(page).getByRole("button", { name: "Set a fallback credential" }).click();
   await expect(page.getByLabel("Setup-token or API key")).toBeFocused();
   await notice(page).getByRole("button", { name: "Add an account" }).click();
   await expect(page.getByRole("button", { name: "+ Add account" })).toHaveAttribute("aria-expanded", "true");
+});
+
+test("setting a fallback on a spent pool turns Oracle's AI back on, on the fallback until the window clears", async ({ page }) => {
+  await withSpentPool(page);
+  await login(page, OWNER);
+  await openAccounts(page);
+  await expect(notice(page)).toContainText("Oracle's AI is off");
+
+  await notice(page).getByRole("button", { name: "Set a fallback credential" }).click();
+  const fallback = page.getByTestId("fallback");
+  await fallback.getByLabel("Setup-token or API key").fill(`${SETUP_TOKEN_PREFIX}01-example-abcd`);
+  await fallback.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("fallback-status")).toContainText("Claude setup-token …abcd");
+
+  // Still one notice, now saying Oracle runs on the fallback, and until when.
+  await expect(notice(page)).toHaveCount(1);
+  await expect(notice(page)).not.toContainText("Oracle's AI is off");
+  await expect(notice(page)).toContainText("Oracle is using the fallback credential until");
+  await expect(notice(page)).toContainText(WORDED);
+  await expect(notice(page)).not.toContainText(ISO);
+  await expect(notice(page)).toContainText("Every Claude account is spent (weekly limit)");
+  await expect(notice(page).getByRole("button", { name: "Set a fallback credential" })).toHaveCount(0);
+  await expect(row(page, "weekly")).toContainText("Spent until");
+
+  // Home says the same.
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-home").click();
+  await expect(notice(page)).toHaveCount(1);
+  await expect(notice(page)).toContainText("Oracle is using the fallback credential until");
+  await expect(notice(page)).toContainText(WORDED);
 });
 
 test("the notice is the owner's: an approver sees the spent state but no notice", async ({ page }) => {
