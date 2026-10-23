@@ -48,6 +48,7 @@ import re
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -131,6 +132,17 @@ async def get_setting(session: AsyncSession, key: str) -> Any:
 
 async def clear_setting(session: AsyncSession, key: str) -> None:
     await session.execute(delete(TenantSetting).where(TenantSetting.key == key))
+
+
+async def company_timezone(session: AsyncSession) -> ZoneInfo | None:
+    """The company's time zone: the one an owner set in Settings (today the alignment
+    report's), or None when none is set (callers then use UTC)."""
+    row = await session.scalar(select(TenantSetting).where(TenantSetting.key == "alignment_report"))
+    zone = row.value.get("timezone") if row is not None and isinstance(row.value, dict) else None
+    try:
+        return ZoneInfo(zone) if isinstance(zone, str) and zone else None
+    except (ValueError, ZoneInfoNotFoundError):
+        return None
 
 
 async def company_horizons(session: AsyncSession) -> dict[str, int]:

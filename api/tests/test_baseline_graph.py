@@ -210,7 +210,14 @@ async def test_goals_need_the_confirm_step(client, ctx):
         type="goal",
         key="activation",
         title="Raise activation",
-        attrs={"metric": "activated accounts", "target": "40%", "horizon": "short", "weight": 3},
+        attrs={
+            "metric": "activated accounts",
+            "unit": "%",
+            "comparison": "at_least",
+            "target": 40,
+            "horizon": "short",
+            "weight": 3,
+        },  # fmt: skip
     )
     assert goal["status"] == "proposed"
     resp = await client.patch(
@@ -415,7 +422,14 @@ async def test_every_baseline_route_requires_auth(client):
             url = path.format(
                 **{
                     k: uuid.uuid4()
-                    for k in ("entity_id", "edge_id", "evidence_id", "proposal_id", "conflict_id")
+                    for k in (
+                        "entity_id",
+                        "edge_id",
+                        "evidence_id",
+                        "proposal_id",
+                        "conflict_id",
+                        "measurement_id",
+                    )  # fmt: skip
                 }
             )
             resp = await client.request(method.upper(), url)
@@ -434,8 +448,11 @@ async def test_other_company_cannot_see_the_graph(client, ctx):
 
 async def test_revisions_take_a_limit_of_the_newest(client, ctx):
     """Home's goal trend reads only the newest revisions, never a goal's whole history."""
-    goal = await entity(client, ctx, type="goal", key="activation", attrs={"current": "30%"})
-    for current in ("31%", "33%", "35%"):
+    goal = await entity(
+        client, ctx, type="goal", key="activation",
+        attrs={"current": 30, "current_as_of": "2026-01-01"},
+    )  # fmt: skip
+    for current in (31, 33, 35):
         resp = await client.patch(
             f"{B}/entities/{goal['id']}",
             json={"attrs": {"current": current}},
@@ -447,7 +464,7 @@ async def test_revisions_take_a_limit_of_the_newest(client, ctx):
     assert len(every) == 4
     newest = (await client.get(url, params={"limit": 2}, headers=ctx.as_("viewer"))).json()
     assert newest == every[:2]
-    assert [r["after"]["attrs"]["current"] for r in newest] == ["35%", "33%"]
+    assert [r["after"]["attrs"]["current"] for r in newest] == [35, 33]
     for bad in (0, 501):
         resp = await client.get(url, params={"limit": bad}, headers=ctx.as_("viewer"))
         assert resp.status_code == 422, bad
