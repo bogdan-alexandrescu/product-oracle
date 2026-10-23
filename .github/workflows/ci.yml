@@ -5,10 +5,11 @@ on:
     branches: [main]
   pull_request:
 
-# One run per pull request (or main push): a new head cancels the PR's older run, so
-# superseded runs stop holding the account's shared hosted runners (owner, 2026-10-23).
+# One run per pull request: a new head cancels the PR's older run, so superseded runs
+# stop holding the account's shared hosted runners (owner, 2026-10-23). Each main push is
+# its own group (by commit), so a merge never drops the run of the merge before it.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
