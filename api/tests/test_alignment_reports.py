@@ -29,7 +29,7 @@ from oracle.reports import slack as report_slack
 from oracle.reports.models import AlignmentReport
 from oracle.rituals import clock as ritual_clock
 from oracle.rituals import service as rituals
-from oracle.rituals.models import Ritual
+from oracle.rituals.models import Ritual, RitualOccurrence
 from oracle.roadmap.models import ProductTrack
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import DEFAULTS
@@ -447,21 +447,17 @@ async def test_the_ticker_builds_one_weekly_report_at_the_local_moment(
 
 async def test_disabled_or_no_active_track_builds_nothing(client, owner, runtime, at):
     """AC4. protects=no empty reports; fails_when=a company without an active or paused
-    track, or with the report disabled, gets a report or an Inbox row; no_claim=content.
-    The report is the alignment_report ritual (H2): each week's moment is checked once,
-    so the paused track is reported at the next week's moment."""
+    track, or with the report disabled, gets a report or an Inbox row; no_claim=content."""
     tenant_id, auth = owner
     at(la(2026, 10, 26, 9))
     assert await due(tenant_id) == []
     await a_track(client, auth, runtime)
     await set_report(client, auth, enabled=False)
-    at(la(2026, 11, 2, 8))
     assert await due(tenant_id) == []
     await set_report(client, auth)
     async with tenant_session(tenant_id) as db:
         await db.execute(update(ProductTrack).values(status="closed"))
         await db.commit()
-    at(la(2026, 11, 9, 8))
     assert await due(tenant_id) == []
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     assert inbox["reports"] == [] and inbox["report_failures"] == []
@@ -469,9 +465,7 @@ async def test_disabled_or_no_active_track_builds_nothing(client, owner, runtime
     async with tenant_session(tenant_id) as db:
         await db.execute(update(ProductTrack).values(status="paused"))
         await db.commit()
-    at(la(2026, 11, 16, 8))
     (report,) = await due(tenant_id)
-    assert report.week_start == date(2026, 11, 9)
     assert [t["status"] for t in report.content["tracks"]] == ["paused"]
 
 
@@ -521,6 +515,35 @@ async def test_the_weekly_report_is_the_alignment_report_ritual(client, owner, r
     assert (await report_ritual(tenant_id)).status == "paused"
     await set_report(client, auth)
     assert (await report_ritual(tenant_id)).status == "active"
+
+
+async def test_over_a_simulated_week_one_clock_builds_one_report(client, owner, runtime, at):
+    """H2 criterion 15. protects=one clock: the run ticker, every hour for a week and
+    twice in the same minute at the report's moment, builds exactly one weekly report,
+    through exactly one alignment_report occurrence, and F6's own ticker check is gone;
+    fails_when=no report, a second report or occurrence that week, or a report built
+    before Monday 08:00 local; no_claim=the report's content (the tests below)."""
+    tenant_id, auth = owner
+    await a_track(client, auth, runtime)
+    assert not hasattr(alignment, "due")
+    out = ticker.TickerOut()
+    moments = [la(2026, 10, 26, 0) + timedelta(hours=h) for h in range(7 * 24)]
+    moments += [la(2026, 10, 26, 8), la(2026, 10, 26, 8, 0, 30)]
+    built_at = None
+    for moment in sorted(moments):
+        at(moment)
+        await ticker._tick_company(tenant_id, out, ticker._Failures(out))
+        if built_at is None and await reports_of(tenant_id):
+            built_at = moment
+    (report,) = await reports_of(tenant_id)
+    assert report.week_start == date(2026, 10, 19) and built_at == la(2026, 10, 26, 8)
+    ritual = await report_ritual(tenant_id)
+    async with tenant_session(tenant_id) as db:
+        mine = RitualOccurrence.ritual_id == ritual.id
+        occurrences = list(await db.scalars(select(RitualOccurrence).where(mine)))
+    assert [o.due_at for o in occurrences] == [la(2026, 10, 26, 8)]
+    assert occurrences[0].pre_read["blocks"][0]["rows"][0]["report_id"] == str(report.id)
+    assert out.companies.failed == 0
 
 
 # --------------------------------------------------------------------------- content

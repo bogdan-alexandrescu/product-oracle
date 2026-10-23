@@ -4,6 +4,7 @@ Every test reads the step state from real tables (connections, sources, users, i
 tenant_settings, user_preferences); nothing here proves the web draws it (web/e2e/setup.spec.ts).
 """
 
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -356,3 +357,17 @@ async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
         "count": None,
         "detail": "2026-10-20T15:00:00+00:00",
     }
+
+
+def test_the_web_checklist_names_every_step_the_api_returns():
+    """protects=H2 review blocker: Home's Set up checklist has its copy (label, Open
+    link, status) for every step oracle.setup.STEPS can return, timezone among them;
+    fails_when=a step the API returns is missing from web/app/home/_setup.tsx's STEPS
+    (Home drew no row for it, or threw for owners); no_claim=the copy itself
+    (web/e2e/setup.spec.ts)."""
+    from pathlib import Path
+
+    source = (Path(__file__).parents[2] / "web/app/home/_setup.tsx").read_text()
+    block = source.split("const STEPS", 1)[1].split("\n};", 1)[0]
+    web_keys = re.findall(r"^  (\w+): \{$", block, flags=re.M)
+    assert web_keys == [s.key for s in setup.STEPS]
