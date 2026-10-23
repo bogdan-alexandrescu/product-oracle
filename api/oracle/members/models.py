@@ -1,21 +1,23 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     LargeBinary,
     Text,
     Uuid,
     false,
+    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from oracle.auth.models import ENGINEERING_LEAD_ROLE, ROLES
+from oracle.auth.models import ENGINEERING_LEAD_ROLE, NAME_LENGTH, ROLES
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
@@ -26,6 +28,48 @@ INVITE_ACCESS = ("granted", "pending", "skipped")
 # queued: a background send owes it; sent; failed (after its one retry); not_sent: no
 # sender configured (ORACLE_MAIL_PROVIDER, ORACLE_MAIL_SENDER).
 INVITE_EMAIL = ("queued", "sent", "failed", "not_sent")
+# A5: an invite is claimable this long after it was made or last resent.
+INVITE_TTL = timedelta(days=14)
+# pending: waiting for an owner (or an approver); approved: an invite was made for it;
+# declined; closed: they became a member another way (an invite, or the rule changed).
+ACCESS_REQUEST_STATUSES = ("pending", "approved", "declined", "closed")
+
+
+class AccessRequest(TenantScoped, Base):
+    """Someone from the company's email domains signed in with Google without an invite
+    under the ``request`` rule (A5): they wait until an owner approves (an invite is made)
+    or declines. One pending row per email; ``created_at`` is when they first asked."""
+
+    __tablename__ = "access_requests"
+    __table_args__ = (
+        CheckConstraint("email = lower(email)", name="email_lowercase"),
+        CheckConstraint(_in("status", ACCESS_REQUEST_STATUSES), name="status"),
+        CheckConstraint("note IS NULL OR char_length(note) <= 500", name="note_length"),
+        CheckConstraint(f"role IS NULL OR {_in('role', ROLES)}", name="role"),
+        Index(
+            "uq_access_requests_tenant_id_email_pending",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    note: Mapped[str | None] = mapped_column(Text)
+    # Their last refused sign-in (touched at most every 10 minutes).
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # A user id or an API token id; no FK, like the other *_by.
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The role it was approved with.
+    role: Mapped[str | None] = mapped_column(Text)
+    invite_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("invites.id", ondelete="SET NULL")
+    )
 
 
 class Invite(TenantScoped, Base):
@@ -38,6 +82,7 @@ class Invite(TenantScoped, Base):
         CheckConstraint(ENGINEERING_LEAD_ROLE, name="engineering_lead_role"),
         CheckConstraint(_in("access", INVITE_ACCESS), name="access"),
         CheckConstraint(_in("email_status", INVITE_EMAIL), name="email_status"),
+        CheckConstraint(NAME_LENGTH, name="name_length"),
         # One open invite per email; accepted and revoked ones are history.
         Index(
             "uq_invites_tenant_id_email_open",
@@ -66,6 +111,23 @@ class Invite(TenantScoped, Base):
     email_error: Mapped[str | None] = mapped_column(Text)
     # When it got its email status (queued: when the send was owed).
     email_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A5: the name the inviter gave; the user takes it at their first sign-in.
+    name: Mapped[str | None] = mapped_column(Text)
+    # A5: not claimed at sign-in from then on (14 days from creation or the last resend).
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC) + INVITE_TTL,
+        server_default=text("now() + interval '14 days'"),
+    )
+    resent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resend_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    # The access request it was made for, when an owner or an approver approved one.
+    access_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("access_requests.id", ondelete="SET NULL", use_alter=True)
+    )
 
 
 FOLLOW_UP_KINDS = ("provider_revoke", "run_cancel", "iap_revoke", "iap_grant")

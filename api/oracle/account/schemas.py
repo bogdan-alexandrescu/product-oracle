@@ -20,6 +20,8 @@ class MyAccountOut(BaseModel):
 
     user_id: uuid.UUID
     email: str
+    # A5: shown to teammates instead of the email when set.
+    name: str | None = None
     role: Role
     created_at: datetime
     last_sign_in_at: datetime | None = None

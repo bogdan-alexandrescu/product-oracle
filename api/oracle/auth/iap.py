@@ -26,6 +26,7 @@ from oracle.auth.jwks import KeyCache
 from oracle.auth.models import User
 from oracle.auth.service import hash_password_async, reserved_email
 from oracle.config import get_settings
+from oracle.members import access
 from oracle.members import service as members
 from oracle.models import Tenant
 from oracle.tenancy import tenant_session, unscoped_session
@@ -102,11 +103,22 @@ async def _signed_in(session: AsyncSession, user: User) -> None:
 
 async def user_for_claims(claims: dict[str, Any]) -> User | None:
     """The default-tenant user for verified IAP claims, provisioned if allowed."""
+    result = await sign_in(claims)
+    return result if isinstance(result, User) else None
+
+
+async def sign_in(claims: dict[str, Any]) -> "User | access.Refused":
+    """Who verified IAP claims sign in as, or why nobody (A5), in this order: a member
+    (removed: refused); new sign-ins off (``invite_only``); a domain outside the company's
+    (``outside_domains``); an open unexpired invite (claimed: its role and name); an
+    expired one (``invite_expired``); then the ``sign_in_without_invite`` rule: ``join``
+    (the default role), ``refuse`` (``invite_only``) or ``request`` (a pending access
+    request, ``pending``; a declined one stays ``declined``)."""
     email = claims["email"].strip().lower()
     tenant_id = await _default_tenant_id()
     if tenant_id is None:
         log.warning("IAP sign-in for %s refused: no tenant yet (run the seed)", email)
-        return None
+        return access.Refused("invite_only")
     async with tenant_session(tenant_id) as s:
         user = await s.scalar(select(User).where(User.email == email))
         if user is not None:
@@ -114,25 +126,40 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
             # again: refused until an owner restores them.
             if user.disabled_at is not None:
                 log.info("IAP sign-in for %s refused: the member is disabled", email)
-                return None
+                return access.Refused("removed")
             await _signed_in(s, user)
             return user
         settings = get_settings()
         domain = email.rsplit("@", 1)[1]
-        allowed = {d.strip().lower().lstrip("@") for d in settings.iap_allowed_domains}
-        if not settings.iap_auto_provision or domain not in allowed:
-            log.info("IAP sign-in for %s refused: unknown user, not provisioned", email)
-            return None
+        if not settings.iap_auto_provision:
+            log.info("IAP sign-in for %s refused: new sign-ins are off", email)
+            return access.Refused("invite_only")
+        if domain not in await access.sign_in_domains(s):
+            log.info("IAP sign-in for %s refused: outside the company's domains", email)
+            return access.Refused("outside_domains")
         if reserved_email(email) and not settings.allow_reserved_email_domains:
             log.info("IAP sign-in for %s refused: a reserved example domain", email)
-            return None
-        # An open invite for this email sets the role (and is accepted); otherwise the
-        # company's iap_default_role setting does.
+            return access.Refused("outside_domains")
+        # An open, unexpired invite for this email sets the role and the name (and is
+        # accepted); otherwise the company's rule decides.
         invite = await members.claim_open_invite(s, email)
+        if invite is None:
+            rule = await access.sign_in_rule(s)
+            if rule != "join" and await members.expired_invite(s, email) is not None:
+                return access.Refused("invite_expired")
+            if rule == "refuse":
+                return access.Refused("invite_only")
+            if rule == "request":
+                latest = await access._latest_request(s, email)
+                if latest is not None and latest.status == "declined":
+                    return access.Refused("declined")
+                await access.touch_request(s, email)
+                return access.Refused("pending")
         role = invite.role if invite is not None else await members.iap_default_role(s)
         # No password sign-in for these users: the hash is of a secret nobody keeps.
         user = User(
             email=email,
+            name=invite.name if invite is not None else None,
             password_hash=await hash_password_async(secrets.token_urlsafe(32)),
             role=role,
             # A3: an invite naming them engineering lead (never with role viewer).
@@ -146,7 +173,8 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
             from oracle.auth.deps import Principal
 
             principal = Principal(tenant_id=tenant_id, kind="user", role=user.role, user_id=user.id)
-            data: dict[str, Any] = {"via": "iap", "role": role}
+            via = "access_request" if invite is not None and invite.access_request_id else "iap"
+            data: dict[str, Any] = {"via": via, "role": role}
             if user.engineering_lead:
                 data["engineering_lead"] = True
             if invite is not None:
@@ -155,9 +183,24 @@ async def user_for_claims(claims: dict[str, Any]) -> User | None:
                     s, principal, "invite.accept", "invite", invite.id, {"user_id": str(user.id)}
                 )
             await record(s, principal, "provision", "user", user.id, data)
+            # They are a member now: a request they had waiting is closed.
+            await access.close_pending(s, email)
             await s.commit()
         except IntegrityError:
             # A concurrent request provisioned the same user first.
             await s.rollback()
-            return await s.scalar(select(User).where(User.email == email))
+            existing = await s.scalar(select(User).where(User.email == email))
+            return existing if existing is not None else access.Refused("pending")
         return user
+
+
+async def access_state(claims: dict[str, Any]) -> tuple[str, str | None, dict[str, Any]]:
+    """(state, company name, details) for verified claims, creating nothing."""
+    email = claims["email"].strip().lower()
+    tenant_id = await _default_tenant_id()
+    if tenant_id is None:
+        return "invite_only", None, {}
+    async with tenant_session(tenant_id) as s:
+        company = await s.scalar(select(Tenant.name).where(Tenant.id == tenant_id))
+        state, details = await access.state_for(s, email)
+        return state, company, details

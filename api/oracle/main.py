@@ -49,7 +49,7 @@ from oracle.jobs.worker import (
 from oracle.launches.router import router as launches_router
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
-from oracle.members.router import people_router
+from oracle.members.router import invites_router, people_router
 from oracle.members.router import router as members_router
 from oracle.modules.router import router as modules_router
 from oracle.modules.service import seed_all_companies
@@ -211,6 +211,7 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(people_router)
+    app.include_router(invites_router)
     app.include_router(account_router)
     app.include_router(connections_router)
     app.include_router(slack_browse_router)

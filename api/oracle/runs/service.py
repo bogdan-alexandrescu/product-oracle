@@ -197,6 +197,7 @@ from oracle.runs.schemas import (
     FlowStart,
     Gate,
     InboxAccessFailure,
+    InboxAccessRequest,
     InboxCheckpoint,
     InboxCounts,
     InboxDocument,
@@ -9409,6 +9410,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     revoke_failures = await _revoke_failures(db) if owner else []
     access_failures = await _access_failures(db) if owner else []
+    access_requests = await _access_requests(db, principal)
     strategy = None
     if owner:
         from oracle.strategy import drift
@@ -9498,6 +9500,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         feedback=feedback,
         revoke_failures=revoke_failures,
         access_failures=access_failures,
+        access_requests=access_requests,
         reports=reports,
         report_failures=report_failures,
         strategy=strategy,
@@ -9514,6 +9517,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.open
         + len(revoke_failures)
         + len(access_failures)
+        # Access requests (A5) are not counted: no Inbox screen shows them yet.
         + sum(1 for r in reports if not r.read)
         + len(report_failures)
         # Strategy drift: one row, however many findings.
@@ -9534,6 +9538,31 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
     )
+
+
+async def _access_requests(db: AsyncSession, principal: Principal) -> list[InboxAccessRequest]:
+    """Pending access requests, oldest first, for callers who may approve them (A5)."""
+    from oracle.members import access
+    from oracle.members.models import AccessRequest
+    from oracle.members.service import iap_default_role
+
+    roles = list(access.invite_roles(principal))
+    if not roles:
+        return []
+    rows = await db.scalars(
+        select(AccessRequest)
+        .where(AccessRequest.status == "pending")
+        .order_by(AccessRequest.created_at, AccessRequest.id)
+    )
+    default = await iap_default_role(db)
+    preset = default if default in roles else roles[0]
+    return [
+        InboxAccessRequest(
+            id=r.id, email=r.email, note=r.note, requested_at=r.created_at,
+            last_seen_at=r.last_seen_at, default_role=preset, roles=roles,
+        )
+        for r in rows
+    ]  # fmt: skip
 
 
 async def _access_failures(db: AsyncSession) -> list[InboxAccessFailure]:
