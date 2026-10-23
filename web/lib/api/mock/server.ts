@@ -2593,7 +2593,16 @@ async function route(db: Db, req: Request): Promise<Response> {
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
     };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals }, req, p, q);
+    const lockedSections = (ref: string) => {
+      const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
+      const latest = doc && db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
+      if (!latest) return [];
+      return latest.sections.map((s) => s.section_key).filter((k) => {
+        const r = latestReview(db, latest.id, k);
+        return r?.verdict === "approved" && !r.lapsed_at;
+      });
+    };
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
     if (intake) return intake;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
