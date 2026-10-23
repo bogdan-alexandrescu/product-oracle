@@ -37,11 +37,13 @@ from every member's Google Docs sources in the same request, with no Drive call
 (:func:`oracle.sources.service.hide_outside_company`).
 
 - ``alignment_report`` (F6): the weekly alignment report's schedule and Slack channel,
-  ``{"enabled", "weekday": "mon".."sun", "time": "HH:MM", "timezone": an IANA zone,
+  ``{"enabled", "weekday": "mon".."sun", "time": "HH:MM",
   "slack_channel": {"id", "name"} | null}`` (oracle.reports.alignment). A partial value
   takes the defaults for the rest.
 
-- ``company_timezone`` (H2): an IANA time zone name (``zoneinfo``), new rituals' zone.
+- ``company_timezone``: the Company time zone, an IANA name (``zoneinfo``), UTC by default
+  (H2's A1 Time zone step sets it). Goals' "today", the weekly alignment report's
+  schedule and the rituals read it; a change moves the rituals on the old zone.
 - ``ritual_summaries`` (H2): ``on_demand`` or ``always`` (Every pre-read); also set with
   ``PUT /v1/rituals/summaries``.
 - ``outcome_measure_days`` (H3): 7-365, default 30: an outcome is checked at the later of
@@ -101,17 +103,17 @@ DEFAULTS: dict[str, Any] = {
         "long_from_months": 12,
         "long_to_months": 24,
     },
-    # F6 (defaults the spec picks): Monday 08:00 Pacific, for the week that just ended.
+    # F6 (defaults the spec picks): Monday 08:00, for the week that just ended, in the
+    # Company time zone.
     "alignment_report": {
         "enabled": True,
         "weekday": "mon",
         "time": "08:00",
-        "timezone": "America/Los_Angeles",
         "slack_channel": None,
     },
     # H11: every responsibility at its default (oracle.autonomy.REGISTRY).
     "autonomy": {},
-    # H2: the company's time zone (an IANA name), new rituals' default.
+    # The Company time zone (an IANA name): goals' today, the alignment report, rituals.
     "company_timezone": "UTC",
     # H2: Oracle's written summary of a pre-read: on_demand, or always (Every pre-read).
     "ritual_summaries": "on_demand",
@@ -154,15 +156,13 @@ async def clear_setting(session: AsyncSession, key: str) -> None:
     await session.execute(delete(TenantSetting).where(TenantSetting.key == key))
 
 
-async def company_timezone(session: AsyncSession) -> ZoneInfo | None:
-    """The company's time zone: the one an owner set in Settings (today the alignment
-    report's), or None when none is set (callers then use UTC)."""
-    row = await session.scalar(select(TenantSetting).where(TenantSetting.key == "alignment_report"))
-    zone = row.value.get("timezone") if row is not None and isinstance(row.value, dict) else None
+async def company_timezone(session: AsyncSession) -> ZoneInfo:
+    """The Company time zone from Settings; UTC when none is set (or it no longer reads)."""
+    zone = await get_setting(session, "company_timezone")
     try:
-        return ZoneInfo(zone) if isinstance(zone, str) and zone else None
+        return ZoneInfo(zone) if isinstance(zone, str) and zone else ZoneInfo("UTC")
     except (ValueError, ZoneInfoNotFoundError):
-        return None
+        return ZoneInfo("UTC")
 
 
 async def company_horizons(session: AsyncSession) -> dict[str, int]:
@@ -466,8 +466,14 @@ async def _company_narrowing(
     return {"hidden_items": hidden} if hidden else {}
 
 
-async def _follow(db: AsyncSession, key: str) -> None:
-    """What follows a stored change: F6's report schedule moves its ritual (H2)."""
+async def _follow(db: AsyncSession, key: str, previous: Any) -> None:
+    """What follows a stored change: F6's report schedule moves its ritual (H2); the
+    Company time zone moves the rituals on the old zone."""
+    if key == "company_timezone":
+        from oracle.rituals.service import follow_company_timezone
+
+        await db.flush()
+        await follow_company_timezone(db, str(previous))
     if key == "alignment_report":
         from oracle.rituals.service import follow_alignment_setting
 
@@ -489,9 +495,10 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     # being disabled must not raise iap_default_role with a request in flight).
     await recheck_caller(db, principal, "owner", shared=key not in GATE_KEYS)
     before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
+    previous = await get_setting(db, key)
     if body.value is None:
         await clear_setting(db, key)
-        await _follow(db, key)
+        await _follow(db, key, previous)
         extra = await _company_narrowing(db, principal, before)
         await audit.record(
             db, principal, "setting.reset", "tenant_setting", data={"key": key, **extra}
@@ -509,7 +516,7 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     else:
         row.value = value
         row.updated_by = principal.id
-    await _follow(db, key)
+    await _follow(db, key, previous)
     extra = await _company_narrowing(db, principal, before)
     await audit.record(
         db,

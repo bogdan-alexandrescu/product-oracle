@@ -11,10 +11,10 @@ alignment rules themselves are read only.
 Until F2 Track health ships its alerts, "needs attention" lists the track's current
 at-risk reasons and says "as of now" (``needs_attention_as_of_now``).
 
-The schedule is the company setting ``alignment_report`` (Monday 08:00
-America/Los_Angeles by default). Its clock is H2's: the built-in ``alignment_report``
-ritual (oracle.rituals) is seeded on this setting's day, time and zone, follows its
-changes, and at each weekly moment builds the week that just ended
+The schedule is the company setting ``alignment_report`` (Monday 08:00 by default) in
+the Company time zone (``company_timezone``, UTC by default). Its clock is H2's: the
+built-in ``alignment_report`` ritual (oracle.rituals) is seeded on this setting's day
+and time in that zone, follows their changes, and at each weekly moment builds the week that just ended
 (``oracle.rituals.blocks.alignment_report``); the same tick posts it to Slack
 (oracle.reports.slack). The unique index on (company, week_start) for weekly reports
 makes a second build impossible. A company with no active or paused track gets none.
@@ -26,7 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -78,7 +78,8 @@ class ReportSettings:
     enabled: bool = True
     weekday: str = "mon"
     time: str = "08:00"
-    timezone: str = "America/Los_Angeles"
+    # The Company time zone (Settings), read by load_settings; the setting has no zone.
+    timezone: str = "UTC"
     slack_channel: dict[str, str] | None = field(default=None, hash=False)
 
     @property
@@ -90,7 +91,6 @@ DEFAULT_SETTING: dict[str, Any] = {
     "enabled": True,
     "weekday": "mon",
     "time": "08:00",
-    "timezone": "America/Los_Angeles",
     "slack_channel": None,
 }
 
@@ -110,15 +110,6 @@ def validate_setting(value: Any) -> dict[str, Any]:
         raise ValueError(f"alignment_report.weekday must be one of {', '.join(WEEKDAYS)}")
     if not isinstance(out["time"], str) or not TIME.fullmatch(out["time"]):
         raise ValueError("alignment_report.time must be HH:MM, 00:00 to 23:59")
-    tz = out["timezone"]
-    try:
-        if not isinstance(tz, str) or not tz or tz != tz.strip():
-            raise ValueError
-        ZoneInfo(tz)
-    except (ValueError, ZoneInfoNotFoundError):
-        raise ValueError(
-            "alignment_report.timezone must be a time zone name, e.g. America/Los_Angeles"
-        ) from None
     channel = out["slack_channel"]
     if channel is not None:
         if not isinstance(channel, dict) or not isinstance(channel.get("id"), str):
@@ -134,7 +125,8 @@ def validate_setting(value: Any) -> dict[str, Any]:
 
 
 async def load_settings(db: AsyncSession) -> ReportSettings:
-    from oracle.tenant_settings_api import get_setting
+    """The report's setting, in the Company time zone."""
+    from oracle.tenant_settings_api import company_timezone, get_setting
 
     raw = await get_setting(db, SETTING_KEY)
     try:
@@ -142,7 +134,7 @@ async def load_settings(db: AsyncSession) -> ReportSettings:
     except ValueError:
         log.warning("alignment_report setting is invalid; using the defaults")
         value = dict(DEFAULT_SETTING)
-    return ReportSettings(**value)
+    return ReportSettings(**value, timezone=str(await company_timezone(db)))
 
 
 # --- weeks -------------------------------------------------------------------------------

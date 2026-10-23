@@ -171,6 +171,25 @@ async def follow_alignment_setting(db: AsyncSession) -> None:
     ritual.lock_version += 1
 
 
+async def follow_company_timezone(db: AsyncSession, old: str) -> None:
+    """The Company time zone changed from ``old``: every ritual on it takes the new zone
+    and its next date in it (a ritual an owner put in another zone keeps it), and the
+    alignment report's ritual follows its setting. The caller commits."""
+    new = await company_timezone(db)
+    rows = await db.scalars(select(Ritual).order_by(Ritual.id).with_for_update())
+    for ritual in rows.all():
+        if (ritual.kind == "alignment_report" and ritual.builtin) or ritual.schedule.get(
+            "timezone"
+        ) != old:
+            continue
+        schedule = Schedule(**{**ritual.schedule, "timezone": new})
+        ritual.schedule = schedule.model_dump()
+        if ritual.status == "active":
+            ritual.next_due_at = next_occurrence(schedule, clock.now())
+        ritual.lock_version += 1
+    await follow_alignment_setting(db)
+
+
 async def _previous_due(db: AsyncSession, ritual_id: uuid.UUID, due_at: datetime):
     return await db.scalar(
         select(func.max(RitualOccurrence.due_at)).where(

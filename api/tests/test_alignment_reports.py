@@ -595,7 +595,8 @@ async def test_dates_verified_and_withdrawn_in_the_week(client, owner, runtime, 
         )  # fmt: skip
         await db.commit()
     # The week that just ended holds every event of this week: build it as the ticker would.
-    at(alignment.scheduled_moment(this_monday(now) + timedelta(days=7), alignment.ReportSettings()))
+    week = this_monday(now) + timedelta(days=7)
+    at(alignment.scheduled_moment(week, alignment.ReportSettings(timezone="America/Los_Angeles")))
     (report,) = await due(tenant_id)
     assert report.week_start == this_monday(now)
     (t,) = report.content["tracks"]
@@ -1013,7 +1014,9 @@ async def test_owners_inbox_lists_the_unread_report(client, owner, runtime, at):
     assert row["id"] == str(report.id) and row["week_start"] == "2026-10-19"
     assert row["read"] is False and row["title"] == "Weekly alignment · week of Oct 19"
     assert row["summary"]["tracks"] == 1
-    assert inbox["total"] == before + 1
+    # The Weekly goals check-in's pre-read (H2) falls due in the same week.
+    rituals = sum(r["counts"] for r in inbox["rituals"])
+    assert inbox["total"] == before + 1 + rituals
     second_owner = await as_user(tenant_id, "owner")
     viewer = await as_user(tenant_id, "viewer")
     assert (await client.get("/v1/inbox", headers=viewer)).json()["reports"] == []
@@ -1025,7 +1028,7 @@ async def test_owners_inbox_lists_the_unread_report(client, owner, runtime, at):
     resp = await client.post(f"/v1/alignment-reports/{report.id}/read", headers=auth)
     assert resp.status_code == 200 and resp.json()["read"] is True
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
-    assert inbox["reports"][0]["read"] is True and inbox["total"] == before
+    assert inbox["reports"][0]["read"] is True and inbox["total"] == before + rituals
     other = (await client.get("/v1/inbox", headers=second_owner)).json()
     assert other["reports"][0]["read"] is False
     assert (await client.get(f"/v1/alignment-reports/{report.id}", headers=second_owner)).json()[
