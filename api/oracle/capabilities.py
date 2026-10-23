@@ -127,7 +127,9 @@ DECIDED_PER_ITEM = frozenset(
 # request filed for someone else an owner's (a commenter files their own); a customer
 # interview its creator's or an approver's, a team interview its interviewee's alone; a
 # slipped date's acceptance the date rights' (F3), an owner's whoever is lead; a scope
-# review's rows (C7) the feature-set stop's approver role's.
+# review's rows (C7) the feature-set stop's approver role's. A discussion's change (G3) is a
+# writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
+# (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
@@ -140,6 +142,7 @@ PER_ITEM: dict[str, Role | None] = {
     "add_discussion_participants": "commenter",
     "add_scope_requirement": "approver",
     "answer_question": "owner",
+    "answer_with_discussion_change": "approver",
     "approve_feasibility_scope": "owner",
     "approve_version": "owner",
     "ask_next_question_batch": "approver",
@@ -147,6 +150,7 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
     "create_checkpoint_action": "owner",
+    "create_discussion_change": None,
     "create_discussion_message": None,
     "create_intake": "approver",
     "create_interview_link": "approver",
@@ -159,6 +163,7 @@ PER_ITEM: dict[str, Role | None] = {
     "decide_knowledge_gap": "owner",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
+    "dismiss_discussion_change": "approver",
     "delete_scope_item": "approver",
     "dismiss_overrun_run": "owner",
     "edit_document_section": "approver",
@@ -170,11 +175,14 @@ PER_ITEM: dict[str, Role | None] = {
     "get_next_question_batch": "approver",
     "open_oracle_action": "owner",
     "patch_interview": "approver",
+    "propose_discussion_change": "commenter",
     "patch_scope_item": "approver",
     "reassign_decision": "owner",
+    "record_discussion_change": "approver",
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "remove_evidence": "approver",
+    "resolve_discussion_change": "approver",
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",
     "retry_import_run": "owner",
@@ -187,10 +195,13 @@ PER_ITEM: dict[str, Role | None] = {
     "set_checkpoint_note": "owner",
     "set_document_visibility": "owner",
     "stage_checkpoint_action": "owner",
+    "stage_discussion_change": "approver",
     "start_draft": "owner",
     "start_regeneration": "approver",
     "start_intake_run": "approver",
     "stop_cancelling_run": "owner",
+    "suggest_discussion_change": None,
+    "summarize_discussion": None,
     "stop_slack_mirror": "approver",
     "take_team_turn": None,
     "tick": "owner",
@@ -198,6 +209,7 @@ PER_ITEM: dict[str, Role | None] = {
     "update_blocker": "owner",
     "update_decision": None,
     "update_discussion": None,
+    "update_discussion_change": None,
     "update_discussion_message": None,
     "update_intake": "owner",
     "update_knowledge_gap": "owner",
@@ -206,6 +218,7 @@ PER_ITEM: dict[str, Role | None] = {
     "update_requester_note": "approver",
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
+    "withdraw_discussion_change": None,
 }
 
 

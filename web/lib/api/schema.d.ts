@@ -1114,12 +1114,252 @@ export interface paths {
         };
         /**
          * List Discussion Changes
-         * @description The typed changes the discussion ended in, read-only here (proposing, suggesting
-         *     and staging arrive with G3 and G4).
+         * @description The typed changes the discussion ended in, each with the action the caller may take
+         *     (``action``: the kind's verb, ``allowed`` and ``why_not``) and what else they may do
+         *     (``can``). Viewers read them and get no action.
          */
         get: operations["list_discussion_changes"];
         put?: never;
+        /**
+         * Create Discussion Change
+         * @description Write a change by hand (commenters and up): a commenter's is ``suggested``, an
+         *     approver's ``proposed``, ready to stage. Only the subject's available kinds; the
+         *     payload is checked as Oracle's are.
+         */
+        post: operations["create_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/change-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Discussion Change Kinds
+         * @description The kinds "Propose a change" offers on this discussion's subject: only those
+         *     available now, each with its action verb and its payload's JSON schema.
+         */
+        get: operations["list_discussion_change_kinds"];
+        put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Discussion Change
+         * @description Edit before acting: saves ``edited_payload``. A commenter's edit makes it their
+         *     suggestion; an approver's keeps the status.
+         */
+        patch: operations["update_discussion_change"];
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Discussion Change
+         * @description Suggest it for an approver to stage (commenters and up): "Suggested by <name>". At
+         *     a checkpoint it is also the item's suggested shared-draft action.
+         */
+        post: operations["suggest_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Discussion Change
+         * @description Withdraw your own suggestion: back to ``proposed`` when Oracle proposed it, else
+         *     ``dismissed``.
+         */
+        post: operations["withdraw_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Discussion Change
+         * @description Stage it (approvers and up): a shared-draft action at the checkpoint or a row for
+         *     the document's next draft (G4). When Oracle pushed back on it, ``override_reason`` is
+         *     required; from a private discussion, ``reason`` (the reason everyone will see) is.
+         */
+        post: operations["stage_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Discussion Change
+         * @description Dismiss it (approvers and up), with an optional note.
+         */
+        post: operations["dismiss_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Discussion Change
+         * @description ``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
+         *     whose reason names the discussion; approvers accept it in Baseline.
+         */
+        post: operations["propose_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Discussion Change
+         * @description ``conflict_pick`` (approvers and up): resolves the conflict with the picked claim.
+         */
+        post: operations["resolve_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer With Discussion Change
+         * @description ``answer`` (the person asked, or approvers and up): posts it as the question's
+         *     answer.
+         */
+        post: operations["answer_with_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Discussion Change
+         * @description ``basis_record`` (Record): records the schedule basis with the caller's date rights
+         *     (F3, ``leads.date_rights``): verified for an engineering lead or an owner, and for an
+         *     approver while no lead is named; ``proposed`` for the lead when an approver records it
+         *     while a lead is named. Anyone else gets 403.
+         */
+        post: operations["record_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarize Discussion
+         * @description Ask Oracle for a summary draft now (commenters and up who can write in it), at most
+         *     1,200 characters: "Decided:", "Open:", "Context:". A summary the starter confirmed is
+         *     replaced only when the starter asks (``replace``); anyone else gets 409.
+         */
+        post: operations["summarize_discussion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13138,6 +13378,70 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["ModuleVersionSummary"][];
         };
+        /** ChangeActIn */
+        ChangeActIn: {
+            /** Lock Version */
+            lock_version: number;
+        };
+        /**
+         * ChangeAction
+         * @description The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy.
+         */
+        ChangeAction: {
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "Stage" | "Propose" | "Resolve" | "Use as answer" | "Ask" | "Record" | "Apply";
+            /** Allowed */
+            allowed: boolean;
+            /** Why Not */
+            why_not?: string | null;
+        };
+        /**
+         * ChangeCan
+         * @description What else the caller may do with the change.
+         */
+        ChangeCan: {
+            /**
+             * Suggest
+             * @default false
+             */
+            suggest: boolean;
+            /**
+             * Edit
+             * @default false
+             */
+            edit: boolean;
+            /**
+             * Withdraw
+             * @default false
+             */
+            withdraw: boolean;
+            /**
+             * Dismiss
+             * @default false
+             */
+            dismiss: boolean;
+        };
+        /** ChangeDismissIn */
+        ChangeDismissIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Note */
+            note?: string | null;
+        };
+        /** ChangeEdit */
+        ChangeEdit: {
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rationale */
+            rationale?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -13171,6 +13475,50 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ChangeIn */
+        ChangeIn: {
+            /** Kind */
+            kind: string;
+            /** Target */
+            target?: {
+                [key: string]: unknown;
+            };
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rationale */
+            rationale?: string | null;
+        };
+        /**
+         * ChangeKindOut
+         * @description A kind "Propose a change" offers on this subject, with its payload's JSON schema.
+         */
+        ChangeKindOut: {
+            /** Kind */
+            kind: string;
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "Stage" | "Propose" | "Resolve" | "Use as answer" | "Ask" | "Record" | "Apply";
+            /** Schema */
+            schema: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ChangeResult
+         * @description Every action's answer: the change, and what acting created (a staged change, a
+         *     proposal, a resolved conflict, an answer), or None.
+         */
+        ChangeResult: {
+            change: components["schemas"]["DiscussionChangeOut"];
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * ChangeSetDiffItem
@@ -13268,6 +13616,15 @@ export interface components {
             changes: (components["schemas"]["AddChange"] | components["schemas"]["MoveChange"] | components["schemas"]["DeferChange"] | components["schemas"]["CutChange"] | components["schemas"]["ReorderChange"])[];
             /** Lock Version */
             lock_version: number;
+        };
+        /** ChangeStageIn */
+        ChangeStageIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Override Reason */
+            override_reason?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** ChangedSection */
         ChangedSection: {
@@ -15625,6 +15982,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
             /** Kind */
             kind: string;
             /** Label */
@@ -15648,15 +16010,42 @@ export interface components {
              * @enum {string}
              */
             proposed_by_kind: "oracle" | "person";
-            /** Proposed By */
-            proposed_by: string | null;
-            /** Suggested By */
-            suggested_by: string | null;
+            proposed_by: components["schemas"]["DiscussionPerson"] | null;
+            suggested_by: components["schemas"]["DiscussionPerson"] | null;
             /**
              * Status
              * @enum {string}
              */
             status: "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
+            action?: components["schemas"]["ChangeAction"] | null;
+            /**
+             * @default {
+             *       "suggest": false,
+             *       "edit": false,
+             *       "withdraw": false,
+             *       "dismiss": false
+             *     }
+             */
+            can: components["schemas"]["ChangeCan"];
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Needs Reason
+             * @default false
+             */
+            needs_reason: boolean;
+            /** Basis */
+            basis?: {
+                [key: string]: unknown;
+            }[];
+            /** Result Ref */
+            result_ref?: {
+                [key: string]: unknown;
+            } | null;
+            /** Decision Note */
+            decision_note?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -15664,14 +16053,6 @@ export interface components {
             created_at: string;
             /** Lock Version */
             lock_version: number;
-            /** Result Ref */
-            result_ref?: {
-                [key: string]: unknown;
-            } | null;
-            /** Pushback */
-            pushback?: {
-                [key: string]: unknown;
-            } | null;
             /** Override Reason */
             override_reason?: string | null;
         };
@@ -31052,6 +31433,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SummaryAsk */
+        SummaryAsk: {
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+        };
         /** SummarySettingsIn */
         SummarySettingsIn: {
             /**
@@ -36099,6 +36488,640 @@ export interface operations {
             };
             /** @description No such discussion (or not one the caller may know of) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_discussion_change_kinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeKindOut"][];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    suggest_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    withdraw_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stage_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeStageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    propose_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    answer_with_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summarize_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SummaryAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The starter confirmed it */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

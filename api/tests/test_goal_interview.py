@@ -341,7 +341,7 @@ async def test_opening_turn_stores_versions(client, fake, monkeypatch):
         row = await s.get(DiscussionChange, uuid.UUID(stored[0]["id"]))
         assert row.from_message_id is not None and row.basis[0]["kind"] == "entity"
         turn = await s.get(DiscussionMessage, row.from_message_id)
-        assert turn.prompt == "discussion_reply.v1+discussion_reply_goal.v1"
+        assert turn.prompt == "discussion_reply.v2+discussion_reply_goal.v1"
         assert "<<<" not in turn.body
 
 
@@ -403,7 +403,7 @@ async def test_propose_then_accept_closes_the_interview(client, fake):
     d_id, _evs = await opened(client, ctx, goal["id"])
     [c] = await changes(client, ctx, d_id)
     out = await propose(client, ctx, c["id"])
-    assert out["status"] == "done" and out["suggested_by"] == uid(ctx, "commenter")
+    assert out["status"] == "done" and out["suggested_by"]["user_id"] == uid(ctx, "commenter")
     proposal_id = out["result_ref"]["proposal_id"]
     [p] = await proposals(client, ctx)
     assert p["id"] == proposal_id and p["status"] == "open"
@@ -621,3 +621,65 @@ async def test_approving_the_baseline_starts_no_interview(client, owner, runtime
     async with tenant_session(tenant_id) as s:
         assert await s.scalar(select(func.count()).select_from(Discussion)) == 0
     assert fake.requests == []
+
+
+# --- B6 versions beside G3's changes --------------------------------------------------------
+
+
+def g3_block(goal_id: str) -> str:
+    entry = {
+        "kind": "entity_edit", "target": {},
+        "payload": {"entity_id": goal_id, "field": "title", "value": "Cut churn in 90 days"},
+        "rationale": "The window is what the team measures [c:1].", "basis": [],
+        "replaces": None,
+    }  # fmt: skip
+    return "<<<CHANGES>>>" + json.dumps({"changes": [entry]})
+
+
+# protects=B6 and G3 share the delimiter: either order, B6's versions block stays for
+# goal_interview and G3's changes object is taken out; fails_when=one block swallows the
+# other or either is left in the text; no_claim=the stream (the route test below).
+def test_a_goal_reply_splits_versions_from_changes():
+    from oracle.discussions import changes as g3
+
+    versions = reply_with([change(version())])
+    g3_tail = g3_block(str(uuid.uuid4()))
+    for text in (
+        f"{versions}\n{g3_tail}",
+        f"{OPENING}\n{g3_tail}\n<<<CHANGES>>>{json.dumps([change(version())])}<<<END>>>",
+    ):
+        rest, tail = g3.split_goal_reply(text)
+        assert tail is not None and json.loads(tail)["changes"][0]["kind"] == "entity_edit"
+        body, found = goal_interview.take_changes(rest)
+        assert "<<<" not in body and body.startswith(OPENING)
+        assert [f["payload"]["target"] for f in found] == [8]
+    assert g3.split_goal_reply(versions) == (versions, None)
+
+
+# protects=a goal discussion's reply carrying both B6's version block and G3's changes block
+# shows readers neither (deltas, the saved body), keeps the version and extracts the change,
+# sent as one changes event before done; fails_when=either block reaches the chat, the
+# version is lost to G3's hold-back, or G3's change is not extracted; no_claim=the model's
+# judgement about what to propose (the fake reply stands in).
+async def test_goal_reply_with_versions_and_changes(client, fake):
+    ctx = await company()
+    goal = await vague_goal(client, ctx)
+    fake.text = f"{reply_with([change(version())])}\n{g3_block(goal['id'])}"
+    d_id, evs = await opened(client, ctx, goal["id"])
+    streamed = "".join(e[1]["text"] for e in evs if e[0] == "delta")
+    assert "<<<" not in streamed and "goal_measure" not in streamed
+    assert "entity_edit" not in streamed and "changes" not in streamed
+    names = [e[0] for e in evs]
+    assert names.index("changes") == len(names) - 2 and names[-1] == "done"
+    assert evs[-1][1]["body"] == f"{OPENING}\n\nWho should own this goal?"
+    sent = {c["kind"] for c in evs[names.index("changes")][1]}
+    assert sent == {"goal_measure", "entity_edit"}
+    stored = {c["kind"]: c for c in await changes(client, ctx, d_id)}
+    assert set(stored) == {"goal_measure", "entity_edit"}
+    assert stored["goal_measure"]["payload"]["target"] == 8
+    assert stored["entity_edit"]["payload"]["value"] == "Cut churn in 90 days"
+    for c in stored.values():
+        assert (c["status"], c["proposed_by_kind"]) == ("proposed", "oracle")
+    async with tenant_session(ctx.tenant_id) as s:
+        turn = await s.get(DiscussionMessage, uuid.UUID(evs[-1][1]["id"]))
+        assert "<<<" not in turn.body and "entity_edit" not in turn.body

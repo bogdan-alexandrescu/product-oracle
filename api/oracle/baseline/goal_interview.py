@@ -577,7 +577,7 @@ async def propose_goal_measure(
     if isinstance(out, GoalMeasurePushback):
         return JSONResponse(out.model_dump(), status.HTTP_409_CONFLICT)
     await db.refresh(out)
-    return discussions.change_out(out)
+    return await discussions.change_out(db, principal, out)
 
 
 @router.post(
@@ -592,4 +592,4 @@ async def dismiss_goal_measure(
     c = await dismiss(db, principal, change_id)
     await db.commit()
     await db.refresh(c)
-    return discussions.change_out(c)
+    return await discussions.change_out(db, principal, c)

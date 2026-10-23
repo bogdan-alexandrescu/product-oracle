@@ -685,6 +685,18 @@ async def create_schedule_basis(
         tracker_record_id=body.tracker_record_id,
         note=body.note,
     )
+    await record_basis(db, principal, rights, row, prd)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def record_basis(
+    db: AsyncSession, principal: Principal, rights: DateRights, row: ScheduleBasis, prd: Document
+) -> ScheduleBasis:
+    """Write a schedule basis with the status the recorder's rights give it (F3): verified
+    for ``verify``, proposed for a lead for ``propose``; audited, flushed, not committed.
+    The route above and G3's Record (``oracle.discussions.changes.record``) both call it."""
     when = schedule.now()
     if rights == "verify":
         row.status, row.verified_by, row.verified_at = "verified", principal.id, when
@@ -707,8 +719,6 @@ async def create_schedule_basis(
             "tracker_key": row.tracker_key,
         },
     )
-    await db.commit()
-    await db.refresh(row)
     return row
 
 

@@ -62,17 +62,19 @@ def test_the_private_finding_and_panel_chats_restrict_the_starter_too():
 
 
 # protects=the registry lists every kind the table's CHECK allows, each with a payload model,
-# its subjects and its role, and none is offered before its pick lands (B6 Goals interview
-# landed goal_measure's); fails_when=a kind is missing, unvalidated, or available before its
-# pick; no_claim=proposing or staging (G3, G4).
+# its subjects and its role, and none is offered before its pick lands (G3 switches on those
+# whose path exists; B6 Goals interview landed goal_measure's); fails_when=a kind is missing,
+# unvalidated, or available before its pick; no_claim=proposing or staging (G3, G4).
 def test_the_registry_covers_every_kind_and_only_landed_ones_are_available():
+    waiting = {"ask_person", "scope_feature", "scope_requirement", "priority_move",
+               "priority_pin"}  # fmt: skip
     assert set(kinds.REGISTRY) == set(CHANGE_KINDS)
     for name, kind in kinds.REGISTRY.items():
         assert kind.name == name
         assert kind.subjects and set(kind.subjects) <= set(SUBJECT_KINDS)
         assert kind.role in ("commenter", "approver")
         assert kind.lands_in
-        assert kind.available(None) is (name == "goal_measure")
+        assert kind.available(None) is (name not in waiting)
     assert kinds.REGISTRY["section_edit"].subjects == ("document", "section")
     assert kinds.REGISTRY["conflict_pick"].role == "approver"
 
