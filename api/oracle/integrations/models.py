@@ -7,7 +7,16 @@ encrypted with :mod:`oracle.crypto` and never returned by any endpoint, logged o
 
 import uuid
 
-from sqlalchemy import CheckConstraint, Integer, LargeBinary, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    CheckConstraint,
+    Index,
+    Integer,
+    LargeBinary,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +35,14 @@ class CompanyIntegration(TenantScoped, Base):
         CheckConstraint(_in("provider", INTEGRATION_PROVIDERS), name="provider"),
         CheckConstraint(_in("purpose", INTEGRATION_PURPOSES), name="purpose"),
         CheckConstraint(_in("status", INTEGRATION_STATUSES), name="status"),
+        # G8: an event's team id resolves one company.
+        Index(
+            "uq_company_integrations_slack_team",
+            "provider",
+            "account_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
     )
 
     provider: Mapped[str] = mapped_column(Text, nullable=False)
@@ -42,3 +59,6 @@ class CompanyIntegration(TenantScoped, Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     # The owner who installed it (a user id).
     installed_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # G8: the app's own Slack user (``oauth.v2.access``'s ``bot_user_id``): its posts never
+    # come back as messages or as source evidence.
+    bot_user_id: Mapped[str | None] = mapped_column(Text)

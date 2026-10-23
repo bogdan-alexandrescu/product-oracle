@@ -3,7 +3,8 @@
 /**
  * Settings › Notifications (F6): Oracle's own Slack app, installed once for the company by an
  * owner, the channel the weekly alignment report posts to, a test message, Disconnect (which
- * revokes the token at Slack), and the report's schedule. No credential is ever shown.
+ * revokes the token at Slack, and ends every discussion's Slack mirror, G8), and the report's
+ * schedule. No credential is ever shown.
  */
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -59,6 +60,8 @@ export function NotificationsSettings() {
 function OwnerSettings() {
   const params = useSearchParams();
   const integrations = useQuery("company-integrations", () => unwrap(api.GET("/v1/company-integrations")));
+  // G8: whether discussions can be mirrored with this install (or it needs a reconnect).
+  const status = useQuery("slack-status", () => unwrap(api.GET("/v1/company-integrations/slack/status")));
   const setting = useQuery("settings|alignment_report", loadSetting);
   const slack = integrations.data?.find((i) => i.provider === "slack" && i.purpose === "notifications") ?? null;
   const connected = params.get("connected") === "slack";
@@ -74,10 +77,11 @@ function OwnerSettings() {
           <SlackPanel
             key={slack?.id ?? "none"}
             slack={slack}
+            status={status.data ?? null}
             setting={setting.data}
             onSetting={(v) => setting.setData(() => v)}
             onChange={async () => {
-              await Promise.all([integrations.reload(), setting.reload()]);
+              await Promise.all([integrations.reload(), setting.reload(), status.reload()]);
             }}
           />
           <SchedulePanel setting={setting.data} onSaved={(v) => setting.setData(() => v)} />
@@ -91,11 +95,13 @@ type Slack = Schemas["CompanyIntegrationOut"];
 
 function SlackPanel({
   slack,
+  status,
   setting,
   onSetting,
   onChange,
 }: {
   slack: Slack | null;
+  status: Schemas["SlackStatusOut"] | null;
   setting: ReportSetting;
   onSetting: (v: ReportSetting) => void;
   onChange: () => Promise<void>;
@@ -142,7 +148,7 @@ function SlackPanel({
       destructive: true,
       action: "Disconnect",
       message:
-        "Disconnect revokes Oracle's Slack token at Slack and deletes it. The weekly report stops posting to Slack until an owner connects it again. People's own Slack connections are not touched.",
+        "Disconnect revokes Oracle's Slack token at Slack and deletes it. The weekly report stops posting to Slack until an owner connects it again. Every mirrored discussion thread gets a closing line and stops mirroring. People's own Slack connections are not touched.",
     });
     if (!ok) return;
     await act("disconnect", async () => {
@@ -158,18 +164,33 @@ function SlackPanel({
         {!slack ? (
           <>
             <p className="text-text2">
-              Oracle&apos;s Slack app posts the weekly alignment report to a channel you pick. It is installed once for the company and posts
-              as Product Oracle.
+              Oracle&apos;s Slack app posts the weekly alignment report to a channel you pick, and people can mirror discussions to a Slack
+              thread. It is installed once for the company and posts as Product Oracle.
             </p>
             <Button variant="solid" disabled={busy !== null} onClick={connect}>
-              Connect Slack for notifications
+              Connect Oracle to Slack
             </Button>
           </>
         ) : (
           <>
-            <p>
-              Connected to <b>{slack.account_label ?? slack.account_id}</b>. Posts show as Product Oracle.
+            <p data-testid="slack-connected">
+              Connected to <b>{status?.label ?? slack.account_label ?? slack.account_id}</b> as @Product Oracle
             </p>
+            {status?.needs_reconnect ? (
+              <Notice
+                tone="warn"
+                testId="slack-reconnect"
+                action={
+                  <Button disabled={busy !== null} onClick={connect}>
+                    Reconnect Slack
+                  </Button>
+                }
+              >
+                Reconnect Slack to allow mirroring discussions
+              </Notice>
+            ) : (
+              status?.mirroring && <p className="text-sm text-text2">People can mirror discussions to a Slack thread.</p>
+            )}
             {channels.error && <ErrorNote>{channels.error}</ErrorNote>}
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Channel" className="w-72 max-w-full">
