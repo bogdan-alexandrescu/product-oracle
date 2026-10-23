@@ -225,6 +225,7 @@ export function seedSpecs(): SpecsDb {
     ],
     run_id: I.run,
     run_status: "succeeded",
+    regeneration_run_id: null,
   };
   return {
     specs: [spec],
@@ -268,7 +269,7 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
         ...base,
         request: { ...base.request, id, kind: data.depth === "full" ? "engineering_spec" : "tech_brief", requirement_ids: data.requirement_ids, status: "queued", created_at: ctx.now(), updated_at: ctx.now() },
         latest_version: null, approach_status: null, freshness: null, versions: [], sections: [], design: [], stale: [],
-        run_id: ctx.uuid(), run_status: "draft",
+        run_id: ctx.uuid(), run_status: "draft", regeneration_run_id: null,
       };
       ctx.db.specs.unshift(spec);
       return json(201, { spec, run_id: spec.run_id });
@@ -279,12 +280,16 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
     if (p[3] === "regenerate" && m === "POST") {
       const denied = need("approver");
       if (denied) return denied;
+      // #481: as the API, no second regeneration while one has not ended.
+      if (spec.regeneration_run_id) return fail(409, `this spec's run has not ended (it is ${spec.run_status}): let it finish, or cancel it on its run page, first`);
       const out: Schemas["RegenerationOut"] = {
         request_id: spec.request.id, run_id: ctx.uuid(), prd_version: 1, section_keys: spec.section_keys,
         dropped_section_keys: [], reasons: spec.stale.flatMap((s) => s.reasons ?? []),
       };
       spec.run_id = out.run_id;
       spec.run_status = "draft";
+      // #481: proposing it settles nothing; the versions stay as stale as they were.
+      spec.regeneration_run_id = out.run_id;
       return json(201, out);
     }
     return null;

@@ -85952,6 +85952,18 @@
               }
             ],
             "title": "Run Status"
+          },
+          "regeneration_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regeneration Run Id"
           }
         },
         "type": "object",

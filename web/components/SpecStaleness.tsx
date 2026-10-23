@@ -18,15 +18,16 @@ const INPUT = "rounded-button border border-line-strong bg-surface px-2.5 py-2 t
 /**
  * #481 A spec version that may be stale, on its tech brief page: the Potentially stale label
  * with its reasons, and the controls that settle it. Review marks it reviewed against the
- * changed PRD (an optional note); Reconcile opens Regenerate from the PRD with the changed
- * sections named, and proposes the draft run only when asked. Both write the trace's
- * staleness actions (POST /v1/trace/staleness/actions), as the Plan inspector's do. The
- * controls are for the roles that may approve the spec (#370); others see the label only.
+ * changed PRD (an optional note), writing the trace's staleness action as the Plan
+ * inspector's does, so the label clears. Reconcile opens Regenerate from the PRD with the
+ * changed sections named, and only proposes the draft run (owner decision 2026-10-23): the
+ * version stays Potentially stale, and Approve refused, until the regenerated version
+ * supersedes it or someone presses Review; meanwhile the label says its regeneration is
+ * running and there is no second Reconcile. The controls are for the roles that may approve
+ * the spec (#370); others see the label only.
  */
 export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; n: number; mayApprove: boolean; onChanged: () => void }) {
   const { can, me } = useMe();
-  // The draft run a regeneration proposed: shown after the label has left potentially stale.
-  const [runId, setRunId] = useState<string | null>(null);
   const listQ = useQuery(`spec-requests|${doc}`, () => unwrap(api.GET("/v1/spec-requests")));
   const requestId = listQ.data?.find((s) => s.document_slug === doc)?.request.id ?? null;
   const specQ = useQuery(`spec-request|${requestId}`, () =>
@@ -37,6 +38,9 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
   if (!spec || !av || av.freshness === "fresh") return null;
   const view = spec.stale.find((s) => s.artifact_version_id === av.id);
   const fresh = FRESHNESS[av.freshness];
+  // The spec's proposed regeneration, while its run has not ended.
+  const runId = spec.regeneration_run_id ?? null;
+  const label = av.freshness === "potentially_stale" && runId ? `${fresh.label} · regeneration running` : fresh.label;
   // The spec's engineering approvers (all approvers when it names none) decide on it, as the API's checks.
   const named = spec.engineering_approver_ids;
   const engineer = me?.role === "owner" || named.length === 0 || (!!me?.user_id && named.includes(me.user_id));
@@ -48,7 +52,7 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
     <div data-testid="spec-staleness" className="mb-3 flex flex-col gap-2 rounded-button border border-line bg-surface px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <Chip kind={fresh.kind} dot>
-          {fresh.label}
+          {label}
         </Chip>
         {view && view.reasons.length > 0 && <span className="text-sm text-text2">{view.reasons.join("; ")}</span>}
       </div>
@@ -66,8 +70,7 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
           spec={spec}
           versionId={av.id}
           view={view}
-          mayRegenerate={can("regenerate_spec", engineer)}
-          onRegenerated={setRunId}
+          mayRegenerate={!runId && can("regenerate_spec", engineer)}
           onChanged={changed}
         />
       )}
@@ -80,14 +83,12 @@ function StaleActions({
   versionId,
   view,
   mayRegenerate,
-  onRegenerated,
   onChanged,
 }: {
   spec: Spec;
   versionId: string;
   view: Output | undefined;
   mayRegenerate: boolean;
-  onRegenerated: (runId: string) => void;
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState<"review" | "reconcile" | null>(null);
@@ -95,10 +96,10 @@ function StaleActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function act(action: "review" | "accept_regeneration") {
+  async function markReviewed() {
     await unwrap(
       api.POST("/v1/trace/staleness/actions", {
-        body: { action, artifact_version_id: versionId, dependency_ids: [], reason: note.trim() || null },
+        body: { action: "review", artifact_version_id: versionId, dependency_ids: [], reason: note.trim() || null },
       }),
     );
   }
@@ -119,21 +120,19 @@ function StaleActions({
 
   const review = (e: FormEvent) => {
     e.preventDefault();
-    void run(() => act("review"));
+    void run(markReviewed);
   };
-  // Proposes the draft run (nothing starts until a person estimates and starts it), then
-  // records the regeneration as accepted for this version.
+  // Only proposes the draft run (nothing starts until a person estimates and starts it);
+  // this version's staleness is left as it is.
   const regenerate = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      const out = await unwrap(
+      await unwrap(
         api.POST("/v1/spec-requests/{request_id}/regenerate", {
           params: { path: { request_id: spec.request.id } },
           body: { reason: note.trim() || null, knobs: { depth: "standard", roles: {}, checkpoints: {} } },
         }),
       );
-      onRegenerated(out.run_id);
-      await act("accept_regeneration");
     });
   };
 
@@ -206,7 +205,7 @@ function Reconcile({
         ) : (
           "The PRD changed since this spec was written. "
         )}
-        Regenerating proposes a draft run from the latest approved PRD; nothing runs until you estimate and start it, and this version stays until a new one is approved.
+        Regenerating proposes a draft run from the latest approved PRD; nothing runs until you estimate and start it, and this version stays Potentially stale until the regenerated one replaces it.
       </p>
       <NoteField value={note} onChange={setNote} />
       <div className="flex flex-wrap gap-2">

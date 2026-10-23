@@ -28171,6 +28171,8 @@ export interface components {
             run_id?: string | null;
             /** Run Status */
             run_status?: string | null;
+            /** Regeneration Run Id */
+            regeneration_run_id?: string | null;
         };
         /**
          * SpecPartState

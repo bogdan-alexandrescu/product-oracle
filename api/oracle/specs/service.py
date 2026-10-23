@@ -72,6 +72,8 @@ from oracle.v2.models import (
 from oracle.v2.schemas import ArtifactRequestOut, ArtifactReviewEventOut, ArtifactVersionOut
 
 FLOW = "prd_to_spec"
+# Run statuses after which a spec may be regenerated again.
+RUN_ENDED = ("succeeded", "failed", "cancelled")
 # The design check (parse, sanitise, static check) runs in a worker thread, never in the
 # event loop; past this many seconds the import fails it cleanly.
 DESIGN_CHECK_SECONDS = 20.0
@@ -1139,6 +1141,11 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
         stale=stale,
         run_id=run.id if run else None,
         run_status=run.status if run else None,
+        regeneration_run_id=run.id
+        if run is not None
+        and _regeneration_for(request, run) is not None
+        and run.status not in RUN_ENDED
+        else None,
     )
 
 
@@ -1351,7 +1358,7 @@ async def regenerate(
     # E1: every requirement of the spec must be adopted by the version it is rebuilt from.
     await _adopted(db, prd, version, list(request.requirement_ids))
     run = await db.get(Run, request.run_id) if request.run_id else None
-    if run is not None and run.status not in ("succeeded", "failed", "cancelled"):
+    if run is not None and run.status not in RUN_ENDED:
         raise SpecError(
             f"this spec's run has not ended (it is {run.status}): let it finish, or cancel it "
             "on its run page, first",

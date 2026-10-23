@@ -71,8 +71,9 @@ async def test_the_imported_regeneration_supersedes_the_stale_version(client, ru
         f"/v1/spec-requests/{request_id}/regenerate", json={}, headers=approver
     )
     assert resp.status_code == 201, resp.text
+    run_id = resp.json()["run_id"]
     script(runtime, world)
-    await h.start(client, approver, resp.json()["run_id"])
+    await h.start(client, approver, run_id)
     await h.tick(client, owner)
 
     spec = await h.get_spec(client, owner, request_id)
@@ -82,6 +83,16 @@ async def test_the_imported_regeneration_supersedes_the_stale_version(client, ru
         "in_review",
     ]
     assert spec["versions"][1]["artifact_version"]["freshness"] == "fresh"
+    # Its run waits on the engineering review of the new version: not ended yet.
+    assert spec["regeneration_run_id"] == run_id
+    run = await h.get_run(client, owner, run_id)
+    resp = await client.post(
+        f"/v1/runs/{run_id}/checkpoints/{h.pending(run)['id']}/decide",
+        json={"decision": "approved"},
+        headers=owner,
+    )
+    assert resp.status_code == 200, resp.text
+    spec = await h.get_spec(client, owner, request_id)
     assert spec["regeneration_run_id"] is None
     # The superseded version is no longer listed as stale.
     assert spec["versions"][0]["artifact_version"]["id"] not in {
