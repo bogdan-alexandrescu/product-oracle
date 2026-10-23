@@ -215,6 +215,7 @@ from oracle.runs.schemas import (
     PreviousAttempt,
     RunCreate,
     RunDecision,
+    RunNoteRefs,
     RunOut,
     RunPatch,
     RunProgress,
@@ -1133,10 +1134,14 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     retries = _draft_retries(run, segments, checkpoints, kind, principal)
     runtime = get_runtime()
     notes: list[str] = []
+    note_refs: list[RunNoteRefs] = []
     for s in segments:
-        for n in (s.artifacts or {}).get("notes") or []:
+        for stored in (s.artifacts or {}).get("notes") or []:
+            n, n_refs = workflow.noted(stored)
             if n not in notes:
                 notes.append(n)
+                if n_refs:
+                    note_refs.append(RunNoteRefs(note=n, refs=n_refs))
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
         await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
@@ -1164,6 +1169,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         overrun_ceiling_usd=_usd(_ceiling(run)),
         runtime=runtime.name,
         notes=notes,
+        note_refs=note_refs,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
             _checkpoint_out(

@@ -17,6 +17,7 @@ from mcp.client.streamable_http import streamable_http_client
 from sqlalchemy import select
 from sqlalchemy import text as sa_text
 
+from oracle import wording
 from oracle.main import app
 from oracle.mcp.egress import client_address
 from oracle.review.models import FeedbackItem
@@ -660,8 +661,9 @@ async def test_person_required_falls_back_to_todays_flow(client, owner):
     # Before SwarmCloud lets a service principal answer: 403 forbidden, person_required.
     swarm.service_answer = False
     run = await decide(client, auth, run, "changes_requested", note="Cover refunds")
-    # Not "decide again": the run continues as a new workflow with the decision.
-    assert any("person_required" in n for n in run["notes"])
+    # Not "decide again": the run continues as a new workflow with the decision. #481: the
+    # note says what happened and who acts, in a person's words; the code is in its refs.
+    _person_note(run, "person_required", "only a person", "nobody needs to act")
     assert swarm.workflows["wf_1"].state == "CANCELLED"
     assert run["status"] == "running" and len(swarm.submissions()) == 2
     second = swarm.submissions()[1]
@@ -1097,7 +1099,20 @@ async def test_credential_missing_park_is_noted(client, owner):
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["status"] == "running"
-    assert any("CREDENTIAL_MISSING" in n for n in run["notes"])
+    refs = _person_note(run, "CREDENTIAL_MISSING", "switched off", "switches it back on")
+    assert "/v1/mcp-servers/oracle" in refs["operator_action"]
+
+
+def _person_note(run: dict, code: str, *says: str) -> dict:
+    """#481: the run's note for SwarmCloud's ``code``, read by a person: what happened and
+    who acts, with no route, method, code or id in its text; the operator detail is in the
+    note's refs. Returns those refs."""
+    [ref] = [r for r in run["note_refs"] if r["refs"].get("code") == code]
+    assert ref["note"] in run["notes"]
+    assert wording.api_words(ref["note"]) == [] and code not in ref["note"], ref["note"]
+    for words in says:
+        assert words in ref["note"], ref["note"]
+    return ref["refs"]
 
 
 def test_every_contract_code_has_advice():
@@ -1118,6 +1133,29 @@ def test_every_contract_code_has_advice():
         "await_input_disabled",
     ):
         assert code in workflow.ADVICE and len(workflow.ADVICE[code]) > 40
+
+
+OLD_CREDENTIAL_MISSING = (
+    "SwarmCloud parked a step with CREDENTIAL_MISSING: Oracle's MCP server is disabled there. "
+    "Enable it (PATCH /v1/mcp-servers/oracle, enabled: true); the step resumes on its own."
+)
+
+
+def test_the_two_operator_notes_read_for_a_person_with_their_detail_in_refs():
+    """protects=#481 Build 4: CREDENTIAL_MISSING and person_required, as a run's notes;
+    fails_when=a note carries a route, a method or its code, its refs lose the operator
+    detail, or a note stored before #481 is served as it was; no_claim=the other advice
+    (tests/test_warning_wording.py scans them all)."""
+    for code in ("CREDENTIAL_MISSING", "person_required"):
+        note, refs = workflow.noted(workflow.ADVICE[code])
+        assert note == workflow.ADVICE[code]
+        assert wording.api_words(note) == [] and code not in note, note
+        assert refs["code"] == code and wording.api_words(" ".join(map(str, refs.values())))
+    # A note stored before #481 is served in the new words, its detail in refs.
+    note, refs = workflow.noted(OLD_CREDENTIAL_MISSING)
+    assert note == workflow.ADVICE["CREDENTIAL_MISSING"] and refs["code"] == "CREDENTIAL_MISSING"
+    # Any other note is served as it is, with no refs.
+    assert workflow.noted(workflow.ADVICE["expired"]) == (workflow.ADVICE["expired"], {})
 
 
 # --------------------------------------------------------------------------- egress

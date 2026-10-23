@@ -29,11 +29,45 @@ const I = {
   document: "c3000000-0000-4000-8000-000000000022",
   run: "c3000000-0000-4000-8000-000000000031",
   requirement: "c3000000-0000-4000-8000-000000000041",
+  specDependency: "c3000000-0000-4000-8000-000000000051",
 };
+
+/** A spec version's dependency on the PRD section that changed (#481: Reconcile names it by its heading). */
+function prdSectionDependency(id: string): Schemas["TraceDependency"] {
+  return {
+    id, freshness: "potentially_stale", caused_by_change_id: null, stale_since: AT, reconciled_by: null, reconciled_at: null, note: null,
+    upstream: { document_slug: "checkout-redesign", document_kind: "prd", version_number: 1, section_key: "s-5-2", deleted: false },
+    reasons: ["section s-5-2 changed in checkout-redesign"],
+  };
+}
 
 // #396: why a spec version that may be stale is not approved (api/oracle/wording.py STALE).
 const STALE =
-  "may be stale: the PRD it rests on changed since it was written (the reasons are beside its Potentially stale label). Review or reconcile it against the PRD, or regenerate it, before approving";
+  "may be stale: the PRD it rests on changed since it was written (the reasons are beside its Potentially stale label). Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile) before approving";
+
+const FRESH_ORDER: Schemas["ArtifactVersionOut"]["freshness"][] = ["fresh", "reconciled", "under_review", "potentially_stale"];
+
+/**
+ * #481: the trace's staleness actions (POST /v1/trace/staleness/actions, api/oracle/trace/staleness.py
+ * act) on a spec's version or its flow's, as the Plan inspector's; null when the output is not one of them.
+ */
+export async function specStalenessAction(ctx: SpecsContext, req: Request): Promise<Response | null> {
+  const a = (await req.clone().json()) as Schemas["StalenessAction"];
+  const spec = ctx.db.specs.find((s) => s.stale.some((v) => v.artifact_version_id && v.artifact_version_id === a.artifact_version_id));
+  const view = spec?.stale.find((v) => v.artifact_version_id === a.artifact_version_id);
+  if (!spec || !view) return null;
+  if (!atLeast(ctx.role, "approver")) return fail(403, "Requires the approver role");
+  if (a.action === "reconcile" && !a.reason?.trim()) return fail(422, "reconciling needs a reason");
+  const from = a.action === "review" ? ["potentially_stale"] : ["potentially_stale", "under_review"];
+  if (!from.includes(view.freshness)) return fail(409, `nothing to ${a.action.replace("_", " ")}: ${view.freshness}`);
+  const to = a.action === "reconcile" ? "reconciled" : "under_review";
+  view.freshness = to;
+  view.dependencies = view.dependencies.map((d) => (from.includes(d.freshness) ? { ...d, freshness: to, note: a.reason ?? d.note } : d));
+  for (const v of spec.versions) if (v.artifact_version.id === view.artifact_version_id) v.artifact_version = { ...v.artifact_version, freshness: to };
+  for (const d of spec.design ?? []) if (d.version.id === view.artifact_version_id) d.version = { ...d.version, freshness: to };
+  spec.freshness = spec.versions.map((v) => v.artifact_version.freshness).reduce((x, y) => (FRESH_ORDER.indexOf(y) > FRESH_ORDER.indexOf(x) ? y : x), "fresh");
+  return json(200, view);
+}
 
 /** The refusal of Approve on a spec document's version whose spec version may be stale (api/oracle/specs/service.py). */
 export function staleSpecRefusal(db: SpecsDb | undefined, slug: string, n: number): { detail: string; refs: Record<string, string> } | null {
@@ -186,11 +220,12 @@ export function seedSpecs(): SpecsDb {
     }),
     design: [design("user_flow"), design("wireframe")],
     stale: [
-      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in checkout-redesign"] },
+      { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in checkout-redesign"] },
       { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in checkout-redesign"] },
     ],
     run_id: I.run,
     run_status: "succeeded",
+    regeneration_run_id: null,
   };
   return {
     specs: [spec],
@@ -234,7 +269,7 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
         ...base,
         request: { ...base.request, id, kind: data.depth === "full" ? "engineering_spec" : "tech_brief", requirement_ids: data.requirement_ids, status: "queued", created_at: ctx.now(), updated_at: ctx.now() },
         latest_version: null, approach_status: null, freshness: null, versions: [], sections: [], design: [], stale: [],
-        run_id: ctx.uuid(), run_status: "draft",
+        run_id: ctx.uuid(), run_status: "draft", regeneration_run_id: null,
       };
       ctx.db.specs.unshift(spec);
       return json(201, { spec, run_id: spec.run_id });
@@ -245,12 +280,16 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
     if (p[3] === "regenerate" && m === "POST") {
       const denied = need("approver");
       if (denied) return denied;
+      // #481: as the API, no second regeneration while one has not ended.
+      if (spec.regeneration_run_id) return fail(409, `this spec's run has not ended (it is ${spec.run_status}): let it finish, or cancel it on its run page, first`);
       const out: Schemas["RegenerationOut"] = {
         request_id: spec.request.id, run_id: ctx.uuid(), prd_version: 1, section_keys: spec.section_keys,
         dropped_section_keys: [], reasons: spec.stale.flatMap((s) => s.reasons ?? []),
       };
       spec.run_id = out.run_id;
       spec.run_status = "draft";
+      // #481: proposing it settles nothing; the versions stay as stale as they were.
+      spec.regeneration_run_id = out.run_id;
       return json(201, out);
     }
     return null;

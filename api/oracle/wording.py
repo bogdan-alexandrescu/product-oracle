@@ -23,11 +23,12 @@ from fastapi import HTTPException
 RECORD_DATE_BASIS = "record a date basis on Plan › Dates (or ask the engineering lead to)"
 MISSING_SOURCE_ITEM = "a source item Oracle no longer has"
 # A spec version (or its flow or wireframe) whose PRD changed since it was written (C2):
-# the tech brief's page shows the reasons beside its Potentially stale label.
+# the tech brief's page shows the reasons beside its Potentially stale label, and (#481)
+# the Review and Reconcile controls that settle it.
 STALE = (
     "may be stale: the PRD it rests on changed since it was written (the reasons are beside "
-    "its Potentially stale label). Review or reconcile it against the PRD, or regenerate it, "
-    "before approving"
+    "its Potentially stale label). Review or reconcile it from its tech brief page "
+    "(Potentially stale › Review / Reconcile) before approving"
 )
 
 Refs = dict[str, str | list[str]]

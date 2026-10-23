@@ -74,7 +74,7 @@ import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from ".
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
-import { routeSpecs, seedSpecs, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
+import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -2885,6 +2885,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     uuid,
   });
   if (briefs) return briefs;
+  // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
+  if (p[1] === "trace" && p[2] === "staleness" && p[3] === "actions" && m === "POST") {
+    const acted = await specStalenessAction({ db: (db.specs ??= seedSpecs()), userId: me.id, role: me.role, uuid, now }, req);
+    if (acted) return acted;
+  }
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
   if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
     const traced = await routeTrace(

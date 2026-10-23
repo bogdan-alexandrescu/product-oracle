@@ -30,6 +30,7 @@ import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
+import { SpecStaleness } from "@/components/SpecStaleness";
 import { buildCodeIndex } from "@/lib/code-index";
 import { useCodeEntities } from "@/lib/codes";
 import { BuildDraftButton } from "@/components/NextDraft";
@@ -1093,6 +1094,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           )}
           {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         </div>
+        {/* #481: a spec version that may be stale is reviewed or reconciled here. */}
+        {document_?.kind === "spec" && version && !version.approved_at && (
+          <SpecStaleness doc={doc} n={n} mayApprove={canApprove} onChanged={() => void verQ.reload()} />
+        )}
 
         {onDocument && hasBrief && (
           <p
