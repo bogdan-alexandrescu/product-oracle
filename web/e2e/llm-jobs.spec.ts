@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { feedbackState, login, openSection, section, sectionAction, showAll } from "./helpers";
 
@@ -206,7 +206,9 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     await expect(jobs.getByTestId("llm-job").first()).toBeVisible();
     // No action buttons; the (i) tip is not an action.
     await expect(jobs.locator('button:not([data-testid="info-tip"])')).toHaveCount(0);
-    await expect(jobs.getByTestId("llm-job-settings").getByRole("checkbox").first()).toBeDisabled();
+    // #370: controls a role can never use are hidden, not disabled: no job switches at all.
+    await expect(jobs.getByTestId("llm-job-settings")).toHaveCount(0);
+    await expect(jobs.getByRole("checkbox")).toHaveCount(0);
   });
 }
 
@@ -232,23 +234,29 @@ test("a new comment queues review comments, and Oracle's suggestion appears on i
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
   await openSection(page, "scope");
-  await page.evaluate(() => {
-    const body = [...document.querySelectorAll<HTMLElement>('[data-section-body="scope"]')].find((el) => el.checkVisibility())!;
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const node = walker.currentNode as Text;
-      const at = node.data.indexOf("One invoice per workspace");
-      if (at >= 0) {
-        const range = document.createRange();
-        range.setStart(node, at);
-        range.setEnd(node, at + "One invoice per workspace".length);
-        window.getSelection()!.removeAllRanges();
-        window.getSelection()!.addRange(range);
-        return;
+  // Select again until the Comment button shows: under load the view can still be wiring its
+  // selection listener (or re-rendering the section) when the first selection lands.
+  const commentButton = page.getByRole("button", { name: /^Comment(\s+c)?$/ });
+  await expect(async () => {
+    await page.evaluate(() => {
+      const body = [...document.querySelectorAll<HTMLElement>('[data-section-body="scope"]')].find((el) => el.checkVisibility())!;
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text;
+        const at = node.data.indexOf("One invoice per workspace");
+        if (at >= 0) {
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + "One invoice per workspace".length);
+          window.getSelection()!.removeAllRanges();
+          window.getSelection()!.addRange(range);
+          return;
+        }
       }
-    }
-  });
-  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
+    });
+    await expect(commentButton).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  await commentButton.click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await dialog.getByLabel("Comment").fill("Split the invoice by project for agencies.");
   await dialog.getByLabel("Comment").press("Control+Enter");

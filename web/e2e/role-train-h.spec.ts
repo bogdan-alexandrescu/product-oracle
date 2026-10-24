@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { POOL_SPENT_SCENARIO } from "../lib/api/mock/claude-accounts";
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";

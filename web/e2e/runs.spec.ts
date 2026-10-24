@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -171,6 +171,9 @@ test("#259: an approver's run over $50 waits for an owner's approval", async ({ 
  * end (the import error on the segment and in the checkpoint's payload). Returns its id.
  */
 async function seedRejectedDraft(page: Page, withProblems = false): Promise<string> {
+  // Seed from a page that runs no app code: a mock request the app still has in flight
+  // would save the store it loaded before the seed over it (seen at 4 workers).
+  await page.goto("/icon.svg");
   return page.evaluate((withProblems) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);

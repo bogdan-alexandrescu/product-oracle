@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login, seedRoadmapAttempt2 } from "./helpers";
 
@@ -45,8 +45,11 @@ test("attempt 2 shows its answers: counts, the declined note in full, and Approv
     "Changed without being asked: outcome Finance downloads each invoice → Finance downloads every invoice as a PDF",
   );
 
-  const decision = page.getByRole("group", { name: "Decide: Roadmap items" });
-  await expect(decision.getByTestId("approve-gate")).toContainText("1 blocking problem left");
-  await expect(decision.getByTestId("approve-gate").getByTestId("gate-reason")).toHaveText([/Single sign-on\s*Change not applied/]);
-  await expect(decision.getByRole("button", { name: "Approve and continue" })).toBeDisabled();
+  // D1: Roadmap items are decided on their review screen (Review items), not on the run page.
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+$/);
+  const bar = page.getByTestId("decision-bar");
+  await expect(bar.getByTestId("approve-blocked")).toHaveText("1 blocking problem left");
+  await expect(page.locator('[data-testid="roadmap-item-row"][data-key="sso-login"]')).toContainText("Change not applied");
+  await expect(bar.getByRole("button", { name: /^Approve/ })).toBeDisabled();
 });

@@ -249,11 +249,29 @@ function Fold({ title, testId, anchor, children }: { title: string; testId: stri
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!anchor || window.location.hash !== `#${anchor}`) return;
+    const el = ref.current;
+    if (!el) return;
     // The side panel and the phone's Review sheet both hold History: scroll the one in view.
-    const raf = requestAnimationFrame(() => {
-      if (ref.current?.checkVisibility()) ref.current.scrollIntoView({ block: "start" });
-    });
-    return () => cancelAnimationFrame(raf);
+    const go = () => {
+      if (el.checkVisibility()) el.scrollIntoView({ block: "start" });
+    };
+    const raf = requestAnimationFrame(go);
+    // The folds above load after arrival and push this one down: keep it in place while History
+    // settles, until the reader scrolls or acts (or a few seconds pass).
+    const settle = new ResizeObserver(go);
+    settle.observe(el.parentElement ?? el);
+    const events = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    const stop = () => {
+      settle.disconnect();
+      for (const e of events) window.removeEventListener(e, stop);
+    };
+    for (const e of events) window.addEventListener(e, stop, { passive: true });
+    const timer = window.setTimeout(stop, 3000);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+      stop();
+    };
   }, [anchor]);
   return (
     <section

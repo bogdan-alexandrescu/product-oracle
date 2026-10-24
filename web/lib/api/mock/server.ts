@@ -3495,9 +3495,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
   // the decision log (./decisions.ts): commenters propose, edit and withdraw.
   // A decision checks who decides itself (A3: an engineering lead below the approver role).
+  // So do F3's schedule bases (./roadmap.ts date rights): a named engineering lead below the
+  // approver role records, verifies, rejects and withdraws them.
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   const need: Role | null =
-    m === "GET" || draftWrite || p[1] === "decisions"
+    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.

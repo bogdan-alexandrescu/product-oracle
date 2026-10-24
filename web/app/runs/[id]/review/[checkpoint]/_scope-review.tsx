@@ -8,7 +8,7 @@ import { Button, Chip, FilterChips, Page, PageHeader, Ring, SegmentedControl, Sh
 import { DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -72,7 +72,7 @@ const openReasons = (f: Feature): Reason[] => f.reasons.filter((r) => !r.answere
  */
 export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const router = useRouter();
-  const { role, can } = useMe();
+  const { can } = useMe();
   const phone = usePhone();
   const scopeQ = useQuery(`scope-review|${run.id}|${cp.id}`, async () => {
     const latest = await unwrap(api.GET("/v1/runs/{run_id}/scope", { params: { path: { run_id: run.id } } }));
@@ -99,9 +99,11 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const pending = cp.status === "pending" && scope?.status === "proposed";
   const mode: Mode = !pending
     ? "viewer"
-    : scope?.can_edit && can("patch_scope_item", hasRole(role, cp.approver_role))
+    : // #370 fixes 4: scope.can_edit and review.can_suggest are the API's item answers (the
+      // stop's role, a commenter); no second check of the signed-in role here.
+      scope?.can_edit && can("patch_scope_item", scope.can_edit)
       ? "approver"
-      : review?.can_suggest && hasRole(role, "commenter")
+      : review?.can_suggest && can("create_checkpoint_action", review.can_suggest)
         ? "commenter"
         : "viewer";
 

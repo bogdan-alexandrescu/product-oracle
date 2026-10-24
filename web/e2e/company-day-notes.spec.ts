@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test, mockNow } from "./test";
 
 import { login } from "./helpers";
 
@@ -47,7 +47,7 @@ const PROBLEM = "Returning buyers retype their address at every checkout. Saved 
 
 /** The mock's last baseline review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
 function aucklandApprovalDay(): string {
-  const at = new Date(Date.now() - 9 * 86_400_000);
+  const at = new Date(mockNow().getTime() - 9 * 86_400_000);
   at.setUTCHours(16, 40, 0, 0);
   const next = new Date(at.getTime() + 86_400_000);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -74,7 +74,8 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   await expect(sheet.getByRole("radio", { name: `Use the current baseline (approved ${day})` })).toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $19.50");
+  // F4 (#181): the Engineering check is on by default and its $5.00 is in the estimate (eng-review.spec.ts).
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $24.50");
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(`Reused (approved ${day})`);

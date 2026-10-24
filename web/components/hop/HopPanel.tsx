@@ -8,7 +8,7 @@ import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/componen
 import { Button, Chip, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { GENERAL, subjectKey, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
@@ -227,7 +227,7 @@ async function lockedReason(c: Schemas["DiscussionChangeOut"]): Promise<string |
  * locked section is never changed and staging from the panel is not open yet.
  */
 function ChangesCard({ id, tick }: { id: string; tick: number }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const [changes, setChanges] = useState<(Schemas["DiscussionChangeOut"] & { locked: string | null })[]>([]);
   useEffect(() => {
     let live = true;
@@ -240,7 +240,8 @@ function ChangesCard({ id, tick }: { id: string; tick: number }) {
     };
   }, [id, tick]);
   if (!changes.length) return null;
-  const stages = hasRole(role, "approver");
+  // #370 fixes 4: can() decides (stage_discussion_change: an approver's on any change).
+  const stages = can("stage_discussion_change");
   return (
     <section aria-label="Changes" className="flex flex-col gap-2 rounded-lg border border-line p-3" data-testid="hop-changes">
       <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">Changes</h3>
@@ -293,7 +294,7 @@ function useDiscussion(id: string | null, tick: number) {
  * as discussion. Panel chats are private: just the reader and Oracle.
  */
 export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {
-  const { role } = useMe();
+  const { can } = useMe();
   const page = useCurrentScreenSubject();
   const [general, setGeneral] = useState(false);
   const [view, setView] = useState<View>({ kind: "list" });
@@ -303,7 +304,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
   const { here, recent } = useLists(subject, tick);
   const threadId = view.kind === "list" ? null : view.id;
   const d = useDiscussion(threadId, tick);
-  const writes = hasRole(role, "commenter");
+  const writes = can("create_discussion");
   const isPanelChat = d?.origin === "panel";
 
   const about = d ? { label: d.subject_label, url: d.subject_url } : { label: subject.label, url: subject.kind === "screen" ? String(subject.subject.path) : null };

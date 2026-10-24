@@ -194,7 +194,13 @@ export function Menu({
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // Escape closes the menu only: preventDefault tells the Ask Oracle panel (listening on
+    // window) that this Escape is taken, so the panel the menu sits in stays open.
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+    };
     const onDown = (e: PointerEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
     };

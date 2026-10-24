@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -76,7 +76,9 @@ test("the Inbox's Review opens the run's rows, and Approve baseline waits until 
   await row(page, "Activate new stores in their first week").getByRole("button", { name: "Activate new stores in their first week", exact: true }).click();
   const why = page.getByTestId("entity-drawer").getByTestId("why-card");
   await expect(why).toContainText("nobody decided it");
-  await page.getByTestId("entity-drawer").getByRole("button", { name: "Confirm" }).click();
+  // The card's own Confirm (its fixes sit under the reasons list); the drawer's action row,
+  // once loaded, has a second one.
+  await why.locator("xpath=..").getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByTestId("band-not-decided")).toHaveText("1 not decided");
   await leaveProposed(page, "Bring buyers back", "Revisit after the board meeting");
   await expect(page.getByTestId("band-not-decided")).toHaveText("0 not decided");

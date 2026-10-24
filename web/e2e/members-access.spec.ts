@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, mockNow } from "./test";
 
 import { login } from "./helpers";
 
@@ -30,7 +30,7 @@ test("members: an owner approves an access request as viewer and it becomes an i
   const invite = page.getByTestId("invite-row").filter({ hasText: "new.person@example.com" });
   await expect(invite).toContainText("Viewer");
   // #460: in the Company time zone (the mock's is America/Los_Angeles), not the browser's.
-  const expires = new Date(Date.now() + 14 * 86_400_000).toLocaleDateString("en-US", {
+  const expires = new Date(mockNow().getTime() + 14 * 86_400_000).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     timeZone: "America/Los_Angeles",
