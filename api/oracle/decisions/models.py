@@ -42,6 +42,8 @@ ORIGINS = (
     "priority_override",
     "autonomy",
     "checkpoint",
+    # H9: a pricing memo's Decide: proposed, then decided by the pricing owner.
+    "pricing",
 )
 # Origins Oracle records on its own: decided as they are captured.
 CAPTURED_ORIGINS = (

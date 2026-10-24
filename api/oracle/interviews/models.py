@@ -39,6 +39,8 @@ from oracle.docs.models import _in
 from oracle.v2.models import _fk, _json, _lock_version, _updated_at
 
 KINDS = ("team", "customer")
+# H9: a fixed guide (no guide job) whose snapshot carries a pricing object.
+PRESETS = ("pricing",)
 STATUSES = ("draft", "invited", "in_progress", "finished", "expired", "revoked")
 ROLES = ("oracle", "interviewee")
 MESSAGE_KINDS = ("intro", "question", "ack", "follow_up", "answer", "skip", "closing")
@@ -49,6 +51,7 @@ class Interview(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("kind", KINDS), name="kind"),
         CheckConstraint(_in("status", STATUSES), name="status"),
+        CheckConstraint(f"preset IS NULL OR {_in('preset', PRESETS)}", name="preset"),
         CheckConstraint(
             "kind <> 'team' OR (intake_id IS NOT NULL AND interviewee_user_id IS NOT NULL)",
             name="team",
@@ -67,6 +70,7 @@ class Interview(TenantScoped, Base):
     intake_id: Mapped[uuid.UUID | None] = _fk("product_intakes", "SET NULL")
     theme_id: Mapped[uuid.UUID | None] = _fk("request_themes", "SET NULL")
     topic: Mapped[str | None] = mapped_column(Text)
+    preset: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     intro: Mapped[str | None] = mapped_column(Text)
     # [{id, prompt, purpose}], what a member approved.

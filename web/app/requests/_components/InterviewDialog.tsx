@@ -13,11 +13,21 @@ import { formatDateTime } from "@/lib/format";
 type About = "intake" | "theme" | "topic";
 type Step = "subject" | "guide" | "link";
 type Draft = { id?: string; prompt: string; purpose: string | null };
+/** H9: Oracle drafts the questions, or the fixed pricing preset fills them. */
+type Questions = "drafted" | "pricing";
+/** The API's create body and interview carry the preset; @/lib/api/interviews does not yet. */
+type Preset = { preset?: "pricing" | null };
+type Created = InterviewOut & Preset;
 
 const ABOUT: { value: About; label: string }[] = [
   { value: "intake", label: "A PRD idea" },
   { value: "theme", label: "A request theme" },
   { value: "topic", label: "A topic" },
+];
+
+const QUESTIONS: { value: Questions; label: string; testId: string }[] = [
+  { value: "drafted", label: "Oracle drafts them", testId: "interview-questions-drafted" },
+  { value: "pricing", label: "Pricing", testId: "interview-questions-pricing" },
 ];
 
 /** A link's expiry in the Company time zone, labelled ("Oct 29, 9:14 AM PDT", #447). */
@@ -26,16 +36,18 @@ const formatPt = (iso: string) => formatDateTime(iso);
 /**
  * Interview a customer (C3): who and what about; then Oracle drafts the questions (a queued
  * job, polled like RefineSection) and the member edits, reorders, deletes and adds them;
- * then Create link shows the private one-time link, once.
+ * then Create link shows the private one-time link, once. A Pricing interview (H9) skips the
+ * drafting: its guide is the API's six fixed questions at once, edited the same way.
  */
 export function InterviewDialog({ onClose, onChanged }: { onClose: () => void; onChanged?: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
   const [step, setStep] = useState<Step>("subject");
-  const [interview, setInterview] = useState<InterviewOut | null>(null);
+  const [interview, setInterview] = useState<Created | null>(null);
   const [link, setLink] = useState<InterviewLink | null>(null);
 
-  const title = step === "subject" ? "Interview a customer" : step === "guide" ? "Draft questions" : "Link created";
+  const guideTitle = interview?.preset === "pricing" ? "Pricing questions" : "Draft questions";
+  const title = step === "subject" ? "Interview a customer" : step === "guide" ? guideTitle : "Link created";
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
       <div
@@ -79,13 +91,14 @@ export function InterviewDialog({ onClose, onChanged }: { onClose: () => void; o
   );
 }
 
-function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated: (iv: InterviewOut) => void }) {
+function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated: (iv: Created) => void }) {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [about, setAbout] = useState<About>("topic");
   const [intakeId, setIntakeId] = useState("");
   const [themeId, setThemeId] = useState("");
   const [topic, setTopic] = useState("");
+  const [questions, setQuestions] = useState<Questions>("drafted");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const intakes = useQuery("interview:intakes", () => unwrap(api.GET("/v1/intakes", { params: { query: { limit: 200 } } })));
@@ -100,8 +113,14 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
     setBusy(true);
     setError(null);
     try {
-      const body: InterviewCreate = { kind: "customer", interviewee_name: name.trim(), interviewee_company: company.trim() || null, subject };
-      onCreated(await interviewsCall<InterviewOut>("POST", "/v1/interviews", body));
+      const body: InterviewCreate & Preset = {
+        kind: "customer",
+        interviewee_name: name.trim(),
+        interviewee_company: company.trim() || null,
+        subject,
+        ...(questions === "pricing" ? { preset: "pricing" as const } : {}),
+      };
+      onCreated(await interviewsCall<Created>("POST", "/v1/interviews", body));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -157,6 +176,15 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
           <textarea className={INPUT} rows={2} value={topic} maxLength={LIMITS.topic} onChange={(e) => setTopic(e.target.value)} />
         </label>
       )}
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-semibold text-text2">Questions</span>
+        <SegmentedControl label="Questions" size="sm" items={QUESTIONS} value={questions} onChange={setQuestions} />
+        {questions === "pricing" && (
+          <p data-testid="interview-pricing-hint" className="text-sm text-text2">
+            Six fixed questions on price, what it replaces and who approves the purchase. You can edit them next.
+          </p>
+        )}
+      </div>
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="ghost" onClick={onCancel}>
@@ -170,11 +198,13 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
   );
 }
 
-function GuideStep({ initial, onCancel, onLinked }: { initial: InterviewOut; onCancel: () => void; onLinked: (l: InterviewLink) => void }) {
+function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel: () => void; onLinked: (l: InterviewLink) => void }) {
   const [iv, setIv] = useState(initial);
   const [intro, setIntro] = useState(initial.intro ?? "");
   const [items, setItems] = useState<Draft[]>(initial.guide);
-  const [loaded, setLoaded] = useState(initial.guide_job?.status === "succeeded");
+  // A pricing guide is there at once: nothing to draft, and no Draft again (the API answers 409).
+  const pricing = initial.preset === "pricing";
+  const [loaded, setLoaded] = useState(pricing || initial.guide_job?.status === "succeeded");
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -293,6 +323,11 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: InterviewOut; onC
         Nothing reaches {iv.interviewee_name} that you did not approve here, except Oracle&rsquo;s short acknowledgements and at most one
         follow-up per question.
       </p>
+      {pricing && (
+        <p data-testid="guide-pricing-note" className="text-sm text-text2">
+          Questions 1 to 4 are the Van Westendorp price questions; Oracle reads the prices back from them.
+        </p>
+      )}
       <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
         Intro
         <textarea

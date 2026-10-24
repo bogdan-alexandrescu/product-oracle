@@ -45,6 +45,21 @@ LINK_EXISTS = "A link exists; withdraw it first"
 DRAFT_ONLY = "Only a draft interview can change"
 NO_GUIDE = "Draft the questions first"
 OPEN = ("draft", "invited", "in_progress")
+PRICING_FIXED = "A pricing interview's guide is fixed; edit it instead"
+
+#: H9: the guide of a pricing interview, (prompt, purpose) in order. Questions 1 to 4 are
+#: the Van Westendorp questions; the snapshot reads the prices back (oracle.interviews.jobs).
+PRICING_GUIDE = (
+    ("At what price would this be so cheap you would doubt its quality?", "Too cheap"),
+    ("At what price would it start to feel like a bargain?", "Bargain"),
+    (
+        "At what price would it start to feel expensive, though you would still consider it?",
+        "Expensive",
+    ),
+    ("At what price would it be too expensive to consider?", "Too expensive"),
+    ("What would you stop using or paying for if you bought this?", "What it replaces"),
+    ("Who approves a purchase like this, and from which budget?", "Budget owner"),
+)
 
 
 class InterviewError(Exception):
@@ -76,6 +91,13 @@ async def get_row(db: AsyncSession, interview_id: uuid.UUID, *, lock: bool = Fal
     return row
 
 
+def pricing_guide() -> list[dict[str, Any]]:
+    return [
+        {"id": uuid.uuid4().hex[:12], "prompt": prompt, "purpose": purpose}
+        for prompt, purpose in PRICING_GUIDE
+    ]
+
+
 def queue_job(row: Interview, kind: str, requested_by: uuid.UUID | None) -> LlmJob:
     return LlmJob(kind=kind, interview_id=row.id, requested_by=requested_by, input={})
 
@@ -102,16 +124,22 @@ async def create(db: AsyncSession, principal: Principal, body: InterviewCreate) 
         title=title[:TITLE_MAX],
         interviewee_name=body.interviewee_name,
         interviewee_company=body.interviewee_company,
+        preset=body.preset,
         created_by=principal.id,
     )
     db.add(row)
     await db.flush()
-    job = queue_job(row, "interview_guide", principal.id)
-    db.add(job)
+    if body.preset == "pricing":
+        # The preset is the guide: no guide job, no model cost.
+        row.guide = pricing_guide()
+    else:
+        job = queue_job(row, "interview_guide", principal.id)
+        db.add(job)
+        await db.flush()
+        row.guide_job_id = job.id
     await db.flush()
-    row.guide_job_id = job.id
-    await db.flush()
-    await audit.record(db, principal, "interview.created", "interview", row.id, {"kind": row.kind})
+    data = {"kind": row.kind} | ({"preset": row.preset} if row.preset else {})
+    await audit.record(db, principal, "interview.created", "interview", row.id, data)
     return row
 
 
@@ -158,6 +186,7 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
         id=row.id,
         kind=row.kind,  # type: ignore[arg-type]
         status=row.status,  # type: ignore[arg-type]
+        preset=row.preset,  # type: ignore[arg-type]
         title=row.title,
         intake_id=row.intake_id,
         theme_id=row.theme_id,
@@ -200,6 +229,7 @@ async def list_interviews(
     intake_id: uuid.UUID | None = None,
     theme_id: uuid.UUID | None = None,
     kind: str | None = None,
+    preset: str | None = None,
 ) -> list[InterviewSummary]:
     q = select(Interview).order_by(Interview.created_at.desc(), Interview.id)
     if status:
@@ -210,6 +240,8 @@ async def list_interviews(
         q = q.where(Interview.theme_id == theme_id)
     if kind:
         q = q.where(Interview.kind == kind)
+    if preset:
+        q = q.where(Interview.preset == preset)
     rows = list(await db.scalars(q))
     counts: dict[uuid.UUID, int] = {}
     if rows:
@@ -225,6 +257,7 @@ async def list_interviews(
             id=r.id,
             kind=r.kind,  # type: ignore[arg-type]
             status=r.status,  # type: ignore[arg-type]
+            preset=r.preset,  # type: ignore[arg-type]
             title=r.title,
             interviewee_name=r.interviewee_name,
             interviewee_company=r.interviewee_company,
@@ -278,6 +311,10 @@ async def redraft(db: AsyncSession, principal: Principal, interview_id: uuid.UUI
     _manage(principal, row)
     if row.status != "draft":
         raise InterviewError(409, DRAFT_ONLY)
+    if row.preset is not None:
+        # Refused rather than refilled: a refill would silently undo a member's edits,
+        # and the preset has nothing for Oracle to draft.
+        raise InterviewError(409, PRICING_FIXED)
     current = await db.get(LlmJob, row.guide_job_id) if row.guide_job_id else None
     if current is not None and current.status in ("queued", "running"):
         raise InterviewError(409, "Oracle is already drafting the questions")

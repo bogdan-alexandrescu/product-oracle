@@ -9,8 +9,12 @@ The snapshot keeps only quotes that are exact substrings of the customer's messa
 (rule 6), and each need becomes one request (rule 7): New, unverified, channel and
 origin ``interview``, the customer as requester (as given), linked to the interview and
 to its intake or theme. Nothing else is written: no gap, answer or baseline item.
+
+A pricing interview's snapshot (H9) also carries ``pricing``: the four Van Westendorp
+prices, the currency, the budget owner and what it replaces, each as said or null.
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -19,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.interviews.models import Interview, InterviewMessage
-from oracle.interviews.schemas import GUIDE_MAX, INTRO_MAX, PROMPT_MAX
+from oracle.interviews.schemas import GUIDE_MAX, INTRO_MAX, PROMPT_MAX, InterviewPricing
 from oracle.interviews.turns import is_quote
 from oracle.jobs import prompting
 from oracle.jobs.kinds import Ask, JobInputError
@@ -42,6 +46,10 @@ TITLE_MAX = 200
 LIST_MAX = 5
 QUOTES_MAX = 3
 NEEDS_MAX = 10
+PRICING_MAX = 200
+#: The pricing fields that hold a price; the others are words (currency, who, what).
+PRICES = ("too_cheap", "bargain", "expensive", "too_expensive")
+_NUMBER = re.compile(r"\d+")
 
 
 async def _interview(s: AsyncSession, job: LlmJob) -> Interview:
@@ -129,6 +137,29 @@ def _texts(value: Any, limit: int = 300) -> list[str]:
     return [v for v in out if v][:LIST_MAX]
 
 
+def _numbers(text: str) -> set[str]:
+    # "1,200" and "1 200" are 1200; a decimal point splits ("9.50" is 9 and 50).
+    return set(_NUMBER.findall(re.sub(r"(?<=\d)[,\s](?=\d{3}(?!\d))", "", text)))
+
+
+def pricing(value: Any, said: list[str]) -> dict[str, str | None]:
+    """The model's pricing object, as said or null. A non-string or empty value is null.
+    A price is kept only when it holds a number and every number in it appears in one of
+    the customer's answers: we cannot check that the customer meant it, but a price whose
+    numbers they never wrote is invented, so it is null."""
+    raw = value if isinstance(value, dict) else {}
+    heard = set().union(*(_numbers(m) for m in said))
+    out: dict[str, str | None] = {}
+    for name in InterviewPricing.model_fields:
+        v = raw.get(name)
+        text = v.strip()[:PRICING_MAX] if isinstance(v, str) else ""
+        if text and name in PRICES:
+            found = _numbers(text)
+            text = text if found and found <= heard else ""
+        out[name] = text or None
+    return InterviewPricing(**out).model_dump()
+
+
 async def snapshot(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     row = await _interview(s, job)
     messages = list(
@@ -142,13 +173,13 @@ async def snapshot(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     if not said:
         raise JobInputError("the interview has no answers")
     guide = row.guide or []
-    answer = await ask(
-        "interview_snapshot",
-        {
-            "questions": [{"id": q["id"], "prompt": q["prompt"]} for q in guide],
-            "answers": [{"question_id": m.guide_item, "body": m.body} for m in messages],
-        },
-    )
+    payload: dict[str, Any] = {
+        "questions": [{"id": q["id"], "prompt": q["prompt"]} for q in guide],
+        "answers": [{"question_id": m.guide_item, "body": m.body} for m in messages],
+    }
+    if row.preset is not None:
+        payload["preset"] = row.preset
+    answer = await ask("interview_snapshot", payload)
     known = {q["id"] for q in guide}
 
     def question(value: Any) -> str | None:
@@ -175,12 +206,15 @@ async def snapshot(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     row = await s.get(Interview, row.id, with_for_update=True, populate_existing=True)
     if row is None:
         raise JobInputError("the interview no longer exists")
-    row.snapshot = {
+    written: dict[str, Any] = {
         "quick_facts": _texts(answer.get("quick_facts")),
         "quotes": quotes,
         "needs": needs,
         "insights": _texts(answer.get("insights")),
     }
+    if row.preset == "pricing":
+        written["pricing"] = pricing(answer.get("pricing"), said)
+    row.snapshot = written
     created = 0
     already = await s.scalar(
         select(ProductRequest.id).where(ProductRequest.interview_id == row.id).limit(1)
