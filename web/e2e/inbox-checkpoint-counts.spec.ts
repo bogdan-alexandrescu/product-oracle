@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
@@ -22,7 +22,19 @@ const childTitles = (page: Page) => page.locator(`tr[data-child-of="${CP}"]`).fi
 
 async function openInbox(page: Page) {
   await login(page);
-  await seedRoadmapReview(page);
+  // Each mock call saves the whole database when it finishes, so a call Home made before the
+  // seed can land over it under load: seed again until it is still there a moment later.
+  const kept = () =>
+    page.evaluate((id) => JSON.parse(localStorage.getItem("po-mock-db-v2")!).runs.runs.some((r: { id: string }) => r.id === id), RUN);
+  for (let i = 0; i < 5; i++) {
+    await seedRoadmapReview(page);
+    let still = true;
+    for (let n = 0; n < 3 && still; n++) {
+      await page.waitForTimeout(700);
+      still = await kept();
+    }
+    if (still) return;
+  }
 }
 
 // Card counts: protects = the row says what needs a decision and how much, with the time left,

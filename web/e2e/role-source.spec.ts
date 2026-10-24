@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 /*
  * #370 fixes 4: what the signed-in role may do comes from GET /v1/me/capabilities only (the

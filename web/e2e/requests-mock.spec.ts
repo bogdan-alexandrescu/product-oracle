@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { routeRequests, seedRequests, type RequestsContext } from "../lib/api/mock/requests";
 import { login } from "./helpers";

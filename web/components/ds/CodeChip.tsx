@@ -14,6 +14,15 @@ const CLOSE_DELAY = 150;
 const PHONE = "(max-width: 639px)";
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** A goal's target in its unit, as the Baseline writes it: "12%", "$4000", "2 min". */
+function targetFigure(target: unknown, unit: unknown): string {
+  const t = String(target);
+  if (typeof unit !== "string" || !unit) return t;
+  if (unit === "%") return `${t}%`;
+  const sym = ({ USD: "$", EUR: "€", GBP: "£" } as Record<string, string>)[unit];
+  return sym ? `${sym}${t}` : `${t} ${unit}`;
+}
+
 /** One card is open at a time: opening one closes the last. */
 let closeOpen: (() => void) | null = null;
 
@@ -315,7 +324,7 @@ function CodeCard({ kind, entityKey, entityId, title, proposed, code }: ChipProp
   const line =
     kind === "goal"
       ? e?.attrs?.target != null && e.attrs.target !== ""
-        ? `Target ${String(e.attrs.target)}`
+        ? `Target ${targetFigure(e.attrs.target, e.attrs.unit)}`
         : null
       : typeof e?.attrs?.status === "string" && e.attrs.status
         ? e.attrs.status.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())

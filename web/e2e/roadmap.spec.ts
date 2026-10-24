@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login, section, openSection } from "./helpers";

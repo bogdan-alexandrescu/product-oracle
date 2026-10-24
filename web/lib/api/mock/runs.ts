@@ -12,6 +12,7 @@ import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
+import { mockNowMs } from "./clock";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
@@ -2766,7 +2767,7 @@ function roadmapReviewRun(): RunOut {
           artifacts: ["roadmap_items.yaml"],
           items_check: items.items_check,
           // D8: the step waits in SwarmCloud, 19 h 30 min left when seeded (the header's time chip).
-          wait: { workflow_id: "mock-wf-roadmap-items", expires_at: new Date(Date.now() + (19 * 60 + 30) * 60_000).toISOString() },
+          wait: { workflow_id: "mock-wf-roadmap-items", expires_at: new Date(mockNowMs() + (19 * 60 + 30) * 60_000).toISOString() },
         },
         created_at: "2026-10-20T09:04:00Z",
         can_decide: true,

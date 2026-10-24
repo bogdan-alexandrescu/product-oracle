@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection, openTab, section, sectionAction, signOut } from "./helpers";
@@ -110,7 +110,8 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
   await page.goto(DOC);
   await openDiscussion(page, "Checkout redesign PRD · 2. Problem");
   await expect(thread(page).getByTestId("discussion-message").first()).toContainText("Is the drop-off at shipping or at payment?");
-  await expect(thread(page)).toContainText("Viewers can read but not write here.");
+  // #370: a control a role can never use is hidden, with no role note: no composer, no note.
+  await expect(thread(page)).not.toContainText("Viewers can read but not write here.");
   await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveCount(0);
   await expect(thread(page).getByRole("button", { name: "Send" })).toHaveCount(0);
 });

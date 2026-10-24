@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
@@ -59,7 +59,8 @@ test("baseline: the Features table's Add makes a feature in its product, serving
 
 test("baseline: the Goals table's Add proposes a goal, and the drawer confirms it", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("region", { name: "Goals", exact: true }).getByRole("button", { name: "Add" }).click();
+  // #345: each top-level goal row has its own "Add subgoal"; the table's Add is the exact name.
+  await page.getByRole("region", { name: "Goals", exact: true }).getByRole("button", { name: "Add", exact: true }).click();
   const form = page.getByRole("dialog", { name: "Add an item" });
   await expect(form.getByLabel("Kind")).toHaveValue("goal");
   await form.getByLabel("Title").fill("Halve support tickets");

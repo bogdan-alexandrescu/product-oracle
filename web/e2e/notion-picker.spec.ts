@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "./test";
 
 import { NOTION_PAGED_SCENARIO } from "../lib/api/mock/notion";
 import { SOURCES_STORAGE_KEY } from "../lib/api/mock/sources";

@@ -105,14 +105,25 @@ export function DecisionBar({
   const canSend = (changes > 0 || !!note.trim()) && !tooLong;
   const approveLabel = held ? "Confirm" : edits > 0 ? `Approve with ${plural(edits, "edit")}` : "Approve";
 
+  // Saving one's own note bumps the draft's revision: the decision that follows expects that
+  // revision, not the one the screen loaded, or it is refused as "the review changed" by its
+  // own note. Only our own bump (one past what we read) is taken; anyone else's still refuses.
+  const [bumped, setBumped] = useState<{ from: number | null; to: number } | null>(null);
+  const expected = bumped && bumped.from === revision ? bumped.to : revision;
+
   async function saveNote() {
     if (!canNote || tooLong || (note.trim() || null) === (savedNote?.trim() || null)) return;
+    const known = expected;
     await unwrap(
       api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", {
         params: { path: { run_id: runId, checkpoint_id: checkpointId } },
         body: { note: note.trim() ? note : null },
       }),
-    ).catch((e) => setError(errorMessage(e)));
+    )
+      .then((r) => {
+        if (known != null && r.revision === known + 1) setBumped({ from: revision, to: r.revision });
+      })
+      .catch((e) => setError(errorMessage(e)));
   }
 
   async function decide(decision: "approved" | "changes_requested" | "confirm") {
@@ -124,7 +135,7 @@ export function DecisionBar({
       await unwrap(
         api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
           params: { path: { run_id: runId, checkpoint_id: checkpointId } },
-          body: { decision, note: note.trim() || null, expected_revision: revision },
+          body: { decision, note: note.trim() || null, expected_revision: expected },
         }),
       );
       setOpen(false);

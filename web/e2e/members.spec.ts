@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { feedbackState, login, section, selectText, openSection, showAll, signOut } from "./helpers";
 
@@ -52,8 +52,16 @@ test("members: invite someone, copy the link, then revoke the invite", async ({ 
   await expect(invites.first()).toContainText("Copied");
 
   // Revoked: the row keeps its place with the outcome and Undo for a moment, then leaves.
+  // The clock holds while the test looks, so a loaded machine cannot let the moment pass
+  // unseen; it steps only to let the revoke's request through.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   await page.getByRole("button", { name: "Revoke invite for pat@example.com" }).click();
-  await expect(invites.first().getByTestId("acted")).toContainText("Revoked");
+  const acted = invites.first().getByTestId("acted");
+  await expect(async () => {
+    if (!(await acted.count())) await page.clock.runFor(100);
+    await expect(acted).toContainText("Revoked", { timeout: 100 });
+  }).toPass();
+  await page.clock.resume();
   await expect(invites).toHaveCount(2);
   await page.reload();
   await expect(page.getByTestId("invite-row")).toHaveCount(2);

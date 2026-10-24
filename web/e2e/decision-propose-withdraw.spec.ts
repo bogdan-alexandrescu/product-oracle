@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { MOCK_SLOW_KEY, MOCK_SLOW_MS } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -16,7 +16,7 @@ const CAPS = "Ship usage caps before anomaly detection";
 
 const row = (page: Page, text: string) => page.getByTestId("decision-row").filter({ hasText: text });
 const inspector = (page: Page) => page.getByTestId("decision-inspector").filter({ visible: true });
-const today = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const today = () => mockNow().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 async function propose(page: Page) {
   await page.getByRole("button", { name: "Propose decision" }).click();

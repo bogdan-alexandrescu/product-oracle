@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { ROADMAP_REVIEW_RUN_ID } from "../lib/api/mock/runs";
 import { login, seedRoadmapReview, signOut } from "./helpers";
@@ -50,6 +50,8 @@ async function seedStaging(page: Page) {
         updated_at: now,
       });
       db.discussions ??= { discussions: [], participants: [], messages: [] };
+      // Idempotent: seeding again (seedHeld) replaces these rows rather than doubling them.
+      db.discussions.discussions = db.discussions.discussions.filter((d: { id: string }) => d.id !== ids.push && d.id !== ids.invite);
       db.discussions.discussions.push(discussion(ids.push, "Push timing", null, runId), discussion(ids.invite, "Invite wording", doc.id, null));
       const action = (id: string, item_key: string, kind: string, field: string | null, value: unknown, extra = {}) => ({
         id,
@@ -105,23 +107,44 @@ async function seedStaging(page: Page) {
   );
 }
 
+/**
+ * Seeds, opens the page and waits for the seed to show there. A mock request the app had in
+ * flight when the seed was written can save its older copy over it (as openSeeded in helpers
+ * handles for a missing run): under load that drops the seed, so seed again (at most 3 times).
+ */
+async function seedHeld(page: Page, open: () => Promise<void>, shown: () => Promise<void>) {
+  for (let i = 0; ; i++) {
+    await seedStaging(page);
+    try {
+      await open();
+      await shown();
+      return;
+    } catch (e) {
+      if (i >= 2) throw e;
+    }
+  }
+}
+
 /** Opens the seeded roadmap review run from the runs list, as a person would. */
 async function openRun(page: Page) {
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  const row = page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" });
+  await expect(row.first()).toBeVisible();
+  await row.getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 }
 
 const bar = (page: Page) => page.getByTestId("staging-bar").filter({ visible: true });
 const chips = (page: Page) => bar(page).getByTestId("staged-chip");
+/** The run page once the seeded staging list shows. */
+const openStagedRun = (page: Page) => seedHeld(page, () => openRun(page), () => expect(chips(page)).toHaveCount(2));
 
 // Card two-origins: protects = one row shows what rows and discussions staged at the checkpoint,
 // the discussion's chip marked with a chat icon; fails_when = a chip is missing or doubled, or
 // the discussion chip has no icon; no_claim = the list's API merge (tests/test_staging.py).
 test("the pending checkpoint shows a row action and a discussion action as two chips", async ({ page }) => {
   await login(page);
-  await seedStaging(page);
-  await openRun(page);
+  await openStagedRun(page);
   await expect(bar(page)).toContainText("Staged:");
   await expect(chips(page)).toHaveCount(2);
   await expect(chips(page).filter({ hasText: "Drop budget-caps" }).getByTestId("chip-discussion")).toHaveCount(0);
@@ -134,8 +157,7 @@ test("the pending checkpoint shows a row action and a discussion action as two c
 // itself (tests/test_checkpoint_review.py).
 test("an approver's × removes a chip and Undo restores it", async ({ page }) => {
   await login(page);
-  await seedStaging(page);
-  await openRun(page);
+  await openStagedRun(page);
   await expect(chips(page)).toHaveCount(2);
   await bar(page).getByRole("button", { name: "Remove Move mobile-push to Next" }).click();
   await expect(chips(page)).toHaveCount(1);
@@ -151,9 +173,12 @@ test("an approver's × removes a chip and Undo restores it", async ({ page }) =>
 // unticked; no_claim = how the model rewrites sections (the mock stands in).
 test("Build draft lists a discussion row next to the accepted suggestions and builds without it when unticked", async ({ page }) => {
   await login(page);
-  await seedStaging(page);
-  await page.goto("/documents/clinic-outreach/v/5");
   const build = page.getByTestId("build-draft").filter({ visible: true });
+  await seedHeld(
+    page,
+    () => page.goto("/documents/clinic-outreach/v/5").then(() => undefined),
+    () => expect(build.getByTestId("build-draft-count")).toHaveText("· 3 staged"),
+  );
   await expect(build).toContainText("Build draft 6");
   await expect(build.getByTestId("build-draft-count")).toHaveText("· 3 staged");
   await build.click();
@@ -181,7 +206,7 @@ test("a commenter sees the chips without ×", async ({ page }) => {
   await seedStaging(page);
   await signOut(page);
   await login(page, "commenter@example.com");
-  await openRun(page);
+  await openStagedRun(page);
   await expect(chips(page)).toHaveCount(2);
   await expect(bar(page).getByRole("button", { name: /^Remove / })).toHaveCount(0);
 });

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
 import { login, openSeeded, seedRoadmapReview, signOut } from "./helpers";

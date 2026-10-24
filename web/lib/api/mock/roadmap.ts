@@ -55,8 +55,8 @@ export interface RoadmapDb {
   alerts?: StoredAlert[];
   /** F2: tracker record history, one row per changed field. */
   recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
-  /** F2: dates accepted from the tracker, by item key (the Plan row reads them). */
-  accepted?: Record<string, string>;
+  /** F2: dates accepted from the tracker, by item key, with the reference of the basis they rest on (the Plan row reads them). */
+  accepted?: Record<string, { day: string; reference: string }>;
 }
 
 export interface RoadmapContext {
@@ -1162,8 +1162,10 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     ];
     const href = `/documents/${prd.slug}/v/${prdVersion}`;
     // F2: a slip accepted from its alert: the item rests on the tracker's date now.
-    const acceptedDay = origin === "approved" && prd.slug === "usage-alerts" ? db.accepted?.[s.key] : undefined;
-    if (acceptedDay) s = { ...s, date: acceptedDay, dateStatus: "verified", slipDays: undefined, state: "on_track", reasons: [], next: undefined };
+    // Its date source names the new basis (the API moves the milestone onto it), so F3's
+    // dateStatus reads it verified rather than the withdrawn basis of the old date.
+    const accepted = origin === "approved" && prd.slug === "usage-alerts" ? db.accepted?.[s.key] : undefined;
+    if (accepted) s = { ...s, date: accepted.day, dateSource: accepted.reference, dateStatus: "verified", slipDays: undefined, state: "on_track", reasons: [], next: undefined };
     const next: Schemas["PlanNext"] =
       origin === "draft"
         ? { action: "review_prd", label: "PRD review", who: { role: "approver", user_id: null }, href, viewer_may: may("approver") }
@@ -1518,7 +1520,7 @@ function trackAlerts(
         moved.push({ id: ms.id, from, to: day });
         Object.assign(ms, { target_date: day, basis_ids: [basis.id], lock_version: ms.lock_version + 1, updated_at: now() });
       }
-      if (a.item_key) (db.accepted ??= {})[a.item_key] = day;
+      if (a.item_key) (db.accepted ??= {})[a.item_key] = { day, reference: ref };
       Object.assign(a, { state: "resolved", resolved_at: now() });
       const out: AcceptDateOut = {
         alert: alertOut(ctx, db, a), basis, withdrawn_basis_ids: withdrawn.map((b) => b.id), milestones_moved: moved, stale_item_ids: [],
