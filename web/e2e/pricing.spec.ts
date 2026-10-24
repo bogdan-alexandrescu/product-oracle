@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_DENY_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, section, signOut } from "./helpers";
 
 /*
@@ -42,20 +42,25 @@ async function openMemo(page: Page, title: string) {
 
 test("10a: an approver drafts a new pricing memo with Oracle; it opens on the question, recommendation and options", async ({ page }) => {
   // protects=an approver opens Company › Market › Pricing, clicks New pricing memo, types a
-  // question, sees the evidence window prefilled (the last six months through today) and
+  // question, sees the evidence window prefilled (six calendar months back from today in the
+  // Company time zone, through that day) and
   // clicks Draft with Oracle; the run's memo is the latest version and opens brief first:
   // The question (with the typed question), Recommendation, then Options with one section
   // per option; the crumb says Company › Market › Pricing; fails_when=the button is missing
-  // for an approver, the run does not write the memo, the question is lost, or the brief is
+  // for an approver, the window is 182 days or ends on the browser's (UTC) day, the run does
+  // not write the memo, the question is lost, or the brief is
   // not first; no_claim=the real agents' wording or the API's $10.00 estimate (the mock
   // runtime writes a fixed draft).
+  // 03:00 UTC on Sep 1 is still Aug 31 in the Company zone (America/Los_Angeles); six
+  // calendar months back from Aug 31 is Feb 28 (182 days would be Mar 2).
+  await page.clock.setFixedTime(new Date("2026-09-01T03:00:00Z"));
   await login(page, APPROVER);
   await openMarket(page);
   await page.getByRole("button", { name: "New pricing memo" }).click();
   const sheet = page.getByRole("dialog", { name: "New pricing memo" });
   await sheet.getByLabel("Question").fill(QUESTION);
-  await expect(sheet.getByLabel("From", { exact: true })).not.toHaveValue("");
-  await expect(sheet.getByLabel("To", { exact: true })).not.toHaveValue("");
+  await expect(sheet.getByLabel("From", { exact: true })).toHaveValue("2026-02-28");
+  await expect(sheet.getByLabel("To", { exact: true })).toHaveValue("2026-08-31");
   await sheet.getByRole("button", { name: "Draft with Oracle" }).click();
 
   await expect(page).toHaveURL(/\/documents\/pricing-[a-z0-9-]+$/);
@@ -232,4 +237,135 @@ test("10g: at 390 px the Pricing and Win and loss tables have no horizontal scro
   await expect(deals.getByTestId("deal-row").first()).toBeVisible();
   await expect(deals.getByTestId("deal-reason").first()).toBeVisible();
   await noSideways("deals-table");
+});
+
+/** Company › Market › Win and loss from the rail, as a person gets there. */
+async function openWinLoss(page: Page) {
+  await openMarket(page);
+  await page.getByTestId("market-tab-win-loss").click();
+  await expect(page).toHaveURL(/tab=win-loss/);
+  await expect(page.getByTestId("deals-table").getByTestId("deal-row").first()).toBeVisible();
+}
+
+const accounts = (page: Page) => page.getByTestId("deals-table").getByTestId("deal-account");
+
+test("10h: the Pricing and Win and loss tables label their dates with the Company time zone", async ({ page }) => {
+  // protects=Pricing's Updated column and Win and loss's Decided on column both name the
+  // Company time zone their days are in; fails_when=either header has no zone;
+  // no_claim=the day itself (lib/format.ts formats it in the Company zone).
+  await login(page, APPROVER);
+  await openMarket(page);
+  await expect(page.getByTestId("pricing-table").getByRole("columnheader", { name: "Updated (America/Los_Angeles)" })).toBeVisible();
+  await page.getByTestId("market-tab-win-loss").click();
+  await expect(page.getByTestId("deals-table").getByRole("columnheader", { name: "Decided on (America/Los_Angeles)" })).toBeVisible();
+});
+
+test("10i: Win and loss filters by result, reason and period", async ({ page }) => {
+  // protects=an approver narrows the six deals by Result (Lost: Account 7 and Account 9),
+  // then Reason (Price: Account 7), clears them, and by Period (on Dec 31 the last 3 months
+  // hold Oct 2, 6 and 9: Account 11, 12 and 14); a filter that matches nothing says so;
+  // fails_when=a filter is ignored or keeps rows it should drop; no_claim=the API's query
+  // (tests/test_deal_outcomes.py).
+  await page.clock.setFixedTime(new Date("2026-12-31T20:00:00Z"));
+  await login(page, APPROVER);
+  await openWinLoss(page);
+  await expect(accounts(page)).toHaveCount(6);
+  await page.getByLabel("Result").selectOption({ label: "Lost" });
+  await expect(accounts(page)).toHaveText(["Account 9", "Account 7"]);
+  await page.getByLabel("Reason").selectOption({ label: "Price" });
+  await expect(accounts(page)).toHaveText(["Account 7"]);
+  await page.getByLabel("Result").selectOption({ label: "Won" });
+  await expect(page.getByTestId("deals-empty")).toHaveText("No win or loss records match");
+  await page.getByLabel("Result").selectOption({ label: "Any result" });
+  await page.getByLabel("Reason").selectOption({ label: "Any reason" });
+  await expect(accounts(page)).toHaveCount(6);
+  await page.getByLabel("Period").selectOption({ label: "Last 3 months" });
+  await expect(accounts(page)).toHaveText(["Account 14", "Account 12", "Account 11"]);
+});
+
+test("10j: an approver adds, edits and deletes a win or loss record", async ({ page }) => {
+  // protects=Add opens the dialog and a saved record shows in the table with its result and
+  // reason; Edit from its row menu changes them; Delete asks first and removes the row;
+  // fails_when=a saved record is missing, the edit does not show, or Delete removes the row
+  // without asking or not at all; no_claim=the API's rules (tests/test_deal_outcomes.py).
+  await login(page, APPROVER);
+  await openWinLoss(page);
+  await expect(accounts(page)).toHaveCount(6);
+
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const add = page.getByRole("dialog", { name: "Add win or loss" });
+  await add.getByLabel("Result").selectOption({ label: "Won" });
+  await add.getByLabel("Decided on").fill("2026-10-01");
+  await add.getByLabel("Account").fill("Account 31");
+  await add.getByLabel("Main reason").selectOption({ label: "Value not clear" });
+  await add.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(add).toBeHidden();
+  await expect(accounts(page)).toHaveCount(7);
+  const row = () => page.getByTestId("deal-row").filter({ hasText: "Account 31" });
+  await expect(row().getByTestId("deal-result")).toHaveText("Won");
+  await expect(row().getByTestId("deal-reason")).toHaveText("Value not clear");
+
+  await row().getByRole("button", { name: "Actions for Account 31" }).click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit win or loss" });
+  await expect(edit.getByLabel("Account")).toHaveValue("Account 31");
+  await edit.getByLabel("Result").selectOption({ label: "Lost" });
+  await edit.getByLabel("Main reason").selectOption({ label: "Price" });
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit).toBeHidden();
+  await expect(row().getByTestId("deal-result")).toHaveText("Lost");
+  await expect(row().getByTestId("deal-reason")).toHaveText("Price");
+
+  await row().getByRole("button", { name: "Actions for Account 31" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  const ask = page.getByRole("alertdialog").filter({ hasText: "Delete Lost · Account 31" });
+  await ask.getByRole("button", { name: "Back" }).click();
+  await expect(row()).toHaveCount(1);
+  await row().getByRole("button", { name: "Actions for Account 31" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await ask.getByRole("button", { name: "Delete record" }).click();
+  await expect(row()).toHaveCount(0);
+  await expect(accounts(page)).toHaveCount(6);
+});
+
+/** Capabilities answer false for `ops` (the mock's MOCK_DENY_KEY), set before signing in. */
+const deny = (page: Page, ops: string[]) => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_DENY_KEY, ops.join(",")]);
+
+test("10k: without list_deal_outcomes there is no Win and loss tab, and its address shows Pricing", async ({ page }) => {
+  // protects=#370: the Win and loss tab is drawn only when the role may list deal outcomes;
+  // its address then opens Pricing, with no deals; fails_when=the tab is drawn (even
+  // disabled) or the deals table shows; no_claim=the API's 403 (tests/test_deal_outcomes.py).
+  await deny(page, ["list_deal_outcomes"]);
+  await login(page, APPROVER);
+  await openMarket(page);
+  await expect(page.getByTestId("market-tab-win-loss")).toHaveCount(0);
+  await page.goto("/company/market?tab=win-loss");
+  await expect(page.getByTestId("pricing-table")).toBeVisible();
+  await expect(page.getByTestId("deals-table")).toHaveCount(0);
+});
+
+test("10k: Add, Import CSV, Edit and Delete are each drawn only when allowed", async ({ page }) => {
+  // protects=#370: with creating, importing and deleting not allowed, Win and loss shows no
+  // Add or Import CSV and each row's menu holds Edit only; fails_when=a control is drawn
+  // (even disabled) without its operation; no_claim=the API's checks.
+  await deny(page, ["create_deal_outcome", "import_deal_outcomes", "delete_deal_outcome"]);
+  await login(page, APPROVER);
+  await openWinLoss(page);
+  await expect(page.getByRole("button", { name: "Add", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Import CSV" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Actions for Account 7" }).click();
+  await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+});
+
+test("10k: with neither Edit nor Delete allowed, the rows have no actions menu", async ({ page }) => {
+  // protects=#370: a row's menu is absent when it would be empty, while Add and Import CSV
+  // stay for a role allowed them; fails_when=an empty menu is drawn, or Add and Import go
+  // with it; no_claim=the API's checks.
+  await deny(page, ["update_deal_outcome", "delete_deal_outcome"]);
+  await login(page, APPROVER);
+  await openWinLoss(page);
+  await expect(page.getByRole("button", { name: "Add", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import CSV" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Actions for/ })).toHaveCount(0);
 });

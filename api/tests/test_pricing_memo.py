@@ -6,10 +6,13 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from oracle import autonomy
+from oracle.db import get_engine
 from oracle.decisions.models import Decision
 from oracle.docs.parser import DraftError, parse_draft
 from oracle.mcp.scopes import required_scope
@@ -24,7 +27,7 @@ from oracle.tenancy import tenant_session
 from oracle.trash.regenerate import FLOWS as REGENERATE_FLOWS
 from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import make_entity
-from tests.decision_helpers import clock, in_days  # noqa: F401
+from tests.decision_helpers import clock, freeze, in_days  # noqa: F401
 from tests.pricing_helpers import (
     OPTIONS,
     QUESTION,
@@ -161,6 +164,28 @@ async def test_an_approver_starts_a_memo_for_approvers_and_a_commenter_cannot(cl
     ]
     assert v1["front_matter"]["question"] == QUESTION
     assert v1["front_matter"]["evidence_window"]["to"]
+
+
+@pytest.mark.parametrize(
+    ("now", "window"),
+    [
+        # 03:00 UTC on Sep 1 is still Aug 31 in America/Los_Angeles; six calendar months
+        # back from Aug 31 is Feb 28 (182 days would be Mar 2).
+        ("2026-09-01T03:00:00+00:00", {"from": "2026-02-28", "to": "2026-08-31"}),
+        ("2026-10-23T18:00:00+00:00", {"from": "2026-04-23", "to": "2026-10-23"}),
+    ],
+)
+async def test_the_default_evidence_window_is_six_calendar_months_to_the_company_day(
+    client, ctx, monkeypatch, now, window
+):
+    """protects=a memo started without a period has the evidence window from the same day
+    six calendar months back (the month's last day when it has fewer days) through today in
+    the Company time zone; fails_when=the window is 182 days, or ends on the server's (UTC)
+    day; no_claim=the dialog's prefilled window (web/e2e/pricing.spec.ts 10a)."""
+    freeze(monkeypatch, datetime.fromisoformat(now).astimezone(UTC))
+    slug = await started_memo(client, ctx)
+    v1 = (await client.get(f"/v1/documents/{slug}/versions/1", headers=ctx.as_("approver"))).json()
+    assert v1["front_matter"]["evidence_window"] == window
 
 
 async def test_import_refuses_the_rules_over_http_and_takes_a_good_memo(client, ctx):
@@ -424,6 +449,35 @@ async def test_the_memo_list_names_the_pricing_owner_for_the_header(client, ctx)
     assert resp.status_code == 200, resp.text
     (memo,) = (await client.get("/v1/pricing-memos", headers=approver)).json()
     assert memo["pricing_owner"]["id"] == str(second.id)
+
+
+async def test_the_memo_list_reads_the_latest_versions_in_one_query(client, ctx):
+    """protects=GET /v1/pricing-memos reads every memo's latest version together: three memos
+    take as many statements as one; fails_when=the list reads one version per memo;
+    no_claim=the list's contents (the tests above)."""
+    await started_memo(client, ctx)
+    approver = ctx.as_("approver")
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    async def listed() -> int:
+        statements.clear()
+        engine = get_engine().sync_engine
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            resp = await client.get("/v1/pricing-memos", headers=approver)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+        assert resp.status_code == 200, resp.text
+        return len(statements)
+
+    one = await listed()
+    await started_memo(client, ctx)
+    await started_memo(client, ctx)
+    assert len((await client.get("/v1/pricing-memos", headers=approver)).json()) == 3
+    assert await listed() == one
 
 
 async def test_the_pricing_owner_decides_it_irreversibly_with_a_prediction(client, ctx):

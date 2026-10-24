@@ -366,6 +366,12 @@ const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
 /**
+ * Tests set this localStorage key before signing in, as MOCK_ROLE_KEY, to a comma-separated
+ * list of operation ids that GET /v1/me/capabilities answers false (#370: a control is absent
+ * when its operation is not allowed, also when the role would allow it).
+ */
+export const MOCK_DENY_KEY = "po-mock-deny";
+/**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
  * (30 goals, 50 more active runs, 250 more decisions, questions asked of the signed-in member); "suggestions" as the
@@ -3372,7 +3378,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
-  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") return json(200, await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0));
+  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
+    const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
+    for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
+    return json(200, caps);
+  }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
