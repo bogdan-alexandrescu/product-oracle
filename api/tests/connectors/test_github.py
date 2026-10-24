@@ -357,6 +357,7 @@ async def test_forbidden_without_rate_limit_is_an_auth_error():
         await collect(FakeGithub(routes).connector())
 
 
+@pytest.mark.timing
 async def test_primary_rate_limit():
     reset = int(time.time()) + 60
     headers = {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(reset)}

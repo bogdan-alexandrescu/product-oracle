@@ -383,6 +383,7 @@ async def test_runtime_status_reports_the_tenant_and_never_the_token(client):
         set_runtime(None)
 
 
+@pytest.mark.timing
 async def test_whoami_has_one_deadline_and_never_echoes_a_token():
     import asyncio
 

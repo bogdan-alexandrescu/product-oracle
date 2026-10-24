@@ -187,6 +187,7 @@ async def test_features_follow_each_switch(client, owner):
     assert "learned at submit" in body["feature_reasons"]["await_input"]
 
 
+@pytest.mark.timing
 async def test_features_are_cached_and_bounded_by_the_timeout():
     import asyncio
 
