@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { LinkIssueDialog } from "@/components/LinkIssueDialog";
 import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { usePlanScope, type PlanScope } from "@/lib/preferences";
@@ -110,6 +111,9 @@ export default function PlanPage() {
   const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
   const [linking, setLinking] = useState<PlanItem | null>(null);
   const tracks = useTracks();
+  // The tracks sit above the Roadmap: drawn before they answer, its rows would move down
+  // under the pointer when they arrive.
+  const tracksKnown = tracks.data !== undefined || !!tracks.error;
   const [milestone, setMilestone] = useState<MilestonePick | null>(null);
 
   const data = q.data;
@@ -214,56 +218,60 @@ export default function PlanPage() {
             onPlanChanged={() => void q.reload()}
           />
         ))}
-        <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
-          {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
-          {tracks.data?.map((t) => (
-            <TrackPanel key={t.id} track={t} may={trackRights} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
-          ))}
-          <Panel
-            title="Roadmap"
-            tools={
-              <>
-                {roadmaps.map((r) => (
-                  <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2 max-[600px]:hidden">
-                    {r.slug} v{r.version}
+        {!tracksKnown ? (
+          <Loading />
+        ) : (
+          <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
+            {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
+            {tracks.data?.map((t) => (
+              <TrackPanel key={t.id} track={t} may={trackRights} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
+            ))}
+            <Panel
+              title="Roadmap"
+              tools={
+                <>
+                  {roadmaps.map((r) => (
+                    <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2 max-[600px]:hidden">
+                      {r.slug} v{r.version}
+                    </span>
+                  ))}
+                  {canWrite && <EditPlanButton roadmaps={roadmaps} onOpened={setOpened} />}
+                  <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
+                    Dashed: proposed by a draft, not approved
                   </span>
-                ))}
-                {canWrite && <EditPlanButton roadmaps={roadmaps} onOpened={setOpened} />}
-                <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
-                  Dashed: proposed by a draft, not approved
-                </span>
-                <SegmentedControl<GroupBy>
-                  label="Group by"
-                  size="sm"
-                  value={by}
-                  onChange={setBy}
-                  items={[
-                    { value: "horizon", label: "Horizon" },
-                    { value: "goal", label: "Goal" },
-                    { value: "prd", label: "PRD" },
-                  ]}
-                />
-                <InfoTip label="the roadmap">
-                  Every item of each roadmap&apos;s approved version, and of its latest draft when Approved + drafts is
-                  on. A draft&apos;s item replaces its approved twin and says how it differs.
-                </InfoTip>
-              </>
-            }
-          >
-            <PlanTable
-              items={data?.items}
-              by={by}
-              tags={tags}
-              prdOrder={prdOrder}
-              selected={item?.id ?? null}
-              onSelect={onSelect}
-              me={userId}
-              loading={q.loading}
-              onLink={canLink ? onLink : undefined}
-            />
-            {data && data.items.length === 0 && <BuildRoadmaps />}
-          </Panel>
-        </Split>
+                  <SegmentedControl<GroupBy>
+                    label="Group by"
+                    size="sm"
+                    value={by}
+                    onChange={setBy}
+                    items={[
+                      { value: "horizon", label: "Horizon" },
+                      { value: "goal", label: "Goal" },
+                      { value: "prd", label: "PRD" },
+                    ]}
+                  />
+                  <InfoTip label="the roadmap">
+                    Every item of each roadmap&apos;s approved version, and of its latest draft when Approved + drafts is
+                    on. A draft&apos;s item replaces its approved twin and says how it differs.
+                  </InfoTip>
+                </>
+              }
+            >
+              <PlanTable
+                items={data?.items}
+                by={by}
+                tags={tags}
+                prdOrder={prdOrder}
+                selected={item?.id ?? null}
+                onSelect={onSelect}
+                me={userId}
+                loading={q.loading}
+                onLink={canLink ? onLink : undefined}
+              />
+              {data && data.items.length === 0 && <BuildRoadmaps />}
+            </Panel>
+          </Split>
+        )}
       </div>
       {msTrack ? (
         <Sheet open={sheet} title="Milestone" onClose={() => setSheet(false)} testId="sheet-plan-milestone">
