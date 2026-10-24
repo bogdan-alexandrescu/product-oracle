@@ -364,3 +364,11 @@ async def test_an_approver_is_told_the_owner_starts_strategy_drafts(client):
         headers=approver.headers,
     )
     assert resp.status_code == 403, resp.text
+
+
+def test_per_item_keys_are_in_alphabetical_order():
+    """protects=PER_ITEM reads as a sorted list (#504 review); fails_when=a key is added out
+    of order; no_claim=the roles it names (the tests above)."""
+    import oracle.capabilities as caps
+
+    assert list(caps.PER_ITEM) == sorted(caps.PER_ITEM)

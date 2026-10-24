@@ -62,9 +62,10 @@ test("an approver reviews the changes proposed in a discussion", async ({ page }
   await expect(row).toContainText("Discussion");
   await row.getByRole("link", { name: "Review changes" }).click();
   await expect(page).toHaveURL(/\?discussion=[^&]+&changes=1/);
-  const card = thread(page).getByTestId("discussion-changes");
+  // G3's changes card is the thread's one list of changes.
+  const card = thread(page).getByTestId("changes-card");
   await expect(card).toBeInViewport();
-  await expect(card.getByTestId("discussion-change")).toHaveCount(2);
+  await expect(card.getByRole("list", { name: "Open changes" }).getByTestId("change-row")).toHaveCount(2);
 });
 
 // protects=criterion 9.3: a participant mentioned again sees "Mentioned you" with the

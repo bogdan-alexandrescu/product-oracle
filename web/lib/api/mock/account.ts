@@ -142,6 +142,12 @@ export function seedAccount(members: Member[], uuid: () => string): AccountDb {
 const live = (t: TokenRow) => !t.revoked_at && (!t.expires_at || t.expires_at > new Date().toISOString());
 
 /** Unrevoked personal tokens and live MCP grants, per member (MemberOut.open_tokens). */
+/** A5: the member's live personal API tokens and MCP clients, apart (the removal preview). */
+export function liveCredentials(db: AccountDb, memberId: string): { api_tokens: number; mcp_clients: number } {
+  const mine = db.tokens.filter((t) => t.user_id === memberId && live(t));
+  return { api_tokens: mine.filter((t) => t.kind === "personal").length, mcp_clients: mine.filter((t) => t.kind === "mcp_client").length };
+}
+
 export function openTokens(db: AccountDb, memberId: string): number {
   return db.tokens.filter((t) => t.user_id === memberId && (t.kind === "personal" || t.kind === "mcp_client") && live(t)).length;
 }
@@ -205,10 +211,18 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
     };
     return { api_tokens_revoked: revoke("personal"), mcp_clients_revoked: revoke("mcp_client"), runs_tokens_revoked: revoke("run") };
   };
-  if (p[2] === "account" && m === "GET") {
+  if (p[2] === "account" && (m === "GET" || m === "PATCH")) {
+    // A5: your own name, shown to teammates instead of your email; null clears it.
+    const row = ctx.members.find((x) => x.id === me.id) ?? me;
+    if (m === "PATCH") {
+      const { name } = await body<Schemas["NamePatch"]>();
+      if ((name ?? "").trim().length > 80) return json(422, { detail: "A name is at most 80 characters" });
+      row.name = name?.trim() || null;
+    }
     const out: Schemas["MyAccountOut"] = {
       user_id: me.id,
       email: me.email,
+      name: row.name ?? null,
       role: me.role,
       created_at: me.created_at,
       last_sign_in_at: me.last_sign_in_at ?? null,

@@ -14,20 +14,24 @@ from sqlalchemy import func, select
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB, same_origin
-from oracle.auth.models import User
+from oracle.auth.models import Role, User
 from oracle.authz import has_role, not_for_runs, require_role
 from oracle.config import get_settings
 from oracle.connections.router import ProviderHttp
-from oracle.members import access, delivery, service, tokens
+from oracle.members import access, delivery, handover, impact, service, tokens
 from oracle.members.names import display_name
 from oracle.members.schemas import (
     AccessApprove,
     AccessRequestOut,
     ApiTokenOut,
     FollowUpOut,
+    HandOverIn,
+    HandOverOut,
+    ImpactOut,
     InviteCreate,
     InviteOut,
     InviteStatus,
+    MemberDetailOut,
     MemberOut,
     MemberPatch,
     PersonOut,
@@ -71,7 +75,8 @@ async def _call[T](op: Awaitable[T]) -> T:
     try:
         return await op
     except service.MemberError as e:
-        raise HTTPException(_STATUS[e.kind], e.message) from e
+        detail = e.detail if e.detail is not None else e.message
+        raise HTTPException(_STATUS[e.kind], detail) from e
 
 
 @router.get("/members", response_model=list[MemberOut])
@@ -85,7 +90,10 @@ async def list_members(db: TenantDB) -> list[MemberOut]:
 @router.patch(
     "/members/{user_id}",
     response_model=MemberOut,
-    responses={409: {"description": "Would demote the last owner"}},
+    responses={
+        409: {"description": "Would demote the last owner"},
+        422: {"description": "A hand-over target cannot hold it (hand_over_target)"},
+    },
 )
 async def update_member(
     user_id: uuid.UUID, body: MemberPatch, principal: Owner, db: TenantDB
@@ -95,8 +103,11 @@ async def update_member(
     and a demotion to viewer clears the flag. Clearing it returns the engineering-stop
     decisions they gave that are not delivered yet to the Inbox."""
     name = body.name if "name" in body.model_fields_set else ...
+    moves = [m.model_dump() for m in body.hand_over or []]
     user = await _call(
-        service.update_member(db, principal, user_id, body.role, body.engineering_lead, name)
+        service.update_member(
+            db, principal, user_id, body.role, body.engineering_lead, name, hand_over=moves
+        )
     )
     await db.commit()
     return (await service.members_out(db, [user]))[0]
@@ -109,7 +120,11 @@ async def update_member(
     responses={404: {"description": "No such member"}, 409: {"description": "The last owner"}},
 )
 async def disable_member(
-    user_id: uuid.UUID, principal: Owner, db: TenantDB, http: ProviderHttp
+    user_id: uuid.UUID,
+    principal: Owner,
+    db: TenantDB,
+    http: ProviderHttp,
+    body: HandOverIn | None = None,
 ) -> MemberOut:
     """Remove a member by disabling them: sign-in is refused on every path; their
     connections are disconnected (revoked at the provider) and their sources recorded
@@ -120,8 +135,11 @@ async def disable_member(
     review gate, and retried by the tick when they fail. Their Google IAP access is
     taken away, and that of the invites revoked with them (audited). The member stays
     in the list (history keeps the name); an owner can restore them, and they sign in
-    fresh. A no-op for a disabled member."""
-    user = await _call(service.disable_member(db, principal, user_id))
+    fresh. A no-op for a disabled member. With ``hand_over`` (A5), those
+    responsibilities move first, in the same transaction; a refused target is a 422
+    (``hand_over_target``) and nothing is moved or removed."""
+    moves = [m.model_dump() for m in body.hand_over or []] if body is not None else None
+    user = await _call(service.disable_member(db, principal, user_id, hand_over=moves))
     await db.commit()
     # The provider and runtime calls it owes, outside the review gate (retried by the tick).
     await service.after_disable(db, principal, user.id, http)
@@ -144,6 +162,77 @@ async def restore_member(user_id: uuid.UUID, principal: Owner, db: TenantDB) -> 
     await delivery.grant_member_access(db, principal, user)
     await db.refresh(user)
     return (await service.members_out(db, [user]))[0]
+
+
+@router.get(
+    "/members/{user_id}",
+    response_model=MemberDetailOut,
+    operation_id="get_member",
+    responses={404: {"description": "No such member"}},
+)
+async def get_member(user_id: uuid.UUID, db: TenantDB) -> MemberDetailOut:
+    """One member: how they joined (``joined.via``: invite, access_request, domain,
+    seeded or unknown), the responsibilities they hold (open items only) and the
+    approvals and decisions a removal would lapse or void."""
+    return MemberDetailOut.model_validate(await _call(impact.member_detail(db, user_id)))
+
+
+@router.get(
+    "/members/{user_id}/impact",
+    response_model=ImpactOut,
+    operation_id="get_member_impact",
+    responses={404: {"description": "No such member"}},
+)
+async def get_member_impact(
+    user_id: uuid.UUID,
+    db: TenantDB,
+    change: Literal["remove", "role"],
+    role: Annotated[Role | None, Query()] = None,
+) -> ImpactOut:
+    """What removing the member (``change=remove``) or changing their role
+    (``change=role&role=commenter``) would end, void and lapse, and the responsibilities
+    they hold (``holder_ok``: whether they may keep each after the change). Reads only:
+    the same selections the change applies, no locks, no writes. ``nothing`` is true
+    when the change touches nothing (a promotion, their own role, a removed member)."""
+    return ImpactOut.model_validate(
+        await _call(impact.member_impact(db, user_id, change, role))  # type: ignore[arg-type]
+    )
+
+
+@router.get(
+    "/members/{user_id}/approvals",
+    response_model=list[TokenApprovalOut],
+    operation_id="list_member_approvals",
+    responses={404: {"description": "No such member"}},
+)
+async def list_member_approvals(
+    user_id: uuid.UUID, db: TenantDB, lapsed: bool = False
+) -> list[TokenApprovalOut]:
+    """The member's section verdicts and version approvals, given in person or through
+    their API tokens and grants, oldest first; ``lapsed=true`` includes lapsed ones."""
+    rows = await _call(service.member_approvals(db, user_id, lapsed=lapsed))
+    return [TokenApprovalOut.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/members/{user_id}/hand-over",
+    response_model=HandOverOut,
+    operation_id="hand_over",
+    responses={
+        404: {"description": "No such member"},
+        422: {"description": "An unknown kind, or a target that cannot hold it"},
+    },
+)
+async def hand_over(
+    user_id: uuid.UUID, body: HandOverIn, principal: Owner, db: TenantDB
+) -> HandOverOut:
+    """Move an active or removed member's responsibilities to other members (``to``)
+    or clear them (``to`` null), all or none; kinds left out stay. Returns what they
+    still hold."""
+    moves = [m.model_dump() for m in body.hand_over or []]
+    await _call(handover.hand_over(db, principal, user_id, moves))
+    await db.commit()
+    return HandOverOut.model_validate({"responsibilities": await handover.remaining(db, user_id)})
 
 
 @router.delete(
@@ -282,13 +371,17 @@ async def resend_invite(invite_id: uuid.UUID, principal: Approver, db: TenantDB)
 @router.post(
     "/invites/{invite_id}/access",
     response_model=InviteOut,
-    responses={404: {"description": "No such invite"}, 409: {"description": "Not open"}},
+    responses={
+        403: {"description": "No longer an owner"},
+        404: {"description": "No such invite"},
+        409: {"description": "Not open"},
+    },
     dependencies=[Depends(same_origin)],
 )
 async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
     """Grant an open invite's Google IAP access again (Retry on "Access not granted
     yet"). Each attempt is audited; ``access`` says how it went."""
-    invite = await _call(service.get_open_invite(db, invite_id))
+    invite = await _call(service.get_open_invite(db, principal, invite_id))
     await delivery.grant_invite_access(db, principal, invite)
     await db.refresh(invite)
     return (await service.invites_out(db, [invite]))[0]
@@ -298,6 +391,7 @@ async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: Tenant
     "/invites/{invite_id}/email",
     response_model=InviteOut,
     responses={
+        403: {"description": "No longer an owner"},
         404: {"description": "No such invite"},
         409: {"description": "Not open, or its email is being sent"},
         429: {"description": "Its email went out under a minute ago (Retry-After: seconds)"},
@@ -308,7 +402,7 @@ async def resend_invite_email(invite_id: uuid.UUID, principal: Owner, db: Tenant
     """Email an open invite again (Resend): queued and sent in the background
     (``email_status``), or ``not_sent`` with no sender configured. Refused (429) under
     a minute after its last send."""
-    invite = await _call(service.get_open_invite(db, invite_id))
+    invite = await _call(service.get_open_invite(db, principal, invite_id))
     if invite.email_status == "queued":
         raise HTTPException(status.HTTP_409_CONFLICT, "Oracle is sending this invite's email")
     wait = delivery.resend_wait(invite)

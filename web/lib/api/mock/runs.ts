@@ -11,6 +11,7 @@ import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
+import { fileItems } from "./checkpoint-review";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
@@ -39,6 +40,8 @@ type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" 
   origin?: "row" | "discussion";
   discussion_id?: string | null;
   from_private?: boolean;
+  /** C2: a question action's question, asked through the questions store (the member's Inbox). */
+  question_id?: string | null;
 };
 /** D8: a checkpoint's shared draft; `log` says who made each revision (the 409's names). */
 export interface DraftRow {
@@ -95,6 +98,14 @@ export interface RunsContext {
    * change of theirs before it checks the revision.
    */
   reviewChange?: () => string | null;
+  /**
+   * C2, as oracle.runs.actions._ask: a question action asks the member through the questions
+   * store (their Inbox's row) and returns the question's id; `asked` reads it back (its status
+   * and answer); `withdraw` withdraws it while nobody answered. Absent: the action holds it.
+   */
+  ask?: (q: { asked_to: string; prompt: string; checkpoint_id: string; item_ref: string }) => string;
+  asked?: (id: string) => { status: string; answer: string | null } | null;
+  withdraw?: (id: string) => void;
   /**
    * A3: whether the signed-in member may decide a checkpoint of a run of `flow`, as the API's
    * oracle.members.leads.may_decide (the engineering stops go to the leads and owners once
@@ -2977,6 +2988,32 @@ export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
 };
 
 
+/** The roadmap review run whose file cannot be read as items (seedRoadmapFileProblem in e2e/helpers.ts, D1). */
+export const ROADMAP_FILE_PROBLEM_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d7";
+
+/** D1: the roadmap review run's twin whose roadmap_items.yaml is not valid YAML: one file-level problem, no items. */
+function roadmapFileProblemRun(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d7")) as RunOut;
+  run.id = ROADMAP_FILE_PROBLEM_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-4";
+  const [items] = run.segments;
+  items.items_check = withReasons(
+    { items: 0, by_horizon: { now: 0, next: 0, later: 0 }, problems: [{ code: "unreadable_yaml", message: "roadmap_items.yaml is not valid YAML: line 3 has a tab where spaces belong", item: null }] },
+    [],
+    null,
+  );
+  const [cp] = run.checkpoints;
+  cp.run_id = run.id;
+  cp.payload = { ...cp.payload, items_check: items.items_check };
+  refresh(run);
+  return run;
+}
+
+export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapFileProblemRun(),
+  artifacts: { [`${ROADMAP_FILE_PROBLEM_RUN_ID}|1|roadmap_items.yaml`]: "version: 1\nitems:\n\t- {id: slack-alerts\n" },
+};
+
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
@@ -3185,6 +3222,12 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       updated_by: who,
       updated_at: ctx.now(),
     };
+    if (a.kind === "question" && ctx.ask) {
+      // C2: asked through the questions store; a changed question withdraws the one before.
+      if (existing?.question_id) ctx.withdraw?.(existing.question_id);
+      const v = (a.value ?? {}) as { asked_to?: string; text?: string };
+      row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
+    }
     draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
     bump(draft, name);
     return out();
@@ -3208,6 +3251,7 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   }
   if (action && rest.length === 2 && m === "DELETE") {
     if (action.created_by !== who && !stages) return fail(403, "Only its author or an approver can undo this action");
+    if (action.question_id) ctx.withdraw?.(action.question_id);
     draft.actions = draft.actions.filter((x) => x !== action);
     bump(draft, name);
     return out();
@@ -3225,33 +3269,89 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
   const seg = r.segments.find((s) => s.seq === cp.segment_seq);
   const check = cp.kind === "roadmap_items" ? (seg?.items_check ?? null) : null;
   const reasons = check?.reasons ?? [];
-  const keys = [...new Set([...reasons.map((x) => x.item), ...draft.actions.map((a) => a.item_key)])];
+  // D1: the file's items first, in order, with their fields (as oracle.runs.actions reads the
+  // checked file); then the items only the reasons or the actions name (no position).
+  const file = check ? fileItems(ctx.db.artifacts[`${r.id}|${cp.segment_seq}|roadmap_items.yaml`] ?? "") : [];
+  const inFile = new Map(file.map((f) => [f.key, f]));
+  const keys = [...new Set([...file.map((f) => f.key), ...reasons.map((x) => x.item), ...draft.actions.map((a) => a.item_key)])];
+  const waiting = new Map<string, Schemas["WaitingOn"]>();
+  // A question action's stakeholder question (C2): asked of a member, answered in value.answer.
+  const questionOf = (a: DraftActionRow): Schemas["ReviewQuestion"] | null => {
+    if (a.kind !== "question") return null;
+    const v = (a.value ?? {}) as { asked_to?: string; text?: string; answer?: string | null; answered_by?: string | null };
+    const to = person(v.asked_to ?? null);
+    const stored = a.question_id ? ctx.asked?.(a.question_id) : null;
+    if (stored) {
+      return {
+        id: a.question_id!,
+        status: stored.status === "answered" ? "answered" : stored.status === "withdrawn" ? "withdrawn" : "open",
+        text: v.text ?? "",
+        asked_to: to ? { id: to.id, name: to.name } : null,
+        answer: stored.answer ? { kind: "answer", body: stored.answer, answered_by: to ? { id: to.id, name: to.name } : null } : null,
+      };
+    }
+    return {
+      id: a.id,
+      status: v.answer ? "answered" : "open",
+      text: v.text ?? "",
+      asked_to: to ? { id: to.id, name: to.name } : null,
+      answer: v.answer ? { kind: "text", body: v.answer, answered_by: to ? { id: to.id, name: to.name } : null } : null,
+    };
+  };
   const tally: Schemas["ReviewTally"] = { need_you: 0, handled: 0, blocking_open: 0, to_confirm_open: 0, waiting_on: [], suggested: 0 };
-  const items: Schemas["ReviewItem"][] = keys.map((key, n) => {
+  const items: Schemas["ReviewItem"][] = keys.map((key) => {
     const mine = draft.actions.filter((a) => a.item_key === key);
     const theirs = reasons.filter((x) => x.item === key);
     const answered = (x: (typeof reasons)[number]) =>
       mine.some((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code)));
     const open = theirs.filter((x) => !answered(x));
-    const state = theirs.length === 0 ? "fine" : open.length === 0 ? "handled" : "needs_you";
+    const asked = mine.map(questionOf).filter((q): q is Schemas["ReviewQuestion"] => q?.status === "open");
+    for (const q of asked) {
+      if (!q.asked_to?.id) continue;
+      const row = waiting.get(q.asked_to.id) ?? { user_id: q.asked_to.id, name: q.asked_to.name, count: 0 };
+      row.count += 1;
+      waiting.set(q.asked_to.id, row);
+    }
+    const state = theirs.length === 0 ? "fine" : open.length === 0 ? "handled" : asked.length ? "waiting" : "needs_you";
     tally.need_you += state === "needs_you" ? 1 : 0;
     tally.handled += state === "handled" ? 1 : 0;
     tally.blocking_open += open.filter((x) => x.severity === "blocking").length;
     tally.to_confirm_open += open.filter((x) => x.severity === "confirm").length;
     tally.suggested += mine.filter((a) => a.state === "suggested").length;
+    const item = inFile.get(key);
     return {
       key,
-      position: n + 1,
-      title: theirs[0]?.item_title ?? key,
-      depends_on: [],
+      position: item?.position ?? null,
+      title: item?.title ?? theirs[0]?.item_title ?? key,
+      horizon: item?.horizon ?? null,
+      milestone: item?.milestone ?? null,
+      confidence: item?.confidence ?? null,
+      rank: item?.rank ?? null,
+      outcome: item?.outcome ?? null,
+      depends_on: item?.depends_on ?? [],
+      prd_section: item?.prd_section ?? null,
       reasons: theirs,
-      actions: mine.map((a) => ({ ...a, created_by: person(a.created_by), updated_by: person(a.updated_by), question: null })),
+      actions: mine.map((a) => ({
+        id: a.id,
+        item_key: a.item_key,
+        kind: a.kind,
+        field: a.field,
+        value: a.value,
+        answers: a.answers,
+        state: a.state,
+        note: a.note,
+        created_by: person(a.created_by),
+        updated_by: person(a.updated_by),
+        updated_at: a.updated_at,
+        question: questionOf(a),
+      })),
       state,
       // D6: the item's answer to the review and its changes since the previous attempt.
       resolution: check?.resolution?.entries.find((e) => e.id === key) ?? null,
       diff: check?.diff?.items.find((d) => d.id === key)?.changes ?? [],
     };
   });
+  tally.waiting_on = [...waiting.values()];
   const pending = cp.status === "pending";
   const stages = pending && mayStage(ctx, r, cp, role);
   return {

@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { CONSOLE_HELD_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
+import { CONSOLE_HELD_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -237,6 +237,33 @@ export async function seedRoadmapReview(page: Page): Promise<string> {
     localStorage.setItem(key, JSON.stringify(db));
     return seed.run.id;
   }, ROADMAP_REVIEW_RUN);
+}
+
+/**
+ * Seeds the mock and opens `url`; seeds again when the app's own writes right after sign-in
+ * landed over the seed (the page then says "run … not found").
+ */
+export async function openSeeded(page: Page, seed: (page: Page) => Promise<string>, url: string) {
+  const missing = page.getByText(/^run [0-9a-f-]+ not found$/);
+  for (let i = 0; i < 3; i++) {
+    await seed(page);
+    await page.goto(url);
+    await expect(page.locator("main h1").or(missing).first()).toBeVisible();
+    if (!(await missing.isVisible())) return;
+  }
+}
+
+/** Seeds the mock with the roadmap review run whose file cannot be read as items (ROADMAP_FILE_PROBLEM_RUN, D1). */
+export async function seedRoadmapFileProblem(page: Page): Promise<string> {
+  return page.evaluate((seed) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
+    db.runs.runs.push(seed.run);
+    Object.assign(db.runs.artifacts, seed.artifacts);
+    localStorage.setItem(key, JSON.stringify(db));
+    return seed.run.id;
+  }, ROADMAP_FILE_PROBLEM_RUN);
 }
 
 /**

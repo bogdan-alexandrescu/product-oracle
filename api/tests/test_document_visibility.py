@@ -456,3 +456,48 @@ async def test_the_approval_decision_follows_the_update(client, ctx):
     assert (await client.get(f"/v1/decisions/{mine['id']}", headers=commenter)).status_code == 404
     inbox = await client.get("/v1/inbox", headers=commenter)
     assert not _leaks(inbox.text, slug, doc_id)
+
+
+@pytest.mark.parametrize("who", ["commenter", "viewer"])
+async def test_the_runs_checkpoint_decisions_follow_the_update(client, ctx, runtime, who):
+    """protects=a checkpoint record of an approvers update's run (its stop sent back by the
+    owner: a decision with source_kind checkpoint) and a decision whose subject is the update
+    are absent from a commenter's and a viewer's decision log and direct read, and shown to an
+    approver (#519 item 2); fails_when=only "Publish <update> v<n>" is hidden and the run's
+    stop names the update in Company › Decisions; no_claim=the Decisions page (the e2e)."""
+    slug, doc_id = await _update(client, ctx)
+    run = await drafted_by_run(client, ctx, runtime, slug, investor_md(slug))
+    cp = next(c for c in run["checkpoints"] if c["status"] == "pending")
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "changes_requested", "note": "Tighten the metrics."},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 200, resp.text
+    from oracle.decisions import capture
+
+    async with tenant_session(ctx.tenant_id) as s:
+        await capture.capture(
+            s,
+            None,
+            origin="oracle",
+            source_kind="discussion",
+            source_id=uuid.uuid4(),
+            title="Investor update · October 2026 leads with metrics",
+            options=[{"key": "yes", "label": "Yes"}],
+            chosen_option="yes",
+            rationale="Asked for",
+            approver_id=ctx.users["owner"].id,
+            subjects=[{"kind": "document", "id": str(doc_id), "ref": slug}],
+        )
+        await s.commit()
+    listed = (await client.get("/v1/decisions", headers=ctx.as_("approver"))).json()
+    mine = [d for d in listed if "Investor update" in d["title"]]
+    assert len(mine) == 2, listed
+    me = ctx.as_(who)
+    resp = await client.get("/v1/decisions", headers=me)
+    assert resp.status_code == 200 and not _leaks(resp.text, slug, doc_id), resp.text
+    for d in mine:
+        assert (await client.get(f"/v1/decisions/{d['id']}", headers=me)).status_code == 404
+    resp = await client.get(f"/v1/runs/{run['id']}/decisions", headers=me)
+    assert resp.status_code in (200, 404) and not _leaks(resp.text, slug, doc_id), resp.text

@@ -33,7 +33,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
 from oracle.members.leads import date_rights, engineering_leads
-from oracle.roadmap import schedule, tracker, tracks
+from oracle.roadmap import schedule, staleness, tracker, tracks
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapItem,
@@ -186,7 +186,7 @@ async def situations(db: AsyncSession, track: ProductTrack, found: "TrackRead") 
                     )
                 )  # fmt: skip
         if item.freshness in ("potentially_stale", "under_review"):
-            why = "; ".join(item.stale_reasons or []) or "Its PRD trace changed"
+            why = staleness.stale_why(item.stale_reasons, "Its PRD trace changed")
             out.append(
                 Situation(
                     item.item_key, "stale", str(item.caused_by_change_id or ""), why,

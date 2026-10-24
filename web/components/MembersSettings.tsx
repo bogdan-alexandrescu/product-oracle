@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
-import { ConfirmDialog } from "@/components/account/ConfirmDialog";
 import { AccessRequests } from "@/components/members/AccessRequests";
+import { personName, RemoveDialog, RoleDialog } from "@/components/members/ChangePreview";
+import { MemberInspector } from "@/components/members/MemberInspector";
+import { SignInRules } from "@/components/members/SignInRules";
+import { FindPerson, matches, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
 import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
 import {
   Avatar,
@@ -23,13 +26,14 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
+import { hasRole, membersApi, type HandOver, type Impact } from "@/lib/api/members-types";
 import { formatDate, formatDateTime, formatDay } from "@/lib/format";
 import { useMe, type Role } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 const ROLES: { role: Role; label: string; can: string }[] = [
   { role: "owner", label: "Owner", can: "everything, plus members, invites, API tokens and company settings" },
-  { role: "approver", label: "Approver", can: "sets section verdicts, imports and approves versions" },
+  { role: "approver", label: "Approver", can: "sets section verdicts, imports and approves versions, invites viewers and commenters" },
   { role: "commenter", label: "Commenter", can: "comments, replies and resolves their own threads" },
   { role: "viewer", label: "Viewer", can: "reads documents, versions, diffs, feedback and exports" },
 ];
@@ -50,16 +54,19 @@ function RoleSelect({
   disabled,
   onChange,
   id,
+  roles,
 }: {
   value: Role;
   label: string;
   disabled?: boolean;
   onChange: (role: Role) => void;
   id?: string;
+  /** The roles offered (A5: an approver's invite_roles); every role by default. */
+  roles?: Role[];
 }) {
   return (
     <select id={id} aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Role)} className={SELECT}>
-      {ROLES.map((r) => (
+      {ROLES.filter((r) => !roles || roles.includes(r.role)).map((r) => (
         <option key={r.role} value={r.role}>
           {r.label}
         </option>
@@ -77,30 +84,42 @@ const pageTip = (
 
 /** Settings > Members: the people of this company's Oracle, their roles and status, and invites. */
 export function MembersSettings() {
-  const { me, role, engineeringLead, loading, can, capsReady, capsError } = useMe();
-  // #370: managing members starts with reading them (GET /v1/members).
+  const { me, loading, can, capsReady, capsError } = useMe();
+  // #370: managing members starts with reading them (GET /v1/members); an approver invites
+  // (A5) and reads the people list like everyone else.
   const canManage = can("list_members");
+  const canInvite = can("create_invite") && !!me?.invite_roles?.length;
   const ready = !loading && (capsReady || !!capsError);
 
-  if (ready && canManage) return <OwnerView selfId={me?.user_id ?? null} />;
+  if (ready && (canManage || canInvite)) return <OwnerView selfId={me?.user_id ?? null} manage={canManage} />;
   return (
     <>
       <PageHeader title="Members" status={pageTip} />
       {ready && (
         <Split inspector={<RolesInspector />}>
-          <p
-            role="note"
-            data-testid="role-note"
-            className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
-          >
-            <span>
-              Your role is <b>{role ? ROLE_LABEL[role].toLowerCase() : "unknown"}</b>.
-            </span>
-            {engineeringLead && <span>You are an engineering lead.</span>}
-          </p>
+          <RoleNote />
+          <PeopleReadOnly />
         </Split>
       )}
     </>
+  );
+}
+
+/** "Your role is commenter. Owners manage members and sign-in." (A5, 3.10) */
+function RoleNote() {
+  const { role, engineeringLead } = useMe();
+  return (
+    <p
+      role="note"
+      data-testid="role-note"
+      className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
+    >
+      <span>
+        Your role is <b>{role ? ROLE_LABEL[role].toLowerCase() : "unknown"}</b>.{" "}
+        {role === "approver" ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
+      </span>
+      {engineeringLead && <span>You are an engineering lead.</span>}
+    </p>
   );
 }
 
@@ -229,8 +248,6 @@ function EmailState({ invite, resending, onResend }: { invite: Invite; resending
   );
 }
 
-const tokensPhrase = (n: number) => (n === 0 ? "nothing else is" : n === 1 ? "their 1 open token is" : `their ${n} open tokens are`);
-
 /** "Removed Oct 18, 2026" */
 function StatusChip({ m }: { m: Member }) {
   const status = !removed(m) ? (
@@ -254,15 +271,29 @@ function StatusChip({ m }: { m: Member }) {
   );
 }
 
-function OwnerView({ selfId }: { selfId: string | null }) {
+/**
+ * The owner's page; with `manage` off, an approver's (A5): their role note, the Access
+ * requests and Invite inspector with their roles and their own invites, and the read-only
+ * People list instead of the member table.
+ */
+function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: boolean }) {
   const { me } = useMe();
-  const membersQ = useQuery("members", () => unwrap(api.GET("/v1/members")));
+  const inviteRoles = me?.invite_roles ?? [];
+  const membersQ = useQuery(manage ? "members" : "members:none", () =>
+    manage ? unwrap(api.GET("/v1/members")) : Promise.resolve(undefined as Member[] | undefined),
+  );
   const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Member | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const memberActs = useActed();
+  // A5: the member whose inspector is open (in place of the invite inspector), the People
+  // search, and a demotion waiting on its dialog.
+  const [inspecting, setInspecting] = useState<string | null>(null);
+  const [find, setFind] = useState("");
+  const [demoting, setDemoting] = useState<{ member: Member; role: Role; impact: Impact } | null>(null);
+  const [demoteError, setDemoteError] = useState<string | null>(null);
   const inviteActs = useActed();
 
   const emailRef = useRef<HTMLInputElement>(null);
@@ -293,13 +324,25 @@ function OwnerView({ selfId }: { selfId: string | null }) {
   const activeOwners = members?.filter((m) => m.role === "owner" && !removed(m)).length ?? 0;
   const replace = (updated: Member) => membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
 
-  async function changeRole(m: Member, role: Role) {
+  async function changeRole(m: Member, role: Role, hand_over: HandOver[] = []) {
     setSaving(m.id);
     setError(null);
     try {
-      replace(await unwrap(api.PATCH("/v1/members/{user_id}", { params: { path: { user_id: m.id } }, body: { role } })));
+      // A5: a lower role first reads what it lapses and voids; with something to show, the
+      // dialog asks (the select stays on the old role until Change role).
+      if (!demoting && !hasRole(role, m.role)) {
+        const impact = await membersApi.impact(m.id, { role });
+        if (!impact.nothing) {
+          setDemoteError(null);
+          setDemoting({ member: m, role, impact });
+          return;
+        }
+      }
+      replace(await membersApi.patch(m.id, hand_over.length ? { role, hand_over } : { role }));
+      setDemoting(null);
     } catch (e) {
-      setError(errorMessage(e));
+      if (demoting) setDemoteError(errorMessage(e));
+      else setError(errorMessage(e));
     } finally {
       setSaving(null);
     }
@@ -332,11 +375,11 @@ function OwnerView({ selfId }: { selfId: string | null }) {
     }
   }
 
-  async function remove(m: Member) {
+  async function remove(m: Member, hand_over: HandOver[]) {
     setSaving(m.id);
     setConfirmError(null);
     try {
-      const updated = await unwrap(api.POST("/v1/members/{user_id}/disable", { params: { path: { user_id: m.id } } }));
+      const updated = await membersApi.disable(m.id, hand_over);
       replace(updated);
       // Removing someone also revokes the open invite for their email.
       invitesQ.setData((prev) => prev?.filter((i) => i.email !== updated.email));
@@ -405,6 +448,18 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       const updated = await unwrap(api.POST("/v1/invites/{invite_id}/email", { params: { path: { invite_id: invite.id } } }));
       polls.current = 0;
       replaceInvite(updated);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function renew(invite: Invite) {
+    setBusy(`resend:${invite.id}`);
+    setError(null);
+    try {
+      replaceInvite(await unwrap(api.POST("/v1/invites/{invite_id}/resend", { params: { path: { invite_id: invite.id } } })));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -533,8 +588,17 @@ function OwnerView({ selfId }: { selfId: string | null }) {
       header: "Member",
       cell: (m) => (
         <span className="flex min-w-0 items-center gap-2.5">
-          <Avatar name={m.email} size={28} tone={m.id === selfId ? "me" : "default"} />
-          <span className={`min-w-0 truncate font-medium ${removed(m) ? "text-text2" : ""}`}>{m.email}</span>
+          <Avatar name={personName(m)} size={28} tone={m.id === selfId ? "me" : "default"} />
+          {/* A5: the name in bold, the email under it (the email alone with no name); opens the member inspector. */}
+          <button
+            type="button"
+            data-testid="member-open"
+            onClick={() => setInspecting(m.id)}
+            className={`flex min-w-0 flex-col text-left leading-tight hover:underline ${removed(m) ? "text-text2" : ""}`}
+          >
+            <span className="truncate font-semibold">{personName(m)}</span>
+            {m.name?.trim() && <span className="truncate text-[13px] font-normal text-text2">{m.email}</span>}
+          </button>
           {m.id === selfId && (
             <Chip kind="acc">
               <span className="sr-only">(</span>you<span className="sr-only">)</span>
@@ -627,8 +691,12 @@ function OwnerView({ selfId }: { selfId: string | null }) {
         </>
       }
       stats={[
-        { label: "Active", value: members ? members.filter((m) => !removed(m)).length : "—", testId: "stat-active" },
-        { label: "Removed", value: members ? members.filter(removed).length : "—", testId: "stat-removed" },
+        ...(manage
+          ? [
+              { label: "Active", value: members ? members.filter((m) => !removed(m)).length : "—", testId: "stat-active" },
+              { label: "Removed", value: members ? members.filter(removed).length : "—", testId: "stat-removed" },
+            ]
+          : []),
         { label: "Open invites", value: invites?.length ?? "—" },
       ]}
     >
@@ -664,13 +732,14 @@ function OwnerView({ selfId }: { selfId: string | null }) {
             <RoleSelect
               value={inviteRole}
               label="Role"
+              roles={inviteRoles}
               onChange={(r) => {
                 setInviteRole(r);
                 if (r === "viewer") setInviteLead(false);
               }}
             />
           </Field>
-          <label className="inline-flex items-center gap-2 text-[15px]" title={inviteRole === "viewer" ? VIEWER_NOT_LEAD : undefined}>
+          {manage && <label className="inline-flex items-center gap-2 text-[15px]" title={inviteRole === "viewer" ? VIEWER_NOT_LEAD : undefined}>
             <input
               type="checkbox"
               checked={inviteLead && inviteRole !== "viewer"}
@@ -679,7 +748,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               className={CHECKBOX}
             />
             Engineering lead
-          </label>
+          </label>}
           <Field label="Message (optional)">
             <textarea
               rows={3}
@@ -733,6 +802,17 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                     <Button variant="ghost" icon="link" aria-label={`Copy link for ${i.email}`} onClick={() => copyLink(i)}>
                       {copied === i.id ? "Copied" : "Copy link"}
                     </Button>
+                    {i.status === "expired" && (
+                      // A5: 14 more days from now.
+                      <Button
+                        variant="ghost"
+                        aria-label={`Resend invite for ${i.email}`}
+                        disabled={busy === `resend:${i.id}`}
+                        onClick={() => renew(i)}
+                      >
+                        {busy === `resend:${i.id}` ? "Resending…" : "Resend"}
+                      </Button>
+                    )}
                     <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
                       Revoke
                     </Button>
@@ -742,8 +822,9 @@ function OwnerView({ selfId }: { selfId: string | null }) {
                         Note: {i.message}
                       </span>
                     )}
-                    <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
-                    <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
+                    {/* #370: Retry and Resend are an owner's; an approver sees neither. */}
+                    {manage && <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />}
+                    {manage && <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />}
                   </>
                 )}
               </li>
@@ -751,18 +832,19 @@ function OwnerView({ selfId }: { selfId: string | null }) {
           </ul>
         )}
       </InspectorSection>
-      <RolesSection members={members} />
+      <RolesSection members={manage ? members : undefined} />
     </Inspector>
   );
 
   const active = members?.filter((m) => !removed(m)).length;
+  const inspected = inspecting ? members?.find((m) => m.id === inspecting) : undefined;
   return (
     <>
       <PageHeader
         title="Members"
         status={
           <>
-            {active != null && <Chip kind="acc">{active} active</Chip>}
+            {manage && active != null && <Chip kind="acc">{active} active</Chip>}
             {pageTip}
           </>
         }
@@ -780,10 +862,27 @@ function OwnerView({ selfId }: { selfId: string | null }) {
           </Button>
         }
       />
-      <Split inspector={inspector}>
+      <Split
+        inspector={
+          inspected ? (
+            <MemberInspector
+              key={inspected.id}
+              member={inspected}
+              people={members ?? []}
+              footer={memberActs.acted?.key === inspected.id ? null : actionCell(inspected)}
+              onClose={() => setInspecting(null)}
+              onSaved={(u) => replace({ ...inspected, ...u })}
+            />
+          ) : (
+            inspector
+          )
+        }
+      >
         {error && <Notice tone="error">{error}</Notice>}
-        <AccessRequests roles={me?.invite_roles ?? []} defaultRole="commenter" onInvited={() => void invitesQ.reload()} />
-        <Panel title="People" count={members?.length}>
+        {!manage && <RoleNote />}
+        <AccessRequests roles={inviteRoles} defaultRole="commenter" onInvited={() => void invitesQ.reload()} />
+        {!manage && <PeopleReadOnly />}
+        {manage && <Panel title="People" count={members?.length} tools={<FindPerson value={find} onChange={setFind} />}>
           {membersQ.error ? (
             <div className="p-4">
               <Notice tone="error">{membersQ.error}</Notice>
@@ -793,7 +892,7 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               <DataTable
                 label="Members"
                 columns={columns}
-                rows={members}
+                rows={members?.filter((m) => matches(find, m.name, m.email))}
                 loading={!members}
                 rowKey={(m) => m.id}
                 rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status, ...memberActs.rowAttrs(m.id) })}
@@ -801,29 +900,26 @@ function OwnerView({ selfId }: { selfId: string | null }) {
               />
             </div>
           )}
-        </Panel>
+        </Panel>}
+        {manage && <SignInRules />}
       </Split>
-      <ConfirmDialog
-        open={!!confirming}
-        title="Remove this member?"
-        subject={confirming?.email}
-        testId="remove-dialog"
-        confirmLabel="Remove member"
-        pendingLabel="Removing…"
+      <RemoveDialog
+        member={confirming}
+        people={members ?? []}
         pending={!!confirming && saving === confirming.id}
         error={confirmError}
         onClose={() => setConfirming(null)}
-        onConfirm={() => confirming && remove(confirming)}
-        consequences={[
-          { icon: "lock", text: "They can't sign in; every session they have ends now." },
-          {
-            icon: "link",
-            text: `Their connections and sources stop, and ${tokensPhrase(confirming?.open_tokens ?? 0)} revoked.`,
-          },
-          { icon: "inbox", text: "Their pending approvals and checkpoint decisions go back to the Inbox." },
-          { icon: "doc", text: "History keeps their name." },
-          { icon: "user", text: "An owner can restore them; revoked tokens and connections stay revoked." },
-        ]}
+        onConfirm={(moves) => confirming && remove(confirming, moves)}
+      />
+      <RoleDialog
+        member={demoting?.member ?? null}
+        role={demoting?.role ?? null}
+        impact={demoting?.impact ?? null}
+        people={members ?? []}
+        pending={!!demoting && saving === demoting.member.id}
+        error={demoteError}
+        onClose={() => setDemoting(null)}
+        onConfirm={(moves) => demoting && changeRole(demoting.member, demoting.role, moves)}
       />
     </>
   );

@@ -33,9 +33,11 @@ FALLBACK_IAP_ROLE: Role = "commenter"
 class MemberError(Exception):
     """A request the members service refuses; the router maps ``kind`` to an HTTP status."""
 
-    def __init__(self, kind: str, message: str):
+    def __init__(self, kind: str, message: str, detail: object | None = None):
         self.kind = kind  # "not_found" | "conflict" | "forbidden" | "invalid"
         self.message = message
+        # What the response's ``detail`` is when not the message (A5's hand-over refusals).
+        self.detail = detail
         super().__init__(message)
 
 
@@ -303,13 +305,19 @@ async def update_member(
     role: Role | None,
     engineering_lead: bool | None,
     name: str | None | object = ...,
+    hand_over: list[dict] | None = None,
 ) -> User:
     """``PATCH /v1/members/{user_id}``: the role, the engineering lead flag, the name
     (A5; None clears it), or several, in one change, role first (so a viewer made
-    commenter can be named at once). ``name`` left out (``...``) is unchanged."""
+    commenter can be named at once). ``name`` left out (``...``) is unchanged. With
+    ``hand_over`` (A5), those responsibilities move first, in the same transaction."""
+    from oracle.members.handover import hand_over as move
+
     if role is None and engineering_lead is None and name is ...:
         raise MemberError("invalid", "Send role, name or both")
     user: User | None = None
+    if hand_over:
+        await move(session, principal, user_id, hand_over)
     if name is not ...:
         user = await set_name(session, principal, user_id, name)  # type: ignore[arg-type]
     if role is not None:
@@ -342,7 +350,12 @@ async def set_name(
     return user
 
 
-async def disable_member(session: AsyncSession, principal: "Principal", user_id: uuid.UUID) -> User:
+async def disable_member(
+    session: AsyncSession,
+    principal: "Principal",
+    user_id: uuid.UUID,
+    hand_over: list[dict] | None = None,
+) -> User:
     """Remove a member by disabling them (C2). The user row stays, so every ``*_by``
     reference and the verdict history keep the name; no sign-in path accepts them
     (``oracle.auth.service.may_sign_in``) and every session signed so far is dead
@@ -364,14 +377,13 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     (:func:`after_disable`), and the tick retries the ones that failed.
 
     Disabling a disabled member is a no-op. The last active owner cannot be disabled.
-    :func:`restore_member` re-enables sign-in only."""
+    :func:`restore_member` re-enables sign-in only. With ``hand_over`` (A5), those
+    responsibilities move first, under the same gate (audited ``member.hand_over``)."""
     from oracle.discussions.service import hand_over as hand_over_discussions
     from oracle.mcp.oauth.models import OAuthToken
     from oracle.review.publish import record_source_revocation
     from oracle.review.state import lapse_approvals
-    from oracle.runs.models import Run
-    from oracle.runs.service import FINAL, stop_run, void_owed_decisions
-    from oracle.sources.models import Source
+    from oracle.runs.service import stop_run, void_owed_decisions
 
     await _gate(session, principal)
     user = await session.get(User, user_id, with_for_update=True)
@@ -383,37 +395,31 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
         raise MemberError("conflict", "You cannot remove yourself; another owner can remove you")
     if user.role == "owner" and not await _other_active_owner(session, user.id):
         raise MemberError("conflict", "Cannot remove the last owner; make someone else owner")
+    if hand_over:
+        from oracle.members.handover import hand_over as move
+
+        await move(session, principal, user.id, hand_over)
     at = datetime.now(UTC)
     via = {"via": "member.disable", "member_id": str(user.id)}
 
     connections, revoked_ids = await _disconnect_all(session, principal, user, via)
-    sources = list(await session.scalars(select(Source).where(Source.owner_user_id == user.id)))
+    sources = await select_sources(session, user.id)
     rest = [x for x in sources if x.id not in revoked_ids]
     await record_source_revocation(session, principal, rest, "source_revoked", drop_links=False)
     for source in sources:
         source.status = "paused"
         source.last_error = "Its owner was removed from this company"
 
-    tokens = list(
-        await session.scalars(
-            select(ApiToken).where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
-        )
-    )
+    tokens = await select_tokens(session, user.id)
     for token in tokens:
         token.revoked_at = at
-    # Revoked earlier: they still name what they did for the member.
-    tokens_ever = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
     await session.execute(
         update(OAuthToken)
-        .where(OAuthToken.user_id == user.id, OAuthToken.revoked_at.is_(None))
+        .where(*_grants_where(user.id))
         .values(revoked_at=at)
         .execution_options(synchronize_session=False)
     )
-    runs = list(
-        await session.scalars(
-            select(Run).where(Run.created_by == user.id, Run.status.not_in(FINAL)).with_for_update()
-        )
-    )
+    runs = list(await session.scalars(_runs_q(user.id).with_for_update()))
     segments: list = []
     for run in runs:
         await stop_run(session, principal, run, via, deferred=segments)
@@ -427,15 +433,9 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
             )
         )
     # Their identities: the user, and the API tokens that acted for them.
-    acted_as = {user.id, *tokens_ever}
+    acted_as = await _acted_as(session, user.id)
     # The open invite for their email, and every open invite they created.
-    invites = list(
-        await session.scalars(
-            select(Invite).where(
-                or_(Invite.email == user.email, Invite.invited_by.in_(acted_as)), *_open()
-            )
-        )
-    )
+    invites = await select_open_invites(session, user, acted_as)
     for invite in invites:
         invite.revoked_at = at
         await audit.record(
@@ -494,6 +494,192 @@ async def disable_member(session: AsyncSession, principal: "Principal", user_id:
     return user
 
 
+# --- What a removal or a demotion does (A5) ----------------------------------------------
+# One selection per effect: no locks, no writes. The apply functions above and below run
+# the same query (with their locks), so the preview (oracle.members.impact) and the
+# action cannot drift.
+
+
+async def _acted_as(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
+    """The member and every API token that ever acted for them (revoked ones still name
+    what they did for the member)."""
+    tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user_id)))
+    return {user_id, *tokens}
+
+
+async def select_tokens(session: AsyncSession, user_id: uuid.UUID) -> list[ApiToken]:
+    """Their active API tokens: a disable revokes them."""
+    return list(
+        await session.scalars(
+            select(ApiToken).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+        )
+    )
+
+
+def _grants_where(user_id: uuid.UUID) -> list:
+    from oracle.mcp.oauth.models import OAuthToken
+
+    return [OAuthToken.user_id == user_id, OAuthToken.revoked_at.is_(None)]
+
+
+async def select_grants(session: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
+    """Their active MCP OAuth grants (refresh-token families): a disable revokes them."""
+    from oracle.mcp.oauth.models import OAuthToken
+
+    return list(
+        await session.scalars(
+            select(OAuthToken.family_id).where(*_grants_where(user_id)).distinct()
+        )
+    )
+
+
+async def select_connections(session: AsyncSession, user_id: uuid.UUID) -> list:
+    """Their connections: a disable disconnects each (:func:`_disconnect_all`)."""
+    from oracle.connections.models import Connection
+
+    return list(await session.scalars(select(Connection).where(Connection.user_id == user_id)))
+
+
+async def select_sources(session: AsyncSession, user_id: uuid.UUID) -> list:
+    """Their sources: a disable records each revoked and pauses it."""
+    from oracle.sources.models import Source
+
+    return list(await session.scalars(select(Source).where(Source.owner_user_id == user_id)))
+
+
+def _runs_q(user_id: uuid.UUID):
+    from oracle.runs.models import Run
+    from oracle.runs.service import FINAL
+
+    return select(Run).where(Run.created_by == user_id, Run.status.not_in(FINAL))
+
+
+async def select_runs(session: AsyncSession, user_id: uuid.UUID) -> list:
+    """Their unfinished runs: a disable cancels them."""
+    return list(await session.scalars(_runs_q(user_id)))
+
+
+async def select_open_invites(
+    session: AsyncSession, user: User, acted_as: set[uuid.UUID]
+) -> list[Invite]:
+    """The open invite for their email, and every open invite they created."""
+    return list(
+        await session.scalars(
+            select(Invite).where(
+                or_(Invite.email == user.email, Invite.invited_by.in_(acted_as)), *_open()
+            )
+        )
+    )
+
+
+def _llm_jobs_q(requesters: set[uuid.UUID]):
+    from oracle.jobs.models import LlmJob
+
+    return select(LlmJob).where(LlmJob.status == "queued", LlmJob.requested_by.in_(requesters))
+
+
+async def select_llm_jobs(session: AsyncSession, requesters: set[uuid.UUID]) -> list[uuid.UUID]:
+    """The queued built-in model jobs they requested: a disable cancels them."""
+    return [j.id for j in await session.scalars(_llm_jobs_q(requesters))]
+
+
+def _spend_q(approvers: set[uuid.UUID], member_id: uuid.UUID | None):
+    from oracle.runs.models import Run, RunSegment
+    from oracle.runs.service import FINAL
+
+    started = select(RunSegment.id).where(
+        RunSegment.run_id == Run.id,
+        or_(RunSegment.started_at.is_not(None), RunSegment.swarm_workflow_id.is_not(None)),
+    )
+    return select(Run).where(
+        Run.approved_by.in_(approvers),
+        Run.status.not_in(FINAL),
+        Run.created_by.is_distinct_from(member_id) if member_id else true(),
+        ~started.exists(),
+    )
+
+
+def _resumes_q(approvers: set[uuid.UUID], member_id: uuid.UUID | None):
+    from oracle.runs.models import Run, RunSegment
+
+    since = select(RunSegment.id).where(
+        RunSegment.run_id == Run.id, RunSegment.started_at >= Run.resumed_at
+    )
+    return select(Run).where(
+        Run.resumed_by.in_(approvers),
+        Run.status.in_(("running", "awaiting_checkpoint")),
+        Run.created_by.is_distinct_from(member_id) if member_id else true(),
+        ~since.exists(),
+    )
+
+
+async def select_spend_approvals(
+    session: AsyncSession, approvers: set[uuid.UUID], member_id: uuid.UUID | None
+) -> tuple[list, list]:
+    """The spend approvals and the overrun Resumes (C2) :func:`_void_spend_approvals`
+    voids: (runs whose approval is void, runs whose Resume is void)."""
+    approvals = list(await session.scalars(_spend_q(approvers, member_id)))
+    resumes = list(await session.scalars(_resumes_q(approvers, member_id)))
+    return approvals, resumes
+
+
+def _decisions_q(deciders: set[uuid.UUID]):
+    from oracle.runs.models import Run, RunSegment
+
+    return (
+        select(RunSegment.id, RunSegment.run_id)
+        .join(Run, Run.id == RunSegment.run_id)
+        .where(
+            Run.status == "running",
+            RunSegment.status == "pending",
+            RunSegment.artifacts["decision"]["decided_by"].astext.in_([str(d) for d in deciders]),
+        )
+    )
+
+
+def _decision_voids(
+    run, segment, cp, deciders: set[uuid.UUID], keep_role: Role | None, kinds
+) -> bool:
+    """Whether :func:`_void_checkpoint_decisions` voids this decision (read under its
+    locks there, without them in :func:`select_checkpoint_decisions`)."""
+    from oracle.authz import has_role
+    from oracle.members.leads import SPEC_FLOW
+
+    decision = (segment.artifacts or {}).get("decision") or {}
+    if run.status != "running" or segment.status != "pending":
+        return False
+    if decision.get("decided_by") not in [str(d) for d in deciders]:
+        return False
+    if cp is None or cp.run_id != run.id:
+        return False
+    if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
+        return False
+    return not (keep_role is not None and has_role(keep_role, cp.approver_role))  # type: ignore[arg-type]
+
+
+async def select_checkpoint_decisions(
+    session: AsyncSession,
+    deciders: set[uuid.UUID],
+    *,
+    keep_role: Role | None = None,
+    kinds: tuple[str, ...] | None = None,
+) -> list[tuple]:
+    """The (run, checkpoint) of each undelivered checkpoint decision
+    :func:`_void_checkpoint_decisions` voids."""
+    from oracle.runs.models import Checkpoint, Run, RunSegment
+
+    out = []
+    for segment_id, run_id in (await session.execute(_decisions_q(deciders))).all():
+        run = await session.get(Run, run_id)
+        segment = await session.get(RunSegment, segment_id)
+        decision = (segment.artifacts or {}).get("decision") or {}
+        cp_id = decision.get("checkpoint_id")
+        cp = await session.get(Checkpoint, uuid.UUID(cp_id)) if cp_id else None
+        if _decision_voids(run, segment, cp, deciders, keep_role, kinds):
+            out.append((run, cp))
+    return out
+
+
 async def _cancel_llm_jobs(
     session: AsyncSession, requesters: set[uuid.UUID], at: datetime
 ) -> list[uuid.UUID]:
@@ -501,14 +687,9 @@ async def _cancel_llm_jobs(
     is spent for them. A job already running finishes (its call is under way). A job a
     worker is claiming right now is waited for (a claim holds its row for a moment), not
     skipped: it is cancelled if still queued, or finishes if the claim started it."""
-    from oracle.jobs.models import LlmJob
-
     jobs = list(
         await session.scalars(
-            select(LlmJob)
-            .where(LlmJob.status == "queued", LlmJob.requested_by.in_(requesters))
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            _llm_jobs_q(requesters).with_for_update().execution_options(populate_existing=True)
         )
     )
     jobs = [j for j in jobs if j.status == "queued"]
@@ -531,26 +712,11 @@ async def _void_spend_approvals(
     that started keeps its approval and its ceiling. With ``member_id`` (a disable),
     their own runs are left out: the disable cancels them; without (a demotion), an
     approval they gave their own run is void too."""
-    from oracle.runs.models import Run, RunSegment
-    from oracle.runs.service import FINAL, unqueue
+    from oracle.runs.models import RunSegment
+    from oracle.runs.service import unqueue
     from oracle.runtokens import revoke_run_tokens
 
-    started = select(RunSegment.id).where(
-        RunSegment.run_id == Run.id,
-        or_(RunSegment.started_at.is_not(None), RunSegment.swarm_workflow_id.is_not(None)),
-    )
-    runs = list(
-        await session.scalars(
-            select(Run)
-            .where(
-                Run.approved_by.in_(approvers),
-                Run.status.not_in(FINAL),
-                Run.created_by.is_distinct_from(member_id) if member_id else true(),
-                ~started.exists(),
-            )
-            .with_for_update()
-        )
-    )
+    runs = list(await session.scalars(_spend_q(approvers, member_id).with_for_update()))
     for run in runs:
         approved_by = run.approved_by
         run.status = "awaiting_approval"
@@ -585,22 +751,13 @@ async def _void_resumes(
     tokens are revoked. A segment still running from before the pause goes on, as the
     pause lets it, with its token. A run the Resume took to a checkpoint keeps waiting
     for it, under the old ceiling. ``member_id``: as for :func:`_void_spend_approvals`."""
-    from oracle.runs.models import Run, RunSegment
+    from oracle.runs.models import RunSegment
     from oracle.runs.service import RESUME_VOIDED, _art, _set_art, _set_knob, unqueue
     from oracle.runtokens import revoke_run_tokens
 
-    since = select(RunSegment.id).where(
-        RunSegment.run_id == Run.id, RunSegment.started_at >= Run.resumed_at
-    )
     runs = list(
         await session.scalars(
-            select(Run)
-            .where(
-                Run.resumed_by.in_(approvers),
-                Run.status.in_(("running", "awaiting_checkpoint")),
-                Run.created_by.is_distinct_from(member_id) if member_id else true(),
-                ~since.exists(),
-            )
+            _resumes_q(approvers, member_id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )
@@ -647,23 +804,11 @@ async def _void_checkpoint_decisions(
     ``keep_role`` (a demotion), a decision on a checkpoint that role may still decide
     stands. With ``kinds`` (an engineering lead unflagged, A3), only checkpoints of those
     kinds that the lead rule governs (oracle.members.leads.lead_stop) are voided."""
-    from oracle.authz import has_role
-    from oracle.members.leads import SPEC_FLOW
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.service import void_decision
 
     decided = [str(d) for d in deciders]
-    candidates = (
-        await session.execute(
-            select(RunSegment.id, RunSegment.run_id)
-            .join(Run, Run.id == RunSegment.run_id)
-            .where(
-                Run.status == "running",
-                RunSegment.status == "pending",
-                RunSegment.artifacts["decision"]["decided_by"].astext.in_(decided),
-            )
-        )
-    ).all()
+    candidates = (await session.execute(_decisions_q(deciders))).all()
     voided: list[uuid.UUID] = []
     for segment_id, run_id in candidates:
         fresh = {"populate_existing": True}
@@ -679,11 +824,7 @@ async def _void_checkpoint_decisions(
         if decision.get("decided_by") not in decided:
             continue
         cp = await session.get(Checkpoint, uuid.UUID(decision["checkpoint_id"]))
-        if cp is None or cp.run_id != run.id:
-            continue
-        if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
-            continue
-        if keep_role is not None and has_role(keep_role, cp.approver_role):  # type: ignore[arg-type]
+        if not _decision_voids(run, segment, cp, deciders, keep_role, kinds):
             continue
         await void_decision(session, principal, run, segment, cp, via)
         voided.append(cp.id)
@@ -1344,11 +1485,28 @@ async def token_approvals(
 ) -> list[dict[str, object]] | None:
     """Every approval given through an API token (section verdicts and version
     approvals), lapsed ones included; ``None`` for an unknown token."""
+    if await session.get(ApiToken, token_id) is None:
+        return None
+    return await _approvals(session, {token_id})
+
+
+async def member_approvals(
+    session: AsyncSession, user_id: uuid.UUID, *, lapsed: bool = False
+) -> list[dict[str, object]]:
+    """``GET /v1/members/{id}/approvals`` (A5): the section verdicts and version
+    approvals the member gave, in person or through their API tokens and grants;
+    lapsed ones too with ``lapsed``."""
+    if await session.get(User, user_id) is None:
+        raise MemberError("not_found", f"Member {user_id} not found")
+    rows = await _approvals(session, await _acted_as(session, user_id))
+    return rows if lapsed else [r for r in rows if r["lapsed_at"] is None]
+
+
+async def _approvals(session: AsyncSession, ids: set[uuid.UUID]) -> list[dict[str, object]]:
+    """The approvals given by or through ``ids`` (users, API tokens), lapsed included."""
     from oracle.docs.models import Document, DocumentVersion
     from oracle.review.models import SectionReview
 
-    if await session.get(ApiToken, token_id) is None:
-        return None
     out: list[dict[str, object]] = []
     rows = (
         await session.execute(
@@ -1357,7 +1515,7 @@ async def token_approvals(
             .join(Document, Document.id == DocumentVersion.document_id)
             .where(
                 SectionReview.verdict == "approved",
-                or_(SectionReview.token_id == token_id, SectionReview.reviewer_id == token_id),
+                or_(SectionReview.token_id.in_(ids), SectionReview.reviewer_id.in_(ids)),
             )
             .order_by(SectionReview.created_at, SectionReview.id)
         )
@@ -1376,17 +1534,15 @@ async def token_approvals(
                 "lapse_reason": review.lapse_reason,
             }
         )
-    who = or_(
-        DocumentVersion.approved_token_id == token_id, DocumentVersion.approved_by == token_id
-    )
+    who = or_(DocumentVersion.approved_token_id.in_(ids), DocumentVersion.approved_by.in_(ids))
     # A lapsed version approval is kept in approval_lapses (a new approval clears
     # approval_lapsed_*), naming its token, or a user-less token as the approver.
-    tid = str(token_id)
+    tids = {str(i) for i in ids}
     in_history = or_(
-        DocumentVersion.approval_lapses.contains([{"approved_token_id": tid}]),
-        DocumentVersion.approval_lapses.contains([{"approved_by": tid}]),
+        *(DocumentVersion.approval_lapses.contains([{"approved_token_id": t}]) for t in tids),
+        *(DocumentVersion.approval_lapses.contains([{"approved_by": t}]) for t in tids),
     )
-    lapsed_who = DocumentVersion.approval_lapsed_by == token_id
+    lapsed_who = DocumentVersion.approval_lapsed_by.in_(ids)
     for version, slug in (
         await session.execute(
             select(DocumentVersion, Document.slug)
@@ -1405,7 +1561,7 @@ async def token_approvals(
         lapses = [
             e
             for e in version.approval_lapses or []
-            if tid in (e.get("approved_token_id"), e.get("approved_by"))
+            if tids & {e.get("approved_token_id"), e.get("approved_by")}
         ]
         for e in lapses:
             out.append(
@@ -1418,7 +1574,7 @@ async def token_approvals(
                 }
             )
         current = version.approved_at is not None and (
-            version.approved_token_id == token_id or version.approved_by == token_id
+            version.approved_token_id in ids or version.approved_by in ids
         )
         if current:
             out.append(
@@ -1606,8 +1762,12 @@ async def resend_invite(
     return invite
 
 
-async def get_open_invite(session: AsyncSession, invite_id: uuid.UUID) -> Invite:
-    """The open invite ``invite_id``, locked: Retry access and Resend act on it."""
+async def get_open_invite(
+    session: AsyncSession, principal: "Principal", invite_id: uuid.UUID
+) -> Invite:
+    """The open invite ``invite_id``, locked: Retry access and Resend email act on it.
+    Owners only, re-read under the gate (an owner demoted while waiting is refused)."""
+    await _gate(session, principal, shared=True)
     invite = await session.get(Invite, invite_id, with_for_update=True)
     if invite is None:
         raise MemberError("not_found", f"Invite {invite_id} not found")

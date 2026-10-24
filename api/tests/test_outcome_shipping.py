@@ -13,6 +13,7 @@ import pytest
 from oracle.quality.shipping import verdict
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
+from tests.day_helpers import company_today
 from tests.launch_helpers import ticker_pass, tracker_done
 from tests.outcome_helpers import days_ago, goal_history, outcome_world, set_record
 from tests.test_roadmap import (  # noqa: F401 - fixtures
@@ -102,7 +103,11 @@ async def test_due_record_gets_a_proposal_a_person_confirms(client, owner, runti
     url = f"/v1/outcomes/{pay['id']}"
     prediction = {**pay["prediction"], "threshold_value": 40, "by": days_ago(10).isoformat()}
     await set_record(
-        tenant_id, pay["id"], status="tracking", prediction=prediction, assess_due_on=date.today()
+        tenant_id,
+        pay["id"],
+        status="tracking",
+        prediction=prediction,
+        assess_due_on=company_today(),
     )
     await goal_history(tenant_id, ("38%", days_ago(20)), ("41%", days_ago(5)))
     await ticker_pass(tenant_id)
@@ -136,7 +141,7 @@ async def test_no_parseable_value_is_inconclusive(client, owner, runtime):  # no
     verdict; no_claim=other unparseable spellings."""
     tenant_id, auth = owner
     pay = (await outcome_world(client, auth, runtime, tenant_id))["payment-step"]
-    await set_record(tenant_id, pay["id"], status="tracking", assess_due_on=date.today())
+    await set_record(tenant_id, pay["id"], status="tracking", assess_due_on=company_today())
     await goal_history(tenant_id, ("not measured yet", days_ago(2)))
     async with tenant_session(tenant_id) as s:
         from sqlalchemy import select
@@ -160,7 +165,11 @@ async def test_oracle_records_the_verdict_when_autonomy_acts(client, owner, runt
     pay = (await outcome_world(client, auth, runtime, tenant_id))["payment-step"]
     prediction = {**pay["prediction"], "threshold_value": 40, "by": days_ago(10).isoformat()}
     await set_record(
-        tenant_id, pay["id"], status="tracking", prediction=prediction, assess_due_on=date.today()
+        tenant_id,
+        pay["id"],
+        status="tracking",
+        prediction=prediction,
+        assess_due_on=company_today(),
     )
     await goal_history(tenant_id, ("41%", days_ago(5)))
     async with tenant_session(tenant_id) as s:

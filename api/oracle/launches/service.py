@@ -30,7 +30,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -50,7 +50,6 @@ from oracle.launches.schemas import (
 )
 from oracle.roadmap.models import RoadmapItem
 from oracle.roadmap.shipped import shipped_items
-from oracle.tenant_settings import TenantSetting
 
 LIVE_STATES = ("planned", "ready")
 # Run states during which a launch's kit run is still under way.
@@ -103,12 +102,9 @@ async def _send_ship_signals(db: AsyncSession, launch: Launch, at: datetime) -> 
 
 
 async def autonomy_acts(db: AsyncSession) -> bool:
-    """Whether H11 Autonomy lets Oracle act within limits on launches (the company
-    setting ``autonomy``: ``{"launches": "act_within_limits"}``). Off by default: people
-    publish and notify."""
-    row = await db.scalar(select(TenantSetting).where(TenantSetting.key == "autonomy"))
-    value = row.value if row is not None and isinstance(row.value, dict) else {}
-    return value.get("launches") == "act_within_limits"
+    """Whether H11 Autonomy lets Oracle act within limits on launches (the ``launches``
+    responsibility at "act"). Off by default (Draft): people publish and notify."""
+    return await autonomy.level(db, "launches") == "act"
 
 
 # --- reading ------------------------------------------------------------------------------
@@ -707,11 +703,39 @@ async def mark_launched(
         published = await publish_internal(db, launch)
         notified = await notify_members(db, audit.ORACLE, launch)
         data.update(oracle_published=published, oracle_notified=notified)
+        if published or notified:
+            await autonomy.acted(
+                db,
+                "launches",
+                summary=_acted_summary(launch, published, notified),
+                subject={
+                    "kind": "launch",
+                    "key": str(launch.id),
+                    "href": f"/roadmap/launches?launch={launch.id}",
+                },
+                undo=None,
+                notify=[launch.owner_id or principal.id],
+            )
     await audit.record(db, principal, "launch.launched", "launch", launch.id, data)
     await db.commit()
     if launch.kit_run_id is None:
         return await _start_kit_or_note(db, principal, launch)
     return None
+
+
+def _acted_summary(launch: Launch, published: int, notified: int) -> str:
+    done = []
+    if published:
+        done.append(f"published {published} internal changelog " + _plural(published, "entry"))
+    if notified:
+        done.append(f"told {notified} member " + _plural(notified, "requester"))
+    return f"{launch.title} launched: Oracle {' and '.join(done)}"
+
+
+def _plural(n: int, word: str) -> str:
+    if n == 1:
+        return word
+    return word[:-1] + "ies" if word.endswith("y") else word + "s"
 
 
 async def cancel_launch(

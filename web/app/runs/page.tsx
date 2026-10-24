@@ -30,6 +30,7 @@ import {
   CHECKPOINT_LABEL,
   COST_DECISION_STATUSES,
   isDelivering,
+  reviewHref,
   runStatusKind,
   runStatusLabel,
   RunCost,
@@ -107,7 +108,10 @@ export default function RunsPage() {
             onClick={(e) => {
               e.stopPropagation();
               // D10: a PRD or roadmap review opens its version, where it is decided.
-              router.push(r.status === "awaiting_checkpoint" && r.review_link ? r.review_link : `/runs/${r.id}`);
+              if (r.status === "awaiting_checkpoint" && r.review_link) return router.push(r.review_link);
+              // D1: Roadmap items open their review screen (the waiting checkpoint is the run's).
+              if (r.status === "awaiting_checkpoint" && r.waiting_on === "roadmap_items") return void openItemsReview(r.id);
+              router.push(`/runs/${r.id}`);
             }}
           >
             {ACTION[r.status]}
@@ -115,6 +119,12 @@ export default function RunsPage() {
         ) : null,
     },
   ];
+
+  async function openItemsReview(id: string) {
+    const run = await unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })).catch(() => null);
+    const cp = run?.checkpoints.find((c) => c.status === "pending" && c.kind === "roadmap_items" && !c.console);
+    router.push((cp && reviewHref({ ...cp, run_id: id })) || `/runs/${id}`);
+  }
 
   return (
     <Page>

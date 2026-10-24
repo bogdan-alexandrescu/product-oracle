@@ -18,6 +18,8 @@ export type StreamError = {
 export type StreamHandlers = {
   onDelta: (text: string) => void;
   onCitations?: (citations: Record<string, unknown>[]) => void;
+  /** G3: the changes the reply proposed (ChangeOut[]), just before `done`. */
+  onChanges?: (changes: unknown[]) => void;
   onDone: (message: unknown) => void;
   onError: (error: StreamError) => void;
   /** The connection dropped and is being reopened: forget the text so far. */
@@ -79,6 +81,7 @@ export async function openStream(url: string, h: StreamHandlers): Promise<void> 
           const data = JSON.parse(e.data);
           if (e.event === "delta") h.onDelta(String(data.text ?? ""));
           else if (e.event === "citations") h.onCitations?.(data);
+          else if (e.event === "changes") h.onChanges?.(data);
           else if (e.event === "done") {
             ended = true;
             h.onDone(data);

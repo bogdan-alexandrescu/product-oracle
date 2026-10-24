@@ -97,13 +97,14 @@ def now() -> datetime:
 
 
 def today() -> date:
-    """UTC's day: the fallback when the company has no time zone in Settings."""
+    """UTC's day (:func:`company_today` is the company's own day)."""
     return now().date()
 
 
 async def company_today(db: AsyncSession) -> date:
-    """The company's day, in its time zone from Settings; UTC's when none is set. A value
-    measured "today" east of UTC is not in the future."""
+    """The company's day, in its time zone from Settings; Pacific's (``COMPANY_ZONE``,
+    America/Los_Angeles) when none is set. A value measured "today" in a zone ahead of
+    the server's clock is not in the future."""
     from oracle.tenant_settings_api import company_timezone  # imports the baseline models
 
     zone = await company_timezone(db)

@@ -314,7 +314,7 @@ export function GoalDiscuss({
 }) {
   const changes = useQuery(`discussion-changes:${discussionId}`, () => discussionChanges(discussionId), { keepPrevious: true });
   const proposals = useQuery(`baseline-proposals-all:${discussionId}`, () => unwrap(api.GET("/v1/baseline/proposals")), { keepPrevious: true });
-  const ids = [...new Set((changes.data ?? []).flatMap((c) => [c.suggested_by, (c.edited_payload ?? c.payload).owner_id]).filter((x): x is string => !!x))];
+  const ids = [...new Set((changes.data ?? []).flatMap((c) => [c.suggested_by?.user_id, (c.edited_payload ?? c.payload).owner_id]).filter((x): x is string => !!x))];
   const people = useQuery(`people-ids:${ids.sort().join(",")}`, () =>
     ids.length ? unwrap(api.GET("/v1/people", { params: { query: { ids } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
   );
@@ -399,6 +399,7 @@ export function GoalDiscuss({
         onChanged={() => void reload()}
         belowHeader={<MissingStrip asked={asked} goal={goal} />}
         renderAfter={renderAfter}
+        inlineKinds={["goal_measure"]}
       />
     </section>
   );

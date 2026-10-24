@@ -12,7 +12,8 @@ item belongs to one of their own sources (decision S6): nobody else sees them un
 file one, and filing shares the item in full (decided 2026-10-21, C1 "Found items").
 
 Runs start two ways: Classify now (an approver, any time) and Oracle's daily run at 07:00
-America/Los_Angeles from the ticker (decided 2026-10-21, C1 "Triage runs"), one a day per
+in the Company time zone from the ticker (decided 2026-10-21, C1 "Triage runs"; every date
+in the Company time zone, decided 2026-10-22), one a day per
 company, only while a New request has no suggestion, and only while an approver or owner
 has turned "Daily triage at 07:00 PT" on (:data:`DAILY_SETTING`, off by default: owner
 2026-10-21, nothing runs or is spent while it is off). The daily run is Oracle's (audited
@@ -38,6 +39,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.company_time import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.requests.models import (
@@ -58,7 +60,6 @@ MAX_BYTES = 1_000_000
 UNREADABLE = f"{FILE} could not be read"
 # With no earlier triage by the starter, found items are looked for this far back.
 SINCE_DAYS = 30
-PACIFIC = ZoneInfo("America/Los_Angeles")
 DAILY_AT = time(7, 0)
 RATIONALE_MAX = 300
 ACTIVE = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
@@ -481,17 +482,26 @@ async def classify_now(db: AsyncSession, principal: Principal, depth: str | None
     return await start(db, principal, depth or "quick")
 
 
-def daily_moment(now: datetime) -> datetime | None:
-    """Today's 07:00 in America/Los_Angeles once it has passed, else None."""
-    local = now.astimezone(PACIFIC)
-    moment = datetime.combine(local.date(), DAILY_AT, tzinfo=PACIFIC)
+def daily_moment(now: datetime, zone: ZoneInfo | None = None) -> datetime | None:
+    """Today's 07:00 in ``zone`` (the Company time zone; its default when not given) once
+    it has passed, else None."""
+    zone = zone or ZoneInfo(COMPANY_ZONE)
+    local = now.astimezone(zone)
+    moment = datetime.combine(local.date(), DAILY_AT, tzinfo=zone)
     return moment if local >= moment else None
 
 
+async def company_moment(db: AsyncSession, now: datetime) -> datetime | None:
+    """:func:`daily_moment` in the company's own time zone."""
+    from oracle.tenant_settings_api import company_timezone
+
+    return daily_moment(now, await company_timezone(db))
+
+
 async def daily_due(db: AsyncSession, now: datetime) -> bool:
-    """Today's automatic run is due: 07:00 Pacific has passed, none ran today, and at
-    least one New request has no suggestion."""
-    moment = daily_moment(now)
+    """Today's automatic run is due: 07:00 in the Company time zone has passed, none ran
+    that day, and at least one New request has no suggestion."""
+    moment = await company_moment(db, now)
     if moment is None:
         return False
     ran = await db.scalar(
@@ -583,7 +593,7 @@ async def daily(db: AsyncSession) -> uuid.UUID | None:
     if not await daily_on(db) or not await daily_due(db, now) or await _active(db) is not None:
         await db.rollback()
         return None
-    moment = daily_moment(now)
+    moment = await company_moment(db, now)
     assert moment is not None
     day = moment.date().isoformat()
     member = await daily_member(db)

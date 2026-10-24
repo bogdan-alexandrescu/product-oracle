@@ -848,6 +848,34 @@ async def test_who_may_turn_the_switch(client, ctx):
     assert on["daily_on"] is True and on["daily_as"] == "Owner"
 
 
+async def test_daily_triage_runs_at_07_00_in_the_company_time_zone(
+    client,
+    ctx,
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    """protects=#519 item 4 (decision 2026-10-22: every date uses the Company time zone):
+    with the Company time zone set to Asia/Tokyo, the daily run waits for 07:00 Tokyo
+    (06:59 Tokyo is 14:59 the day before in Pacific, past Pacific's 07:00) and is that
+    Tokyo day's run; fails_when=triage hard-codes Pacific and starts at 06:59 Tokyo with
+    Pacific's day; no_claim=the switch's label (the owner kept "07:00 PT" on 2026-10-24)."""
+    tokyo = ZoneInfo("Asia/Tokyo")
+    resp = await client.put(
+        "/v1/settings/company_timezone", json={"value": "Asia/Tokyo"}, headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    await add(client, ctx)
+    await switch(client, ctx, "owner", True)
+    day = datetime(2026, 10, 21, tzinfo=tokyo)
+    frozen(monkeypatch, day.replace(hour=6, minute=59))
+    await ticker_pass(ctx.tenant_id)
+    assert await triage_runs(ctx) == []
+    frozen(monkeypatch, day.replace(hour=7, minute=1))
+    await ticker_pass(ctx.tenant_id)
+    [run] = await triage_runs(ctx)
+    assert run.knobs["triage_day"] == "2026-10-21"
+
+
 async def test_daily_triage_counts_new_requests_without_a_suggestion(client, ctx):
     """protects=the daily run's condition (a New request with no suggestion), read as of
     the frozen clock; fails_when=a merged or suggested request alone triggers it;
