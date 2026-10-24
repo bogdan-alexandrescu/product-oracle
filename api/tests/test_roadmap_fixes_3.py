@@ -87,6 +87,7 @@ PROBES = {
 }
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(PROBES))
 def test_each_probe_is_a_problem_in_under_100_ms(name):
     text = PROBES[name]
@@ -103,6 +104,7 @@ def test_the_loader_raises_only_its_refusal(name):
         items_file.load_items_yaml(PROBES[name])
 
 
+@pytest.mark.timing
 def test_a_base60_value_is_a_string_read_at_once():
     started = time.monotonic()
     data = items_file.load_items_yaml(BASE60)
@@ -110,6 +112,7 @@ def test_a_base60_value_is_a_string_read_at_once():
     assert isinstance(data["items"][0]["economics"]["effort"], str)
 
 
+@pytest.mark.timing
 def test_the_one_megabyte_base60_scalar_is_refused_at_once():
     text = _in_economics(base60(1_000_000))
     started = time.monotonic()
@@ -143,6 +146,7 @@ def test_an_over_long_value_is_refused(monkeypatch):
     assert [p["code"] for p in out.problems] == ["too_large"]
 
 
+@pytest.mark.timing
 def test_the_parse_runs_in_a_worker_thread_with_a_time_cap(monkeypatch):
     def slow(text, **kw):
         time.sleep(1)
@@ -181,6 +185,7 @@ def test_any_other_failure_of_the_check_is_a_problem(monkeypatch):
     assert [p["code"] for p in check_items(ITEMS).problems] == ["unreadable_yaml"]
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("probe", ["long_decimal", "deep_sequence", "deep_mapping"])
 async def test_the_tick_completes_and_revokes_the_token(client, owner, runtime, probe):  # noqa: F811
     tenant_id, auth = owner

@@ -57,6 +57,7 @@ async def test_import_is_linear_on_a_space_run(client, shape):
     assert took < CPU_LIMIT, f"{shape} import took {took:.2f}s of CPU"
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 async def test_honest_import_after_four_big_posts(client, shape):
     tenant, auth = await seed_auth()

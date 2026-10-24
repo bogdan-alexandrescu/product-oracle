@@ -1,0 +1,123 @@
+{
+  "description": "D1 Roadmap items review: one CheckpointReview (GET /v1/runs/{run_id}/checkpoints/{checkpoint_id}/review, D8) with the fields the review screen reads, the four 409 bodies decide answers (review_changed, blocking_open, edits_leave_problems, needs_agents) and the CheckpointOut fields of the Approve button. api/tests/test_checkpoint_review_contract.py validates it against the API's models and the real route's responses; web/e2e/roadmap-items-review.spec.ts checks the mock (lib/api/mock/runs.ts) answers in the same shapes. Synthetic placeholder text only.",
+  "review": {
+    "checkpoint_id": "00000000-0000-4000-8000-0000000d1c01",
+    "run_id": "00000000-0000-4000-8000-0000000d1001",
+    "kind": "roadmap_items",
+    "status": "pending",
+    "approver_role": "approver",
+    "attempt": 2,
+    "revision": 3,
+    "wait": { "state": "open", "ends_at": "2026-10-21T04:30:00Z", "seconds_left": 70200 },
+    "file": { "name": "roadmap_items.yaml", "seq": 1 },
+    "file_problems": [],
+    "items": [
+      {
+        "key": "slack-alerts",
+        "position": 1,
+        "title": "Slack alerts",
+        "horizon": "now",
+        "milestone": { "name": "Beta", "date": "2026-11-30" },
+        "confidence": "high",
+        "rank": 2,
+        "outcome": "Teams hear about spend spikes where they work",
+        "depends_on": ["anomaly-detection"],
+        "prd_section": "alerts-slack",
+        "reasons": [
+          {
+            "item": "slack-alerts",
+            "item_title": "Slack alerts",
+            "code": "unverified_date",
+            "severity": "blocking",
+            "label": "Date unverified",
+            "text": "No verified estimate, capacity or commitment supports 2026-11-30.",
+            "data": { "date": "2026-11-30" },
+            "fixes": [{ "label": "Remove date", "action": { "kind": "edit", "item": "slack-alerts", "field": "milestone_date", "value": null } }]
+          }
+        ],
+        "actions": [
+          {
+            "id": "00000000-0000-4000-8000-0000000d1a01",
+            "item_key": "slack-alerts",
+            "kind": "edit",
+            "field": "milestone_date",
+            "value": null,
+            "answers": ["unverified_date"],
+            "state": "staged",
+            "note": null,
+            "created_by": { "id": "00000000-0000-4000-8000-0000000d1e01", "name": "Approver", "role": "approver" },
+            "updated_by": { "id": "00000000-0000-4000-8000-0000000d1e01", "name": "Approver", "role": "approver" },
+            "updated_at": "2026-10-20T09:10:00Z",
+            "question": {
+              "id": "00000000-0000-4000-8000-0000000d1b01",
+              "status": "answered",
+              "text": "Is the beta date firm?",
+              "asked_to": { "id": "00000000-0000-4000-8000-0000000d1e02", "name": "Commenter" },
+              "answer": { "kind": "text", "body": "Not yet", "answered_by": { "id": "00000000-0000-4000-8000-0000000d1e02", "name": "Commenter" } }
+            }
+          }
+        ],
+        "state": "handled",
+        "resolution": {
+          "id": "slack-alerts",
+          "action": "change",
+          "outcome": "done",
+          "said": "done",
+          "note": null,
+          "fields": [{ "field": "milestone.date", "requested": null, "applied": true, "current": null }]
+        },
+        "diff": [{ "field": "horizon", "from": "next", "to": "now" }]
+      }
+    ],
+    "tally": {
+      "need_you": 4,
+      "handled": 1,
+      "blocking_open": 2,
+      "to_confirm_open": 3,
+      "waiting_on": [{ "user_id": "00000000-0000-4000-8000-0000000d1e02", "name": "Commenter", "count": 1 }],
+      "suggested": 1
+    },
+    "note": "Keep the beta small",
+    "sent_review": null,
+    "sent_review_yaml": null,
+    "can_read": true,
+    "can_suggest": true,
+    "can_stage": true,
+    "can_decide": true,
+    "gate": {
+      "open": false,
+      "blocking_open": 2,
+      "file_problems": 0,
+      "left": [{ "item": "budget-caps", "item_title": "Budget caps", "code": "horizon_breaks_dependency", "label": "Depends on a later item", "waivable": true, "question_id": null }]
+    },
+    "diff": { "against_attempt": 1, "items": [{ "id": "slack-alerts", "changes": [{ "field": "horizon", "from": "next", "to": "now" }] }], "added": [], "removed": ["weekly-digest"] }
+  },
+  "conflicts": {
+    "review_changed": {
+      "code": "review_changed",
+      "message": "The review changed since you loaded it (1 change by Commenter): look again, then decide.",
+      "revision": 4,
+      "changes": 1,
+      "by": ["Commenter"]
+    },
+    "blocking_open": {
+      "code": "blocking_open",
+      "message": "2 blocking problems are open: fix or waive them, then approve.",
+      "left": [{ "item": "budget-caps", "item_title": "Budget caps", "code": "horizon_breaks_dependency", "label": "Depends on a later item", "waivable": true, "question_id": null }]
+    },
+    "edits_leave_problems": {
+      "code": "edits_leave_problems",
+      "message": "After the edits, 1 blocking problem is left: slack-alerts: Date unverified",
+      "left": [{ "item": "slack-alerts", "item_title": "Slack alerts", "code": "unverified_date", "label": "Date unverified", "waivable": false, "question_id": null }]
+    },
+    "needs_agents": {
+      "code": "needs_agents",
+      "message": "Split on budget-caps needs the agents: send back, or remove it to approve.",
+      "actions": ["00000000-0000-4000-8000-0000000d1a02"]
+    }
+  },
+  "checkpoint": {
+    "approve_label": "Approve with 1 edit",
+    "needs_agents": [{ "action_id": "00000000-0000-4000-8000-0000000d1a02", "item": "budget-caps", "kind": "split" }]
+  }
+}

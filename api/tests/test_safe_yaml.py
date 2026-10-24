@@ -82,6 +82,7 @@ def _timed(fn, *args, **kwargs):
 # --- the loader ---------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_probe_is_refused_fast(name):
     text, problem = REFUSED[name]
@@ -93,6 +94,7 @@ def test_probe_is_refused_fast(name):
     assert took < BUDGET.get(name, FAST), f"{name} took {took:.3f}s"
 
 
+@pytest.mark.timing
 def test_base60_is_a_string_and_fast():
     data, exc, took = _timed(safe_yaml.load, BASE60_80K)
     assert exc is None
@@ -158,6 +160,7 @@ def test_directives_and_internal_errors_are_one_error():
     assert caught.value.line is not None
 
 
+@pytest.mark.timing
 async def test_a_slow_parse_does_not_block_the_event_loop():
     """run_parse runs on the parse pool: other coroutines keep running meanwhile.
 
@@ -192,6 +195,7 @@ async def test_a_slow_parse_does_not_block_the_event_loop():
 # --- parse_draft ---------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_parse_draft_refuses_probe(name):
     lines, problem = REFUSED[name]
@@ -203,6 +207,7 @@ def test_parse_draft_refuses_probe(name):
     assert took < BUDGET.get(name, FAST), f"{name} took {took:.3f}s"
 
 
+@pytest.mark.timing
 def test_parse_draft_base60_and_size():
     parsed, exc, took = _timed(parse_draft, with_front_matter(BASE60_80K))
     assert exc is None and isinstance(parsed.front_matter["probe"], str) and took < FAST
@@ -220,6 +225,7 @@ def test_parse_draft_reports_the_line_of_a_refusal():
 # --- POST /v1/documents/{doc}/versions and MCP push_draft ----------------------------------
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     "name", ["deep_sequence", "billion_laughs", "long_decimal", "tag_binary", "nan"]
 )
@@ -234,6 +240,7 @@ async def test_import_version_answers_422(client, name):
     assert took < FAST, f"{name} took {took:.3f}s"
 
 
+@pytest.mark.timing
 async def test_import_version_caps_the_body(client):
     _, auth = await seed_auth()
     start = time.perf_counter()
@@ -293,6 +300,7 @@ async def test_push_draft_refuses_probes(tenant_id):
 BASELINE = "version: 1\nentities: []\nedges: []\n"
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(REFUSED))
 def test_baseline_parse_refuses_probe(name):
     _, exc, took = _timed(yaml_io._parse_and_validate, REFUSED[name][0] + BASELINE)
@@ -301,6 +309,7 @@ def test_baseline_parse_refuses_probe(name):
     assert took < BUDGET.get(name, FAST)
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", ["deep_sequence", "billion_laughs", "nan", "duplicate_key"])
 async def test_baseline_yaml_import_answers_422(client, name):
     _, auth = await seed_auth()
@@ -332,6 +341,7 @@ async def test_baseline_yaml_import_caps_the_body(client):
 TEMPLATE = "---\nbrief: [t]\n---\n# T {#t}\n\n## Sources and data points {#sources}\n"
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", ["deep_sequence", "billion_laughs", "tag_python", "nan"])
 def test_template_front_matter_and_layout_refuse_probes(name):
     lines = REFUSED[name][0]
@@ -352,6 +362,7 @@ async def test_template_validate_route_refuses_a_probe(client):
     assert "invalid_front_matter" in {p["code"] for p in resp.json()["problems"]}
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     ("name", "code"),
     [("deep_sequence", "too_deep"), ("billion_laughs", "yaml_alias"), ("nan", "non_finite_number")],

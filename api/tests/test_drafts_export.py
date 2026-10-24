@@ -511,6 +511,7 @@ def test_running_header_detection(css, running):
     assert running_header(css) is running
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     "hostile",
     [

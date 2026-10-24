@@ -320,6 +320,7 @@ async def test_the_published_pdf_renders_on_the_export_pool_in_a_place(client, m
 # --------------------------------------------------------------------------- others go on
 
 
+@pytest.mark.timing
 async def test_approvals_go_on_while_a_publish_renders(client, monkeypatch):
     """Another company's approvals, and verdicts on the document being published, are not
     held behind a slow publish render."""

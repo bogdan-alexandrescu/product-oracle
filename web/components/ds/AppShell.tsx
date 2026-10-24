@@ -303,11 +303,11 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
 }
 
 /**
- * Pages without the rail: sign-in, MCP client consent, and a customer's interview link (C3,
+ * Pages without the rail: sign-in, where a Google sign-in waits to join (A5), MCP client consent, and a customer's interview link (C3,
  * `/i/<token>`), which a customer opens without an account and never signs in on.
  */
 function bare(pathname: string): boolean {
-  return pathname.startsWith("/login") || pathname.startsWith("/oauth") || pathname.startsWith("/i/");
+  return pathname.startsWith("/login") || pathname.startsWith("/access") || pathname.startsWith("/oauth") || pathname.startsWith("/i/");
 }
 
 /** Rail and tab bar; reads the pathname, so it renders inside its own Suspense boundary. */
@@ -425,6 +425,7 @@ function Navs() {
 /** Titles of the screens outside the rail's destinations, for when the page draws no H1 yet. */
 const OTHER_TITLES: [string, string][] = [
   ["/login", "Sign in"],
+  ["/access", "Access"],
   ["/oauth", "Connect an MCP client"],
   ["/sources", "Sources"],
   ["/design", "Design system"],

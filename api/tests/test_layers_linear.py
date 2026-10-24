@@ -4,6 +4,8 @@ import random
 import re
 import time
 
+import pytest
+
 from oracle.docs import layers
 
 _OLD_COMMENT = re.compile(r"<!--(.*?)-->", re.S)
@@ -48,6 +50,7 @@ def test_the_same_result_as_the_regexes_on_random_bodies():
         assert layers.notes_block(text) == _old_notes(text), repr(text)
 
 
+@pytest.mark.timing
 def test_many_unclosed_openers_are_linear():
     for body in ("x " + "<!--" * 262_144, "```notes\n" * 116_508):
         started = time.monotonic()

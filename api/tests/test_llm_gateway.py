@@ -393,6 +393,7 @@ async def _call_by(tenant_id, fakes, deadline, on_call=None):
         )
 
 
+@pytest.mark.timing
 async def test_no_swap_starts_that_cannot_finish_before_the_deadline(tenant_id, fakes, monkeypatch):
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
     spent = await add_account(tenant_id, "alpha")

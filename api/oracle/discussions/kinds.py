@@ -38,7 +38,7 @@ class GoalMeasure(_Payload):
     ``owner_id``. Oracle's never carry ``owner_id`` or ``weight`` (:func:`goal_measure`)."""
 
     entity_id: uuid.UUID
-    metric: str | None = Field(default=None, max_length=200)
+    metric: str | None = Field(default=None, min_length=3, max_length=200)
     unit: str | None = Field(default=None, max_length=50)
     comparison: Literal["at_least", "above", "at_most", "below"] | None = None
     target: float | None = None
@@ -46,7 +46,7 @@ class GoalMeasure(_Payload):
     horizon: Literal["short", "medium", "long"] | None = None
     due: date | None = None
     owner_id: uuid.UUID | None = None
-    weight: float | None = None
+    weight: float | None = Field(default=None, gt=0, le=10)
 
 
 # The goal attrs a goal_measure payload sets (payload key -> attrs key).
@@ -161,6 +161,12 @@ def _not_yet(_db: Any) -> bool:
     return False
 
 
+def _landed(_db: Any) -> bool:
+    """G3: the path that applies the kind exists (G4 staging, baseline proposals, conflict
+    resolution, answers)."""
+    return True
+
+
 @dataclass(frozen=True)
 class Kind:
     name: str
@@ -218,36 +224,45 @@ def _measure(p: dict[str, Any]) -> str:
 _KINDS = [
     Kind("section_edit", SectionEdit, ("document", "section"), "Stage", "approver",
          "the document's next draft",
-         lambda p: f"Change {p['section_key']}: {p['instruction']}", suggest=True),
+         lambda p: f"Change {p['section_key']}: {p['instruction']}",
+         suggest=True, available=_landed),
     Kind("goal_measure", GoalMeasure, ("entity", "intake", "gap"), "Propose", "commenter",
          "a baseline proposal", _measure, available=lambda _db: True),
     Kind("entity_edit", EntityEdit, ("entity", "conflict"), "Propose", "commenter",
          "a baseline proposal",
-         lambda p: f"Change {p['entity_id']}'s {p['field']} to {p['value']}"),
+         lambda p: f"Change {p['entity_id']}'s {p['field']} to {p['value']}",
+         available=_landed),
     Kind("conflict_pick", ConflictPick, ("conflict",), "Resolve", "approver",
          "the conflict's resolution",
-         lambda p: f"Resolve the conflict: keep claim {p['claim_index'] + 1}"),
+         lambda p: f"Resolve the conflict: keep claim {p['claim_index'] + 1}",
+         available=_landed),
     Kind("answer", Answer, SUBJECT_KINDS, "Use as answer", "approver", "the question's answer",
-         lambda p: f"Answer: {p['body']}"),
+         lambda p: f"Answer: {p['body']}", available=_landed),
     Kind("ask_person", AskPerson, SUBJECT_KINDS, "Ask", "commenter",
          "a question asked of that person", lambda p: f"Ask {p['asked_to']}: {p['prompt']}"),
     Kind("basis_record", BasisRecord, ("roadmap_item", "checkpoint_item", "track"), "Record",
          "approver", "a schedule basis",
-         lambda p: f"Record a date basis: {p['reference']} supports {p['supports_date']}"),
+         lambda p: f"Record a date basis: {p['reference']} supports {p['supports_date']}",
+         available=_landed),
     Kind("item_horizon", ItemHorizon, ITEM_SUBJECTS, "Stage", "approver", SHARED_DRAFT,
-         lambda p: f"Move {p['item_key']} to {p['horizon'].capitalize()}", suggest=True),
+         lambda p: f"Move {p['item_key']} to {p['horizon'].capitalize()}",
+         suggest=True, available=_landed),
     Kind("item_outcome", ItemOutcome, ITEM_SUBJECTS, "Stage", "approver", SHARED_DRAFT,
-         lambda p: f"Change {p['item_key']}'s outcome to {p['outcome']}", suggest=True),
+         lambda p: f"Change {p['item_key']}'s outcome to {p['outcome']}",
+         suggest=True, available=_landed),
     Kind("item_drop", ItemDrop, ITEM_SUBJECTS, "Stage", "approver", SHARED_DRAFT,
-         lambda p: f"Drop {p['item_key']}: {p['reason']}", suggest=True),
+         lambda p: f"Drop {p['item_key']}: {p['reason']}",
+         suggest=True, available=_landed),
     Kind("item_dependency", ItemDependency, ITEM_SUBJECTS, "Stage", "approver", SHARED_DRAFT,
-         _dependency, suggest=True),
+         _dependency,
+         suggest=True, available=_landed),
     Kind("item_date_remove", ItemDateRemove, ITEM_SUBJECTS, "Stage", "approver", SHARED_DRAFT,
-         lambda p: f"Remove {p['item_key']}'s date", suggest=True),
+         lambda p: f"Remove {p['item_key']}'s date",
+         suggest=True, available=_landed),
     Kind("item_split", ItemSplit, ("checkpoint_item",), "Stage", "approver", SHARED_DRAFT,
-         lambda p: f"Split {p['item_key']} into {_list(p['into'])}"),
+         lambda p: f"Split {p['item_key']} into {_list(p['into'])}", available=_landed),
     Kind("item_merge", ItemMerge, ("checkpoint_item",), "Stage", "approver", SHARED_DRAFT,
-         lambda p: f"Merge {p['item_key']} with {_list(p['with'])}"),
+         lambda p: f"Merge {p['item_key']} with {_list(p['with'])}", available=_landed),
     Kind("scope_feature", ScopeFeature, SCOPE_SUBJECTS, "Stage", "approver",
          "the feature set at its checkpoint",
          lambda p: f"{p['decision'].capitalize()} {p['feature_id']}: {p['reason']}",
@@ -295,6 +310,11 @@ def goal_measure(payload: dict[str, Any], proposed_by_kind: str) -> dict[str, An
     if found:
         raise goals.GoalFieldsError(found)
     return validate_payload("goal_measure", payload)
+
+
+def schema_of(kind: str) -> dict[str, Any]:
+    """The payload's JSON schema, as the prompt and the Propose a change form read it."""
+    return REGISTRY[kind].payload.model_json_schema(by_alias=True)
 
 
 def available_for(subject_kind: str, db: Any = None) -> list[str]:

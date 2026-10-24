@@ -766,6 +766,7 @@ async def _jobs(tenant_id: uuid.UUID) -> list[LlmJob]:
         return list(await s.scalars(select(LlmJob).order_by(LlmJob.created_at)))
 
 
+@pytest.mark.timing
 async def test_a_job_is_never_cut_mid_call_by_the_tick(client, ticker_on, claude, monkeypatch):
     tenant_id = await _backlog(client, 5)
     monkeypatch.setattr(get_llm_settings(), "timeout_seconds", 1.0)
@@ -795,6 +796,7 @@ async def test_no_job_is_claimed_when_less_than_a_call_remains(
     assert (job.status, job.attempts) == ("queued", 0)
 
 
+@pytest.mark.timing
 async def test_a_job_whose_calls_keep_overrunning_fails_after_its_attempts(
     client, ticker_on, claude, monkeypatch
 ):
@@ -851,6 +853,7 @@ async def test_a_job_cut_before_its_call_started_goes_back_to_the_queue(
     assert (job.status, job.attempts) == ("succeeded", 1)
 
 
+@pytest.mark.timing
 async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     client, ticker_on, claude, monkeypatch
 ):
@@ -880,6 +883,7 @@ async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     assert (job.status, job.attempts) == ("succeeded", 1)
 
 
+@pytest.mark.timing
 async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, claude, monkeypatch):
     tenant_id = await _backlog(client, 5)
     headers = await token_with_role(tenant_id, "owner")
@@ -899,6 +903,7 @@ async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, cl
     assert statuses.count("queued") == 5 - out["llm_jobs"]["ran"]
 
 
+@pytest.mark.timing
 async def test_a_job_swaps_to_no_account_it_has_no_time_left_for(
     client, ticker_on, claude, monkeypatch
 ):
@@ -929,6 +934,7 @@ async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monke
     assert [j.status for j in await _jobs(tenant_id)] == ["queued", "queued"]
 
 
+@pytest.mark.timing
 async def test_a_backlog_defers_no_other_companys_runs(
     client, ticker_on, runtime, claude, monkeypatch
 ):

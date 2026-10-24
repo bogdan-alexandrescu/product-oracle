@@ -78,6 +78,8 @@ const PROVIDERS: Schemas["ProviderOut"][] = [
 
 const SETTING_DEFAULTS: Record<string, unknown> = {
   iap_default_role: "commenter",
+  // A5: a Google sign-in without an invite asks an owner (request), joins (join) or is refused (refuse).
+  sign_in_without_invite: "request",
   confidence_weights: {},
   blocker_risk_acceptance_role: "owner",
   blocker_risk_review_max_days: 90,
@@ -342,6 +344,9 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
           ok = false;
         }
         if (!ok) return json(422, { detail: "company_timezone must be an IANA time zone name" });
+      }
+      if (key === "sign_in_without_invite" && !["request", "join", "refuse"].includes(String(value))) {
+        return json(422, { detail: "sign_in_without_invite must be request, join or refuse" });
       }
       if (key === "company_email_domains" && Array.isArray(value)) {
         const domain = value.map((d) => String(d).trim().toLowerCase().replace(/^@/, "")).find(publicMailDomain);

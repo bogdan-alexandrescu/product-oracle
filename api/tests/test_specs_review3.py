@@ -475,6 +475,7 @@ SLOW_PAYLOADS = {
 }
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", list(SLOW_PAYLOADS))
 def test_the_static_check_is_linear(name):
     from oracle.specs.sanitize import sanitize_svg, sanitize_wireframe, static_problems
@@ -493,6 +494,7 @@ def test_the_static_check_is_linear(name):
     assert elapsed < 1.0, f"{name}: {elapsed:.1f}s"
 
 
+@pytest.mark.timing
 def test_a_worst_case_design_bundle_is_checked_in_under_a_second():
     from oracle.specs.design import check_design
 
@@ -522,6 +524,7 @@ def test_quoted_local_css_references_are_local():
         assert not out.safe, ref
 
 
+@pytest.mark.timing
 async def test_the_design_check_runs_off_the_event_loop_with_a_time_cap(
     client, runtime, monkeypatch
 ):

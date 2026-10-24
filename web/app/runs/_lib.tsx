@@ -149,11 +149,11 @@ export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, u
 
 /**
  * A checkpoint kind with its own review screen opens it (/runs/<id>/review/<checkpoint id>):
- * C7's feature set, and F4's Engineering check once its briefs check is in; other kinds are
- * decided on the run page.
+ * C7's feature set, D1's roadmap items, and F4's Engineering check once its briefs check is
+ * in; other kinds are decided on the run page.
  */
 export function reviewHref(cp: { id: string; run_id: string; kind: CheckpointKind; payload?: CheckpointOut["payload"] }): string | null {
-  return cp.kind === "feature_set" || briefsCheck({ kind: cp.kind, payload: cp.payload ?? {} }) ? `/runs/${cp.run_id}/review/${cp.id}` : null;
+  return cp.kind === "feature_set" || cp.kind === "roadmap_items" || briefsCheck({ kind: cp.kind, payload: cp.payload ?? {} }) ? `/runs/${cp.run_id}/review/${cp.id}` : null;
 }
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];

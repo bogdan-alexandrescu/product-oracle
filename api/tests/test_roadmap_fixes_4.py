@@ -63,6 +63,7 @@ def _roadmap_probe(name: str) -> str:
 # --------------------------------------------------------------------------- B1
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 def test_the_safe_loader_refuses_each_probe_at_once(name):
     started = time.monotonic()
@@ -95,6 +96,7 @@ def test_an_export_never_writes_aliases_the_loader_would_refuse():
     assert "&" not in text and safe_yaml.load(text) == {"a": shared, "b": shared}
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 def test_parse_draft_refuses_each_probe_in_front_matter_at_once(name):
     started = time.monotonic()
@@ -104,6 +106,7 @@ def test_parse_draft_refuses_each_probe_in_front_matter_at_once(name):
     assert [p.code for p in exc.value.problems] == ["invalid_front_matter"]
 
 
+@pytest.mark.timing
 def test_a_template_front_matter_probe_is_a_problem():
     from oracle.templates.validation import check_template
 
@@ -114,6 +117,7 @@ def test_a_template_front_matter_probe_is_a_problem():
         assert "invalid_front_matter" in {p.code for p in check.problems}, name
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 async def test_post_versions_refuses_each_probe(client, owner, name):  # noqa: F811
     _, auth = owner
@@ -143,6 +147,7 @@ async def test_post_versions_refuses_a_body_over_one_megabyte(client, owner):  #
     assert [p.code for p in exc.value.problems] == ["draft_too_large"]
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(YAML_PROBES))
 async def test_baseline_yaml_refuses_each_probe(client, owner, name):  # noqa: F811
     _, auth = owner
@@ -156,6 +161,7 @@ async def test_baseline_yaml_refuses_each_probe(client, owner, name):  # noqa: F
     assert resp.status_code == 422, resp.text
 
 
+@pytest.mark.timing
 async def test_the_draft_parse_runs_off_the_event_loop(monkeypatch):
     import asyncio
 
@@ -182,6 +188,7 @@ async def test_the_draft_parse_runs_off_the_event_loop(monkeypatch):
     assert [p.code for p in exc.value.problems] == ["too_slow"] and beats >= 2
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", ["deep_mapping", "deep_sequence", "alias_bomb"])
 async def test_a_runs_roadmap_md_probe_fails_the_import_not_the_tick(
     client,
@@ -206,6 +213,7 @@ async def test_a_runs_roadmap_md_probe_fails_the_import_not_the_tick(
     assert "roadmap.md was rejected" in run["error"] and "invalid_front_matter" in run["error"]
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", ["long_decimal", "deep_mapping", "alias_bomb"])
 async def test_a_runs_prd_md_probe_fails_the_import_not_the_tick(client, owner, runtime, name):  # noqa: F811
     from tests.fixtures import draft

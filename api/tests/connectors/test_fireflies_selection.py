@@ -99,6 +99,7 @@ def test_series_title_keeps_case_and_drops_the_dated_suffix():
     assert series_title("  AI Agents  daily standup ") == "AI Agents daily standup"
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     "title",
     [
@@ -128,6 +129,7 @@ def _fastest(title: str) -> float:
     return best
 
 
+@pytest.mark.timing
 def test_series_title_does_not_backtrack_exponentially_on_repeated_dates():
     """A regex repeating overlapping date alternatives backtracked exponentially: the
     first title took 36 s at 21 blocks and the second doubled with every date."""
@@ -138,6 +140,7 @@ def test_series_title_does_not_backtrack_exponentially_on_repeated_dates():
     assert series_title(dates) == dates
 
 
+@pytest.mark.timing
 def test_series_title_worst_case_is_bounded():
     """Every round strips a suffix of the capped title: the most rounds there can be."""
     for title in ("S" + " 1" * 99, "S" + " - 1" * 49, "S" + " (1)" * 49, "S" + " #1" * 66):

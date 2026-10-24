@@ -170,7 +170,7 @@ async def test_the_stream_and_a_second_reader_share_one_call(client, fake):
         assert text == done.body
         assert evs[-1][0] == "done" and evs[-1][1]["status"] == "complete"
     assert sum(1 for e in first if e[0] == "delta") >= 2
-    assert done.input_tokens == 100 and done.prompt == "discussion_reply.v1"
+    assert done.input_tokens == 100 and done.prompt == "discussion_reply.v2"
     # Owners read the accounting; nobody else does (P3d).
     msgs = await client.get(f"/v1/discussions/{d['id']}/messages", headers=ctx.as_("owner"))
     oracle = [m for m in msgs.json()["items"] if m["author_kind"] == "oracle"][0]
@@ -241,6 +241,7 @@ time.sleep(60)
 # with its partial text, and Claude Code's process is gone; Retry makes it pending again;
 # fails_when=it keeps running, loses the text, or the process lingers; no_claim=the real
 # claude binary.
+@pytest.mark.timing
 async def test_stop_cancels_the_call_and_retry_asks_again(client, tmp_path):
     from tests.test_llm_gateway import _running
 

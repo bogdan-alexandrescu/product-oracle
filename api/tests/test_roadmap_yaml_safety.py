@@ -6,6 +6,8 @@ run's import, a person's PUT) refuses such a file before it is expanded."""
 
 import time
 
+import pytest
+
 from oracle import safe_yaml
 from oracle.runs import roadmap as items_file
 from oracle.runs.roadmap import check_items
@@ -43,6 +45,7 @@ def _codes(text: str) -> list[str]:
     return [p["code"] for p in check_items(text).problems]
 
 
+@pytest.mark.timing
 def test_an_alias_bomb_is_refused_quickly_with_a_clear_problem():
     text = bomb(5)  # ~600 bytes; expanded, 10^6 strings
     assert len(text.encode()) < 1500
@@ -80,6 +83,7 @@ def test_the_plain_file_still_loads():
     assert items_file.load_items_yaml(ITEMS)["items"][0]["id"] == "payment-step"
 
 
+@pytest.mark.timing
 async def test_a_person_s_import_refuses_the_bomb(client, owner, runtime):  # noqa: F811
     _, auth = owner
     await approved_prd(client, auth)

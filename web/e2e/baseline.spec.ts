@@ -96,7 +96,7 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   await expect(d.getByRole("list", { name: "Blocks" })).toHaveText(/Saved carts/);
 
   // Lock: who and when, with Unlock for approvers.
-  await expect(d.getByTestId("lock-note")).toContainText("Locked by member");
+  await expect(d.getByTestId("lock-note")).toContainText("Locked by Approver");
   await expect(d.getByTestId("lock-note")).toContainText("Oct 15");
   await expect(d.getByRole("button", { name: "Unlock" })).toBeVisible();
 

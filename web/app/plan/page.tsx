@@ -79,6 +79,19 @@ export default function PlanPage() {
   const canBaseline = can("confirm_entity");
   // F7: approvers, owners and engineering leads link and unlink tracker issues.
   const canLink = can("link_tracker_issue");
+  // #370 (#505): each track control shows only to a role that can call its route.
+  const trackRights = useMemo(
+    () => ({
+      edit: can("update_track"),
+      addMilestone: can("create_track_milestone"),
+      check: can("monitor_track"),
+      // Like create_run: an owner only for some runs, so an approver may on most tracks.
+      draftRoadmap: can("create_track_roadmap_run", true),
+      push: can("push_track_to_tracker"),
+    }),
+    [can],
+  );
+  const canEditMilestone = can("update_milestone");
   const [scope, setScope, ready] = usePlanScope(userId ?? (me ? "token" : null));
   const q = useQuery(
     `plan|${ready ? scope : "wait"}`,
@@ -130,7 +143,8 @@ export default function PlanPage() {
       key={`${msTrack.id}|${milestone?.id ?? "new"}`}
       track={msTrack}
       milestoneId={milestone?.id ?? null}
-      canWrite={canWrite}
+      // #370 (#505): a role that can never change the milestone sees it read only.
+      canWrite={milestone?.id ? canEditMilestone : trackRights.addMilestone}
       onSaved={async (m) => {
         const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
         putTrack(t);
@@ -203,7 +217,7 @@ export default function PlanPage() {
         <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
           {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
           {tracks.data?.map((t) => (
-            <TrackPanel key={t.id} track={t} canWrite={canWrite} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
+            <TrackPanel key={t.id} track={t} may={trackRights} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
           ))}
           <Panel
             title="Roadmap"

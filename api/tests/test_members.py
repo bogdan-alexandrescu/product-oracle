@@ -258,6 +258,11 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("DELETE", "/v1/members/{user_id}", "owner", {}),
     ("POST", "/v1/members/{user_id}/disable", "owner", {}),
     ("POST", "/v1/members/{user_id}/restore", "owner", {}),
+    # A5: member detail, the removal and demotion preview, approvals, hand-over.
+    ("GET", "/v1/members/{user_id}", "owner", {}),
+    ("GET", "/v1/members/{user_id}/impact", "owner", {"params": {"change": "remove"}}),
+    ("GET", "/v1/members/{user_id}/approvals", "owner", {}),
+    ("POST", "/v1/members/{user_id}/hand-over", "owner", {"json": {"hand_over": []}}),
     ("GET", "/v1/api-tokens", "owner", {}),
     ("DELETE", "/v1/api-tokens/{token_id}", "owner", {}),
     ("GET", "/v1/api-tokens/{token_id}/approvals", "owner", {}),

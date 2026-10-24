@@ -70,10 +70,12 @@ async def _import_quickly(client, text: str, doc: str = "probe"):
 # --------------------------------------------------------------------------- M1
 
 
+@pytest.mark.timing
 def test_a_900_kb_line_of_tags_is_refused_before_any_parse():
     assert _refused_quickly(FRONT + "<b>" * 300_000 + "\n") == {"line_too_long"}
 
 
+@pytest.mark.timing
 async def test_a_900_kb_line_of_tags_is_refused_at_import(client):
     resp = await _import_quickly(client, FRONT + "<b>" * 300_000 + "\n")
     assert resp.status_code == 422 and "line_too_long" in resp.text
@@ -86,6 +88,7 @@ def test_a_line_over_the_cap_is_named_by_its_line():
     assert problem.code == "line_too_long" and problem.line == 9
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("separator", ["\n", "\n\n"])
 def test_a_megabyte_of_image_openers_in_short_lines_is_refused_quickly(separator):
     text = FRONT + IMAGE_OPENERS.replace("\n", separator) + "\n"
@@ -93,11 +96,13 @@ def test_a_megabyte_of_image_openers_in_short_lines_is_refused_quickly(separator
     assert _refused_quickly(text)
 
 
+@pytest.mark.timing
 async def test_a_megabyte_of_image_openers_is_refused_quickly_at_import(client):
     resp = await _import_quickly(client, FRONT + IMAGE_OPENERS + "\n")
     assert resp.status_code == 422, resp.text[:300]
 
 
+@pytest.mark.timing
 def test_a_megabyte_of_prose_in_long_lines_is_read_quickly():
     text = FRONT + "\n".join([LONG_PROSE_LINE] * 48) + "\n"
     assert len(text) > 950_000
@@ -107,11 +112,13 @@ def test_a_megabyte_of_prose_in_long_lines_is_read_quickly():
     assert draft.sections[0].body_text.startswith("word word")
 
 
+@pytest.mark.timing
 async def test_a_megabyte_of_prose_in_long_lines_imports_quickly(client):
     resp = await _import_quickly(client, FRONT + "\n".join([LONG_PROSE_LINE] * 48) + "\n")
     assert resp.status_code == 201, resp.text[:300]
 
 
+@pytest.mark.timing
 async def test_a_spec_edit_of_prose_in_long_lines_is_checked_quickly(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
@@ -122,6 +129,7 @@ async def test_a_spec_edit_of_prose_in_long_lines_is_checked_quickly(client, run
     assert resp.status_code in (200, 201), resp.text[:300]
 
 
+@pytest.mark.timing
 async def test_a_spec_edit_over_the_spec_cap_is_refused(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
@@ -140,6 +148,7 @@ async def test_a_queue_wait_does_not_count_against_the_parse_cap():
     await asyncio.gather(*busy)
 
 
+@pytest.mark.timing
 async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeypatch):
     monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.3)
     ctx = await make_ctx()

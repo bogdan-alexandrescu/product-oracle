@@ -40,6 +40,8 @@ test("engineering lead: the owner ticks Eng lead, it stays after a reload and th
   await box.check();
   await expect(box).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
+  // The tick shows at once; the box is disabled until the save lands.
+  await expect(box).toBeEnabled();
   await page.reload();
   await expect(leadBox(page, "commenter@example.com")).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
@@ -86,7 +88,7 @@ test("engineering lead: the invite form names a lead, never a viewer", async ({ 
   await expect(box).toBeEnabled();
   await form.getByLabel("Email").fill("lead.hire@example.com");
   await box.check();
-  await form.getByRole("button", { name: "Send invite" }).click();
+  await form.getByRole("button", { name: "Send invite", exact: true }).click();
   const row = page.getByTestId("invite-row").filter({ hasText: "lead.hire@example.com" });
   await expect(row).toContainText("Commenter");
   await expect(row).toContainText("Eng lead");

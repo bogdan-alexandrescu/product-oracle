@@ -89,6 +89,7 @@ async def test_reads_initialize_and_tools_list_never_read_swarmcloud(client, own
     assert _reads(swarm) == before
 
 
+@pytest.mark.timing
 async def test_thirty_concurrent_writes_on_a_slow_status_share_one_bounded_read(
     client, owner, monkeypatch
 ):

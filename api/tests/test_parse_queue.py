@@ -61,6 +61,7 @@ def bearer(raw: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw}"}
 
 
+@pytest.mark.timing
 async def test_one_person_has_two_parses_and_the_rest_get_429(client, monkeypatch):
     tenant, auth = await seed_auth()
     other = bearer(await api_token(tenant))
@@ -79,6 +80,7 @@ async def test_one_person_has_two_parses_and_the_rest_get_429(client, monkeypatc
     await asyncio.gather(*pending)
 
 
+@pytest.mark.timing
 async def test_a_wait_for_a_worker_past_the_limit_is_503(client, monkeypatch):
     tenant, auth = await seed_auth()
     monkeypatch.setattr(safe_yaml, "QUEUE_SECONDS", 0.5)
@@ -195,6 +197,7 @@ def test_nested_citation_markers_are_stripped_to_nothing():
     assert strip_citations("plain [c:x]") == "plain"
 
 
+@pytest.mark.timing
 def test_deeply_nested_citation_markers_leave_nothing_citation_re_reads():
     import time
 
@@ -224,6 +227,7 @@ async def test_the_budget_is_in_force_inside_the_parse():
     assert await safe_yaml.run_parse_within(parse_budget.active, seconds=1) is True
 
 
+@pytest.mark.timing
 async def test_a_parse_past_its_budget_is_refused_near_the_cap_and_frees_the_slot():
     from oracle import parse_budget
 
