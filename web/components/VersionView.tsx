@@ -8,6 +8,7 @@ import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
+import { PricingDecide } from "@/components/PricingDecide";
 import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
@@ -1015,6 +1016,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               )}
               {/* C1e: accepted changes staged for the next draft, built in one job. */}
               {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {/* H9: an approved pricing memo's Decide (the pricing owner), or who it waits for. */}
+              {document_?.kind === "pricing" && n === latest && <PricingDecide slug={document_.slug} />}
               {templateOnly && document_ && <DraftWithOracleButton slug={document_.slug} />}
               {version &&
                 (version.approved_at || canApprove) &&

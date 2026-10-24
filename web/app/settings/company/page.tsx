@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel, ViewOnly } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { displayName } from "@/lib/names";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -299,7 +300,111 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
   );
 }
 
-/** Settings > Company: the company-wide choices an owner makes: the planning horizons and the Company time zone. */
+/**
+ * H9 Pricing input: the pricing owner, the one person who decides prices (research [74]).
+ * An active owner; unset, the earliest active owner. Owners only: others do not see it.
+ */
+function PricingOwnerPanel() {
+  const settingQ = useQuery("settings|pricing_owner", () => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "pricing_owner" } } })));
+  const membersQ = useQuery("members", () => unwrap(api.GET("/v1/members")));
+  const owners = (membersQ.data ?? [])
+    .filter((m) => m.role === "owner" && m.status === "active")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const stored = settingQ.data ? ((settingQ.data.value as string | null) ?? null) : undefined;
+  // Unset reads as the earliest active owner, as the API does.
+  const current = stored === undefined ? undefined : (owners.find((m) => m.id === stored) ?? owners[0])?.id;
+  const [edit, setEdit] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chosen = edit ?? current ?? "";
+
+  async function save() {
+    if (!chosen) return;
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const out: Schemas["SettingOut"] = await unwrap(
+        api.PUT("/v1/settings/{key}", { params: { path: { key: "pricing_owner" } }, body: { value: chosen } }),
+      );
+      settingQ.setData(() => out);
+      setEdit(null);
+      setSaved(true);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const loadError = settingQ.error ?? membersQ.error;
+  return (
+    <div id="pricing-owner" className="scroll-mt-4" data-testid="pricing-owner-panel">
+      <Panel
+        title="Pricing owner"
+        tools={
+          <InfoTip label="pricing owner" side="bottom">
+            The one person who decides prices. Oracle drafts pricing memos; the pricing owner decides from them in the decision log. The earliest
+            owner until you choose another.
+          </InfoTip>
+        }
+      >
+        {loadError && (
+          <div className="p-4">
+            <Notice tone="error">{loadError}</Notice>
+          </div>
+        )}
+        {current !== undefined && membersQ.data && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <div className={ROW.replace("88px", "160px")}>
+              <label htmlFor="pricing-owner-select" className={ROW_LABEL}>
+                Pricing owner
+              </label>
+              <select
+                id="pricing-owner-select"
+                className={`${SELECT_FIELD} max-w-72`}
+                value={chosen}
+                onChange={(e) => {
+                  setEdit(e.target.value);
+                  setSaved(false);
+                }}
+              >
+                {owners.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {displayName(m.email, m.name)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {error && (
+              <div className="px-4 pb-1 max-[600px]:px-3">
+                <Notice tone="error">{error}</Notice>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
+              <Button type="submit" variant="solid" disabled={busy || !chosen}>
+                Save
+              </Button>
+              {saved && (
+                <span role="status" className="text-sm font-semibold text-pass">
+                  Saved
+                </span>
+              )}
+            </div>
+          </form>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+/** Settings > Company: the company-wide choices an owner makes: the planning horizons, the Company time zone and the pricing owner. */
 export default function CompanySettingsPage() {
   // #370: Settings' gate answers a role that cannot read the company settings.
   const { can, capsReady } = useMe();
@@ -312,6 +417,8 @@ export default function CompanySettingsPage() {
         <div className="flex min-w-0 flex-col gap-4">
           <HorizonsPanel />
           <TimezonePanel canChange={canChange} />
+          {/* H9: owners choose the pricing owner; others do not see the field. */}
+          {canChange && can("list_members") && <PricingOwnerPanel />}
         </div>
       )}
     </>
