@@ -609,7 +609,9 @@ async def told_in_oracle(client, ctx: Ctx) -> tuple[dict, dict]:
         reply = await s.get(RequestReply, uuid.UUID(mine["id"]))
         reply.body = "We've decided not to build dark mode: too few would use it."
         await s.commit()
-    resp = await client.post(f"/v1/request-replies/{mine['id']}/notify", headers=ctx.as_("approver"))
+    resp = await client.post(
+        f"/v1/request-replies/{mine['id']}/notify", headers=ctx.as_("approver")
+    )
     assert resp.status_code == 200, resp.text
     return root, resp.json()
 

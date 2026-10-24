@@ -233,6 +233,8 @@ class RequestReply(TenantScoped, Base):
     sent_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     skip_reason: Mapped[str | None] = mapped_column(Text)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the member who asked opened the answer told in Oracle: its Inbox row ends then.
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
 

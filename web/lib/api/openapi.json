@@ -12216,7 +12216,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/sources/{source_id}/coverage": {
@@ -36315,6 +36316,60 @@
         },
         "x-min-role": "commenter",
         "x-per-item": "approver"
+      }
+    },
+    "/v1/request-replies/{reply_id}/opened": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Open Request Reply",
+        "description": "The member who asked opened Answer to your request: its Inbox row ends. The asker\nonly; opening it again changes nothing. 409 for a reply not told in Oracle.",
+        "operationId": "open_request_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/requests/{request_id}/replies/draft": {
@@ -69678,6 +69733,18 @@
             ],
             "title": "Body"
           },
+          "reply_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply Id"
+          },
           "at": {
             "anyOf": [
               {
@@ -69703,7 +69770,7 @@
           "counts"
         ],
         "title": "InboxRequestReply",
-        "description": "H10 rows: Replies to send (the request's filer and its decider; counted until\nevery reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said\nno (the decision's approver; counted until Reopen or Keep the no) and Answer to your\nrequest (the member who asked; shown only, with the reply)."
+        "description": "H10 rows: Replies to send (the request's filer and its decider; counted until\nevery reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said\nno (the decision's approver; counted until Reopen or Keep the no) and Answer to your\nrequest (the member who asked; shown only, with the reply, until they open it)."
       },
       "InboxRevokeFailure": {
         "properties": {
@@ -87713,6 +87780,18 @@
               }
             ],
             "title": "Notified At"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At"
           },
           "drafting": {
             "type": "boolean",
