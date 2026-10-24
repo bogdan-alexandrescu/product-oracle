@@ -444,6 +444,7 @@ async def test_a_job_slowed_by_contention_but_under_its_cpu_cap_is_never_given_u
     assert uuid.UUID(resp.json()["id"]) not in _given_up_versions()
 
 
+@pytest.mark.timing
 async def test_the_wall_backstop_never_gives_a_version_up(client, monkeypatch):
     """A job past the wall backstop (``JOB_WALL_SECONDS``: liveness, not cost) stops being
     waited for: the read is 503 (try again), the version is not given up, and the next read

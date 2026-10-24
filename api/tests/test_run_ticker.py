@@ -934,6 +934,7 @@ async def test_no_job_runs_with_a_limit_of_zero(client, ticker_on, claude, monke
     assert [j.status for j in await _jobs(tenant_id)] == ["queued", "queued"]
 
 
+@pytest.mark.timing
 async def test_a_backlog_defers_no_other_companys_runs(
     client, ticker_on, runtime, claude, monkeypatch
 ):

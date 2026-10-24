@@ -241,6 +241,7 @@ time.sleep(60)
 # with its partial text, and Claude Code's process is gone; Retry makes it pending again;
 # fails_when=it keeps running, loses the text, or the process lingers; no_claim=the real
 # claude binary.
+@pytest.mark.timing
 async def test_stop_cancels_the_call_and_retry_asks_again(client, tmp_path):
     from tests.test_llm_gateway import _running
 
