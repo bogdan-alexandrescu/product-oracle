@@ -18,6 +18,8 @@ const TREND_REVISIONS = 24;
 export function useGoals(scope: string): {
   goals: GoalView[] | undefined;
   history: Map<string, Point[]>;
+  /** The trends are loading: a goal with a current value and no history yet keeps its trend's room meanwhile. */
+  historyPending: boolean;
   error: string | null;
   loading: boolean;
 } {
@@ -51,5 +53,5 @@ export function useGoals(scope: string): {
     },
     { keepPrevious: true },
   );
-  return { goals, history: historyQ.data ?? new Map(), error: goalsQ.error, loading: goalsQ.loading };
+  return { goals, history: historyQ.data ?? new Map(), historyPending: historyQ.loading, error: goalsQ.error, loading: goalsQ.loading };
 }
