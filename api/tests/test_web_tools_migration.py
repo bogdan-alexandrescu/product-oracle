@@ -76,7 +76,9 @@ def test_chains_on_the_single_head():
     assert script.get_heads() == [REVISION]
 
 
-def _token(tenant: uuid.UUID, scopes: str, expires: str = "now() + interval '1 hour'") -> None:
+def _token(
+    tenant: uuid.UUID, scopes: list[str], expires: str = "now() + interval '1 hour'"
+) -> None:
     run = uuid.uuid4()
     _run(
         "INSERT INTO runs (id, tenant_id, flow, status) "
@@ -86,7 +88,7 @@ def _token(tenant: uuid.UUID, scopes: str, expires: str = "now() + interval '1 h
     )
     _run(
         "INSERT INTO run_tokens (id, tenant_id, run_id, token_hash, scopes, expires_at) "
-        f"VALUES (gen_random_uuid(), :t, :r, :h, CAST(:s AS text[]), {expires})",
+        f"VALUES (gen_random_uuid(), :t, :r, :h, :s, {expires})",
         t=tenant,
         r=run,
         h=uuid.uuid4().hex,
@@ -111,9 +113,9 @@ def test_upgrade_and_downgrade(scratch_db):
     assert "'read:web'" in _check() and "'read:other_lane'" in _check()
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
-    _token(tenant, "{read:web,read:baseline}")
+    _token(tenant, ["read:web", "read:baseline"])
     with pytest.raises(IntegrityError):
-        _token(tenant, "{read:everything}")
+        _token(tenant, ["read:everything"])
     with pytest.raises(IntegrityError):
         _run(
             "INSERT INTO web_results (id, tenant_id, run_id, ref, kind, url, host, text) "
@@ -132,7 +134,8 @@ def test_upgrade_and_downgrade(scratch_db):
     assert "read:web" not in _check() and "'read:other_lane'" in _check()
     # Expired tokens that held it are gone with it; nothing else is.
     assert _run("SELECT count(*) FROM run_tokens") == [(0,)]
-    assert _run("SELECT count(*) FROM runs") == [(1,)]
+    # (The refused token's run stays: it was inserted on its own.)
+    assert _run("SELECT count(*) FROM runs") == [(2,)]
 
     command.upgrade(_cfg(), REVISION)
     assert TABLES <= _tables()

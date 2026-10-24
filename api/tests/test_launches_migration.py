@@ -76,7 +76,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0048_scope_review"]
+    assert script.get_heads() == ["0049_web_tools"]
 
 
 def _tenant() -> uuid.UUID:

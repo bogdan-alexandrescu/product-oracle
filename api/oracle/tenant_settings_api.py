@@ -60,6 +60,10 @@ from every member's Google Docs sources in the same request, with no Drive call
 - ``outcome_calibration`` (H3): ``apply`` (default) multiplies priority confidence by the
   track record; ``show`` only displays it.
 
+- ``web_searches_per_month`` (H7): 0-2,000, default 200: the open-web searches Oracle's
+  digest runs may make in the Company time zone's month (counted from ``web_searches``);
+  0 turns web search off.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -134,7 +138,10 @@ DEFAULTS: dict[str, Any] = {
     "outcome_measure_days": 30,
     "calibration_min_outcomes": 5,
     "outcome_calibration": "apply",
+    # H7 Competitive digest: open-web searches per month across runs; 0 turns them off.
+    "web_searches_per_month": 200,
 }
+MAX_WEB_SEARCHES_PER_MONTH = 2000
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
 # key takes it shared; either way the caller is re-read under it.
@@ -315,6 +322,11 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         lo, hi = (7, 365) if key == "outcome_measure_days" else (1, 100)
         if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
             raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
+        return value
+    if key == "web_searches_per_month":
+        hi = MAX_WEB_SEARCHES_PER_MONTH
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= hi:
+            raise InvalidSetting(f"web_searches_per_month must be a whole number from 0 to {hi}")
         return value
     if key == "outcome_calibration":
         if value not in ("apply", "show"):

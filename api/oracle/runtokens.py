@@ -27,6 +27,8 @@ SCOPES = (
     "read:documents",
     "write:proposals",
     "write:drafts",
+    # H7: search_web and fetch_web_page; only the competitive digest's segment holds it.
+    "read:web",
 )
 
 

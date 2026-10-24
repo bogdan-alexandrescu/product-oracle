@@ -67,7 +67,7 @@ def test_the_migration_follows_0015_and_precedes_0014_intake():
     # that, 0017_citation_source_oracle on that, then 0018_runtime_features,
     # 0019_citation_confidence, the intake lane's 0014_intake and the PRD review chain
     # (0014_review, 0014_member_disable, 0014_member_follow_up_retry) on that.
-    assert script.get_heads() == ["0048_scope_review"]
+    assert script.get_heads() == ["0049_web_tools"]
     assert script.get_revision("0016_roadmap").down_revision == REVISION
     assert script.get_revision("0016_refinement_batch").down_revision == "0016_roadmap"
     assert (

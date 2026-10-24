@@ -17,16 +17,6 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
-from oracle.web import robots
-from oracle.web.brave import BraveSearch
-from oracle.web.models import WebResult, WebSearch, purge_old
-from oracle.web.search import (
-    NOTE,
-    ProviderError,
-    SearchResult,
-    WebSearchProvider,
-    get_search_provider,
-)
 from sqlalchemy import select, update
 
 from oracle.auth import service as auth_service
@@ -41,6 +31,16 @@ from oracle.runs.models import Run
 from oracle.runtokens import SCOPES, mint_run_token
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
+from oracle.web import robots
+from oracle.web.brave import BraveSearch
+from oracle.web.models import WebResult, WebSearch, purge_old
+from oracle.web.search import (
+    NOTE,
+    ProviderError,
+    SearchResult,
+    WebSearchProvider,
+    get_search_provider,
+)
 from tests.conftest import make_tenant
 
 PUBLIC_IP = "93.184.216.34"
@@ -713,3 +713,41 @@ async def test_web_results_are_purged_after_13_months(world):
         await s.commit()
         assert [r.ref for r in (await s.scalars(select(WebResult))).all()] == ["w-3"]
         assert [r.query for r in (await s.scalars(select(WebSearch))).all()] == ["w-3"]
+
+
+# --- over MCP -------------------------------------------------------------------------
+
+
+async def test_only_a_run_token_with_read_web_is_offered_and_can_call_search_web(world, provider):
+    """The tools reach agents through Oracle's MCP server: a run token holding read:web
+    lists and calls search_web (a POST that reads, so a checkpoint wait does not hold
+    it); a run token without it and a person's API token are not offered it."""
+    import json
+
+    from oracle.swarm import FakeRuntime, set_runtime
+    from tests.test_mcp import api_token, mcp_client, text_of
+
+    tenant_id, owner = world
+    set_runtime(FakeRuntime())
+    try:
+        digest = await _run_token(tenant_id, owner, ["read:sources", "read:baseline", "read:web"])
+        async with mcp_client(digest) as c:
+            names = {t.name for t in (await c.list_tools()).tools}
+            assert {"search_web", "fetch_web_page"} <= names
+            result = await c.call_tool("search_web", {"body": {"query": "Competitor A news"}})
+        assert not result.is_error, text_of(result)
+        body = json.loads(text_of(result))
+        assert body["untrusted"] is True and body["results"][0]["ref"] == "w-1"
+
+        for token in (
+            await _run_token(tenant_id, owner, ["read:baseline"]),
+            await api_token(tenant_id),
+        ):
+            async with mcp_client(token) as c:
+                names = {t.name for t in (await c.list_tools()).tools}
+                assert not {"search_web", "fetch_web_page"} & names
+                refused = await c.call_tool("search_web", {"body": {"query": "x"}})
+            assert refused.is_error
+        assert provider.calls == [("Competitor A news", 8)]
+    finally:
+        set_runtime(None)
