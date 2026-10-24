@@ -130,9 +130,12 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(items.getByTestId("reason-chip")).toHaveText(["No PRD section"]);
   await expect(items.getByTestId("reason-text")).toHaveText(/^Section features is not in .+ v\d+\.$/);
   await expect(items.getByTestId("reason-fixes")).toHaveText("Fix: Link section");
-  const cp = items.getByTestId("checkpoint-roadmap_items");
-  await expect(cp).toContainText("Roadmap items");
-  await cp.getByRole("button", { name: "Approve and continue" }).click();
+  // D1: the run page shows the stop's summary; it is decided on the Roadmap items review screen.
+  await items.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+  await page.getByTestId("decision-bar").getByRole("button", { name: /^Approve/ }).click();
+  await expect(page.getByTestId("review-status")).toHaveText("Approved");
+  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
 
   // Roadmap draft: imported as the roadmap's next version, linked to the PRD.
   await page.getByRole("button", { name: "Check agents now" }).click();

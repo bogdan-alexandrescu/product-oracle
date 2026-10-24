@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, FilterChips, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
+import { Button, Chip, FilterChips, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
 import { DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
+import { ItemInspector } from "@/components/review/ItemInspector";
+import { ItemsTable } from "@/components/review/ItemsTable";
+import { RawFileSheet } from "@/components/review/RawFileSheet";
+import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole, useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { ItemsInspector } from "./_items-inspector";
 import {
   AGENT_KINDS,
   day,
@@ -48,6 +51,41 @@ export type Ops = {
 export type Form = { key: string; kind: "waive" | "split" | "ask"; code?: string; where: "row" | "inspector" } | null;
 
 const POLL_MS = 10_000;
+const OUTCOME_MAX = 500;
+/** Ghost rows (removed items, D6) sort after every item of their group. */
+const GHOST_POSITION = 1_000_000;
+const HORIZON_INDEX = new Map<string, number>(HORIZONS.map((h, i) => [h, i]));
+
+/** Whether a staged (or my own suggested) edit removes the item's milestone date. */
+const dateRemoved = (it: Item) => it.actions.some((a) => a.kind === "edit" && a.field === "milestone_date" && a.value == null);
+
+/** "0.7" or "70" as E2's 0-1 confidence; a word stays a word. */
+function confidenceOf(c: string | null | undefined): TableRow["confidence"] {
+  if (!c) return null;
+  if (!/^[\d.]+$/.test(c)) return c;
+  const n = Number(c);
+  return n <= 1 ? n : n / 100;
+}
+
+/** A file item as E2's table row: the review's states in its row fields (muted, struck, date removed). */
+function toRow(it: Item, prd: { slug: string; version: number } | null): TableRow {
+  const staged = it.actions.filter((a) => a.state === "staged" && a.kind !== "question");
+  const m = it.milestone;
+  return {
+    key: it.key,
+    position: it.position != null ? it.position - 1 : GHOST_POSITION,
+    title: it.title ?? it.key,
+    outcome: it.outcome ?? null,
+    horizon: (it.horizon ?? "") as Horizon,
+    milestone: m ? { name: m.name ?? null, date: m.date ? day(m.date) : null, refused_date: null, refused: null, verified: false, date_removed: dateRemoved(it) } : null,
+    confidence: confidenceOf(it.confidence),
+    depends_on: it.depends_on,
+    prd: it.prd_section ? { label: it.prd_section, href: prd ? `/documents/${prd.slug}/v/${prd.version}#${it.prd_section}` : "#" } : null,
+    ghost: it.position == null,
+    muted: it.state === "handled",
+    struck: staged.some((a) => a.kind === "drop"),
+  };
+}
 
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
@@ -110,7 +148,6 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const [menu, setMenu] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(null);
   const [raw, setRaw] = useState<"file" | "agents" | null>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
 
   // D8: the draft is read again every 10 s while the page is visible (a teammate's suggestion).
   useEffect(() => {
@@ -159,20 +196,19 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   if (!review) return <div className="px-6 py-8"><Loading /></div>;
 
   const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
-  const groups: { label: string; rows: Item[] }[] = [];
-  const order = group === "horizon" ? [...HORIZONS.map(horizonLabel), horizonLabel(null)] : [];
-  for (const it of rows) {
-    const label = group === "horizon" ? horizonLabel(it.horizon) : (openReasons(it)[0]?.label ?? (it.reasons.length ? "Handled" : "Nothing open"));
-    const g = groups.find((x) => x.label === label);
-    if (g) g.rows.push(it);
-    else groups.push({ label, rows: [it] });
-  }
-  if (group === "horizon") groups.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
-  const groupHead = (g: { label: string; rows: Item[] }) => {
-    if (group !== "horizon") return `${g.label} · ${g.rows.length}`;
-    const all = items.filter((x) => horizonLabel(x.horizon) === g.label);
+  const byKey = new Map(items.map((x) => [x.key, x]));
+  const prdRef = run.source ? { slug: run.source.slug, version: run.source.version } : null;
+  const tableRows = rows.map((it) => toRow(it, prdRef));
+  // Group: by horizon (Now, Next, Later, then items not in the file), or by the first open reason.
+  const reasonOf = (it: Item) => openReasons(it)[0]?.label ?? (it.reasons.length ? "Handled" : "Nothing open");
+  const reasonOrder = [...new Set(rows.map(reasonOf))];
+  const groupBy = group === "horizon" ? undefined : (r: TableRow) => reasonOf(byKey.get(r.key)!);
+  const groupOrder = group === "horizon" ? (g: string) => HORIZON_INDEX.get(g) ?? 9 : (g: string) => reasonOrder.indexOf(g);
+  const groupHead = (g: string, shown: TableRow[]) => {
+    if (group !== "horizon") return <span data-testid="group-head">{`${g} · ${shown.length}`}</span>;
+    const all = items.filter((x) => (x.horizon ?? "") === g);
     const need = all.filter((x) => x.reasons.length > 0).length;
-    return `${g.label} · ${need} of ${all.length} need you`;
+    return <span data-testid="group-head">{`${horizonLabel(g || null)} · ${need} of ${all.length} need you`}</span>;
   };
 
   const tally = review.tally;
@@ -200,8 +236,12 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const unchanged = items.filter((it) => it.position != null && !staged.some((a) => a.item_key === it.key)).length;
   const entries = new Set(staged.map((a) => a.item_key)).size;
   const fileProblems = review.file_problems;
-  // The row picked, else the first that needs me (the inspector is never empty).
-  const shownRows = groups.flatMap((g) => g.rows);
+  // The row picked, else the first that needs me (the inspector is never empty), in the table's order.
+  const shownRows = [...rows].sort((a, b) => {
+    const [ra, rb] = [toRow(a, prdRef), toRow(b, prdRef)];
+    const order = groupOrder(groupBy ? groupBy(ra) : ra.horizon) - groupOrder(groupBy ? groupBy(rb) : rb.horizon);
+    return order || ra.position - rb.position;
+  });
   const selectedItem = items.find((x) => x.key === selected) ?? shownRows.find((x) => x.state === "needs_you") ?? shownRows[0] ?? null;
   const source = run.source;
   const prd = source ? `${source.title} v${source.version}` : "the PRD";
@@ -210,32 +250,52 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     setSelected(it.key);
     if (phone) setSheet(true);
   };
-  // ↑/↓ move the selection between rows; no single-key decisions.
-  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    const target = e.target as HTMLElement;
-    if (target.closest("input, textarea, select, [role=menu]")) return;
-    // From the focused row, else the selected one.
-    const focused = target.closest<HTMLElement>("[data-key]")?.dataset.key;
-    const at = shownRows.findIndex((x) => x.key === (focused ?? selectedItem?.key));
-    const next = shownRows[Math.min(shownRows.length - 1, Math.max(0, at + (e.key === "ArrowDown" ? 1 : -1)))];
-    if (!next) return;
-    e.preventDefault();
-    setSelected(next.key);
-    tableRef.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(next.key)}"] [data-testid="item-title"]`)?.focus();
-  };
+  const columns: Column<TableRow>[] = [
+    {
+      key: "reasons",
+      header: "Needs you because",
+      wrap: true,
+      phone: "meta",
+      cell: (r) => <ReasonsCell it={byKey.get(r.key)!} showDiff={filter === "changed"} />,
+    },
+    {
+      key: "call",
+      header: "Your call",
+      width: "236px",
+      align: "right",
+      wrap: true,
+      phone: "meta",
+      cell: (r) => {
+        const it = byKey.get(r.key)!;
+        return (
+          // A row action is not a selection: the click stays in the cell.
+          <div className="flex flex-col items-end gap-1 max-[600px]:items-start" onClick={(e) => e.stopPropagation()}>
+            <span className="flex min-w-0 flex-wrap items-center justify-end gap-1 max-[600px]:justify-start" data-testid="your-call">
+              <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
+              {mode !== "viewer" && it.position != null && (
+                <RowMenu it={it} open={openReasons(it)} mode={mode} ops={ops} menuOpen={menu === it.key} setMenu={(o) => setMenu(o ? it.key : null)} setForm={setForm} onSelect={() => pick(it)} />
+              )}
+            </span>
+            <Suggestions it={it} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
+          </div>
+        );
+      },
+    },
+  ];
 
   const inspector = selectedItem && (
-    <ItemsInspector
+    <ReviewInspector
+      key={selectedItem.key}
       item={selectedItem}
       items={items}
+      rows={items.map((x) => toRow(x, prdRef))}
       count={items.filter((x) => x.position != null).length}
       review={review}
       mode={mode}
       ops={ops}
       form={form?.key === selectedItem.key && form.where === "inspector" ? form : null}
       setForm={setForm}
-      prd={source ? { slug: source.slug, version: source.version } : null}
+      prd={prdRef}
       meId={me?.user_id ?? null}
     />
   );
@@ -324,58 +384,21 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
                 <SegmentedControl<Group> label="Group" size="sm" value={group} onChange={setGroup} items={[{ value: "horizon", label: "Horizon" }, { value: "reason", label: "Reason" }]} />
               </span>
             </div>
-            <div
-              ref={tableRef}
-              role="table"
-              aria-label="Roadmap items"
-              onKeyDown={onKey}
-              className="min-w-0 rounded-panel border border-line bg-surface max-[600px]:border-0 max-[600px]:bg-transparent"
-              data-testid="items-table"
-            >
-              <div role="row" className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-[13px] font-semibold text-text2 max-[900px]:hidden`}>
-                <span role="columnheader">#</span>
-                <span role="columnheader">Item</span>
-                <span role="columnheader">Horizon</span>
-                <span role="columnheader">Milestone</span>
-                <span role="columnheader">Conf.</span>
-                <span role="columnheader">Needs you because</span>
-                <span role="columnheader" className="text-right">
-                  Your call
-                </span>
-              </div>
-              {rows.length === 0 && (
-                <p className="px-4 py-6 text-sm text-text2" data-testid="items-empty">
-                  {filter === "needs" ? "Nothing needs you. Approve, or look at All." : "No items here."}
-                </p>
-              )}
-              {groups.map((g) => (
-                <div key={g.label} role="rowgroup" aria-label={g.label} className="max-[900px]:flex max-[900px]:flex-col max-[900px]:gap-2">
-                  <div role="row" className="border-b border-line bg-surface2 px-3 py-1.5 text-sm font-semibold max-[900px]:border-0 max-[900px]:bg-transparent max-[900px]:px-1">
-                    <span role="cell" data-testid="group-head">
-                      {groupHead(g)}
-                    </span>
-                  </div>
-                  {g.rows.map((it) => (
-                    <ItemRow
-                      key={it.key}
-                      it={it}
-                      mode={mode}
-                      ops={ops}
-                      selected={selectedItem?.key === it.key}
-                      showDiff={filter === "changed"}
-                      ghost={it.position == null}
-                      titleOf={titleOf}
-                      menuOpen={menu === it.key}
-                      setMenu={(open) => setMenu(open ? it.key : null)}
-                      form={form?.key === it.key && form.where === "row" ? form : null}
-                      setForm={setForm}
-                      onSelect={() => pick(it)}
-                      meId={me?.user_id ?? null}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+            <ItemsTable
+              label="Roadmap items"
+              rows={tableRows}
+              selected={selectedItem?.key ?? null}
+              onSelect={(k) => pick(byKey.get(k)!)}
+              hide={["depends_on", "prd", "state"]}
+              widths={{ position: "36px", horizon: "72px", milestone: "112px" }}
+              extraColumns={columns}
+              rowDecorations={(r) => ({ "data-state": byKey.get(r.key)?.state })}
+              groupBy={groupBy}
+              groupOrder={groupOrder}
+              groupLabel={groupHead}
+              detail={(r) => (form?.key === r.key && form.where === "row" ? <RowForm it={byKey.get(r.key)!} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} /> : null)}
+              empty={filter === "needs" ? "Nothing needs you. Approve, or look at All." : "No items here."}
+            />
           </>
         )}
         <DecisionBar
@@ -410,116 +433,41 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       <Sheet open={phone && sheet && !!inspector} title={selectedItem?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-item">
         {inspector}
       </Sheet>
-      <RawFile open={raw} onClose={() => setRaw(null)} runId={run.id} seq={review.file?.seq ?? cp.segment_seq ?? 1} />
+      <RawFileSheet open={raw} onClose={() => setRaw(null)} runId={run.id} seq={review.file?.seq ?? cp.segment_seq ?? 1} />
     </Page>
   );
 }
 
-const COLS = "grid-cols-[24px_minmax(100px,1.5fr)_64px_minmax(72px,1fr)_40px_minmax(110px,1.4fr)_minmax(150px,1.6fr)]";
-
-function ItemRow({
-  it,
-  mode,
-  ops,
-  selected,
-  showDiff,
-  ghost,
-  titleOf,
-  menuOpen,
-  setMenu,
-  form,
-  setForm,
-  onSelect,
-  meId,
-}: {
-  it: Item;
-  mode: Mode;
-  ops: Ops;
-  selected: boolean;
-  showDiff: boolean;
-  ghost: boolean;
-  titleOf: (key: string) => string;
-  menuOpen: boolean;
-  setMenu: (open: boolean) => void;
-  form: Form;
-  setForm: (f: Form) => void;
-  onSelect: () => void;
-  meId: string | null;
-}) {
+/** The row's reasons: at most two chips ("+n" for the rest), and in Changed the resolution and the diff. */
+function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
   const open = openReasons(it);
-  const staged = it.actions.filter((a) => a.state === "staged" && a.kind !== "question");
-  const dropped = staged.some((a) => a.kind === "drop");
-  const dateGone = it.actions.some((a) => a.kind === "edit" && a.field === "milestone_date" && a.value == null);
-  const handled = it.state === "handled";
   const shown = [...open, ...it.reasons.filter((r) => !open.includes(r))];
   return (
-    <div
-      role="row"
-      aria-selected={selected}
-      data-testid="item-row"
-      data-key={it.key}
-      className={`border-b border-line last:border-b-0 max-[900px]:rounded-button max-[900px]:border max-[900px]:bg-surface ${selected ? "bg-accent-soft/50 shadow-[inset_4px_0_0_var(--accent)]" : ""} ${ghost ? "opacity-80" : ""}`}
-    >
-      <div className={`grid ${COLS} items-center gap-x-2 px-2 py-2 max-[900px]:flex max-[900px]:flex-wrap max-[900px]:gap-2 max-[900px]:px-3`}>
-        <span role="cell" className="tnum text-sm text-text2 max-[900px]:hidden">
-          {it.position ?? "—"}
-        </span>
-        <span role="cell" className="flex min-w-0 flex-col max-[900px]:basis-full">
-          <button
-            type="button"
-            onClick={onSelect}
-            className={`min-w-0 text-left font-medium break-words hover:underline focus-visible:outline-2 focus-visible:outline-accent ${handled ? "text-text2" : ""} ${dropped || ghost ? "line-through" : ""}`}
-            data-testid="item-title"
-          >
-            {it.title ?? it.key}
-          </button>
-          {ghost && <span className="text-[13px] text-text2">Not in this file</span>}
-          <span className="hidden text-[13px] text-text2 max-[900px]:block">
-            {[horizonLabel(it.horizon), it.milestone?.name, it.depends_on.length ? `depends on ${it.depends_on.map(titleOf).join(", ")}` : null].filter(Boolean).join(" · ")}
-          </span>
-        </span>
-        <span role="cell" className="max-[900px]:hidden">
-          {it.horizon && <Chip kind={it.horizon === "now" ? "now" : "line"}>{horizonLabel(it.horizon)}</Chip>}
-        </span>
-        <span role="cell" className="min-w-0 text-sm break-words max-[900px]:hidden">
-          {it.milestone?.name}
-          {it.milestone?.date && (
-            <span className="block text-text2">
-              {dateGone ? <s title="Date removed">{day(it.milestone.date)}</s> : day(it.milestone.date)}
-            </span>
-          )}
-        </span>
-        <span role="cell" className="max-[900px]:hidden" title={it.confidence ? `Confidence ${it.confidence}` : undefined}>
-          {it.confidence && (/^[\d.]+$/.test(it.confidence) ? <Ring value={Math.round(Number(it.confidence) * (Number(it.confidence) <= 1 ? 100 : 1))} size={32} stroke={4} /> : <span className="text-sm">{it.confidence}</span>)}
-        </span>
-        <span role="cell" className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
-          {shown.slice(0, 2).map((r) => (
-            <span key={r.code} data-testid="reason-chip" className="max-w-full">
-              <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={r.text} wrap>
-                {r.label}
-              </Chip>
-            </span>
-          ))}
-          {shown.length > 2 && (
-            <Chip kind="line" title={shown.slice(2).map((r) => r.label).join(", ")}>
-              +{shown.length - 2}
+    <span className="flex min-w-0 flex-col gap-1">
+      <span className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
+        {shown.slice(0, 2).map((r) => (
+          <span key={r.code} data-testid="reason-chip" className="max-w-full">
+            <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={r.text} wrap>
+              {r.label}
             </Chip>
-          )}
-          {showDiff && it.resolution && (
-            <span data-testid="resolution-chip">
-              <Chip kind={it.resolution.outcome === "done" ? "pass" : "warn"} wrap>
-                {resolutionText(it.resolution)}
-              </Chip>
-            </span>
-          )}
-        </span>
-        <span role="cell" className="flex min-w-0 flex-wrap items-center justify-end gap-1 max-[900px]:basis-full max-[900px]:justify-start" data-testid="your-call">
-          <YourCall it={it} open={open} staged={staged} mode={mode} ops={ops} titleOf={titleOf} meId={meId} />
-          {mode !== "viewer" && !ghost && <RowMenu it={it} open={open} mode={mode} ops={ops} menuOpen={menuOpen} setMenu={setMenu} setForm={setForm} onSelect={onSelect} />}
-        </span>
-      </div>
+          </span>
+        ))}
+        {shown.length > 2 && (
+          <Chip kind="line" title={shown.slice(2).map((r) => r.label).join(", ")}>
+            +{shown.length - 2}
+          </Chip>
+        )}
+        {showDiff && it.resolution && (
+          <span data-testid="resolution-chip">
+            <Chip kind={it.resolution.outcome === "done" ? "pass" : "warn"} wrap>
+              {resolutionText(it.resolution)}
+            </Chip>
+          </span>
+        )}
+        {it.position == null && <span className="text-[13px] text-text2">Not in this file</span>}
+      </span>
       {showDiff && it.diff.length > 0 && (
-        <ul className="px-3 pb-2 pl-10 text-sm text-text2 max-[900px]:pl-3" data-testid="row-diff">
+        <ul className="text-sm text-text2" data-testid="row-diff">
           {it.diff.map((d) => (
             <li key={d.field} className="break-words">
               {d.field}: <s>{show(d.from)}</s> → {show(d.to)}
@@ -527,9 +475,7 @@ function ItemRow({
           ))}
         </ul>
       )}
-      <Suggestions it={it} mode={mode} ops={ops} titleOf={titleOf} meId={meId} />
-      {form && <RowForm it={it} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} />}
-    </div>
+    </span>
   );
 }
 
@@ -597,7 +543,7 @@ function Suggestions({ it, mode, ops, titleOf, meId }: { it: Item; mode: Mode; o
       {list.map((a) => {
         const mine = a.created_by?.id != null && a.created_by.id === meId;
         return (
-          <p key={a.id} className="flex flex-wrap items-center gap-2 px-3 pb-2 pl-10 text-sm text-text2 max-[900px]:pl-3" data-testid="suggested-by">
+          <p key={a.id} className="flex flex-wrap items-center justify-end gap-2 text-sm text-text2 max-[600px]:justify-start" data-testid="suggested-by">
             <span>
               Suggested by {mine ? "you" : (a.created_by?.name ?? "someone")}: {describe(a, it, titleOf)}
             </span>
@@ -718,7 +664,7 @@ export function RowForm({ it, form, mode, ops, onDone }: { it: Item; form: NonNu
   };
   const ok = form.kind === "ask" ? !!who && !!text.trim() : form.kind === "split" ? text.split("\n").filter((x) => x.trim()).length >= 2 : !!text.trim();
   return (
-    <div className="flex flex-col gap-2 px-3 pb-3 pl-10 max-[900px]:pl-3" data-testid={`form-${form.kind}`}>
+    <div className="flex flex-col gap-2" data-testid={`form-${form.kind}`}>
       {form.kind === "ask" && (
         <label className="text-sm">
           <span className="mr-2">Ask</span>
@@ -753,29 +699,235 @@ export function RowForm({ it, form, mode, ops, onDone }: { it: Item; form: NonNu
   );
 }
 
-/** roadmap_items.yaml as it is now, or the agents' text when Approve with edits changed it (D7). */
-function RawFile({ open, onClose, runId, seq }: { open: "file" | "agents" | null; onClose: () => void; runId: string; seq: number }) {
-  const [loaded, setLoaded] = useState<{ which: string; text: string } | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    api
-      .GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", {
-        params: { path: { run_id: runId, seq, name: "roadmap_items.yaml" }, query: open === "agents" ? { agents: true } : {} },
-        parseAs: "text",
-      })
-      .then(({ data, response }) => {
-        if (live) setLoaded({ which: open, text: response.ok ? (data as string) : `Could not load roadmap_items.yaml (${response.status}).` });
-      });
-    return () => {
-      live = false;
-    };
-  }, [open, runId, seq]);
+/**
+ * D1: one item in E2's ItemInspector: its reasons as cards with their fixes first, then the
+ * Horizon control, Outcome with Edit, the milestone's Remove date, a remove (×) per dependency,
+ * why its rank, From the PRD, the footer (Ask a teammate, Split, Drop) and the History tab.
+ */
+function ReviewInspector({
+  item,
+  items,
+  rows,
+  count,
+  review,
+  mode,
+  ops,
+  form,
+  setForm,
+  prd,
+  meId,
+}: {
+  item: Item;
+  items: Item[];
+  rows: TableRow[];
+  count: number;
+  review: Review;
+  mode: Mode;
+  ops: Ops;
+  form: Form;
+  setForm: (f: Form) => void;
+  prd: { slug: string; version: number } | null;
+  meId: string | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
+  const open = openReasons(item);
+  const edit = mode !== "viewer" && item.position != null;
+  const staged = (field: string) => item.actions.find((a) => a.kind === "edit" && a.field === field && (a.state === "staged" || a.created_by?.id === meId));
+  const horizon = (staged("horizon")?.value as string | undefined) ?? item.horizon ?? "now";
+  const outcome = (staged("outcome")?.value as string | undefined) ?? item.outcome ?? "";
+  const removedDeps = ((staged("depends_on")?.value as { remove?: string[] } | undefined)?.remove ?? []) as string[];
+  const act = ops.act;
+  const row = { ...toRow(item, prd), outcome: outcome || null };
+
+  const reasons: ReactNode = (
+    <>
+      {item.reasons.length > 0 && (
+        <InspectorSection label="Needs you because" testId="item-reasons-cards">
+          <ul className="flex flex-col gap-2">
+            {item.reasons.map((r) => {
+              const isOpen = open.includes(r);
+              const by = item.actions.find((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers.length || a.answers.includes(r.code)));
+              return (
+                <li key={r.code} className="rounded-button border border-line p-2.5" data-testid="reason-card">
+                  <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
+                    {r.severity === "blocking" ? "Blocking" : "To confirm"} · {r.label}
+                  </Chip>
+                  <p className="mt-1.5 text-sm break-words">{r.text}</p>
+                  {!isOpen && by ? (
+                    <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-pass">
+                      ✓ {doneText(by, titleOf)}
+                      {(mode === "approver" || by.created_by?.id === meId) && (
+                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.remove(by.id)}>
+                          Undo
+                        </Button>
+                      )}
+                    </p>
+                  ) : (
+                    mode !== "viewer" && (
+                      <p className="mt-1.5 flex flex-wrap gap-1.5">
+                        {r.fixes
+                          .filter((f) => f.action.kind !== "waive")
+                          .map((f, i) => (
+                            <FixButton key={f.label} fix={f} reason={r} mode={mode} ops={ops} primary={i === 0} />
+                          ))}
+                        {mode === "approver" && waivable(r) && (
+                          <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "waive", code: r.code, where: "inspector" })}>
+                            Waive…
+                          </Button>
+                        )}
+                      </p>
+                    )
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </InspectorSection>
+      )}
+      {form && (
+        <InspectorSection>
+          <RowForm it={item} form={form} mode={mode} ops={ops} onDone={() => setForm(null)} />
+        </InspectorSection>
+      )}
+    </>
+  );
+
   return (
-    <Sheet open={!!open} title={open === "agents" ? "Agents' file" : "Raw file"} onClose={onClose} testId="sheet-raw-file">
-      <pre className="mx-4 my-3 max-h-[70vh] overflow-auto rounded-button bg-surface2 p-3 font-mono text-[13px] whitespace-pre-wrap break-words" data-testid="raw-file-content">
-        {loaded?.which === open ? loaded.text : "Loading…"}
-      </pre>
-    </Sheet>
+    <ItemInspector
+      row={row}
+      total={count}
+      rows={rows}
+      eyebrow={item.position == null ? "Not in this file · selected" : undefined}
+      reasons={reasons}
+      horizonControl={
+        edit ? (
+          <SegmentedControl<string>
+            label="Horizon"
+            size="sm"
+            value={horizon}
+            onChange={(h) => void act({ item_key: item.key, kind: "edit", field: "horizon", value: h, answers: [] })}
+            items={HORIZONS.map((h) => ({ value: h, label: horizonLabel(h) }))}
+          />
+        ) : (
+          <p className="text-sm">{horizonLabel(item.horizon)}</p>
+        )
+      }
+      outcomeEdit={
+        editing ? (
+          <OutcomeEdit
+            value={outcome}
+            onCancel={() => setEditing(false)}
+            onSave={async (v) => {
+              await act({ item_key: item.key, kind: "edit", field: "outcome", value: v, answers: [] });
+              setEditing(false);
+            }}
+          />
+        ) : (
+          <p className="flex flex-wrap items-start gap-2 text-[15px] break-words">
+            <span className="min-w-0 flex-1">{outcome || "—"}</span>
+            {edit && (
+              <Button variant="ghost" className="h-7 px-2 text-sm" aria-label="Edit outcome" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            )}
+          </p>
+        )
+      }
+      milestoneAction={
+        edit && item.milestone?.date && !dateRemoved(item) ? (
+          <Button className="h-8 px-2.5 text-sm" onClick={() => void act({ item_key: item.key, kind: "edit", field: "milestone_date", value: null, answers: [] })}>
+            Remove date
+          </Button>
+        ) : null
+      }
+      removedDependencies={removedDeps}
+      dependencyAction={
+        edit
+          ? (d) => (
+              <Button
+                variant="ghost"
+                className="h-7 w-7 justify-center px-0"
+                aria-label={`Remove dependency ${titleOf(d)}`}
+                onClick={() => void act({ item_key: item.key, kind: "edit", field: "depends_on", value: { add: [], remove: [...removedDeps, d] }, answers: [] })}
+              >
+                ×
+              </Button>
+            )
+          : undefined
+      }
+      priority={item.rank != null ? { rank: item.rank, explanation: `Ranked ${item.rank} in the priority order this run read.` } : undefined}
+      tabs={[{ value: "history", label: "History", content: <History item={item} review={review} titleOf={titleOf} /> }]}
+    >
+      {edit && (
+        <InspectorSection>
+          <footer className="flex flex-wrap gap-2">
+            <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "ask", where: "inspector" })}>
+              Ask a teammate…
+            </Button>
+            <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "split", where: "inspector" })}>
+              Split…
+            </Button>
+            <Button className="h-8 px-2.5 text-sm" onClick={() => void act({ item_key: item.key, kind: "drop", answers: open.map((r) => r.code) })}>
+              Drop
+            </Button>
+          </footer>
+        </InspectorSection>
+      )}
+    </ItemInspector>
+  );
+}
+
+function OutcomeEdit({ value, onSave, onCancel }: { value: string; onSave: (v: string) => Promise<void>; onCancel: () => void }) {
+  const [text, setText] = useState(value);
+  return (
+    <div className="flex flex-col gap-2">
+      <textarea aria-label="Outcome" value={text} maxLength={OUTCOME_MAX} rows={3} onChange={(e) => setText(e.target.value)} className={INPUT} />
+      <span className="flex gap-2">
+        <Button variant="solid" disabled={!text.trim() || text === value} onClick={() => void onSave(text.trim())}>
+          Save
+        </Button>
+        <Button onClick={onCancel}>Cancel</Button>
+      </span>
+    </div>
+  );
+}
+
+/** This attempt's changes to the item and its answer to the review (D6), and the draft's actions on it (D8). */
+function History({ item, review, titleOf }: { item: Item; review: Review; titleOf: (k: string) => string }) {
+  const empty = !item.diff.length && !item.resolution && !item.actions.length;
+  return (
+    <InspectorSection testId="item-history">
+      <div className="flex flex-col gap-3 text-sm">
+        {empty && <p className="text-text2">Nothing changed on this item in attempt {review.attempt ?? 1}.</p>}
+        {item.resolution && (
+          <p>
+            The agents&apos; answer to the review:{" "}
+            <Chip kind={item.resolution.outcome === "done" ? "pass" : "warn"} wrap>
+              {resolutionText(item.resolution)}
+            </Chip>
+          </p>
+        )}
+        {item.diff.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {item.diff.map((d) => (
+              <li key={d.field} className="break-words">
+                {d.field}: <s>{show(d.from)}</s> → {show(d.to)}
+              </li>
+            ))}
+          </ul>
+        )}
+        {item.actions.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {item.actions.map((a) => (
+              <li key={a.id}>
+                {a.created_by?.name ?? "Someone"} {a.state === "staged" ? "staged" : "suggested"}: {a.kind === "question" ? `asked ${a.question?.asked_to?.name ?? "a teammate"}` : doneText(a, titleOf)}
+                {a.question?.answer?.body && <span className="block text-text2">Answer: {a.question.answer.body}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </InspectorSection>
   );
 }

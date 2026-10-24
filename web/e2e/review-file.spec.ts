@@ -18,11 +18,6 @@ test("send back with staged actions and no note, then view the review that was s
   await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 
-  const decision = page.getByRole("group", { name: "Decide: Roadmap items" });
-  const requestChanges = decision.getByRole("button", { name: "Request changes" });
-  // Nothing staged and no note: nothing to send.
-  await expect(requestChanges).toBeDisabled();
-
   const slack = page.getByTestId("item-reasons").filter({ hasText: "Slack alerts" });
   await slack.getByRole("button", { name: "Remove date", exact: true }).click();
   await expect(slack.getByTestId("draft-action")).toHaveText(/Staged by/);
@@ -30,9 +25,14 @@ test("send back with staged actions and no note, then view the review that was s
   await push.getByRole("button", { name: "Drop", exact: true }).click();
   await expect(push.getByTestId("draft-action")).toHaveText(/Staged by/);
 
-  await expect(decision.getByLabel("Note for the agents")).toHaveValue("");
-  await expect(requestChanges).toBeEnabled();
-  await requestChanges.click();
+  // D1: decided on the Roadmap items review screen; no note.
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  const bar = page.getByTestId("decision-bar");
+  await expect(bar.getByLabel("Note to the agents")).toHaveValue("");
+  await bar.getByRole("button", { name: "Send back to agents" }).click();
+  await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
+  await expect(page.getByTestId("review-status")).toHaveText("Sent back · 2 entries");
+  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
 
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items).toContainText("attempt 2");

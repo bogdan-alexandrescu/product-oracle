@@ -20,8 +20,7 @@ const decision = (page: Page) => page.getByRole("group", { name: "Decide: Roadma
 
 /** D1: Roadmap items are decided on their review screen, opened from the run page's Review items. */
 async function openReview(page: Page) {
-  await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: /usage-alerts-roadmap(?!-)/ }).getByRole("link").first().click();
+  await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}/review/${CP}$`));
 }
@@ -39,7 +38,6 @@ async function waive(page: Page, key: string, title: string, reason: string) {
 // a date offers Waive…; no_claim = the API's numbers (pytest has them).
 test("approve stays disabled with blocking problems; waiving one drops the count; a date is never waived", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
   await openReview(page);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
   await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking left");
@@ -59,17 +57,15 @@ test("approve stays disabled with blocking problems; waiving one drops the count
 // no_claim = the agents' re-run.
 test("with only the date left approve stays disabled and send back still sends it back", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
   await openReview(page);
   await waive(page, "usage-export", "Usage export", "Section lands in the next PRD version");
   await waive(page, "budget-caps", "Budget caps", "Anomaly detection ships first in practice");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 blocking left");
   await expect(bar(page).getByRole("button", { name: /^Approve/ })).toBeDisabled();
 
-  await bar(page).getByLabel("Note to the agents").fill("Remove the Slack alerts date");
   await bar(page).getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
-  await expect(page.getByTestId("review-status")).toHaveText(/Sent back/);
+  await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);
 });
 
 // Card console-run-page: protects = the run page keeps its own console panel for a console

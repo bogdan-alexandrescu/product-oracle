@@ -40,6 +40,8 @@ type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" 
   origin?: "row" | "discussion";
   discussion_id?: string | null;
   from_private?: boolean;
+  /** C2: a question action's question, asked through the questions store (the member's Inbox). */
+  question_id?: string | null;
 };
 /** D8: a checkpoint's shared draft; `log` says who made each revision (the 409's names). */
 export interface DraftRow {
@@ -96,6 +98,14 @@ export interface RunsContext {
    * change of theirs before it checks the revision.
    */
   reviewChange?: () => string | null;
+  /**
+   * C2, as oracle.runs.actions._ask: a question action asks the member through the questions
+   * store (their Inbox's row) and returns the question's id; `asked` reads it back (its status
+   * and answer); `withdraw` withdraws it while nobody answered. Absent: the action holds it.
+   */
+  ask?: (q: { asked_to: string; prompt: string; checkpoint_id: string; item_ref: string }) => string;
+  asked?: (id: string) => { status: string; answer: string | null } | null;
+  withdraw?: (id: string) => void;
   /**
    * A3: whether the signed-in member may decide a checkpoint of a run of `flow`, as the API's
    * oracle.members.leads.may_decide (the engineering stops go to the leads and owners once
@@ -3212,6 +3222,12 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       updated_by: who,
       updated_at: ctx.now(),
     };
+    if (a.kind === "question" && ctx.ask) {
+      // C2: asked through the questions store; a changed question withdraws the one before.
+      if (existing?.question_id) ctx.withdraw?.(existing.question_id);
+      const v = (a.value ?? {}) as { asked_to?: string; text?: string };
+      row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
+    }
     draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
     bump(draft, name);
     return out();
@@ -3235,6 +3251,7 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   }
   if (action && rest.length === 2 && m === "DELETE") {
     if (action.created_by !== who && !stages) return fail(403, "Only its author or an approver can undo this action");
+    if (action.question_id) ctx.withdraw?.(action.question_id);
     draft.actions = draft.actions.filter((x) => x !== action);
     bump(draft, name);
     return out();
@@ -3263,6 +3280,16 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     if (a.kind !== "question") return null;
     const v = (a.value ?? {}) as { asked_to?: string; text?: string; answer?: string | null; answered_by?: string | null };
     const to = person(v.asked_to ?? null);
+    const stored = a.question_id ? ctx.asked?.(a.question_id) : null;
+    if (stored) {
+      return {
+        id: a.question_id!,
+        status: stored.status === "answered" ? "answered" : stored.status === "withdrawn" ? "withdrawn" : "open",
+        text: v.text ?? "",
+        asked_to: to ? { id: to.id, name: to.name } : null,
+        answer: stored.answer ? { kind: "answer", body: stored.answer, answered_by: to ? { id: to.id, name: to.name } : null } : null,
+      };
+    }
     return {
       id: a.id,
       status: v.answer ? "answered" : "open",
