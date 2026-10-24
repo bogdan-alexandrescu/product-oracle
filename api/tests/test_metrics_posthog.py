@@ -202,3 +202,76 @@ async def test_disconnect_pauses_posthog_metrics(client, ctx, clock, fake_postho
     assert (await connect(client, ctx)).status_code == 200
     got = (await client.get(f"/v1/metrics/{metric['id']}", headers=ctx.as_("viewer"))).json()
     assert (got["status"], got["last_error"]) == ("active", None)
+
+
+# protects=a malformed analytics PUT never sends the key back: FastAPI's 422 for a bad
+# project id, a missing field, a key that is too long or broken JSON carries no
+# api_key value; fails_when=the validation error echoes the request body (and the key);
+# no_claim=logs (the key is never logged by Oracle's code, not checked here).
+async def test_a_malformed_analytics_put_never_echoes_the_key(client, ctx, fake_posthog):
+    bodies = [
+        {"provider": "posthog", "host": "eu", "project_id": "not valid!", "api_key": KEY},
+        {"host": "eu", "project_id": "12345", "api_key": KEY},
+        {"provider": "posthog", "host": "eu", "project_id": "12345", "api_key": KEY * 20},
+        {"provider": "other", "host": "eu", "project_id": "12345", "api_key": KEY},
+    ]
+    for body in bodies:
+        resp = await client.put(A, json=body, headers=ctx.as_("owner"))
+        assert resp.status_code == 422, resp.text
+        assert KEY not in resp.text, resp.text
+        assert resp.json()["detail"], resp.text
+    raw = '{"provider": "posthog", "host": "eu", "api_key": "' + KEY + '", '
+    headers = {**ctx.as_("owner"), "content-type": "application/json"}
+    resp = await client.put(A, content=raw, headers=headers)
+    assert resp.status_code == 422, resp.text
+    assert KEY not in resp.text
+    assert fake_posthog.requests == []
+
+
+# protects=a 12-week backfill that fails partway fills the missing earlier weeks on a
+# later pull, not only the last week; fails_when=the weeks after the failure stay empty
+# for good; no_claim=the real PostHog API's shape.
+async def test_a_failed_backfill_is_filled_by_a_later_pull(client, ctx, clock, fake_posthog):
+    from datetime import timedelta
+
+    from tests.metrics_helpers import NOW
+    from tests.test_metrics_ticker import _tick
+
+    assert (await connect(client, ctx)).status_code == 200
+    weeks = weeks_back(12)
+    fake_posthog.failing_weeks = {weeks[4]}
+    resp = await create(client, ctx, source="posthog", query=QUERY)
+    assert resp.status_code == 201, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        stored = [r.week_start for r in await s.scalars(select(MetricValue))]
+    assert sorted(stored) == weeks[:4]
+    fake_posthog.failing_weeks = set()
+    clock.at(NOW + timedelta(hours=1, minutes=1))
+    await _tick(ctx.tenant_id)
+    async with tenant_session(ctx.tenant_id) as s:
+        stored = [r.week_start for r in await s.scalars(select(MetricValue))]
+    assert sorted(stored) == weeks
+    got = (await client.get(f"/v1/metrics/{resp.json()['id']}", headers=ctx.as_("viewer"))).json()
+    assert (got["status"], got["last_error"]) == ("active", None)
+
+
+# protects=a query answering SQL NULL stores no value for its week (the review reads "No
+# value this week"), not 0; Test shows the week with no value; fails_when=NULL is stored
+# as 0; no_claim=the real PostHog API's shape.
+async def test_a_null_answer_stores_no_value(client, ctx, clock, fake_posthog):
+    assert (await connect(client, ctx)).status_code == 200
+    weeks = weeks_back(12)
+    fake_posthog.values = {weeks[3]: None, LAST_WEEK: None}
+    resp = await create(client, ctx, source="posthog", query=QUERY)
+    assert resp.status_code == 201, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        stored = {r.week_start: float(r.value) for r in await s.scalars(select(MetricValue))}
+    assert weeks[3] not in stored and LAST_WEEK not in stored
+    assert len(stored) == 10
+    assert resp.json()["last_week"] is None or resp.json()["last_week"]["week_start"] != (
+        LAST_WEEK.isoformat()
+    )
+    resp = await client.post("/v1/metrics/test", json={"query": QUERY},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    assert [v["value"] for v in resp.json()["values"]] == [100, 100, 100, None]

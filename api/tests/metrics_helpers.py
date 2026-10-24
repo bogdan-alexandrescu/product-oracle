@@ -2,6 +2,7 @@
 no request leaves the process), the clock, and made-up metrics. The real PostHog API's
 shape is not exercised here."""
 
+import asyncio
 import json
 import re
 from datetime import UTC, date, datetime, timedelta
@@ -30,20 +31,29 @@ class FakePostHog:
 
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
-        self.values: dict[date, float] = {}
+        self.values: dict[date, float | None] = {}
         self.default = 100.0
         self.refuse_key: str | None = None
         self.status = 200
         # Project ids whose queries fail with a 500.
         self.failing: set[str] = set()
+        # Weeks whose query fails with a 500.
+        self.failing_weeks: set[date] = set()
+        # Set ``hold`` to keep a metric's query waiting until it is set; ``entered`` is
+        # set once one is waiting.
+        self.hold: asyncio.Event | None = None
+        self.entered = asyncio.Event()
 
     def week_of(self, request: httpx.Request) -> date | None:
         q = json.loads(request.content)["query"]["query"]
         m = _START.search(q)
         return datetime.fromisoformat(m.group(1)).date() if m else None
 
-    def handler(self, request: httpx.Request) -> httpx.Response:
+    async def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        if self.hold is not None and self.week_of(request) is not None:
+            self.entered.set()
+            await self.hold.wait()
         if self.refuse_key is not None:
             return httpx.Response(
                 401, json={"detail": f"{self.refuse_key} (key {KEY} is not valid)"}
@@ -53,8 +63,15 @@ class FakePostHog:
             return httpx.Response(self.status if self.status != 200 else 500,
                                   json={"detail": "Query failed upstream"})  # fmt: skip
         week = self.week_of(request)
+        if week in self.failing_weeks:
+            return httpx.Response(500, json={"detail": "Query failed upstream"})
+        # A week in ``values`` as None answers SQL NULL.
         value = 1 if week is None else self.values.get(week, self.default)
         return httpx.Response(200, json={"results": [[value]], "columns": ["n"]})
+
+    def metric_queries(self) -> list[str]:
+        """The queries sent for a week (not the key check)."""
+        return [q for q in self.queries() if _START.search(q)]
 
     def queries(self) -> list[str]:
         return [json.loads(r.content)["query"]["query"] for r in self.requests]

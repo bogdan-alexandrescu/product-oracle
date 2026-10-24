@@ -104,3 +104,33 @@ def test_error_text_redaction():
     assert key not in got
     assert len(got) <= 300
     assert got.startswith("Invalid key")
+
+
+# protects=rule 2 uses the metric's threshold_pct (10% only by default): with a short
+# history an owner's 20% leaves +12 on 100 unflagged and flags +25, and an owner's 5%
+# flags +6; fails_when=the fixed 10% still applies under an owner's higher threshold
+# (it could only loosen the rule), or a lower one is ignored; no_claim=rule 1's history.
+def test_rule_two_uses_the_owners_threshold_above_and_below_ten():
+    base = [100, 101, 100, 101, 100]
+    assert variance.check([*base, 112], "up", 20).variance is None
+    assert variance.check([*base, 125], "up", 20).variance == "better"
+    assert variance.check([*base, 88], "up", 20).variance is None
+    assert variance.check([*base, 106], "up", 5).variance == "better"
+    assert variance.check([*base, 104], "up", 5).variance is None
+
+
+# protects=rule 2 when typical is 0 (a flat history) uses threshold_pct too: 20% leaves
+# +12 on 100 unflagged, 5% flags +6; fails_when=a flat history falls back to the fixed
+# 10%; no_claim=rule 1 with a moving history.
+def test_a_flat_history_uses_the_owners_threshold():
+    flat = [100.0] * 13
+    assert variance.check([*flat, 112], "up", 20).variance is None
+    assert variance.check([*flat, 112], "up", None).variance == "better"
+    assert variance.check([*flat, 106], "down", 5).variance == "worse"
+
+
+# protects=a PostHog answer of SQL NULL is no value, not 0; fails_when=NULL reads as 0;
+# no_claim=the real PostHog API's shape.
+def test_a_null_answer_is_no_value():
+    assert posthog._number({"results": [[None]]}) is None
+    assert posthog._number({"results": [[0]]}) == 0

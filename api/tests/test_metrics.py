@@ -307,3 +307,88 @@ async def test_run_token_reads_but_never_writes(client, ctx, clock):
             assert refused.is_error and "not available to run tokens" in text_of(refused)
     finally:
         set_runtime(None)
+
+
+# protects=rule 2 with an owner's threshold above 10%: a metric at 20% with a short
+# history going 100 -> 112 has no variance and its owner no "Explain a variance" Inbox
+# row; fails_when=the fixed 10% flags it anyway; no_claim=the rule's other branches
+# (test_metrics_variance.py).
+async def test_an_owners_higher_threshold_flags_nothing_at_twelve_percent(client, ctx, clock):
+    metric = (await create(client, ctx, threshold_pct=20)).json()
+    for week, value in zip(weeks_back(4), [100, 101, 100, 112], strict=True):
+        assert (await _put(client, ctx, metric, week, value)).status_code == 200
+    assert (await client.get(V, headers=ctx.as_("viewer"))).json() == []
+    inbox = (await client.get("/v1/inbox", headers=ctx.as_("commenter"))).json()
+    assert inbox["metrics"] == []
+
+
+# protects=PATCH with null for a field that cannot be empty is 422, never a 500;
+# fails_when=a null title, description, unit, direction or owner reaches the service;
+# no_claim=the other 422s (test_refusals).
+async def test_patch_with_a_null_required_field_is_422(client, ctx, clock):
+    metric = (await create(client, ctx)).json()
+    for field in ("title", "description", "unit", "direction", "owner_id"):
+        resp = await client.patch(f"{M}/{metric['id']}", json={field: None, "lock_version": 1},
+                                  headers=ctx.as_("approver"))  # fmt: skip
+        assert resp.status_code == 422, (field, resp.status_code, resp.text)
+    got = (await client.get(f"{M}/{metric['id']}", headers=ctx.as_("viewer"))).json()
+    assert (got["title"], got["lock_version"]) == ("Weekly active teams", 1)
+
+
+# protects=an explanation is trimmed before its 10 to 1,000 characters are counted;
+# fails_when=spaces pad a short text past 10 (and "short" is stored), or trailing spaces
+# push a 1,000-character text over; no_claim=the words on screen.
+async def test_an_explanation_is_trimmed_before_its_length_is_checked(client, ctx, clock):
+    _, var = await _with_variance(client, ctx)
+    url = f"{V}/{var['id']}/explain"
+    padded = {"explanation": "     short      "}
+    resp = await client.post(url, json=padded, headers=ctx.as_("commenter"))
+    assert resp.status_code == 422, resp.text
+    long = "x" * 1000
+    resp = await client.post(url, json={"explanation": f"  {long}   "},
+                             headers=ctx.as_("commenter"))  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["explanation"] == long
+
+
+# protects=a value recorded or deleted by hand for one week rechecks the next week's
+# variance (this week is its "week before"): correcting the week before a jump removes
+# the jump's open variance, restoring it brings it back, deleting it removes it again;
+# fails_when=only the edited week is rechecked; no_claim=a variance a person answered
+# (it stays).
+async def test_a_value_by_hand_rechecks_the_next_week(client, ctx, clock):
+    metric, var = await _with_variance(client, ctx)
+    before = LAST_WEEK - timedelta(weeks=1)
+
+    async def flagged() -> set[str]:
+        rows = (await client.get(V, headers=ctx.as_("viewer"))).json()
+        return {r["week_start"] for r in rows}
+
+    assert (await _put(client, ctx, metric, before, 140)).status_code == 200
+    assert LAST_WEEK.isoformat() not in await flagged()
+    assert (await _put(client, ctx, metric, before, 100)).status_code == 200
+    assert LAST_WEEK.isoformat() in await flagged()
+    resp = await client.delete(f"{M}/{metric['id']}/values/{before}",
+                               headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 204
+    assert LAST_WEEK.isoformat() not in await flagged()
+
+
+# protects=the metric's owner gets their Inbox rows whatever credential they call with:
+# rows match the person (user id), so a principal whose id is a token id (a token acting
+# for the user) still sees them; fails_when=rows match principal.id, the token's id;
+# no_claim=how each credential resolves to a principal (oracle.auth.deps).
+async def test_inbox_rows_match_the_person_not_the_token(client, ctx, clock):
+    import uuid
+
+    from oracle.auth.deps import Principal
+    from oracle.metrics import review
+
+    await _with_variance(client, ctx)
+    person = ctx.users["commenter"].id
+    via_token = Principal(tenant_id=ctx.tenant_id, kind="token", role="commenter",
+                          user_id=person, token_id=uuid.uuid4())  # fmt: skip
+    assert via_token.id != person
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = await review.inbox_rows(s, via_token)
+    assert [r.reason for r in rows] == ["explain"]

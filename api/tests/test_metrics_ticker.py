@@ -54,9 +54,10 @@ async def _count(tenant_id) -> int:
 
 
 # protects=criterion 5: with the last complete week missing one tick stores it; ten more
-# ticks, two of them overlapping, store no duplicate and query no more; fails_when=a tick
-# misses the week, stores it twice or re-queries a stored week; no_claim=the hourly
-# cadence of the scheduler itself.
+# ticks, two of them overlapping (the second runs whole while the first waits on PostHog
+# for a new missing week), store no duplicate and query each week once; fails_when=a tick
+# misses the week, stores it twice or re-queries a stored or claimed week; no_claim=the
+# hourly cadence of the scheduler itself.
 async def test_one_tick_stores_the_missing_week_once(client, ctx, clock, fake_posthog):
     assert (await connect(client, ctx)).status_code == 200
     metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
@@ -67,13 +68,47 @@ async def test_one_tick_stores_the_missing_week_once(client, ctx, clock, fake_po
     sent = len(fake_posthog.requests)
     for _ in range(4):
         await _tick(ctx.tenant_id)
-    await asyncio.gather(_tick(ctx.tenant_id), _tick(ctx.tenant_id))
+    assert len(fake_posthog.requests) == sent
+    clock.at(NOW + timedelta(days=14))
+    fake_posthog.hold = asyncio.Event()
+    first = asyncio.create_task(_tick(ctx.tenant_id))
+    try:
+        await asyncio.wait_for(fake_posthog.entered.wait(), 30)
+        await asyncio.wait_for(_tick(ctx.tenant_id), 30)
+        assert not first.done()
+    finally:
+        fake_posthog.hold.set()
+    await first
     for _ in range(4):
         await _tick(ctx.tenant_id)
-    assert await _count(ctx.tenant_id) == 13
-    assert len(fake_posthog.requests) == sent
+    assert await _count(ctx.tenant_id) == 14
+    assert len(fake_posthog.metric_queries()) == 12 + 2
     row = await _metric(ctx.tenant_id, metric["id"])
     assert row.last_pulled_at is not None and row.attempts == 0
+
+
+# protects=the ticker holds no row lock while it waits on PostHog: it claims the due
+# metrics, commits, then calls out; fails_when=a metric row stays locked (FOR UPDATE)
+# across the outbound HTTP calls, blocking edits and Pull now meanwhile; no_claim=the
+# lock's length in a real deployment.
+async def test_no_row_lock_is_held_while_posthog_answers(client, ctx, clock, fake_posthog):
+    assert (await connect(client, ctx)).status_code == 200
+    metric = (await create(client, ctx, source="posthog", query=QUERY)).json()
+    clock.at(NOW + timedelta(days=7))
+    fake_posthog.hold = asyncio.Event()
+    first = asyncio.create_task(_tick(ctx.tenant_id))
+    try:
+        await asyncio.wait_for(fake_posthog.entered.wait(), 30)
+        async with tenant_session(ctx.tenant_id) as s:
+            row = await s.scalar(
+                select(Metric).where(Metric.id == metric["id"]).with_for_update(nowait=True)
+            )
+            assert row is not None
+            await s.rollback()
+    finally:
+        fake_posthog.hold.set()
+    await first
+    assert await _count(ctx.tenant_id) == 13
 
 
 # protects=criterion 5: a provider 500 increments attempts and is retried on the next

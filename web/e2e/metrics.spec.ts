@@ -25,8 +25,8 @@ const START = new Date("2026-10-19T12:00:00Z");
 
 test.use({ timezoneId: "America/New_York", locale: "en-US" });
 
-async function withMetrics(page: Page) {
-  await page.clock.install({ time: START });
+async function withMetrics(page: Page, time: Date = START) {
+  await page.clock.install({ time });
   await page.addInitScript((key) => localStorage.setItem(key, "metrics"), MOCK_SCENARIO_KEY);
 }
 
@@ -48,6 +48,21 @@ async function openMetrics(page: Page) {
   await page.getByTestId("company-tab-metrics").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/company\/metrics$/);
   await expect(page.getByTestId("company-tab-metrics").filter({ visible: true })).toHaveAttribute("aria-current", "page");
+}
+
+/** Opens Company from the phone's More sheet (the tab bar has no Company tab). */
+async function openCompanyOnPhone(page: Page) {
+  await page.getByTestId("tab-bar").getByTestId("tab-more").click();
+  await page.getByRole("dialog", { name: "More" }).getByRole("link", { name: "Company" }).click();
+  await expect(page).toHaveURL(/\/company\/strategy$/);
+}
+
+/** Opens a goal's drawer in the Baseline (the rail's Baseline). */
+async function openGoal(page: Page, key: string, title: string) {
+  await page.getByTestId("app-nav").getByTestId("nav-baseline").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline" })).toBeVisible();
+  await page.getByTestId(`goal-${key}`).getByRole("button", { name: title }).click();
+  return page.getByRole("dialog", { name: title });
 }
 
 /** Opens this Monday's metrics review from Company › Rituals. */
@@ -170,11 +185,12 @@ test("13c: the metric's owner explains a variance from the Inbox and the badge d
 
 test("13d: the metric's owner picks Don't know yet and the card shows the day in the Company time zone", async ({ page }) => {
   // protects=AC13d, Don't know yet with a day to find out by (default 7 days, at most 28),
-  // shown as "Finding out by Oct 26" from the Company's today (Oct 19 in Los Angeles);
-  // fails_when=the control is missing for the owner, the day is not saved, or the card
-  // shows another day; no_claim=the Find out Inbox row once the day passes
-  // (test_metrics_review.py).
-  await withMetrics(page);
+  // shown as "Finding out by Oct 26" from the Company's today: at Tue 05:00 UTC it is
+  // already Oct 20 in New York (the browser) but still Oct 19 in Los Angeles (the Company);
+  // fails_when=the control is missing for the owner, the day is not saved, or the default,
+  // the bound or the card follow the browser's day (Oct 27, Nov 17); no_claim=the Find out
+  // Inbox row once the day passes (test_metrics_review.py).
+  await withMetrics(page, new Date("2026-10-20T05:00:00Z"));
   await login(page, METRIC_OWNER);
   await openReview(page);
   const c = card(page, "Invites sent per team");
@@ -240,12 +256,156 @@ test("13h: at 390 px the Metrics table and the variance cards have no horizontal
   await page.setViewportSize({ width: 390, height: 844 });
   await withMetrics(page);
   await login(page, METRIC_OWNER);
-  await page.goto("/company/metrics");
+  await openCompanyOnPhone(page);
+  const tabs = page.getByRole("navigation", { name: "Company" }).filter({ visible: true });
+  await tabs.getByTestId("company-tab-metrics").click();
+  await expect(page).toHaveURL(/\/company\/metrics$/);
   await expect(metricRow(page, "Weekly active teams")).toBeVisible();
   const wide = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(await wide()).toBeLessThanOrEqual(0);
-  await page.goto("/company/rituals");
+  await tabs.getByTestId("company-tab-rituals").click();
+  await expect(page).toHaveURL(/\/company\/rituals$/);
   await page.getByTestId("ritual-row").filter({ hasText: "Weekly metrics review" }).getByRole("link").click();
   await expect(page.getByTestId("variance-card")).toHaveCount(2);
   expect(await wide()).toBeLessThanOrEqual(0);
+});
+
+test("the Goal select and what Save sends agree: a goal of another unit is dropped, not sent", async ({ page }) => {
+  // protects=MetricForm's Goal: the select shows "No goal" once the picked goal is no longer
+  // a valid choice (its unit no longer matches), and Save sends no goal then;
+  // fails_when=the hidden state keeps the goal and Save is refused (422, the unit must match
+  // the goal's); no_claim=the API's unit check (test_metrics.py).
+  await withMetrics(page);
+  await login(page, APPROVER);
+  await openMetrics(page);
+  await page.getByRole("button", { name: "Add metric" }).click();
+  const sheet = page.getByRole("dialog", { name: "Add metric" });
+  await sheet.getByLabel("Title").fill("Activated accounts");
+  await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days");
+  await sheet.getByLabel("Unit", { exact: true }).fill("%");
+  await sheet.getByLabel("Goal").selectOption({ label: "Raise activation" });
+  await sheet.getByLabel("Unit", { exact: true }).fill("accounts");
+  await expect(sheet.getByLabel("Goal")).toHaveValue("");
+  await sheet.getByLabel("Owner").selectOption({ label: "Approver" });
+  await sheet.getByLabel("Source").selectOption("manual");
+  await sheet.getByRole("button", { name: "Add metric" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(metricRow(page, "Activated accounts")).toContainText("By hand");
+});
+
+test("editing a metric whose goal is no longer confirmed saves, with No goal", async ({ page }) => {
+  // protects=MetricForm on Edit: a metric linked to a goal that was archived since shows
+  // "No goal", and Save goes through (the link ends); fails_when=Save sends the archived
+  // goal and every Save is refused (422, link a confirmed goal); no_claim=the API's
+  // confirmed-goal check (test_metrics.py).
+  await withMetrics(page);
+  await login(page, OWNER);
+  const drawer = await openGoal(page, "g.paid-conversion", "Grow paid conversion");
+  await drawer.getByRole("button", { name: "Archive" }).click();
+  const ask = drawer.getByRole("form", { name: "Archive" });
+  await ask.getByLabel("Reason").fill("Pricing moved to annual plans only.");
+  await ask.getByRole("button", { name: "Archive" }).click();
+  await expect(drawer.getByRole("status")).toContainText("Archived");
+  await page.keyboard.press("Escape");
+  await openMetrics(page);
+  await metricRow(page, "Trial to paid rate").click();
+  const inspector = page.getByTestId("metric-inspector").filter({ visible: true });
+  await inspector.getByRole("button", { name: "Edit" }).click();
+  const sheet = page.getByRole("dialog", { name: "Edit metric" });
+  await expect(sheet.getByLabel("Goal")).toHaveValue("");
+  await sheet.getByLabel("Threshold (%)").fill("15");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(inspector).toContainText("15%");
+});
+
+test("the inspector's goal reads Home's distance to go", async ({ page }) => {
+  // protects=the linked goal's distance in the metric inspector is Home's words (assess):
+  // a strict "below" bound reached exactly reads "Not below", as Home reads it;
+  // fails_when=the inspector writes its own text ("Target met" at the bound);
+  // no_claim=assess() itself (Home's specs).
+  await withMetrics(page);
+  await login(page, APPROVER);
+  const drawer = await openGoal(page, "g.paid-conversion", "Grow paid conversion");
+  await drawer.getByRole("button", { name: "Edit" }).click();
+  const form = drawer.getByRole("form", { name: "Edit" });
+  await form.getByLabel("Comparison").selectOption("below");
+  await form.getByLabel("Value", { exact: true }).fill("9.4");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await openMetrics(page);
+  await metricRow(page, "Trial to paid rate").click();
+  const inspector = page.getByTestId("metric-inspector").filter({ visible: true });
+  const goal = inspector.getByRole("link", { name: "Grow paid conversion" });
+  await expect(goal).toBeVisible();
+  await expect(inspector).toContainText("Not below");
+  await expect(inspector).not.toContainText("Target met");
+});
+
+test("a commenter who owns a typed metric records its value, and the page is not View only", async ({ page }) => {
+  // protects=the header and the controls agree with the API: the metric's owner (a
+  // commenter) may record a value on a metric typed by hand or by API, so the page does not
+  // read View only and Record a value shows on that metric only, not on their PostHog one;
+  // fails_when=View only shows while Record works, or Record shows on a PostHog metric;
+  // no_claim=the API's owner check (test_metrics.py).
+  await withMetrics(page);
+  await login(page, METRIC_OWNER);
+  await openMetrics(page);
+  await expect(page.getByRole("button", { name: "Add metric" })).toHaveCount(0);
+  await expect(viewOnly(page)).toHaveCount(0);
+  const inspector = page.getByTestId("metric-inspector").filter({ visible: true });
+  await metricRow(page, "Weekly active teams").click();
+  await expect(inspector).toContainText("Weekly active teams");
+  await expect(inspector.getByRole("button", { name: "Record" })).toHaveCount(0);
+  await metricRow(page, "Invites sent per team").click();
+  await expect(inspector).toContainText("Invites sent per team");
+  const value = inspector.getByRole("textbox", { name: "Value" });
+  await value.fill("4.4");
+  await inspector.getByRole("button", { name: "Record" }).click();
+  // Recorded: the field empties (it keeps the number when the API refuses).
+  await expect(value).toHaveValue("");
+  await expect(inspector).not.toContainText(/Requires|Only the metric/);
+});
+
+test("the review's metrics table draws each metric's 12-week sparkline", async ({ page }) => {
+  // protects=the occurrence page's metrics_table, as the spec shows it: each metric with
+  // values has its sparkline; fails_when=the rows have no sparkline; no_claim=the
+  // sparkline's drawing.
+  await withMetrics(page);
+  await login(page, APPROVER);
+  await openReview(page);
+  const table = page.getByTestId("metrics-review-table");
+  await expect(table.getByRole("listitem")).toHaveCount(3);
+  await expect(table.getByRole("img", { name: /^Trend / })).toHaveCount(3);
+});
+
+test("a Find out row raised after my last visit is New, and its Age tip is the day", async ({ page }) => {
+  // protects=the Inbox's metric rows: a row whose day came after my previous visit shows
+  // as New (the day compared as the instant it begins in the Company time zone, like with
+  // like), and the Age tooltip shows the row's day with no time; fails_when=a calendar day
+  // is compared as text with an instant (so a row raised hours after the visit is not
+  // New), or the tooltip shows a time read off UTC midnight; no_claim=the API's rows
+  // (test_metrics_review.py).
+  await withMetrics(page);
+  await login(page, METRIC_OWNER);
+  await openReview(page);
+  const c = card(page, "Invites sent per team");
+  await c.getByRole("button", { name: "Don't know yet" }).click();
+  await c.getByRole("button", { name: "Save" }).click();
+  await expect(c.getByTestId("variance-status")).toHaveText("Finding out by Oct 26");
+  // Sun Oct 25, 23:00 in Los Angeles: a visit; the find-out day has not come.
+  await page.clock.setSystemTime(new Date("2026-10-26T06:00:00Z"));
+  await page.reload();
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  await expect(page.getByTestId("inbox-metrics")).toBeVisible();
+  await expect(metricNeed(page, "Find out · Invites sent per team")).toHaveCount(0);
+  // Mon Oct 26, 05:00 in Los Angeles: the day has come, after that visit.
+  await page.clock.setSystemTime(new Date("2026-10-26T12:00:00Z"));
+  await page.reload();
+  // The Inbox opens on New: the row is drawn there only when it is New.
+  const row = metricNeed(page, "Find out · Invites sent per team · due Oct 26");
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveAttribute("data-state", "new");
+  await expect(row.getByTitle("Oct 26", { exact: true })).toHaveCount(1);
 });
