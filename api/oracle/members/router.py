@@ -371,13 +371,17 @@ async def resend_invite(invite_id: uuid.UUID, principal: Approver, db: TenantDB)
 @router.post(
     "/invites/{invite_id}/access",
     response_model=InviteOut,
-    responses={404: {"description": "No such invite"}, 409: {"description": "Not open"}},
+    responses={
+        403: {"description": "No longer an owner"},
+        404: {"description": "No such invite"},
+        409: {"description": "Not open"},
+    },
     dependencies=[Depends(same_origin)],
 )
 async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
     """Grant an open invite's Google IAP access again (Retry on "Access not granted
     yet"). Each attempt is audited; ``access`` says how it went."""
-    invite = await _call(service.get_open_invite(db, invite_id))
+    invite = await _call(service.get_open_invite(db, principal, invite_id))
     await delivery.grant_invite_access(db, principal, invite)
     await db.refresh(invite)
     return (await service.invites_out(db, [invite]))[0]
@@ -387,6 +391,7 @@ async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: Tenant
     "/invites/{invite_id}/email",
     response_model=InviteOut,
     responses={
+        403: {"description": "No longer an owner"},
         404: {"description": "No such invite"},
         409: {"description": "Not open, or its email is being sent"},
         429: {"description": "Its email went out under a minute ago (Retry-After: seconds)"},
@@ -397,7 +402,7 @@ async def resend_invite_email(invite_id: uuid.UUID, principal: Owner, db: Tenant
     """Email an open invite again (Resend): queued and sent in the background
     (``email_status``), or ``not_sent`` with no sender configured. Refused (429) under
     a minute after its last send."""
-    invite = await _call(service.get_open_invite(db, invite_id))
+    invite = await _call(service.get_open_invite(db, principal, invite_id))
     if invite.email_status == "queued":
         raise HTTPException(status.HTTP_409_CONFLICT, "Oracle is sending this invite's email")
     wait = delivery.resend_wait(invite)
