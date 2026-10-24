@@ -1,7 +1,6 @@
 """H10 Inbox rows on Requests: Replies to send, Asked again, Answer to your request."""
 
 import uuid
-from datetime import timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +11,6 @@ from oracle.requests import replies
 from oracle.requests.models import ProductRequest, RequestReply
 from oracle.runs.schemas import InboxRequestReply
 from oracle.tenant_settings_api import get_setting
-
-# Answer to your request: shown for this long after a person told the member in Oracle.
-ANSWER_DAYS = 14
 
 
 async def _asked_again_counts(
@@ -116,8 +112,7 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxReques
                     )
                 )
 
-    # Answer to your request: the member who asked, shown only.
-    since = replies.now() - timedelta(days=ANSWER_DAYS)
+    # Answer to your request: the member who asked, shown only, until they open it.
     told = (
         await db.execute(
             select(RequestReply, ProductRequest.title)
@@ -125,7 +120,7 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxReques
             .where(
                 RequestReply.member_id == me,
                 RequestReply.status == "notified",
-                RequestReply.notified_at >= since,
+                RequestReply.opened_at.is_(None),
             )
             .order_by(RequestReply.notified_at.desc())
         )
@@ -137,6 +132,7 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxReques
                 title=title,
                 reason="answer",
                 body=reply.body,
+                reply_id=reply.id,
                 at=reply.notified_at,
                 counts=False,
             )

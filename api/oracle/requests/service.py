@@ -1216,6 +1216,32 @@ async def notify_reply(db: AsyncSession, principal: Principal, reply_id: uuid.UU
     return reply
 
 
+async def open_reply(db: AsyncSession, principal: Principal, reply_id: uuid.UUID) -> RequestReply:
+    """The member who asked opened the answer told in Oracle: its Inbox row ends. Theirs
+    alone (403 for anyone else, a run's token or a read-only client); opening it again
+    changes nothing. 409 for a reply not told in Oracle."""
+    reply = await db.scalar(
+        select(RequestReply)
+        .where(RequestReply.id == reply_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if reply is None:
+        raise _not_found("Reply")
+    if principal.is_run or principal.read_only or reply.member_id != principal.user_id:
+        raise _forbidden("Only the member who asked opens this answer")
+    if reply.status != "notified":
+        raise _conflict("Only a reply told in Oracle is opened")
+    if reply.opened_at is None:
+        reply.opened_at = _now()
+        await flush_or_conflict(db)
+        await audit.record(
+            db, principal, "request_reply.opened", "request_reply", reply.id,
+            {"request_id": str(reply.request_id)},
+        )  # fmt: skip
+    return reply
+
+
 def _refuse_run(principal: Principal) -> None:
     if principal.is_run or principal.run_token_id is not None:
         raise _forbidden("A run's agents never send, mark or edit replies")

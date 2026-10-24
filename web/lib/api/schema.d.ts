@@ -10470,6 +10470,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/request-replies/{reply_id}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Request Reply
+         * @description The member who asked opened Answer to your request: its Inbox row ends. The asker
+         *     only; opening it again changes nothing. 409 for a reply not told in Oracle.
+         */
+        post: operations["open_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests/{request_id}/replies/draft": {
         parameters: {
             query?: never;
@@ -21987,7 +22008,7 @@ export interface components {
          * @description H10 rows: Replies to send (the request's filer and its decider; counted until
          *     every reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said
          *     no (the decision's approver; counted until Reopen or Keep the no) and Answer to your
-         *     request (the member who asked; shown only, with the reply).
+         *     request (the member who asked; shown only, with the reply, until they open it).
          */
         InboxRequestReply: {
             /**
@@ -22008,6 +22029,8 @@ export interface components {
             decision_number?: number | null;
             /** Body */
             body?: string | null;
+            /** Reply Id */
+            reply_id?: string | null;
             /** At */
             at?: string | null;
             /** Counts */
@@ -28549,6 +28572,8 @@ export interface components {
             skip_reason: string | null;
             /** Notified At */
             notified_at: string | null;
+            /** Opened At */
+            opened_at?: string | null;
             /** Drafting */
             drafting: boolean;
             /** Lock Version */
@@ -57303,6 +57328,37 @@ export interface operations {
         };
     };
     notify_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_request_reply: {
         parameters: {
             query?: never;
             header?: never;

@@ -332,6 +332,17 @@ async def notify_request_reply(reply_id: uuid.UUID, db: TenantDB, principal: Com
     return await _reply(db, reply)
 
 
+@router.post("/request-replies/{reply_id}/opened", response_model=ReplyOut)
+async def open_request_reply(reply_id: uuid.UUID, db: TenantDB, principal: Viewer) -> ReplyOut:
+    """The member who asked opened Answer to your request: its Inbox row ends. The asker
+    only; opening it again changes nothing. 409 for a reply not told in Oracle."""
+    try:
+        reply = await service.open_reply(db, principal, reply_id)
+    except service.RequestError as e:
+        raise _http(e) from e
+    return await _reply(db, reply)
+
+
 @router.post(
     "/requests/{request_id}/replies/draft",
     response_model=DraftJobOut,

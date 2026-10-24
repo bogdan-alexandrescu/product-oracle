@@ -152,6 +152,8 @@ class ReplyOut(BaseModel):
     sent_by_name: str | None
     skip_reason: str | None
     notified_at: datetime | None
+    # When the member who asked opened it in their Inbox (Answer to your request).
+    opened_at: datetime | None = None
     # Oracle's job is drafting it ("Drafting the replies…").
     drafting: bool
     lock_version: int
