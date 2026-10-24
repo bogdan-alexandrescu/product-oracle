@@ -1,11 +1,12 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { Button, PageHeader, SegmentedControl, ViewOnly } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { useMe } from "@/lib/me";
+import { useSetParams } from "@/lib/use-set-params";
 
 import { Alternatives } from "./_components/Alternatives";
 import { ChangeDiff } from "./_components/ChangeDiff";
@@ -42,9 +43,9 @@ export default function MarketPage() {
  * URL, so the digest's and the memos' links open them.
  */
 function Market() {
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
+  // Rewrites the URL's state (null removes a key) from the latest URL; the page follows the URL.
+  const setParams = useSetParams();
   const { can, capsReady, capsError } = useMe();
   const [adding, setAdding] = useState(false);
   if (!capsReady && !capsError) return <Loading />;
@@ -61,17 +62,6 @@ function Market() {
   const alternative = params.get("alternative");
   const change = params.get("change");
   const mayWrite = can("create_competitor");
-
-  /** Rewrites the URL's state (null removes a key); the page follows the URL. */
-  function setParams(patch: Record<string, string | null>) {
-    const next = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null || v === "") next.delete(k);
-      else next.set(k, v);
-    }
-    const s = next.toString();
-    router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
-  }
 
   return (
     <>

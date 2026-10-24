@@ -102,7 +102,11 @@ export const REASONS: Record<Reason, string> = {
 };
 export const CURRENCIES = ["USD", "EUR", "GBP"] as const;
 
-/** What a record keeps of its alternative until H7's alternatives land: "Alternative: <name>" in the note. */
+/**
+ * The alternative a record names. H7's alternatives have landed, but an imported file's
+ * alternative column is not matched to them: the import keeps it as text, "Alternative: <name>"
+ * in the note (api oracle/pricing/outcomes.py), and this reads it back.
+ */
 export function alternativeOf(d: Pick<Deal, "reason_note">): string | null {
   return /(?:^|\n)Alternative: (.+)$/m.exec(d.reason_note ?? "")?.[1] ?? null;
 }

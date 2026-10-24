@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
 
 import { Avatar, Button, Chip, DataTable, Empty, FilterChips, InfoTip, PageHeader, Panel, Sheet, Split, type Column } from "@/components/ds";
@@ -9,6 +9,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { useSetParams } from "@/lib/use-set-params";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { DecisionInspector } from "./_components/DecisionInspector";
@@ -86,9 +87,9 @@ async function loadPages(query: ListQuery, pages: number): Promise<{ rows: Decis
  * when I have any), From, search, and the subject and run the deep links use.
  */
 function Decisions() {
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
+  // Rewrites the URL's filters (null removes one) from the latest URL; the view follows the URL.
+  const setParams = useSetParams();
   const { me, can } = useMe();
   const phone = useIsPhone();
   const run = params.get("run");
@@ -151,17 +152,6 @@ function Decisions() {
   );
   const detail =
     detailQ.data && selectedKey && (String(detailQ.data.number) === selectedKey || detailQ.data.id === selectedKey) ? detailQ.data : null;
-
-  /** Rewrites the URL's filters (null removes one); the view follows the URL. */
-  function setParams(patch: Record<string, string | null>) {
-    const next = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null || v === "") next.delete(k);
-      else next.set(k, v);
-    }
-    const s = next.toString();
-    router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
-  }
 
   async function changed(updated?: Decision) {
     invalidateWaiting();
