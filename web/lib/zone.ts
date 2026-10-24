@@ -5,6 +5,8 @@
  */
 
 export const DEFAULT_ZONE = "America/Los_Angeles";
+/** #514: how screens say no Company time zone is stored yet, and which one is used meanwhile. */
+export const ZONE_NOT_SET = "Not set · Pacific is used";
 
 let current = DEFAULT_ZONE;
 

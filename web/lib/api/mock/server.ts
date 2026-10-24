@@ -4025,6 +4025,24 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") 
   };
 }
 
+/**
+ * Tests seed the mock's data through `__poMockWrite(change)`: the change takes its turn with
+ * the app's own calls (each reads the data, answers, then saves it), so a call in flight never
+ * saves over a seed. Resolves with what `change` returns, once saved.
+ */
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
+  (globalThis as { __poMockWrite?: unknown }).__poMockWrite = <T>(change: (db: Db) => T): Promise<T> => {
+    const next = queue.then(() => {
+      const db = load();
+      const out = change(db);
+      save(db);
+      return out;
+    });
+    queue = next.catch(() => undefined);
+    return next;
+  };
+}
+
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).
   const url = new URL(req.url);

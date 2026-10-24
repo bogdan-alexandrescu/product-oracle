@@ -295,12 +295,17 @@ async function ring(page: Page) {
 }
 
 async function expectVisibleFocus(page: Page, name: string | RegExp) {
-  const r = await ring(page);
-  expect(r.name).toMatch(name);
-  expect(r.style, `${r.name}: focus outline`).not.toBe("none");
-  expect(r.width, `${r.name}: focus outline width`).toBeGreaterThanOrEqual(2);
-  // WCAG 1.4.11: a focus indicator is at least 3:1 against what it sits on.
-  expect(contrast(r.color, r.bg), `${r.name}: ${r.color} on ${r.bg}`).toBeGreaterThanOrEqual(3);
+  // Polled: buttons fade their colours (the ring's too) after a theme change.
+  await expect
+    .poll(async () => {
+      const r = await ring(page);
+      if (typeof name === "string" ? !r.name.includes(name) : !name.test(r.name)) return `focus is on "${r.name}"`;
+      if (r.style === "none" || r.width < 2) return `${r.name}: outline ${r.style} ${r.width}px`;
+      // WCAG 1.4.11: a focus indicator is at least 3:1 against what it sits on.
+      const ratio = contrast(r.color, r.bg);
+      return ratio >= 3 ? "visible" : `${r.name}: ${r.color} on ${r.bg} is ${ratio.toFixed(2)}:1`;
+    })
+    .toBe("visible");
 }
 
 // Card keyboard-decide: protects = criterion 16, Enter on a row offers the row's first fix as a

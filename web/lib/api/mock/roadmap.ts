@@ -1531,7 +1531,8 @@ function trackAlerts(
 
 /**
  * The Inbox's track group (F2 §4): for the track's owner, else every owner, one entry per
- * track with open alerts or alerts done in the last 30 days. `total` counts the new and open.
+ * track with open alerts or alerts done in the last 30 days. `total` counts each track with new
+ * or open alerts once: its alerts are the row's children (#514, as the API counts).
  */
 export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | null): { tracks: InboxTrack[]; total: number } {
   const tracks: InboxTrack[] = [];
@@ -1557,7 +1558,7 @@ export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | n
       more: Math.max(0, open.length - 3),
       done,
     });
-    total += open.length;
+    if (open.length) total += 1;
   }
   return { tracks, total };
 }
