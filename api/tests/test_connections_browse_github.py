@@ -164,6 +164,7 @@ async def test_a_slack_connection_is_not_found(client, tenant_id, alice, github)
     assert resp.status_code == 404
 
 
+@pytest.mark.timing
 async def test_rate_limit_is_a_clear_retry(client, alice, conn, github):
     github.limited = True
     resp = await client.get(url(conn), headers=alice.headers)
