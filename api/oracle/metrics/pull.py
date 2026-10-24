@@ -3,11 +3,12 @@ link and the variance follow it), the 12-week backfill and the ticker's pulls.
 
 Deterministic: no model call. A week runs Monday 00:00 to the next Monday 00:00 in the
 Company time zone. The ticker (``pull_due``) reads, for each PostHog metric whose last
-complete week has no value, that week's value: at most 20 queries per company per tick,
-a failed pull retried on the next hourly attempt, and the metric ``error`` after 24
-hours of failures.
+complete week has no value, that week's value (and the weeks a failed backfill left):
+at most 20 queries per company per tick, a failed pull retried on the next hourly
+attempt, and the metric ``error`` after 24 hours of failures. A query that answers SQL
+NULL stores no value for its week.
 
-The caller commits.
+The caller commits, except ``pull_due``, which commits its claim before calling out.
 """
 
 import uuid
@@ -16,7 +17,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, exists, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -110,7 +111,8 @@ async def connection(db: AsyncSession) -> posthog.Connection | None:
     )
 
 
-async def query_week(conn: posthog.Connection, query: str, week: date, zone: str) -> float:
+async def query_week(conn: posthog.Connection, query: str, week: date, zone: str) -> float | None:
+    """The week's value; None when the query answered no value (SQL NULL)."""
     start, end = week_bounds(week, zone)
     return await posthog.query_number(conn, fill_query(query, start, end, zone))
 
@@ -251,6 +253,8 @@ async def store(
     await _goal_measurement(db, metric, week, amount)
     if check:
         await evaluate(db, metric, week, zone)
+        # This week is the next one's "week before": its variance moves with this value.
+        await evaluate(db, metric, week + timedelta(weeks=1), zone)
     # The company's first weekly value: the metrics review takes over the goals check-in.
     await activate.activate_review(db)
     return True
@@ -269,6 +273,7 @@ async def remove(db: AsyncSession, metric: Metric, week: date, zone: str) -> boo
     await _goal_measurement(db, metric, week, None)
     await link_goal(db, metric)
     await evaluate(db, metric, week, zone)
+    await evaluate(db, metric, week + timedelta(weeks=1), zone)
     return True
 
 
@@ -298,8 +303,8 @@ async def pull_week(
     db: AsyncSession, metric: Metric, conn: posthog.Connection, week: date, zone: str,
     *, replace: bool,
 ) -> None:  # fmt: skip
-    """Read one week from PostHog and store it; PostHogError when the read fails (the
-    metric's pull state records it)."""
+    """Read one week from PostHog and store it (no value answered: the week has none);
+    PostHogError when the read fails (the metric's pull state records it)."""
     at = now()
     try:
         value = await query_week(conn, metric.query or "", week, zone)
@@ -307,22 +312,27 @@ async def pull_week(
         _failed(metric, exc.message, at)
         await db.flush()
         raise
-    await store(db, metric, week, value, source="posthog", zone=zone, replace=replace)
+    if value is not None:
+        await store(db, metric, week, value, source="posthog", zone=zone, replace=replace)
+    elif replace:
+        await remove(db, metric, week, zone)
     _succeeded(metric, at)
     await db.flush()
 
 
 async def backfill(db: AsyncSession, metric: Metric, conn: posthog.Connection) -> None:
     """The last 12 complete weeks, so the normal range works at once; the variance rule
-    runs on the last one only. A failure stops it (the ticker retries the last week)."""
+    runs on the last one only. A failure stops it; the ticker fills the weeks after the
+    last one stored (``pull_due``)."""
     zone = await company_time.company_time_zone(db)
     weeks = recent_weeks(now(), zone, BACKFILL_WEEKS)
     at = now()
     try:
         for week in weeks:
             value = await query_week(conn, metric.query or "", week, zone)
-            await store(db, metric, week, value, source="posthog", zone=zone,
-                        check=week == weeks[-1])  # fmt: skip
+            if value is not None:
+                await store(db, metric, week, value, source="posthog", zone=zone,
+                            check=week == weeks[-1])  # fmt: skip
     except posthog.PostHogError as exc:
         _failed(metric, exc.message, at)
     else:
@@ -331,18 +341,16 @@ async def backfill(db: AsyncSession, metric: Metric, conn: posthog.Connection) -
     await db.flush()
 
 
-async def pull_due(db: AsyncSession) -> int:
-    """The ticker step: each active (or failing) PostHog metric whose last complete week
-    has no value and whose next attempt is due, at most 20 per tick. Overlapping ticks
-    skip a metric another holds, and a value is never stored twice. Returns the values
-    stored."""
-    conn = await connection(db)
-    if conn is None:
-        return 0
-    at = now()
-    zone = await company_time.company_time_zone(db)
-    week = last_complete_week(at, zone)
-    has_week = exists().where(MetricValue.metric_id == Metric.id, MetricValue.week_start == week)
+async def _claim(
+    db: AsyncSession, at: datetime, zone: str
+) -> list[tuple[uuid.UUID, str, list[date]]]:
+    """The due metrics and the weeks each reads, at most 20 queries in all. Each claimed
+    metric's next attempt moves an hour on, so an overlapping tick leaves it; the caller
+    commits, which releases the row locks before any query goes out."""
+    has_week = exists().where(
+        MetricValue.metric_id == Metric.id,
+        MetricValue.week_start == last_complete_week(at, zone),
+    )
     due = list(
         await db.scalars(
             select(Metric)
@@ -357,28 +365,85 @@ async def pull_due(db: AsyncSession) -> int:
             .with_for_update(skip_locked=True)
         )
     )
-    stored = 0
+    claimed: list[tuple[uuid.UUID, str, list[date]]] = []
+    left = MAX_QUERIES_PER_TICK
     for metric in due:
-        # Read again under the lock: an overlapping tick may have stored it meanwhile.
-        if await db.scalar(
-            select(MetricValue.id).where(
-                MetricValue.metric_id == metric.id, MetricValue.week_start == week
-            )
-        ):
-            continue
-        attempt = now()
-        try:
-            value = await query_week(conn, metric.query or "", week, zone)
-        except posthog.PostHogError as exc:
-            _failed(metric, exc.message, attempt)
-            await db.flush()
-            continue
-        async with db.begin_nested():
-            if await store(db, metric, week, value, source="posthog", zone=zone, replace=False):
-                await link_goal(db, metric)
+        if left <= 0:
+            break
+        # The weeks after the last one stored: the last complete week, and the rest of a
+        # backfill that failed partway. Oldest first: what does not fit waits for the next
+        # tick, which goes on from the last one stored.
+        latest = await db.scalar(
+            select(func.max(MetricValue.week_start)).where(MetricValue.metric_id == metric.id)
+        )
+        recent = recent_weeks(at, zone, BACKFILL_WEEKS)
+        weeks = [w for w in recent if latest is None or w > latest][:left]
+        left -= len(weeks)
+        metric.next_pull_at = at + RETRY_AFTER
+        claimed.append((metric.id, metric.query or "", weeks))
+    await db.flush()
+    return claimed
+
+
+async def _record_pull(
+    db: AsyncSession, metric_id: uuid.UUID, read: list[tuple[date, float | None]],
+    failure: tuple[str, datetime] | None, attempt: datetime, zone: str, week: date,
+) -> int:  # fmt: skip
+    """Store what one claimed metric's queries read (oldest first; the variance rule on the
+    last complete week once its history is in) and its pull state. The values stored."""
+    metric = await db.scalar(select(Metric).where(Metric.id == metric_id).with_for_update())
+    if metric is None or metric.status not in ("active", "error"):
+        return 0
+    stored = 0
+    async with db.begin_nested():
+        for day, value in read:
+            if value is None:
+                continue
+            if await store(db, metric, day, value, source="posthog", zone=zone,
+                           replace=False, check=day == week):  # fmt: skip
                 stored += 1
+        if stored:
+            await link_goal(db, metric)
+    if failure is not None:
+        _failed(metric, *failure)
+    else:
         _succeeded(metric, attempt)
-        await db.flush()
+        if (week, None) in read:
+            # PostHog has no value for the last complete week yet: ask again in an hour.
+            metric.next_pull_at = attempt + RETRY_AFTER
+    await db.flush()
+    return stored
+
+
+async def pull_due(db: AsyncSession) -> int:
+    """The ticker step: each active (or failing) PostHog metric whose last complete week
+    has no value and whose next attempt is due, at most 20 queries per tick. The due
+    metrics are claimed and committed first, so no row lock is held while PostHog
+    answers; each metric's result is then written and committed on its own. Overlapping
+    ticks skip a claimed metric, and a value is never stored twice. Commits; returns the
+    values stored."""
+    conn = await connection(db)
+    if conn is None:
+        return 0
+    at = now()
+    zone = await company_time.company_time_zone(db)
+    week = last_complete_week(at, zone)
+    claimed = await _claim(db, at, zone)
+    await db.commit()
+    stored = 0
+    for metric_id, query, weeks in claimed:
+        read: list[tuple[date, float | None]] = []
+        failure: tuple[str, datetime] | None = None
+        attempt = now()
+        for day in weeks:
+            attempt = now()
+            try:
+                read.append((day, await query_week(conn, query, day, zone)))
+            except posthog.PostHogError as exc:
+                failure = (exc.message, attempt)
+                break
+        stored += await _record_pull(db, metric_id, read, failure, attempt, zone, week)
+        await db.commit()
     return stored
 
 

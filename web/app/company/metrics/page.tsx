@@ -46,7 +46,7 @@ function Metrics() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { can } = useMe();
+  const { me, can } = useMe();
   const phone = useIsPhone();
   const [form, setForm] = useState<"add" | "edit" | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -54,6 +54,9 @@ function Metrics() {
   const listQ = useQuery(`metrics|${archived}`, () => unwrap(api.GET("/v1/metrics", { params: { query: { include_archived: archived } } })), { keepPrevious: true });
   const rows = listQ.data ?? [];
   const writer = can("create_metric");
+  // The metric's owner (any role) records the values of a metric typed by hand or by API: the
+  // page is View only for them only when they own no such metric.
+  const records = rows.some((m) => m.source !== "posthog" && m.status !== "archived" && can("record_metric_value", m.owner_id === me?.user_id));
   const goalsQ = useQuery("metric-goals", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })));
   const peopleQ = useQuery(`metric-people|${writer}`, () =>
     writer ? unwrap(api.GET("/v1/people", { params: { query: { limit: 100 } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
@@ -145,7 +148,7 @@ function Metrics() {
     <>
       <PageHeader
         title="Company"
-        status={!writer && <ViewOnly />}
+        status={!writer && !records && <ViewOnly />}
         action={
           writer && (
             <Button variant="primary" icon="plus" onClick={() => setForm("add")}>

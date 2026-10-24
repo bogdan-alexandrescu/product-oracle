@@ -73241,7 +73241,7 @@
         "properties": {
           "values": {
             "items": {
-              "$ref": "#/components/schemas/WeekValue"
+              "$ref": "#/components/schemas/MetricTestWeek"
             },
             "type": "array",
             "title": "Values"
@@ -73264,6 +73264,32 @@
           "error"
         ],
         "title": "MetricTestOut"
+      },
+      "MetricTestWeek": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_start",
+          "value"
+        ],
+        "title": "MetricTestWeek"
       },
       "MetricValueOut": {
         "properties": {

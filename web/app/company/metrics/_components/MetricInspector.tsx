@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
+import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -29,14 +30,10 @@ import {
 import { MetricChart } from "./MetricChart";
 import type { Goal } from "./MetricForm";
 
-/** "7 pts to go" / "Target met": how far the goal's current value is from its target. */
-function distanceText(goal: Goal): string | null {
-  const { current, target, unit, comparison } = goal.attrs as { current?: unknown; target?: unknown; unit?: string; comparison?: string };
-  if (typeof current !== "number" || typeof target !== "number") return null;
-  const below = comparison === "below" || comparison === "at_most";
-  const gap = Math.round((below ? current - target : target - current) * 100) / 100;
-  if (gap <= 0) return "Target met";
-  return unit === "%" ? `${gap} pts to go` : `${gap} ${unit ?? ""} to go`.trim();
+/** The goal's distance to go in Home's words ("7 pts to go", "Target met", "Not below"); null when Home gives none. */
+function distanceText(goals: Goal[], id: string): string | null {
+  const view = goalViews(goals).find((g) => g.id === id);
+  return view ? assess(view).text || null : null;
 }
 
 /**
@@ -158,7 +155,7 @@ export function MetricInspector({
       {(goal || drives || inputs.length > 0) && (
         <InspectorSection label={metric.kind === "input" ? "Drives" : goal ? "Goal and inputs" : "Inputs"}>
           {goal && (
-            <InspectorRow value={distanceText(goal)}>
+            <InspectorRow value={distanceText(goals, goal.id)}>
               <Link href={`/baseline?entity=${goal.id}`} className="hover:underline">
                 {goal.title}
               </Link>

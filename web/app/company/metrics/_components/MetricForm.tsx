@@ -58,6 +58,9 @@ export function MetricForm({
   const taken = new Set(metrics.filter((m) => m.goal_id && m.status !== "archived" && m.id !== metric?.id).map((m) => m.goal_id));
   const goalUnit = (g: Goal) => (typeof g.attrs.unit === "string" ? g.attrs.unit : null);
   const goalChoices = goals.filter((g) => g.status === "confirmed" && !taken.has(g.id) && goalUnit(g) === unit.trim());
+  // The goal the select shows, and the one Save sends: none once the picked goal is no longer a
+  // choice (another unit, or no longer confirmed).
+  const goalId = goalChoices.some((g) => g.id === goal) ? goal : "";
 
   async function test() {
     setBusy(true);
@@ -81,7 +84,7 @@ export function MetricForm({
       description: description.trim(),
       unit: unit.trim(),
       direction,
-      goal_id: kind === "output" && goal ? goal : null,
+      goal_id: kind === "output" && goalId ? goalId : null,
       drives_metric_id: kind === "input" && drives ? drives : null,
       owner_id: owner,
       query: source === "posthog" ? query : null,
@@ -168,7 +171,7 @@ export function MetricForm({
                 id="metric-goal"
                 aria-describedby="metric-goal-help"
                 className={INPUT}
-                value={goalChoices.some((g) => g.id === goal) ? goal : ""}
+                value={goalId}
                 onChange={(e) => setGoal(e.target.value)}
               >
                 <option value="">No goal</option>

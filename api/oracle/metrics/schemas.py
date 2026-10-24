@@ -2,9 +2,9 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 Kind = Literal["output", "input"]
 Direction = Literal["up", "down"]
@@ -40,6 +40,14 @@ class MetricPatch(BaseModel):
     owner_id: uuid.UUID | None = None
     query: str | None = Field(default=None, min_length=1, max_length=MAX_QUERY)
     threshold_pct: float | None = Field(default=None, ge=1, le=500)
+
+    @model_validator(mode="after")
+    def _no_null_for_a_required_field(self) -> Self:
+        # Leaving a field out keeps it; null is only for the fields that may be empty.
+        for name in ("title", "description", "unit", "direction", "owner_id"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be empty")
+        return self
 
 
 class WeekValue(BaseModel):
@@ -146,14 +154,23 @@ class QueryIn(BaseModel):
     query: str = Field(min_length=1, max_length=MAX_QUERY)
 
 
+class MetricTestWeek(BaseModel):
+    week_start: date
+    # None: the query answered no value (SQL NULL) for the week.
+    value: float | None
+
+
 class MetricTestOut(BaseModel):
     # The last 4 complete weeks' values, oldest first; empty with ``error`` on a failure.
-    values: list[WeekValue]
+    values: list[MetricTestWeek]
     error: str | None
 
 
 class ExplainIn(BaseModel):
-    explanation: str = Field(min_length=10, max_length=1000)
+    # Trimmed first, then counted: 10 to 1,000 characters.
+    explanation: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=10, max_length=1000)
+    ]
     lock_version: int | None = None
 
 

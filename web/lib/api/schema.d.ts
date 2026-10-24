@@ -23600,9 +23600,19 @@ export interface components {
         /** MetricTestOut */
         MetricTestOut: {
             /** Values */
-            values: components["schemas"]["WeekValue"][];
+            values: components["schemas"]["MetricTestWeek"][];
             /** Error */
             error: string | null;
+        };
+        /** MetricTestWeek */
+        MetricTestWeek: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number | null;
         };
         /** MetricValueOut */
         MetricValueOut: {

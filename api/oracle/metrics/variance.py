@@ -6,7 +6,8 @@ For a metric's weekly values ``v`` (oldest first, this week last), this week's c
 1. With at least 6 changes in the history, ``typical = median(|history|)``; the week is
    a variance when ``typical > 0`` and ``|c| > 2 x typical``.
 2. With fewer than 6 changes, or ``typical = 0``, the week is a variance when
-   ``|c / v[w-1]| >= threshold_pct`` (10% by default; from 0 any change counts).
+   ``|c / v[w-1]| >= threshold_pct``, the metric's own (10% when it has none; from 0 any
+   change counts).
 3. An owner-set ``threshold_pct`` always applies too: rule 1 or rule 3.
 4. A change in the metric's good direction is Better, the other way Worse.
 5. A week with no value is no variance ("No value this week").
@@ -61,14 +62,17 @@ def check(values: list[float | None], direction: str, threshold_pct: float | Non
         if a is not None and b is not None
     ]
     typical = median(abs(h) for h in history) if len(history) >= MIN_HISTORY else None
+    limit = DEFAULT_THRESHOLD_PCT if threshold_pct is None else float(threshold_pct)
     if typical:
-        flagged = abs(change) > 2 * typical
+        # Rule 1, or rule 3: an owner-set threshold applies too.
+        flagged = abs(change) > 2 * typical or (
+            threshold_pct is not None and _pct_rule(change, previous, limit)
+        )
         band = (previous - 2 * typical, previous + 2 * typical)
     else:
-        flagged = _pct_rule(change, previous, DEFAULT_THRESHOLD_PCT)
+        # Rule 2: the metric's threshold_pct, 10% by default.
+        flagged = _pct_rule(change, previous, limit)
         band = None
-    if threshold_pct is not None:
-        flagged = flagged or _pct_rule(change, previous, float(threshold_pct))
     pct = round(change / previous * 100, 1) if previous else None
     better = (change > 0) == (direction == "up")
     return Check(

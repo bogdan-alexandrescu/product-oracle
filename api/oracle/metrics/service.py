@@ -23,6 +23,7 @@ from oracle.metrics.schemas import (
     MetricDetail,
     MetricOut,
     MetricPatch,
+    MetricTestWeek,
     MetricValueOut,
     PossibleCause,
     VarianceOut,
@@ -254,7 +255,7 @@ async def pull_now(db: AsyncSession, metric: Metric) -> None:
     await pull.link_goal(db, metric)
 
 
-async def test_query(db: AsyncSession, query: str) -> tuple[list[WeekValue], str | None]:
+async def test_query(db: AsyncSession, query: str) -> tuple[list[MetricTestWeek], str | None]:
     conn = await pull.connection(db)
     if conn is None:
         raise MetricError(NOT_CONNECTED, 409)
@@ -262,8 +263,8 @@ async def test_query(db: AsyncSession, query: str) -> tuple[list[WeekValue], str
     out = []
     try:
         for week in pull.recent_weeks(pull.now(), zone, 4):
-            out.append(WeekValue(week_start=week, value=await pull.query_week(conn, query, week,
-                                                                              zone)))  # fmt: skip
+            value = await pull.query_week(conn, query, week, zone)
+            out.append(MetricTestWeek(week_start=week, value=value))
     except posthog.PostHogError as exc:
         return [], exc.message
     return out, None

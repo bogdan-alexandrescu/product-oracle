@@ -206,12 +206,14 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxMetric
     now = pull.now()
     today = company_time.day(now, zone)
     rows: list[InboxMetric] = []
+    # The person, whatever credential they call with (principal.id is a token's id for a
+    # token); a company token owns no metric.
     pairs = (
         await db.execute(
             select(MetricVariance, Metric)
             .join(Metric, Metric.id == MetricVariance.metric_id)
             .where(
-                Metric.owner_id == principal.id,
+                Metric.owner_id == principal.user_id,
                 Metric.status != "archived",
                 MetricVariance.status.in_(("open", "unknown")),
             )

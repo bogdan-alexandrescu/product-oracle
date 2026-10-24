@@ -222,11 +222,10 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         failures.add(tenant_id)
     try:
         # Metrics (H5): each PostHog metric's last complete week, read once (deterministic,
-        # no model call); a failed pull is retried on the next hourly attempt.
+        # no model call); a failed pull is retried on the next hourly attempt. It commits its
+        # claim before calling PostHog, then each metric's result.
         async with tenant_session(tenant_id) as db:
-            async with db.begin_nested():
-                await metrics_pull.pull_due(db)
-            await db.commit()
+            await metrics_pull.pull_due(db)
     except Exception:
         log.exception("run ticker: metric pulls failed for company %s", tenant_id)
         failures.add(tenant_id)

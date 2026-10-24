@@ -11,8 +11,10 @@ from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 
@@ -325,6 +327,26 @@ async def test_slack_notifications(
 # as an id.
 
 
+class _NoInputRoute(APIRoute):
+    """A route whose 422 never sends back what was sent: FastAPI's validation error echoes
+    the request body in each error's ``input``, and the analytics PUT carries the key."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def run(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except RequestValidationError as exc:
+                errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+                raise RequestValidationError(errors) from None
+
+        return run
+
+
+analytics = APIRouter(route_class=_NoInputRoute)
+
+
 async def _analytics_out(db: TenantDB) -> AnalyticsOut:
     row = await metrics_pull.integration(db)
     count = await db.scalar(
@@ -347,13 +369,13 @@ async def _analytics_out(db: TenantDB) -> AnalyticsOut:
     )  # fmt: skip
 
 
-@router.get("/company-integrations/analytics", response_model=AnalyticsOut)
+@analytics.get("/company-integrations/analytics", response_model=AnalyticsOut)
 async def get_analytics_integration(principal: Owner, db: TenantDB) -> AnalyticsOut:
     """The analytics connection (PostHog): host, project and state; never the key."""
     return await _analytics_out(db)
 
 
-@router.put(
+@analytics.put(
     "/company-integrations/analytics",
     response_model=AnalyticsOut,
     responses={422: {"description": "The host or the key was refused"}},
@@ -400,7 +422,7 @@ async def put_analytics_integration(
     return await _analytics_out(db)
 
 
-@router.delete("/company-integrations/analytics", status_code=status.HTTP_204_NO_CONTENT)
+@analytics.delete("/company-integrations/analytics", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_analytics_integration(principal: Owner, db: TenantDB) -> None:
     """Disconnect PostHog: the key is deleted and PostHog metrics are paused ("Analytics
     disconnected"); their values stay."""
@@ -414,6 +436,9 @@ async def delete_analytics_integration(principal: Owner, db: TenantDB) -> None:
         )  # fmt: skip
         await db.delete(row)
     await db.commit()
+
+
+router.include_router(analytics)
 
 
 @router.delete(

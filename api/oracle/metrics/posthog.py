@@ -100,7 +100,8 @@ def _message(response: httpx.Response) -> str:
     return f"PostHog answered {response.status_code}"
 
 
-def _number(body: Any) -> float:
+def _number(body: Any) -> float | None:
+    """The one number; None when the query answered SQL NULL (no value that week)."""
     rows = body.get("results") if isinstance(body, dict) else None
     if not isinstance(rows, list) or len(rows) != 1:
         raise PostHogError("The query must return one row with one number")
@@ -109,15 +110,16 @@ def _number(body: Any) -> float:
         raise PostHogError("The query must return one row with one number")
     value = row[0]
     if value is None:
-        return 0.0
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
         raise PostHogError("The query must return one row with one number") from None
 
 
-async def query_number(conn: Connection, hogql: str) -> float:
-    """Run ``hogql``; its single number. PostHogError with a redacted message otherwise."""
+async def query_number(conn: Connection, hogql: str) -> float | None:
+    """Run ``hogql``; its single number (None for NULL). PostHogError with a redacted
+    message otherwise."""
     await check_host(conn.host)
     transport = _transport or guarded_transport(resolve)
     url = f"{conn.base_url}/api/projects/{conn.project_id}/query/"

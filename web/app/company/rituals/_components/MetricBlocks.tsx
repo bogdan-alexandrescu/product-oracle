@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Chip, ViewOnly } from "@/components/ds";
+import { Button, Chip, Sparkline, ViewOnly } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
@@ -27,6 +27,8 @@ export type MetricRow = {
   vs_6w_avg_pct: number | null;
   vs_last_year: number | null;
   vs_last_year_pct: number | null;
+  /** The last 12 weeks' values, oldest first (null: no value that week). */
+  spark: (number | null)[];
   variance: "better" | "worse" | null;
   href: string;
 };
@@ -46,38 +48,42 @@ const signed = (v: number) => (v > 0 ? `+${num(v)}` : num(v));
 const valueText = (v: number, unit: string) => (unit === "%" ? `${num(v)}%` : `${num(v)} ${unit}`);
 const vs = (v: number | null, pct: number | null) => (v == null ? "—" : pct == null ? signed(v) : `${signed(v)} (${signed(pct)}%)`);
 
-/** The fixed format (research [62]): outputs first, each followed by its inputs; wraps on a phone, never scrolls sideways. */
+/** The fixed format (research [62]): outputs first, each followed by its inputs, with the 12-week sparkline; wraps on a phone, never scrolls sideways. */
 export function MetricsTable({ rows }: { rows: MetricRow[] }) {
   return (
     <ul className="flex flex-col divide-y divide-line" data-testid="metrics-review-table">
-      {rows.map((r) => (
-        <li key={r.metric_id} className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 ${r.kind === "input" ? "pl-9" : ""}`}>
-          <Link href={r.href} className="min-w-0 flex-[1_1_12rem] font-medium [overflow-wrap:anywhere] hover:underline">
-            {r.title}
-          </Link>
-          {r.state === "pull_failed" ? (
-            <span className="text-sm text-crit">Not read</span>
-          ) : r.value == null ? (
-            <span className="text-sm text-text2">No value this week</span>
-          ) : (
-            <>
-              <span className="tnum text-[15px] font-semibold">{valueText(r.value, r.unit)}</span>
-              <span className="tnum text-sm" title="Against the week before">
-                {vs(r.change, r.change_pct)}
-              </span>
-              <span className="tnum text-sm text-text2" title="Against the 6-week average">
-                6-wk avg {vs(r.vs_6w_avg, r.vs_6w_avg_pct)}
-              </span>
-              {r.vs_last_year != null && (
-                <span className="tnum text-sm text-text2" title="Against the same week last year">
-                  Year {vs(r.vs_last_year, r.vs_last_year_pct)}
+      {rows.map((r) => {
+        const known = r.spark.filter((v): v is number => v != null);
+        return (
+          <li key={r.metric_id} className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 ${r.kind === "input" ? "pl-9" : ""}`}>
+            <Link href={r.href} className="min-w-0 flex-[1_1_12rem] font-medium [overflow-wrap:anywhere] hover:underline">
+              {r.title}
+            </Link>
+            {known.length > 1 && <Sparkline values={known} label={`Trend ${known.join(", ")}`} />}
+            {r.state === "pull_failed" ? (
+              <span className="text-sm text-crit">Not read</span>
+            ) : r.value == null ? (
+              <span className="text-sm text-text2">No value this week</span>
+            ) : (
+              <>
+                <span className="tnum text-[15px] font-semibold">{valueText(r.value, r.unit)}</span>
+                <span className="tnum text-sm" title="Against the week before">
+                  {vs(r.change, r.change_pct)}
                 </span>
-              )}
-              {r.variance && <Chip kind={DIRECTION_KIND[r.variance]}>{DIRECTION[r.variance]}</Chip>}
-            </>
-          )}
-        </li>
-      ))}
+                <span className="tnum text-sm text-text2" title="Against the 6-week average">
+                  6-wk avg {vs(r.vs_6w_avg, r.vs_6w_avg_pct)}
+                </span>
+                {r.vs_last_year != null && (
+                  <span className="tnum text-sm text-text2" title="Against the same week last year">
+                    Year {vs(r.vs_last_year, r.vs_last_year_pct)}
+                  </span>
+                )}
+                {r.variance && <Chip kind={DIRECTION_KIND[r.variance]}>{DIRECTION[r.variance]}</Chip>}
+              </>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -91,7 +97,9 @@ export function MetricsTable({ rows }: { rows: MetricRow[] }) {
 export function VarianceCards({ rows, live, onChanged }: { rows: VarianceRow[]; live: Map<string, Variance>; onChanged: () => Promise<void> }) {
   const { me, can } = useMe();
   const cards = rows.map((r) => live.get(r.variance_id) ?? ({ ...r, id: r.variance_id } as Variance));
-  const acts = cards.some((v) => can("explain_metric_variance", v.owner_id === me?.user_id)) || can("mark_metric_variance_noise");
+  const acts =
+    cards.some((v) => can("explain_metric_variance", v.owner_id === me?.user_id) || can("mark_metric_variance_unknown", v.owner_id === me?.user_id)) ||
+    can("mark_metric_variance_noise");
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       {!acts && (
@@ -110,7 +118,9 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
   const { me, can } = useMe();
   const zone = useCompanyZone();
   const today = todayIn(zone);
-  const answers = can("explain_metric_variance", v.owner_id === me?.user_id);
+  const explains = can("explain_metric_variance", v.owner_id === me?.user_id);
+  const unknown = can("mark_metric_variance_unknown", v.owner_id === me?.user_id);
+  const answers = explains || unknown;
   const noise = can("mark_metric_variance_noise");
   const draft = v.oracle_draft ?? "";
   const [text, setText] = useState(v.explanation ?? draft);
@@ -188,7 +198,7 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
         </p>
       )}
       {v.status === "noise" && v.noise_reason && <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">{v.noise_reason}</p>}
-      {!answers && open && draft && (
+      {!explains && open && draft && (
         <p className="mt-2 text-[15px] [overflow-wrap:anywhere]">
           {draft}
           <span className="block text-[13px] text-text2">Drafted by Oracle</span>
@@ -196,11 +206,13 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
       )}
       {answers && open && (
         <div className="mt-2 flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Explanation
-            <textarea className={`${INPUT} min-h-20`} maxLength={EXPLAIN_MAX} value={text} onChange={(e) => setText(e.target.value)} />
-          </label>
-          {drafted && <p className="text-[13px] text-text2">Drafted by Oracle</p>}
+          {explains && (
+            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+              Explanation
+              <textarea className={`${INPUT} min-h-20`} maxLength={EXPLAIN_MAX} value={text} onChange={(e) => setText(e.target.value)} />
+            </label>
+          )}
+          {explains && drafted && <p className="text-[13px] text-text2">Drafted by Oracle</p>}
           {mode === "unknown" && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Find out by
@@ -216,16 +228,20 @@ function VarianceCard({ variance: v, ownerName, onChanged }: { variance: Varianc
           <div className="flex flex-wrap gap-2">
             {mode === null ? (
               <>
-                <Button
-                  variant="solid"
-                  disabled={busy || text.trim().length < EXPLAIN_MIN}
-                  onClick={() => run(() => unwrap(api.POST("/v1/metric-variances/{variance_id}/explain", { ...path, body: { explanation: text.trim(), lock_version: v.lock_version } })))}
-                >
-                  Explain
-                </Button>
-                <Button disabled={busy} onClick={() => setMode("unknown")}>
-                  Don&apos;t know yet
-                </Button>
+                {explains && (
+                  <Button
+                    variant="solid"
+                    disabled={busy || text.trim().length < EXPLAIN_MIN}
+                    onClick={() => run(() => unwrap(api.POST("/v1/metric-variances/{variance_id}/explain", { ...path, body: { explanation: text.trim(), lock_version: v.lock_version } })))}
+                  >
+                    Explain
+                  </Button>
+                )}
+                {unknown && (
+                  <Button disabled={busy} onClick={() => setMode("unknown")}>
+                    Don&apos;t know yet
+                  </Button>
+                )}
                 {noise && (
                   <Button variant="ghost" disabled={busy} onClick={() => setMode("noise")}>
                     Noise
