@@ -25,6 +25,7 @@ Flow = Literal[
     "update_draft",
     "prd_draft_items",
     "ritual_summary",
+    "competitive_digest",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[

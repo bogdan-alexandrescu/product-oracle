@@ -52,6 +52,12 @@ READ_AREAS = {
         # H2: rituals and their pre-reads (a summary or update draft run reads them).
         "rituals",
         "ritual-occurrences",
+        # H7: the alternatives, their change log, the open web's findings (public pages,
+        # read with no credential) and the positioning inputs. Run tokens never write them.
+        "competitors",
+        "competitor-changes",
+        "competitor-web-findings",
+        "positioning",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
