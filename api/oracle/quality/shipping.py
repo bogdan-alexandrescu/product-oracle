@@ -145,12 +145,13 @@ async def actual_value(
             .order_by(GoalMeasurement.measured_on)
         )
     )
-    readings: list[tuple[date, float, str]] = [
-        (m.measured_on, float(m.value), f"{float(m.value):g}") for m in measurements
-    ]
-    source = "measurement"
+    # H5: a measurement read from the goal's linked metric is the metric's value.
+    readings: list[tuple[date, float, str, str]] = [
+        (m.measured_on, float(m.value), f"{float(m.value):g}",
+         "metric" if m.metric_id is not None else "measurement")
+        for m in measurements
+    ]  # fmt: skip
     if not readings:
-        source = "goal_history"
         for rev in await db.scalars(
             select(EntityRevision)
             .where(EntityRevision.entity_id == goal_id)
@@ -161,11 +162,11 @@ async def actual_value(
             raw = raw if raw is not None else attrs.get("current_text")
             value = number(raw)
             if value is not None:
-                readings.append((rev.created_at.date(), value, str(raw)))
+                readings.append((rev.created_at.date(), value, str(raw), "goal_history"))
     if not readings:
         return None
     after = [r for r in readings if by is None or r[0] >= by]
-    on, value, observed = after[0] if after else readings[-1]
+    on, value, observed, source = after[0] if after else readings[-1]
     return value, on, observed, (None if after else "measured early"), source
 
 

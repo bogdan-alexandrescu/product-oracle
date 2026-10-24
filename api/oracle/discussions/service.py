@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
-from oracle.discussions import access, inbox, kinds, replies
+from oracle.discussions import access, inbox, replies
 from oracle.discussions.models import (
     MAX_BODY,
     MAX_SUMMARY,
@@ -853,35 +853,15 @@ async def list_messages(
     return list(reversed(rows[:limit])), len(rows) > limit
 
 
-async def list_changes(
-    db: AsyncSession, d: Discussion, status: str | None
-) -> list[DiscussionChangeOut]:
-    stmt = select(DiscussionChange).where(DiscussionChange.discussion_id == d.id)
-    if status:
-        stmt = stmt.where(DiscussionChange.status == status)
-    rows = await db.scalars(stmt.order_by(DiscussionChange.created_at, DiscussionChange.id))
-    return [change_out(c) for c in rows]
+async def change_out(
+    db: AsyncSession, principal: "Principal", c: DiscussionChange
+) -> DiscussionChangeOut:
+    """One change as the caller reads it (G3's ``action`` and ``can`` included)."""
+    from oracle.discussions import changes
 
-
-def change_out(c: DiscussionChange) -> DiscussionChangeOut:
-    return DiscussionChangeOut(
-        id=c.id,
-        kind=c.kind,
-        label=kinds.label(c.kind, c.edited_payload or c.payload, c.target),
-        target=c.target,
-        payload=c.payload,
-        edited_payload=c.edited_payload,
-        rationale=c.rationale,
-        proposed_by_kind=c.proposed_by_kind,  # type: ignore[arg-type]
-        proposed_by=c.proposed_by,
-        suggested_by=c.suggested_by,
-        status=c.status,  # type: ignore[arg-type]
-        created_at=c.created_at,
-        lock_version=c.lock_version,
-        result_ref=c.result_ref,
-        pushback=c.pushback,
-        override_reason=c.override_reason,
-    )
+    d, _parts, seat = await readable(db, principal, c.discussion_id)
+    [out] = await changes.list_changes(db, principal, d, seat, ids=[c.id])
+    return out
 
 
 # --- writing ------------------------------------------------------------------------------
@@ -1192,6 +1172,10 @@ async def update(
         d.closed_by = principal.user_id if body.status == "closed" else None
         d.closed_at = datetime.now(UTC) if body.status == "closed" else None
         await _record(db, principal, "close" if body.status == "closed" else "reopen", d)
+        if body.status == "closed":
+            from oracle.discussions import summary
+
+            await summary.queue(db, d)
     if (manages or body.visibility not in (None, d.visibility)) and d.status == "closed":
         raise DiscussionError(409, CLOSED)
     if body.visibility == "open" and d.visibility == "private":

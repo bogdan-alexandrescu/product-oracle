@@ -513,6 +513,56 @@ def lapse_entry(version: DocumentVersion, at: datetime, reason: str) -> dict[str
     }
 
 
+def _lapsing_queries(
+    reviewer_id: uuid.UUID | None, token_id: uuid.UUID | None, grant_id: uuid.UUID | None
+):
+    """The section approvals (with their document and version number) and the version
+    approvals :func:`lapse_approvals` lapses: one place for it and its preview."""
+    review_who = []
+    version_who = []
+    if reviewer_id is not None:
+        review_who.append(SectionReview.reviewer_id == reviewer_id)
+        version_who.append(DocumentVersion.approved_by == reviewer_id)
+    if token_id is not None:
+        review_who += [SectionReview.token_id == token_id, SectionReview.reviewer_id == token_id]
+        version_who += [
+            DocumentVersion.approved_token_id == token_id,
+            DocumentVersion.approved_by == token_id,
+        ]
+    if grant_id is not None:
+        review_who.append(SectionReview.grant_id == grant_id)
+        version_who.append(DocumentVersion.approved_grant_id == grant_id)
+    reviews = (
+        select(SectionReview, DocumentVersion.document_id, DocumentVersion.number)
+        .join(DocumentVersion, DocumentVersion.id == SectionReview.version_id)
+        .where(
+            SectionReview.verdict == "approved",
+            SectionReview.lapsed_at.is_(None),
+            or_(*review_who),
+        )
+    )
+    versions = select(DocumentVersion).where(
+        DocumentVersion.approved_at.is_not(None), or_(*version_who)
+    )
+    return reviews, versions
+
+
+async def select_lapsing_approvals(
+    db: AsyncSession,
+    *,
+    reviewer_id: uuid.UUID | None = None,
+    token_id: uuid.UUID | None = None,
+    grant_id: uuid.UUID | None = None,
+) -> tuple[list[SectionReview], list[DocumentVersion]]:
+    """What :func:`lapse_approvals` would lapse: (section approvals, version
+    approvals). No locks, no writes (A5's preview)."""
+    if reviewer_id is None and token_id is None and grant_id is None:
+        return [], []
+    reviews_q, versions_q = _lapsing_queries(reviewer_id, token_id, grant_id)
+    rows = (await db.execute(reviews_q)).all()
+    return [r for r, _, _ in rows], list(await db.scalars(versions_q))
+
+
 async def lapse_approvals(
     db: AsyncSession,
     principal: "Principal | None",
@@ -536,45 +586,15 @@ async def lapse_approvals(
     if reviewer_id is None and token_id is None and grant_id is None:
         return {"section_review_ids": [], "version_ids": []}
     at = now()
-    review_who = []
-    version_who = []
-    if reviewer_id is not None:
-        review_who.append(SectionReview.reviewer_id == reviewer_id)
-        version_who.append(DocumentVersion.approved_by == reviewer_id)
-    if token_id is not None:
-        review_who += [SectionReview.token_id == token_id, SectionReview.reviewer_id == token_id]
-        version_who += [
-            DocumentVersion.approved_token_id == token_id,
-            DocumentVersion.approved_by == token_id,
-        ]
-    if grant_id is not None:
-        review_who.append(SectionReview.grant_id == grant_id)
-        version_who.append(DocumentVersion.approved_grant_id == grant_id)
-    rows = (
-        await db.execute(
-            select(SectionReview, DocumentVersion.document_id, DocumentVersion.number)
-            .join(DocumentVersion, DocumentVersion.id == SectionReview.version_id)
-            .where(
-                SectionReview.verdict == "approved",
-                SectionReview.lapsed_at.is_(None),
-                or_(*review_who),
-            )
-            .with_for_update(of=SectionReview)
-        )
-    ).all()
+    reviews_q, versions_q = _lapsing_queries(reviewer_id, token_id, grant_id)
+    rows = (await db.execute(reviews_q.with_for_update(of=SectionReview))).all()
     sections: dict[tuple[uuid.UUID, str], int] = {}
     for review, document_id, number in rows:
         review.lapsed_at = at
         review.lapse_reason = reason
         key = (document_id, review.section_key)
         sections[key] = max(sections.get(key, 0), number)
-    versions = list(
-        await db.scalars(
-            select(DocumentVersion)
-            .where(DocumentVersion.approved_at.is_not(None), or_(*version_who))
-            .with_for_update()
-        )
-    )
+    versions = list(await db.scalars(versions_q.with_for_update()))
     for v in versions:
         v.approval_lapses = [*(v.approval_lapses or []), lapse_entry(v, at, reason)]
         v.approval_lapsed_at = at

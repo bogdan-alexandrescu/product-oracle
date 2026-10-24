@@ -1114,12 +1114,255 @@ export interface paths {
         };
         /**
          * List Discussion Changes
-         * @description The typed changes the discussion ended in, read-only here (proposing, suggesting
-         *     and staging arrive with G3 and G4).
+         * @description The typed changes the discussion ended in, each with the action the caller may take
+         *     (``action``: the kind's verb, ``allowed`` and ``why_not``) and what else they may do
+         *     (``can``). Viewers read them and get no action.
          */
         get: operations["list_discussion_changes"];
         put?: never;
+        /**
+         * Create Discussion Change
+         * @description Write a change by hand (commenters and up): a commenter's is ``suggested``, an
+         *     approver's ``proposed``, ready to stage. Only the subject's available kinds; the
+         *     payload is checked as Oracle's are.
+         */
+        post: operations["create_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/change-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Discussion Change Kinds
+         * @description The kinds "Propose a change" offers on this discussion's subject: only those
+         *     available now, each with its action verb and its payload's JSON schema.
+         */
+        get: operations["list_discussion_change_kinds"];
+        put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Discussion Change
+         * @description Edit before acting: saves ``edited_payload``. A commenter's edit makes it their
+         *     suggestion; an approver's keeps the status.
+         */
+        patch: operations["update_discussion_change"];
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Discussion Change
+         * @description Suggest it for an approver to stage (commenters and up): "Suggested by <name>". At
+         *     a checkpoint it is also the item's suggested shared-draft action.
+         */
+        post: operations["suggest_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Discussion Change
+         * @description Withdraw your own suggestion: back to ``proposed`` when Oracle proposed it, else
+         *     ``dismissed``.
+         */
+        post: operations["withdraw_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Discussion Change
+         * @description Stage it (approvers and up): a shared-draft action at the checkpoint or a row for
+         *     the document's next draft (G4). When Oracle pushed back on it, ``override_reason`` is
+         *     required; from a private discussion, ``reason`` (the reason everyone will see) is.
+         */
+        post: operations["stage_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Discussion Change
+         * @description Dismiss it (approvers and up), with an optional note.
+         */
+        post: operations["dismiss_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Discussion Change
+         * @description ``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
+         *     whose reason names the discussion and links its page; approvers accept it in Baseline.
+         *     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
+         *     and a target the start or current value already meets gets Oracle's pushback once
+         *     (409); proposing it again keeps it and logs the override.
+         */
+        post: operations["propose_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Discussion Change
+         * @description ``conflict_pick`` (approvers and up): resolves the conflict with the picked claim.
+         */
+        post: operations["resolve_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer With Discussion Change
+         * @description ``answer`` (the person asked, or approvers and up): posts it as the question's
+         *     answer.
+         */
+        post: operations["answer_with_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Discussion Change
+         * @description ``basis_record`` (Record): records the schedule basis with the caller's date rights
+         *     (F3, ``leads.date_rights``): verified for an engineering lead or an owner, and for an
+         *     approver while no lead is named; ``proposed`` for the lead when an approver records it
+         *     while a lead is named. Anyone else gets 403.
+         */
+        post: operations["record_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarize Discussion
+         * @description Ask Oracle for a summary draft now (commenters and up who can write in it), at most
+         *     1,200 characters: "Decided:", "Open:", "Context:". A summary the starter confirmed is
+         *     replaced only when the starter asks (``replace``); anyone else gets 409.
+         */
+        post: operations["summarize_discussion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2118,7 +2361,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Member
+         * @description One member: how they joined (``joined.via``: invite, access_request, domain,
+         *     seeded or unknown), the responsibilities they hold (open items only) and the
+         *     approvals and decisions a removal would lapse or void.
+         */
+        get: operations["get_member"];
         put?: never;
         post?: never;
         /**
@@ -2160,7 +2409,9 @@ export interface paths {
          *     review gate, and retried by the tick when they fail. Their Google IAP access is
          *     taken away, and that of the invites revoked with them (audited). The member stays
          *     in the list (history keeps the name); an owner can restore them, and they sign in
-         *     fresh. A no-op for a disabled member.
+         *     fresh. A no-op for a disabled member. With ``hand_over`` (A5), those
+         *     responsibilities move first, in the same transaction; a refused target is a 422
+         *     (``hand_over_target``) and nothing is moved or removed.
          */
         post: operations["disable_member"];
         delete?: never;
@@ -2185,6 +2436,73 @@ export interface paths {
          *     Their Google IAP access is granted again (audited).
          */
         post: operations["restore_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Member Impact
+         * @description What removing the member (``change=remove``) or changing their role
+         *     (``change=role&role=commenter``) would end, void and lapse, and the responsibilities
+         *     they hold (``holder_ok``: whether they may keep each after the change). Reads only:
+         *     the same selections the change applies, no locks, no writes. ``nothing`` is true
+         *     when the change touches nothing (a promotion, their own role, a removed member).
+         */
+        get: operations["get_member_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Member Approvals
+         * @description The member's section verdicts and version approvals, given in person or through
+         *     their API tokens and grants, oldest first; ``lapsed=true`` includes lapsed ones.
+         */
+        get: operations["list_member_approvals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/hand-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand Over
+         * @description Move an active or removed member's responsibilities to other members (``to``)
+         *     or clear them (``to`` null), all or none; kinds left out stay. Returns what they
+         *     still hold.
+         */
+        post: operations["hand_over"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9767,6 +10085,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/company-integrations/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Analytics Integration
+         * @description The analytics connection (PostHog): host, project and state; never the key.
+         */
+        get: operations["get_analytics_integration"];
+        /**
+         * Put Analytics Integration
+         * @description Connect PostHog, or replace its host, project or key. The key is tested with one
+         *     trivial query first: a refused key is 422 with the provider's message (no key). An
+         *     own host must be ``https`` and resolve to public addresses only.
+         */
+        put: operations["put_analytics_integration"];
+        post?: never;
+        /**
+         * Delete Analytics Integration
+         * @description Disconnect PostHog: the key is deleted and PostHog metrics are paused ("Analytics
+         *     disconnected"); their values stay.
+         */
+        delete: operations["delete_analytics_integration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/company-integrations/{integration_id}": {
         parameters: {
             query?: never;
@@ -10803,6 +11152,247 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metrics
+         * @description The company's weekly metrics: outputs, each followed by the inputs that drive it,
+         *     with last week's value, its change and the last 12 weeks.
+         */
+        get: operations["list_metrics"];
+        put?: never;
+        /**
+         * Create Metric
+         * @description Add a metric. A PostHog metric reads its last 12 complete weeks at once (409 when
+         *     PostHog is not connected).
+         */
+        post: operations["create_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Metric Query
+         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. The
+         *     provider's error, when it refuses, is in ``error``.
+         */
+        post: operations["test_metric_query"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Metric
+         * @description A metric with up to 52 weekly values, its variances and its definition history.
+         */
+        get: operations["get_metric"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Metric
+         * @description Edit a metric (``lock_version``). A query or unit change raises its definition
+         *     version: later values carry the new one.
+         */
+        patch: operations["update_metric"];
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Metric
+         * @description Archive a metric: it is no longer read or reviewed; its values stay.
+         */
+        post: operations["archive_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Metric
+         * @description Restore an archived metric.
+         */
+        post: operations["restore_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull Metric
+         * @description Pull now: read the last complete week from PostHog again and replace its value
+         *     (409 unless the metric's source is PostHog; 502 with the provider's message).
+         */
+        post: operations["pull_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/values/{week_start}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record Metric Value
+         * @description Record a week's value on a metric typed by hand or written by API (an approver or
+         *     the metric's owner). 409 for a PostHog metric; 422 for a week_start that is not a
+         *     Monday or a week that has not ended.
+         */
+        put: operations["record_metric_value"];
+        post?: never;
+        /**
+         * Delete Metric Value
+         * @description Delete a week's value typed by hand or written by API.
+         */
+        delete: operations["delete_metric_value"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metric Variances
+         * @description The variances, latest week first: each with its possible causes, its explanation
+         *     state and Oracle's draft if any.
+         */
+        get: operations["list_metric_variances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explain Metric Variance
+         * @description Explain a variance (10 to 1,000 characters): the metric's owner or an approver.
+         */
+        post: operations["explain_metric_variance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/unknown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Metric Variance Unknown
+         * @description Don't know yet, with a day to find out by (1 to 28 days ahead): the metric's owner
+         *     or an approver.
+         */
+        post: operations["mark_metric_variance_unknown"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/noise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Metric Variance Noise
+         * @description Mark a variance as noise, with a reason (approvers).
+         */
+        post: operations["mark_metric_variance_noise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -11370,6 +11960,48 @@ export interface components {
              * @default true
              */
             needs_attention_as_of_now: boolean;
+        };
+        /** AnalyticsIn */
+        AnalyticsIn: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "posthog";
+            /** Host */
+            host: string;
+            /** Project Id */
+            project_id: string;
+            /** Api Key */
+            api_key: string;
+        };
+        /**
+         * AnalyticsOut
+         * @description The connection, never its key.
+         */
+        AnalyticsOut: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "posthog";
+            /** Host */
+            host: string | null;
+            /** Project Id */
+            project_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "error" | "disconnected";
+            /** Last Error */
+            last_error: string | null;
+            /** Connected By Name */
+            connected_by_name: string | null;
+            /** Connected At */
+            connected_at: string | null;
+            /** Metrics */
+            metrics: number;
         };
         /** AnnotationOut */
         AnnotationOut: {
@@ -11956,6 +12588,13 @@ export interface components {
             updated_by?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** Band */
+        Band: {
+            /** Low */
+            low: number;
+            /** High */
+            high: number;
         };
         /** BaselineSegmentUsd */
         BaselineSegmentUsd: {
@@ -13138,6 +13777,79 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["ModuleVersionSummary"][];
         };
+        /** Change */
+        Change: {
+            /** Value */
+            value: number;
+            /** Pct */
+            pct: number | null;
+            /** Variance */
+            variance: ("better" | "worse") | null;
+        };
+        /** ChangeActIn */
+        ChangeActIn: {
+            /** Lock Version */
+            lock_version: number;
+        };
+        /**
+         * ChangeAction
+         * @description The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy.
+         */
+        ChangeAction: {
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "Stage" | "Propose" | "Resolve" | "Use as answer" | "Ask" | "Record" | "Apply";
+            /** Allowed */
+            allowed: boolean;
+            /** Why Not */
+            why_not?: string | null;
+        };
+        /**
+         * ChangeCan
+         * @description What else the caller may do with the change.
+         */
+        ChangeCan: {
+            /**
+             * Suggest
+             * @default false
+             */
+            suggest: boolean;
+            /**
+             * Edit
+             * @default false
+             */
+            edit: boolean;
+            /**
+             * Withdraw
+             * @default false
+             */
+            withdraw: boolean;
+            /**
+             * Dismiss
+             * @default false
+             */
+            dismiss: boolean;
+        };
+        /** ChangeDismissIn */
+        ChangeDismissIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Note */
+            note?: string | null;
+        };
+        /** ChangeEdit */
+        ChangeEdit: {
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rationale */
+            rationale?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -13171,6 +13883,50 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ChangeIn */
+        ChangeIn: {
+            /** Kind */
+            kind: string;
+            /** Target */
+            target?: {
+                [key: string]: unknown;
+            };
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rationale */
+            rationale?: string | null;
+        };
+        /**
+         * ChangeKindOut
+         * @description A kind "Propose a change" offers on this subject, with its payload's JSON schema.
+         */
+        ChangeKindOut: {
+            /** Kind */
+            kind: string;
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "Stage" | "Propose" | "Resolve" | "Use as answer" | "Ask" | "Record" | "Apply";
+            /** Schema */
+            schema: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ChangeResult
+         * @description Every action's answer: the change, and what acting created (a staged change, a
+         *     proposal, a resolved conflict, an answer), or None.
+         */
+        ChangeResult: {
+            change: components["schemas"]["DiscussionChangeOut"];
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * ChangeSetDiffItem
@@ -13268,6 +14024,15 @@ export interface components {
             changes: (components["schemas"]["AddChange"] | components["schemas"]["MoveChange"] | components["schemas"]["DeferChange"] | components["schemas"]["CutChange"] | components["schemas"]["ReorderChange"])[];
             /** Lock Version */
             lock_version: number;
+        };
+        /** ChangeStageIn */
+        ChangeStageIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Override Reason */
+            override_reason?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** ChangedSection */
         ChangedSection: {
@@ -14032,14 +14797,14 @@ export interface components {
             id: string;
             /**
              * Provider
-             * @constant
+             * @enum {string}
              */
-            provider: "slack";
+            provider: "slack" | "posthog";
             /**
              * Purpose
-             * @constant
+             * @enum {string}
              */
-            purpose: "notifications";
+            purpose: "notifications" | "metrics";
             /** Account Id */
             account_id: string;
             /** Account Label */
@@ -15470,6 +16235,20 @@ export interface components {
             /** Key */
             key: string;
         };
+        /** Definition */
+        Definition: {
+            /** Version */
+            version: number;
+            /** Unit */
+            unit: string;
+            /** Query */
+            query: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
         /** DependenciesCreate */
         DependenciesCreate: {
             /** Artifact Version Id */
@@ -15625,6 +16404,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
             /** Kind */
             kind: string;
             /** Label */
@@ -15648,15 +16432,42 @@ export interface components {
              * @enum {string}
              */
             proposed_by_kind: "oracle" | "person";
-            /** Proposed By */
-            proposed_by: string | null;
-            /** Suggested By */
-            suggested_by: string | null;
+            proposed_by: components["schemas"]["DiscussionPerson"] | null;
+            suggested_by: components["schemas"]["DiscussionPerson"] | null;
             /**
              * Status
              * @enum {string}
              */
             status: "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
+            action?: components["schemas"]["ChangeAction"] | null;
+            /**
+             * @default {
+             *       "suggest": false,
+             *       "edit": false,
+             *       "withdraw": false,
+             *       "dismiss": false
+             *     }
+             */
+            can: components["schemas"]["ChangeCan"];
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Needs Reason
+             * @default false
+             */
+            needs_reason: boolean;
+            /** Basis */
+            basis?: {
+                [key: string]: unknown;
+            }[];
+            /** Result Ref */
+            result_ref?: {
+                [key: string]: unknown;
+            } | null;
+            /** Decision Note */
+            decision_note?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -15664,14 +16475,6 @@ export interface components {
             created_at: string;
             /** Lock Version */
             lock_version: number;
-            /** Result Ref */
-            result_ref?: {
-                [key: string]: unknown;
-            } | null;
-            /** Pushback */
-            pushback?: {
-                [key: string]: unknown;
-            } | null;
             /** Override Reason */
             override_reason?: string | null;
         };
@@ -17160,6 +17963,11 @@ export interface components {
             title: string;
             /** Runs Per Month */
             runs_per_month: number;
+            /**
+             * Per Summary Usd
+             * @default 3
+             */
+            per_summary_usd: number;
         };
         /** EvaluationFindingOut */
         EvaluationFindingOut: {
@@ -17546,6 +18354,13 @@ export interface components {
             heading: string;
             /** Html */
             html: string;
+        };
+        /** ExplainIn */
+        ExplainIn: {
+            /** Explanation */
+            explanation: string;
+            /** Lock Version */
+            lock_version?: number | null;
         };
         /** Explanation */
         Explanation: {
@@ -18141,7 +18956,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Title */
             title: string;
             /** Description */
@@ -18757,6 +19572,27 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HandOver
+         * @description Move one kind of responsibility to ``to`` (an active member with the kind's
+         *     role), or clear it (``to`` null). A kind left out stays as it is.
+         */
+        HandOver: {
+            /** Kind */
+            kind: string;
+            /** To */
+            to?: string | null;
+        };
+        /** HandOverIn */
+        HandOverIn: {
+            /** Hand Over */
+            hand_over?: components["schemas"]["HandOver"][] | null;
+        };
+        /** HandOverOut */
+        HandOverOut: {
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ResponsibilityOut"][];
+        };
         /** Health */
         Health: {
             /** Status */
@@ -18776,6 +19612,13 @@ export interface components {
              * @default []
              */
             decision_ids: string[];
+        };
+        /** HeldOut */
+        HeldOut: {
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
         };
         /**
          * HiddenDiscussion
@@ -18849,6 +19692,17 @@ export interface components {
             /** Holders */
             holders: components["schemas"]["HolderOut"][];
         };
+        /** HoldsOut */
+        HoldsOut: {
+            /** Section Approvals */
+            section_approvals: number;
+            /** Version Approvals */
+            version_approvals: number;
+            /** Spend Approvals */
+            spend_approvals: number;
+            /** Checkpoint Decisions */
+            checkpoint_decisions: number;
+        };
         /**
          * HumanRatingIn
          * @description A person's rating of the ten criteria (all or some), for comparison with the rules.
@@ -18898,6 +19752,23 @@ export interface components {
              */
             created_at: string;
         };
+        /** ImpactCheckpoint */
+        ImpactCheckpoint: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+        };
         /** ImpactDocument */
         ImpactDocument: {
             /** Slug */
@@ -18906,6 +19777,27 @@ export interface components {
             version: number;
             /** Marks */
             marks: number;
+        };
+        /** ImpactEnds */
+        ImpactEnds: {
+            /** Sign In */
+            sign_in: boolean;
+            /** Api Tokens */
+            api_tokens: number;
+            /** Mcp Clients */
+            mcp_clients: number;
+            /** Connections */
+            connections: {
+                [key: string]: number;
+            };
+            /** Sources */
+            sources: number;
+            /** Runs */
+            runs: components["schemas"]["ImpactRun"][];
+            /** Llm Jobs */
+            llm_jobs: number;
+            /** Invites */
+            invites: number;
         };
         /** ImpactItem */
         ImpactItem: {
@@ -18920,6 +19812,13 @@ export interface components {
             version: number;
             /** Item Key */
             item_key: string;
+        };
+        /** ImpactLapses */
+        ImpactLapses: {
+            /** Section Approvals */
+            section_approvals: number;
+            /** Version Approvals */
+            version_approvals: components["schemas"]["ImpactVersion"][];
         };
         /** ImpactMilestone */
         ImpactMilestone: {
@@ -18939,6 +19838,36 @@ export interface components {
             target_date: string | null;
             /** Keeps Date */
             keeps_date: boolean;
+        };
+        /**
+         * ImpactOut
+         * @description What removing or demoting the member would do, read as of ``as_of``.
+         */
+        ImpactOut: {
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "remove" | "role";
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            ends?: components["schemas"]["ImpactEnds"] | null;
+            voids: components["schemas"]["ImpactVoids"];
+            lapses: components["schemas"]["ImpactLapses"];
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ImpactResponsibilityOut"][];
+            /** Nothing */
+            nothing: boolean;
         };
         /** ImpactReport */
         ImpactReport: {
@@ -18970,6 +19899,51 @@ export interface components {
              */
             truncated: boolean;
         };
+        /** ImpactResponsibilityOut */
+        ImpactResponsibilityOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["HeldOut"][];
+            /**
+             * Needs Role
+             * @enum {string}
+             */
+            needs_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Blocks */
+            blocks?: string | null;
+            /** Holder Ok */
+            holder_ok: boolean;
+        };
+        /** ImpactRun */
+        ImpactRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /** ImpactRunRef */
+        ImpactRunRef: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Title */
+            title: string;
+        };
         /** ImpactSubject */
         ImpactSubject: {
             /** Kind */
@@ -18982,6 +19956,24 @@ export interface components {
             title?: string | null;
             /** Document Id */
             document_id?: string | null;
+        };
+        /** ImpactVersion */
+        ImpactVersion: {
+            /** Document */
+            document: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /** ImpactVoids */
+        ImpactVoids: {
+            /** Spend Approvals */
+            spend_approvals: components["schemas"]["ImpactRunRef"][];
+            /** Resumes */
+            resumes: components["schemas"]["ImpactRunRef"][];
+            /** Checkpoint Decisions */
+            checkpoint_decisions: components["schemas"]["ImpactCheckpoint"][];
         };
         /**
          * ImportErrorResponse
@@ -19168,7 +20160,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -19567,6 +20559,40 @@ export interface components {
             at?: string | null;
         };
         /**
+         * InboxMetric
+         * @description A metric row of the Inbox (H5): Explain a variance and Find out (the metric's
+         *     owner; Find out from its find-out-by day), Metric not read for a day (owners).
+         *     ``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that
+         *     lists the variance, when one does.
+         */
+        InboxMetric: {
+            /** Variance Id */
+            variance_id?: string | null;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "explain" | "find_out" | "pull_failed";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Due On */
+            due_on?: string | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Counts */
+            counts: boolean;
+        };
+        /**
          * InboxOracleAction
          * @description "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
          *     for one of the people it notified. Counted until that person opens it.
@@ -19727,6 +20753,11 @@ export interface components {
              * @default []
              */
             outcomes: components["schemas"]["InboxOutcome"][];
+            /**
+             * Metrics
+             * @default []
+             */
+            metrics: components["schemas"]["InboxMetric"][];
             /** Last Seen At */
             last_seen_at?: string | null;
             /**
@@ -21399,6 +22430,20 @@ export interface components {
              */
             quality_review: boolean;
         };
+        /** JoinedOut */
+        JoinedOut: {
+            /** At */
+            at?: string | null;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "invite" | "access_request" | "domain" | "seeded" | "unknown";
+            /** By */
+            by?: string | null;
+            /** By Name */
+            by_name?: string | null;
+        };
         /** KindCoverage */
         KindCoverage: {
             /** Kind */
@@ -22255,6 +23300,55 @@ export interface components {
              */
             created_at: string;
         };
+        /** MemberDetailOut */
+        MemberDetailOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Disabled At */
+            disabled_at?: string | null;
+            /** Disabled By */
+            disabled_by?: string | null;
+            /** Last Sign In At */
+            last_sign_in_at?: string | null;
+            /**
+             * Open Tokens
+             * @default 0
+             */
+            open_tokens: number;
+            /** Access Pending */
+            access_pending?: ("revoke" | "grant") | null;
+            joined: components["schemas"]["JoinedOut"];
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ResponsibilityOut"][];
+            holds: components["schemas"]["HoldsOut"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            readonly status: "active" | "disabled";
+        };
         /** MemberOut */
         MemberOut: {
             /**
@@ -22312,6 +23406,239 @@ export interface components {
             engineering_lead?: boolean | null;
             /** Name */
             name?: string | null;
+            /** Hand Over */
+            hand_over?: components["schemas"]["HandOver"][] | null;
+        };
+        /** MetricCreate */
+        MetricCreate: {
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Drives Metric Id */
+            drives_metric_id?: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query?: string | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
+        };
+        /** MetricDetail */
+        MetricDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id: string | null;
+            /** Drives Metric Id */
+            drives_metric_id: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query: string | null;
+            /** Threshold Pct */
+            threshold_pct: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "archived";
+            /** Definition Version */
+            definition_version: number;
+            last_week: components["schemas"]["WeekValue"] | null;
+            change: components["schemas"]["Change"] | null;
+            /** Spark */
+            spark: (number | null)[];
+            /** Last Pulled At */
+            last_pulled_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Values */
+            values: components["schemas"]["MetricValueOut"][];
+            /** Variances */
+            variances: components["schemas"]["VarianceOut"][];
+            /** Definitions */
+            definitions: components["schemas"]["Definition"][];
+        };
+        /** MetricOut */
+        MetricOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id: string | null;
+            /** Drives Metric Id */
+            drives_metric_id: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query: string | null;
+            /** Threshold Pct */
+            threshold_pct: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "archived";
+            /** Definition Version */
+            definition_version: number;
+            last_week: components["schemas"]["WeekValue"] | null;
+            change: components["schemas"]["Change"] | null;
+            /** Spark */
+            spark: (number | null)[];
+            /** Last Pulled At */
+            last_pulled_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** MetricPatch */
+        MetricPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("up" | "down") | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Drives Metric Id */
+            drives_metric_id?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Query */
+            query?: string | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
+        };
+        /** MetricTestOut */
+        MetricTestOut: {
+            /** Values */
+            values: components["schemas"]["MetricTestWeek"][];
+            /** Error */
+            error: string | null;
+        };
+        /** MetricTestWeek */
+        MetricTestWeek: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number | null;
+        };
+        /** MetricValueOut */
+        MetricValueOut: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Definition Version */
+            definition_version: number;
+            /** Note */
+            note: string | null;
+            /** Recorded By */
+            recorded_by: string | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -23128,6 +24455,13 @@ export interface components {
             items: number;
             /** Milestone Id */
             milestone_id?: string | null;
+        };
+        /** NoiseIn */
+        NoiseIn: {
+            /** Reason */
+            reason: string;
+            /** Lock Version */
+            lock_version?: number | null;
         };
         /**
          * NotReadCounts
@@ -24064,6 +25398,23 @@ export interface components {
             /** Until */
             until: string | null;
         };
+        /** PossibleCause */
+        PossibleCause: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "launch" | "changelog" | "roadmap_item" | "decision" | "definition";
+            /** Title */
+            title: string;
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            /** Href */
+            href: string;
+        };
         /** PrdAnchor */
         PrdAnchor: {
             document: components["schemas"]["DocumentRef"] | null;
@@ -24703,7 +26054,7 @@ export interface components {
             /** Measured At */
             measured_at?: string | null;
             /** Source */
-            source?: ("goal_history" | "measurement") | null;
+            source?: ("goal_history" | "measurement" | "metric") | null;
             /** Note */
             note?: string | null;
         };
@@ -25078,6 +26429,11 @@ export interface components {
             goal_ids?: string[] | null;
             /** Note */
             note?: string | null;
+        };
+        /** QueryIn */
+        QueryIn: {
+            /** Query */
+            query: string;
         };
         /** Question */
         Question: {
@@ -26560,6 +27916,27 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** ResponsibilityOut */
+        ResponsibilityOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["HeldOut"][];
+            /**
+             * Needs Role
+             * @enum {string}
+             */
+            needs_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Blocks */
+            blocks?: string | null;
+        };
         /**
          * ReusedBaseline
          * @description The baseline review a run reuses: its Confirm the baseline checkpoint.
@@ -27150,6 +28527,8 @@ export interface components {
             next_due_at: string | null;
             /** Lock Version */
             lock_version: number;
+            /** Replaced By */
+            replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
         };
         /** RitualPatch */
@@ -27470,7 +28849,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Document */
             document?: string | null;
             /** Source */
@@ -27635,7 +29014,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /**
@@ -27897,7 +29276,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /**
@@ -31052,6 +32431,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SummaryAsk */
+        SummaryAsk: {
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+        };
         /** SummarySettingsIn */
         SummarySettingsIn: {
             /**
@@ -33065,6 +34452,16 @@ export interface components {
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
         };
+        /** UnknownIn */
+        UnknownIn: {
+            /**
+             * Find Out By
+             * Format: date
+             */
+            find_out_by: string;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
         /**
          * UnrequestedChange
          * @description A field of an item the review left alone (``unchanged``) that changed anyway.
@@ -33202,6 +34599,73 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ValueIn */
+        ValueIn: {
+            /** Value */
+            value: number;
+            /** Note */
+            note?: string | null;
+        };
+        /** VarianceOut */
+        VarianceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
+            /** Previous */
+            previous: number;
+            /** Change */
+            change: number;
+            /** Change Pct */
+            change_pct: number | null;
+            band: components["schemas"]["Band"] | null;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "better" | "worse";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "explained" | "unknown" | "noise";
+            /** Explanation */
+            explanation: string | null;
+            /** Explained By Name */
+            explained_by_name: string | null;
+            /** Find Out By */
+            find_out_by: string | null;
+            /** Noise Reason */
+            noise_reason: string | null;
+            /** Oracle Draft */
+            oracle_draft: string | null;
+            /** Oracle Confidence */
+            oracle_confidence: ("high" | "medium" | "low") | null;
+            /** Possible Causes */
+            possible_causes: components["schemas"]["PossibleCause"][];
+            /** Lock Version */
+            lock_version: number;
         };
         /**
          * VersionAnchors
@@ -33519,6 +34983,16 @@ export interface components {
         WaiveIn: {
             /** Reason */
             reason: string;
+        };
+        /** WeekValue */
+        WeekValue: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
         };
         /** WindowOut */
         WindowOut: {
@@ -36115,6 +37589,642 @@ export interface operations {
             };
         };
     };
+    create_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_discussion_change_kinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeKindOut"][];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    suggest_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    withdraw_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stage_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeStageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    propose_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oracle's pushback on a goal version (once), a stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMeasurePushback"];
+                };
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    answer_with_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summarize_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SummaryAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The starter confirmed it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     dismiss_inbox_discussion_item: {
         parameters: {
             query?: never;
@@ -37993,6 +40103,44 @@ export interface operations {
             };
         };
     };
+    get_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDetailOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     remove_member: {
         parameters: {
             query?: never;
@@ -38067,14 +40215,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A hand-over target cannot hold it (hand_over_target) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -38087,7 +40233,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HandOverIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -38158,6 +40308,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_member_impact: {
+        parameters: {
+            query: {
+                change: "remove" | "role";
+                role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_member_approvals: {
+        parameters: {
+            query?: {
+                lapsed?: boolean;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenApprovalOut"][];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hand_over: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandOverIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandOverOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unknown kind, or a target that cannot hold it */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -52610,6 +54881,75 @@ export interface operations {
             };
         };
     };
+    get_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+        };
+    };
+    put_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+            /** @description The host or the key was refused */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     delete_company_integration: {
         parameters: {
             query?: never;
@@ -54565,6 +56905,640 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ChangelogEntryOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metrics: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_metric_query: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTestOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description PostHog refused or failed the query */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_metric_value: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValueIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricValueOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_metric_value: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metric_variances: {
+        parameters: {
+            query?: {
+                status?: ("open" | "explained" | "unknown" | "noise") | null;
+                metric_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    explain_metric_variance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_metric_variance_unknown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnknownIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_metric_variance_noise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoiseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

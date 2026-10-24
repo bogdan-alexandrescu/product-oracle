@@ -17,11 +17,12 @@ test("members: remove asks in an in-app dialog, then restore lets them sign in a
   await expect(row).toHaveAttribute("data-status", "active");
 
   await page.getByRole("button", { name: "Remove commenter@example.com" }).click();
-  const dialog = page.getByRole("dialog", { name: "Remove this member?" });
+  // A5: the title names them; the fixed lines gave way to the preview of what this ends.
+  const dialog = page.getByRole("dialog", { name: "Remove Commenter?" });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("commenter@example.com");
-  for (const line of ["can't sign in", "connections and sources stop", "go back to the Inbox", "History keeps their name", "An owner can restore them"]) {
-    await expect(dialog.getByRole("list", { name: "What happens" })).toContainText(line);
+  await expect(dialog).toContainText("commenter@example.com · Commenter");
+  for (const line of ["can't sign in", "History keeps their name", "An owner can restore them"]) {
+    await expect(dialog).toContainText(line);
   }
   // Cancel leaves everything as it was.
   await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -59,7 +60,7 @@ test("members: removing revokes the member's tokens, and Undo restores them righ
   const row = memberRow(page, "approver@example.com");
   await expect(row.getByTestId("open-tokens")).toHaveText("1");
   await page.getByRole("button", { name: "Remove approver@example.com" }).click();
-  await page.getByRole("dialog", { name: "Remove this member?" }).getByRole("button", { name: "Remove member" }).click();
+  await page.getByRole("dialog", { name: "Remove Approver?" }).getByRole("button", { name: "Remove member" }).click();
   // Undo sits where Remove was, for about a second.
   await row.getByRole("button", { name: "Undo" }).click();
   await expect(row).toHaveAttribute("data-status", "active");
@@ -79,7 +80,7 @@ test("members: you cannot remove yourself or the last owner, and the control say
   await expect(page.getByRole("tooltip").filter({ hasText: "can't remove yourself" })).toBeVisible();
   await expect(page.getByRole("tooltip").filter({ hasText: "only owner" })).toBeVisible();
   await remove.click({ force: true });
-  await expect(page.getByRole("dialog", { name: "Remove this member?" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Remove Admin?" })).toBeHidden();
 
   // With a second owner you are no longer the last one, but still cannot remove yourself.
   await page.getByLabel("Role for approver@example.com").selectOption("owner");
@@ -151,7 +152,7 @@ test("my account: from the user menu; a personal token's secret is shown once", 
   await expect(details).toContainText("Viewer");
   await expect(details).toContainText("Password");
 
-  await page.getByLabel("Name").fill("laptop script");
+  await page.getByRole("form", { name: "Create a token" }).getByLabel("Name").fill("laptop script");
   // 90 days unless chosen otherwise.
   const lifetime = page.getByRole("group", { name: "Expires after" });
   await expect(lifetime.getByRole("button", { name: "90 days" })).toHaveAttribute("aria-pressed", "true");
@@ -187,7 +188,7 @@ test("my account: a token's expiry is chosen at creation; an expired one shows a
 
   const lifetime = page.getByRole("group", { name: "Expires after" });
   await expect(lifetime.getByRole("button")).toHaveText(["30 days", "90 days", "1 year", "Never"]);
-  await page.getByLabel("Name").fill("yearly export");
+  await page.getByRole("form", { name: "Create a token" }).getByLabel("Name").fill("yearly export");
   await lifetime.getByRole("button", { name: "1 year" }).click();
   await expect(lifetime.getByRole("button", { name: "1 year" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Create token" }).click();
@@ -196,7 +197,7 @@ test("my account: a token's expiry is chosen at creation; an expired one shows a
   await expect(row.getByTestId("token-expiry")).toHaveText(`Expires ${inDays(365)}`);
   await expect(row).toContainText("Active");
 
-  await page.getByLabel("Name").fill("forever");
+  await page.getByRole("form", { name: "Create a token" }).getByLabel("Name").fill("forever");
   await lifetime.getByRole("button", { name: "Never" }).click();
   await page.getByRole("button", { name: "Create token" }).click();
   await expect(page.getByTestId("new-token-expiry")).toHaveText("Never expires");

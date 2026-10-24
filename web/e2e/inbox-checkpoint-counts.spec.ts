@@ -42,9 +42,10 @@ test("the checkpoint row counts what needs me, with the time left and Review ite
     "Budget caps",
     "Usage export",
   ]);
+  // D1: Review items opens the Roadmap items review screen.
   await row.getByRole("link", { name: "Review items" }).click();
-  await expect(page).toHaveURL(new RegExp(`/runs/${RUN}#decide$`));
-  await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/runs/${RUN}/review/${CP}$`));
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
 });
 
 // Card safe-fix: protects = a one-click fix stages (decides nothing), reads done with Undo, the
@@ -104,10 +105,11 @@ test("a child with no safe fix shows only Open; +7 more links to the review", as
   await expect(usage.getByRole("button")).toHaveCount(0);
   const more = child(page, "more").getByTestId("child-more");
   await expect(more).toHaveText("+7 more · 0 handled");
-  await expect(more).toHaveAttribute("href", `/runs/${RUN}#decide`);
+  // D1: the review screen, with the item selected on arrival (?item=).
+  await expect(more).toHaveAttribute("href", `/runs/${RUN}/review/${CP}`);
   await usage.getByRole("link", { name: "Open Usage export" }).click();
-  await expect(page).toHaveURL(new RegExp(`/runs/${RUN}\\?item=usage-export#decide$`));
-  await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/runs/${RUN}/review/${CP}\\?item=usage-export$`));
+  await expect(page.getByTestId("roadmap-item-inspector")).toContainText("Usage export");
 });
 
 // Card suggestion: protects = a commenter's suggestion on a shown item reads "Suggested: …" with

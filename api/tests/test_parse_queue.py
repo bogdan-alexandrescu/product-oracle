@@ -224,6 +224,7 @@ async def test_the_budget_is_in_force_inside_the_parse():
     assert await safe_yaml.run_parse_within(parse_budget.active, seconds=1) is True
 
 
+@pytest.mark.timing
 async def test_a_parse_past_its_budget_is_refused_near_the_cap_and_frees_the_slot():
     from oracle import parse_budget
 

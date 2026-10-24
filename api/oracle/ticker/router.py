@@ -51,10 +51,12 @@ from oracle.config import get_settings
 from oracle.connections import service as connections_service
 from oracle.db import get_engine
 from oracle.discussions import replies as discussion_replies
+from oracle.discussions import summary as discussion_summary
 from oracle.discussions.replies import RepliesTick
 from oracle.interviews import service as interviews_service
 from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
+from oracle.metrics import pull as metrics_pull
 from oracle.models import Tenant
 from oracle.requests import triage as request_triage
 from oracle.rituals import service as rituals
@@ -219,6 +221,15 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         log.exception("run ticker: rituals failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
+        # Metrics (H5): each PostHog metric's last complete week, read once (deterministic,
+        # no model call); a failed pull is retried on the next hourly attempt. It commits its
+        # claim before calling PostHog, then each metric's result.
+        async with tenant_session(tenant_id) as db:
+            await metrics_pull.pull_due(db)
+    except Exception:
+        log.exception("run ticker: metric pulls failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
         # Strategy drift (H4): a daily deterministic check, no model call.
         async with tenant_session(tenant_id) as db:
             if await strategy_drift.check_due(db):
@@ -323,6 +334,15 @@ async def _run_jobs(
             continue
         for name in ("queued", "sent", "retried", "failed"):
             setattr(out.slack_outbox, name, getattr(out.slack_outbox, name) + getattr(sent, name))
+        # G3: the summary drafts queued by a close or a first staged change.
+        if (
+            HARD_LIMIT_SECONDS - (time.monotonic() - started)
+            > 2 * discussion_replies.reply_seconds()
+        ):
+            try:
+                await discussion_summary.run_queued(tenant_id, limit=2)
+            except Exception:
+                log.exception("run ticker: discussion summaries failed for company %s", tenant_id)
     limit = llm_jobs.get_worker_settings().max_per_tick
     if limit <= 0:
         return

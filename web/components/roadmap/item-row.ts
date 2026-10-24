@@ -13,7 +13,15 @@ export type ItemRow = {
   title: string;
   outcome: string | null;
   horizon: Horizon;
-  milestone: { name: string | null; date: string | null; refused_date: string | null; refused: string | null } | null;
+  milestone: {
+    name: string | null;
+    date: string | null;
+    refused_date: string | null;
+    refused: string | null;
+    /** D1: the date is not verified (no "verified" chip); `date_removed`: a staged edit removes it (struck). */
+    verified?: boolean;
+    date_removed?: boolean;
+  } | null;
   /** "high" / "medium" / "low", or a 0-1 number. */
   confidence: string | number | null;
   depends_on: string[];
@@ -23,6 +31,9 @@ export type ItemRow = {
   engineering?: Schemas["TrackerRecordRef"][];
   /** E3: an item the compared version had and this one dropped (a muted, struck row). */
   ghost?: boolean;
+  /** D1: a handled row's text is muted; a dropped item's title is struck through. */
+  muted?: boolean;
+  struck?: boolean;
 };
 
 export const HORIZONS: { value: Horizon; label: string }[] = [

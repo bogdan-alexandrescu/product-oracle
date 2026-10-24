@@ -87,6 +87,7 @@ PROBES = {
 }
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("name", sorted(PROBES))
 def test_each_probe_is_a_problem_in_under_100_ms(name):
     text = PROBES[name]
@@ -143,6 +144,7 @@ def test_an_over_long_value_is_refused(monkeypatch):
     assert [p["code"] for p in out.problems] == ["too_large"]
 
 
+@pytest.mark.timing
 def test_the_parse_runs_in_a_worker_thread_with_a_time_cap(monkeypatch):
     def slow(text, **kw):
         time.sleep(1)

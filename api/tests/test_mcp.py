@@ -231,6 +231,7 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
     assert {
         "list_access_requests", "approve_access_request", "decline_access_request",
         "reopen_access_request", "get_sign_in_rules", "resend_invite", "update_my_account",
+        "get_member", "get_member_impact", "list_member_approvals", "hand_over",
     } <= tools  # fmt: skip
 
 

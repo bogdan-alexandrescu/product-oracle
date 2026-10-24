@@ -20,12 +20,23 @@ export function LoginForm() {
   // Only follow same-site paths (nothing is rendered from it, so the server pass may say /home).
   const target = typeof window === "undefined" ? "/home" : safeNextPath(next, window.location.origin);
 
-  // Already signed in (e.g. by Google IAP in front of the app): skip the form.
+  // Already signed in (e.g. by Google IAP in front of the app): skip the form. A5: a Google
+  // sign-in that is not (yet) a member goes to /access, which says where it stands.
   useEffect(() => {
     let live = true;
     api
-      .GET("/v1/me")
-      .then(({ response }) => live && response.ok && router.replace(target))
+      .GET("/v1/auth/access")
+      .then(({ data }) => {
+        if (!live) return false;
+        if (data && data.state !== "member" && data.state !== "no_google_sign_in") {
+          router.replace("/access");
+          return false;
+        }
+        return true;
+      })
+      .catch(() => true)
+      .then((ask) => (ask ? api.GET("/v1/me") : null))
+      .then((res) => live && res?.response.ok && router.replace(target))
       .catch(() => undefined);
     return () => {
       live = false;

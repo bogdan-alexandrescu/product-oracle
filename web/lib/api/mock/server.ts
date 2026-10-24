@@ -9,11 +9,13 @@ import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
-import { accountRoute, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
+import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
+import type { HandOver } from "@/lib/api/members-types";
+import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
@@ -29,6 +31,7 @@ import {
   seedDiscussionInbox,
   seedDiscussionReplies,
   seedDiscussions,
+  seedDiscussionRecord,
   seedRunDiscussions,
   type DiscussionRow,
   type DiscussionsContext,
@@ -73,7 +76,8 @@ import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./so
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
-import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
 import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -135,6 +139,10 @@ export interface Db {
   invites: InviteRow[];
   /** A5: access requests (Settings › Members). */
   access_requests?: Schemas["AccessRequestOut"][];
+  /** A5: the note the pending person sent with their request (the access-pending scenario). */
+  access_note?: string | null;
+  /** A5: what each member holds (responsibilities, approvals), seeded in ./members.ts. */
+  holdings?: MembersDb["holdings"];
   /** Invites an owner resent (the "mail-fails" scenario sends those). */
   invites_resent?: string[];
   documents: DocumentRow[];
@@ -183,6 +191,8 @@ export interface Db {
   decisions?: DecisionsDb;
   /** Rituals, their occurrences and the summaries mode (./rituals.ts, H2); seeded on first use. */
   rituals?: RitualsDb;
+  /** H5: metrics, their weekly values and variances, and the PostHog connection (./metrics.ts); seeded in the "metrics" scenario only. */
+  metrics?: MetricsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -1150,6 +1160,8 @@ function seed(): Db {
   attributeCommenterProposal(db.baseline, db.members.find((m) => m.email === "commenter@example.com")!.id);
   // B5: activation's owner is the approver.
   attributeGoalOwner(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
+  // The colleague who locked the seeded items is the approver (#505: the lock names a person).
+  attributeLocks(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
   db.members.push({
     ...REMOVED_MEMBER,
@@ -1485,7 +1497,41 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     uuid,
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
+    openVariances: (id) => openVariances(ensureMetrics(db, me), id),
   };
+}
+
+/** What the metrics mock reads: the signed-in member, the members and the goals. */
+function metricsContext(db: Db, me: MemberRow): MetricsContext {
+  return {
+    me: { id: me.id, email: me.email, name: me.name, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, name: m.name, role: m.role, status: m.status })),
+    uuid,
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    goals: () =>
+      db.baseline.entities
+        .filter((e) => e.type === "goal")
+        .map((e) => ({ id: e.id, title: e.title, unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null, confirmed: e.status === "confirmed" })),
+  };
+}
+
+/** H5: the metrics; the "metrics" scenario seeds them, every other company has none. */
+function ensureMetrics(db: Db, me: MemberRow): MetricsDb {
+  db.metrics ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "metrics" ? seedMetrics(metricsContext(db, me)) : emptyMetrics();
+  return db.metrics;
+}
+
+/** The rituals; the "metrics" scenario adds the Weekly metrics review that replaced the goals check-in. */
+function ensureRituals(db: Db, me: MemberRow): RitualsDb {
+  if (db.rituals) return db.rituals;
+  const ctx = ritualsContext(db, me);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  db.rituals = seedRituals(ctx, scenario === "rituals");
+  if (scenario === "metrics") {
+    const metrics = ensureMetrics(db, me);
+    addMetricsReview(ctx, db.rituals, (id, asOf) => reviewBlocks(metricsContext(db, me), metrics, id, asOf));
+  }
+  return db.rituals;
 }
 
 /** The next version: the base with some sections replaced, and the resolutions recorded. */
@@ -1562,6 +1608,27 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     reviewDecider: (c) => runReviewDecider(db, c),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
+    ask: (q) => {
+      const at = now();
+      const id = uuid();
+      ensureV2(db).questions.push({
+        id, gap_id: null, intake_id: null, document_id: null, checkpoint_id: q.checkpoint_id, item_ref: q.item_ref, entity_id: null,
+        module_key: null, category: "general", prompt: q.prompt, rationale: null, priority: 100, batch: null,
+        asked_to: q.asked_to, asked_by: member?.id ?? db.user_id, section_key: null, status: "asked", created_at: at, updated_at: at,
+      });
+      return id;
+    },
+    asked: (id) => {
+      const v2 = ensureV2(db);
+      const q = v2.questions.find((x) => x.id === id);
+      if (!q) return null;
+      const a = v2.answers.filter((x) => x.question_id === id && x.kind === "answer").at(-1);
+      return { status: q.status, answer: a?.body ?? null };
+    },
+    withdraw: (id) => {
+      const q = ensureV2(db).questions.find((x) => x.id === id);
+      if (q && (q.status === "asked" || q.status === "delegated")) Object.assign(q, { status: "withdrawn", updated_at: now() });
+    },
     reviewChange: () => {
       const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
       localStorage.removeItem(MOCK_REVIEW_CHANGE_KEY);
@@ -1784,7 +1851,9 @@ function load(): Db {
           ? seedDiscussionsScenario(db, seedSlackBridge)
           : scenario === "run-discussions"
             ? seedRunDiscussionsScenario(db)
-            : emptyDiscussions();
+            : scenario === "discussion-record"
+              ? seedDiscussionRecordScenario(db)
+              : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
@@ -1806,6 +1875,7 @@ function load(): Db {
     db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
+  if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
   if (scenario === VERSION_WARNINGS_SCENARIO) {
@@ -1876,6 +1946,27 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
     status: "asked", created_at: at, updated_at: at, discussion_id: d.id, discussion_title: d.title,
   });
   return discussions;
+}
+
+/** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
+function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
+  const prd = findDocument(db, "checkout-redesign")!;
+  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
+}
+
+/** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
+function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): RoadmapContext {
+  return {
+    userId: me.id,
+    role: me.role,
+    engineeringLead: engineeringLeads(db).includes(me.id),
+    leadNamed: engineeringLeads(db).length > 0,
+    userName: me.email,
+    documents: db.documents,
+    versions: db.versions,
+    approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
+    drafts: () => draftDb(db).rows,
+  };
 }
 
 /** G5 "run-discussions": an open and a private discussion on the feature-set run's waiting checkpoint. */
@@ -2366,6 +2457,7 @@ const notFound = (what: string) => json(404, { detail: `${what} not found` });
 
 const ROLE_ORDER: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
+const APPROVER_INVITES = "Approvers invite viewers and commenters. Ask an owner to invite an approver.";
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
@@ -2447,6 +2539,19 @@ const iapRefusal = (email: string) =>
     ? `oracle-api-be: Google returned 400 (bad request): User ${email} does not exist.`
     : "oracle-api-be: Google returned 403 (permission denied)";
 
+/** A5: the scenarios that sign in with Google as someone who is not a member (GET /v1/auth/access). */
+const ACCESS_SCENARIOS: Record<string, Schemas["AccessStateOut"]["state"]> = {
+  "access-pending": "pending",
+  "access-declined": "declined",
+  "access-invite-only": "invite_only",
+  "access-expired": "invite_expired",
+  "access-outside": "outside_domains",
+};
+const ACCESS_EMAIL = "new.person@example.com";
+
+/** An open invite past its expiry (A5): still a row, with Resend. */
+const expired = (i: InviteRow) => i.status === "open" && !!i.expires_at && Date.parse(i.expires_at) < Date.now();
+
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
   const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
@@ -2458,28 +2563,43 @@ function settleInviteEmails(db: Db) {
   }
 }
 
-/** Members, invites: owners only, as in the API. */
+/**
+ * Members: owners only, as in the API. Invites and access requests (A5): approvers too, with
+ * their invite_roles (viewer and commenter), and only the invites they sent.
+ */
 async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
-  if (!atLeast(me.role, "owner")) return forbidden("owner");
   const m = req.method;
+  const owner = atLeast(me.role, "owner");
+  if (!owner && (p[1] === "members" || !atLeast(me.role, "approver"))) return forbidden(p[1] === "members" ? "owner" : "approver");
+  const inviteRoles = meOut(db, me).invite_roles;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const account = (db.account ??= seedAccount(db.members, uuid));
   const out = (x: MemberRow): MemberRow => ({ ...x, open_tokens: openTokens(account, x.id) });
+  const detailCtx: MembersContext = { db, me, uuid, now, openTokens: (id) => openTokens(account, id), credentials: (id) => liveCredentials(account, id) };
   if (p[1] === "members") {
     if (!p[2] && m === "GET") return json(200, db.members.map(out));
+    // A5: a member's detail, the preview of a change, and hand-over (./members.ts).
+    const detail = await membersDetailRoute(detailCtx, req, p);
+    if (detail) return detail;
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
     // A disabled owner is not another owner.
     const otherOwner = db.members.some((x) => x.id !== target.id && x.role === "owner" && x.status !== "disabled");
     if (m === "PATCH") {
       // A role, the engineering lead flag (A3), or both: role first.
-      const { role, engineering_lead: lead } = await body<Schemas["MemberPatch"]>();
-      if (role == null && lead == null) return json(422, { detail: "Send role, engineering_lead or both" });
+      const { role, engineering_lead: lead, name, hand_over } = await body<Schemas["MemberPatch"] & { hand_over?: HandOver[] }>();
+      if (role == null && lead == null && name === undefined) return json(422, { detail: "Send role, engineering_lead, name or more" });
+      if (name != null && name.trim().length > 80) return json(422, { detail: "A name is at most 80 characters" });
       const nextRole = role ?? target.role;
       if (role != null && target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
         return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
       if (lead && nextRole === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      // A5: hand-over first, then the role change; a refused move changes nothing.
+      const refused = handOver(detailCtx, target.id, hand_over);
+      if (refused) return refused;
+      if (name !== undefined) target.name = name?.trim() || null;
+      if (role != null && role !== target.role) applied(detailCtx, { ...target, role }, "role");
       target.role = nextRole;
       // A viewer never carries the flag: a demotion to viewer clears it.
       if (nextRole === "viewer") target.engineering_lead = false;
@@ -2495,6 +2615,11 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         if (target.role === "owner" && !otherOwner) {
           return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
+        // A5: the hand-over applies first, then the disable; a refused move removes no one.
+        const input = m === "POST" ? await body<{ hand_over?: HandOver[] } | null>() : null;
+        const refused = handOver(detailCtx, target.id, input?.hand_over);
+        if (refused) return refused;
+        applied(detailCtx, target, "remove");
         Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
         // Their Google IAP access is taken away; in "iap-revoke-fails" Google refuses, and
         // the revoke is owed (the tick retries it).
@@ -2525,6 +2650,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
     if (p[3] === "approve" && m === "POST") {
       if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
       const { role, name } = await body<Schemas["AccessApprove"]>();
+      if (!inviteRoles.includes(role)) return json(403, { detail: APPROVER_INVITES });
       const invite: InviteRow = {
         id: uuid(),
         email: row.email,
@@ -2573,22 +2699,30 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const status = new URL(req.url).searchParams.get("status") ?? "open";
       return json(
         200,
-        db.invites.filter((i) => status === "all" || i.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        db.invites
+          // A5: an open invite past its expiry reads expired; ?status=open lists both (each needs an action).
+          .map((i) => (expired(i) ? { ...i, status: "expired" as const } : i))
+          .filter((i) => (status === "all" || i.status === status || (status === "open" && i.status === "expired")) && (owner || i.invited_by === me.id))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
     }
     if (!p[2] && m === "POST") {
       const input = await body<Schemas["InviteCreate"]>();
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
+      if (!inviteRoles.includes(input.role)) return json(403, { detail: APPROVER_INVITES });
       if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
       if ((input.message?.length ?? 0) > 500) return json(422, { detail: "The message is longer than 500 characters" });
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
-        return json(422, { detail: `Only addresses at ${SIGN_IN_DOMAINS.join(" or ")} can sign in to Oracle` });
+        // A5 (3.4): the API's outside_company_domains refusal.
+        return json(422, {
+          detail: `${email} is outside the company's email domains (${SIGN_IN_DOMAINS.join(", ")}), so Google sign-in can't let them join. Add the domain under Sign-in first.`,
+        });
       }
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
-      if (db.invites.some((i) => i.email === email && i.status === "open")) {
-        return json(409, { detail: `${email} already has an open invite; revoke it first` });
-      }
+      const before = db.invites.find((i) => i.email === email && i.status === "open");
+      if (before && expired(before)) return json(409, { detail: `${email} has an expired invite; resend it` });
+      if (before) return json(409, { detail: `${email} already has an open invite; revoke it first` });
       const invite: InviteRow = {
         id: uuid(),
         email,
@@ -2613,8 +2747,20 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       db.invites.push(invite);
       return json(201, invite);
     }
-    const invite = db.invites.find((i) => i.id === p[2]);
+    // Approvers act on their own invites only; another's is not found.
+    const invite = db.invites.find((i) => i.id === p[2] && (owner || i.invited_by === me.id));
     if (!invite) return notFound("Invite");
+    if (!owner && m === "POST" && (p[3] === "access" || p[3] === "email")) return forbidden("owner");
+    // A5: Resend gives an open or expired invite 14 more days.
+    if (m === "POST" && p[3] === "resend") {
+      if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
+      Object.assign(invite, {
+        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        resent_at: now(),
+        resend_count: (invite.resend_count ?? 0) + 1,
+      });
+      return json(200, invite);
+    }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
       if (p[3] === "access") {
@@ -2971,6 +3117,29 @@ async function route(db: Db, req: Request): Promise<Response> {
     const out = await routePublicInterviews(ensureInterviews(db), interviewsContext(db, db.user_id, "viewer"), req, p);
     if (out) return out;
   }
+  // A5: where a Google sign-in without membership stands (the access-* scenarios); /v1/me is then 401.
+  const access = ACCESS_SCENARIOS[localStorage.getItem(MOCK_SCENARIO_KEY) ?? ""];
+  if (p[1] === "auth" && p[2] === "access") {
+    const signedIn = db.members.find((x) => x.email === sessionOf(db) && x.status !== "disabled");
+    const state = access ?? (signedIn ? "member" : "no_google_sign_in");
+    const out: Schemas["AccessStateOut"] = {
+      state,
+      email: access ? ACCESS_EMAIL : (signedIn?.email ?? null),
+      company: "Acme",
+      requested_at: state === "pending" ? "2026-10-21T16:05:00Z" : null,
+      note: (db.access_note ??= null),
+      invite_expired_at: state === "invite_expired" ? "2026-10-30T12:00:00Z" : null,
+    };
+    if (p[3] === "note" && m === "POST") {
+      if (state !== "pending") return json(409, { detail: "There is no request waiting for a note" });
+      const { note } = await body<Schemas["AccessNote"]>();
+      if ((note ?? "").length > 500) return json(422, { detail: "A note is at most 500 characters" });
+      db.access_note = out.note = note?.trim() || null;
+      return json(200, out);
+    }
+    if (!p[3] && m === "GET") return json(200, out);
+  }
+  if (access) return json(401, { detail: "Not authenticated" });
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
@@ -3048,7 +3217,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
-  if (p[1] === "discussions") {
+  if (p[1] === "discussions" || p[1] === "discussion-changes") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const discussionsCtx: DiscussionsContext = {
       db: (db.discussions ??= emptyDiscussions()),
@@ -3074,11 +3243,37 @@ async function route(db: Db, req: Request): Promise<Response> {
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
       slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
+      // G3 Record: F3's date rights and its schedule-basis route, as the API's record() uses them.
+      dateRights: () => {
+        const leads = engineeringLeads(db);
+        if (me.role === "owner" || (leads.includes(me.id) && atLeast(me.role, "commenter"))) return "verify";
+        return atLeast(me.role, "approver") ? (leads.length ? "propose" : "verify") : null;
+      },
+      recordBasis: async (b) => {
+        const ctx = roadmapContext(db, me);
+        db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+        const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
+        return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
+      },
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
   }
   if (p[1] === "members" || p[1] === "invites" || p[1] === "access-requests") return membersRoute(db, req, p, me);
+  // A5: who becomes a member on a Google sign-in (Settings › Members › Sign-in), owners only.
+  if (p[1] === "sign-in-rules" && !p[2] && m === "GET") {
+    if (!atLeast(me.role, "owner")) return forbidden("owner");
+    const stored = mockSettingValue("company_email_domains");
+    const set = (Array.isArray(stored) ? stored : []).map(String).filter((d) => !SIGN_IN_DOMAINS.includes(d));
+    const rules: Schemas["SignInRulesOut"] = {
+      google_sign_in: true,
+      new_sign_ins_off: false,
+      domains: [...SIGN_IN_DOMAINS.map((domain) => ({ domain, from: "deployment" as const })), ...set.map((domain) => ({ domain, from: "settings" as const }))],
+      without_invite: String(mockSettingValue("sign_in_without_invite") ?? "request") as Schemas["SignInRulesOut"]["without_invite"],
+      default_role: String(mockSettingValue("iap_default_role") ?? "commenter") as Role,
+    };
+    return json(200, rules);
+  }
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
@@ -3169,6 +3364,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
   if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
+  // H5: metrics, their variances and the analytics connection check roles themselves (./metrics.ts).
+  const metricsOut = await routeMetrics(metricsContext(db, me), ensureMetrics(db, me), req, p, q);
+  if (metricsOut) return metricsOut;
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
@@ -3399,17 +3597,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (v2) return v2;
 
   // Roadmap alignment and product tracks (CR-11).
-  const roadmapCtx: RoadmapContext = {
-    userId: me.id,
-    role: me.role,
-    engineeringLead: engineeringLeads(db).includes(me.id),
-    leadNamed: engineeringLeads(db).length > 0,
-    userName: me.email,
-    documents: db.documents,
-    versions: db.versions,
-    approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
-    drafts: () => draftDb(db).rows,
-  };
+  const roadmapCtx = roadmapContext(db, me);
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
   const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
   if (draftRes) return draftRes;
@@ -3462,8 +3650,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
-  db.rituals ??= seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
-  const ritual = await routeRituals(ritualsCtx, db.rituals, req, p, q);
+  const ritual = await routeRituals(ritualsCtx, ensureRituals(db, me), req, p, q);
   if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
@@ -3483,7 +3670,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
-    const ritualRows = ritualInbox(ritualsCtx, db.rituals);
+    const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;
     inbox.rituals = ritualRows;
     inbox.total += ritualCounted;
@@ -3492,6 +3679,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;
+    // Metric rows (H5): Explain a variance, Find out and Metric not read for a day; all count.
+    const metricRows = metricInbox(metricsContext(db, me), ensureMetrics(db, me));
+    const metricCounted = metricRows.filter((r) => r.counts).length;
+    inbox.metrics = metricRows;
+    inbox.total += metricCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

@@ -24,6 +24,10 @@ export function ConfirmDialog({
   onConfirm,
   onClose,
   testId,
+  children,
+  note,
+  waiting,
+  confirmVariant = "danger",
 }: {
   open: boolean;
   title: string;
@@ -37,6 +41,13 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
   testId?: string;
+  /** More under the lines (A5: the preview's groups and the hand-over rows). */
+  children?: ReactNode;
+  /** A last line above the buttons (A5: what stays after a removal). */
+  note?: ReactNode;
+  /** While what the action does is still being read: the confirm button is disabled with this label. */
+  waiting?: string | null;
+  confirmVariant?: "danger" | "solid";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -57,39 +68,46 @@ export function ConfirmDialog({
         e.preventDefault();
         if (!pending) onClose();
       }}
-      className="m-auto w-[min(460px,calc(100vw-24px))] rounded-panel border border-line bg-surface p-0 text-text shadow-tip backdrop:bg-[rgba(6,16,30,0.55)]"
+      className="m-auto max-h-[calc(100dvh-24px)] w-[min(460px,calc(100vw-24px))] overflow-hidden rounded-panel border border-line bg-surface p-0 text-text shadow-tip backdrop:bg-[rgba(6,16,30,0.55)]"
     >
       {open && (
-        <div className="flex flex-col gap-4 p-5">
-          <div className="flex items-start gap-3">
-            <span aria-hidden className="grid size-10 flex-none place-items-center rounded-full bg-crit-bg text-crit">
-              <Icon name="alert" size={20} />
-            </span>
-            <div className="min-w-0">
-              <h2 id={titleId} className="font-display text-lg leading-6 font-bold tracking-heading">
-                {title}
-              </h2>
-              {subject && <p className="mt-0.5 truncate text-[15px] font-medium text-text2">{subject}</p>}
+        // The content scrolls inside; the buttons stay at the bottom (a phone, a long preview).
+        <div className="flex max-h-[calc(100dvh-26px)] flex-col">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5 pb-0">
+            <div className="flex items-start gap-3">
+              <span aria-hidden className="grid size-10 flex-none place-items-center rounded-full bg-crit-bg text-crit">
+                <Icon name="alert" size={20} />
+              </span>
+              <div className="min-w-0">
+                <h2 id={titleId} className="font-display text-lg leading-6 font-bold tracking-heading">
+                  {title}
+                </h2>
+                {subject && <p className="mt-0.5 truncate text-[15px] font-medium text-text2">{subject}</p>}
+              </div>
             </div>
+            {consequences.length > 0 && (
+              <ul aria-label="What happens" className="flex flex-col gap-2 text-[15px] leading-[22px]">
+                {consequences.map((c, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span aria-hidden className="mt-0.5 flex-none text-text2">
+                      <Icon name={c.icon ?? "check"} size={16} />
+                    </span>
+                    <span className="min-w-0">{c.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {children}
+            {note && <p className="text-[13px] leading-[18px] text-text2">{note}</p>}
+            {error && <Notice tone="error">{error}</Notice>}
           </div>
-          <ul aria-label="What happens" className="flex flex-col gap-2 text-[15px] leading-[22px]">
-            {consequences.map((c, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span aria-hidden className="mt-0.5 flex-none text-text2">
-                  <Icon name={c.icon ?? "check"} size={16} />
-                </span>
-                <span className="min-w-0">{c.text}</span>
-              </li>
-            ))}
-          </ul>
-          {error && <Notice tone="error">{error}</Notice>}
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-none flex-wrap justify-end gap-2 p-5 pt-4">
             {/* The safe choice has focus, so Enter never confirms by accident. */}
             <Button variant="secondary" autoFocus disabled={pending} onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="danger" disabled={pending} onClick={onConfirm} data-testid="confirm-action">
-              {pending ? (pendingLabel ?? `${confirmLabel}…`) : confirmLabel}
+            <Button variant={confirmVariant} disabled={pending || !!waiting} onClick={onConfirm} data-testid="confirm-action">
+              {pending ? (pendingLabel ?? `${confirmLabel}…`) : (waiting ?? confirmLabel)}
             </Button>
           </div>
         </div>

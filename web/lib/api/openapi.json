@@ -3875,7 +3875,7 @@
           "discussions"
         ],
         "summary": "List Discussion Changes",
-        "description": "The typed changes the discussion ended in, read-only here (proposing, suggesting\nand staging arrive with G3 and G4).",
+        "description": "The typed changes the discussion ended in, each with the action the caller may take\n(``action``: the kind's verb, ``allowed`` and ``why_not``) and what else they may do\n(``can``). Viewers read them and get no action.",
         "operationId": "list_discussion_changes",
         "security": [
           {
@@ -3954,6 +3954,804 @@
           }
         },
         "x-min-role": "viewer"
+      },
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Create Discussion Change",
+        "description": "Write a change by hand (commenters and up): a commenter's is ``suggested``, an\napprover's ``proposed``, ready to stage. Only the subject's available kinds; the\npayload is checked as Oracle's are.",
+        "operationId": "create_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
+      }
+    },
+    "/v1/discussions/{discussion_id}/change-kinds": {
+      "get": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "List Discussion Change Kinds",
+        "description": "The kinds \"Propose a change\" offers on this discussion's subject: only those\navailable now, each with its action verb and its payload's JSON schema.",
+        "operationId": "list_discussion_change_kinds",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChangeKindOut"
+                  },
+                  "title": "Response List Discussion Change Kinds"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/discussion-changes/{change_id}": {
+      "patch": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Update Discussion Change",
+        "description": "Edit before acting: saves ``edited_payload``. A commenter's edit makes it their\nsuggestion; an approver's keeps the status.",
+        "operationId": "update_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
+      }
+    },
+    "/v1/discussion-changes/{change_id}/suggest": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Suggest Discussion Change",
+        "description": "Suggest it for an approver to stage (commenters and up): \"Suggested by <name>\". At\na checkpoint it is also the item's suggested shared-draft action.",
+        "operationId": "suggest_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
+      }
+    },
+    "/v1/discussion-changes/{change_id}/withdraw": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Withdraw Discussion Change",
+        "description": "Withdraw your own suggestion: back to ``proposed`` when Oracle proposed it, else\n``dismissed``.",
+        "operationId": "withdraw_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
+      }
+    },
+    "/v1/discussion-changes/{change_id}/stage": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Stage Discussion Change",
+        "description": "Stage it (approvers and up): a shared-draft action at the checkpoint or a row for\nthe document's next draft (G4). When Oracle pushed back on it, ``override_reason`` is\nrequired; from a private discussion, ``reason`` (the reason everyone will see) is.",
+        "operationId": "stage_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeStageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/dismiss": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Dismiss Discussion Change",
+        "description": "Dismiss it (approvers and up), with an optional note.",
+        "operationId": "dismiss_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeDismissIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/propose": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Propose Discussion Change",
+        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion and links its page; approvers accept it in Baseline.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override.",
+        "operationId": "propose_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Oracle's pushback on a goal version (once), a stale lock_version, or already handled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMeasurePushback"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/resolve": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Resolve Discussion Change",
+        "description": "``conflict_pick`` (approvers and up): resolves the conflict with the picked claim.",
+        "operationId": "resolve_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/answer": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Answer With Discussion Change",
+        "description": "``answer`` (the person asked, or approvers and up): posts it as the question's\nanswer.",
+        "operationId": "answer_with_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/verify": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Record Discussion Change",
+        "description": "``basis_record`` (Record): records the schedule basis with the caller's date rights\n(F3, ``leads.date_rights``): verified for an engineering lead or an owner, and for an\napprover while no lead is named; ``proposed`` for the lead when an approver records it\nwhile a lead is named. Anyone else gets 403.",
+        "operationId": "record_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/discussions/{discussion_id}/summary": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Summarize Discussion",
+        "description": "Ask Oracle for a summary draft now (commenters and up who can write in it), at most\n1,200 characters: \"Decided:\", \"Open:\", \"Context:\". A summary the starter confirmed is\nreplaced only when the starter asks (``replace``); anyone else gets 409.",
+        "operationId": "summarize_discussion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryAsk"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This discussion is private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "The starter confirmed it"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/inbox/discussion-items/{item_id}": {
@@ -7428,6 +8226,53 @@
             "description": "Would demote the last owner"
           },
           "422": {
+            "description": "A hand-over target cannot hold it (hand_over_target)"
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Member",
+        "description": "One member: how they joined (``joined.via``: invite, access_request, domain,\nseeded or unknown), the responsibilities they hold (open items only) and the\napprovals and decisions a removal would lapse or void.",
+        "operationId": "get_member",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberDetailOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
@@ -7498,7 +8343,7 @@
           "members"
         ],
         "summary": "Disable Member",
-        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. Their Google IAP access is\ntaken away, and that of the invites revoked with them (audited). The member stays\nin the list (history keeps the name); an owner can restore them, and they sign in\nfresh. A no-op for a disabled member.",
+        "description": "Remove a member by disabling them: sign-in is refused on every path; their\nconnections are disconnected (revoked at the provider) and their sources recorded\nas revoked, so documents citing them cannot publish; their API tokens and OAuth\ngrants are revoked, their runs cancelled, the open invite for their email revoked;\ntheir approvals lapse for good; every session they signed is ended. The calls at\nthe providers and the runtime are made after the disable commits, outside the\nreview gate, and retried by the tick when they fail. Their Google IAP access is\ntaken away, and that of the invites revoked with them (audited). The member stays\nin the list (history keeps the name); an owner can restore them, and they sign in\nfresh. A no-op for a disabled member. With ``hand_over`` (A5), those\nresponsibilities move first, in the same transaction; a refused target is a 422\n(``hand_over_target``) and nothing is moved or removed.",
         "operationId": "disable_member",
         "security": [
           {
@@ -7520,6 +8365,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HandOverIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7602,6 +8464,226 @@
                 }
               }
             }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/members/{user_id}/impact": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Member Impact",
+        "description": "What removing the member (``change=remove``) or changing their role\n(``change=role&role=commenter``) would end, void and lapse, and the responsibilities\nthey hold (``holder_ok``: whether they may keep each after the change). Reads only:\nthe same selections the change applies, no locks, no writes. ``nothing`` is true\nwhen the change touches nothing (a promotion, their own role, a removed member).",
+        "operationId": "get_member_impact",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "change",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "remove",
+                "role"
+              ],
+              "type": "string",
+              "title": "Change"
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "viewer",
+                    "commenter",
+                    "approver",
+                    "owner"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/members/{user_id}/approvals": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Member Approvals",
+        "description": "The member's section verdicts and version approvals, given in person or through\ntheir API tokens and grants, oldest first; ``lapsed=true`` includes lapsed ones.",
+        "operationId": "list_member_approvals",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "lapsed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Lapsed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenApprovalOut"
+                  },
+                  "title": "Response List Member Approvals"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/members/{user_id}/hand-over": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Hand Over",
+        "description": "Move an active or removed member's responsibilities to other members (``to``)\nor clear them (``to`` null), all or none; kinds left out stay. Returns what they\nstill hold.",
+        "operationId": "hand_over",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOverIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandOverOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member"
+          },
+          "422": {
+            "description": "An unknown kind, or a target that cannot hold it"
           }
         },
         "x-min-role": "owner"
@@ -33924,6 +35006,101 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/company-integrations/analytics": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Get Analytics Integration",
+        "description": "The analytics connection (PostHog): host, project and state; never the key.",
+        "operationId": "get_analytics_integration",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      },
+      "put": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Put Analytics Integration",
+        "description": "Connect PostHog, or replace its host, project or key. The key is tested with one\ntrivial query first: a refused key is 422 with the provider's message (no key). An\nown host must be ``https`` and resolve to public addresses only.",
+        "operationId": "put_analytics_integration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyticsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The host or the key was refused"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      },
+      "delete": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "Delete Analytics Integration",
+        "description": "Disconnect PostHog: the key is deleted and PostHog metrics are paused (\"Analytics\ndisconnected\"); their values stay.",
+        "operationId": "delete_analytics_integration",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
     "/v1/company-integrations/{integration_id}": {
       "delete": {
         "tags": [
@@ -37589,6 +38766,916 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/metrics": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "List Metrics",
+        "description": "The company's weekly metrics: outputs, each followed by the inputs that drive it,\nwith last week's value, its change and the last 12 weeks.",
+        "operationId": "list_metrics",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetricOut"
+                  },
+                  "title": "Response List Metrics"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      },
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Create Metric",
+        "description": "Add a metric. A PostHog metric reads its last 12 complete weeks at once (409 when\nPostHog is not connected).",
+        "operationId": "create_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metrics/test": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Test Metric Query",
+        "description": "Run a PostHog query for the last 4 complete weeks; nothing is stored. The\nprovider's error, when it refuses, is in ``error``.",
+        "operationId": "test_metric_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricTestOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metrics/{metric_id}": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Get Metric",
+        "description": "A metric with up to 52 weekly values, its variances and its definition history.",
+        "operationId": "get_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      },
+      "patch": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Update Metric",
+        "description": "Edit a metric (``lock_version``). A query or unit change raises its definition\nversion: later values carry the new one.",
+        "operationId": "update_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metrics/{metric_id}/archive": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Archive Metric",
+        "description": "Archive a metric: it is no longer read or reviewed; its values stay.",
+        "operationId": "archive_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metrics/{metric_id}/restore": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Restore Metric",
+        "description": "Restore an archived metric.",
+        "operationId": "restore_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metrics/{metric_id}/pull": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Pull Metric",
+        "description": "Pull now: read the last complete week from PostHog again and replace its value\n(409 unless the metric's source is PostHog; 502 with the provider's message).",
+        "operationId": "pull_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "502": {
+            "description": "PostHog refused or failed the query"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metrics/{metric_id}/values/{week_start}": {
+      "put": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Record Metric Value",
+        "description": "Record a week's value on a metric typed by hand or written by API (an approver or\nthe metric's owner). 409 for a PostHog metric; 422 for a week_start that is not a\nMonday or a week that has not ended.",
+        "operationId": "record_metric_value",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Week Start"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValueIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricValueOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      },
+      "delete": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Delete Metric Value",
+        "description": "Delete a week's value typed by hand or written by API.",
+        "operationId": "delete_metric_value",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metric_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Metric Id"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Week Start"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/metric-variances": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "List Metric Variances",
+        "description": "The variances, latest week first: each with its possible causes, its explanation\nstate and Oracle's draft if any.",
+        "operationId": "list_metric_variances",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "explained",
+                    "unknown",
+                    "noise"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "metric_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VarianceOut"
+                  },
+                  "title": "Response List Metric Variances"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/metric-variances/{variance_id}/explain": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Explain Metric Variance",
+        "description": "Explain a variance (10 to 1,000 characters): the metric's owner or an approver.",
+        "operationId": "explain_metric_variance",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Variance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VarianceOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/metric-variances/{variance_id}/unknown": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Mark Metric Variance Unknown",
+        "description": "Don't know yet, with a day to find out by (1 to 28 days ahead): the metric's owner\nor an approver.",
+        "operationId": "mark_metric_variance_unknown",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Variance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnknownIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VarianceOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/metric-variances/{variance_id}/noise": {
+      "post": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Mark Metric Variance Noise",
+        "description": "Mark a variance as noise, with a reason (approvers).",
+        "operationId": "mark_metric_variance_noise",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Variance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoiseIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VarianceOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
@@ -39189,6 +41276,133 @@
           "markdown"
         ],
         "title": "AlignmentReportOut"
+      },
+      "AnalyticsIn": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "posthog",
+            "title": "Provider"
+          },
+          "host": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 2,
+            "title": "Host"
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[0-9A-Za-z_-]+$",
+            "title": "Project Id"
+          },
+          "api_key": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 8,
+            "title": "Api Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "host",
+          "project_id",
+          "api_key"
+        ],
+        "title": "AnalyticsIn"
+      },
+      "AnalyticsOut": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "posthog",
+            "title": "Provider"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "error",
+              "disconnected"
+            ],
+            "title": "Status"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "connected_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected By Name"
+          },
+          "connected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          },
+          "metrics": {
+            "type": "integer",
+            "title": "Metrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "host",
+          "project_id",
+          "status",
+          "last_error",
+          "connected_by_name",
+          "connected_at",
+          "metrics"
+        ],
+        "title": "AnalyticsOut",
+        "description": "The connection, never its key."
       },
       "AnnotationOut": {
         "properties": {
@@ -40888,6 +43102,24 @@
           "stays_with_people"
         ],
         "title": "AutonomyOut"
+      },
+      "Band": {
+        "properties": {
+          "low": {
+            "type": "number",
+            "title": "Low"
+          },
+          "high": {
+            "type": "number",
+            "title": "High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "low",
+          "high"
+        ],
+        "title": "Band"
       },
       "BaselineSegmentUsd": {
         "properties": {
@@ -44531,6 +46763,182 @@
         ],
         "title": "CatalogModuleOut"
       },
+      "Change": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "variance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "better",
+                  "worse"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "pct",
+          "variance"
+        ],
+        "title": "Change"
+      },
+      "ChangeActIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ChangeActIn"
+      },
+      "ChangeAction": {
+        "properties": {
+          "verb": {
+            "type": "string",
+            "enum": [
+              "Stage",
+              "Propose",
+              "Resolve",
+              "Use as answer",
+              "Ask",
+              "Record",
+              "Apply"
+            ],
+            "title": "Verb"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          }
+        },
+        "type": "object",
+        "required": [
+          "verb",
+          "allowed"
+        ],
+        "title": "ChangeAction",
+        "description": "The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy."
+      },
+      "ChangeCan": {
+        "properties": {
+          "suggest": {
+            "type": "boolean",
+            "title": "Suggest",
+            "default": false
+          },
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "dismiss": {
+            "type": "boolean",
+            "title": "Dismiss",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ChangeCan",
+        "description": "What else the caller may do with the change."
+      },
+      "ChangeDismissIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ChangeDismissIn"
+      },
+      "ChangeEdit": {
+        "properties": {
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payload",
+          "lock_version"
+        ],
+        "title": "ChangeEdit"
+      },
       "ChangeEventOut": {
         "properties": {
           "id": {
@@ -44627,6 +47035,103 @@
           "created_at"
         ],
         "title": "ChangeEventOut"
+      },
+      "ChangeIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Kind"
+          },
+          "target": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Target"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "title": "ChangeIn"
+      },
+      "ChangeKindOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "verb": {
+            "type": "string",
+            "enum": [
+              "Stage",
+              "Propose",
+              "Resolve",
+              "Use as answer",
+              "Ask",
+              "Record",
+              "Apply"
+            ],
+            "title": "Verb"
+          },
+          "schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Schema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "verb",
+          "schema"
+        ],
+        "title": "ChangeKindOut",
+        "description": "A kind \"Propose a change\" offers on this subject, with its payload's JSON schema."
+      },
+      "ChangeResult": {
+        "properties": {
+          "change": {
+            "$ref": "#/components/schemas/DiscussionChangeOut"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change"
+        ],
+        "title": "ChangeResult",
+        "description": "Every action's answer: the change, and what acting created (a staged change, a\nproposal, a resolved conflict, an answer), or None."
       },
       "ChangeSetDiffItem": {
         "properties": {
@@ -44937,6 +47442,43 @@
         ],
         "title": "ChangeSetPatch",
         "description": "The change set's changes, whole, in order, and the lock_version last read."
+      },
+      "ChangeStageIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "override_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Reason"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ChangeStageIn"
       },
       "ChangedSection": {
         "properties": {
@@ -46990,12 +49532,18 @@
           },
           "provider": {
             "type": "string",
-            "const": "slack",
+            "enum": [
+              "slack",
+              "posthog"
+            ],
             "title": "Provider"
           },
           "purpose": {
             "type": "string",
-            "const": "notifications",
+            "enum": [
+              "notifications",
+              "metrics"
+            ],
             "title": "Purpose"
           },
           "account_id": {
@@ -50786,6 +53334,42 @@
         "title": "DeferChange",
         "description": "Defer an item: it moves to Later."
       },
+      "Definition": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "unit",
+          "query",
+          "at"
+        ],
+        "title": "Definition"
+      },
       "DependenciesCreate": {
         "properties": {
           "artifact_version_id": {
@@ -51162,6 +53746,11 @@
             "format": "uuid",
             "title": "Id"
           },
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
           "kind": {
             "type": "string",
             "title": "Kind"
@@ -51214,26 +53803,22 @@
           "proposed_by": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid"
+                "$ref": "#/components/schemas/DiscussionPerson"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Proposed By"
+            ]
           },
           "suggested_by": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid"
+                "$ref": "#/components/schemas/DiscussionPerson"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Suggested By"
+            ]
           },
           "status": {
             "type": "string",
@@ -51247,14 +53832,49 @@
             ],
             "title": "Status"
           },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChangeAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "lock_version": {
-            "type": "integer",
-            "title": "Lock Version"
+          "can": {
+            "$ref": "#/components/schemas/ChangeCan",
+            "default": {
+              "suggest": false,
+              "edit": false,
+              "withdraw": false,
+              "dismiss": false
+            }
+          },
+          "pushback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushback"
+          },
+          "needs_reason": {
+            "type": "boolean",
+            "title": "Needs Reason",
+            "default": false
+          },
+          "basis": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Basis"
           },
           "result_ref": {
             "anyOf": [
@@ -51268,17 +53888,25 @@
             ],
             "title": "Result Ref"
           },
-          "pushback": {
+          "decision_note": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Pushback"
+            "title": "Decision Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
           },
           "override_reason": {
             "anyOf": [
@@ -51295,6 +53923,7 @@
         "type": "object",
         "required": [
           "id",
+          "discussion_id",
           "kind",
           "label",
           "target",
@@ -55438,6 +58067,11 @@
           "runs_per_month": {
             "type": "number",
             "title": "Runs Per Month"
+          },
+          "per_summary_usd": {
+            "type": "number",
+            "title": "Per Summary Usd",
+            "default": 3.0
           }
         },
         "type": "object",
@@ -56564,6 +59198,32 @@
         ],
         "title": "ExpandOut",
         "description": "A detail section (and its sub-sections) a slide links to, for the Expand overlay."
+      },
+      "ExplainIn": {
+        "properties": {
+          "explanation": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Explanation"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "explanation"
+        ],
+        "title": "ExplainIn"
       },
       "Explanation": {
         "properties": {
@@ -58266,7 +60926,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Key"
           },
@@ -59809,6 +62470,69 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HandOver": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "HandOver",
+        "description": "Move one kind of responsibility to ``to`` (an active member with the kind's\nrole), or clear it (``to`` null). A kind left out stays as it is."
+      },
+      "HandOverIn": {
+        "properties": {
+          "hand_over": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HandOver"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hand Over"
+          }
+        },
+        "type": "object",
+        "title": "HandOverIn"
+      },
+      "HandOverOut": {
+        "properties": {
+          "responsibilities": {
+            "items": {
+              "$ref": "#/components/schemas/ResponsibilityOut"
+            },
+            "type": "array",
+            "title": "Responsibilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "responsibilities"
+        ],
+        "title": "HandOverOut"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -59847,6 +62571,24 @@
         },
         "type": "object",
         "title": "HeldIn"
+      },
+      "HeldOut": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "title"
+        ],
+        "title": "HeldOut"
       },
       "HiddenDiscussion": {
         "properties": {
@@ -60045,6 +62787,34 @@
         ],
         "title": "HoldersOut"
       },
+      "HoldsOut": {
+        "properties": {
+          "section_approvals": {
+            "type": "integer",
+            "title": "Section Approvals"
+          },
+          "version_approvals": {
+            "type": "integer",
+            "title": "Version Approvals"
+          },
+          "spend_approvals": {
+            "type": "integer",
+            "title": "Spend Approvals"
+          },
+          "checkpoint_decisions": {
+            "type": "integer",
+            "title": "Checkpoint Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_approvals",
+          "version_approvals",
+          "spend_approvals",
+          "checkpoint_decisions"
+        ],
+        "title": "HoldsOut"
+      },
       "HumanRatingIn": {
         "properties": {
           "ratings": {
@@ -60166,6 +62936,36 @@
         ],
         "title": "HumanView"
       },
+      "ImpactCheckpoint": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "checkpoint_id",
+          "kind",
+          "title"
+        ],
+        "title": "ImpactCheckpoint"
+      },
       "ImpactDocument": {
         "properties": {
           "slug": {
@@ -60188,6 +62988,60 @@
           "marks"
         ],
         "title": "ImpactDocument"
+      },
+      "ImpactEnds": {
+        "properties": {
+          "sign_in": {
+            "type": "boolean",
+            "title": "Sign In"
+          },
+          "api_tokens": {
+            "type": "integer",
+            "title": "Api Tokens"
+          },
+          "mcp_clients": {
+            "type": "integer",
+            "title": "Mcp Clients"
+          },
+          "connections": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Connections"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactRun"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "llm_jobs": {
+            "type": "integer",
+            "title": "Llm Jobs"
+          },
+          "invites": {
+            "type": "integer",
+            "title": "Invites"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sign_in",
+          "api_tokens",
+          "mcp_clients",
+          "connections",
+          "sources",
+          "runs",
+          "llm_jobs",
+          "invites"
+        ],
+        "title": "ImpactEnds"
       },
       "ImpactItem": {
         "properties": {
@@ -60217,6 +63071,27 @@
           "item_key"
         ],
         "title": "ImpactItem"
+      },
+      "ImpactLapses": {
+        "properties": {
+          "section_approvals": {
+            "type": "integer",
+            "title": "Section Approvals"
+          },
+          "version_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactVersion"
+            },
+            "type": "array",
+            "title": "Version Approvals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section_approvals",
+          "version_approvals"
+        ],
+        "title": "ImpactLapses"
       },
       "ImpactMilestone": {
         "properties": {
@@ -60260,6 +63135,84 @@
           "keeps_date"
         ],
         "title": "ImpactMilestone"
+      },
+      "ImpactOut": {
+        "properties": {
+          "member_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Member Id"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "remove",
+              "role"
+            ],
+            "title": "Change"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "viewer",
+                  "commenter",
+                  "approver",
+                  "owner"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of"
+          },
+          "ends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactEnds"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "voids": {
+            "$ref": "#/components/schemas/ImpactVoids"
+          },
+          "lapses": {
+            "$ref": "#/components/schemas/ImpactLapses"
+          },
+          "responsibilities": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactResponsibilityOut"
+            },
+            "type": "array",
+            "title": "Responsibilities"
+          },
+          "nothing": {
+            "type": "boolean",
+            "title": "Nothing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "member_id",
+          "change",
+          "as_of",
+          "voids",
+          "lapses",
+          "responsibilities",
+          "nothing"
+        ],
+        "title": "ImpactOut",
+        "description": "What removing or demoting the member would do, read as of ``as_of``."
       },
       "ImpactReport": {
         "properties": {
@@ -60333,6 +63286,107 @@
         ],
         "title": "ImpactReport"
       },
+      "ImpactResponsibilityOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HeldOut"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "needs_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Needs Role"
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks"
+          },
+          "holder_ok": {
+            "type": "boolean",
+            "title": "Holder Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "count",
+          "needs_role",
+          "holder_ok"
+        ],
+        "title": "ImpactResponsibilityOut"
+      },
+      "ImpactRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "ImpactRun"
+      },
+      "ImpactRunRef": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "title"
+        ],
+        "title": "ImpactRunRef"
+      },
       "ImpactSubject": {
         "properties": {
           "kind": {
@@ -60391,6 +63445,61 @@
           "kind"
         ],
         "title": "ImpactSubject"
+      },
+      "ImpactVersion": {
+        "properties": {
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "title",
+          "version"
+        ],
+        "title": "ImpactVersion"
+      },
+      "ImpactVoids": {
+        "properties": {
+          "spend_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactRunRef"
+            },
+            "type": "array",
+            "title": "Spend Approvals"
+          },
+          "resumes": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactRunRef"
+            },
+            "type": "array",
+            "title": "Resumes"
+          },
+          "checkpoint_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactCheckpoint"
+            },
+            "type": "array",
+            "title": "Checkpoint Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spend_approvals",
+          "resumes",
+          "checkpoint_decisions"
+        ],
+        "title": "ImpactVoids"
       },
       "ImportErrorResponse": {
         "properties": {
@@ -60877,7 +63986,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -61918,6 +65028,83 @@
         "title": "InboxLaunch",
         "description": "A launch row of the Inbox: Ready to launch (owner), Set tier (approvers), Notes\nto send (owner) are counted; Shipped (a member's personal note) is shown only."
       },
+      "InboxMetric": {
+        "properties": {
+          "variance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variance Id"
+          },
+          "metric_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Metric Id"
+          },
+          "metric_title": {
+            "type": "string",
+            "title": "Metric Title"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "explain",
+              "find_out",
+              "pull_failed"
+            ],
+            "title": "Reason"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "occurrence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Id"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric_id",
+          "metric_title",
+          "reason",
+          "week_start",
+          "counts"
+        ],
+        "title": "InboxMetric",
+        "description": "A metric row of the Inbox (H5): Explain a variance and Find out (the metric's\nowner; Find out from its find-out-by day), Metric not read for a day (owners).\n``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that\nlists the variance, when one does."
+      },
       "InboxOracleAction": {
         "properties": {
           "id": {
@@ -62199,6 +65386,14 @@
             },
             "type": "array",
             "title": "Outcomes",
+            "default": []
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/InboxMetric"
+            },
+            "type": "array",
+            "title": "Metrics",
             "default": []
           },
           "last_seen_at": {
@@ -66567,6 +69762,61 @@
         "title": "JobSettings",
         "description": "Which built-in jobs run on this document (all on by default)."
       },
+      "JoinedOut": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "invite",
+              "access_request",
+              "domain",
+              "seeded",
+              "unknown"
+            ],
+            "title": "Via"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "via"
+        ],
+        "title": "JoinedOut"
+      },
       "KindCoverage": {
         "properties": {
           "kind": {
@@ -68991,6 +72241,140 @@
         ],
         "title": "MeasurementOut"
       },
+      "MemberDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "engineering_lead": {
+            "type": "boolean",
+            "title": "Engineering Lead",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "disabled_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled By"
+          },
+          "last_sign_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sign In At"
+          },
+          "open_tokens": {
+            "type": "integer",
+            "title": "Open Tokens",
+            "default": 0
+          },
+          "access_pending": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "revoke",
+                  "grant"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Pending"
+          },
+          "joined": {
+            "$ref": "#/components/schemas/JoinedOut"
+          },
+          "responsibilities": {
+            "items": {
+              "$ref": "#/components/schemas/ResponsibilityOut"
+            },
+            "type": "array",
+            "title": "Responsibilities"
+          },
+          "holds": {
+            "$ref": "#/components/schemas/HoldsOut"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "created_at",
+          "joined",
+          "responsibilities",
+          "holds",
+          "status"
+        ],
+        "title": "MemberDetailOut"
+      },
       "MemberOut": {
         "properties": {
           "id": {
@@ -69150,11 +72534,827 @@
               }
             ],
             "title": "Name"
+          },
+          "hand_over": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HandOver"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hand Over"
           }
         },
         "type": "object",
         "title": "MemberPatch",
         "description": "A role, the engineering lead flag, a name (A5), or several (applied in one\nchange: role first). ``\"name\": null`` clears the name."
+      },
+      "MetricCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "output",
+              "input"
+            ],
+            "title": "Kind"
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Unit"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Direction"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "drives_metric_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drives Metric Id"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "posthog",
+              "manual",
+              "api"
+            ],
+            "title": "Source"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "threshold_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "kind",
+          "unit",
+          "direction",
+          "owner_id",
+          "source"
+        ],
+        "title": "MetricCreate"
+      },
+      "MetricDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "output",
+              "input"
+            ],
+            "title": "Kind"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Direction"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "drives_metric_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drives Metric Id"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "posthog",
+              "manual",
+              "api"
+            ],
+            "title": "Source"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "threshold_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Pct"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "error",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "definition_version": {
+            "type": "integer",
+            "title": "Definition Version"
+          },
+          "last_week": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Change"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spark": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Spark"
+          },
+          "last_pulled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Pulled At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/MetricValueOut"
+            },
+            "type": "array",
+            "title": "Values"
+          },
+          "variances": {
+            "items": {
+              "$ref": "#/components/schemas/VarianceOut"
+            },
+            "type": "array",
+            "title": "Variances"
+          },
+          "definitions": {
+            "items": {
+              "$ref": "#/components/schemas/Definition"
+            },
+            "type": "array",
+            "title": "Definitions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "kind",
+          "unit",
+          "direction",
+          "goal_id",
+          "drives_metric_id",
+          "owner_id",
+          "owner_name",
+          "source",
+          "query",
+          "threshold_pct",
+          "status",
+          "definition_version",
+          "last_week",
+          "change",
+          "spark",
+          "last_pulled_at",
+          "last_error",
+          "lock_version",
+          "values",
+          "variances",
+          "definitions"
+        ],
+        "title": "MetricDetail"
+      },
+      "MetricOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "output",
+              "input"
+            ],
+            "title": "Kind"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Direction"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "drives_metric_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drives Metric Id"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "posthog",
+              "manual",
+              "api"
+            ],
+            "title": "Source"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "threshold_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Pct"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "error",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "definition_version": {
+            "type": "integer",
+            "title": "Definition Version"
+          },
+          "last_week": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Change"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spark": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Spark"
+          },
+          "last_pulled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Pulled At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "kind",
+          "unit",
+          "direction",
+          "goal_id",
+          "drives_metric_id",
+          "owner_id",
+          "owner_name",
+          "source",
+          "query",
+          "threshold_pct",
+          "status",
+          "definition_version",
+          "last_week",
+          "change",
+          "spark",
+          "last_pulled_at",
+          "last_error",
+          "lock_version"
+        ],
+        "title": "MetricOut"
+      },
+      "MetricPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "drives_metric_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drives Metric Id"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "threshold_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 500.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "MetricPatch"
+      },
+      "MetricTestOut": {
+        "properties": {
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/MetricTestWeek"
+            },
+            "type": "array",
+            "title": "Values"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "values",
+          "error"
+        ],
+        "title": "MetricTestOut"
+      },
+      "MetricTestWeek": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_start",
+          "value"
+        ],
+        "title": "MetricTestWeek"
+      },
+      "MetricValueOut": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "posthog",
+              "manual",
+              "api"
+            ],
+            "title": "Source"
+          },
+          "definition_version": {
+            "type": "integer",
+            "title": "Definition Version"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_start",
+          "value",
+          "source",
+          "definition_version",
+          "note",
+          "recorded_by",
+          "recorded_at"
+        ],
+        "title": "MetricValueOut"
       },
       "MilestoneCreate": {
         "properties": {
@@ -71103,6 +75303,32 @@
           "items"
         ],
         "title": "NextMilestone"
+      },
+      "NoiseIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "NoiseIn"
       },
       "NotReadCounts": {
         "properties": {
@@ -73770,6 +77996,42 @@
         "title": "PoolOut",
         "description": "Whether Oracle's built-in calls can run now, as the gateway decides it."
       },
+      "PossibleCause": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "launch",
+              "changelog",
+              "roadmap_item",
+              "decision",
+              "definition"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "on": {
+            "type": "string",
+            "format": "date",
+            "title": "On"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "on",
+          "href"
+        ],
+        "title": "PossibleCause"
+      },
       "PrdAnchor": {
         "properties": {
           "document": {
@@ -75566,7 +79828,8 @@
                 "type": "string",
                 "enum": [
                   "goal_history",
-                  "measurement"
+                  "measurement",
+                  "metric"
                 ]
               },
               {
@@ -76522,6 +80785,21 @@
           "lock_version"
         ],
         "title": "QualifyIn"
+      },
+      "QueryIn": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Query"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "QueryIn"
       },
       "Question": {
         "properties": {
@@ -80943,6 +85221,59 @@
         "title": "ResolutionReport",
         "description": "How each feedback item raised on earlier versions was handled, as of ``version``."
       },
+      "ResponsibilityOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HeldOut"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "needs_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Needs Role"
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "count",
+          "needs_role"
+        ],
+        "title": "ResponsibilityOut"
+      },
       "ReusedBaseline": {
         "properties": {
           "checkpoint_id": {
@@ -82488,6 +86819,17 @@
             "type": "integer",
             "title": "Lock Version"
           },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
+          },
           "last_pre_read": {
             "anyOf": [
               {
@@ -83470,7 +87812,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -83936,7 +88279,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -84746,7 +89090,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -93757,6 +98102,17 @@
         ],
         "title": "SuggestionPatch"
       },
+      "SummaryAsk": {
+        "properties": {
+          "replace": {
+            "type": "boolean",
+            "title": "Replace",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SummaryAsk"
+      },
       "SummarySettingsIn": {
         "properties": {
           "mode": {
@@ -99492,6 +103848,31 @@
         ],
         "title": "UnavailableItem"
       },
+      "UnknownIn": {
+        "properties": {
+          "find_out_by": {
+            "type": "string",
+            "format": "date",
+            "title": "Find Out By"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "find_out_by"
+        ],
+        "title": "UnknownIn"
+      },
       "UnrequestedChange": {
         "properties": {
           "field": {
@@ -99850,6 +104231,217 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValueIn": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "ValueIn"
+      },
+      "VarianceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "metric_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Metric Id"
+          },
+          "metric_title": {
+            "type": "string",
+            "title": "Metric Title"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "previous": {
+            "type": "number",
+            "title": "Previous"
+          },
+          "change": {
+            "type": "number",
+            "title": "Change"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Band"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "better",
+              "worse"
+            ],
+            "title": "Direction"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "explained",
+              "unknown",
+              "noise"
+            ],
+            "title": "Status"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "explained_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explained By Name"
+          },
+          "find_out_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Find Out By"
+          },
+          "noise_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Reason"
+          },
+          "oracle_draft": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Draft"
+          },
+          "oracle_confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Confidence"
+          },
+          "possible_causes": {
+            "items": {
+              "$ref": "#/components/schemas/PossibleCause"
+            },
+            "type": "array",
+            "title": "Possible Causes"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "metric_id",
+          "metric_title",
+          "owner_id",
+          "week_start",
+          "value",
+          "previous",
+          "change",
+          "change_pct",
+          "band",
+          "direction",
+          "status",
+          "explanation",
+          "explained_by_name",
+          "find_out_by",
+          "noise_reason",
+          "oracle_draft",
+          "oracle_confidence",
+          "possible_causes",
+          "lock_version"
+        ],
+        "title": "VarianceOut"
       },
       "VersionAnchors": {
         "properties": {
@@ -100662,6 +105254,25 @@
           "reason"
         ],
         "title": "WaiveIn"
+      },
+      "WeekValue": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_start",
+          "value"
+        ],
+        "title": "WeekValue"
       },
       "WindowOut": {
         "properties": {

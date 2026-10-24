@@ -87,7 +87,7 @@ test("Notifications: an invite's Last tried in the Company time zone", async ({ 
   await page.clock.setFixedTime(at);
   await page.goto("/settings/members");
   await page.getByLabel("Email").fill("pat+tag@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
   const row = page.getByTestId("invite-row").filter({ hasText: "pat+tag@example.com" });
   await expect(row.getByTestId("invite-access-detail")).toContainText(`Last tried ${auckland(at)}`);
 });

@@ -20,7 +20,7 @@ from oracle import changes
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import items as items_mod
-from oracle.roadmap import tracker
+from oracle.roadmap import staleness, tracker
 from oracle.roadmap.models import (
     ProductTrack,
     RoadmapItem,
@@ -628,7 +628,7 @@ def item_risk(
             if b.critical and item.horizon == "now":
                 risk.off = True
     if item.freshness in ("potentially_stale", "under_review"):
-        why = "; ".join(item.stale_reasons or []) or "its PRD trace changed"
+        why = staleness.stale_why(item.stale_reasons, "its PRD trace changed")
         reasons.append({"kind": "stale", "detail": why})
     when = tracker.milestone_date(item, dated, ctx.milestone_of(item))
     risk.drift = tracker.drift_of(item, records, when, now)
