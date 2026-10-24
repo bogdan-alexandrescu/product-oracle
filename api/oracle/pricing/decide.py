@@ -95,6 +95,21 @@ async def _latest(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersion |
     )
 
 
+async def _latest_versions(
+    db: AsyncSession, document_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, DocumentVersion]:
+    """The latest version of each memo, in one query."""
+    if not document_ids:
+        return {}
+    rows = await db.scalars(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id.in_(document_ids))
+        .order_by(DocumentVersion.document_id, DocumentVersion.number.desc())
+        .distinct(DocumentVersion.document_id)
+    )
+    return {v.document_id: v for v in rows}
+
+
 async def _decisions(db: AsyncSession, document_ids: list[uuid.UUID]) -> dict[uuid.UUID, Decision]:
     """The latest pricing decision of each memo."""
     if not document_ids:
@@ -115,11 +130,12 @@ async def list_memos(db: AsyncSession, principal: Principal) -> list[PricingMemo
         )
     )
     found = await _decisions(db, [d.id for d in documents])
+    versions = await _latest_versions(db, [d.id for d in documents])
     decider = await pricing_owner(db) if documents else None
     owner = PricingOwner(id=decider.id, name=name_of(decider)) if decider is not None else None
     out = []
     for document in documents:
-        latest = await _latest(db, document.id)
+        latest = versions.get(document.id)
         d = found.get(document.id)
         if d is not None and d.status == "decided":
             state = "decided"

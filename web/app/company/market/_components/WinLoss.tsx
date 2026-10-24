@@ -7,6 +7,7 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addDays, todayIn, useCompanyZone } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { RowMenu, RowMenuItem } from "../../updates/_components/RowMenu";
@@ -29,6 +30,12 @@ const PERIODS: { value: Period; label: string }[] = [
  */
 export function WinLoss() {
   const zone = useCompanyZone();
+  // #370: each control is drawn only when its operation is allowed.
+  const { can } = useMe();
+  const mayAdd = can("create_deal_outcome");
+  const mayImport = can("import_deal_outcomes");
+  const mayEdit = can("update_deal_outcome");
+  const mayDelete = can("delete_deal_outcome");
   const [result, setResult] = useState<Result | "">("");
   const [reason, setReason] = useState<Reason | "">("");
   const [period, setPeriod] = useState<Period>("all");
@@ -61,7 +68,9 @@ export function WinLoss() {
     { key: "plan", header: "Plan", width: "120px", phone: "hide", cell: (d) => <span className="text-sm">{d.plan ?? "—"}</span> },
     { key: "reason", header: "Reason", width: "180px", phone: "meta", cell: (d) => <span className="text-sm" data-testid="deal-reason">{REASONS[d.reason]}</span> },
     { key: "alternative", header: "Alternative", width: "160px", phone: "hide", cell: (d) => <span className="text-sm text-text2">{alternativeOf(d) ?? "—"}</span> },
-    {
+  ];
+  if (mayEdit || mayDelete) {
+    columns.push({
       key: "actions",
       header: <span className="sr-only">Actions</span>,
       width: "56px",
@@ -70,28 +79,32 @@ export function WinLoss() {
         <RowMenu label={`Actions for ${d.account}`}>
           {(close) => (
             <>
-              <RowMenuItem
-                onClick={() => {
-                  close();
-                  setEditing(d);
-                }}
-              >
-                Edit
-              </RowMenuItem>
-              <RowMenuItem
-                onClick={() => {
-                  close();
-                  void remove(d);
-                }}
-              >
-                Delete
-              </RowMenuItem>
+              {mayEdit && (
+                <RowMenuItem
+                  onClick={() => {
+                    close();
+                    setEditing(d);
+                  }}
+                >
+                  Edit
+                </RowMenuItem>
+              )}
+              {mayDelete && (
+                <RowMenuItem
+                  onClick={() => {
+                    close();
+                    void remove(d);
+                  }}
+                >
+                  Delete
+                </RowMenuItem>
+              )}
             </>
           )}
         </RowMenu>
       ),
-    },
-  ];
+    });
+  }
 
   return (
     <>
@@ -105,10 +118,12 @@ export function WinLoss() {
               One deal&apos;s result and its main reason: Won, Lost, No decision or Churned. Enter it here or import a CSV file. No contact details;
               Oracle never looks an account up. Pricing memos count these records. Owners and approvers see them.
             </InfoTip>
-            <Button icon="plus" onClick={() => setEditing("new")}>
-              Add
-            </Button>
-            <Button onClick={() => setImporting(true)}>Import CSV</Button>
+            {mayAdd && (
+              <Button icon="plus" onClick={() => setEditing("new")}>
+                Add
+              </Button>
+            )}
+            {mayImport && <Button onClick={() => setImporting(true)}>Import CSV</Button>}
           </div>
         }
       >

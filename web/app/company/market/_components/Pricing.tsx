@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button, Chip, DataTable, Empty, InfoTip, Panel, type Column } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { useCompanyZone } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -20,6 +21,7 @@ import { NewPricingMemo } from "./NewPricingMemo";
  */
 export function Pricing() {
   const { can } = useMe();
+  const zone = useCompanyZone();
   const mayCreate = can("start_draft", true) && can("create_run", true);
   const q = useQuery(MEMOS_KEY, () => unwrap(api.GET("/v1/pricing-memos")));
   const [creating, setCreating] = useState(false);
@@ -64,7 +66,7 @@ export function Pricing() {
           <span className="text-sm text-text2">—</span>
         ),
     },
-    { key: "updated", header: "Updated", width: "120px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
+    { key: "updated", header: `Updated (${zone})`, width: "200px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
   ];
 
   return (

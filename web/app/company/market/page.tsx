@@ -41,20 +41,25 @@ export default function MarketPage() {
 function Market() {
   const params = useSearchParams();
   const pathname = usePathname();
-  const tab: Tab = params.get("tab") === "win-loss" ? "win-loss" : "pricing";
+  const { can } = useMe();
+  // #370: Win and loss is drawn only for a role that may list the deals; its address then opens Pricing.
+  const winLoss = can("list_deal_outcomes");
+  const tab: Tab = winLoss && params.get("tab") === "win-loss" ? "win-loss" : "pricing";
   return (
     <>
       <PageHeader title="Company" />
-      <div className="mb-3">
-        <SegmentedControl<Tab>
-          label="Market"
-          value={tab}
-          items={[
-            { value: "pricing", label: "Pricing", href: `${pathname}?tab=pricing`, testId: "market-tab-pricing" },
-            { value: "win-loss", label: "Win and loss", href: `${pathname}?tab=win-loss`, testId: "market-tab-win-loss" },
-          ]}
-        />
-      </div>
+      {winLoss && (
+        <div className="mb-3">
+          <SegmentedControl<Tab>
+            label="Market"
+            value={tab}
+            items={[
+              { value: "pricing", label: "Pricing", href: `${pathname}?tab=pricing`, testId: "market-tab-pricing" },
+              { value: "win-loss", label: "Win and loss", href: `${pathname}?tab=win-loss`, testId: "market-tab-win-loss" },
+            ]}
+          />
+        </div>
+      )}
       {tab === "pricing" ? <Pricing /> : <WinLoss />}
     </>
   );

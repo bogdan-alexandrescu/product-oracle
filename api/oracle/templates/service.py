@@ -901,6 +901,7 @@ async def _update_front_matter(
     """H8: an update's ``period`` (given, else the day after the period of the last
     approved update of the same template, else the first of this month, through today)
     and ``previous``, that last approved update and its version."""
+    from oracle.decisions.service import company_today
     from oracle.updates.frontmatter import parse_period
 
     rows = await db.execute(
@@ -917,7 +918,7 @@ async def _update_front_matter(
         parsed = parse_period((fm or {}).get("period"))
         if parsed is not None and (last is None or parsed[1] > last[0]):
             last = (parsed[1], slug, number)
-    today = date.today()
+    today = await company_today(db)
     if period is not None:
         start, end = period.from_, period.to
     else:
@@ -930,13 +931,23 @@ async def _update_front_matter(
     return lines
 
 
+def months_back(day: date, months: int) -> date:
+    """The same day ``months`` calendar months before ``day``; the month's last day when
+    that month is shorter (Aug 31 back 6 months is Feb 28)."""
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    month += 1
+    last = (date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)).day
+    return date(year, month, min(day.day, last))
+
+
 def _pricing_front_matter(data: StartDraftIn, today: date) -> list[str]:
     """H9: a pricing memo's question (as typed) and evidence window (given, else the last
-    six months through today). The options are the run's to write."""
+    six calendar months through today, the Company day). The options are the run's to
+    write."""
     if data.period is not None:
         start, end = data.period.from_, data.period.to
     else:
-        start, end = today - timedelta(days=182), today
+        start, end = months_back(today, 6), today
     lines = [f"evidence_window: {{from: {start.isoformat()}, to: {end.isoformat()}}}"]
     if data.question:
         lines.insert(0, f"question: {json.dumps(data.question.strip())}")
@@ -1012,6 +1023,8 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         await db.rollback()
         raise ConflictError(f"a document with slug '{slug}' was created concurrently") from e
 
+    from oracle.decisions.service import company_today
+
     markdown = draft_skeleton(
         version.body,
         slug=slug,
@@ -1023,7 +1036,7 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         extra=(
             await _update_front_matter(db, template.key, data.period)
             if data.kind == "update"
-            else _pricing_front_matter(data, date.today())
+            else _pricing_front_matter(data, await company_today(db))
             if data.kind == "pricing"
             else None
         ),

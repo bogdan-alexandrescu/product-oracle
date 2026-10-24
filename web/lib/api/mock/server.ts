@@ -4,7 +4,7 @@
  * will against the real API. State lives in localStorage, so it survives reloads.
  */
 import type { Schemas } from "@/lib/api/client";
-import { addDays, todayIn } from "@/lib/dates";
+import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
@@ -3251,7 +3251,7 @@ function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Re
   const question = input.question?.trim() ?? "";
   if (!question || question.length > 300) return json(422, { detail: "Say the pricing question in one sentence" });
   const today = todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"));
-  const window: EvidenceWindow = input.period ?? { from: addDays(today, -182), to: today };
+  const window: EvidenceWindow = input.period ?? { from: addMonths(today, -6), to: today };
   if (!ISO_DAY.test(window.from) || !ISO_DAY.test(window.to) || window.from > window.to) return json(422, { detail: "evidence_window: from and to are dates, from on or before to" });
   const title = input.title?.trim() || "Pricing memo";
   const base = slugOf(input.slug || title);

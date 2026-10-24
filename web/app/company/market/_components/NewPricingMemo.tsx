@@ -6,7 +6,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { addDays, todayIn, useCompanyZone } from "@/lib/dates";
+import { addMonths, todayIn, useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
 import { Modal } from "./Modal";
@@ -29,7 +29,7 @@ export function NewPricingMemo({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const today = todayIn(useCompanyZone());
   const [question, setQuestion] = useState("");
-  const [from, setFrom] = useState(() => addDays(today, -182));
+  const [from, setFrom] = useState(() => addMonths(today, -6));
   const [to, setTo] = useState(today);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
