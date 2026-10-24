@@ -34,11 +34,11 @@ test("run page: the sent-back review names the Company day it was sent back on",
   await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 
-  const push = page.getByTestId("item-reasons").filter({ hasText: "Mobile push" });
-  await push.getByRole("button", { name: "Drop", exact: true }).click();
-  await expect(push.getByTestId("draft-action")).toHaveText(/Staged by/);
-  // D1: decided on the Roadmap items review screen, then back to the run.
+  // D1 (#542): staged and decided on the Roadmap items review screen, then back to the run.
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  const push = page.locator('[data-testid="roadmap-item-row"][data-key="mobile-push"]');
+  await push.getByRole("button", { name: "Drop", exact: true }).click();
+  await expect(push.getByTestId("row-done")).toHaveText(/✓ Dropped/);
   await page.getByTestId("decision-bar").getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);

@@ -129,13 +129,15 @@ test("a child with no safe fix shows only Open; +7 more links to the review", as
 // stage; no_claim = who may suggest (the API's role checks).
 test("a commenter's suggestion shows as Suggested with Stage", async ({ page }) => {
   await openInbox(page);
-  // The commenter suggests Remove date on Slack alerts from the run's decision.
+  // The commenter suggests Remove date on Slack alerts from the review screen (D1, #542: the
+  // run page's Review items; it has no per-item buttons).
   await signOut(page);
   await login(page, "commenter@example.com");
-  await page.goto(`/runs/${RUN}#decide`);
-  const reasons = page.getByTestId("item-reasons").filter({ hasText: "Slack alerts" });
+  await page.goto(`/runs/${RUN}`);
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  const reasons = page.locator('[data-testid="roadmap-item-row"][data-key="slack-alerts"]');
   await reasons.getByRole("button", { name: "Remove date", exact: true }).click();
-  await expect(reasons.getByTestId("draft-action")).toHaveText(/Suggested by Commenter/);
+  await expect(reasons.getByTestId("suggested-by")).toHaveText(/Suggested by you/);
   await signOut(page);
   await login(page);
   await page.goto("/inbox");
