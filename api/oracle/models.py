@@ -76,6 +76,7 @@ from oracle.launches.models import (  # noqa: E402
 )
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
+from oracle.metrics.models import Metric, MetricValue, MetricVariance  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
 from oracle.priorities.models import PriorityOverride, PrioritySnapshot  # noqa: E402
 from oracle.quality.models import OutcomeRecord, QualityLearning  # noqa: E402
@@ -232,6 +233,9 @@ __all__ = [
     "ProductIntake",
     "Launch",
     "LaunchTask",
+    "Metric",
+    "MetricValue",
+    "MetricVariance",
     "ProductTrack",
     "Proposal",
     "QualityLearning",

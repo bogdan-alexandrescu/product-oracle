@@ -3,9 +3,12 @@
 One row per company, provider and purpose: Oracle's Slack app for notifications is
 installed once per company ("Slack poster", decided 2026-10-20). The bot token is
 encrypted with :mod:`oracle.crypto` and never returned by any endpoint, logged or audited.
+H5's PostHog query connection (provider ``posthog``, purpose ``metrics``) keeps its
+personal API key the same way, and its host and project id in ``config``.
 """
 
 import uuid
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -17,14 +20,14 @@ from sqlalchemy import (
     Uuid,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-INTEGRATION_PROVIDERS = ("slack",)
-INTEGRATION_PURPOSES = ("notifications",)
+INTEGRATION_PROVIDERS = ("slack", "posthog")
+INTEGRATION_PURPOSES = ("notifications", "metrics")
 INTEGRATION_STATUSES = ("active", "revoked", "error")
 
 
@@ -41,7 +44,7 @@ class CompanyIntegration(TenantScoped, Base):
             "provider",
             "account_id",
             unique=True,
-            postgresql_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active' AND provider = 'slack'"),
         ),
     )
 
@@ -66,4 +69,8 @@ class CompanyIntegration(TenantScoped, Base):
     # Slack): Oracle's posts there still never become source evidence.
     former_bot_user_ids: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, default=list, server_default="{}"
+    )
+    # H5 PostHog: {"host": "us" | "eu" | "https://...", "project_id": "..."}.
+    config: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
     )

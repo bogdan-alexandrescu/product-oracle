@@ -170,8 +170,11 @@ PER_ITEM: dict[str, Role | None] = {
     "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
     "estimate_regeneration": "approver",
+    # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
+    "explain_metric_variance": "approver",
     "get_checkpoint_draft": "owner",
     "get_next_question_batch": "approver",
+    "mark_metric_variance_unknown": "approver",
     "mirror_discussion_to_slack": "approver",
     "open_oracle_action": "owner",
     "patch_interview": "approver",
@@ -179,6 +182,7 @@ PER_ITEM: dict[str, Role | None] = {
     "propose_discussion_change": "commenter",
     "reassign_decision": "owner",
     "record_discussion_change": "approver",
+    "record_metric_value": "approver",
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "remove_evidence": "approver",

@@ -274,7 +274,8 @@ class Conflict(TenantScoped, Base):
 
 
 class GoalMeasurement(TenantScoped, Base):
-    """A goal's value on a day (B5), recorded by a person; one row per goal per day. The
+    """A goal's value on a day (B5), recorded by a person or read from the goal's linked
+    metric (H5); one row per goal per day. The
     latest by ``measured_on`` is the goal's ``attrs.current`` (oracle.baseline.measurements)."""
 
     __tablename__ = "goal_measurements"
@@ -291,3 +292,7 @@ class GoalMeasurement(TenantScoped, Base):
     )
     # User or API token id; no FK because it can be either.
     recorded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # H5: a weekly value read from a linked metric (recorded_by is then null).
+    metric_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("metrics.id", ondelete="SET NULL")
+    )

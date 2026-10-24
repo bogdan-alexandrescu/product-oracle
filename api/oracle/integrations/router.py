@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from oracle import audit, crypto
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
@@ -24,6 +24,11 @@ from oracle.authz import recheck_caller, require_role
 from oracle.connections import oauth
 from oracle.integrations import slack_api, slack_oauth
 from oracle.integrations.models import CompanyIntegration
+from oracle.metrics import posthog
+from oracle.metrics import pull as metrics_pull
+from oracle.metrics import service as metrics_service
+from oracle.metrics.models import Metric
+from oracle.metrics.schemas import AnalyticsIn, AnalyticsOut
 from oracle.reports.alignment import CHANNEL_ID
 from oracle.slack import bridge, outbox
 from oracle.tenancy import tenant_session
@@ -41,8 +46,8 @@ Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 
 class CompanyIntegrationOut(BaseModel):
     id: uuid.UUID
-    provider: Literal["slack"]
-    purpose: Literal["notifications"]
+    provider: Literal["slack", "posthog"]
+    purpose: Literal["notifications", "metrics"]
     # Slack's workspace id and name.
     account_id: str
     account_label: str | None
@@ -315,6 +320,102 @@ async def test_slack_notifications(
     return SlackTestOut(sent=True, channel_id=body.channel_id)
 
 
+# --- H5 Settings › Analytics: PostHog's query connection (owners) -------------------------
+# Declared before the ``{integration_id}`` routes, which would otherwise read "analytics"
+# as an id.
+
+
+async def _analytics_out(db: TenantDB) -> AnalyticsOut:
+    row = await metrics_pull.integration(db)
+    count = await db.scalar(
+        select(func.count())
+        .select_from(Metric)
+        .where(Metric.source == "posthog", Metric.status != "archived")
+    )
+    if row is None:
+        return AnalyticsOut(
+            provider="posthog", host=None, project_id=None, status="disconnected",
+            last_error=None, connected_by_name=None, connected_at=None, metrics=count or 0,
+        )  # fmt: skip
+    who = await metrics_service.names(db, {row.installed_by})
+    config = row.config or {}
+    return AnalyticsOut(
+        provider="posthog", host=config.get("host"), project_id=config.get("project_id"),
+        status="error" if row.status == "error" else "active", last_error=row.last_error,
+        connected_by_name=who.get(row.installed_by), connected_at=row.created_at,
+        metrics=count or 0,
+    )  # fmt: skip
+
+
+@router.get("/company-integrations/analytics", response_model=AnalyticsOut)
+async def get_analytics_integration(principal: Owner, db: TenantDB) -> AnalyticsOut:
+    """The analytics connection (PostHog): host, project and state; never the key."""
+    return await _analytics_out(db)
+
+
+@router.put(
+    "/company-integrations/analytics",
+    response_model=AnalyticsOut,
+    responses={422: {"description": "The host or the key was refused"}},
+)
+async def put_analytics_integration(
+    body: AnalyticsIn, principal: Owner, db: TenantDB
+) -> AnalyticsOut:
+    """Connect PostHog, or replace its host, project or key. The key is tested with one
+    trivial query first: a refused key is 422 with the provider's message (no key). An
+    own host must be ``https`` and resolve to public addresses only."""
+    await recheck_caller(db, principal, "owner")
+    conn = posthog.Connection(host=body.host.strip(), project_id=body.project_id,
+                              api_key=body.api_key)  # fmt: skip
+    try:
+        await posthog.check_host(conn.host)
+        await posthog.query_number(conn, posthog.KEY_CHECK_QUERY)
+    except posthog.HostError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+    except posthog.PostHogError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"PostHog refused the key: {exc.message}"
+        ) from None
+    row = await metrics_pull.integration(db)
+    if row is None:
+        row = CompanyIntegration(provider=posthog.PROVIDER, purpose=posthog.PURPOSE)
+        db.add(row)
+    row.account_id = body.project_id
+    row.account_label = None
+    row.ciphertext = posthog.seal(body.api_key)
+    row.key_version = crypto.KEY_VERSION
+    row.scopes = ["query:read"]
+    row.status = "active"
+    row.last_error = None
+    row.installed_by = principal.id
+    row.config = {"host": conn.host, "project_id": body.project_id}
+    await db.flush()
+    await metrics_pull.resume_all(db)
+    await audit.record(
+        db, principal, "company_integration.installed", "company_integration", row.id,
+        {"provider": row.provider, "purpose": row.purpose, "host": conn.host,
+         "project_id": body.project_id},
+    )  # fmt: skip
+    await db.commit()
+    return await _analytics_out(db)
+
+
+@router.delete("/company-integrations/analytics", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_analytics_integration(principal: Owner, db: TenantDB) -> None:
+    """Disconnect PostHog: the key is deleted and PostHog metrics are paused ("Analytics
+    disconnected"); their values stay."""
+    await recheck_caller(db, principal, "owner")
+    row = await metrics_pull.integration(db)
+    paused = await metrics_pull.pause_all(db)
+    if row is not None:
+        await audit.record(
+            db, principal, "company_integration.removed", "company_integration", row.id,
+            {"provider": row.provider, "purpose": row.purpose, "metrics_paused": paused},
+        )  # fmt: skip
+        await db.delete(row)
+    await db.commit()
+
+
 @router.delete(
     "/company-integrations/{integration_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -331,7 +432,12 @@ async def delete_company_integration(
     await recheck_caller(db, principal, "owner")
     row = await db.scalar(
         select(CompanyIntegration)
-        .where(CompanyIntegration.id == integration_id, CompanyIntegration.status != "revoked")
+        .where(
+            CompanyIntegration.id == integration_id,
+            CompanyIntegration.status != "revoked",
+            # PostHog is disconnected through /company-integrations/analytics.
+            CompanyIntegration.provider == slack_oauth.PROVIDER,
+        )
         .with_for_update()
     )
     if row is None:
