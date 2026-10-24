@@ -29,6 +29,7 @@ import {
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
+import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
@@ -86,6 +87,12 @@ type Decide = (
   revision?: number | null,
   onChanged?: (message: string) => void,
 ) => void;
+
+/**
+ * D1: a Roadmap items stop is decided on its review screen; the run page shows its summary.
+ * A console answer keeps its panel and Confirm here (W5), held to the same gate (D3).
+ */
+const decidedOnScreen = (cp: CheckpointOut) => cp.kind === "roadmap_items" && !cp.console;
 
 /** The decision panel (#decide): scrolled to and focused, so the keyboard continues from it. */
 function toDecision() {
@@ -221,7 +228,10 @@ export function RunDetail({ id }: { id: string }) {
   const retryImport = (seq: number) =>
     act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
   const done = run.segments.filter((s) => s.status === "succeeded").length;
-  const deciding = run.checkpoints.some((c) => c.status === "pending" && c.can_decide);
+  const decideCp = run.checkpoints.find((c) => c.status === "pending" && c.can_decide);
+  const deciding = !!decideCp;
+  // D1: Decide opens the Roadmap items review screen.
+  const decideHref = decideCp && decidedOnScreen(decideCp) ? reviewHref({ ...decideCp, run_id: run.id }) : null;
   const open = !FINAL_STATUSES.includes(run.status) && run.status !== "draft";
 
   return (
@@ -271,12 +281,17 @@ export function RunDetail({ id }: { id: string }) {
                 Approve {usd(run.estimate_usd)} and start
               </Button>
             )}
-            {deciding && (
-              // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
-              <Button variant="primary" icon="flag" onClick={toDecision}>
-                Decide
-              </Button>
-            )}
+            {deciding &&
+              (decideHref ? (
+                <LinkButton href={decideHref} variant="primary" icon="flag">
+                  Decide
+                </LinkButton>
+              ) : (
+                // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
+                <Button variant="primary" icon="flag" onClick={toDecision}>
+                  Decide
+                </Button>
+              ))}
             {can("resume_run") && run.status === "paused_overrun" && (
               <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/runs/{run_id}/resume", path)))}>
                 Resume
@@ -951,6 +966,15 @@ function SegmentItem({
             <AppliedEditsLine key={cp.id} cp={cp} />
           ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
+          {waitingCp?.kind === "roadmap_items" && reviewHref(waitingCp) && (
+            <ItemsReviewLine
+              run={run}
+              cp={waitingCp}
+              needYou={shared ? shared.tally.need_you : new Set(s.items_check?.reasons.map((x) => x.item)).size}
+              blocking={shared?.tally.blocking_open ?? s.items_check?.blocking ?? 0}
+              anchor={deciding.includes(waitingCp) && decidedOnScreen(waitingCp)}
+            />
+          )}
           {waitingCp?.kind === "feature_set" && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
             // C7: commenters suggest and viewers read on the review screen too.
             <p className="mt-2" data-testid="review-link">
@@ -982,7 +1006,7 @@ function SegmentItem({
           ))}
           <VagueGoalsLine count={vague} href={`/baseline?tab=proposals&run=${run.id}&interview=vague`} />
           {screened && <ReviewScreenLine run={run} cp={screened} />}
-          {deciding.map((cp, i) =>
+          {deciding.filter((cp) => !decidedOnScreen(cp)).map((cp, i) =>
             // D10: a PRD or roadmap review with its draft imported is decided in the version;
             // a refused draft and a console answer stay here.
             cp.review_link && !cp.console && !cp.cannot_approve ? (
@@ -1010,6 +1034,33 @@ function SegmentItem({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * D1: the Roadmap items stop on the run page: "{n} need you · {b} blocking" (the items still
+ * needing a person), Review items (the review screen, where it is decided) and the Raw file.
+ */
+function ItemsReviewLine({ run, cp, needYou, blocking, anchor }: { run: RunOut; cp: CheckpointOut; needYou: number; blocking: number; anchor: boolean }) {
+  const [raw, setRaw] = useState(false);
+  return (
+    <div
+      id={anchor ? "decide" : undefined}
+      tabIndex={anchor ? -1 : undefined}
+      className="mt-2 flex flex-wrap items-center gap-2"
+      data-testid="items-review-line"
+    >
+      <span className="font-semibold">
+        {needYou} need you · {blocking} blocking
+      </span>
+      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={cp.can_decide ? "primary" : "secondary"}>
+        Review items
+      </LinkButton>
+      <Button icon="doc" onClick={() => setRaw(true)}>
+        Raw file
+      </Button>
+      <RawFileSheet open={raw ? "file" : null} onClose={() => setRaw(false)} runId={run.id} seq={cp.segment_seq ?? 1} />
+    </div>
   );
 }
 

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { ROADMAP_REVIEW_RUN_ID } from "../lib/api/mock/runs";
 import { MOCK_REVIEW_CHANGE_KEY } from "../lib/api/mock/server";
-import { login, seedRoadmapReview, signOut } from "./helpers";
+import { login, openSeeded, seedRoadmapReview, signOut } from "./helpers";
 
 /**
  * D8 Shared draft decision: the Roadmap items checkpoint's draft lives on the server. Its note
@@ -21,7 +22,14 @@ async function openRun(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 }
 
-const decision = (page: Page) => page.getByRole("group", { name: "Decide: Roadmap items" });
+const bar = (page: Page) => page.getByTestId("decision-bar");
+
+/** D1: Roadmap items are decided on their review screen, opened from the run page's Review items. */
+async function openReview(page: Page) {
+  await openSeeded(page, seedRoadmapReview, `/runs/${ROADMAP_REVIEW_RUN_ID}`);
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+}
 
 // Card saved-note: protects = the note to the agents is saved on the server as the approver
 // types and loads after a reload; fails_when = a reload loses it, or "Saved" shows before the
@@ -29,12 +37,15 @@ const decision = (page: Page) => page.getByRole("group", { name: "Decide: Roadma
 test("the note to the agents is saved as I type and is there after a reload", async ({ page }) => {
   await login(page);
   await seedRoadmapReview(page);
-  await openRun(page);
-  const note = decision(page).getByLabel("Note for the agents");
+  await openReview(page);
+  const note = bar(page).getByLabel("Note to the agents");
   await note.fill("Caps ship on plan thresholds");
-  await expect(decision(page).getByTestId("note-status")).toHaveText("Saved");
+  // The review screen's bar saves the note when it loses focus; a reload reads it back.
+  await page.keyboard.press("Tab");
+  // The bar shows no saved state: give the save a moment before reloading (a reload cancels it).
+  await page.waitForTimeout(1_000);
   await page.reload();
-  await expect(decision(page).getByLabel("Note for the agents")).toHaveValue("Caps ship on plan thresholds");
+  await expect(bar(page).getByLabel("Note to the agents")).toHaveValue("Caps ship on plan thresholds");
 });
 
 // Card time-left: protects = the approver sees how long the SwarmCloud wait has left;
@@ -42,8 +53,8 @@ test("the note to the agents is saved as I type and is there after a reload", as
 test("the decision header says how long the wait has left", async ({ page }) => {
   await login(page);
   await seedRoadmapReview(page);
-  await openRun(page);
-  await expect(decision(page).getByTestId("wait-chip")).toHaveText("Waiting for you · 19 h left");
+  await openReview(page);
+  await expect(page.getByTestId("review-status")).toHaveText("Waiting for you · 19 h left");
 });
 
 // Card commenter-suggests: protects = a commenter's action reaches the approver's open page
@@ -79,23 +90,28 @@ test("a commenter's suggestion shows on the approver's page within one poll", as
 test("a decision over a draft that changed since it loaded is refused until I look again", async ({ page }) => {
   await login(page);
   await seedRoadmapReview(page);
-  await openRun(page);
-  await expect(decision(page).getByTestId("wait-chip")).toBeVisible();
-  // D3: the seeded run has blocking problems, so the decision here is Request changes.
-  await decision(page).getByLabel("Note for the agents").fill("Remove the Slack alerts date");
-  await expect(decision(page).getByTestId("note-status")).toHaveText("Saved");
+  await openReview(page);
+  // D3: the seeded run has blocking problems, so the decision here is Send back.
+  await page.locator('[data-testid="roadmap-item-row"][data-key="slack-alerts"]').getByRole("button", { name: "Remove date", exact: true }).click();
+  await expect(bar(page).getByTestId("staged-chip")).toHaveCount(1);
   // Another reviewer changes the draft after this page loaded it, before the decision.
   await page.evaluate((key) => localStorage.setItem(key, "commenter@example.com"), MOCK_REVIEW_CHANGE_KEY);
-  await decision(page).getByRole("button", { name: "Request changes" }).click();
-  const changed = page.getByTestId("review-changed");
+  const sendBack = async () => {
+    await bar(page).getByRole("button", { name: "Send back to agents" }).click();
+    await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
+  };
+  await sendBack();
+  // The confirm sheet stays open over the bar on a refusal: close it to read why.
+  await page.getByTestId("sheet-send-back").getByRole("button", { name: "Cancel" }).click();
+  const changed = bar(page).getByTestId("review-changed");
   await expect(changed).toContainText("The review changed since you loaded it (1 change by Commenter): look again, then decide.");
   // Nothing was decided: the checkpoint still waits.
-  await expect(page.getByTestId("checkpoint-waiting")).toBeVisible();
-  await expect(decision(page).getByRole("button", { name: "Request changes" })).toBeEnabled();
+  await expect(page.getByTestId("review-status")).toHaveText(/Waiting for you/);
 
   await changed.getByRole("button", { name: "Reload" }).click();
   await expect(changed).toHaveCount(0);
-  await decision(page).getByRole("button", { name: "Request changes" }).click();
-  await expect(page.getByTestId("checkpoint-waiting")).toHaveCount(0);
+  await sendBack();
+  await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);
+  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
   await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Changes requested");
 });

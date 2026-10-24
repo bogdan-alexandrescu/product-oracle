@@ -922,8 +922,14 @@ function actionWords(a: Pick<DraftAction, "kind" | "field" | "value">, done: boo
  * D9: up to three items of a roadmap items checkpoint, each with its first reason, its safe
  * fix (staged in one click, undone in one) and Open, then "+k more · h handled".
  */
+/** D9's child row: the item on the kind's review screen (D1 `?item=`), else the run page's decision. */
+function itemHref(c: InboxCheckpointRow, item: string): string {
+  const screen = reviewHref(c);
+  return screen ? `${screen}?item=${encodeURIComponent(item)}` : `/runs/${c.run_id}?item=${encodeURIComponent(item)}#decide`;
+}
+
 function childNeeds(c: InboxCheckpointRow, summary: InboxSummary, busy: string | null, act: Act, fixed?: FixedHere): Need[] {
-  const review = `/runs/${c.run_id}#decide`;
+  const review = reviewHref(c) ?? `/runs/${c.run_id}#decide`;
   // The rows I fixed on this visit stay in their places, done; the rest are the API's.
   const mine = Object.entries(fixed?.rows ?? {}).filter(([k]) => k.startsWith(`${c.id}-`));
   const children = summary.children.filter((child) => !fixed?.rows[`${c.id}-${child.item}`]);
@@ -1081,7 +1087,7 @@ function ChildActions({
           </Button>
         )
       )}
-      <LinkButton variant="ghost" href={`/runs/${c.run_id}?item=${encodeURIComponent(child.item)}#decide`} aria-label={`Open ${title}`}>
+      <LinkButton variant="ghost" href={itemHref(c, child.item)} aria-label={`Open ${title}`}>
         Open
       </LinkButton>
       {error && (
@@ -1168,15 +1174,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       action: c.kind === "baseline_confirm" ? (
         // B2: the run's review opens in the Baseline, filtered to the run.
         <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
+      ) : isHeld(c) ? (
+        // A held console approval is confirmed on the kind's review screen (D1, C7), else the run page.
+        <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>
+      ) : counted ? (
+        // D1: the Roadmap items review screen.
+        <LinkButton href={reviewHref(c) ?? review}>Review items</LinkButton>
       ) : reviewHref(c) ? (
         // F4: the Engineering check has its own review screen.
         <LinkButton href={reviewHref(c)!}>Review</LinkButton>
-      ) : isHeld(c) ? (
-        // The run page's checkpoint row, until the kind's review screen ships (D1).
-        <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>
-      ) : counted ? (
-        // Until D1's review screen lands, the run page opens at the decision.
-        <LinkButton href={review}>Review items</LinkButton>
       ) : (
         // The same verb as the runs list: the run page opens at the decision; a priority stop
         // opens its order next to the live ranking (C8), where it is decided too; a PRD or

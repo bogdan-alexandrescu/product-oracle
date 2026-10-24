@@ -8,6 +8,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
+import { ItemsReview } from "./_items-review";
 import { CheckpointReviewScreen } from "./_review";
 import { ScopeReview } from "./_scope-review";
 
@@ -21,9 +22,10 @@ function EngReviewView({ run, cp }: ReviewViewProps) {
   return <CheckpointReviewScreen runId={run.id} checkpointId={cp.id} />;
 }
 
-/** One entry per checkpoint kind with a review screen (D1 adds roadmap_items). */
+/** One entry per checkpoint kind with a review screen. */
 const VIEWS: Partial<Record<CheckpointOut["kind"], ComponentType<ReviewViewProps>>> = {
   feature_set: ScopeReview,
+  roadmap_items: ItemsReview,
   eng_review: EngReviewView,
 };
 

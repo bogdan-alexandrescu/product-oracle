@@ -1571,6 +1571,27 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     reviewDecider: (c) => runReviewDecider(db, c),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
+    ask: (q) => {
+      const at = now();
+      const id = uuid();
+      ensureV2(db).questions.push({
+        id, gap_id: null, intake_id: null, document_id: null, checkpoint_id: q.checkpoint_id, item_ref: q.item_ref, entity_id: null,
+        module_key: null, category: "general", prompt: q.prompt, rationale: null, priority: 100, batch: null,
+        asked_to: q.asked_to, asked_by: member?.id ?? db.user_id, section_key: null, status: "asked", created_at: at, updated_at: at,
+      });
+      return id;
+    },
+    asked: (id) => {
+      const v2 = ensureV2(db);
+      const q = v2.questions.find((x) => x.id === id);
+      if (!q) return null;
+      const a = v2.answers.filter((x) => x.question_id === id && x.kind === "answer").at(-1);
+      return { status: q.status, answer: a?.body ?? null };
+    },
+    withdraw: (id) => {
+      const q = ensureV2(db).questions.find((x) => x.id === id);
+      if (q && (q.status === "asked" || q.status === "delegated")) Object.assign(q, { status: "withdrawn", updated_at: now() });
+    },
     reviewChange: () => {
       const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
       localStorage.removeItem(MOCK_REVIEW_CHANGE_KEY);

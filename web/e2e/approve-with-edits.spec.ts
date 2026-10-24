@@ -18,7 +18,13 @@ async function openRun(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 }
 
-const decision = (page: Page) => page.getByRole("group", { name: "Decide: Roadmap items" });
+const bar = (page: Page) => page.getByTestId("decision-bar");
+
+/** D1: Roadmap items are decided on their review screen, opened from the run page's Review items. */
+async function openReview(page: Page) {
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+}
 const item = (page: Page, title: string) => page.getByTestId("item-reasons").filter({ hasText: title });
 
 /** Stages one reason's fix from its item, as an approver does, and waits for it to show as staged. */
@@ -30,17 +36,22 @@ async function stage(page: Page, title: string, fix: string) {
   await expect(row.getByTestId("draft-action").last()).toHaveText(/Staged by/);
 }
 
-/** Remove date, Drop and Move to Later staged, the section reason waived: the gate opens on the edits. */
+/** Remove date, Drop and Move to Later staged on the run page; the review screen opened. */
 async function stageEdits(page: Page) {
   await stage(page, "Slack alerts", "Remove date");
   await stage(page, "Mobile push", "Drop");
   await stage(page, "Budget caps", "Move to Later");
-  const gate = decision(page).getByTestId("approve-gate");
-  const row = gate.getByTestId("gate-reason").filter({ hasText: "Usage export" });
-  await row.getByRole("button", { name: "Waive…" }).click();
-  await row.getByRole("textbox").fill("Section lands in the next PRD version");
-  await row.getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(gate).toHaveCount(0);
+  await openReview(page);
+}
+
+/** On the review screen, the section reason waived: the gate opens on the edits. */
+async function waiveSection(page: Page) {
+  const row = page.locator('[data-testid="roadmap-item-row"][data-key="usage-export"]');
+  await row.getByRole("button", { name: "More actions for Usage export" }).click();
+  await page.getByRole("menuitem", { name: "Waive…" }).click();
+  await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill("Section lands in the next PRD version");
+  await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
+  await expect(row.getByTestId("row-done")).toHaveText(/✓ Waived/);
 }
 
 /**
@@ -90,12 +101,14 @@ test("approve with 3 edits applies them, moves to the roadmap draft and keeps th
   await login(page);
   await seedRoadmapReview(page);
   await openRun(page);
-  await expect(decision(page).getByRole("button", { name: "Approve and continue" })).toBeDisabled();
-
   await stageEdits(page);
-  const approve = decision(page).getByRole("button", { name: "Approve with 3 edits" });
+  const approve = bar(page).getByRole("button", { name: "Approve with 3 edits" });
+  await expect(approve).toBeDisabled();
+  await waiveSection(page);
   await expect(approve).toBeEnabled();
   await approve.click();
+  await expect(page.getByTestId("review-status")).toHaveText("Approved with 3 edits");
+  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
 
   // The run moves on to the roadmap draft: no agent re-ran the roadmap items.
   await expect(page.getByTestId("segment-roadmap_draft").getByTestId("segment-state")).toHaveText("Running");
@@ -135,16 +148,15 @@ test("a staged split disables approve and says it needs the agents", async ({ pa
   await seedStagedSplit(page);
   await openRun(page);
   await stageEdits(page);
+  await waiveSection(page);
 
-  const sentence = "Split on budget-caps needs the agents: send back, or remove it to approve.";
-  await expect(decision(page).getByTestId("needs-agents")).toHaveText(sentence);
-  const approve = decision(page).getByRole("button", { name: "Approve with 3 edits" });
+  // D1's review screen: the split blocks Approve with the reason it needs the agents.
+  await expect(bar(page).getByTestId("approve-blocked")).toContainText("Split needs the agents");
+  const approve = bar(page).getByRole("button", { name: "Approve with 3 edits" });
   await expect(approve).toBeDisabled();
-  await expect(approve).toHaveAttribute("title", sentence);
 
   // Removing the split is the other way on: Approve is enabled again.
-  const split = item(page, "Budget caps").getByTestId("draft-action").filter({ hasText: "Split" });
-  await split.getByRole("button", { name: "Undo" }).click();
-  await expect(decision(page).getByTestId("needs-agents")).toHaveCount(0);
+  await bar(page).getByRole("button", { name: /^Undo .*split/i }).click();
+  await expect(bar(page).getByTestId("approve-blocked")).toHaveCount(0);
   await expect(approve).toBeEnabled();
 });
