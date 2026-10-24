@@ -76,7 +76,8 @@ import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./so
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
-import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { ritualInbox, routeRituals, seedRituals, addDigest, type RitualsContext, type RitualsDb } from "./rituals";
+import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
 import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -192,6 +193,8 @@ export interface Db {
   rituals?: RitualsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
+  /** Alternatives, watched pages, the change log, web findings and positioning (./market.ts, H7). */
+  market?: MarketDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -375,6 +378,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "rituals" as the default company plus a Monthly roadmap refresh pre-read prepared early
  * (the owner and the approver attend) and last week's goals check-in, held, whose summary
  * failed (H2, ./rituals.ts);
+ * "market" as the default company plus three made-up alternatives with a page change, three
+ * not-vetted web findings and two positioning suggestions, and the Monthly competitive
+ * digest's pre-read prepared early (H7, ./market.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
@@ -3610,7 +3616,23 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
-  db.rituals ??= seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
+  // Market (H7): alternatives, the change log and positioning; seeded in the "market" scenario only.
+  const marketScenario = localStorage.getItem(MOCK_SCENARIO_KEY) === "market";
+  const digestId = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
+  db.market ??= marketScenario ? seedMarket(digestId) : emptyMarket();
+  const market = await routeMarket(
+    { me: { id: me.id, email: me.email, name: me.name ?? null, role: me.role }, uuid, companyTimezone: ritualsCtx.companyTimezone },
+    db.market,
+    req,
+    p,
+    q,
+  );
+  if (market) return market;
+  db.rituals ??= (() => {
+    const seeded = seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
+    if (marketScenario) addDigest(ritualsCtx, seeded, digestId, (asOf) => digestBlocks(db.market!, ritualsCtx.companyTimezone(), asOf));
+    return seeded;
+  })();
   const ritual = await routeRituals(ritualsCtx, db.rituals, req, p, q);
   if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;

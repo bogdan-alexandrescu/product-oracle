@@ -466,6 +466,28 @@ _ALL: tuple[Responsibility, ...] = (
         wired_by_name="H6 Launches and changelog",
         ceiling_reason="what is said to people outside the company",
     ),
+    Responsibility(
+        key="market",
+        title="Watch the market",
+        group="planning",
+        ceiling="recommend",
+        default="recommend",
+        levels={
+            "observe": "Oracle reads the pages you watch and lists what changed.",
+            "draft": (
+                "Oracle also searches the web each month and writes the digest for a named "
+                "person to edit."
+            ),
+            "recommend": (
+                "Oracle also suggests positioning changes with evidence; a person accepts each."
+            ),
+        },
+        limits=None,
+        wired_by="H7",
+        wired_by_name="H7 Competitive digest",
+        wired=True,
+        ceiling_reason="the category and positioning bet stay with people",
+    ),
 )
 REGISTRY: dict[str, Responsibility] = {r.key: r for r in _ALL}
 

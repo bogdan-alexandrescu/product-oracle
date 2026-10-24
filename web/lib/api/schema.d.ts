@@ -11121,6 +11121,302 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/competitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitors
+         * @description The alternatives the company tracks (direct, indirect and status quo) with their
+         *     latest changes.
+         */
+        get: operations["list_competitors"];
+        put?: never;
+        /** Create Competitor */
+        post: operations["create_competitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Competitor
+         * @description One alternative: its pages, its last 20 changes and its open web findings.
+         */
+        get: operations["get_competitor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Competitor */
+        patch: operations["update_competitor"];
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Competitor
+         * @description Archive an alternative: its pages are paused.
+         */
+        post: operations["archive_competitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Competitor */
+        post: operations["restore_competitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Watch Competitor Page
+         * @description Watch a public page of an alternative; it is read at once, then weekly.
+         */
+        post: operations["watch_competitor_page"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-pages/{page_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Competitor Page
+         * @description Stop watching a page: its snapshots and page changes go with it.
+         */
+        delete: operations["delete_competitor_page"];
+        options?: never;
+        head?: never;
+        /** Update Competitor Page */
+        patch: operations["update_competitor_page"];
+        trace?: never;
+    };
+    "/v1/competitor-pages/{page_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Competitor Page
+         * @description Check now: read the page at once (409 when its robots.txt disallows it).
+         */
+        post: operations["check_competitor_page"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitor Changes
+         * @description The change log: page changes and promoted web findings, newest first (from and to
+         *     are UTC dates, to exclusive).
+         */
+        get: operations["list_competitor_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Competitor Change
+         * @description One change: the diff lines of a page change, or its web finding.
+         */
+        get: operations["get_competitor_change"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-web-findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitor Web Findings
+         * @description What the monthly web search found, not vetted until a person promotes it (open
+         *     findings older than 90 days only with include_older).
+         */
+        get: operations["list_competitor_web_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-web-findings/{finding_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Web Finding
+         * @description Promote to change log (409 when the finding is not open).
+         */
+        post: operations["promote_web_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-web-findings/{finding_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Web Finding */
+        post: operations["dismiss_web_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/positioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Positioning
+         * @description The company's positioning inputs (alternatives, unique attributes, value and
+         *     proof, best-fit customers, market category, trends) and the open suggestions.
+         */
+        get: operations["get_positioning"];
+        /** Update Positioning */
+        put: operations["update_positioning"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/positioning-suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Positioning Suggestion */
+        post: operations["accept_positioning_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/positioning-suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Positioning Suggestion */
+        post: operations["dismiss_positioning_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -13502,6 +13798,58 @@ export interface components {
              */
             dismiss: boolean;
         };
+        /** ChangeDetail */
+        ChangeDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Competitor Name */
+            competitor_name: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "page" | "web";
+            /** Page Label */
+            page_label: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
+            /** Page Url */
+            page_url: string | null;
+            /** Web Host */
+            web_host?: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Added Lines */
+            added_lines: number;
+            /** Removed Lines */
+            removed_lines: number;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "minor" | "notable" | "major";
+            /**
+             * Rated By
+             * @enum {string}
+             */
+            rated_by: "rule" | "oracle" | "person";
+            /** Summary */
+            summary: string | null;
+            /** Web Finding Id */
+            web_finding_id: string | null;
+            /** Diff */
+            diff: components["schemas"]["DiffLine"][];
+            web_finding?: components["schemas"]["WebFindingOut"] | null;
+        };
         /** ChangeDismissIn */
         ChangeDismissIn: {
             /** Lock Version */
@@ -13585,6 +13933,55 @@ export interface components {
             schema: {
                 [key: string]: unknown;
             };
+        };
+        /** ChangeOut */
+        ChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Competitor Name */
+            competitor_name: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "page" | "web";
+            /** Page Label */
+            page_label: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
+            /** Page Url */
+            page_url: string | null;
+            /** Web Host */
+            web_host?: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Added Lines */
+            added_lines: number;
+            /** Removed Lines */
+            removed_lines: number;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "minor" | "notable" | "major";
+            /**
+             * Rated By
+             * @enum {string}
+             */
+            rated_by: "rule" | "oracle" | "person";
+            /** Summary */
+            summary: string | null;
+            /** Web Finding Id */
+            web_finding_id: string | null;
         };
         /**
          * ChangeResult
@@ -14606,6 +15003,119 @@ export interface components {
             status: string;
             /** Document Slug */
             document_slug?: string | null;
+        };
+        /** CompetitorCreate */
+        CompetitorCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "direct" | "indirect" | "status_quo";
+            /** Website */
+            website?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Aliases */
+            aliases?: string[];
+        };
+        /** CompetitorDetail */
+        CompetitorDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "direct" | "indirect" | "status_quo";
+            /** Website */
+            website: string | null;
+            /** Aliases */
+            aliases: string[];
+            /** Description */
+            description: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** Pages */
+            pages: number;
+            /** Last Change On */
+            last_change_on: string | null;
+            /** Changes This Month */
+            changes_this_month: number;
+            /** Open Web Findings */
+            open_web_findings: number;
+            /** Watch Problem */
+            watch_problem?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Page List */
+            page_list: components["schemas"]["PageOut"][];
+            /** Changes */
+            changes: components["schemas"]["ChangeOut"][];
+            /** Web Findings */
+            web_findings: components["schemas"]["WebFindingOut"][];
+        };
+        /** CompetitorOut */
+        CompetitorOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "direct" | "indirect" | "status_quo";
+            /** Website */
+            website: string | null;
+            /** Aliases */
+            aliases: string[];
+            /** Description */
+            description: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** Pages */
+            pages: number;
+            /** Last Change On */
+            last_change_on: string | null;
+            /** Changes This Month */
+            changes_this_month: number;
+            /** Open Web Findings */
+            open_web_findings: number;
+            /** Watch Problem */
+            watch_problem?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** CompetitorPatch */
+        CompetitorPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Name */
+            name?: string | null;
+            /** Kind */
+            kind?: ("direct" | "indirect" | "status_quo") | null;
+            /** Website */
+            website?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Aliases */
+            aliases?: string[] | null;
         };
         /**
          * ComposedModule
@@ -16020,6 +16530,16 @@ export interface components {
         DesignReviewOut: {
             event: components["schemas"]["ArtifactReviewEventOut"];
             version: components["schemas"]["ArtifactVersionOut"];
+        };
+        /** DiffLine */
+        DiffLine: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "+" | "-";
+            /** Text */
+            text: string;
         };
         /** DiffOut */
         DiffOut: {
@@ -17619,6 +18139,11 @@ export interface components {
             title: string;
             /** Runs Per Month */
             runs_per_month: number;
+            /**
+             * Per Run Usd
+             * @default 3
+             */
+            per_run_usd: number;
         };
         /** EvaluationFindingOut */
         EvaluationFindingOut: {
@@ -18433,6 +18958,11 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** FindingDismissIn */
+        FindingDismissIn: {
+            /** Reason */
+            reason?: string | null;
+        };
         /**
          * FindingOut
          * @description A finding drawn from the author's own sources and what others see of it (S6).
@@ -18600,7 +19130,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "competitive_digest";
             /** Title */
             title: string;
             /** Description */
@@ -19804,7 +20334,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "competitive_digest";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -21590,6 +22120,13 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** Item */
+        Item: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
         /**
          * ItemChange
          * @description How a draft item differs from its approved twin (roadmap.diff.diff_items).
@@ -21699,6 +22236,13 @@ export interface components {
             tracker_events: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ItemIn */
+        ItemIn: {
+            /** Id */
+            id?: string | null;
+            /** Text */
+            text: string;
         };
         /** ItemOut */
         ItemOut: {
@@ -24369,6 +24913,58 @@ export interface components {
             /** Modules */
             modules: components["schemas"]["PackModuleOut"][];
         };
+        /** PageIn */
+        PageIn: {
+            /** Url */
+            url: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "pricing" | "changelog" | "product" | "docs" | "blog" | "other";
+        };
+        /** PageOut */
+        PageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Url */
+            url: string;
+            /** Host */
+            host: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "pricing" | "changelog" | "product" | "docs" | "blog" | "other";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "blocked" | "error";
+            /** Last Checked At */
+            last_checked_at: string | null;
+            /** Last Changed At */
+            last_changed_at: string | null;
+            /** Attempts */
+            attempts: number;
+            /** Last Error */
+            last_error: string | null;
+        };
+        /** PagePatch */
+        PagePatch: {
+            /** Label */
+            label?: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
+            /** Status */
+            status?: ("active" | "paused") | null;
+        };
         /** PasswordChange */
         PasswordChange: {
             /** Current Password */
@@ -24764,6 +25360,82 @@ export interface components {
             reason: string | null;
             /** Until */
             until: string | null;
+        };
+        /** PositioningFields */
+        PositioningFields: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["Item"][];
+            /** Unique Attributes */
+            unique_attributes?: components["schemas"]["Item"][];
+            /** Value And Proof */
+            value_and_proof?: components["schemas"]["Item"][];
+            /** Best Fit Customers */
+            best_fit_customers?: components["schemas"]["Item"][];
+            /** Market Category */
+            market_category?: components["schemas"]["Item"][];
+            /** Trends */
+            trends?: components["schemas"]["Item"][];
+        };
+        /** PositioningFieldsIn */
+        PositioningFieldsIn: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["ItemIn"][];
+            /** Unique Attributes */
+            unique_attributes?: components["schemas"]["ItemIn"][];
+            /** Value And Proof */
+            value_and_proof?: components["schemas"]["ItemIn"][];
+            /** Best Fit Customers */
+            best_fit_customers?: components["schemas"]["ItemIn"][];
+            /** Market Category */
+            market_category?: components["schemas"]["ItemIn"][];
+            /** Trends */
+            trends?: components["schemas"]["ItemIn"][];
+        };
+        /** PositioningIn */
+        PositioningIn: {
+            fields: components["schemas"]["PositioningFieldsIn"];
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** PositioningOut */
+        PositioningOut: {
+            fields: components["schemas"]["PositioningFields"];
+            /** Suggestions */
+            suggestions: components["schemas"]["PositioningSuggestionOut"][];
+            /** Updated By Name */
+            updated_by_name: string | null;
+            /** Updated At */
+            updated_at: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** PositioningSuggestionOut */
+        PositioningSuggestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "alternatives" | "unique_attributes" | "value_and_proof" | "best_fit_customers" | "market_category" | "trends";
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add" | "replace" | "remove";
+            /** Item Id */
+            item_id: string | null;
+            /** Text */
+            text: string | null;
+            /** Rationale */
+            rationale: string;
+            /** Refs */
+            refs: components["schemas"]["SuggestionRef"][];
+            /** Occurrence Id */
+            occurrence_id: string | null;
         };
         /** PrdAnchor */
         PrdAnchor: {
@@ -25232,6 +25904,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** PromoteIn */
+        PromoteIn: {
+            /** Rating */
+            rating?: ("minor" | "notable" | "major") | null;
         };
         /** ProposalAccept */
         ProposalAccept: {
@@ -28192,7 +28869,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "competitive_digest";
             /** Document */
             document?: string | null;
             /** Source */
@@ -28357,7 +29034,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "competitive_digest";
             /** Flow Title */
             flow_title: string;
             /**
@@ -28619,7 +29296,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "competitive_digest";
             /** Flow Title */
             flow_title: string;
             /**
@@ -31774,6 +32451,20 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SuggestionRef */
+        SuggestionRef: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "change" | "web" | "request" | "source_item";
+            /** Id */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Vetted */
+            vetted?: boolean | null;
+        };
         /** SummaryAsk */
         SummaryAsk: {
             /**
@@ -34249,6 +34940,54 @@ export interface components {
         WaiveIn: {
             /** Reason */
             reason: string;
+        };
+        /** WebFindingOut */
+        WebFindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Competitor Name */
+            competitor_name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "news" | "review" | "launch" | "pricing" | "other";
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Excerpt */
+            excerpt: string;
+            /** Url */
+            url: string;
+            /** Host */
+            host: string;
+            /** Published On */
+            published_on: string | null;
+            /**
+             * Found On
+             * Format: date
+             */
+            found_on: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "promoted" | "dismissed";
+            /** Vetted */
+            vetted: boolean;
+            /** Occurrence Id */
+            occurrence_id: string | null;
+            /** Dismiss Reason */
+            dismiss_reason?: string | null;
         };
         /** WindowOut */
         WindowOut: {
@@ -56101,6 +56840,898 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_competitors: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorDetail"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archive_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restore_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    watch_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    check_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_competitor_changes: {
+        parameters: {
+            query?: {
+                competitor_id?: string | null;
+                from?: string | null;
+                to?: string | null;
+                rating?: ("minor" | "notable" | "major") | null;
+                origin?: ("page" | "web") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_competitor_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeDetail"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_competitor_web_findings: {
+        parameters: {
+            query?: {
+                status?: ("open" | "promoted" | "dismissed") | null;
+                competitor_id?: string | null;
+                occurrence_id?: string | null;
+                include_older?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_web_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_web_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFindingOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_positioning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+        };
+    };
+    update_positioning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositioningIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    accept_positioning_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_positioning_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

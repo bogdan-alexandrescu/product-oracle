@@ -21,6 +21,7 @@ from oracle.baseline import figures
 from oracle.baseline.figures import Figure
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
 from oracle.docs.models import Document, DocumentVersion
+from oracle.market import blocks as market_blocks
 from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
@@ -622,6 +623,9 @@ async def update_draft(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
              "text": f"{doc.title} ({doc.status})"}]  # fmt: skip
 
 
+# H7 Competitive digest's four blocks (oracle.market.blocks).
+TITLES.update(market_blocks.TITLES)
+
 Builder = Callable[[AsyncSession, BlockCtx], Awaitable[list[dict[str, Any]]]]
 BUILDERS: dict[str, Builder] = {
     "goals": goals,
@@ -646,6 +650,7 @@ BUILDERS: dict[str, Builder] = {
     "strategy_age": strategy_age,
     "changelog_drafts": changelog_drafts,
     "update_draft": update_draft,
+    **market_blocks.BUILDERS,
 }
 
 
