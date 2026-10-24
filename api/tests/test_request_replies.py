@@ -688,3 +688,14 @@ async def test_a_persons_edit_while_oracle_drafts_is_kept(client, ctx, fake):
     await worker.run_pending(ctx.tenant_id)
     [got] = await replies(client, ctx, r["id"])
     assert got["body"] == "No: we focus on activation." and got["draft_source"] == "person"
+
+
+async def test_a_request_filed_for_someone_else_has_no_member_asker(client, ctx):
+    """protects=member askers are the members who asked in their own name; fails_when=an
+    owner filing in someone else's name is taken for the asker (and told in Oracle);
+    no_claim=looking askers up by name."""
+    r = await add(client, ctx, who="owner", channel="in_app", requester_name="Pat Doe",
+                  requester_kind="team")  # fmt: skip
+    assert (await act(client, ctx, r["id"], "disqualify", reason="no_goal")).status_code == 200
+    [reply] = await replies(client, ctx, r["id"])
+    assert reply["member_id"] is None and reply["asker"] == "Pat Doe"
