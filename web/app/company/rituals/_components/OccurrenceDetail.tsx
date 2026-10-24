@@ -16,7 +16,10 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from "./lib";
 
-type Row = { text?: string; href?: string | null; method?: string; label?: string; finding_id?: string };
+type Row = { text?: string; href?: string | null; method?: string; label?: string; finding_id?: string; summary?: string | null; untrusted?: boolean };
+
+/** A row's text, with an untrusted summary (H7: a promoted web finding's title, kept out of the pre-read's text) shown as plain text. */
+const rowText = (r: Row) => (r.untrusted && r.summary ? `${r.text} · ${r.summary}` : r.text);
 type Block = { key: string; title: string; as_of?: string; rows: Row[] };
 
 const NOTES_MAX = 10_000;
@@ -156,10 +159,10 @@ function BlockCard({ block }: { block: Block }) {
             <li key={i} className="min-w-0 [overflow-wrap:anywhere]">
               {r.href ? (
                 <Link href={r.href} className="hover:underline">
-                  {r.text}
+                  {rowText(r)}
                 </Link>
               ) : (
-                r.text
+                rowText(r)
               )}
             </li>
           ))}
@@ -237,7 +240,8 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
       setBusy(false);
     }
   };
-  const button = canAsk && occ.pre_read.built_at && (
+  // Not offered when Oracle does not write it (a digest at H11 "Watch the market" Observe).
+  const button = canAsk && occ.pre_read.built_at && occ.summary_offered !== false && (
     <Button variant="solid" disabled={busy} onClick={ask}>
       {words.ask}
     </Button>

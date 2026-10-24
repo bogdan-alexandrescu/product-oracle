@@ -31,7 +31,12 @@ type Change = Omit<ChangeOut, "competitor_name" | "page_label" | "page_url" | "w
   diff: Schemas["DiffLine"][];
 };
 type Finding = Omit<WebFindingOut, "competitor_name" | "vetted" | "found_on"> & { created_at: string };
-type StoredSuggestion = Omit<Suggestion, "refs"> & { refs: { kind: Schemas["SuggestionRef"]["kind"]; id: string }[]; status: "open" | "accepted" | "dismissed" };
+// A request or source item ref carries its title here: the market mock keeps no requests or
+// sources of its own (the API reads the request's title, and a source item's for its owner).
+type StoredSuggestion = Omit<Suggestion, "refs"> & {
+  refs: { kind: Schemas["SuggestionRef"]["kind"]; id: string; title?: string }[];
+  status: "open" | "accepted" | "dismissed";
+};
 
 export interface MarketDb {
   competitors: Competitor[];
@@ -215,6 +220,20 @@ export function seedMarket(occurrenceId: string | null): MarketDb {
       occurrence_id: occurrenceId,
       status: "open",
     },
+    {
+      id: id("suggestion:spreadsheets"),
+      field: "alternatives",
+      action: "remove",
+      item_id: "alt1",
+      text: null,
+      rationale: "Competitor A's team plan and the requests name tools, not spreadsheets.",
+      refs: [
+        { kind: "change", id: id("change:a-pricing") },
+        { kind: "request", id: id("request:import"), title: "Import our roadmap from a spreadsheet" },
+      ],
+      occurrence_id: occurrenceId,
+      status: "open",
+    },
   );
   return db;
 }
@@ -272,7 +291,7 @@ function positioningOut(db: MarketDb): PositioningOut {
       const ch = db.changes.find((x) => x.id === r.id);
       return { ...r, title: ch?.summary ?? null, vetted: null };
     }
-    return { ...r, title: null, vetted: null };
+    return { kind: r.kind, id: r.id, title: r.title ?? null, vetted: null };
   };
   return {
     fields: db.positioning.fields,
@@ -297,10 +316,14 @@ export function digestBlocks(db: MarketDb, zone: string, asOf: string) {
     const out = changeOut(db, ch);
     const origin = out.page_label ? LABEL_TITLES[out.page_label] : `From the web · ${out.web_host}`;
     const lines = ch.origin === "page" ? ` · +${ch.added_lines} −${ch.removed_lines}` : "";
+    // As the API: a web change's summary (the finding's title) is a field marked untrusted, never pre-read text.
+    const untrusted = ch.origin === "web";
     return {
       change_id: ch.id,
       href: `/company/market?alternative=${c.id}&change=${ch.id}`,
-      text: `${c.name} · ${origin} · ${day(ch.detected_at)}${lines} · ${ch.rating}${ch.summary ? ` · ${ch.summary}` : ""}`,
+      summary: ch.summary,
+      untrusted,
+      text: `${c.name} · ${origin} · ${day(ch.detected_at)}${lines} · ${ch.rating}${ch.summary && !untrusted ? ` · ${ch.summary}` : ""}`,
     };
   });
   const web = db.findings

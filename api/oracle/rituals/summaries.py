@@ -165,6 +165,12 @@ async def on_demand(db: AsyncSession, principal: Principal, occ: RitualOccurrenc
     return await _start(db, principal, occ, principal.user_id, kind)
 
 
+async def offered(db: AsyncSession, kind: str | None) -> bool:
+    """Whether Oracle writes a ``kind`` occurrence's summary now: a competitive digest's
+    not at H11 ``market`` Observe (its route answers 409 there)."""
+    return kind not in FLOW_FOR_KIND or await _market_writes(db)
+
+
 async def _market_writes(db: AsyncSession) -> bool:
     """H11 ``market``: Oracle writes the digest from Draft up, never at Observe."""
     from oracle import autonomy

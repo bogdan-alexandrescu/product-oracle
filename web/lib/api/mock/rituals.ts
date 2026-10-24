@@ -19,7 +19,7 @@ type Member = { id: string; email: string; role: Role; status?: string };
 /** A stored ritual: the API's record without what is derived on the way out. */
 type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string };
 /** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
-type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions"> & {
+type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions" | "summary_offered"> & {
   summary_reads?: number;
   read_by: string[];
 };
@@ -43,6 +43,8 @@ export interface RitualsContext {
   companyTimezone: () => string;
   /** The decision log, for the decisions recorded with an occurrence. */
   decisions: () => LoggedDecision[];
+  /** H11 "Watch the market" above Observe: Oracle writes the competitive digest. */
+  marketWrites: () => boolean;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -393,6 +395,7 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
     attendee_ids: r.attendee_ids,
     timezone: r.schedule.timezone,
     read_by_me: o.read_by.includes(ctx.me.id),
+    summary_offered: r.kind !== DIGEST.kind || ctx.marketWrites(),
     decisions: decisionsOf(ctx, o).map((d) => ({ id: d.id, number: d.number, title: d.title, href: `/company/decisions?d=${d.number}` })),
   };
 }
@@ -618,6 +621,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   }
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+    if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
     if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
     const id = ctx.uuid();
     Object.assign(o, { summary_state: "running", summary_run_id: id, summary_reads: 0, summary_note: null });

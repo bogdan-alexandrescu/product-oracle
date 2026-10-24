@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -15,6 +16,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.baseline.public_links import LinkFetcher
 from oracle.market import robots, watch
+from oracle.market.blocks import LABEL_TITLES
 from oracle.market.findings import plain
 from oracle.market.models import (
     FIELDS,
@@ -57,6 +59,7 @@ DECIDED_HIDE = timedelta(days=180)
 # Open findings older than this are hidden from the default view.
 OPEN_SHOWN = timedelta(days=90)
 KIND = "competitive_digest"
+STALE_POSITIONING = "Someone else changed the positioning; reload"
 
 
 class MarketError(Exception):
@@ -544,20 +547,52 @@ def _fields(row: Positioning | None) -> dict[str, list[dict[str, str]]]:
     return {f: [dict(i) for i in stored.get(f) or []] for f in FIELDS}
 
 
-async def _ref_out(db: AsyncSession, ref: dict[str, Any]) -> SuggestionRef:
+async def _ref_out(
+    db: AsyncSession, ref: dict[str, Any], viewer: uuid.UUID | None
+) -> SuggestionRef:
+    """A suggestion's evidence with its title: the finding's, the change's summary (else
+    the alternative and the page), the request's, and a source item's for its source's
+    owner only (a person's source is private to them, S3)."""
+    from oracle.requests.models import ProductRequest
+    from oracle.sources.models import Source, SourceItem
+
     title: str | None = None
     vetted: bool | None = None
-    if ref.get("kind") == "web":
-        try:
-            f = await db.get(CompetitorWebFinding, uuid.UUID(str(ref.get("id"))))
-        except ValueError:
-            f = None
+    kind = ref.get("kind")
+    try:
+        rid = uuid.UUID(str(ref.get("id")))
+    except ValueError:
+        rid = None
+    if rid is not None and kind == "web":
+        f = await db.get(CompetitorWebFinding, rid)
         if f is not None:
             title, vetted = f.title, f.status == "promoted"
+    elif rid is not None and kind == "change":
+        row = (
+            await db.execute(
+                select(CompetitorChange, Competitor, CompetitorPage)
+                .join(Competitor, Competitor.id == CompetitorChange.competitor_id)
+                .outerjoin(CompetitorPage, CompetitorPage.id == CompetitorChange.page_id)
+                .where(CompetitorChange.id == rid)
+            )
+        ).first()
+        if row is not None:
+            ch, c, page = row
+            where = LABEL_TITLES[page.label] if page is not None else "From the web"
+            title = ch.summary or f"{c.name} · {where}"
+    elif rid is not None and kind == "request":
+        title = await db.scalar(select(ProductRequest.title).where(ProductRequest.id == rid))
+    elif rid is not None and kind == "source_item" and viewer is not None:
+        title = await db.scalar(
+            select(SourceItem.title)
+            .join(Source, Source.id == SourceItem.source_id)
+            .where(SourceItem.id == rid, Source.owner_user_id == viewer)
+        )
     return SuggestionRef(kind=ref["kind"], id=str(ref["id"]), title=title, vetted=vetted)
 
 
-async def positioning_out(db: AsyncSession) -> PositioningOut:
+async def positioning_out(db: AsyncSession, viewer: uuid.UUID | None = None) -> PositioningOut:
+    """The positioning and its open suggestions as ``viewer`` (a user id) sees them."""
     row = await _positioning(db)
     fields = _fields(row)
     suggestions = []
@@ -569,7 +604,7 @@ async def positioning_out(db: AsyncSession) -> PositioningOut:
         suggestions.append(
             PositioningSuggestionOut(
                 id=s.id, field=s.field, action=s.action, item_id=s.item_id, text=s.text,  # type: ignore[arg-type]
-                rationale=s.rationale, refs=[await _ref_out(db, r) for r in s.refs or []],
+                rationale=s.rationale, refs=[await _ref_out(db, r, viewer) for r in s.refs or []],
                 occurrence_id=s.occurrence_id,
             )
         )  # fmt: skip
@@ -611,7 +646,14 @@ async def _save(
     before = _fields(row)
     if row is None:
         row = Positioning(fields=fields, updated_by=principal.id, updated_at=_now())
-        db.add(row)
+        try:
+            # Two first saves at once: the one that loses the race to the company's one
+            # row reloads, as with a stale lock_version.
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError:
+            raise MarketError(409, STALE_POSITIONING) from None
     else:
         row.fields = fields
         row.updated_by, row.updated_at = principal.id, _now()
@@ -627,7 +669,7 @@ async def update_positioning(
 ) -> PositioningOut:
     row = await _positioning(db, lock=True)
     if (row.lock_version if row is not None else 0) != body.lock_version:
-        raise MarketError(409, "Someone else changed the positioning; reload")
+        raise MarketError(409, STALE_POSITIONING)
     fields: dict[str, list[dict[str, str]]] = {}
     for f in FIELDS:
         items = [
@@ -638,7 +680,7 @@ async def update_positioning(
         fields[f] = items
     await _save(db, principal, row, fields, {"by": "person"})
     await db.commit()
-    return await positioning_out(db)
+    return await positioning_out(db, principal.user_id)
 
 
 async def _open_suggestion(db: AsyncSession, sid: uuid.UUID) -> PositioningSuggestion:
@@ -676,7 +718,7 @@ async def accept_suggestion(
     s.status, s.decided_by, s.decided_at = "accepted", principal.id, _now()
     await _save(db, principal, row, fields, {"by": "suggestion", "suggestion_id": str(s.id)})
     await db.commit()
-    return await positioning_out(db)
+    return await positioning_out(db, principal.user_id)
 
 
 async def dismiss_suggestion(
@@ -687,7 +729,7 @@ async def dismiss_suggestion(
     await audit.record(db, principal, "positioning_suggestion.dismissed",
                        "positioning_suggestion", s.id)  # fmt: skip
     await db.commit()
-    return await positioning_out(db)
+    return await positioning_out(db, principal.user_id)
 
 
 def utc(d: date) -> datetime:

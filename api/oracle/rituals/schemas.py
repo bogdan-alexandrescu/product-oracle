@@ -109,6 +109,9 @@ class OccurrenceOut(BaseModel):
     summary: str | None
     summary_state: SummaryState
     summary_note: str | None
+    # Whether Oracle writes this occurrence's summary now (H7: a competitive digest's is not
+    # offered at H11 market Observe).
+    summary_offered: bool = True
     read_by_me: bool
 
 

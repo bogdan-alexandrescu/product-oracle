@@ -219,6 +219,7 @@ async def _removed_texts(s: AsyncSession, now: datetime) -> dict[str, datetime]:
     for ev in await s.scalars(
         select(AuditEvent).where(
             AuditEvent.action == "positioning.changed",
+            AuditEvent.created_at >= now - REMOVED_WINDOW,
         )
     ):
         at = (ev.data or {}).get("at")

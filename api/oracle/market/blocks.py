@@ -84,13 +84,16 @@ async def competitor_changes(db: AsyncSession, ctx: Any) -> list[dict[str, Any]]
         if finding is not None:
             origin = f"From the web · {finding.host}"
         lines = f" · +{ch.added_lines} −{ch.removed_lines}" if ch.origin == "page" else ""
-        summary = f" · {ch.summary}" if ch.summary else ""
+        # A promoted finding's summary is its title, text from the web: it stays a field
+        # marked untrusted and never enters the pre-read's text (the digest's prompt).
+        untrusted = ch.origin == "web"
+        summary = f" · {ch.summary}" if ch.summary and not untrusted else ""
         out.append({
             "change_id": str(ch.id), "competitor_id": str(c.id), "competitor": c.name,
             "origin": ch.origin, "label": page.label if page is not None else None,
             "detected_on": company_time.day(ch.detected_at, zone).isoformat(),
             "added_lines": ch.added_lines, "removed_lines": ch.removed_lines,
-            "rating": ch.rating, "summary": ch.summary,
+            "rating": ch.rating, "summary": ch.summary, "untrusted": untrusted,
             "href": f"/company/market?alternative={c.id}&change={ch.id}",
             "text": f"{c.name} · {origin} · {_day(ch.detected_at, zone)}{lines} · "
                     f"{ch.rating}{summary}",

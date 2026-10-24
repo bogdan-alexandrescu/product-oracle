@@ -242,7 +242,7 @@ async def dismiss_web_finding(
 async def get_positioning(db: TenantDB, principal: Viewer) -> PositioningOut:
     """The company's positioning inputs (alternatives, unique attributes, value and
     proof, best-fit customers, market category, trends) and the open suggestions."""
-    return await service.positioning_out(db)
+    return await service.positioning_out(db, principal.user_id)
 
 
 @router.put("/positioning", response_model=PositioningOut, responses=ERRORS)

@@ -9,6 +9,7 @@ no_claim=<what green does not prove>.
 
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import func, select
 
 from oracle.market import diff, robots
@@ -203,6 +204,7 @@ async def test_robots_txt_answering_503_blocks_the_page(client, ctx, at, web):
     assert web.hits(PRICING) == 0
 
 
+@pytest.mark.timing
 async def test_a_hanging_host_does_not_stall_the_tick(client, ctx, at, web, monkeypatch):
     """protects=the weekly checks keep inside the tick's budget: no read starts that could
     not finish before the deadline, each page's result is committed as it completes (a

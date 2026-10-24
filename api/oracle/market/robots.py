@@ -5,7 +5,9 @@ through the same fetcher (oracle.baseline.public_links.LinkFetcher: https, publi
 addresses, size and time caps) and keeps it :data:`TTL`. The group for
 ``ProductOracleBot`` applies when the file has one, otherwise the ``*`` group; the longest
 matching ``Allow`` or ``Disallow`` wins (``Allow`` on a tie), with ``*`` and ``$`` as in
-RFC 9309. A missing file (404) or one that cannot be read allows everything.
+RFC 9309. A missing file (404) or one that cannot be read allows everything, except a
+file that answers 5xx: the site is unreachable, so nothing is allowed (RFC 9309 2.3.1.4).
+An empty ``User-agent:`` line names no crawler.
 """
 
 import re
@@ -24,8 +26,12 @@ BLOCKED = "The site asks bots not to read this page"
 class Rules:
     # (allow, pattern) of the group that applies.
     rules: tuple[tuple[bool, str], ...] = ()
+    # robots.txt answered 5xx: nothing may be read.
+    disallow_all: bool = False
 
     def allows(self, path: str) -> bool:
+        if self.disallow_all:
+            return False
         best: tuple[int, bool] | None = None
         for allow, pattern in self.rules:
             if not pattern:
@@ -60,7 +66,8 @@ def parse(text: str) -> Rules:
             if in_rules:
                 groups.append((agents, rules))
                 agents, rules, in_rules = set(), [], False
-            agents.add(value.lower())
+            if value:
+                agents.add(value.lower())
         elif key in ("allow", "disallow"):
             in_rules = True
             rules.append((key == "allow", value))
@@ -74,11 +81,20 @@ def parse(text: str) -> Rules:
     return Rules()
 
 
+# The fetcher reports an error answer as "The page answered with an error (<code>)."
+_SERVER_ERROR = re.compile(r"\(5\d\d\)")
+
 _cache: dict[str, tuple[datetime, Rules]] = {}
 
 
 def clear() -> None:
     _cache.clear()
+
+
+def cached(url: str, now: datetime) -> bool:
+    """Whether the rules for ``url``'s host are at hand (no robots.txt read needed)."""
+    hit = _cache.get((urlsplit(url).hostname or "").lower())
+    return hit is not None and now - hit[0] < TTL
 
 
 async def rules_for(fetcher: LinkFetcher, url: str, now: datetime) -> Rules:
@@ -89,8 +105,9 @@ async def rules_for(fetcher: LinkFetcher, url: str, now: datetime) -> Rules:
     try:
         page = await fetcher.fetch(f"https://{host}/robots.txt", now=now)
         rules = parse(page.text)
-    except LinkError:
-        rules = Rules()
+    except LinkError as e:
+        server_error = e.code == "unreachable" and _SERVER_ERROR.search(str(e)) is not None
+        rules = Rules(disallow_all=server_error)
     _cache[host] = (now, rules)
     return rules
 

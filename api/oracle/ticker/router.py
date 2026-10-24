@@ -181,11 +181,15 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
     acc.errors += len(swept.errors)
 
 
-async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failures) -> None:
+async def _tick_company(
+    tenant_id: uuid.UUID, out: TickerOut, failures: _Failures, started: float | None = None
+) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
     tracks' monitoring, its rituals (oracle.rituals, the weekly alignment report among
-    them), its launches' Ready detection, its interview links' expiry and its daily request
-    triage, each on its own."""
+    them), its watched pages, its launches' Ready detection, its interview links' expiry
+    and its daily request triage, each on its own. ``started`` is the tick's start (now
+    when not given): the watched pages' reads keep inside its ``BUDGET_SECONDS``."""
+    deadline = (time.monotonic() if started is None else started) + BUDGET_SECONDS
     async with tenant_session(tenant_id) as db:
         company = await body.tick_company(db, tenant_id)
     if company.runs is not None:
@@ -221,11 +225,13 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         failures.add(tenant_id)
     try:
         # Watched pages (H7): the weekly reads of alternatives' public pages and the web
-        # results purge (deterministic, no model call).
+        # results purge (deterministic, no model call). Each read is committed as it
+        # completes; none starts that could not finish inside the tick's start budget, so
+        # hanging hosts do not delay the next companies.
         from oracle.market import watch as market_watch
 
         async with tenant_session(tenant_id) as db:
-            await market_watch.check_due(db)
+            await market_watch.check_due(db, deadline=deadline)
             await db.commit()
     except Exception:
         log.exception("run ticker: watched pages failed for company %s", tenant_id)
@@ -383,7 +389,7 @@ async def _tick_every_company(out: TickerOut, started: float) -> None:
         out.companies.deferred -= 1
         out.companies.ticked += 1
         ticked.append(tenant_id)
-        await _tick_company(tenant_id, out, failures)
+        await _tick_company(tenant_id, out, failures, started)
     await _run_jobs(ticked, out, failures, started)
     # Last, inside the tick's hard limit, each within its own budget.
     async with connections_service.http_client() as http:

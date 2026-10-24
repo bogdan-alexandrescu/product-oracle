@@ -12,7 +12,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FIELDS, day, type Positioning as PositioningOut, type Suggestion } from "./lib";
 
-const ACTION_LABEL: Record<Suggestion["action"], string> = { add: "Add", replace: "Replace with", remove: "Remove" };
+const ACTION_LABEL: Record<Suggestion["action"], string> = { add: "Add", replace: "Replace", remove: "Remove" };
 const REF_LABEL: Record<Suggestion["refs"][number]["kind"], string> = { change: "Change", web: "From the web", request: "Request", source_item: "Source" };
 
 /**
@@ -172,7 +172,7 @@ function Field({
         <div key={s.id} data-testid="positioning-suggestion" className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2">
           <p className="text-[15px]">
             <span className="font-semibold">Oracle suggests · {ACTION_LABEL[s.action]}</span>
-            {s.text && <>: {s.text}</>}
+            {suggestionText(s, items)}
           </p>
           <p className="text-sm text-text2">{s.rationale}</p>
           {s.refs.length > 0 && (
@@ -203,6 +203,15 @@ function Field({
       {error && <ErrorNote>{error}</ErrorNote>}
     </section>
   );
+}
+
+/** What a suggestion says after its action: a Remove or Replace names the item it acts on. */
+function suggestionText(s: Suggestion, items: { id: string; text: string }[]): string {
+  const target = s.action === "add" ? undefined : items.find((i) => i.id === s.item_id);
+  const named = target ? target.text : s.item_id ? "an item no longer in this field" : "";
+  if (s.action === "remove") return named ? `: ${named}` : "";
+  if (s.action === "replace") return `${named ? ` ${named}` : ""}${s.text ? ` with: ${s.text}` : ""}`;
+  return s.text ? `: ${s.text}` : "";
 }
 
 /** Where a suggestion's evidence opens in Oracle. */

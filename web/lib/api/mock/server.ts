@@ -44,7 +44,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
+import { emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -1500,6 +1500,7 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     uuid,
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
+    marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
   };
 }
 

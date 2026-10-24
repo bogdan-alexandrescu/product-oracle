@@ -24614,6 +24614,11 @@ export interface components {
             summary_state: "none" | "running" | "ready" | "failed" | "not_started";
             /** Summary Note */
             summary_note: string | null;
+            /**
+             * Summary Offered
+             * @default true
+             */
+            summary_offered: boolean;
             /** Read By Me */
             read_by_me: boolean;
         };

@@ -8,19 +8,28 @@ minute. robots.txt is honoured first (oracle.market.robots).
 
 A read stores a snapshot of the normalised text; when its hash differs from the
 previous snapshot, a ``competitor_changes`` row holds the line diff (oracle.market.diff).
-A failure sets ``last_error`` and counts an attempt; after :data:`MAX_ATTEMPTS` failed
-weeks, or at once when the page is not public or its host is not a public address, the
-page is ``error``. Each page keeps its last :data:`KEEP_SNAPSHOTS` snapshots plus those a
-change points to. The same step purges web results older than :data:`WEB_RESULTS_KEPT`.
+A failure (a ``LinkError``, or anything else a read raises) sets ``last_error`` and counts
+an attempt; after :data:`MAX_ATTEMPTS` failed weeks, or at once when the page is not public
+or its host is not a public address, the page is ``error``. A page robots.txt blocked is
+tried again after :data:`BLOCKED_RECHECK`. Each page keeps its last :data:`KEEP_SNAPSHOTS`
+snapshots plus those a change points to. The same step purges web results older than
+:data:`WEB_RESULTS_KEPT`.
+
+The step keeps inside the tick: each page's result is committed as it completes, and no
+read starts that could not finish before the tick's deadline (the fetcher's time cap, twice
+when robots.txt must be read first), so hanging hosts neither hold the tick nor lose what
+was read before them.
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import ColumnElement, and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.baseline import public_links
 from oracle.baseline.public_links import LinkError, LinkFetcher, get_link_fetcher
 from oracle.market import diff, robots
 from oracle.market.models import CompetitorChange, CompetitorPage, CompetitorPageSnapshot
@@ -38,6 +47,10 @@ WEB_RESULTS_KEPT = timedelta(days=396)
 # Fetcher codes that end the page at once: a sign-in wall or a non-public address.
 FINAL_CODES = ("not_public", "blocked_address")
 NOT_READ = "Not read for 3 weeks"
+# A page robots.txt blocked is read again (robots.txt first) after this.
+BLOCKED_RECHECK = timedelta(days=30)
+# last_error of a read that failed with something other than the fetcher's LinkError.
+UNEXPECTED = "The page could not be read."
 
 
 def fetcher() -> LinkFetcher:
@@ -117,25 +130,56 @@ async def _prune(db: AsyncSession, page: CompetitorPage) -> None:
     )
 
 
-async def check_due(db: AsyncSession) -> int:
-    """One tick's weekly reads for the session's company; returns how many were read. The
-    caller commits."""
+def _due(now: datetime) -> ColumnElement[bool]:
+    return or_(
+        and_(
+            CompetitorPage.status == "active",
+            or_(
+                CompetitorPage.last_checked_at.is_(None),
+                CompetitorPage.last_checked_at <= now - EVERY,
+            ),
+        ),
+        and_(
+            CompetitorPage.status == "blocked",
+            CompetitorPage.last_checked_at <= now - BLOCKED_RECHECK,
+        ),
+    )
+
+
+def _read_seconds(url: str, now: datetime) -> float:
+    """The longest one read of ``url`` may take: the fetcher's cap, twice when robots.txt
+    must be read first."""
+    cap = public_links.TOTAL_TIMEOUT
+    return cap if robots.cached(url, now) else 2 * cap
+
+
+async def _failed(db: AsyncSession, page_id, now: datetime) -> None:
+    """A read that raised something other than LinkError: a failed attempt, so the page
+    waits its week like any other failure instead of being due again next tick."""
+    page = await db.get(CompetitorPage, page_id, populate_existing=True)
+    if page is None:
+        return
+    page.last_checked_at, page.last_error = now, UNEXPECTED
+    page.attempts += 1
+    if page.attempts >= MAX_ATTEMPTS:
+        page.status = "error"
+
+
+async def check_due(db: AsyncSession, deadline: float | None = None) -> int:
+    """One tick's weekly reads for the session's company; returns how many were read.
+
+    Each page's result is committed as it completes. With a ``deadline`` (a
+    ``time.monotonic()`` value), no read starts that could not finish before it."""
     now = clock.now()
     await db.execute(delete(WebResult).where(WebResult.fetched_at < now - WEB_RESULTS_KEPT))
-    due = list(
-        await db.scalars(
-            select(CompetitorPage)
-            .where(
-                CompetitorPage.status == "active",
-                or_(
-                    CompetitorPage.last_checked_at.is_(None),
-                    CompetitorPage.last_checked_at <= now - EVERY,
-                ),
-            )
+    await db.commit()
+    due = (
+        await db.execute(
+            select(CompetitorPage.id, CompetitorPage.url)
+            .where(_due(now))
             .order_by(CompetitorPage.last_checked_at.asc().nulls_first(), CompetitorPage.id)
-            .with_for_update(skip_locked=True)
         )
-    )
+    ).all()
     if not due:
         return 0
     busy = {
@@ -146,17 +190,29 @@ async def check_due(db: AsyncSession) -> int:
     }
     fetch = fetcher()
     read = 0
-    for page in due:
+    for page_id, url in due:
         if read >= PER_TICK:
             break
-        host = host_of(page.url)
+        host = host_of(url)
         if host in busy:
+            continue
+        if deadline is not None and deadline - time.monotonic() < _read_seconds(url, now):
+            break
+        page = await db.scalar(
+            select(CompetitorPage)
+            .where(CompetitorPage.id == page_id, _due(now))
+            .with_for_update(skip_locked=True)
+        )
+        if page is None:  # read meanwhile (Check now), or being read
+            await db.commit()
             continue
         busy.add(host)
         try:
             async with db.begin_nested():
                 await check_page(db, page, fetch, now)
         except Exception:
-            log.exception("market: reading watched page %s failed", page.id)
+            log.exception("market: reading watched page %s failed", page_id)
+            await _failed(db, page_id, now)
+        await db.commit()
         read += 1
     return read

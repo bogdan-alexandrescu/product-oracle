@@ -619,6 +619,31 @@ const REGISTRY: RegistryRow[] = [
     "wired_by": "H6",
     "wired_by_name": "H6 Launches and changelog",
     "limits_default": null
+  },
+  {
+    "key": "market",
+    "title": "Watch the market",
+    "group": "planning",
+    "group_title": "Planning",
+    "default": "recommend",
+    "ceiling": "recommend",
+    "allowed": [
+      "observe",
+      "draft",
+      "recommend"
+    ],
+    "levels": {
+      "observe": "Oracle reads the pages you watch and lists what changed.",
+      "draft": "Oracle also searches the web each month and writes the digest for a named person to edit.",
+      "recommend": "Oracle also suggests positioning changes with evidence; a person accepts each."
+    },
+    "ceiling_reason": "the category and positioning bet stay with people",
+    "limits_schema": null,
+    "fixed_limits": [],
+    "wired": true,
+    "wired_by": "H7",
+    "wired_by_name": "H7 Competitive digest",
+    "limits_default": null
   }
 ] as RegistryRow[];
 
@@ -634,6 +659,13 @@ export function emptyAutonomy(): AutonomyDb {
 function levelOf(r: RegistryRow, s: Stored | undefined): Level {
   if (!s || !ORDER.includes(s.level)) return r.default;
   return rank(s.level) <= rank(r.ceiling) ? s.level : r.ceiling;
+}
+
+/** A responsibility's level as Oracle follows it now (its default with nothing stored). */
+export function levelFor(db: AutonomyDb, key: string): Level {
+  const r = REGISTRY.find((x) => x.key === key);
+  if (!r) throw new Error(`no responsibility ${key}`);
+  return levelOf(r, db.stored[key]);
 }
 
 function itemOut(r: RegistryRow, s: Stored | undefined): Item {

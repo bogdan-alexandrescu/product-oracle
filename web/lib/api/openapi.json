@@ -75692,6 +75692,11 @@
             ],
             "title": "Summary Note"
           },
+          "summary_offered": {
+            "type": "boolean",
+            "title": "Summary Offered",
+            "default": true
+          },
           "read_by_me": {
             "type": "boolean",
             "title": "Read By Me"
