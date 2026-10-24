@@ -196,7 +196,9 @@ export default function DocumentsPage() {
   const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const router = useRouter();
   const { can, capsReady } = useMe();
-  const canPropose = can("create_intake");
+  // #370: New PRD creates an intake not linked to a PRD (the handler only asks an approver to
+  // link one), so the item lets a commenter in, as in NewPrd.
+  const canPropose = can("create_intake", true);
   const [picked, setPicked] = useState<string | null>(null);
   const selected = documents.find((d) => d.slug === picked) ?? documents[0] ?? null;
   const inReview = documents.filter((d) => d.status === "in_review").length;

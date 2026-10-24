@@ -110,7 +110,7 @@ function Requests({ roles, defaultRole, onInvited }: { roles: Role[]; defaultRol
                           </option>
                         ))}
                       </select>
-                      <Button variant="primary" onClick={() => decide(r, "approve")}>
+                      <Button onClick={() => decide(r, "approve")}>
                         Approve
                       </Button>
                     </>

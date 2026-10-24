@@ -107,7 +107,7 @@ export function MembersSettings() {
 
 /** "Your role is commenter. Owners manage members and sign-in." (A5, 3.10) */
 function RoleNote() {
-  const { role, engineeringLead } = useMe();
+  const { role, engineeringLead, can } = useMe();
   return (
     <p
       role="note"
@@ -116,7 +116,7 @@ function RoleNote() {
     >
       <span>
         Your role is <b>{role ? ROLE_LABEL[role].toLowerCase() : "unknown"}</b>.{" "}
-        {role === "approver" ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
+        {can("create_invite") ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
       </span>
       {engineeringLead && <span>You are an engineering lead.</span>}
     </p>
@@ -324,21 +324,21 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   const activeOwners = members?.filter((m) => m.role === "owner" && !removed(m)).length ?? 0;
   const replace = (updated: Member) => membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
 
-  async function changeRole(m: Member, role: Role, hand_over: HandOver[] = []) {
+  async function changeRole(m: Member, next: Role, hand_over: HandOver[] = []) {
     setSaving(m.id);
     setError(null);
     try {
       // A5: a lower role first reads what it lapses and voids; with something to show, the
       // dialog asks (the select stays on the old role until Change role).
-      if (!demoting && !hasRole(role, m.role)) {
-        const impact = await membersApi.impact(m.id, { role });
+      if (!demoting && !hasRole(next, m.role)) {
+        const impact = await membersApi.impact(m.id, { role: next });
         if (!impact.nothing) {
           setDemoteError(null);
-          setDemoting({ member: m, role, impact });
+          setDemoting({ member: m, role: next, impact });
           return;
         }
       }
-      replace(await membersApi.patch(m.id, hand_over.length ? { role, hand_over } : { role }));
+      replace(await membersApi.patch(m.id, hand_over.length ? { role: next, hand_over } : { role: next }));
       setDemoting(null);
     } catch (e) {
       if (demoting) setDemoteError(errorMessage(e));
