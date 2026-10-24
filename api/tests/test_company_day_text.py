@@ -28,6 +28,7 @@ from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
+from tests.day_helpers import company_today
 from tests.intake_helpers import intake_with_source
 
 AUCKLAND = "Pacific/Auckland"
@@ -339,7 +340,7 @@ async def test_blocker_gate_rationales_name_the_company_day(client):
     ctx = await make_ctx()
     await company_zone(client, ctx, AUCKLAND)
     # 20:00 UTC thirty days out: the next day in Auckland.
-    soon = datetime.combine(date.today() + timedelta(days=30), time(20), tzinfo=UTC)
+    soon = datetime.combine(company_today(AUCKLAND) + timedelta(days=30), time(20), tzinfo=UTC)
     soon_day = soon.astimezone(ZoneInfo(AUCKLAND)).date().isoformat()
     assert soon_day != soon.date().isoformat()
 
@@ -436,7 +437,7 @@ async def test_the_documents_blocker_section_names_the_company_day(client):
     ctx = await make_ctx()
     await company_zone(client, ctx, AUCKLAND)
     # 20:00 UTC thirty days out: the next day in Auckland.
-    soon = datetime.combine(date.today() + timedelta(days=30), time(20), tzinfo=UTC)
+    soon = datetime.combine(company_today(AUCKLAND) + timedelta(days=30), time(20), tzinfo=UTC)
     soon_day = company_time.day(soon, AUCKLAND).isoformat()
     assert soon_day != soon.date().isoformat()
 
