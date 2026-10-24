@@ -14,6 +14,17 @@ export async function login(page: Page, email: string = ADMIN.email) {
   await expect(page).toHaveURL(/\/home$/);
 }
 
+/**
+ * Serves Claude's sign-in page (claude.com) from the test (#520): Playwright reports the
+ * popup the app opens only once its page answers, and the real site, slow under load,
+ * left "Open Claude's sign-in page" waiting past the test's timeout.
+ */
+export async function standInClaudePage(page: Page) {
+  await page.context().route("https://claude.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<title>Claude</title><h1>Sign in to Claude</h1>" }),
+  );
+}
+
 /** A section of the visible version (Next keeps recently visited routes mounted but hidden). */
 export function section(page: Page, key: string): Locator {
   return page.locator(`section[data-section-key="${key}"]`).filter({ visible: true });
