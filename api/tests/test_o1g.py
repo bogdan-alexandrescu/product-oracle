@@ -206,6 +206,7 @@ async def test_slide_css_may_not_style_the_host(client, tenant_id, bad):
     ]
 
 
+@pytest.mark.timing
 def test_the_host_check_is_linear():
     # Many comments after a colon with no host: a backtracking pattern takes minutes.
     started = time.perf_counter()

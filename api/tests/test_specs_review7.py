@@ -49,6 +49,7 @@ def _after_anchor(text: str, citation: bool = False):
 # --------------------------------------------------------------------------- B1
 
 
+@pytest.mark.timing
 def test_the_comment_checks_are_linear_on_a_mebibyte_of_unclosed_comments():
     body = "<!--" * (1 << 18)  # 1 MiB
     started = time.monotonic()

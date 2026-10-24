@@ -470,6 +470,7 @@ async def test_messages_are_paced_capped_and_the_40th_finishes(client, ctx, fake
     assert resp.status_code == 410 and resp.json() == {"reason": "used"}
 
 
+@pytest.mark.timing
 async def test_a_burst_on_one_link_never_holds_the_pool_for_other_companies(client, ctx, fake):
     """protects=the shared connection pool (second review of #321): the cheap checks run
     before any lock, the model call holds no row lock or connection, and one turn per link

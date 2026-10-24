@@ -880,6 +880,7 @@ async def test_a_job_out_of_time_before_its_call_started_is_put_back_unspent(
     assert (job.status, job.attempts) == ("succeeded", 1)
 
 
+@pytest.mark.timing
 async def test_the_v1_tick_runs_jobs_only_inside_the_ticks_time_limit(client, claude, monkeypatch):
     tenant_id = await _backlog(client, 5)
     headers = await token_with_role(tenant_id, "owner")

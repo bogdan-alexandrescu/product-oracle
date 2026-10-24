@@ -227,6 +227,7 @@ async def test_only_the_interviewee_takes_team_turns(client, ctx, fake):
     assert not [k for k, _ in fake.calls if k == "interview_team_turn"]
 
 
+@pytest.mark.timing
 async def test_a_burst_of_team_turns_never_holds_the_pool_for_other_companies(client, ctx, fake):
     """protects=the shared connection pool (fifth review of #380): a team turn claims
     the turn and commits, calls the model with no session or row lock held, then writes

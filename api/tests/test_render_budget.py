@@ -576,6 +576,7 @@ async def until_found(version) -> tuple:
             await asyncio.sleep(0.02)
 
 
+@pytest.mark.timing
 async def test_a_company_runs_at_most_two_date_jobs_at_once(monkeypatch):
     """One company cycling large versions cannot fill the 4-thread parse pool: its third
     concurrent job is refused (503, try again) without starting; another company's runs."""
@@ -658,6 +659,7 @@ def test_after_an_empty_leading_code_block_a_date_is_in_its_own_block():
     assert f.block == "Payment ships 2026-11-30."
 
 
+@pytest.mark.timing
 async def test_approve_takes_the_document_lock_only_once_the_dates_are_found(client, monkeypatch):
     """Approving a roadmap version whose dates are still being found does not hold the
     document's row lock meanwhile (an import waits on that lock)."""
@@ -741,6 +743,7 @@ def _busy(resp, code: str) -> dict:
     return body
 
 
+@pytest.mark.timing
 async def test_one_person_s_second_concurrent_export_is_refused_at_once(
     client,
     tenant_id,
@@ -775,6 +778,7 @@ async def _fill(client, *companies: uuid.UUID) -> list[asyncio.Task]:
     return tasks
 
 
+@pytest.mark.timing
 async def test_a_company_holding_its_two_exports_leaves_two_workers_to_others(client, monkeypatch):
     """Owner decision 2026-10-20: 4 workers, 2 exports per company: whatever one company
     runs, two workers are left for the others."""
@@ -792,6 +796,7 @@ async def test_a_company_holding_its_two_exports_leaves_two_workers_to_others(cl
         assert (await t).status_code == 200
 
 
+@pytest.mark.timing
 async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(client, monkeypatch):
     held = Held(monkeypatch)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
@@ -818,6 +823,7 @@ async def test_a_company_runs_two_exports_and_a_third_company_is_not_starved(cli
     assert held.started == 5
 
 
+@pytest.mark.timing
 async def test_a_wait_for_a_worker_past_ten_seconds_is_busy_not_too_large(client, monkeypatch):
     held = Held(monkeypatch)
     monkeypatch.setattr(offload, "QUEUE_SECONDS", 0.2)
@@ -842,6 +848,7 @@ async def test_a_wait_for_a_worker_past_ten_seconds_is_busy_not_too_large(client
     assert held.started == 5
 
 
+@pytest.mark.timing
 async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeypatch):
     """Queued 1.5 s behind a full pool, then rendered at once: served, although the
     request took longer than the render cap (1 s here)."""
@@ -864,6 +871,7 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
         assert blocked.json()["detail"] == "This document is too large to export quickly"
 
 
+@pytest.mark.timing
 async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
     held = Held(monkeypatch)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
@@ -936,6 +944,7 @@ def test_the_present_share_is_the_owner_s():
     )
 
 
+@pytest.mark.timing
 async def test_one_person_s_third_concurrent_deck_is_refused_at_once(
     client,
     tenant_id,
@@ -964,6 +973,7 @@ async def test_one_person_s_third_concurrent_deck_is_refused_at_once(
     assert (await client.get(deck_url(3), headers=viewer)).status_code == 200
 
 
+@pytest.mark.timing
 async def test_present_works_while_the_person_s_own_export_runs(
     client,
     tenant_id,
@@ -992,6 +1002,7 @@ async def test_present_works_while_the_person_s_own_export_runs(
     assert (await exporting).status_code == 200
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("mix", ["exports", "decks", "export_and_deck"])
 async def test_a_company_with_two_places_in_use_is_refused_a_third(client, monkeypatch, mix):
     """Exports and decks share the company's two places; another company's export still
@@ -1029,6 +1040,7 @@ async def test_a_company_with_two_places_in_use_is_refused_a_third(client, monke
         assert (await t).status_code == 200
 
 
+@pytest.mark.timing
 async def test_one_company_s_decks_never_take_more_than_two_workers(client, monkeypatch):
     held = Held(monkeypatch)
     decks = HeldDecks(monkeypatch)
@@ -1062,6 +1074,7 @@ async def test_one_company_s_decks_never_take_more_than_two_workers(client, monk
         assert (await t).status_code == 200
 
 
+@pytest.mark.timing
 async def test_a_deck_waiting_past_ten_seconds_for_a_worker_is_busy(client, monkeypatch):
     held = Held(monkeypatch)
     decks = HeldDecks(monkeypatch, held=False)
@@ -1084,6 +1097,7 @@ async def test_a_deck_waiting_past_ten_seconds_for_a_worker_is_busy(client, monk
     assert (await client.get(deck_url(), headers=await _token(c, "viewer"))).status_code == 200
 
 
+@pytest.mark.timing
 async def test_a_repeat_deck_is_served_from_the_cache_without_a_place(
     client,
     tenant_id,
@@ -1114,6 +1128,7 @@ async def test_a_repeat_deck_is_served_from_the_cache_without_a_place(
         assert (await t).status_code == 200
 
 
+@pytest.mark.timing
 async def test_parallel_requests_for_one_deck_build_it_once(
     client,
     tenant_id,
@@ -1198,6 +1213,7 @@ async def test_one_deck_refused_busy_is_one_build_attempt_for_all_its_waiters(cl
     await no_place_held()
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize("failure", ["too_large", "error"])
 async def test_a_failed_deck_build_fails_its_waiters_alike_and_is_not_built_again(
     tenant_id,
@@ -1242,6 +1258,7 @@ async def test_a_failed_deck_build_fails_its_waiters_alike_and_is_not_built_agai
     await no_place_held()
 
 
+@pytest.mark.timing
 async def test_a_builder_refused_its_own_person_s_share_leaves_others_their_own_build(
     client,
     tenant_id,
@@ -1287,6 +1304,7 @@ async def test_a_builder_refused_its_own_person_s_share_leaves_others_their_own_
     await no_place_held()
 
 
+@pytest.mark.timing
 async def test_a_cancelled_deck_build_never_leaves_its_waiters_hanging(
     client,
     tenant_id,

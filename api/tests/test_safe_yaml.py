@@ -160,6 +160,7 @@ def test_directives_and_internal_errors_are_one_error():
     assert caught.value.line is not None
 
 
+@pytest.mark.timing
 async def test_a_slow_parse_does_not_block_the_event_loop():
     """run_parse runs on the parse pool: other coroutines keep running meanwhile.
 
@@ -239,6 +240,7 @@ async def test_import_version_answers_422(client, name):
     assert took < FAST, f"{name} took {took:.3f}s"
 
 
+@pytest.mark.timing
 async def test_import_version_caps_the_body(client):
     _, auth = await seed_auth()
     start = time.perf_counter()

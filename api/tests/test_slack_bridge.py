@@ -280,6 +280,7 @@ async def test_unsigned_or_old_events_are_refused(client, slack):
 # attributed to them, in one request answered 200 under 3 s; the same event_id again adds
 # nothing; fails_when=a retry duplicates it, or it is attributed to anyone else;
 # no_claim=Slack's latency.
+@pytest.mark.timing
 async def test_a_commenters_reply_becomes_one_message_once(client, slack):
     ctx, _doc = await setup(client)
     d, thread = await mirrored(client, ctx, slack)

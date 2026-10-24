@@ -363,6 +363,7 @@ async def test_malformed_results_are_skipped_not_a_500(client, alice, notion_con
     assert odd.json()["detail"] == "Notion did not answer; try again shortly"
 
 
+@pytest.mark.timing
 async def test_browsing_is_throttled_per_person_and_connection(
     client, tenant_id, alice, bob, notion_conn, notion_http, monkeypatch
 ):

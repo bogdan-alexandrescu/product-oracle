@@ -99,6 +99,7 @@ def test_series_title_keeps_case_and_drops_the_dated_suffix():
     assert series_title("  AI Agents  daily standup ") == "AI Agents daily standup"
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     "title",
     [
