@@ -376,9 +376,6 @@ REFUSAL_MODULES = [
     "runs/workflow.py",
     "tenant_settings_api.py",
 ]
-# SwarmCloud's advice an operator acts on outside the app (Oracle's MCP server, which no
-# screen manages): it names the API call an operator makes, and is left as it is.
-OPERATOR_ADVICE = {"CREDENTIAL_MISSING", "person_required"}
 # #396 fixes 3: refusals that may name an id filled in at runtime (``_names_an_id``), and
 # why a person never reads that id. A 404 (``NotFound``, a review's ``not_found``) answers a
 # lookup with the id the caller sent ("run {run_id} not found"): the web asks only for what
@@ -434,11 +431,9 @@ def _refusals() -> list[tuple[str, str, bool]]:
                 and getattr(node.target, "id", None) == "ADVICE"
                 and isinstance(node.value, ast.Dict)
             ):
-                args = [
-                    v
-                    for k, v in zip(node.value.keys, node.value.values, strict=True)
-                    if not (isinstance(k, ast.Constant) and k.value in OPERATOR_ADVICE)
-                ]
+                # #481: every advice, the operator's too (its API call is in the
+                # note's refs, workflow.ADVICE_REFS).
+                args = list(node.value.values)
             for arg in args:
                 literal = _literal(arg, constants) or ""
                 names = (
@@ -452,10 +447,10 @@ def _refusals() -> list[tuple[str, str, bool]]:
 
 def test_every_gate_refusal_a_person_reads_speaks_the_app_s_words():
     """protects=#396 fixes 2 item 2, fixes 3 item 1: the refusals of the approve, publish,
-    review and run-start paths that reach the web; fails_when=one carries /v1/, an HTTP
-    method or a UUID, as text or as an id filled in at runtime (``{run.id}``,
-    ``{workflow_id}``); no_claim=MCP tools' messages (an agent reads them), SwarmCloud's
-    operator advice (OPERATOR_ADVICE), 404 lookups and ID_EXEMPT."""
+    review and run-start paths that reach the web, and SwarmCloud's advice a run's notes
+    carry (#481: the operator's too); fails_when=one carries /v1/, an HTTP method or a UUID,
+    as text or as an id filled in at runtime (``{run.id}``, ``{workflow_id}``); no_claim=MCP
+    tools' messages (an agent reads them), 404 lookups and ID_EXEMPT."""
     refusals = _refusals()
     assert len(refusals) > 200, "the scan found the refusals"
     assert [(where, text) for where, text, _ in refusals if wording.api_words(text)] == []
@@ -503,6 +498,8 @@ async def test_a_stale_spec_s_approve_refusal_is_plain_and_keeps_its_id(client, 
     body = resp.json()
     _plain(body["detail"])
     assert "may be stale" in body["detail"] and "Potentially stale" in body["detail"]
+    # #481: the refusal names the controls a person uses.
+    assert CONTROLS in body["detail"], body["detail"]
     assert body["refs"] == {"artifact_version": spec_version}
 
     flow = next(d for d in spec["design"] if d["kind"] == "user_flow")["version"]
@@ -513,7 +510,46 @@ async def test_a_stale_spec_s_approve_refusal_is_plain_and_keeps_its_id(client, 
     body = resp.json()
     _plain(body["detail"])
     assert "may be stale" in body["detail"] and "Potentially stale" in body["detail"]
+    assert CONTROLS in body["detail"], body["detail"]
     assert body["refs"] == {"artifact_version": flow["id"]}
+
+
+# #481: where a person reviews or reconciles a spec version that may be stale.
+CONTROLS = (
+    "Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile)"
+)
+
+
+async def test_review_clears_a_stale_spec_s_label_and_approve_then_succeeds(client, runtime):  # noqa: F811
+    """protects=#481 Build 2: Review on a spec version that may be stale writes the trace's
+    staleness action (the Plan inspector's store), so its label clears and Approve passes;
+    fails_when=the review leaves the version potentially stale, or Approve still refuses;
+    no_claim=the controls on the page (web/e2e/spec-staleness.spec.ts)."""
+    from tests import specs_helpers as h
+    from tests.fixtures import draft
+    from tests.test_specs import generated
+
+    world = await h.make_world(client)
+    created = await generated(client, runtime, world)
+    head, viewer = world.ctx.as_("owner"), world.ctx.as_("viewer")
+    v2 = draft("prd_v1.md").replace(
+        "Show the shipping cost on the cart page", "Show a shipping estimate on the cart page"
+    )
+    assert (await h.import_md(client, head, v2)).status_code == 201
+    spec = await h.get_spec(client, viewer, created["spec"]["request"]["id"])
+    av = spec["versions"][0]["artifact_version"]["id"]
+    body = {"action": "review", "artifact_version_id": av, "reason": "Checked against v2"}
+    # A viewer may not mark it reviewed (the page hides the control from them).
+    resp = await client.post("/v1/trace/staleness/actions", json=body, headers=viewer)
+    assert resp.status_code == 403, resp.text
+    resp = await client.post("/v1/trace/staleness/actions", json=body, headers=head)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["freshness"] == "under_review"
+    spec = await h.get_spec(client, viewer, created["spec"]["request"]["id"])
+    assert spec["versions"][0]["artifact_version"]["freshness"] == "under_review"
+    slug = created["spec"]["document_slug"]
+    resp = await client.post(f"/v1/documents/{slug}/versions/1/approve", headers=head)
+    assert resp.status_code == 200, resp.text
 
 
 async def test_starting_a_run_before_its_estimate_says_what_to_do(client, runtime):  # noqa: F811

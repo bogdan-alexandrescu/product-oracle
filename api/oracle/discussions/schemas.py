@@ -161,8 +161,26 @@ class DiscussionSummary(BaseModel):
     updated_at: datetime
 
 
+class DiscussionSlackIn(BaseModel):
+    channel_id: str = Field(min_length=1, max_length=40)
+
+
+class DiscussionSlackOut(BaseModel):
+    """G8: the Slack thread an open discussion is mirrored to."""
+
+    channel_name: str
+    # Slack's link to the thread, once the root message is posted.
+    thread_url: str | None
+    status: Literal["posting", "live", "failing", "failed"]
+    # The last error while ``failing`` ("Slack mirror failing: <error>"), or Slack's reason
+    # when it gave up on the root message (``failed``).
+    error: str | None = None
+
+
 class DiscussionOut(DiscussionSummary):
     subject: dict[str, Any]
+    # G8 Slack bridge: the live mirror, if any.
+    slack: DiscussionSlackOut | None = None
     participants: list[DiscussionParticipantOut]
     me: DiscussionMe  # type: ignore[assignment]
     # The starter of a private discussion only: what Make open would expose now.
@@ -256,6 +274,11 @@ class DiscussionChangeOut(BaseModel):
     status: ChangeStatus
     created_at: datetime
     lock_version: int
+    # What acting created ({"proposal_id"} for a goal_measure), C1b's pushback on it
+    # ({"reason"}) and why it was kept anyway.
+    result_ref: dict[str, Any] | None = None
+    pushback: dict[str, Any] | None = None
+    override_reason: str | None = None
 
 
 class DiscussionExposureConflict(BaseModel):

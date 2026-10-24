@@ -58,6 +58,7 @@ from oracle.decisions.models import Decision, DecisionReview  # noqa: E402
 from oracle.discussions.models import (  # noqa: E402
     Discussion,
     DiscussionChange,
+    DiscussionInboxItem,
     DiscussionMessage,
     DiscussionParticipant,
 )
@@ -107,6 +108,11 @@ from oracle.roadmap.models import (  # noqa: E402
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
+from oracle.slack.models import (  # noqa: E402
+    DiscussionSlackLink,
+    SlackEventSeen,
+    SlackOutbox,
+)
 from oracle.sources.models import (  # noqa: E402
     Snapshot,
     Source,
@@ -118,6 +124,7 @@ from oracle.strategy.models import StrategyCheck, StrategyFinding  # noqa: E402
 from oracle.swarm.learned import LearnedFeature  # noqa: E402
 from oracle.templates.models import Template, TemplateVersion, Theme  # noqa: E402
 from oracle.tenant_settings import TenantSetting  # noqa: E402
+from oracle.trash.models import TrashEntry  # noqa: E402
 from oracle.v2.models import (  # noqa: E402
     ArtifactDependency,
     ArtifactOutput,
@@ -168,6 +175,7 @@ __all__ = [
     "DecisionReview",
     "Discussion",
     "DiscussionChange",
+    "DiscussionInboxItem",
     "DiscussionMessage",
     "DiscussionParticipant",
     "Citation",
@@ -179,6 +187,9 @@ __all__ = [
     "ClaudeSweepLease",
     "Comment",
     "CompanyIntegration",
+    "DiscussionSlackLink",
+    "SlackEventSeen",
+    "SlackOutbox",
     "CompositionRevision",
     "Conflict",
     "Connection",
@@ -213,6 +224,7 @@ __all__ = [
     "OAuthClient",
     "OAuthCode",
     "OAuthToken",
+    "OracleAction",
     "OutcomeRecord",
     "PriorityOverride",
     "PrioritySnapshot",
@@ -251,11 +263,14 @@ __all__ = [
     "TemplateModuleAssignment",
     "TemplateVersion",
     "Tenant",
-    "OracleAction",
     "TenantSetting",
+    "TrashEntry",
     "Theme",
     "TrackMilestone",
     "TrackerRecord",
     "User",
     "UserPreference",
 ]
+
+# Trash (#482): every read leaves trashed rows out; registered with the models.
+import oracle.trash.filter  # noqa: E402,F401

@@ -13,6 +13,7 @@ from oracle import wording
 from oracle.account.router import router as account_router
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
+from oracle.baseline.goal_interview import router as goal_interview_router
 from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router
 from oracle.baseline.service import GoalFieldsInvalid
@@ -49,7 +50,7 @@ from oracle.jobs.worker import (
 from oracle.launches.router import router as launches_router
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
-from oracle.members.router import people_router
+from oracle.members.router import invites_router, people_router
 from oracle.members.router import router as members_router
 from oracle.modules.router import router as modules_router
 from oracle.modules.service import seed_all_companies
@@ -64,8 +65,10 @@ from oracle.review.v2_router import router as review_v2_router
 from oracle.rituals.router import router as rituals_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
+from oracle.runs.scope_router import router as scope_router
 from oracle.safe_yaml import ParseBusy
 from oracle.setup import router as setup_router
+from oracle.slack.events import router as slack_events_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
 from oracle.sources.router import router as sources_router
@@ -78,6 +81,7 @@ from oracle.tenant_settings_api import router as settings_router
 from oracle.ticker.router import HARD_LIMIT_SECONDS
 from oracle.ticker.router import router as ticker_router
 from oracle.trace.router import router as trace_router
+from oracle.trash.router import router as trash_router
 from oracle.v2.router import router as v2_router
 
 log = logging.getLogger(__name__)
@@ -200,6 +204,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(preferences_router)
+    app.include_router(trash_router)
     app.include_router(docs_router)
     app.include_router(review_router)
     # G1: one thread per subject, open by default, private when its starter says so.
@@ -211,6 +216,7 @@ def create_app() -> FastAPI:
     # v1 lanes add their routes to these (empty until then).
     app.include_router(members_router)
     app.include_router(people_router)
+    app.include_router(invites_router)
     app.include_router(account_router)
     app.include_router(connections_router)
     app.include_router(slack_browse_router)
@@ -226,11 +232,13 @@ def create_app() -> FastAPI:
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)
     app.include_router(baseline_router)
+    app.include_router(goal_interview_router)
     app.include_router(priorities_router)
     app.include_router(decisions_router)
     app.include_router(rituals_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
+    app.include_router(scope_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)
     # v2 lanes: intake, gaps, questions and answers (CR-03).
@@ -261,6 +269,8 @@ def create_app() -> FastAPI:
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
     app.include_router(ticker_router)
+    # G8: Slack's Events API (signed by Slack; not in OpenAPI, so no MCP tool).
+    app.include_router(slack_events_router)
     # Every REST operation above (and any added later) is also an MCP tool here.
     mount_mcp(app)
     # B5: MCP clients see a goal's typed attrs shape.

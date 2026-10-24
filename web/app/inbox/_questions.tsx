@@ -6,7 +6,7 @@ import { AnswerQuestion, askerName, type InboxQuestion } from "@/components/Answ
 import { Button, Chip, LinkButton, Sheet } from "@/components/ds";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import type { Need } from "./_needs";
+import { discussionHref, type Need } from "./_needs";
 
 /** A question answered here: shown in place, with its outcome, until the tab changes; then under Done. */
 type Settled = { q: InboxQuestion; label: string; moved: boolean };
@@ -52,6 +52,9 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
     const done = settled.get(q.question.id);
     const prompt = q.question.prompt;
     const href = q.subject.href;
+    // G6: a question asked from a discussion names it, and opens it.
+    const from = q.question.discussion_id && q.question.discussion_title ? q.question.discussion_title : null;
+    const context = from ? `From discussion ${from}` : q.subject.title;
     return {
       key: q.question.id,
       icon: "ask",
@@ -70,8 +73,8 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
         </>
       ),
       context: (
-        <span className="block truncate" title={q.subject.title}>
-          {q.subject.title}
+        <span className="block truncate" title={context}>
+          {context}
         </span>
       ),
       at: q.question.created_at,
@@ -87,6 +90,11 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
           {href && (
             <LinkButton variant="ghost" href={href} aria-label={`Open ${q.subject.title}`}>
               Open
+            </LinkButton>
+          )}
+          {href && from && (
+            <LinkButton variant="ghost" href={discussionHref(href, q.question.discussion_id!)}>
+              Open discussion
             </LinkButton>
           )}
         </>

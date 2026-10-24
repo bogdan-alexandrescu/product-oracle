@@ -145,6 +145,7 @@ from oracle.docs import visibility, written
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
+from oracle.engineering import check as eng_check
 from oracle.jobs.models import LlmSuggestion
 from oracle.members.leads import (
     ENGINEERING_KINDS,
@@ -197,6 +198,7 @@ from oracle.runs.schemas import (
     FlowStart,
     Gate,
     InboxAccessFailure,
+    InboxAccessRequest,
     InboxCheckpoint,
     InboxCounts,
     InboxDocument,
@@ -214,6 +216,7 @@ from oracle.runs.schemas import (
     PreviousAttempt,
     RunCreate,
     RunDecision,
+    RunNoteRefs,
     RunOut,
     RunPatch,
     RunProgress,
@@ -296,6 +299,14 @@ ORACLE_KNOBS = (
     "target_goals",
     # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
     "draft_roadmap_id",
+    # E1 part B ("Reuse items"): false on a Build roadmap run that derives its items
+    # again ("Derive the items again"); absent: it reuses the source version's draft items.
+    "reuse_draft_items",
+    # E1 part B: the draft items its estimate reuses, {"draft_roadmap_id", "version",
+    # "ready_at"}; the start re-checks them (oracle.roadmap.draft_items.reusable).
+    "draft_items_reused",
+    # #482: a Regenerate's note to the agents (oracle.trash.regenerate).
+    "regenerate_note",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -351,7 +362,31 @@ def _flow(run: Run) -> flows.FlowDef:
 
 
 def _knobs(run: Run) -> flows.Knobs:
-    return flows.resolve_knobs(_flow(run), run.knobs)
+    raw = run.knobs or {}
+    stored = raw.get("checkpoints")
+    if isinstance(stored, dict) and stored:
+        # Stored knobs name every stop of the flow as it was when the run was made: a stop
+        # added since (F4's eng_review) is off for it, so its segments stay as they were.
+        added = {
+            s.checkpoint: False
+            for s in _flow(run).segments
+            if s.skip_when_off and s.checkpoint not in stored
+        }
+        if added:
+            raw = {**raw, "checkpoints": {**stored, **added}}
+    return flows.resolve_knobs(_flow(run), raw)
+
+
+def _skipped_off(sdef: flows.SegmentDef, knobs: flows.Knobs) -> bool:
+    """F4: a segment skipped whole because its stop is off (no step, no spend)."""
+    return (
+        sdef.skip_when_off
+        and sdef.checkpoint is not None
+        and not knobs.checkpoints.get(sdef.checkpoint, True)
+    )
+
+
+OFF_NOTE = "Turned off when the run started."
 
 
 def _art(segment: RunSegment) -> dict[str, Any]:
@@ -415,6 +450,9 @@ def flow_catalog() -> FlowCatalog:
                         outputs=list(s.outputs_for(f.target_kind or "prd")),
                         checkpoint=s.checkpoint,  # type: ignore[arg-type]
                         approver_role=s.approver_role,  # type: ignore[arg-type]
+                        decider="engineering_lead"
+                        if s.checkpoint in ENGINEERING_KINDS and f.key != SPEC_FLOW
+                        else "role",
                     )
                     for s in f.segments
                 ],
@@ -811,16 +849,20 @@ def _checkpoint_out(
     flow: str,
     leads: frozenset[uuid.UUID],
     staged: dict[uuid.UUID, list[CheckpointAction]] | None = None,
+    vague_goals: int | None = None,
+    live: dict[uuid.UUID, list[dict[str, Any]]] | None = None,
     open_questions: set[uuid.UUID] | None = None,
 ) -> CheckpointOut:
     """``names``: :func:`_decider_names` of the checkpoints read; ``flow``: the run's;
     ``leads``: :func:`oracle.members.leads.engineering_leads`, read once per request;
     ``staged``: :func:`_staged_actions` of the checkpoints read (the approve gate);
+    ``vague_goals``: :func:`_vague_goals` of the checkpoints read;
+    ``live``: :func:`_live_reasons` of the checkpoints read;
     ``open_questions``: :func:`_open_questions` of those (D7: what needs the agents)."""
     console = ((cp.payload or {}).get("wait") or {}).get("console")
     payload, delivery = _delivery(cp, names or {})
     mine = (staged or {}).get(cp.id, []) if cp.status == "pending" else []
-    shut = gate.approve_gate(cp, None, mine) if cp.status == "pending" else None
+    shut = gate.approve_gate(cp, (live or {}).get(cp.id), mine) if cp.status == "pending" else None
     edits = cp.kind in apply_edits.FILES
     blocked = apply_edits.needs_agents(mine, open_questions or set()) if edits else []
     return CheckpointOut(
@@ -842,10 +884,12 @@ def _checkpoint_out(
         can_decide=cp.status == "pending"
         and principal is not None
         and may_decide(principal, cp, flow, leads),
+        lead_stop=lead_stop(cp.kind, flow, leads),
         cannot_approve=_cannot_approve(cp)
         or (gate.message(shut) if shut is not None and not shut.open else None),
         gate=shut,
         delivery=delivery,
+        vague_goals=vague_goals if _offers_interviews(cp) else None,
         approve_label=apply_edits.label(apply_edits.edit_count(mine) if edits else 0),
         needs_agents=[NeedsAgents(action_id=a.id, item=a.item_key, kind=a.kind) for a in blocked],
         review_link=review_link.link(cp),
@@ -869,6 +913,20 @@ async def _open_questions(
     )
 
 
+def _offers_interviews(cp: Checkpoint) -> bool:
+    return cp.kind == "baseline_confirm" and cp.status == "approved"
+
+
+async def _vague_goals(db: AsyncSession, checkpoints: list[Checkpoint]) -> int | None:
+    """B6: how many goals are not measurable, when an approved Confirm the baseline is
+    read (the after-review line offers an interview; nothing starts one here)."""
+    if not any(_offers_interviews(c) for c in checkpoints):
+        return None
+    from oracle.baseline.goal_interview import vague_count
+
+    return await vague_count(db)
+
+
 async def _staged_actions(
     db: AsyncSession, checkpoints: list[Checkpoint]
 ) -> dict[uuid.UUID, list[CheckpointAction]]:
@@ -886,10 +944,25 @@ async def _staged_actions(
     return out
 
 
+async def _live_reasons(
+    db: AsyncSession, checkpoints: list[Checkpoint]
+) -> dict[uuid.UUID, list[dict[str, Any]]]:
+    """The blocking reasons of the pending checkpoints whose kind reads them live (B2:
+    the goals a run proposed and nobody decided, at Confirm the baseline)."""
+    from oracle.baseline import from_run
+
+    out: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for c in checkpoints:
+        if c.status == "pending" and c.kind in gate.LIVE_KINDS:
+            out[c.id] = await from_run.gate_reasons(db, c.run_id)
+    return out
+
+
 async def approve_gate_of(db: AsyncSession, cp: Checkpoint) -> Gate | None:
-    """The approve gate of ``cp`` now (D3): its stored blocking reasons and staged actions."""
+    """The approve gate of ``cp`` now (D3): its blocking reasons and staged actions."""
     staged = await _staged_actions(db, [cp])
-    return gate.approve_gate(cp, None, staged.get(cp.id, []))
+    live = await _live_reasons(db, [cp])
+    return gate.approve_gate(cp, live.get(cp.id), staged.get(cp.id, []))
 
 
 def blocking_open(shut: Gate) -> RunError:
@@ -937,7 +1010,7 @@ def _segment_out(
         draft_import=DraftImport(**imp) if imp else None,
         sent_back=_sent_back(run, segment),
         reused=art.get("reused") if segment.status == "skipped" else None,
-        note=art.get("note") if segment.status == "skipped" else None,
+        note=art.get("note") if segment.status == "skipped" or art.get("reused_items") else None,
         can_retry_draft_import=can_retry_draft_import,
         items_check=ItemsCheck(**check) if check else None,
         previous_attempt=PreviousAttempt(
@@ -1071,6 +1144,8 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     names = await _decider_names(db, checkpoints)
     leads = await engineering_leads(db)
     staged = await _staged_actions(db, checkpoints)
+    vague = await _vague_goals(db, checkpoints)
+    live = await _live_reasons(db, checkpoints)
     asked = await _open_questions(db, staged)
     refs = await _refs(db, [run])
     knobs = _knobs(run)
@@ -1080,10 +1155,14 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     retries = _draft_retries(run, segments, checkpoints, kind, principal)
     runtime = get_runtime()
     notes: list[str] = []
+    note_refs: list[RunNoteRefs] = []
     for s in segments:
-        for n in (s.artifacts or {}).get("notes") or []:
+        for stored in (s.artifacts or {}).get("notes") or []:
+            n, n_refs = workflow.noted(stored)
             if n not in notes:
                 notes.append(n)
+                if n_refs:
+                    note_refs.append(RunNoteRefs(note=n, refs=n_refs))
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
         await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
@@ -1098,6 +1177,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             budget_usd=_usd(knobs.budget_usd),
             reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
             goals=[TargetGoal(**g) for g in (run.knobs or {}).get("target_goals") or []],
+            reuse_draft_items=(run.knobs or {}).get("reuse_draft_items") is not False
+            if run.flow == REUSES_DRAFT_ITEMS
+            else None,
         ),
         snapshot_id=run.snapshot_id,
         snapshot_as_of=snapshot.as_of if snapshot else None,
@@ -1108,11 +1190,20 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         overrun_ceiling_usd=_usd(_ceiling(run)),
         runtime=runtime.name,
         notes=notes,
+        note_refs=note_refs,
         segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
         checkpoints=[
             _checkpoint_out(
-                c, principal, names, flow=run.flow, leads=leads, staged=staged, open_questions=asked
-            )
+                c,
+                principal,
+                names,
+                flow=run.flow,
+                leads=leads,
+                staged=staged,
+                vague_goals=vague,
+                live=live,
+                open_questions=asked,
+            )  # fmt: skip
             for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
@@ -1839,6 +1930,10 @@ async def create_run(
     extra.pop("target_goals", None)
     if goals := await _target_goals(db, flow, body.knobs.goals):
         extra["target_goals"] = goals
+    extra.pop("reuse_draft_items", None)
+    extra.pop("draft_items_reused", None)
+    if body.knobs.reuse_draft_items is False and flow.key == REUSES_DRAFT_ITEMS:
+        extra["reuse_draft_items"] = False
     if body.strategy_brief is not None:
         if flow.key != "strategy_draft":
             raise Invalid("only a Vision or strategy draft run takes a brief")
@@ -1941,7 +2036,8 @@ async def update_run(
         intake = {
             k: v
             for k, v in oracle.items()
-            if k.startswith("intake_") or k in ("reuse_baseline", "target_goals")
+            if k.startswith("intake_")
+            or k in ("reuse_baseline", "target_goals", "reuse_draft_items")
         }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
@@ -1953,6 +2049,12 @@ async def update_run(
         oracle.pop("target_goals", None)
         if goals := await _target_goals(db, flow, body.knobs.goals):
             oracle["target_goals"] = goals
+    # E1 part B: what the run reuses is decided again by its next estimate.
+    oracle.pop("draft_items_reused", None)
+    if body.knobs is not None and body.knobs.reuse_draft_items is not None:
+        oracle.pop("reuse_draft_items", None)
+        if body.knobs.reuse_draft_items is False and flow.key == REUSES_DRAFT_ITEMS:
+            oracle["reuse_draft_items"] = False
     run.knobs = {**stored, **oracle}
     await _reset_segments(db, run, flow)
     await audit.record(db, principal, "run.updated", "run", run.id, {})
@@ -1966,15 +2068,30 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
     await _recheck_reuse(db, run)
     flow, knobs = _flow(run), _knobs(run)
     reused = (run.knobs or {}).get("reuse_baseline")
-    zone = await company_time.company_time_zone(db) if reused else company_time.DEFAULT_ZONE
+    items_reused = await _draft_items_to_reuse(db, run)
+    _set_knob(run, "draft_items_reused", items_reused)
+    zone = (
+        await company_time.company_time_zone(db)
+        if reused or items_reused
+        else company_time.DEFAULT_ZONE
+    )
     segments = {s.name: s for s in await _segments(db, run.id)}
     rows = []
     for i, sdef in enumerate(flow.segments, start=1):
         amount = flows.segment_estimate(sdef, knobs)
         skip = bool(reused) and sdef.name == "baseline"
-        if skip:
+        off = _skipped_off(sdef, knobs)
+        skip_items = items_reused is not None and sdef.name == "roadmap_items"
+        if skip or off or skip_items:
             amount = Decimal("0.00")
         segments[sdef.name].estimate_usd = amount
+        note = None
+        if skip:
+            note = f"Current baseline, approved {reuse.short_date(reused['approved_at'], zone)}"
+        elif items_reused is not None and skip_items:
+            note = _items_reused_note(items_reused, zone)
+        elif off:
+            note = OFF_NOTE
         rows.append(
             SegmentEstimate(
                 seq=i,
@@ -1982,10 +2099,11 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
                 title=sdef.title,
                 roles=knobs.roles[sdef.name],
                 estimate_usd=float(amount),
-                reused=skip,
-                note=f"Current baseline, approved {reuse.short_date(reused['approved_at'], zone)}"
-                if skip
+                reused=skip or skip_items,
+                reused_from_version=items_reused["version"]
+                if items_reused is not None and skip_items
                 else None,
+                note=note,
             )
         )
     total = sum((Decimal(str(r.estimate_usd)) for r in rows), Decimal(0))
@@ -2014,6 +2132,7 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     if run.estimate_usd is None:
         raise RunError("estimate the run first: press Estimate, then Start run")
     await _recheck_reuse(db, run)
+    await _recheck_draft_items(db, run)
     await _one_build_at_a_time(db, _flow(run))
     knobs = _knobs(run)
     source_id = _source_id(run)
@@ -2082,6 +2201,7 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
         raise RunError(f"run is {run.status}, not awaiting approval")
     # A run reusing the baseline: still reusable now (else 409, nothing changed, C4).
     await _recheck_reuse(db, run)
+    await _recheck_draft_items(db, run)
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
@@ -2092,16 +2212,151 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
 async def _launch(db: AsyncSession, run: Run, principal: Principal | str | None = None) -> None:
     run.status = "running"
     run.started_at = _now()
-    ceiling = (run.estimate_usd * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
+    items_reused = (run.knobs or {}).get("draft_items_reused")
+    base = run.estimate_usd
+    if items_reused:
+        # E1 part B: the ceiling counts the reused items step at its nominal cost, so a
+        # send-back that derives the items again (a paid step) does not pause the run.
+        base += flows.segment_estimate(_flow(run).segment("roadmap_items"), _knobs(run))
+    ceiling = (base * flows.OVERRUN_FACTOR).quantize(Decimal("0.0001"))
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     segments = await _segments(db, run.id)
+    knobs = _knobs(run)
+    for s in segments:
+        if _skipped_off(_flow(run).segment(s.name), knobs):
+            _skip_off(s)
     first = segments[0]
     reused = (run.knobs or {}).get("reuse_baseline")
     if reused and first.name == "baseline" and len(segments) > 1:
         await _skip_reused_baseline(db, run, first, reused, principal)
         first = segments[1]
+    if items_reused and first.name == "roadmap_items":
+        try:
+            if await _reuse_draft_items(db, run, first, segments, items_reused, principal):
+                return
+        except safe_yaml.ParseBusy:
+            # No free worker for the items check: the segment stays succeeded with its
+            # advance "opening", and the next tick advances it again (_resume_advance).
+            log.warning("run %s: the reused items wait for a parse worker", run.id)
+            return
     # Workflow mode covers the segments from ``first`` on: no baseline step is submitted.
     await _submit(db, run, first, segments)
+
+
+def _skip_off(segment: RunSegment) -> None:
+    """F4: the segment's stop is off, so nothing of it runs (recorded skipped at no cost)."""
+    art = _art(segment)
+    art["note"] = OFF_NOTE
+    _set_art(segment, art)
+    segment.status = "skipped"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.finished_at = _now()
+    segment.error = None
+
+
+# E1 part B (decided 2026-10-21, "Reuse items"): the flow whose items step reuses the
+# approved source version's draft items.
+REUSES_DRAFT_ITEMS = "prd_to_roadmap"
+
+
+async def _draft_items_to_reuse(db: AsyncSession, run: Run) -> dict[str, Any] | None:
+    """The ``draft_items_reused`` knob of a Build roadmap run: the source version's draft
+    items when they may be reused and the run does not derive them again; else None."""
+    if run.flow != REUSES_DRAFT_ITEMS or (run.knobs or {}).get("reuse_draft_items") is False:
+        return None
+    source_id = _source_id(run)
+    if source_id is None:
+        return None
+    from oracle.roadmap import draft_items
+
+    found = await draft_items.reusable(db, source_id)
+    version = await db.get(DocumentVersion, source_id)
+    if found is None or version is None:
+        return None
+    row = found[0]
+    return {
+        "draft_roadmap_id": str(row.id),
+        "version": version.number,
+        "ready_at": row.ready_at.isoformat() if row.ready_at else None,
+    }
+
+
+def _items_reused_note(knob: dict[str, Any], zone: str) -> str:
+    """'Reused: the roadmap items of v3, derived 20 Oct', the Company time zone's day."""
+    note = f"Reused: the roadmap items of v{knob['version']}"
+    if knob.get("ready_at"):
+        note += f", derived {company_time.day_first_in_words(knob['ready_at'], zone)}"
+    return note
+
+
+async def _recheck_draft_items(db: AsyncSession, run: Run) -> None:
+    """A run estimated with reused draft items: still the same items (else 409, nothing
+    changed): a Derive again or a new derivation since makes the estimate stale."""
+    knob = (run.knobs or {}).get("draft_items_reused")
+    if knob and await _draft_items_to_reuse(db, run) != knob:
+        raise RunError(
+            "the PRD version's draft roadmap items changed since the estimate: "
+            "estimate the run again"
+        )
+
+
+async def _reuse_draft_items(
+    db: AsyncSession,
+    run: Run,
+    segment: RunSegment,
+    segments: list[RunSegment],
+    knob: dict[str, Any],
+    principal: Principal | str | None,
+) -> bool:
+    """E1 part B: the run's roadmap_items segment reuses the source version's draft items.
+    Their roadmap_items.yaml is written from the stored rows, the segment succeeds at no
+    cost with nothing submitted, and it is advanced: its stop opens on those items (or,
+    with the stop off, the roadmap draft is queued). False when they are gone."""
+    from oracle.roadmap import draft_items
+
+    source_id = _source_id(run)
+    found = await draft_items.reusable(db, source_id) if source_id else None
+    version = await db.get(DocumentVersion, source_id) if source_id else None
+    prd = await db.get(Document, version.document_id) if version is not None else None
+    if found is None or version is None or prd is None:
+        return False
+    row, rows = found
+    now = _now()
+    note = _items_reused_note(knob, await company_time.company_time_zone(db))
+    art = _art(segment)
+    art["files"] = {ITEMS_FILE: draft_items.items_yaml(prd.slug, version.number, rows)}
+    art["attempts"].append(
+        {
+            "attempt": len(art["attempts"]) + 1,
+            "workflow_id": None,
+            "submitted_at": now.isoformat(),
+            "cost_usd": 0,
+            "note": None,
+            "state": "succeeded",
+        }
+    )
+    art["reused_items"] = knob
+    art["note"] = note
+    # Until it is advanced: a busy parse pool stops the advance, and the tick resumes it.
+    art["attempts"][-1]["advanced"] = "opening"
+    _set_art(segment, art)
+    segment.status = "succeeded"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.started_at = segment.started_at or now
+    segment.finished_at = now
+    segment.error = None
+    await audit.record(
+        db,
+        principal if principal is not None else audit.ORACLE,
+        "run.items_reused",
+        "run",
+        run.id,
+        {"draft_roadmap_id": str(row.id), "version": version.number, "items": len(rows)},
+    )
+    await _advance(db, run, segment, segments)
+    return True
 
 
 async def _skip_reused_baseline(
@@ -2316,7 +2571,11 @@ async def _prompt_context(
         kind=kind,
         source=source,
         draft=draft_ctx,
-        extra_lines=await extensions.prompt_lines(db, run),
+        extra_lines=[
+            *await extensions.prompt_lines(db, run),
+            *await eng_check.prompt_lines(db, run.id, segment.name),
+            *_regenerate_note(run),
+        ],
         intake_id=run.knobs.get("intake_id"),
         intake_gap_ids=list(run.knobs.get("intake_gap_ids") or []),
         scope_yaml=scope_yaml,
@@ -2329,6 +2588,18 @@ async def _prompt_context(
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
+
+
+def _regenerate_note(run: Run) -> list[str]:
+    """#482: the note given with Regenerate, for every step of the run it started."""
+    note = (run.knobs or {}).get("regenerate_note")
+    if not note:
+        return []
+    return [
+        "This run regenerates the document as its next version. The note given with "
+        "Regenerate (a person's words: follow them where they fit the task above):",
+        f"- {note}",
+    ]
 
 
 async def _target_kind(db: AsyncSession, run: Run) -> str:
@@ -3105,7 +3376,11 @@ async def _submit_now(
     kind = await _target_kind(db, run)
     registered_again = False
     while True:
-        covered = [s for s in segments if s.seq >= segment.seq] if mode.waits else [segment]
+        covered = (
+            [s for s in segments if s.seq >= segment.seq and s.status != "skipped"]
+            if mode.waits
+            else [segment]
+        )
         planned: list[tuple[int, str, list[str]]] = []
         contexts: list[tuple[int, flows.SegmentDef, flows.PromptContext]] = []
         for s in covered:
@@ -3737,7 +4012,7 @@ async def _next(
     segment: RunSegment,
     segments: list[RunSegment],
 ) -> None:
-    later = [s for s in segments if s.seq > segment.seq]
+    later = [s for s in segments if s.seq > segment.seq and s.status != "skipped"]
     wf = _drivable(run)
     if later and wf is not None and _plan_entry(wf, later[0].seq) is not None:
         # Already part of the live workflow: it runs once the wait is answered.
@@ -4283,6 +4558,11 @@ async def _advance(
         "attempt": attempt.get("attempt", 1),
         "artifacts": sorted(art["files"].keys()),
     }
+    if sdef.checkpoint == eng_check.KIND and flows.BRIEFS_FILE in sdef.outputs:
+        # F4: what the Engineering check's screen and its gate read.
+        payload[eng_check.PAYLOAD_KEY] = await eng_check.check_segment(
+            db, run, art["files"].get(flows.BRIEFS_FILE)
+        )
     if imported is not None:
         payload["import"] = imported
     if baseline_import is not None:
@@ -6816,11 +7096,19 @@ async def decide_checkpoint(
     if decision == "changes_requested" and not note and document_review is None:
         if not send_back:
             raise Invalid("say what to change: a note is required to request changes")
-        staged = await db.scalar(
-            select(func.count())
-            .select_from(CheckpointAction)
-            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+        sent = select(func.count()).where(
+            CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged"
         )
+        if cp.kind == "feature_set":
+            # C7: an edit or an add is the scope's rows (counted below), never a staged
+            # action the review file carries.
+            sent = sent.where(CheckpointAction.kind.not_in(("edit", "add")))
+        staged = await db.scalar(sent.select_from(CheckpointAction))
+        if not staged and cp.kind == "feature_set":
+            # C7: the rows a person changed are what is sent back.
+            from oracle.runs import scope_review
+
+            staged = await scope_review.edits_count(db, cp)
         if not staged:
             raise Invalid(NOTHING_TO_SEND)
     segments = await _segments(db, run.id)
@@ -6828,7 +7116,9 @@ async def decide_checkpoint(
     segment = next((s for s in segments if s.seq == seq), None)
     # Only a segment in the state its checkpoint expects is started: the checkpoint's
     # segment succeeded, and the next one (approved) has not run.
-    later = next((s for s in segments if segment and s.seq > segment.seq), None)
+    later = next(
+        (s for s in segments if segment and s.seq > segment.seq and s.status != "skipped"), None
+    )
     if segment is None or segment.status != "succeeded":
         raise RunError(f"the checkpoint's segment is {segment.status if segment else 'missing'}")
     if decision == "approved" and later is not None and later.status != "pending":
@@ -6866,6 +7156,14 @@ async def decide_checkpoint(
     from oracle.staging import hooks as staging_hooks
 
     await staging_hooks.decided(db, cp, decision)
+    if decision == "approved" and cp.kind == eng_check.KIND and run.flow != SPEC_FLOW:
+        # F4: the lead's verdicts, answers and sizes, in this transaction.
+        staged = await db.scalars(
+            select(CheckpointAction).where(
+                CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged"
+            )
+        )
+        await eng_check.on_approved(db, principal, run, cp, list(staged))
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.
@@ -7129,6 +7427,9 @@ async def _continue_decided(
     # Until its workflow is submitted, the segment remembers the decision that started
     # it: a disable of the decider voids it.
     art = _art(target)
+    if target is segment and art.pop("reused_items", None) is not None:
+        # E1 part B: a send-back derives the reused items again; they are no longer reused.
+        art.pop("note", None)
     art["decision"] = {
         "checkpoint_id": str(cp.id),
         "decided_by": str(cp.decided_by),
@@ -8420,6 +8721,15 @@ async def _scope_decided(
     if scope is None:
         return
     if cp.status == "approved":
+        # C7 Approve with edits: what people added or reworded becomes the approver's
+        # own baseline writes, in this transaction (no agent round).
+        from oracle.runs import scope_review
+
+        edits = (
+            await scope_review.approved(db, principal, run, cp, scope)
+            if scope.status == "proposed"
+            else {}
+        )
         await feature_set.approve(db, scope, cp.decided_by, run.document_id)
         await audit.record(
             db,
@@ -8427,8 +8737,9 @@ async def _scope_decided(
             "prd_scope.approved",
             "prd_scope",
             scope.id,
-            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by)},
-        )
+            {"run_id": str(run.id), "checkpoint_id": str(cp.id), "by": str(cp.decided_by),
+             **edits},
+        )  # fmt: skip
     elif cp.status == "changes_requested" and scope.status == "proposed":
         scope.status = "superseded"
         scope.lock_version += 1
@@ -9293,6 +9604,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
+    live = await _live_reasons(db, mine)
     asked = await _open_questions(db, staged)
     owner = principal.role == "owner"
     waiting_runs: list[Run] = []
@@ -9319,6 +9631,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 flow=run.flow,
                 leads=leads,
                 staged=staged,
+                live=live,
                 open_questions=asked,
             ).model_dump(),
             flow=run.flow,  # type: ignore[arg-type]
@@ -9409,6 +9722,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     revoke_failures = await _revoke_failures(db) if owner else []
     access_failures = await _access_failures(db) if owner else []
+    access_requests = await _access_requests(db, principal)
     strategy = None
     if owner:
         from oracle.strategy import drift
@@ -9482,6 +9796,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.roadmap.alerts import inbox_rows as track_rows
 
     track_groups = await track_rows(db, principal, seen)
+    # G6: invitations, mentions and changes proposed in discussions I can read.
+    from oracle.discussions import inbox as discussion_inbox
+
+    discussions = await discussion_inbox.rows(db, principal, seen)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9498,6 +9816,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         feedback=feedback,
         revoke_failures=revoke_failures,
         access_failures=access_failures,
+        access_requests=access_requests,
         reports=reports,
         report_failures=report_failures,
         strategy=strategy,
@@ -9514,6 +9833,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.open
         + len(revoke_failures)
         + len(access_failures)
+        # Access requests (A5) are not counted: no Inbox screen shows them yet.
         + sum(1 for r in reports if not r.read)
         + len(report_failures)
         # Strategy drift: one row, however many findings.
@@ -9521,6 +9841,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(1 for r in launch_rows if r.counted)
         + sum(1 for r in outcome_inbox if r.counts)
         + sum(a.counts for a in oracle_actions)
+        + sum(1 for r in discussions if r.state in ("new", "open"))
         + sum(t.counts.new + t.counts.open for t in track_groups)
         + counted,
         tracks=track_groups,
@@ -9533,7 +9854,33 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         decisions=decisions,
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
+        discussions=discussions,
     )
+
+
+async def _access_requests(db: AsyncSession, principal: Principal) -> list[InboxAccessRequest]:
+    """Pending access requests, oldest first, for callers who may approve them (A5)."""
+    from oracle.members import access
+    from oracle.members.models import AccessRequest
+    from oracle.members.service import iap_default_role
+
+    roles = list(access.invite_roles(principal))
+    if not roles:
+        return []
+    rows = await db.scalars(
+        select(AccessRequest)
+        .where(AccessRequest.status == "pending")
+        .order_by(AccessRequest.created_at, AccessRequest.id)
+    )
+    default = await iap_default_role(db)
+    preset = default if default in roles else roles[0]
+    return [
+        InboxAccessRequest(
+            id=r.id, email=r.email, note=r.note, requested_at=r.created_at,
+            last_seen_at=r.last_seen_at, default_role=preset, roles=roles,
+        )
+        for r in rows
+    ]  # fmt: skip
 
 
 async def _access_failures(db: AsyncSession) -> list[InboxAccessFailure]:

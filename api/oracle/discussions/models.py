@@ -82,6 +82,7 @@ MAX_TITLE = 200
 MAX_BODY = 8000
 MAX_SUMMARY = 1200
 MAX_RATIONALE = 1000
+INBOX_KINDS = ("invited", "mentioned")
 
 
 def _updated_at() -> Mapped[datetime]:
@@ -230,6 +231,10 @@ class DiscussionMessage(TenantScoped, Base):
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     prompt: Mapped[str | None] = mapped_column(Text)
     pushback: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # G8 Slack bridge: a reply from the mirrored thread (its ts and its Slack author), or
+    # the ts of the post that mirrored this message.
+    slack_ts: Mapped[str | None] = mapped_column(Text)
+    slack_user_id: Mapped[str | None] = mapped_column(Text)
 
 
 class DiscussionChange(TenantScoped, Base):
@@ -283,3 +288,43 @@ class DiscussionChange(TenantScoped, Base):
     updated_at: Mapped[datetime] = _updated_at()
 
     __mapper_args__ = {"version_id_col": lock_version}
+
+
+class DiscussionInboxItem(TenantScoped, Base):
+    """G6: a person's Inbox row for being invited into a discussion or mentioned in it.
+    Written with the message or the add; done when they read past it or dismiss it;
+    deleted when they are removed. "Changes proposed" rows are derived, not stored."""
+
+    __tablename__ = "discussion_inbox_items"
+    __table_args__ = (
+        CheckConstraint(_in("kind", INBOX_KINDS), name="kind"),
+        Index(
+            "uq_discussion_inbox_invited",
+            "user_id",
+            "discussion_id",
+            unique=True,
+            postgresql_where=text("kind = 'invited'"),
+        ),
+        Index(
+            "uq_discussion_inbox_mentioned",
+            "user_id",
+            "message_id",
+            unique=True,
+            postgresql_where=text("kind = 'mentioned'"),
+        ),
+        Index("ix_discussion_inbox_open", "user_id", postgresql_where=text("done_at IS NULL")),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    discussion_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussion_messages.id", ondelete="CASCADE")
+    )
+    by_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

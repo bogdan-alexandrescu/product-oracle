@@ -1,28 +1,39 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { CitationChip } from "@/components/CitationChip";
 import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
-import { Button, Chip, confirmInPage, Icon, Notice, useFocusTrap } from "@/components/ds";
+import { Button, Chip, confirmInPage, Icon, InfoTip, Notice, useFocusTrap } from "@/components/ds";
 import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
-import { Loading } from "@/components/ui";
+import { INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type CitationOut, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
-import { errorMessage } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { plural } from "./DiscussionList";
 
 type Discussion = Schemas["DiscussionOut"];
 type Message = Schemas["DiscussionMessageOut"];
+type Change = Schemas["DiscussionChangeOut"];
+type Channel = Schemas["NotificationChannelOut"];
 type Counts = { messages: number; people: number };
 type Loaded = { kind: "ok"; d: Discussion; messages: Message[] } | { kind: "private" } | { kind: "error"; message: string };
 
 const STARTER_ADDS = "Only the starter can add people to a private discussion";
 const SHARE_TO_ADD = "Share this finding at Summary or above to add people";
 const VISIBILITY_TIP = { open: "Everyone who can see this can read it", private: "Only the people in it can read it" } as const;
+// G8 Slack bridge copy (spec 3.1, 3.4).
+const PRIVATE_STAYS = "Private discussions stay in Oracle";
+const OWNER_CONNECTS = "An owner connects Oracle to Slack in Settings";
+const mirrorConfirm = (channel: string) =>
+  `Everything posted in this discussion from now on, Oracle's replies included, will be visible to everyone in #${channel}, including people who are not in Oracle.`;
+const privateStopsMirror = (channel: string) =>
+  `This discussion is mirrored to #${channel}. Making it private stops the mirror. What was posted stays in Slack.`;
 
 /** The API's words without the status suffix the client adds ("… (403)"). */
 function detail(e: unknown): string {
@@ -280,7 +291,126 @@ function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: str
   );
 }
 
+/**
+ * Mirror to Slack… (G8): a channel the Oracle app is in, found by search, then the confirm
+ * copy naming who will see the discussion from now on; Mirror links it.
+ */
+function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string; onDone: () => void; onCancel: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const title = useId();
+  useFocusTrap(ref, true, onCancel);
+  const channels = useQuery("slack-channels|mirror", () => unwrap(api.GET("/v1/company-integrations/slack/channels", { params: { query: { mirror: true } } })));
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<Channel | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const q = query.trim().replace(/^#/, "").toLowerCase();
+  const shown = (channels.data ?? []).filter((c) => c.name.toLowerCase().includes(q));
+
+  const mirror = async () => {
+    if (!picked) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(api.POST("/v1/discussions/{discussion_id}/slack", { params: { path: { discussion_id: discussionId } }, body: { channel_id: picked.id } }));
+      onDone();
+    } catch (e) {
+      setError(detail(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title}
+        tabIndex={-1}
+        data-testid="mirror-to-slack"
+        className="w-full max-w-md min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none"
+      >
+        <div className="flex min-h-14 items-center border-b border-line px-5 max-[600px]:px-4">
+          <h2 id={title} className="font-display text-lg font-bold tracking-heading">
+            Mirror to Slack
+          </h2>
+        </div>
+        {!picked ? (
+          <div className="flex min-w-0 flex-col gap-2 px-5 py-3.5 max-[600px]:px-4">
+            <input
+              type="search"
+              aria-label="Find a channel"
+              placeholder="Find a channel"
+              data-autofocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className={INPUT}
+            />
+            {channels.error && <InlineError>{channels.error}</InlineError>}
+            {channels.loading && !channels.data && <Loading />}
+            {channels.data && (
+              <ul role="listbox" aria-label="Channels" className="flex max-h-60 min-w-0 flex-col gap-0.5 overflow-y-auto">
+                {shown.length === 0 && <li className="px-2 py-1.5 text-sm text-text2">No channel matches</li>}
+                {shown.map((c) => (
+                  <li key={c.id} className="min-w-0">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => setPicked(c)}
+                      className="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-surface2"
+                    >
+                      <span className="min-w-0 truncate font-semibold text-text">#{c.name}</span>
+                      {c.is_private && <span className="flex-none text-[13px] text-text2">private</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[13px] text-text2">Invite @Product Oracle to a channel to see it here.</p>
+          </div>
+        ) : (
+          <p className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4" data-testid="mirror-confirm">
+            {mirrorConfirm(picked.name)}
+          </p>
+        )}
+        {error && (
+          <div className="px-5 pb-2 max-[600px]:px-4">
+            <InlineError>{error}</InlineError>
+          </div>
+        )}
+        <div className="flex justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
+          {picked ? (
+            <>
+              <Button variant="ghost" onClick={() => (setPicked(null), setError(null))}>
+                Back
+              </Button>
+              <Button variant="primary" data-autofocus disabled={busy} onClick={() => void mirror()}>
+                Mirror to #{picked.name}
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type Draft = { user_id: string; name: string };
+
+/** What a page drives in the composer (B6's quick replies): send a reply, or start an @mention. */
+export type ComposerHandle = { send: (text: string) => Promise<void>; mention: () => void };
 
 /**
  * The composer: plain text, "@" opens the member picker (C2's directory; viewers show as
@@ -288,7 +418,17 @@ type Draft = { user_id: string; name: string };
  * else's mention of an outsider turns amber, says so, and keeps Send disabled until it is
  * removed.
  */
-function Composer({ d, messages, onSent }: { d: Discussion; messages: Message[]; onSent: () => Promise<void> }) {
+function Composer({
+  d,
+  messages,
+  onSent,
+  handle,
+}: {
+  d: Discussion;
+  messages: Message[];
+  onSent: () => Promise<void>;
+  handle?: Ref<ComposerHandle>;
+}) {
   const { me } = useMe();
   const [text, setText] = useState("");
   // B6 Goals interview's discussions start with "Ask Oracle" on (the entity's interview flag).
@@ -331,26 +471,45 @@ function Composer({ d, messages, onSent }: { d: Discussion; messages: Message[];
     setQuery(null);
     box.current?.focus();
   };
-  const send = async () => {
-    if (!text.trim() || anyBlocked) return;
+  const post = async (body: string, picked: Draft[]) => {
     setSending(true);
     setError(null);
     try {
       await unwrap(
         api.POST("/v1/discussions/{discussion_id}/messages", {
           params: { path: { discussion_id: d.id } },
-          body: { body: text.trim(), mention_oracle: askOracle, mentions: mentions.filter((m) => text.includes(`@${m.name}`)).map((m) => m.user_id) },
+          body: { body, mention_oracle: askOracle, mentions: picked.filter((m) => body.includes(`@${m.name}`)).map((m) => m.user_id) },
         }),
       );
-      setText("");
-      setMentions([]);
-      await onSent();
+      return true;
     } catch (e) {
       setError(detail(e));
+      return false;
     } finally {
       setSending(false);
     }
   };
+  const send = async () => {
+    if (!text.trim() || anyBlocked) return;
+    if (!(await post(text.trim(), mentions))) return;
+    setText("");
+    setMentions([]);
+    await onSent();
+  };
+  useImperativeHandle(handle, () => ({
+    send: async (reply: string) => {
+      if (await post(reply, [])) await onSent();
+    },
+    mention: () => {
+      const next = text && !/\s$/.test(text) ? `${text} @` : `${text}@`;
+      setText(next);
+      setQuery("");
+      requestAnimationFrame(() => {
+        box.current?.focus();
+        box.current?.setSelectionRange(next.length, next.length);
+      });
+    },
+  }));
 
   return (
     <form
@@ -438,13 +597,14 @@ function Composer({ d, messages, onSent }: { d: Discussion; messages: Message[];
   );
 }
 
-function MenuItem({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function MenuItem({ onClick, disabled = false, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="flex h-9 items-center rounded-lg px-2.5 text-left text-sm font-medium whitespace-nowrap text-text hover:bg-surface2"
+      disabled={disabled}
+      className="flex h-9 items-center rounded-lg px-2.5 text-left text-sm font-medium whitespace-nowrap text-text hover:bg-surface2 disabled:cursor-not-allowed disabled:text-text2 disabled:hover:bg-transparent"
     >
       {children}
     </button>
@@ -454,7 +614,8 @@ function MenuItem({ onClick, children }: { onClick: () => void; children: ReactN
 /**
  * One discussion: its header (title, Open / Private with what it means, its people), the
  * messages, the composer, and a ⋯ menu (Rename; Make private; Make open; People; Summary;
- * Share summary with everyone; Close or Reopen; Follow or Leave), each as the reader may.
+ * Share summary with everyone; Mirror to Slack… or Stop mirroring; Close or Reopen; Follow
+ * or Leave), each as the reader may. A mirrored discussion shows its Slack chip (G8).
  * `onBack` draws "← All feedback" (or `backLabel`).
  */
 export function DiscussionThread({
@@ -462,12 +623,27 @@ export function DiscussionThread({
   onBack,
   backLabel = "All feedback",
   onChanged,
+  refreshKey = 0,
+  belowHeader,
+  renderAfter,
+  composer,
+  focusChanges = false,
 }: {
   id: string;
   onBack?: () => void;
   backLabel?: string;
   /** Something about it changed (a message, its visibility): lists showing it reload. */
   onChanged?: () => void;
+  /** A change made elsewhere (a version proposed or accepted): bumping it reloads the thread. */
+  refreshKey?: number;
+  /** Under the header (B6: the missing-field chips). */
+  belowHeader?: ReactNode;
+  /** Under a message (B6: Oracle's version cards and quick replies). */
+  renderAfter?: (m: Message, ctx: { d: Discussion; messages: Message[] }) => ReactNode;
+  /** The composer's handle (B6's quick replies send and mention through it). */
+  composer?: Ref<ComposerHandle>;
+  /** Opened from the Inbox's Review changes (G6): scroll to the changes card. */
+  focusChanges?: boolean;
 }) {
   const { me, can } = useMe();
   const myId = me?.user_id ?? null;
@@ -478,6 +654,15 @@ export function DiscussionThread({
   const [warning, setWarning] = useState<Counts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mirroring, setMirroring] = useState(false);
+  const router = useRouter();
+  // G8: the starter or an approver may mirror an open discussion; they need the install's state.
+  // A G7 panel chat never is (Share as discussion opens it), so it shows no Slack at all.
+  const shownD = state?.kind === "ok" ? state.d : null;
+  const mayMirror = !!shownD && shownD.status === "open" && shownD.origin !== "panel" && can("mirror_discussion_to_slack", shownD.me.can_manage);
+  const slackStatus = useQuery(mayMirror ? "slack-status" : "slack-status|none", () =>
+    mayMirror ? unwrap(api.GET("/v1/company-integrations/slack/status")) : Promise.resolve(null),
+  );
 
   const reload = async () => {
     const next = await load(id);
@@ -490,7 +675,41 @@ export function DiscussionThread({
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, refreshKey]);
+  // The changes still waiting on a decision (proposed by Oracle, suggested by people).
+  const [changes, setChanges] = useState<Change[]>([]);
+  useEffect(() => {
+    let live = true;
+    unwrap(api.GET("/v1/discussions/{discussion_id}/changes", { params: { path: { discussion_id: id } } }))
+      .then((rows) => live && setChanges(rows.filter((c) => c.status === "proposed" || c.status === "suggested")))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [id, refreshKey]);
+  const changesRef = useRef<HTMLElement>(null);
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (focusChanges && changes.length > 0 && !scrolled.current && changesRef.current) {
+      scrolled.current = true;
+      changesRef.current.scrollIntoView({ block: "center" });
+    }
+  }, [focusChanges, changes]);
+  // Reading the thread marks it read to its last message: the Inbox's invitation and
+  // mentions read past are done (G6), and the rail's count reads again.
+  const lastId = state?.kind === "ok" ? state.messages.at(-1)?.id : undefined;
+  const readTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!lastId || readTo.current === lastId) return;
+    readTo.current = lastId;
+    void api
+      .POST("/v1/discussions/{discussion_id}/read", { params: { path: { discussion_id: id } }, body: { message_id: lastId } })
+      .then(({ response }) => {
+        if (!response.ok) return;
+        invalidateWaiting();
+        waitingChanged();
+      });
+  }, [id, lastId]);
 
   const back = onBack && (
     <Button variant="ghost" icon="chevron-left" onClick={onBack} aria-label={backLabel}>
@@ -573,7 +792,9 @@ export function DiscussionThread({
     const n = d.participants.length;
     const yes = await confirmInPage({
       action: "Make private",
-      message: `Make private? The ${plural(n, "person", "people")} in it keep${n === 1 ? "s" : ""} reading it. Everyone else will see only that a private discussion exists.`,
+      message: `${d.slack ? `${privateStopsMirror(d.slack.channel_name)} ` : ""}Make private? The ${plural(n, "person", "people")} in it keep${
+        n === 1 ? "s" : ""
+      } reading it. Everyone else will see only that a private discussion exists.`,
     });
     if (yes) await patch({ visibility: "private" });
   };
@@ -635,7 +856,28 @@ export function DiscussionThread({
     }
   };
 
-  const items: { label: string; run: () => void }[] = [];
+  const stopMirroring = async () => {
+    if (!d.slack) return;
+    const yes = await confirmInPage({
+      action: "Stop mirroring",
+      message:
+        // No thread yet (or a failed mirror): nothing was posted, and no closing line goes.
+        !d.slack.thread_url
+          ? `Stop mirroring to #${d.slack.channel_name}? Nothing was posted in Slack.`
+          : `Stop mirroring to #${d.slack.channel_name}? Oracle posts a closing line in the Slack thread. What was posted stays in Slack.`,
+    });
+    if (!yes) return;
+    setError(null);
+    try {
+      await unwrap(api.DELETE("/v1/discussions/{discussion_id}/slack", { params: { path: { discussion_id: d.id } } }));
+      await reload();
+      onChanged?.();
+    } catch (e) {
+      setError(detail(e));
+    }
+  };
+
+  const items: { label: string; run: () => void; disabled?: boolean; tip?: string }[] = [];
   if (open && starter) items.push({ label: "Rename", run: () => (setDraft(d.title), setEditing("title")) });
   if (open && starter && !priv) items.push({ label: "Make private", run: () => void makePrivate() });
   if (open && canMakeOpen) items.push({ label: "Make open", run: () => setWarning(d.exposure ?? { messages: d.message_count, people: 0 }) });
@@ -647,6 +889,18 @@ export function DiscussionThread({
         ? { label: "Stop sharing summary", run: () => void patch({ summary_shared: false }) }
         : { label: "Share summary with everyone", run: () => void patch({ summary_shared: true }) },
     );
+  // G8 Mirror to Slack: never for a private discussion (an info tip says why instead).
+  const slack = slackStatus.data ?? null;
+  const owner = can("install_slack_notifications");
+  let slackTip: string | null = null;
+  if (mayMirror && slack) {
+    if (d.slack) items.push({ label: "Stop mirroring", run: () => void stopMirroring() });
+    else if (priv) slackTip = PRIVATE_STAYS;
+    else if (slack.mirroring) items.push({ label: "Mirror to Slack…", run: () => setMirroring(true) });
+    else if (owner)
+      items.push({ label: slack.needs_reconnect ? "Reconnect Slack…" : "Connect Oracle to Slack…", run: () => router.push("/settings/notifications") });
+    else items.push({ label: "Mirror to Slack", run: () => undefined, disabled: true, tip: OWNER_CONNECTS });
+  }
   if (canClose) items.push({ label: open ? "Close" : "Reopen", run: () => void patch({ status: open ? "closed" : "open" }) });
   if (myId && !d.me.participant && !priv && open) items.push({ label: "Follow", run: () => void follow() });
   if (myId && d.me.participant && !(priv && starter)) items.push({ label: priv ? "Leave" : "Unfollow", run: () => void leave() });
@@ -657,21 +911,43 @@ export function DiscussionThread({
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 items-start gap-2">
           <h3 className="min-w-0 flex-1 font-display text-[17px] leading-6 font-bold tracking-heading break-words">{d.title}</h3>
-          {items.length > 0 && (
+          {(items.length > 0 || slackTip) && (
             <Menu label="Discussion actions" icon="more" iconOnly>
               {(close) => (
-                <span role="menu" aria-label="Discussion actions" className="flex min-w-44 flex-col gap-0.5">
-                  {items.map((it) => (
-                    <MenuItem
-                      key={it.label}
-                      onClick={() => {
-                        close();
-                        it.run();
-                      }}
-                    >
-                      {it.label}
-                    </MenuItem>
-                  ))}
+                <span className="flex min-w-44 flex-col gap-0.5">
+                  <span role="menu" aria-label="Discussion actions" className="flex flex-col gap-0.5">
+                    {items.map((it) =>
+                      it.tip ? (
+                        <span key={it.label} className="flex items-center gap-1.5" title={it.tip}>
+                          <MenuItem disabled={it.disabled} onClick={() => undefined}>
+                            {it.label}
+                          </MenuItem>
+                          <InfoTip label={it.label} side="bottom">
+                            {it.tip}
+                          </InfoTip>
+                        </span>
+                      ) : (
+                        <MenuItem
+                          key={it.label}
+                          disabled={it.disabled}
+                          onClick={() => {
+                            close();
+                            it.run();
+                          }}
+                        >
+                          {it.label}
+                        </MenuItem>
+                      ),
+                    )}
+                  </span>
+                  {slackTip && (
+                    <span className="flex h-9 items-center gap-1.5 px-2.5 text-sm text-text2" data-testid="slack-private-tip">
+                      Slack
+                      <InfoTip label="Slack" side="bottom">
+                        {slackTip}
+                      </InfoTip>
+                    </span>
+                  )}
                 </span>
               )}
             </Menu>
@@ -691,8 +967,19 @@ export function DiscussionThread({
             {plural(d.participants.length, "person", "people")}
           </button>
           {!open && <Chip kind="na">Closed</Chip>}
+          {d.slack &&
+            (d.slack.thread_url ? (
+              <a href={d.slack.thread_url} target="_blank" rel="noreferrer" data-testid="discussion-slack" title="Open the Slack thread" className="inline-flex">
+                <Chip kind="acc">#{d.slack.channel_name}</Chip>
+              </a>
+            ) : (
+              <span data-testid="discussion-slack" title={d.slack.status === "failed" ? "Slack mirror failed" : "Mirrored to Slack"} className="inline-flex">
+                <Chip kind="acc">#{d.slack.channel_name}</Chip>
+              </span>
+            ))}
           <span className="min-w-0 truncate">{d.subject_label}</span>
         </div>
+        {belowHeader}
         {d.summary && (
           <p className="rounded-lg bg-surface2 px-3 py-2 text-sm leading-5 break-words" data-testid="discussion-summary">
             <span className="font-semibold">Summary: </span>
@@ -700,6 +987,22 @@ export function DiscussionThread({
           </p>
         )}
       </div>
+
+      {changes.length > 0 && (
+        <section ref={changesRef} aria-label="Changes proposed" className="flex flex-col gap-2 rounded-lg border border-line p-3" data-testid="discussion-changes">
+          <h4 className="text-sm font-semibold">{plural(changes.length, "change", "changes")} proposed</h4>
+          <ul className="flex flex-col gap-1.5">
+            {changes.map((c) => (
+              <li key={c.id} className="flex min-w-0 items-center gap-2 text-sm" data-testid="discussion-change">
+                <span className="min-w-0 flex-1 truncate" title={c.label}>
+                  {c.label}
+                </span>
+                <Chip kind="line">{c.status === "suggested" ? "Suggested" : c.proposed_by_kind === "oracle" ? "Proposed by Oracle" : "Proposed"}</Chip>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {editing && (
         <form
@@ -750,6 +1053,17 @@ export function DiscussionThread({
         </div>
       )}
 
+      {d.slack?.status === "failing" && d.started_by.user_id === myId && (
+        <Notice tone="warn" testId="slack-failing">
+          Slack mirror failing: {d.slack.error ?? "Slack did not take the last post"}
+        </Notice>
+      )}
+      {d.slack?.status === "failed" && d.started_by.user_id === myId && (
+        <Notice tone="warn" testId="slack-failed">
+          Slack mirror failed: {d.slack.error ?? "Slack did not take the first post"}. Stop mirroring to mirror it again.
+        </Notice>
+      )}
+
       {error && <InlineError>{error}</InlineError>}
 
       <ol className="flex min-w-0 flex-col gap-3" aria-label="Messages">
@@ -765,6 +1079,11 @@ export function DiscussionThread({
                 <span className="font-semibold text-text">{m.author?.name ?? "Oracle"}</span>
                 <span className="tnum">{formatDateTime(m.created_at)}</span>
                 {m.edited_at && !m.deleted && <span>edited</span>}
+                {m.via === "slack" && (
+                  <span data-testid="via-slack" className="text-[12px]">
+                    via Slack
+                  </span>
+                )}
               </p>
               {m.author_kind === "oracle" && !m.deleted ? (
                 <OracleReply m={m} discussionId={d.id} asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)} />
@@ -776,6 +1095,7 @@ export function DiscussionThread({
               {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
                 <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
               )}
+              {renderAfter?.(m, { d, messages })}
             </li>
           ),
         )}
@@ -796,12 +1116,25 @@ export function DiscussionThread({
         <Composer
           d={d}
           messages={messages}
+          handle={composer}
           onSent={async () => {
             await reload();
             onChanged?.();
           }}
         />
       ) : null}
+
+      {mirroring && (
+        <MirrorDialog
+          discussionId={d.id}
+          onCancel={() => setMirroring(false)}
+          onDone={() => {
+            setMirroring(false);
+            void reload();
+            onChanged?.();
+          }}
+        />
+      )}
 
       {warning && (
         <MakeOpenWarning

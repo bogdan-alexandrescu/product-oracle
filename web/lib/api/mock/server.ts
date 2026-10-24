@@ -9,7 +9,7 @@ import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, type BaselineState } from "./baseline";
+import { addGoalCodes, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -20,37 +20,59 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { emptyDiscussions, routeDiscussions, seedDiscussionReplies, seedDiscussions, seedRunDiscussions, type DiscussionRow, type DiscussionsContext, type DiscussionsDb, type DocumentSection, type SubjectInfo } from "./discussions";
+import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
+import { goalCheck } from "./goals";
+import {
+  discussionInboxRows,
+  emptyDiscussions,
+  routeDiscussions,
+  seedDiscussionInbox,
+  seedDiscussionReplies,
+  seedDiscussions,
+  seedRunDiscussions,
+  type DiscussionRow,
+  type DiscussionsContext,
+  type DiscussionsDb,
+  type DocumentSection,
+  type SubjectInfo,
+} from "./discussions";
 import { routeEngineering, type CodeMapRow } from "./engineering";
-import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
+import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
   approveRunReview,
   ENGINEERING_KINDS,
   enlargeRuns,
   FEATURE_SET_RUN,
+  fromRunCheckpoint,
   lastBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
   routeRuns,
+  seedEngCheckRun,
+  seedBaselineReviewRun,
   seedEngReviewRun,
   seedFeatureSetRun,
   seedPriorityRuns,
   seedRunReviewRun,
   seedRuns,
+  seedScopeReviewRuns,
   sendBackEntries,
   type RunsContext,
   type RunsDb,
 } from "./runs";
+import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
@@ -69,12 +91,13 @@ import {
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { draftRoadmapSummary, queueDraftRoadmap, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
-import { routeSpecs, seedSpecs, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
+import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
+import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /**
@@ -110,6 +133,8 @@ export interface Db {
   user_id: string;
   members: MemberRow[];
   invites: InviteRow[];
+  /** A5: access requests (Settings › Members). */
+  access_requests?: Schemas["AccessRequestOut"][];
   /** Invites an owner resent (the "mail-fails" scenario sends those). */
   invites_resent?: string[];
   documents: DocumentRow[];
@@ -128,6 +153,8 @@ export interface Db {
   llm?: LlmDb;
   /** Product Oracle v2 tables (./v2.ts); absent in data saved before v2. */
   v2?: V2Db;
+  /** #482: Trash (./trash.ts); absent in data saved before it. */
+  trash?: TrashDb;
   /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
   review_v2?: ReviewV2Db;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
@@ -350,6 +377,8 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
+ * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
+ * with three rows that need a person, attempt 2, and a held console approval);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
@@ -804,6 +833,37 @@ function seedEngReview(): Db {
 }
 
 /**
+ * F4 "eng-check" scenario: the default company with commenter@example.com named engineering
+ * lead, and a Baseline to PRD run waiting at its Engineering check (./runs.ts).
+ */
+function seedEngCheck(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
+function seedEngCheckNoLead(): Db {
+  const db = seed();
+  seeded("eng-check-no-lead", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * B2 "baseline-review" scenario: the default seed plus a Build the baseline run waiting at
+ * Confirm the baseline with what it wrote to the baseline (./from-run.ts); "baseline-review-
+ * console": the same run approved in SwarmCloud's console while its goals are undecided.
+ */
+function seedBaselineReview(consoleHeld: boolean): Db {
+  const db = seed();
+  const run = seeded("baseline-review", () => seedBaselineReviewRun(db.runs!, runsContext(db), consoleHeld));
+  const lead = db.members.find((m) => m.email === "approver@example.com")!.id;
+  seeded("baseline-review-items", () => seedFromRun(db.baseline, run.id, uuid, lead));
+  return db;
+}
+
+/**
  * D3 "roadmap-items-console-held" scenario: the default company plus the roadmap review run
  * (usage-alerts-roadmap at its Roadmap items checkpoint) approved in SwarmCloud's console
  * while blocking reasons are open, so the approval is held (./runs.ts ROADMAP_REVIEW_HELD_RUN).
@@ -841,6 +901,51 @@ function seedFeatureSet(): Db {
   const db = seed();
   seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
   return db;
+}
+
+/** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
+function seedScopeReview(): Db {
+  const db = seed();
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * C7 Approve with edits: each requirement a person added becomes a locked, confirmed
+ * `requirement` entity of the approver's, part of its feature (the feature's entity, else a
+ * proposed one as the agents' proposal would make); an edited one gets the same direct edit.
+ */
+function scopeToBaseline(db: Db, scope: StoredScope, by: string) {
+  const at = new Date().toISOString();
+  const s = db.baseline;
+  const base = { origin: "user" as const, locked: true, locked_by: by, locked_at: at, confidence: null, run_id: scope.run_id, created_at: at, updated_at: at };
+  for (const { feature, requirement, added } of personRequirements(scope)) {
+    let f = s.entities.find((e) => e.type === "feature" && (e.id === feature.entity_id || e.key === feature.key || e.key === `f.${feature.key}`));
+    if (!f) {
+      f = { id: uuid(), type: "feature", key: feature.key, title: feature.title, body: feature.text ?? null, attrs: {}, status: "proposed", origin: "agent", locked: false, locked_by: null, locked_at: null, confidence: feature.confidence ?? null, run_id: scope.run_id, created_at: at, updated_at: at };
+      s.entities.push(f);
+      // As the API: the agents' open proposal to create it is withdrawn (never listed again).
+      const made = (p: (typeof s.proposals)[number]) => {
+        const fields = (p.payload.fields ?? {}) as { type?: string; key?: string };
+        return p.status === "open" && p.payload.op === "create" && p.payload.kind === "entity" && fields.type === "feature" && fields.key === feature.key;
+      };
+      s.proposals = s.proposals.filter((p) => !made(p));
+    }
+    const text = requirement.text ?? requirement.title;
+    const attrs = { feature: feature.key, goals: feature.goals.map((g) => g.key), acceptance: requirement.acceptance, from_scope: scope.id };
+    const existing = !added && requirement.entity_id ? s.entities.find((e) => e.id === requirement.entity_id) : undefined;
+    if (existing) {
+      Object.assign(existing, { body: text, attrs: { ...existing.attrs, acceptance: requirement.acceptance }, locked: true, locked_by: by, locked_at: at, updated_at: at });
+      continue;
+    }
+    const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "requirement";
+    let key = `r.${slug}`;
+    for (let n = 2; s.entities.some((e) => e.key === key); n++) key = `r.${slug}-${n}`;
+    const entity = { ...base, id: uuid(), type: "requirement" as const, key, title: text.slice(0, 80), body: text, attrs, status: "confirmed" as const };
+    s.entities.push(entity);
+    requirement.entity_id = entity.id;
+    s.edges.push({ ...base, id: uuid(), src_id: entity.id, dst_id: f.id, type: "part_of", attrs: {}, status: "confirmed" });
+  }
 }
 
 /**
@@ -1065,6 +1170,9 @@ function seed(): Db {
     email_status: "sent",
     email_at: i.created_at,
     sign_in_url: signInUrl(),
+    // A5: 14 days from creation.
+    expires_at: new Date(Date.parse(i.created_at) + 14 * 86_400_000).toISOString(),
+    resend_count: 0,
   }));
   const docs = new Map<string, DocumentRow>();
   for (const d of DOCUMENTS as DocumentSeed[]) {
@@ -1221,6 +1329,15 @@ function seed(): Db {
     for (const v of d.versions) {
       if (v.source) ver(d.slug, v.number).source = versionSource(docs.get(v.source.slug)!, ver(v.source.slug, v.source.version));
     }
+  }
+  // #482 "trash-family": the early shipping cost brief is usage-alerts' tech brief too, so
+  // that PRD has a derived roadmap and a spec (deleting it takes both to Trash). As the spec
+  // import makes it: through its spec request, with no source on the brief's versions.
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
+    const brief = docs.get("checkout-redesign-early-shipping-cost-spec")!;
+    for (const v of db.versions) if (v.document_id === brief.id) v.source = null;
+    db.specs ??= seedSpecs();
+    for (const s of db.specs.specs) if (s.document_slug === brief.slug) s.request.source_document_id = docs.get("usage-alerts")!.id;
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
@@ -1439,9 +1556,12 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       if (flow !== "prd_to_spec" && leads.length) return role === "owner" || (leads.includes(member.id) && atLeast(role, "commenter"));
       return atLeast(role, c.approver_role);
     },
+    leadStop: (c, flow) => ENGINEERING_KINDS.includes(c.kind) && flow !== "prd_to_spec" && engineeringLeads(db).length > 0,
+    setEffort: (key, size, runId) => setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
+    scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     reviewChange: () => {
       const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
       localStorage.removeItem(MOCK_REVIEW_CHANGE_KEY);
@@ -1455,6 +1575,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
+    baselineReview: (runId, actions) => baselineReviewOf(db.baseline, runId, actions as Schemas["ReviewAction"][]),
     stagedText: (id) => {
       const s = withSuggestion(db.llm, { id } as FeedbackRow).suggestion;
       return s?.text ?? null;
@@ -1464,12 +1585,18 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return v ? lockedKeys(db, v) : [];
     },
     openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
+    // B6: the confirmed and proposed goals not measurable, for an approved Confirm the baseline stop.
+    vagueGoals: () =>
+      db.baseline.entities.filter(
+        (e) => e.type === "goal" && (e.status === "confirmed" || e.status === "proposed") && !goalCheck(e.attrs, e.status, (id) => activeMember(db, id)).measurable,
+      ).length,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
       return vs.length ? vs[vs.length - 1].number : null;
     },
     sectionKeys: (versionId) => db.versions.find((v) => v.id === versionId)?.sections.map((s) => s.section_key) ?? [],
+    draftItemsToReuse: (documentId, version) => reusableDraftItems(draftDb(db), documentId, version),
     // The approved version a roadmap is built from: the one named, else the latest approved.
     sourceVersion: (documentId, number) => {
       const doc = findDocument(db, documentId)!;
@@ -1585,8 +1712,16 @@ function load(): Db {
           ? seedBigPrd
           : scenario === "feature-set" || scenario === "run-discussions"
             ? seedFeatureSet
+          : scenario === "baseline-review" || scenario === "baseline-review-console"
+            ? () => seedBaselineReview(scenario === "baseline-review-console")
+          : scenario === "scope-review"
+            ? seedScopeReview
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
+          : scenario === "eng-check"
+            ? seedEngCheck
+          : scenario === "eng-check-no-lead"
+            ? seedEngCheckNoLead
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
           : scenario === "run-review"
@@ -1642,12 +1777,14 @@ function load(): Db {
   // so other specs' counts stay as they were.
   db.discussions =
     scenario === "discussions"
-      ? seedDiscussionsScenario(db)
+      ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
       : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
-        : scenario === "run-discussions"
-          ? seedRunDiscussionsScenario(db)
-          : emptyDiscussions();
+        : scenario === SLACK_SCENARIO
+          ? seedDiscussionsScenario(db, seedSlackBridge)
+          : scenario === "run-discussions"
+            ? seedRunDiscussionsScenario(db)
+            : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
@@ -1724,6 +1861,23 @@ function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDisc
   return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
 }
 
+/** G6: the "discussions" seed plus the open discussion on saved-carts v2 whose rows wait in the Inbox. */
+function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): DiscussionsDb {
+  const doc = findDocument(db, "saved-carts")!;
+  const ctx = { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now };
+  seedDiscussionInbox(ctx, discussions, doc.id, doc.title, `/documents/${doc.slug}/v/2`);
+  // Criterion 7: a question Oracle asked the approver from that discussion names it.
+  const d = discussions.discussions.find((x) => x.document_id === doc.id)!;
+  const at = "2026-10-21T08:25:00Z";
+  ensureV2(db).questions.push({
+    id: uuid(), gap_id: null, intake_id: null, document_id: doc.id, checkpoint_id: null, item_ref: null, entity_id: null,
+    module_key: null, category: "general", prompt: "How long should a guest's cart last?", rationale: null, priority: 100,
+    batch: null, asked_to: db.members.find((m) => m.email === "approver@example.com")!.id, asked_by: null, section_key: null,
+    status: "asked", created_at: at, updated_at: at, discussion_id: d.id, discussion_title: d.title,
+  });
+  return discussions;
+}
+
 /** G5 "run-discussions": an open and a private discussion on the feature-set run's waiting checkpoint. */
 function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
   const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
@@ -1789,6 +1943,22 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
   if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
+}
+
+/** An active member of this Oracle (a goal's owner must be one). */
+function activeMember(db: Db, userId: string): boolean {
+  return db.members.some((m) => m.id === userId && m.status !== "disabled");
+}
+
+/** /v1/baseline/... through ./baseline.ts, with the caller and the lookups it needs. */
+function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, req: Request, p: string[], q: URLSearchParams) {
+  const runOf = (runId: string): Schemas["ProposalRun"] | null => {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const r = db.runs.runs.find((x) => x.id === runId);
+    return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
+  };
+  const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
+  return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id) }, req, p.slice(2), q);
 }
 
 function save(db: Db) {
@@ -2199,6 +2369,8 @@ const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDE
 const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
+  // A5: the roles they may invite with (owners any, approvers viewer and commenter).
+  const invite_roles: Role[] = m.role === "owner" ? ROLE_ORDER : m.role === "approver" ? ["viewer", "commenter"] : [];
   return {
     kind: "user",
     tenant_id: db.tenant_id,
@@ -2206,6 +2378,8 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
     email: m.email,
     role: m.role,
     engineering_lead: !!m.engineering_lead,
+    name: m.name ?? null,
+    invite_roles,
     company_timezone: String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
   };
 }
@@ -2338,6 +2512,60 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       return json(200, out(target));
     }
   }
+  if (p[1] === "access-requests") {
+    // A5, as oracle.members.access: approve makes an open invite (14 days), decline
+    // turns it down, reopen (Undo) puts it back to pending and revokes an unclaimed invite.
+    const rows = (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
+    if (!p[2] && m === "GET") {
+      const status = new URL(req.url).searchParams.get("status") ?? "pending";
+      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+    }
+    const row = rows.find((r) => r.id === p[2]);
+    if (!row) return notFound("Access request");
+    if (p[3] === "approve" && m === "POST") {
+      if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
+      const { role, name } = await body<Schemas["AccessApprove"]>();
+      const invite: InviteRow = {
+        id: uuid(),
+        email: row.email,
+        name: name ?? null,
+        role,
+        engineering_lead: false,
+        status: "open",
+        invited_by: me.id,
+        created_at: now(),
+        accepted_at: null,
+        revoked_at: null,
+        access: "granted",
+        access_error: null,
+        access_at: now(),
+        email_status: "queued",
+        email_at: now(),
+        sign_in_url: signInUrl(),
+        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        resend_count: 0,
+        access_request_id: row.id,
+      };
+      db.invites.unshift(invite);
+      Object.assign(row, { status: "approved", role, invite_id: invite.id, decided_by: me.id, decided_at: now() });
+      return json(200, row);
+    }
+    if (p[3] === "decline" && m === "POST") {
+      if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
+      Object.assign(row, { status: "declined", decided_by: me.id, decided_at: now() });
+      return json(200, row);
+    }
+    if (p[3] === "reopen" && m === "POST") {
+      if (row.status !== "approved" && row.status !== "declined") return json(409, { detail: `This request is ${row.status}` });
+      const invite = db.invites.find((i) => i.id === row.invite_id);
+      // Approvers revoke only the invites they sent.
+      if (invite && !invite.revoked_at && me.role !== "owner" && invite.invited_by !== me.id)
+        return json(403, { detail: "Another person approved this request; ask an owner to undo it" });
+      if (invite) Object.assign(invite, { status: "revoked", revoked_at: now() });
+      Object.assign(row, { status: "pending", role: null, invite_id: null, decided_by: null, decided_at: null });
+      return json(200, row);
+    }
+  }
   if (p[1] === "invites") {
     settleInviteEmails(db);
     const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
@@ -2353,6 +2581,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const email = input.email.trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
       if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      if ((input.message?.length ?? 0) > 500) return json(422, { detail: "The message is longer than 500 characters" });
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
         return json(422, { detail: `Only addresses at ${SIGN_IN_DOMAINS.join(" or ")} can sign in to Oracle` });
       }
@@ -2377,6 +2606,9 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         email_status: scenario === "mail-off" ? "not_sent" : "queued",
         email_at: now(),
         sign_in_url: signInUrl(),
+        expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        resend_count: 0,
+        message: input.message?.trim() || null,
       };
       db.invites.push(invite);
       return json(201, invite);
@@ -2748,6 +2980,24 @@ async function route(db: Db, req: Request): Promise<Response> {
     const hidden = findDocument(db, p[2]);
     if (hidden && !canSee(me.role, hidden.visibility)) return notFound("Document");
   }
+  // #482: delete, restore, Settings › Trash and Regenerate (./trash.ts).
+  const trashOut = await routeTrash(
+    {
+      db: (db.trash ??= emptyTrash()),
+      documents: db.documents,
+      versions: db.versions,
+      runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
+      intakes: () => ensureV2(db).intakes,
+      specRequests: () => (db.specs ??= seedSpecs()).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
+      me,
+      uuid,
+      now,
+    },
+    req,
+    p,
+    q,
+  );
+  if (trashOut) return trashOut;
   // v2 review routes (./review-v2.ts) check roles themselves.
   if (!db.review_v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -2819,12 +3069,16 @@ async function route(db: Db, req: Request): Promise<Response> {
         return next;
       },
       current: () => load().discussions ?? emptyDiscussions(),
+      // B6: the scripted Oracle of a goals interview.
+      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)),
+      // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
+      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
   }
-  if (p[1] === "members" || p[1] === "invites") return membersRoute(db, req, p, me);
+  if (p[1] === "members" || p[1] === "invites" || p[1] === "access-requests") return membersRoute(db, req, p, me);
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
@@ -2834,6 +3088,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     uuid,
   });
   if (briefs) return briefs;
+  // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
+  if (p[1] === "trace" && p[2] === "staleness" && p[3] === "actions" && m === "POST") {
+    const acted = await specStalenessAction({ db: (db.specs ??= seedSpecs()), userId: me.id, role: me.role, uuid, now }, req);
+    if (acted) return acted;
+  }
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
   if (["documents", "section-links", "baseline", "trace"].includes(p[1])) {
     const traced = await routeTrace(
@@ -2854,17 +3113,34 @@ async function route(db: Db, req: Request): Promise<Response> {
     );
     if (traced) return traced;
   }
-  // The baseline mock checks roles itself (commenters propose, approvers decide).
-  if (p[1] === "baseline") {
-    const runOf = (runId: string): Schemas["ProposalRun"] | null => {
-      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-      const r = db.runs.runs.find((x) => x.id === runId);
-      return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
-    };
-    const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-    const isMember = (userId: string) => db.members.some((m) => m.id === userId && m.status !== "disabled");
-    return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember }, req, p.slice(2), q);
+  // B2: what a run wrote to the baseline (viewer+), its rows read under its shared draft.
+  if (p[1] === "baseline" && p[2] === "from-run" && p[3] && req.method === "GET") {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
+    if (!found) return json(404, { detail: `run ${p[3]} not found` });
+    return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
   }
+  // B6 Goals interview: its routes write discussions and proposals, so they come first.
+  if (p[1] === "baseline") {
+    const goalCtx: GoalInterviewContext = {
+      baseline: db.baseline,
+      discussions: () => (db.discussions ??= emptyDiscussions()),
+      members: db.members,
+      me: { id: me.id, role: me.role },
+      isMember: (id) => activeMember(db, id),
+      uuid,
+      now,
+    };
+    const res = await routeGoalInterview(goalCtx, req, p);
+    if (res) return res;
+    if (p[2] === "proposals" && p[3] && p[4] === "accept" && req.method === "POST") {
+      const accepted = await routeBaselineFor(db, me, req, p, q);
+      if (accepted.ok) afterAccept(goalCtx, p[3]);
+      return accepted;
+    }
+  }
+  // The baseline mock checks roles itself (commenters propose, approvers decide).
+  if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
   // Sources and connections belong to each user: every role manages their own.
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
     return routeSources(req, p, q, {
@@ -2889,12 +3165,18 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   if (pool) return pool;
+  // G8: the Slack install's status (every member) and its channels (commenters and up).
+  const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
+  if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
+  // C7: a scope_enhance job lives with the run's scope (./scope.ts).
+  const scopeJob = scopeJobRoute(db.runs, p, now);
+  if (scopeJob) return scopeJob;
   const jobs = await llmJobsRoute(llm, req, p, q);
   if (jobs) return jobs;
   // G4 One staging list (./staging.ts) checks roles itself.
@@ -3054,7 +3336,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The API's role checks: viewers read, commenters comment, approvers decide. A checkpoint's
   // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
   // the decision log (./decisions.ts): commenters propose, edit and withdraw.
-  const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note");
+  // A decision checks who decides itself (A3: an engineering lead below the approver role).
+  const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   const need: Role | null =
     m === "GET" || draftWrite || p[1] === "decisions"
       ? null
@@ -3236,6 +3519,9 @@ async function route(db: Db, req: Request): Promise<Response> {
         : [];
     // F2: the track group (the track's owner, else every owner); its new and open alerts count.
     const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
+    // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
+    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
+    const discussing = discussions.filter((r) => r.state !== "done").length;
     return json(200, {
       ...inbox,
       tracks: tracked.tracks,
@@ -3246,7 +3532,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       strategy,
       oracle_actions: did,
       dates,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total,
+      discussions,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing,
     });
   }
   if (runs) return runs;
@@ -3548,6 +3835,47 @@ async function route(db: Db, req: Request): Promise<Response> {
 
 /** One request at a time: each loads the whole db and saves it back, so two in flight would lose a write. */
 let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * G8 test hook (mock mode only): `globalThis.__poMockSlack.reply({title, email, text})` stores
+ * a reply from the mirrored Slack thread of the discussion titled `title`, as the events
+ * endpoint would, from the member with `email`. The page shows it on its next load.
+ * `__poMockSlack.fail({title, error})` makes that discussion's mirror failed, as when Slack
+ * gives up on its first post; `__poMockSlack.posting({title})` makes it wait for its first
+ * post (no thread yet).
+ */
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
+  (globalThis as { __poMockSlack?: unknown }).__poMockSlack = {
+    reply: (input: { title: string; email: string; text: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        const id = injectSlackReply((db.discussions ??= emptyDiscussions()), db.members, input, now(), uuid());
+        save(db);
+        return id;
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    fail: (input: { title: string; error: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        failSlackMirror((db.discussions ??= emptyDiscussions()), input);
+        save(db);
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    posting: (input: { title: string }) => {
+      const next = queue.then(() => {
+        const db = load();
+        holdSlackMirror((db.discussions ??= emptyDiscussions()), input);
+        save(db);
+      });
+      queue = next.catch(() => undefined);
+      return next;
+    },
+  };
+}
 
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).

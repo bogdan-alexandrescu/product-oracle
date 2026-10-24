@@ -37,6 +37,15 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
+from oracle.engineering import check as eng_check
+from oracle.members.leads import (
+    ENGINEERING_KINDS,
+    LEAD_ONLY,
+    engineering_leads,
+    lead_refusal,
+    lead_stop,
+    may_decide,
+)
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.runs import batch, gate, reasons, roadmap, service
@@ -92,6 +101,7 @@ KIND_WORDS = {
     "priority_order": "priority order",
     "prd_review": "PRD review",
     "eng_review": "Engineering review",
+    "eng_dates": "Engineering dates",
     "roadmap_items": "roadmap items",
     "roadmap_review": "roadmap review",
     "request_triage": "request triage",
@@ -224,24 +234,28 @@ def _roadmap_items(body: ActionIn, ctx: ValidationContext) -> None:
         if body.kind == "merge":
             _known(ids, ctx, "merge")
     elif body.kind == "question":
-        v = body.value if isinstance(body.value, dict) else {}
-        text = v.get("text")
-        try:
-            uuid.UUID(str(v.get("asked_to")))
-        except ValueError:
-            text = None
-        if (
-            body.field is not None
-            or not isinstance(text, str)
-            or not text.strip()
-            or len(text) > QUESTION_TEXT
-            or set(v) != {"asked_to", "text"}
-        ):
-            raise InvalidAction(
-                f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
-            )
+        _question(body)
     elif body.kind == "waive":
         _waive_reason(body)
+
+
+def _question(body: ActionIn) -> None:
+    v = body.value if isinstance(body.value, dict) else {}
+    text = v.get("text")
+    try:
+        uuid.UUID(str(v.get("asked_to")))
+    except ValueError:
+        text = None
+    if (
+        body.field is not None
+        or not isinstance(text, str)
+        or not text.strip()
+        or len(text) > QUESTION_TEXT
+        or set(v) != {"asked_to", "text"}
+    ):
+        raise InvalidAction(
+            f"question needs asked_to (a member id) and text (1 to {QUESTION_TEXT} characters)"
+        )
 
 
 def _waive_reason(body: ActionIn) -> None:
@@ -250,18 +264,94 @@ def _waive_reason(body: ActionIn) -> None:
         raise InvalidAction("waive needs a reason")
 
 
+# C7 Scope review: the fields an edit of a scope row may change.
+SCOPE_FIELDS = ("decision", "text", "acceptance", "goals", "depends_on", "blocker_keys")
+SCOPE_DECISIONS = ("include", "exclude", "defer", "keep", "cut")
+
+
 def _feature_set(body: ActionIn, ctx: ValidationContext) -> None:
-    """C6 Feature set: until C7 Scope review adds its edits, a waiver of a feature's
-    blocking problem (D3) is the one action."""
-    if body.kind != "waive":
-        raise InvalidAction("a feature set checkpoint takes only waivers")
+    """C7 Scope review on the scope's rows (keys of its features and requirements): an
+    ``edit`` of one field, an ``add`` of a requirement (``{parent, text, acceptance}``),
+    an ``accept`` of a reason to confirm, a ``waive`` of a blocking one (D3), a
+    ``question``. A commenter's is a suggestion; an approver's Accept applies an edit or
+    an add to the row (oracle.runs.scope_review.apply_action)."""
+    if body.kind not in ("edit", "add", "accept", "waive", "question"):
+        raise InvalidAction(f"{body.kind} does not apply to a feature set")
     if body.item_key not in ctx.item_keys | {WHOLE_FILE}:
-        raise InvalidAction(f"{body.item_key} has no problem in the feature set")
-    _waive_reason(body)
+        raise InvalidAction(f"{body.item_key} is not a row of the feature set")
+    v = body.value
+    if body.kind == "waive":
+        _waive_reason(body)
+    elif body.kind == "edit":
+        if body.field not in SCOPE_FIELDS:
+            raise InvalidAction("edit changes one of " + ", ".join(SCOPE_FIELDS))
+        if body.field == "decision":
+            d = v.get("decision") if isinstance(v, dict) else v
+            if d not in SCOPE_DECISIONS:
+                raise InvalidAction('decision is {"decision": include|exclude|defer|keep|cut}')
+        elif body.field == "text" and (not isinstance(v, str) or not v.strip() or len(v) > 1000):
+            raise InvalidAction("text is a string of 1 to 1000 characters")
+        elif body.field in ("acceptance", "depends_on", "blocker_keys") and _ids(v) is None:
+            raise InvalidAction(f"{body.field} is a list of strings")
+        elif body.field == "goals" and not isinstance(v, list):
+            raise InvalidAction('goals is [{"goal_id": id, "contribution": 0-3}]')
+    elif body.kind == "add":
+        text = v.get("text") if isinstance(v, dict) else None
+        if not isinstance(text, str) or not text.strip() or len(text) > 1000:
+            raise InvalidAction('add is {"parent": feature key, "text": 1 to 1000 characters}')
+    elif body.kind == "question":
+        _question(body)
+
+
+def _eng_review(body: ActionIn, ctx: ValidationContext) -> None:
+    """F4 Engineering check: a verdict, a size or an answer per feature, or a question."""
+    asked = {k: set(v.get("questions") or ()) for k, v in ctx.items.items()}
+    try:
+        eng_check.validate(body.kind, body.item_key, body.field, body.value, ctx.item_keys, asked)
+    except eng_check.Invalid as exc:
+        raise InvalidAction(str(exc)) from None
+    if body.kind == "question":
+        _question(body)
+
+
+LOOK_AGAIN_NOTE = 2000
+
+
+def _baseline_confirm(body: ActionIn, ctx: ValidationContext) -> None:
+    """B2 Baseline review from this run: on a row of the run (``<type>:<key>``), Look again
+    (``{"note"}``) or, on a goal of the run, Leave proposed (a ``waive`` with a reason).
+    Every other change is a baseline write, applied at once through the baseline routes."""
+    if body.kind not in ("look_again", "waive"):
+        raise InvalidAction(
+            f"{body.kind} does not apply to the baseline: confirm, reject, edit or merge it "
+            "through the baseline"
+        )
+    if body.item_key not in ctx.item_keys:
+        raise InvalidAction(f"{body.item_key} is not an item from this run")
+    if body.kind == "waive":
+        if (ctx.items.get(body.item_key) or {}).get("type") != "goal":
+            raise InvalidAction("only a goal from this run is left proposed")
+        _waive_reason(body)
+        return
+    v = body.value if isinstance(body.value, dict) else {}
+    note = v.get("note")
+    if (
+        body.field is not None
+        or set(v) != {"note"}
+        or not isinstance(note, str)
+        or not note.strip()
+        or len(note) > LOOK_AGAIN_NOTE
+    ):
+        raise InvalidAction(f"look_again needs a note of 1 to {LOOK_AGAIN_NOTE} characters")
 
 
 # The spec owning each checkpoint kind registers its vocabulary here.
-VOCABULARY: dict[str, Validator] = {"roadmap_items": _roadmap_items, "feature_set": _feature_set}
+VOCABULARY: dict[str, Validator] = {
+    "roadmap_items": _roadmap_items,
+    "feature_set": _feature_set,
+    "eng_review": _eng_review,
+    "baseline_confirm": _baseline_confirm,
+}
 
 
 def validate(checkpoint_kind: str, body: ActionIn, ctx: ValidationContext) -> None:
@@ -324,11 +414,39 @@ def _context(found: _File | None) -> ValidationContext:
     )
 
 
+async def _baseline_context(db: AsyncSession, run: Run) -> ValidationContext:
+    """B2: the run's baseline rows (``<type>:<key>``), each with its type."""
+    from oracle.baseline import from_run
+
+    found = await from_run.members(db, run.id)
+    items = {from_run.item_key(e): {"type": e.type} for e in found.entities.values()}
+    return ValidationContext(item_keys=frozenset(items), items=items)
+
+
 def _gate_context(cp: Checkpoint) -> ValidationContext:
-    """A kind with no item file: its items are those its approve gate's reasons name."""
+    """A kind with no item file: its items are those its approve gate's reasons name (the
+    Engineering check: its briefs' features, with their question ids)."""
+    if cp.kind == eng_check.KIND:
+        asked = eng_check.questions(cp)
+        return ValidationContext(
+            item_keys=eng_check.item_keys(cp),
+            items={k: {"questions": sorted(v)} for k, v in asked.items()},
+        )
     source = gate.BLOCKING_SOURCES.get(cp.kind)
     reasons = source.read(cp)[0] if source is not None else []
     return ValidationContext(item_keys=frozenset(r["item"] for r in reasons))
+
+
+async def _scope_context(db: AsyncSession, cp: Checkpoint) -> ValidationContext:
+    """C7: a feature-set checkpoint's items are its scope's rows (and what its stored
+    check names, for a run from before scopes)."""
+    from oracle.runs import feature_set
+
+    keys = set(_gate_context(cp).item_keys)
+    scope = await service._scope_of(db, cp)
+    if scope is not None:
+        keys |= {i.key for i in await feature_set.scope_items(db, scope.id)}
+    return ValidationContext(item_keys=frozenset(keys))
 
 
 # --------------------------------------------------------------------------- writes
@@ -366,12 +484,20 @@ async def _writable(
     )
     if cp is None:
         raise service.NotFound(f"checkpoint {checkpoint_id} not found")
-    role = cp.approver_role if stage else "commenter"
-    if not has_role(principal.role, role):  # type: ignore[arg-type]
-        raise service.Forbidden(f"Requires the {role} role")
-    refusal = await caller_refusal(db, principal, role)  # type: ignore[arg-type]
-    if refusal is not None:
-        raise service.Forbidden(refusal)
+    if stage and await _by_lead(db, run, cp):
+        # F4: with an engineering lead named, its leads and owners stage at its stops.
+        if not await _may_stage(db, principal, run, cp):
+            raise service.Forbidden(LEAD_ONLY)
+        refusal = await lead_refusal(db, principal)
+        if refusal is not None:
+            raise service.Forbidden(refusal)
+    else:
+        role = cp.approver_role if stage else "commenter"
+        if not has_role(principal.role, role):  # type: ignore[arg-type]
+            raise service.Forbidden(f"Requires the {role} role")
+        refusal = await caller_refusal(db, principal, role)  # type: ignore[arg-type]
+        if refusal is not None:
+            raise service.Forbidden(refusal)
     if cp.status != "pending":
         raise service.RunError(DECIDED)
     return run, cp
@@ -379,6 +505,21 @@ async def _writable(
 
 def _stages(principal: Principal, cp: Checkpoint) -> bool:
     return has_role(principal.role, cp.approver_role)  # type: ignore[arg-type]
+
+
+async def _by_lead(db: AsyncSession, run: Run, cp: Checkpoint) -> bool:
+    """Whether the stop waits for the engineering leads and owners (F4, A3's rule)."""
+    if cp.kind not in ENGINEERING_KINDS:
+        return False
+    return lead_stop(cp.kind, run.flow, await engineering_leads(db))
+
+
+async def _may_stage(db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint) -> bool:
+    """Who stages (and so decides): A3's ``may_decide`` at an engineering stop, else the
+    checkpoint's role floor."""
+    if cp.kind in ENGINEERING_KINDS:
+        return may_decide(principal, cp, run.flow, await engineering_leads(db))
+    return _stages(principal, cp)
 
 
 async def _action(db: AsyncSession, cp: Checkpoint, action_id: uuid.UUID) -> CheckpointAction:
@@ -491,17 +632,33 @@ async def put_action(
 
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     found = await _file(db, run, cp) if cp.kind in VOCABULARY else None
-    ctx = _context(found) if cp.kind in ITEM_FILES else _gate_context(cp)
+    if cp.kind == "baseline_confirm":
+        ctx = await _baseline_context(db, run)
+    elif cp.kind in ITEM_FILES:
+        ctx = _context(found)
+    elif cp.kind == "feature_set":
+        ctx = await _scope_context(db, cp)
+    else:
+        ctx = _gate_context(cp)
     try:
         validate(cp.kind, body, ctx)
     except InvalidAction as exc:
         raise service.Invalid(str(exc)) from None
-    stages = _stages(principal, cp) and not suggest_only
+    leads = await engineering_leads(db) if cp.kind in ENGINEERING_KINDS else frozenset()
+    by_lead = lead_stop(cp.kind, run.flow, leads)
+    # F4: with an engineering lead named, the leads and owners stage at its stops; anyone
+    # else's choice is a suggestion (c6).
+    may_stage = may_decide(principal, cp, run.flow, leads) if by_lead else _stages(principal, cp)
+    stages = may_stage and not suggest_only
     if body.kind == "waive":
         _waivable(cp, body, found, stages)
     if stages:
-        # A staged action counts: the approver role, re-read under the gate.
-        refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        # A staged action counts: the approver role (or the flag), re-read under the gate.
+        refusal = (
+            await lead_refusal(db, principal)
+            if by_lead
+            else await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        )
         if refusal is not None:
             raise service.Forbidden(refusal)
     existing = await db.scalar(
@@ -512,9 +669,11 @@ async def put_action(
             func.coalesce(CheckpointAction.field, "") == (body.field or ""),
         )
     )
-    if existing is not None and not _stages(principal, cp) and existing.created_by != principal.id:
+    if existing is not None and not may_stage and existing.created_by != principal.id:
         raise service.Forbidden("Only its author or an approver can change this action")
     replaced = existing.discussion_change_id if existing is not None else None
+    if stages and source is None and cp.kind == "feature_set" and body.kind in ("edit", "add"):
+        return await _apply_now(db, principal, run, cp, body, existing, replaced)
     question_id = None
     if body.kind == "question":
         if existing is not None:
@@ -542,6 +701,42 @@ async def put_action(
         await hooks.replaced(db, replaced)
     event = STAGED if stages else SUGGESTED
     await _bump(db, principal, run, cp, event, body.item_key, _snapshot(action))
+    await db.commit()
+    return action
+
+
+async def _apply_now(
+    db: AsyncSession,
+    principal: Principal,
+    run: Run,
+    cp: Checkpoint,
+    body: ActionIn,
+    existing: CheckpointAction | None,
+    replaced: uuid.UUID | None,
+) -> CheckpointAction:
+    """C7: an approver's own ``edit`` or ``add`` on a feature-set row is applied to the
+    scope at once, as the approver's (Approve and Send back read the rows); nothing is
+    staged, and a suggestion in the same slot goes. Returns the action, not stored."""
+    from oracle.runs import scope_review
+    from oracle.staging import hooks
+
+    try:
+        await scope_review.apply_change(
+            db, principal, cp, body.item_key, body.kind, body.field, body.value
+        )
+    except service.RunError:
+        await db.rollback()
+        raise
+    if existing is not None:
+        await db.delete(existing)
+        await db.flush()
+    if replaced is not None:
+        await hooks.replaced(db, replaced)
+    action = CheckpointAction(
+        id=uuid.uuid4(), checkpoint_id=cp.id, item_key=body.item_key, kind=body.kind,
+        field=body.field, value=body.value, state="staged", created_by=principal.id,
+    )  # fmt: skip
+    await _bump(db, principal, run, cp, STAGED, body.item_key, _snapshot(action))
     await db.commit()
     return action
 
@@ -575,6 +770,19 @@ async def stage_action(
     action = await _action(db, cp, action_id)
     if action.state == "staged":
         return
+    from oracle.runs import scope_review
+
+    snapshot = _snapshot(action)
+    try:
+        applied = await scope_review.apply_action(db, principal, cp, action)
+    except service.RunError:
+        await db.rollback()
+        raise
+    if applied:
+        # C7: a suggested edit or add is now the row's, as the approver's; the action goes.
+        await _bump(db, principal, run, cp, STAGED, action.item_key, snapshot)
+        await db.commit()
+        return
     action.state = "staged"
     action.updated_by = principal.id
     await db.flush()
@@ -600,9 +808,13 @@ async def remove_action(
     run, cp = await _writable(db, principal, run_id, checkpoint_id, stage=False)
     action = await _action(db, cp, action_id)
     if action.created_by != principal.id:
-        if not _stages(principal, cp):
+        if not await _may_stage(db, principal, run, cp):
             raise service.Forbidden("Only its author or an approver can undo this action")
-        refusal = await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        refusal = (
+            await lead_refusal(db, principal)
+            if await _by_lead(db, run, cp)
+            else await caller_refusal(db, principal, cp.approver_role)  # type: ignore[arg-type]
+        )
         if refusal is not None:
             raise service.Forbidden(refusal)
     await _withdraw(db, principal, action.question_id)
@@ -697,7 +909,9 @@ async def _people(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Rev
         return {}
     out: dict[uuid.UUID, ReviewPerson] = {}
     for user in await db.scalars(select(User).where(User.id.in_(wanted))):
-        out[user.id] = ReviewPerson(id=user.id, name=display_name(user.email), role=user.role)
+        out[user.id] = ReviewPerson(
+            id=user.id, name=display_name(user.email, user.name), role=user.role
+        )
     for token in await db.scalars(select(ApiToken).where(ApiToken.id.in_(wanted))):
         out[token.id] = ReviewPerson(id=token.id, name=token.name, role=token.role)
     return out
@@ -960,9 +1174,12 @@ async def _read(
             )
         )
     tally.waiting_on = list(waiting.values())
+    live = None
+    if cp.kind == "baseline_confirm":
+        items, tally, live = await _baseline_items(db, run, by_item)
 
     pending = cp.status == "pending"
-    stages = pending and _stages(principal, cp) and not principal.read_only
+    stages = pending and await _may_stage(db, principal, run, cp) and not principal.read_only
     attempt = (cp.payload or {}).get("attempt")
     problems = checked.check.problems if checked else []
     staged = [r for r in rows if r.state == "staged"]
@@ -990,9 +1207,44 @@ async def _read(
         and not principal.read_only,
         can_stage=stages,
         can_decide=stages,
-        gate=gate.approve_gate(cp, None, staged) if pending else None,
+        gate=gate.approve_gate(cp, live, staged) if pending else None,
         diff=ItemsAttemptDiff(**attempt_diff) if attempt_diff else None,
     )
+
+
+async def _baseline_items(
+    db: AsyncSession, run: Run, by_item: dict[str, list[ReviewAction]]
+) -> tuple[list[ReviewItem], ReviewTally, list[dict[str, Any]]]:
+    """B2: a Confirm the baseline checkpoint's items are the run's baseline rows (the same
+    code as GET /v1/baseline/from-run), its tally and the gate's live reasons."""
+    from oracle.baseline import from_run
+
+    built = await from_run.build(db, run.id, [a for acts in by_item.values() for a in acts])
+    tally = ReviewTally()
+    items: list[ReviewItem] = []
+    live: list[dict[str, Any]] = []
+    for row in built.rows:
+        open_reasons = [
+            r for r in row.reasons if not any(from_run._answers(a, r) for a in row.actions)
+        ]
+        tally.need_you += row.state == "needs_you"
+        tally.handled += row.state == "handled"
+        if row.state == "needs_you":
+            tally.blocking_open += sum(1 for r in open_reasons if r.severity == gate.BLOCKING)
+            tally.to_confirm_open += sum(1 for r in open_reasons if r.severity != gate.BLOCKING)
+        tally.suggested += sum(1 for a in row.actions if a.state == "suggested")
+        live += [r.model_dump() for r in row.reasons if r.code == from_run.GOAL_UNDECIDED]
+        items.append(
+            ReviewItem(
+                key=row.key,
+                title=row.entity.title,
+                reasons=row.reasons,
+                actions=row.actions,
+                state=row.state,
+                baseline=row,
+            )
+        )
+    return items, tally, live
 
 
 # --------------------------------------------------------------------------- inbox (D9)
@@ -1092,9 +1344,23 @@ async def _roadmap_items(
     return summary
 
 
+async def _baseline_confirm_summary(
+    db: AsyncSession, principal: Principal, run: Run, cp: Checkpoint
+) -> InboxSummary:
+    """B2: Confirm the baseline's Inbox counts, read from the run's baseline rows."""
+    from oracle.baseline import from_run
+
+    review = await _read(db, principal, run, cp)
+    rows = [i.baseline for i in review.items if i.baseline is not None]
+    return InboxSummary(**from_run.row_tally(rows), wait=review.wait)
+
+
 Summary = Callable[[AsyncSession, Principal, Run, Checkpoint], Any]
 # checkpoint kind -> its Inbox summary; the spec owning a kind's review registers it here.
-SUMMARIES: dict[str, Summary] = {"roadmap_items": _roadmap_items}
+SUMMARIES: dict[str, Summary] = {
+    "roadmap_items": _roadmap_items,
+    "baseline_confirm": _baseline_confirm_summary,
+}
 
 
 async def inbox_summary(

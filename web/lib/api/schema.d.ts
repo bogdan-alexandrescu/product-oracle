@@ -38,6 +38,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Access State
+         * @description Where the Google-signed person stands (A5), read from the Google sign-in alone (no
+         *     member needed) and creating nothing: ``member``, ``pending`` (an owner has not
+         *     decided their access request yet), ``approved`` (the next page load signs them in),
+         *     ``declined``, ``invite_expired``, ``invite_only``, ``outside_domains``, ``removed``;
+         *     ``no_google_sign_in`` without Google sign-in. Browser only: not an MCP tool.
+         */
+        get: operations["get_access_state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/access/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Access Note
+         * @description Set the note an owner reads on the caller's pending access request (A5). Browser
+         *     only: not an MCP tool.
+         */
+        post: operations["send_access_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -114,7 +159,7 @@ export interface paths {
         patch: operations["update_preferences"];
         trace?: never;
     };
-    "/v1/documents": {
+    "/v1/documents/{doc}/dependents": {
         parameters: {
             query?: never;
             header?: never;
@@ -122,11 +167,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Documents
-         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
-         *     its latest and latest approved version and the latest version's provenance.
+         * Document Dependents
+         * @description What a delete of this document takes to Trash with it (the delete dialog).
          */
-        get: operations["list_documents"];
+        get: operations["document_dependents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -144,6 +188,255 @@ export interface paths {
         };
         /** Get Document */
         get: operations["get_document"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Document
+         * @description Move the document and its dependents to Trash (30 days, then purged). A published
+         *     one needs ``confirm_published`` (409 without): its external copy stays where it is.
+         *     409 while a run is working on any of them.
+         */
+        delete: operations["delete_document"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Document
+         * @description Restore the document with everything that went to Trash with it.
+         */
+        post: operations["restore_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/dependents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Intake Dependents */
+        get: operations["intake_dependents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Intake
+         * @description Move the brief, the PRD it became and that PRD's dependents to Trash.
+         */
+        delete: operations["delete_intake"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Intake */
+        post: operations["restore_intake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Run
+         * @description Move a finished, cancelled or draft run to Trash (409 while it works).
+         */
+        delete: operations["delete_run"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Run
+         * @description Change a draft's document or knobs; its estimate is cleared.
+         */
+        patch: operations["update_run"];
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Run */
+        post: operations["restore_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description What is in Trash, newest first: who deleted it, when, why, what went with it and
+         *     the days left before the ticker purges it.
+         */
+        get: operations["list_trash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trash/{entry_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Trash Entry
+         * @description Restore everything the delete took, together; ``not_restored`` says what could not
+         *     come back with it (what it was built from, purged or still in Trash, and what was
+         *     trashed separately).
+         */
+        post: operations["restore_trash_entry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/trash/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Purge Trash Entry
+         * @description Delete for good now, without waiting for the 30 days.
+         */
+        delete: operations["purge_trash_entry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/regenerate/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Estimate Regeneration
+         * @description A draft run of the document's flow, estimated: the inputs it will use and the cost.
+         *     For the document's decider or an approver (403 otherwise); 422 for a kind no flow
+         *     writes (edit it instead).
+         */
+        post: operations["estimate_regeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Regeneration
+         * @description Start the estimated run, through the same cost gates as starting any run. Its
+         *     result is imported as the document's next version.
+         */
+        post: operations["start_regeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Documents
+         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+         *     its latest and latest approved version and the latest version's provenance.
+         */
+        get: operations["list_documents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -828,6 +1121,55 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/discussion-items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss Inbox Discussion Item
+         * @description Dismiss my Invited or Mentioned row (G6): it moves to Done. A changes-proposed row
+         *     cannot be dismissed; it goes when its changes are handled.
+         */
+        delete: operations["dismiss_inbox_discussion_item"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/slack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mirror Discussion To Slack
+         * @description Mirror an open discussion to a new thread in a Slack channel Oracle's Slack app is
+         *     in (the starter or an approver). Oracle posts the root message (title, subject, link,
+         *     summary or first message), then every new message; replies in the thread from members
+         *     who can write come back as messages. Earlier messages are not copied.
+         */
+        post: operations["mirror_discussion_to_slack"];
+        /**
+         * Stop Slack Mirror
+         * @description Stop mirroring: Oracle posts a closing line with a link to the discussion, and
+         *     replies in the thread no longer come back. What was posted stays in Slack.
+         */
+        delete: operations["stop_slack_mirror"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1918,39 +2260,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/invites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Invites
-         * @description Invites, newest first: open ones unless ``status`` asks for others (or ``all``).
-         */
-        get: operations["list_invites"];
-        put?: never;
-        /**
-         * Create Invite
-         * @description Pre-assign a role to an email: its first Google sign-in lands with that role, and as
-         *     an engineering lead when ``engineering_lead`` (never with role viewer: 422).
-         *
-         *     The invitee is granted Google IAP access on Oracle's backend services
-         *     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
-         *     ``access_error`` when the grant failed: the invite is kept, and
-         *     ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
-         *     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
-         *     ``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)
-         *     for an address outside the domains that can sign in.
-         */
-        post: operations["create_invite"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/invites/{invite_id}/access": {
         parameters: {
             query?: never;
@@ -1989,28 +2298,6 @@ export interface paths {
          */
         post: operations["resend_invite_email"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/invites/{invite_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Revoke Invite
-         * @description Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.
-         *     The invitee's Google IAP access is taken away, unless they are an active member or
-         *     have another open invite (audited).
-         */
-        delete: operations["revoke_invite"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2060,6 +2347,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sign-in-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sign In Rules
+         * @description Who becomes a member through Google sign-in: whether it is on, whether new
+         *     sign-ins are off where Oracle is deployed, the company's email domains and where
+         *     each is set, the rule for people without an invite and the default role. Change
+         *     them with ``PUT /v1/settings/{key}`` (``sign_in_without_invite``,
+         *     ``iap_default_role``, ``company_email_domains``).
+         */
+        get: operations["get_sign_in_rules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/people": {
         parameters: {
             query?: never;
@@ -2087,6 +2398,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invites
+         * @description Invites, newest first: open ones (expired included, as both still need an action)
+         *     unless ``status`` asks for others (or ``all``). Owners see every invite, approvers the
+         *     ones they sent.
+         */
+        get: operations["list_invites"];
+        put?: never;
+        /**
+         * Create Invite
+         * @description Pre-assign a role (and a name) to an email: its first Google sign-in lands with
+         *     that role, and as an engineering lead when ``engineering_lead`` (never with role
+         *     viewer: 422). Owners invite with any role; approvers viewers and commenters (A5).
+         *     The invite expires in 14 days (``expires_at``; Resend gives 14 more).
+         *
+         *     The invitee is granted Google IAP access on Oracle's backend services
+         *     (``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with
+         *     ``access_error`` when the grant failed: the invite is kept, and
+         *     ``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in
+         *     link in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;
+         *     ``not_sent`` with no sender configured: send them ``sign_in_url``). With Google
+         *     sign-in on, refused (422) for an address outside the company's email domains.
+         */
+        post: operations["create_invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{invite_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Invite
+         * @description Give an open or expired invite 14 more days from now (A5): ``expires_at``,
+         *     ``resent_at`` and ``resend_count``; audited ``invite.resend``. Its email goes out
+         *     again when a sender is configured and its last one is over a minute old. Approvers
+         *     resend only the invites they sent.
+         */
+        post: operations["resend_invite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{invite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invite
+         * @description Revoke an open invite (approvers: one they sent). Revoking twice is a no-op; an
+         *     accepted invite is a 409.
+         *     The invitee's Google IAP access is taken away, unless they are an active member or
+         *     have another open invite (audited).
+         */
+        delete: operations["revoke_invite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Access Requests
+         * @description People from the company's email domains who signed in with Google without an
+         *     invite (rule ``request``), newest first: pending ones unless ``status`` asks for
+         *     others.
+         */
+        get: operations["list_access_requests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Access Request
+         * @description Let them in with ``role`` (and a ``name``): an open invite is made for their email
+         *     (14 days), so their next page load signs them in. Owners approve with any role,
+         *     approvers as viewer or commenter. Audited.
+         */
+        post: operations["approve_access_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{request_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Access Request
+         * @description Turn the request down: later sign-ins stay refused (an invite still lets them in).
+         */
+        post: operations["decline_access_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-requests/{request_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Access Request
+         * @description Undo: a declined request, or an approved one whose invite is not claimed yet (the
+         *     invite is revoked), is pending again. Approvers undo only the approvals they gave:
+         *     they revoke only the invites they sent.
+         */
+        post: operations["reopen_access_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/account": {
         parameters: {
             query?: never;
@@ -2096,8 +2576,8 @@ export interface paths {
         };
         /**
          * Get My Account
-         * @description Your email, role, when you last signed in and how you sign in: with a password,
-         *     with Google (when this deployment signs in through Google), or both.
+         * @description Your email, name, role, when you last signed in and how you sign in: with a
+         *     password, with Google (when this deployment signs in through Google), or both.
          */
         get: operations["get_my_account"];
         put?: never;
@@ -2105,7 +2585,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update My Account
+         * @description Set your name (A5), shown to your teammates instead of your email; null clears
+         *     it. Any role; a read-only token or MCP client cannot change it. Audited.
+         */
+        patch: operations["update_my_account"];
         trace?: never;
     };
     "/v1/me/password": {
@@ -3368,6 +3853,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{entity_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Entity
+         * @description Merge into… (B2): a duplicate a run created goes into an item of the same type (its
+         *     evidence and edges move, its open proposals are rejected, it is deleted). Returns the
+         *     target.
+         */
+        post: operations["merge_entity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/from-run/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Baseline From Run
+         * @description What a run wrote to the baseline, for a person to review (B2): every item it
+         *     created, changed or proposed a change to, with the reasons each needs a person and the
+         *     shared draft's actions on it; the run's Confirm the baseline stop with its gate; the
+         *     other proposed goals.
+         */
+        get: operations["get_baseline_from_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/entities/{entity_id}/unlock": {
         parameters: {
             query?: never;
@@ -3838,6 +4368,116 @@ export interface paths {
          * @description Merge a YAML graph in, idempotent by (type, key); locked items get proposals.
          */
         post: operations["import_yaml"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/entities/{goal_id}/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Goal Interview
+         * @description Start a goals interview on a vague goal (B6): a discussion on the goal with its
+         *     owner in it, Oracle's opening turn pending (stream it from G2's
+         *     ``GET /v1/discussions/{id}/messages/{reply_id}/stream``). An open interview on the
+         *     goal is returned instead (200, ``created`` false).
+         */
+        post: operations["start_goal_interview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goals/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Goal Interviews
+         * @description Start (or reopen) a goals interview per goal, in the order given; ``entity_ids``
+         *     omitted: every vague goal. Each discussion's opening turn costs a model call, so the
+         *     web asks for one goal at a time as its stepper reaches it.
+         */
+        post: operations["start_goal_interviews"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goals/vague": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vague Goals
+         * @description The confirmed and proposed goals that are not measurable, with what each misses
+         *     and the open interview on it (the Goals panel's Interview vague goals).
+         */
+        get: operations["list_vague_goals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goal-measures/{change_id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Goal Measure
+         * @description Propose a measurable version of the goal: a baseline proposal ("From discussion
+         *     <title>") an approver accepts. ``payload``: the person's Edit (it may set owner_id and
+         *     weight). Its fields pass B5's checks first (422, nothing created). A target the start
+         *     or current value already meets gets Oracle's pushback once (409); sending it again,
+         *     or with ``keep``, proposes it and records the override in the summary.
+         */
+        post: operations["propose_goal_measure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/goal-measures/{change_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Goal Measure
+         * @description Dismiss one of Oracle's versions (approvers).
+         */
+        post: operations["dismiss_goal_measure"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4794,27 +5434,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/runs/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run */
-        get: operations["get_run"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Run
-         * @description Change a draft's document or knobs; its estimate is cleared.
-         */
-        patch: operations["update_run"];
-        trace?: never;
-    };
     "/v1/runs/{run_id}/decisions": {
         parameters: {
             query?: never;
@@ -5330,6 +5949,120 @@ export interface paths {
          *     disable still owes (``oracle tick`` calls it on a schedule).
          */
         post: operations["tick"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Prd Scope Review
+         * @description A PRD scope as its review screen reads it, any member: each feature with its
+         *     requirements, reasons (blocking and to confirm, answered by D8 waivers and accepts)
+         *     and history, the tally, and the previous attempt's decisions for the Changed filter.
+         */
+        get: operations["get_prd_scope_review"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Scope Item
+         * @description Remove a requirement a person added (approver role or above); 409 for a row the
+         *     agents wrote (cut it instead).
+         */
+        delete: operations["delete_scope_item"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Scope Item
+         * @description Decide or edit one row (approver role or above): a feature's decision (a left-out
+         *     one with its reason), goals (confirmed goals only), dependencies and blockers; a
+         *     requirement's decision, text and acceptance; ``revert`` puts the agent's values back.
+         *     The scope is re-checked: the answer carries the new tally.
+         */
+        patch: operations["patch_scope_item"];
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Scope Requirement
+         * @description Add a requirement to a feature (approver role or above): ``origin: person``; its
+         *     goals default to the feature's. Approving writes it to the baseline as the approver's.
+         */
+        post: operations["add_scope_requirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enhance Scope Requirement
+         * @description Ask Oracle to deepen a requirement (approver role or above): a queued
+         *     ``scope_enhance`` job on Oracle's own model; poll ``GET /v1/llm-jobs/{job_id}``. Its
+         *     output is a suggestion: nothing changes until it is accepted.
+         */
+        post: operations["enhance_scope_requirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Scope Enhancement
+         * @description Accept an enhancement (approver role or above), as Oracle wrote it or edited: the
+         *     requirement's text and acceptance become the person's.
+         */
+        post: operations["accept_scope_enhancement"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8918,7 +9651,8 @@ export interface paths {
         };
         /**
          * List Company Integrations
-         * @description The company's own integrations (Oracle's Slack app); never a credential.
+         * @description The company's own integrations (Oracle's Slack app); never a credential. A
+         *     disconnected one is not listed.
          */
         get: operations["list_company_integrations"];
         put?: never;
@@ -8970,6 +9704,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/company-integrations/slack/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Slack Status
+         * @description Whether Oracle's Slack app is connected and can mirror discussions (G8); any member.
+         */
+        get: operations["slack_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/company-integrations/slack/channels": {
         parameters: {
             query?: never;
@@ -8979,8 +9733,10 @@ export interface paths {
         };
         /**
          * List Slack Notification Channels
-         * @description The channels the report can post to: public ones, and the private ones the bot was
-         *     invited to when the install can read them.
+         * @description The channels the report can post to, or a discussion can be mirrored to (G8:
+         *     commenters and up): public ones, and the private ones the bot was invited to when
+         *     the install can read them. ``mirror`` keeps only the ones the bot is in, the only
+         *     ones whose replies come back.
          */
         get: operations["list_slack_notification_channels"];
         put?: never;
@@ -9023,9 +9779,11 @@ export interface paths {
         post?: never;
         /**
          * Delete Company Integration
-         * @description Disconnect: revoke the bot token at Slack (best effort) and delete it. The report
-         *     stops posting (and the report's channel is cleared); people's own Slack connections
-         *     are untouched.
+         * @description Disconnect: every mirrored discussion thread gets its closing line and stops
+         *     mirroring (G8), then the bot token is revoked at Slack (best effort) and the install is
+         *     set ``revoked``: its token is erased, and its row and ``bot_user_id`` are kept, so
+         *     people's Slack sources keep skipping Oracle's own posts (S6). The report stops posting
+         *     (and the report's channel is cleared); people's own Slack connections are untouched.
          */
         delete: operations["delete_company_integration"];
         options?: never;
@@ -10228,6 +10986,80 @@ export interface components {
             lock_version: number;
             /** Parts */
             parts: ("theme" | "goals" | "duplicate" | "feature")[];
+        };
+        /** AccessApprove */
+        AccessApprove: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /** Name */
+            name?: string | null;
+        };
+        /** AccessNote */
+        AccessNote: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * AccessRequestOut
+         * @description Someone who signed in with Google without an invite, asking to join (A5).
+         */
+        AccessRequestOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "declined" | "closed";
+            /** Note */
+            note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /** Invite Id */
+            invite_id?: string | null;
+        };
+        /**
+         * AccessStateOut
+         * @description Where a Google-signed person stands (A5): never anything about other people.
+         */
+        AccessStateOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "member" | "pending" | "approved" | "declined" | "invite_expired" | "invite_only" | "outside_domains" | "removed" | "no_google_sign_in";
+            /** Email */
+            email?: string | null;
+            /** Company */
+            company?: string | null;
+            /** Requested At */
+            requested_at?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Invite Expired At */
+            invite_expired_at?: string | null;
         };
         /** AccountCreated */
         AccountCreated: {
@@ -12682,6 +13514,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Lead Stop
+             * @default false
+             */
+            lead_stop: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
             gate?: components["schemas"]["Gate"] | null;
@@ -12699,6 +13536,8 @@ export interface components {
             needs_agents: components["schemas"]["NeedsAgents"][];
             /** Review Link */
             review_link?: string | null;
+            /** Vague Goals */
+            vague_goals?: number | null;
         };
         /**
          * CheckpointReview
@@ -14640,6 +15479,24 @@ export interface components {
             /** Upstream */
             upstream: components["schemas"]["TraceUpstreamRef"][];
         };
+        /**
+         * DependentsOut
+         * @description What the delete dialog lists: the root and everything that goes to Trash with it.
+         *     ``published``: ask once more, the external copy stays where it is. ``working_runs``:
+         *     runs to cancel before the delete is allowed.
+         */
+        DependentsOut: {
+            root: components["schemas"]["TrashItem"];
+            /** Items */
+            items: components["schemas"]["TrashItem"][];
+            /** Published */
+            published: boolean;
+            /**
+             * Working Runs
+             * @default []
+             */
+            working_runs: string[];
+        };
         /** DeriveIn */
         DeriveIn: {
             /**
@@ -14807,6 +15664,16 @@ export interface components {
             created_at: string;
             /** Lock Version */
             lock_version: number;
+            /** Result Ref */
+            result_ref?: {
+                [key: string]: unknown;
+            } | null;
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            /** Override Reason */
+            override_reason?: string | null;
         };
         /** DiscussionCreate */
         DiscussionCreate: {
@@ -15046,6 +15913,7 @@ export interface components {
             subject: {
                 [key: string]: unknown;
             };
+            slack?: components["schemas"]["DiscussionSlackOut"] | null;
             /** Participants */
             participants: components["schemas"]["DiscussionParticipantOut"][];
             exposure?: components["schemas"]["DiscussionExposure"] | null;
@@ -15131,6 +15999,28 @@ export interface components {
             /** First Message */
             first_message: string;
         };
+        /** DiscussionSlackIn */
+        DiscussionSlackIn: {
+            /** Channel Id */
+            channel_id: string;
+        };
+        /**
+         * DiscussionSlackOut
+         * @description G8: the Slack thread an open discussion is mirrored to.
+         */
+        DiscussionSlackOut: {
+            /** Channel Name */
+            channel_name: string;
+            /** Thread Url */
+            thread_url: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "posting" | "live" | "failing" | "failed";
+            /** Error */
+            error?: string | null;
+        };
         /**
          * DiscussionStarted
          * @description A new discussion, and Oracle's ``pending`` reply to its first message when the rule
@@ -15206,6 +16096,7 @@ export interface components {
             subject: {
                 [key: string]: unknown;
             };
+            slack?: components["schemas"]["DiscussionSlackOut"] | null;
             /** Participants */
             participants: components["schemas"]["DiscussionParticipantOut"][];
             exposure?: components["schemas"]["DiscussionExposure"] | null;
@@ -17296,6 +18187,12 @@ export interface components {
              * @enum {string}
              */
             approver_role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Decider
+             * @default role
+             * @enum {string}
+             */
+            decider: "role" | "engineering_lead";
         };
         /** FlowStart */
         FlowStart: {
@@ -17367,6 +18264,197 @@ export interface components {
             aging: number;
             /** Stale */
             stale: number;
+        };
+        /**
+         * FromRunCheckpoint
+         * @description The run's latest Confirm the baseline stop, as the caller may use it.
+         */
+        FromRunCheckpoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "changes_requested" | "skipped";
+            /** Approver Role */
+            approver_role: string;
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+            /**
+             * Can Suggest
+             * @default false
+             */
+            can_suggest: boolean;
+            /**
+             * Can Stage
+             * @default false
+             */
+            can_stage: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            gate?: components["schemas"]["Gate"] | null;
+            /** Note */
+            note?: string | null;
+            wait: components["schemas"]["WaitInfo"];
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Review Note */
+            review_note?: string | null;
+        };
+        /** FromRunEdges */
+        FromRunEdges: {
+            /**
+             * New
+             * @default 0
+             */
+            new: number;
+            /**
+             * Changed
+             * @default 0
+             */
+            changed: number;
+        };
+        /** FromRunMerge */
+        FromRunMerge: {
+            /** Allowed */
+            allowed: boolean;
+            /** Why Not */
+            why_not?: string | null;
+        };
+        /**
+         * FromRunOut
+         * @description GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+         *     person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
+         *     baseline.
+         */
+        FromRunOut: {
+            run: components["schemas"]["ProposalRun"];
+            checkpoint?: components["schemas"]["FromRunCheckpoint"] | null;
+            summary: components["schemas"]["FromRunSummary"];
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["FromRunRow"][];
+            /**
+             * Other Proposed Goals
+             * @default []
+             */
+            other_proposed_goals: components["schemas"]["EntityOut"][];
+        };
+        /** FromRunProposal */
+        FromRunProposal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * FromRunRow
+         * @description One baseline item a run created (``new``), changed (``changed``) or proposed a
+         *     change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+         *     (recomputed on every read), the shared draft's actions on its key and its state.
+         */
+        FromRunRow: {
+            /** Key */
+            key: string;
+            entity: components["schemas"]["EntityOut"];
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "new" | "changed" | "proposal";
+            /**
+             * Proposal Ids
+             * @default []
+             */
+            proposal_ids: string[];
+            /**
+             * Proposals
+             * @default []
+             */
+            proposals: components["schemas"]["FromRunProposal"][];
+            /**
+             * Conflict Ids
+             * @default []
+             */
+            conflict_ids: string[];
+            /**
+             * @default {
+             *       "new": 0,
+             *       "changed": 0
+             *     }
+             */
+            edges: components["schemas"]["FromRunEdges"];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["RowReason"][];
+            /**
+             * Actions
+             * @default []
+             */
+            actions: components["schemas"]["ReviewAction"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "needs_you" | "handled" | "waiting" | "fine";
+            merge: components["schemas"]["FromRunMerge"];
+        };
+        /** FromRunSummary */
+        FromRunSummary: {
+            /**
+             * Items
+             * @default 0
+             */
+            items: number;
+            /**
+             * Need You
+             * @default 0
+             */
+            need_you: number;
+            /**
+             * Not Decided
+             * @default 0
+             */
+            not_decided: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Left Proposed
+             * @default 0
+             */
+            left_proposed: number;
+            /**
+             * Other Proposed Goals
+             * @default 0
+             */
+            other_proposed_goals: number;
         };
         /** GapCreate */
         GapCreate: {
@@ -17450,6 +18538,8 @@ export interface components {
             label: string;
             /** Waivable */
             waivable: boolean;
+            /** Question Id */
+            question_id?: string | null;
         };
         /**
          * GateView
@@ -17550,6 +18640,16 @@ export interface components {
                 [key: string]: number;
             } | null;
         };
+        /** GoalInterviewOut */
+        GoalInterviewOut: {
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /** Created */
+            created: boolean;
+        };
         /** GoalLink */
         GoalLink: {
             /**
@@ -17573,6 +18673,29 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
+        };
+        /** GoalMeasureAct */
+        GoalMeasureAct: {
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Keep
+             * @default false
+             */
+            keep: boolean;
+        };
+        /** GoalMeasurePushback */
+        GoalMeasurePushback: {
+            /** Detail */
+            detail: string;
+            /**
+             * Pushback
+             * @default true
+             * @constant
+             */
+            pushback: true;
         };
         /** GoalProblem */
         GoalProblem: {
@@ -17931,6 +19054,39 @@ export interface components {
             /** Next Attempt At */
             next_attempt_at?: string | null;
         };
+        /**
+         * InboxAccessRequest
+         * @description Someone from the company's email domains who signed in with Google without an
+         *     invite and waits for an owner, or an approver, to let them in (A5).
+         */
+        InboxAccessRequest: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /**
+             * Default Role
+             * @enum {string}
+             */
+            default_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Roles */
+            roles: ("viewer" | "commenter" | "approver" | "owner")[];
+        };
         /** InboxCheckpoint */
         InboxCheckpoint: {
             /**
@@ -17984,6 +19140,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Lead Stop
+             * @default false
+             */
+            lead_stop: boolean;
             /** Cannot Approve */
             cannot_approve?: string | null;
             gate?: components["schemas"]["Gate"] | null;
@@ -18001,6 +19162,8 @@ export interface components {
             needs_agents: components["schemas"]["NeedsAgents"][];
             /** Review Link */
             review_link?: string | null;
+            /** Vague Goals */
+            vague_goals?: number | null;
             /**
              * Flow
              * @enum {string}
@@ -18178,6 +19341,78 @@ export interface components {
             state: "new" | "open" | "done";
             /** Counts */
             counts: boolean;
+        };
+        /**
+         * InboxDiscussionItem
+         * @description G6: a discussion row. ``invited`` (added by a mention or a private one's starter),
+         *     ``mentioned`` (mentioned again) or ``changes_proposed`` (approvers: changes waiting on
+         *     them, derived on read; id ``chg_<discussion id>``). Shown only to those who can read
+         *     the discussion now.
+         */
+        InboxDiscussionItem: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "invited" | "mentioned" | "changes_proposed";
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "open" | "private";
+            /** Subject Label */
+            subject_label: string;
+            /** Subject Url */
+            subject_url: string;
+            by?: components["schemas"]["InboxDiscussionPerson"] | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Count */
+            count?: number | null;
+            /**
+             * People
+             * @default []
+             */
+            people: string[];
+            /**
+             * People More
+             * @default 0
+             */
+            people_more: number;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open" | "done";
+            /**
+             * Can Write
+             * @default false
+             */
+            can_write: boolean;
+        };
+        /** InboxDiscussionPerson */
+        InboxDiscussionPerson: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
         };
         /** InboxDocument */
         InboxDocument: {
@@ -18420,6 +19655,11 @@ export interface components {
              */
             access_failures: components["schemas"]["InboxAccessFailure"][];
             /**
+             * Access Requests
+             * @default []
+             */
+            access_requests: components["schemas"]["InboxAccessRequest"][];
+            /**
              * Reports
              * @default []
              */
@@ -18494,6 +19734,11 @@ export interface components {
              * @default []
              */
             tracks: components["schemas"]["InboxTrack"][];
+            /**
+             * Discussions
+             * @default []
+             */
+            discussions: components["schemas"]["InboxDiscussionItem"][];
         };
         /**
          * InboxOutcome
@@ -19397,6 +20642,14 @@ export interface components {
             /** Purpose */
             purpose?: string | null;
         };
+        /** InterviewIn */
+        InterviewIn: {
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
         /** InterviewJobState */
         InterviewJobState: {
             /**
@@ -19527,6 +20780,21 @@ export interface components {
             /** Interviewee Company */
             interviewee_company?: string | null;
         };
+        /** InterviewRow */
+        InterviewRow: {
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
+            /** Created */
+            created: boolean;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+        };
         /**
          * InterviewSubject
          * @description What the interview is about: exactly one of an intake, a request theme or a topic.
@@ -19579,6 +20847,16 @@ export interface components {
             /** Request Count */
             request_count: number;
         };
+        /** InterviewsIn */
+        InterviewsIn: {
+            /** Entity Ids */
+            entity_ids?: string[] | null;
+        };
+        /** InterviewsOut */
+        InterviewsOut: {
+            /** Discussions */
+            discussions: components["schemas"]["InterviewRow"][];
+        };
         /** InviteCreate */
         InviteCreate: {
             /** Email */
@@ -19588,11 +20866,15 @@ export interface components {
              * @enum {string}
              */
             role: "viewer" | "commenter" | "approver" | "owner";
+            /** Name */
+            name?: string | null;
             /**
              * Engineering Lead
              * @default false
              */
             engineering_lead: boolean;
+            /** Message */
+            message?: string | null;
         };
         /** InviteOut */
         InviteOut: {
@@ -19617,14 +20899,32 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "open" | "accepted" | "revoked";
+            status: "open" | "expired" | "accepted" | "revoked";
+            /** Name */
+            name?: string | null;
             /** Invited By */
             invited_by?: string | null;
+            /** Invited By Name */
+            invited_by_name?: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Resent At */
+            resent_at?: string | null;
+            /**
+             * Resend Count
+             * @default 0
+             */
+            resend_count: number;
+            /** Access Request Id */
+            access_request_id?: string | null;
             /** Accepted At */
             accepted_at?: string | null;
             /** Revoked At */
@@ -19651,6 +20951,8 @@ export interface components {
             email_at?: string | null;
             /** Sign In Url */
             sign_in_url: string;
+            /** Message */
+            message?: string | null;
         };
         /**
          * ItemChange
@@ -20136,6 +21438,8 @@ export interface components {
             reuse_baseline?: boolean | null;
             /** Goals */
             goals?: string[] | null;
+            /** Reuse Draft Items */
+            reuse_draft_items?: boolean | null;
         };
         /** KnobsOut */
         KnobsOut: {
@@ -20160,6 +21464,8 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["TargetGoal"][];
+            /** Reuse Draft Items */
+            reuse_draft_items?: boolean | null;
         };
         /** KnowledgeGapOut */
         KnowledgeGapOut: {
@@ -20649,13 +21955,15 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
             intake_id?: string | null;
             /** Decision Id */
             decision_id?: string | null;
+            /** Scope Id */
+            scope_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -20889,6 +22197,13 @@ export interface components {
             token_id?: string | null;
             /** Token Name */
             token_name?: string | null;
+            /** Name */
+            name?: string | null;
+            /**
+             * Invite Roles
+             * @default []
+             */
+            invite_roles: ("viewer" | "commenter" | "approver" | "owner")[];
             /**
              * Company Timezone
              * @default America/Los_Angeles
@@ -20949,6 +22264,8 @@ export interface components {
             id: string;
             /** Email */
             email: string;
+            /** Name */
+            name?: string | null;
             /**
              * Role
              * @enum {string}
@@ -20985,23 +22302,16 @@ export interface components {
         };
         /**
          * MemberPatch
-         * @description A role, the engineering lead flag, or both (applied in one change, role first).
+         * @description A role, the engineering lead flag, a name (A5), or several (applied in one
+         *     change: role first). ``"name": null`` clears the name.
          */
         MemberPatch: {
             /** Role */
             role?: ("viewer" | "commenter" | "approver" | "owner") | null;
             /** Engineering Lead */
             engineering_lead?: boolean | null;
-        };
-        /** MergeIn */
-        MergeIn: {
-            /** Lock Version */
-            lock_version: number;
-            /**
-             * Into Id
-             * Format: uuid
-             */
-            into_id: string;
+            /** Name */
+            name?: string | null;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -21338,6 +22648,8 @@ export interface components {
             user_id: string;
             /** Email */
             email: string;
+            /** Name */
+            name?: string | null;
             /**
              * Role
              * @enum {string}
@@ -21362,6 +22674,14 @@ export interface components {
              * @enum {string}
              */
             signed_in_via: "browser" | "api_token" | "mcp_client";
+        };
+        /**
+         * NamePatch
+         * @description ``PATCH /v1/me/account``: your name (A5); null clears it.
+         */
+        NamePatch: {
+            /** Name */
+            name: string | null;
         };
         /**
          * NeedsAgents
@@ -21822,6 +23142,15 @@ export interface components {
             flagged: number;
             /** Limited */
             limited: number;
+        };
+        /**
+         * NotRestored
+         * @description Something a restore could not bring back with the entry, and why.
+         */
+        NotRestored: {
+            item: components["schemas"]["TrashItem"];
+            /** Reason */
+            reason: string;
         };
         /** NoteCounts */
         NoteCounts: {
@@ -22816,6 +24145,68 @@ export interface components {
             approved_at?: string | null;
             /** Lock Version */
             lock_version: number;
+        };
+        /**
+         * PrdScopeReview
+         * @description A PRD scope as its review screen reads it (C7): each feature's reasons and
+         *     history, the tally, the previous attempt's decisions (key -> decision) and kept
+         *     requirements (key -> requirement keys) for the Changed filter, and the confirmed goals
+         *     a person may pick. Suggestions, waivers and accepts come from the D8 review read.
+         */
+        PrdScopeReview: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Segment Seq */
+            segment_seq: number;
+            /** Attempt */
+            attempt: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "superseded";
+            check: components["schemas"]["FeatureSetCheck"];
+            /** Features */
+            features: components["schemas"]["ScopeReviewFeature"][];
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Checkpoint Id */
+            checkpoint_id?: string | null;
+            /** Title */
+            title?: string | null;
+            summary: components["schemas"]["ScopeSummary"];
+            /** Previous */
+            previous?: {
+                [key: string]: string;
+            } | null;
+            /** Previous Requirements */
+            previous_requirements?: {
+                [key: string]: string[];
+            } | null;
+            /**
+             * Goals Available
+             * @default []
+             */
+            goals_available: components["schemas"]["ScopeGoalChoice"][];
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
         };
         /** PreRead */
         PreRead: {
@@ -24207,20 +25598,38 @@ export interface components {
             /** Readable */
             readable: boolean;
         };
-        /** RegenerateIn */
-        RegenerateIn: {
-            /** Prd Version */
-            prd_version?: number | null;
-            /** Reason */
-            reason?: string | null;
+        /** RegenerateEstimateIn */
+        RegenerateEstimateIn: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * RegenerateEstimateOut
+         * @description A draft run that would regenerate the document, estimated; nothing is spent until
+         *     it is started. Over the threshold an owner approves it first.
+         */
+        RegenerateEstimateOut: {
             /**
-             * @default {
-             *       "depth": "standard",
-             *       "roles": {},
-             *       "checkpoints": {}
-             *     }
+             * Run Id
+             * Format: uuid
              */
-            knobs: components["schemas"]["KnobsIn"];
+            run_id: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Kind */
+            kind: string;
+            /** Flow */
+            flow: string;
+            /** Inputs */
+            inputs: string[];
+            /** Estimate Usd */
+            estimate_usd: number;
+            /** Approval Threshold Usd */
+            approval_threshold_usd: number;
+            /** Needs Owner Approval */
+            needs_owner_approval: boolean;
+            /** Note */
+            note?: string | null;
         };
         /**
          * RegenerationOut
@@ -25283,6 +26692,7 @@ export interface components {
              * @enum {string}
              */
             state: "needs_you" | "handled" | "waiting" | "fine";
+            baseline?: components["schemas"]["FromRunRow"] | null;
             resolution?: components["schemas"]["ResolutionEntry"] | null;
             /**
              * Diff
@@ -25638,6 +27048,8 @@ export interface components {
             actor: string;
             /** Reason */
             reason?: string | null;
+            /** Run Id */
+            run_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -26014,6 +27426,44 @@ export interface components {
             /** Created At */
             created_at?: string | null;
         };
+        /**
+         * RowReason
+         * @description B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's
+         *     reasons read as they are stored.
+         */
+        RowReason: {
+            /** Item */
+            item: string;
+            /** Item Title */
+            item_title?: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "confirm";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /**
+             * Data
+             * @default {}
+             */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Fixes
+             * @default []
+             */
+            fixes: components["schemas"]["ReasonFix"][];
+            /** Waivable */
+            waivable?: boolean | null;
+            /** Detail */
+            detail?: string | null;
+        };
         /** RunCreate */
         RunCreate: {
             /**
@@ -26165,6 +27615,15 @@ export interface components {
             /** Omitted */
             omitted: number;
         };
+        /** RunNoteRefs */
+        RunNoteRefs: {
+            /** Note */
+            note: string;
+            /** Refs */
+            refs: {
+                [key: string]: string | string[];
+            };
+        };
         /** RunOut */
         RunOut: {
             /**
@@ -26276,6 +27735,11 @@ export interface components {
             runtime: string;
             /** Notes */
             notes: string[];
+            /**
+             * Note Refs
+             * @default []
+             */
+            note_refs: components["schemas"]["RunNoteRefs"][];
             /** Segments */
             segments: components["schemas"]["SegmentOut"][];
             /** Checkpoints */
@@ -26693,6 +28157,22 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * ScopeEnhanceAccept
+         * @description The enhanced text and acceptance as the approver accepts them (edited, or the
+         *     job's own when absent).
+         */
+        ScopeEnhanceAccept: {
+            /** Text */
+            text?: string | null;
+            /** Acceptance */
+            acceptance?: string[] | null;
+        };
+        /** ScopeEnhanceIn */
+        ScopeEnhanceIn: {
+            /** Instruction */
+            instruction?: string | null;
+        };
         /** ScopeFeatureOut */
         ScopeFeatureOut: {
             /**
@@ -26757,12 +28237,216 @@ export interface components {
             /** Contribution */
             contribution?: number | null;
         };
+        /** ScopeGoalChoice */
+        ScopeGoalChoice: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** ScopeGoalIn */
+        ScopeGoalIn: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /**
+             * Contribution
+             * @default 1
+             */
+            contribution: number;
+        };
+        /**
+         * ScopeHistory
+         * @description The agent's value of a row and who changed it last.
+         */
+        ScopeHistory: {
+            /**
+             * Original
+             * @default {}
+             */
+            original: {
+                [key: string]: unknown;
+            };
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided By Name */
+            decided_by_name?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+        };
+        /**
+         * ScopeItemOut
+         * @description One scope row after a write (C7), with the scope's new tally and the checkpoint's
+         *     draft revision (D8) to decide with.
+         */
+        ScopeItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "feature" | "requirement";
+            /** Key */
+            key: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Title */
+            title: string;
+            /** Text */
+            text?: string | null;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "defer" | "keep" | "cut";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["ScopeGoal"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Blocker Keys
+             * @default []
+             */
+            blocker_keys: string[];
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /**
+             * Original
+             * @default {}
+             */
+            original: {
+                [key: string]: unknown;
+            };
+            summary: components["schemas"]["ScopeSummary"];
+            /** Revision */
+            revision: number;
+            /** Scope Lock Version */
+            scope_lock_version: number;
+        };
+        /**
+         * ScopeItemPatch
+         * @description One person's change to one scope row (C7); every field optional. ``revert`` puts
+         *     the row back to the agent's values. ``decision_reason`` of a left-out feature:
+         *     no_goal | not_now | out_of_scope | duplicate | other:<text>.
+         */
+        ScopeItemPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Decision */
+            decision?: ("include" | "exclude" | "defer" | "keep" | "cut") | null;
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Acceptance */
+            acceptance?: string[] | null;
+            /** Goals */
+            goals?: components["schemas"]["ScopeGoalIn"][] | null;
+            /** Depends On */
+            depends_on?: string[] | null;
+            /** Blocker Keys */
+            blocker_keys?: string[] | null;
+            /**
+             * Revert
+             * @default false
+             */
+            revert: boolean;
+        };
         /** ScopeOut */
         ScopeOut: {
             /** Name */
             name: string;
             /** Description */
             description: string;
+        };
+        /**
+         * ScopeReason
+         * @description Why a feature needs a person (C7): a blocking problem of the scope's check, or a
+         *     flag to confirm. ``answered``: a staged D8 waiver (blocking) or accept (to confirm)
+         *     answers it.
+         */
+        ScopeReason: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "to_confirm";
+            /** Label */
+            label: string;
+            /** Requirement */
+            requirement?: string | null;
+            /**
+             * Waivable
+             * @default false
+             */
+            waivable: boolean;
+            /**
+             * Answered
+             * @default false
+             */
+            answered: boolean;
+        };
+        /**
+         * ScopeRequirementIn
+         * @description A requirement a person adds to a feature (C7); its goals default to the
+         *     feature's.
+         */
+        ScopeRequirementIn: {
+            /**
+             * Parent Id
+             * Format: uuid
+             */
+            parent_id: string;
+            /** Text */
+            text: string;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /** Goals */
+            goals?: components["schemas"]["ScopeGoalIn"][] | null;
         };
         /** ScopeRequirementOut */
         ScopeRequirementOut: {
@@ -26798,6 +28482,195 @@ export interface components {
             entity_id?: string | null;
             /** Proposal Id */
             proposal_id?: string | null;
+        };
+        /** ScopeReviewFeature */
+        ScopeReviewFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "include" | "exclude" | "defer";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["ScopeGoal"][];
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            /**
+             * Blocker Keys
+             * @default []
+             */
+            blocker_keys: string[];
+            /** Confidence */
+            confidence?: number | null;
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["ScopeReviewRequirement"][];
+            /** Text */
+            text?: string | null;
+            /** Position */
+            position: number;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Evidence Ids
+             * @default []
+             */
+            evidence_ids: string[];
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["ScopeReason"][];
+            /**
+             * Needs You
+             * @default false
+             */
+            needs_you: boolean;
+            /**
+             * @default {
+             *       "original": {}
+             *     }
+             */
+            history: components["schemas"]["ScopeHistory"];
+        };
+        /** ScopeReviewRequirement */
+        ScopeReviewRequirement: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Text */
+            text?: string | null;
+            /**
+             * Acceptance
+             * @default []
+             */
+            acceptance: string[];
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "keep" | "cut";
+            /** Decision Reason */
+            decision_reason?: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "agent" | "person";
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
+            /**
+             * Parent Id
+             * Format: uuid
+             */
+            parent_id: string;
+            /** Position */
+            position: number;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Added
+             * @default false
+             */
+            added: boolean;
+            /**
+             * @default {
+             *       "original": {}
+             *     }
+             */
+            history: components["schemas"]["ScopeHistory"];
+        };
+        /**
+         * ScopeSummary
+         * @description The scope's tally (C7): features, those that need a person, open blocking and
+         *     to-confirm reasons, those handled, rows a person changed and suggestions waiting.
+         */
+        ScopeSummary: {
+            /**
+             * Features
+             * @default 0
+             */
+            features: number;
+            /**
+             * Needs You
+             * @default 0
+             */
+            needs_you: number;
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
+            /**
+             * To Confirm
+             * @default 0
+             */
+            to_confirm: number;
+            /**
+             * Handled
+             * @default 0
+             */
+            handled: number;
+            /**
+             * Edits
+             * @default 0
+             */
+            edits: number;
+            /**
+             * Suggestions Open
+             * @default 0
+             */
+            suggestions_open: number;
         };
         /** SearchHit */
         SearchHit: {
@@ -27533,6 +29406,8 @@ export interface components {
              * @default false
              */
             reused: boolean;
+            /** Reused From Version */
+            reused_from_version?: number | null;
             /** Note */
             note?: string | null;
         };
@@ -27711,6 +29586,35 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** SignInDomain */
+        SignInDomain: {
+            /** Domain */
+            domain: string;
+            /**
+             * From
+             * @enum {string}
+             */
+            from: "deployment" | "settings";
+        };
+        /** SignInRulesOut */
+        SignInRulesOut: {
+            /** Google Sign In */
+            google_sign_in: boolean;
+            /** New Sign Ins Off */
+            new_sign_ins_off: boolean;
+            /** Domains */
+            domains: components["schemas"]["SignInDomain"][];
+            /**
+             * Without Invite
+             * @enum {string}
+             */
+            without_invite: "request" | "join" | "refuse";
+            /**
+             * Default Role
+             * @enum {string}
+             */
+            default_role: "viewer" | "commenter" | "approver" | "owner";
+        };
         /**
          * SignedOutEverywhere
          * @description Every session signed before ``sessions_valid_after`` is refused, this one too;
@@ -27774,6 +29678,21 @@ export interface components {
             channels: components["schemas"]["SlackChannelOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * SlackStatusOut
+         * @description What any member's discussion menu needs to know (G8): connected, the Slack name,
+         *     whether discussions can be mirrored, and whether an owner must reconnect first.
+         */
+        SlackStatusOut: {
+            /** Connected */
+            connected: boolean;
+            /** Label */
+            label: string | null;
+            /** Mirroring */
+            mirroring: boolean;
+            /** Needs Reconnect */
+            needs_reconnect: boolean;
         };
         /** SlackTestIn */
         SlackTestIn: {
@@ -28157,6 +30076,8 @@ export interface components {
             run_id?: string | null;
             /** Run Status */
             run_status?: string | null;
+            /** Regeneration Run Id */
+            regeneration_run_id?: string | null;
         };
         /**
          * SpecPartState
@@ -28771,6 +30692,10 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Discussion Id */
+            discussion_id?: string | null;
+            /** Discussion Title */
+            discussion_title?: string | null;
         };
         /** StaleEvidence */
         StaleEvidence: {
@@ -30978,6 +32903,67 @@ export interface components {
             records: components["schemas"]["TrackerRecordIn"][];
         };
         /**
+         * TrashEntryOut
+         * @description One delete in Settings › Trash: restored together, purged after ``days_left``.
+         */
+        TrashEntryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            root: components["schemas"]["TrashItem"];
+            /** Items */
+            items: components["schemas"]["TrashItem"][];
+            /** Deleted By */
+            deleted_by?: string | null;
+            /** Deleted By Name */
+            deleted_by_name?: string | null;
+            /**
+             * Deleted At
+             * Format: date-time
+             */
+            deleted_at: string;
+            /** Reason */
+            reason?: string | null;
+            /** Published */
+            published: boolean;
+            /**
+             * Purge After
+             * Format: date-time
+             */
+            purge_after: string;
+            /** Days Left */
+            days_left: number;
+            /**
+             * Not Restored
+             * @default []
+             */
+            not_restored: components["schemas"]["NotRestored"][];
+        };
+        /**
+         * TrashItem
+         * @description A document, intake or run as it was when it went to Trash.
+         */
+        TrashItem: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "document" | "intake" | "run";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug?: string | null;
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+        };
+        /**
          * TriageDailyIn
          * @description Turn "Daily triage at 07:00 PT" on or off.
          */
@@ -31195,6 +33181,14 @@ export interface components {
             id: string;
             /** Title */
             title: string | null;
+        };
+        /** VagueGoalOut */
+        VagueGoalOut: {
+            entity: components["schemas"]["EntityOut"];
+            /** Missing */
+            missing: string[];
+            /** Discussion Id */
+            discussion_id?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -31601,6 +33595,19 @@ export interface components {
              */
             notes: components["schemas"]["ImportIssue"][];
         };
+        /**
+         * MergeIn
+         * @description Merge into… (B2): the item to merge the duplicate into, and why.
+         */
+        oracle__baseline__schemas__MergeIn: {
+            /**
+             * Into
+             * Format: uuid
+             */
+            into: string;
+            /** Reason */
+            reason?: string | null;
+        };
         /** AuthorizeOut */
         oracle__claude_accounts__router__AuthorizeOut: {
             /** Authorize Url */
@@ -31671,6 +33678,41 @@ export interface components {
             predicted_value?: number | null;
             /** Threshold Value */
             threshold_value?: number | null;
+        };
+        /** MergeIn */
+        oracle__requests__schemas__MergeIn: {
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Into Id
+             * Format: uuid
+             */
+            into_id: string;
+        };
+        /** RegenerateIn */
+        oracle__specs__schemas__RegenerateIn: {
+            /** Prd Version */
+            prd_version?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * @default {
+             *       "depth": "standard",
+             *       "roles": {},
+             *       "checkpoints": {}
+             *     }
+             */
+            knobs: components["schemas"]["KnobsIn"];
+        };
+        /** RegenerateIn */
+        oracle__trash__schemas__RegenerateIn: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Note */
+            note?: string | null;
         };
         /**
          * GoalAttrs
@@ -31795,6 +33837,66 @@ export interface operations {
             };
         };
     };
+    get_access_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStateOut"];
+                };
+            };
+        };
+    };
+    send_access_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessNote"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStateOut"];
+                };
+            };
+            /** @description No pending access request */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     logout: {
         parameters: {
             query?: never;
@@ -31906,13 +34008,13 @@ export interface operations {
             };
         };
     };
-    list_documents: {
+    document_dependents: {
         parameters: {
-            query?: {
-                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                doc: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -31923,7 +34025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentSummary"][];
+                    "application/json": components["schemas"]["DependentsOut"];
                 };
             };
             /** @description Validation Error */
@@ -31955,6 +34057,478 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+                confirm_published?: boolean;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    intake_dependents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependentsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_intake: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+                confirm_published?: boolean;
+            };
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_intake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_run: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"][];
+                };
+            };
+        };
+    };
+    restore_trash_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_trash_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estimate_regeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateEstimateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerateEstimateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_regeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["oracle__trash__schemas__RegenerateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_documents: {
+        parameters: {
+            query?: {
+                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
                 };
             };
             /** @description Validation Error */
@@ -33517,6 +36091,139 @@ export interface operations {
                 };
             };
             /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_inbox_discussion_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such Inbox row of the caller's */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mirror_discussion_to_slack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscussionSlackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionSlackOut"];
+                };
+            };
+            /** @description Not the starter or an approver */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already mirrored, closed, or Slack is not connected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private discussions stay in Oracle */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stop_slack_mirror: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not the starter or an approver */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -35562,75 +38269,6 @@ export interface operations {
             };
         };
     };
-    list_invites: {
-        parameters: {
-            query?: {
-                status?: ("open" | "accepted" | "revoked") | "all";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_invite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InviteCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InviteOut"];
-                };
-            };
-            /** @description Already a member, or an open invite exists */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS) */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     retry_invite_access: {
         parameters: {
             query?: never;
@@ -35728,35 +38366,6 @@ export interface operations {
             };
         };
     };
-    revoke_invite: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                invite_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     retry_member_follow_up: {
         parameters: {
             query?: never;
@@ -35847,6 +38456,26 @@ export interface operations {
             };
         };
     };
+    get_sign_in_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInRulesOut"];
+                };
+            };
+        };
+    };
     list_people: {
         parameters: {
             query?: {
@@ -35880,6 +38509,340 @@ export interface operations {
             };
         };
     };
+    list_invites: {
+        parameters: {
+            query?: {
+                status?: ("open" | "expired" | "accepted" | "revoked") | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description A role the caller may not invite with */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already a member, or an open or expired invite exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Outside the company's email domains (outside_company_domains) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resend_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteOut"];
+                };
+            };
+            /** @description No such invite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Accepted or revoked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_access_requests: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "declined" | "closed" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_access_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessApprove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"];
+                };
+            };
+            /** @description A role the caller may not approve with */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not pending, or already a member */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_access_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"];
+                };
+            };
+            /** @description No such request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_access_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestOut"];
+                };
+            };
+            /** @description An approval another person gave (approvers) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cannot reopen */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_my_account: {
         parameters: {
             query?: never;
@@ -35896,6 +38859,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyAccountOut"];
+                };
+            };
+        };
+    };
+    update_my_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAccountOut"];
+                };
+            };
+            /** @description A read-only credential */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -38370,6 +41373,79 @@ export interface operations {
             };
         };
     };
+    merge_entity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["oracle__baseline__schemas__MergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Not mergeable: the detail says why */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_baseline_from_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FromRunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     unlock_entity: {
         parameters: {
             query?: never;
@@ -39425,6 +42501,204 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["YamlImportError"];
+                };
+            };
+        };
+    };
+    start_goal_interview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterviewIn"] | null;
+            };
+        };
+        responses: {
+            /** @description An open interview on this goal exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalInterviewOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalInterviewOut"];
+                };
+            };
+            /** @description Entity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only goals can be interviewed | This goal is already measurable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    start_goal_interviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vague_goals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VagueGoalOut"][];
+                };
+            };
+        };
+    };
+    propose_goal_measure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GoalMeasureAct"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionChangeOut"];
+                };
+            };
+            /** @description Change not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oracle's pushback (once), closed, or the version was acted on */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMeasurePushback"];
+                };
+            };
+            /** @description Goal fields rejected (B5), every problem */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YamlImportError"];
+                };
+            };
+        };
+    };
+    dismiss_goal_measure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionChangeOut"];
+                };
+            };
+            /** @description Change not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not proposed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -41795,72 +45069,6 @@ export interface operations {
             };
         };
     };
-    get_run: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_run: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RunPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_run_decisions: {
         parameters: {
             query?: never;
@@ -42624,6 +45832,211 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickOut"];
+                };
+            };
+        };
+    };
+    get_prd_scope_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrdScopeReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_scope_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_scope_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeItemPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_scope_requirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeRequirementIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enhance_scope_requirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeEnhanceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_scope_enhancement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scope_id: string;
+                item_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopeEnhanceAccept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -47129,7 +50542,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RegenerateIn"];
+                "application/json": components["schemas"]["oracle__specs__schemas__RegenerateIn"];
             };
         };
         responses: {
@@ -49085,9 +52498,31 @@ export interface operations {
             };
         };
     };
-    list_slack_notification_channels: {
+    slack_status: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackStatusOut"];
+                };
+            };
+        };
+    };
+    list_slack_notification_channels: {
+        parameters: {
+            query?: {
+                mirror?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -49109,6 +52544,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
             /** @description Slack */
             502: {
@@ -49472,7 +52916,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MergeIn"];
+                "application/json": components["schemas"]["oracle__requests__schemas__MergeIn"];
             };
         };
         responses: {

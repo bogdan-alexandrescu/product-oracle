@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
-from oracle.discussions import agent_view, replies, service
+from oracle.discussions import agent_view, inbox, replies, service
 from oracle.discussions.schemas import (
     ChangeStatus,
     DiscussionChangeOut,
@@ -31,11 +31,14 @@ from oracle.discussions.schemas import (
     DiscussionPatch,
     DiscussionReadIn,
     DiscussionShareIn,
+    DiscussionSlackIn,
+    DiscussionSlackOut,
     DiscussionStarted,
     Origin,
     RunDiscussionsOut,
     Status,
 )
+from oracle.slack import bridge
 
 router = APIRouter(
     prefix="/v1", tags=["discussions"], dependencies=[Depends(require_role("viewer"))]
@@ -427,3 +430,55 @@ async def list_discussion_changes(
     and staging arrive with G3 and G4)."""
     d, _parts, _seat = await _call(service.readable(db, principal, discussion_id))
     return await service.list_changes(db, d, status_)
+
+
+@router.delete(
+    "/inbox/discussion-items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"description": "No such Inbox row of the caller's"}},
+)
+async def dismiss_inbox_discussion_item(item_id: str, principal: Viewer, db: TenantDB) -> None:
+    """Dismiss my Invited or Mentioned row (G6): it moves to Done. A changes-proposed row
+    cannot be dismissed; it goes when its changes are handled."""
+    try:
+        await inbox.dismiss(db, principal, item_id)
+    except inbox.InboxItemNotFound:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Inbox row not found") from None
+    await db.commit()
+
+
+@router.post(
+    "/discussions/{discussion_id}/slack",
+    response_model=DiscussionSlackOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        403: {"description": "Not the starter or an approver"},
+        404: GONE,
+        409: {"description": "Already mirrored, closed, or Slack is not connected"},
+        422: {"description": "Private discussions stay in Oracle"},
+    },
+)
+async def mirror_discussion_to_slack(
+    discussion_id: uuid.UUID, body: DiscussionSlackIn, principal: Commenter, db: TenantDB
+) -> DiscussionSlackOut:
+    """Mirror an open discussion to a new thread in a Slack channel Oracle's Slack app is
+    in (the starter or an approver). Oracle posts the root message (title, subject, link,
+    summary or first message), then every new message; replies in the thread from members
+    who can write come back as messages. Earlier messages are not copied."""
+    link = await _call(bridge.mirror(db, principal, discussion_id, body.channel_id))
+    await db.commit()
+    out = await bridge.slack_out(db, link)
+    assert out is not None
+    return out
+
+
+@router.delete(
+    "/discussions/{discussion_id}/slack",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={403: {"description": "Not the starter or an approver"}, 404: GONE},
+)
+async def stop_slack_mirror(discussion_id: uuid.UUID, principal: Commenter, db: TenantDB) -> None:
+    """Stop mirroring: Oracle posts a closing line with a link to the discussion, and
+    replies in the thread no longer come back. What was posted stays in Slack."""
+    await _call(bridge.unmirror(db, principal, discussion_id))
+    await db.commit()

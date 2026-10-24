@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { DeleteMenu } from "@/components/ArtifactMenu";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -27,6 +28,7 @@ import {
 } from "@/components/ds";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
+import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
@@ -38,11 +40,13 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import {
+  briefsCheck,
   CANCEL_AGAIN_CONFIRM,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
   RETRY_CONFIRM,
+  reviewHref,
   runStatusLabel,
   RunStatusBadge,
   STOP_CANCELLING_CONFIRM,
@@ -70,6 +74,9 @@ const NOTE_SAVE_MS = 800;
 type CheckpointReview = Schemas["CheckpointReview"];
 type WaitInfo = Schemas["WaitInfo"];
 type ActionIn = Schemas["ActionIn"];
+
+/** A run still at work cannot go to Trash: cancel it first (#482). */
+const WORKING = new Set<string>(["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"]);
 
 /** `revision`: the shared draft's the decider saw (D8); `onChanged` hears it changed since. */
 type Decide = (
@@ -116,6 +123,7 @@ function LinkedDiscussion() {
 export function RunDetail({ id }: { id: string }) {
   const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
   const { me, can } = useMe();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // #258: what the last "Check agents now" checked, said once it answers.
@@ -274,6 +282,14 @@ export function RunDetail({ id }: { id: string }) {
                 Resume
               </Button>
             )}
+            {/* #482: a run alone goes to Trash (its document stays). */}
+            <DeleteMenu
+              op="delete_run"
+              title={run.flow_title}
+              dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
+              remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
+              onDeleted={() => router.push("/runs")}
+            />
           </>
         }
       />
@@ -691,7 +707,11 @@ function SegmentItem({
   onDraftChanged: () => void;
 }) {
   const kind = s.checkpoint;
-  const { me } = useMe();
+  const { me, can } = useMe();
+  // B6: once the baseline is approved, Oracle offers a goals interview on the goals still vague.
+  const vague = can("start_goal_interview")
+    ? (checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as { vague_goals?: number | null } | undefined)?.vague_goals ?? 0
+    : 0;
   // D8: the waiting checkpoint's shared draft, for every member who can see the run.
   const waitingCp = checkpoints.find((c) => c.status === "pending") ?? null;
   const draft = useDraft(run.id, waitingCp?.id ?? null);
@@ -709,8 +729,13 @@ function SegmentItem({
     // onDraftChanged is a new function on every render: the revision decides.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionKey]);
-  const deciding = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
-  const compact = checkpoints.filter((c) => !(c.status === "pending" && c.can_decide));
+  // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
+  const screened = checkpoints.find((c) => c.status === "pending" && briefsCheck(c)) ?? null;
+  // The Waiting chip counts every stop waiting for me, the screened one included.
+  const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
+  const deciding = mine.filter((c) => c !== screened);
+  // The screened stop is said once, on its line: never again as a chip.
+  const compact = checkpoints.filter((c) => c !== screened && !(c.status === "pending" && c.can_decide));
   const waiting = checkpoints.some((c) => c.status === "pending");
   // Decided, not delivered to the run yet: said under the segment, with why it waits.
   const delivering = checkpoints.filter((c) => c.delivery && !s.sent_back);
@@ -728,8 +753,10 @@ function SegmentItem({
     s.draft_import ||
     s.artifacts.length > 0 ||
     deciding.length > 0 ||
+    !!screened ||
     delivering.length > 0 ||
     s.status === "running" ||
+    vague > 0 ||
     !!shared;
   const rejected = !!s.draft_import?.error;
   // Each open decision's note, here so Send back to writer can fill it in.
@@ -858,17 +885,17 @@ function SegmentItem({
                 {CHECKPOINT_LABEL[kind]}: off
               </Chip>
             ))}
-          {deciding.length > 0 && (
+          {mine.length > 0 && (
             // The decision panel below and the inspector name the checkpoint; the row shows its state.
             <a
               href="#decide"
               data-testid="checkpoint-waiting"
               className="inline-flex max-w-full rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <Chip kind="warn" title={`Waiting: ${deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
+              <Chip kind="warn" title={`Waiting: ${mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
                 <Icon name="clock" size={16} />
                 Waiting
-                <span className="sr-only">: {deciding.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+                <span className="sr-only">: {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
               </Chip>
             </a>
           )}
@@ -924,6 +951,14 @@ function SegmentItem({
             <AppliedEditsLine key={cp.id} cp={cp} />
           ))}
           {s.feature_set_check && <FeatureSetCheckLine check={s.feature_set_check} />}
+          {waitingCp?.kind === "feature_set" && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
+            // C7: commenters suggest and viewers read on the review screen too.
+            <p className="mt-2" data-testid="review-link">
+              <LinkButton href={reviewHref(waitingCp)!} icon="flag">
+                Review feature set
+              </LinkButton>
+            </p>
+          )}
           {s.draft_import && (
             <DraftImportLine
               imp={s.draft_import}
@@ -945,6 +980,8 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
+          <VagueGoalsLine count={vague} href={`/baseline?tab=proposals&run=${run.id}&interview=vague`} />
+          {screened && <ReviewScreenLine run={run} cp={screened} />}
           {deciding.map((cp, i) =>
             // D10: a PRD or roadmap review with its draft imported is decided in the version;
             // a refused draft and a console answer stay here.
@@ -973,6 +1010,24 @@ function SegmentItem({
         </div>
       )}
     </li>
+  );
+}
+
+/** F4: the Engineering check waiting, its counts, and Review (its own screen). */
+function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
+  const check = briefsCheck(cp)!;
+  const blocking = (cp.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  return (
+    <div id="decide" tabIndex={-1} className="flex flex-wrap items-center gap-2" data-testid="review-screen-line">
+      <span className="font-semibold">
+        {plural(check.features.length, "feature")}
+        {blocking > 0 && ` · ${blocking} blocking`}
+      </span>
+      <span className="text-text2">{cp.can_decide ? "Waiting for you" : "Waits for the engineering lead"}</span>
+      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant={cp.can_decide ? "primary" : "secondary"}>
+        {cp.can_decide ? "Review" : "View"}
+      </LinkButton>
+    </div>
   );
 }
 
@@ -1539,6 +1594,18 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
   );
 }
 
+/** B2: "Review in Baseline · 3 need you", the run's rows in the Baseline (the files stay below). */
+function FromRunLink({ runId }: { runId: string }) {
+  const q = useQuery(`baseline-from-run:${runId}`, () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })));
+  return (
+    <p className="mt-2">
+      <LinkButton href={`/baseline?run=${runId}`} icon="baseline">
+        Review in Baseline{q.data ? ` · ${q.data.summary.need_you} need you` : ""}
+      </LinkButton>
+    </p>
+  );
+}
+
 /** D7: the file an approval with edits changed (the API's review names it; roadmap items' otherwise). */
 const editedFile = (cp: CheckpointOut) => (typeof cp.review?.file === "string" ? cp.review.file : "roadmap_items.yaml");
 
@@ -1590,6 +1657,12 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
   }
   return (
     <div data-testid="sent-review">
+      {cp.kind === "baseline_confirm" && cp.note && (
+        // B2: the structured note the agents got (3.1 (7)).
+        <pre className="mb-1.5 font-sans whitespace-pre-wrap text-text2" data-testid="sent-back-note">
+          {cp.note}
+        </pre>
+      )}
       <p className="text-text2">
         Sent back · {entries} {entries === 1 ? "entry" : "entries"} ·{" "}
         <button type="button" className="font-medium text-accent-ink hover:underline" aria-expanded={text != null} onClick={() => void toggle()}>
@@ -1796,6 +1869,7 @@ function CheckpointRow({
         </Chip>
         {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
+      {cp.kind === "baseline_confirm" && <FromRunLink runId={run.id} />}
       {cp.note && (
         <p className="mt-1.5 text-text2">
           <CodeText text={cp.note} />
@@ -1810,6 +1884,14 @@ function CheckpointRow({
       {!other && agentsOnly && (
         <p className="mt-2 text-sm text-warn" data-testid="needs-agents">
           {agentsOnly}
+        </p>
+      )}
+      {cp.kind === "feature_set" && reviewHref(cp) && cp.status === "pending" && (
+        // C7: the feature set is reviewed row by row on its own screen; the raw files stay below.
+        <p className="mt-2">
+          <LinkButton href={reviewHref(cp)!} variant="solid" icon="flag">
+            Review feature set
+          </LinkButton>
         </p>
       )}
       {orderHref(cp) && (

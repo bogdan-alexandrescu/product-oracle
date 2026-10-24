@@ -88,6 +88,33 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   update_review: "Update review",
 };
 
+/**
+ * F4: a stop's name where a Baseline to PRD run is configured. The engineering stops show
+ * their segment's title ("Engineering check"); the kind's label stays the spec flow's.
+ */
+export function stopLabel(segment: { name: string; title: string; checkpoint?: CheckpointKind | null }): string {
+  if (segment.name in STOP_HELP) return segment.title;
+  return segment.checkpoint ? CHECKPOINT_LABEL[segment.checkpoint] : segment.title;
+}
+
+/** F4: what each engineering stop does, said under its toggle. */
+export const STOP_HELP: Record<string, string> = {
+  eng_review: "The engineering lead checks feasibility and sizes before the priority order.",
+  eng_dates: "After the PRD review, the engineering lead records the dates behind the draft's Now items.",
+};
+
+/** F4: the Engineering check of a Baseline to PRD run, as its checkpoint stores it (briefs_check). */
+export type BriefsCheck = {
+  features: { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] }[];
+  problems: { code: string; message: string; feature?: string | null }[];
+  code_map_used: boolean;
+};
+
+export function briefsCheck(cp: Pick<CheckpointOut, "kind" | "payload">): BriefsCheck | null {
+  const check = cp.kind === "eng_review" ? (cp.payload as { briefs_check?: BriefsCheck } | null)?.briefs_check : null;
+  return check && Array.isArray(check.features) ? check : null;
+}
+
 export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {
   pending: "na",
   running: "acc",
@@ -118,6 +145,15 @@ export const SENT_BACK_STATE = "Revising: sent back by Oracle";
 export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, unknown> | null }): string | null {
   const id = cp.kind === "priority_order" ? cp.payload?.priority_snapshot_id : null;
   return typeof id === "string" ? `/priorities?snapshot=${id}` : null;
+}
+
+/**
+ * A checkpoint kind with its own review screen opens it (/runs/<id>/review/<checkpoint id>):
+ * C7's feature set, and F4's Engineering check once its briefs check is in; other kinds are
+ * decided on the run page.
+ */
+export function reviewHref(cp: { id: string; run_id: string; kind: CheckpointKind; payload?: CheckpointOut["payload"] }): string | null {
+  return cp.kind === "feature_set" || briefsCheck({ kind: cp.kind, payload: cp.payload ?? {} }) ? `/runs/${cp.run_id}/review/${cp.id}` : null;
 }
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
@@ -173,8 +209,11 @@ export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
       <table className="w-full text-[15px]">
         <tbody>
           {estimate.segments.map((s) => (
-            <tr key={s.seq}>
-              <td className="py-0.5 text-text">{s.title}</td>
+            <tr key={s.seq} data-testid={`estimate-row-${s.name}`}>
+              <td className="py-0.5 text-text">
+                {/* E1 part B: Build roadmap reuses the approved version's draft items. */}
+                {s.reused_from_version != null ? `${s.title} · reused from v${s.reused_from_version}` : s.title}
+              </td>
               <td className="tnum py-0.5 text-right font-mono text-sm text-text2">{usd(s.estimate_usd)}</td>
             </tr>
           ))}

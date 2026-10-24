@@ -11,7 +11,7 @@ import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHECKPOINT_LABEL, EstimateSummary, RunsWhere, usd, type EstimateOut, type FlowCatalog } from "./_lib";
+import { EstimateSummary, RunsWhere, STOP_HELP, stopLabel, usd, type EstimateOut, type FlowCatalog } from "./_lib";
 
 type Flow = FlowCatalog["flows"][number];
 type Depth = "quick" | "standard" | "deep";
@@ -259,8 +259,9 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                         <span className="min-w-0 truncate font-semibold">
                           <span className="tnum">{i + 1}</span>. {s.title}
                         </span>
-                        {s.checkpoint && <StopToggle kind={s.checkpoint} on={checkpoints[s.checkpoint] ?? true} onChange={(on) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint!]: on })} />}
+                        {s.checkpoint && <StopToggle label={stopLabel(s)} on={checkpoints[s.checkpoint] ?? true} onChange={(on) => change(setCheckpoints)({ ...checkpoints, [s.checkpoint!]: on })} />}
                       </div>
+                      {STOP_HELP[s.name] && <p className="text-sm text-text2" data-testid="stop-help">{STOP_HELP[s.name]}</p>}
                       <div className="flex flex-wrap gap-1.5">
                         {catalog.data!.roles.map((r) => {
                           const on = segmentRoles(s).includes(r.key);
@@ -330,7 +331,7 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
 }
 
 /** A segment's stop, on or off (a segment without a stop shows none). */
-function StopToggle({ kind, on, onChange }: { kind: keyof typeof CHECKPOINT_LABEL; on: boolean; onChange: (on: boolean) => void }) {
+function StopToggle({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
   return (
     <label className="flex items-center gap-1.5 text-sm text-text2">
       <input
@@ -338,10 +339,10 @@ function StopToggle({ kind, on, onChange }: { kind: keyof typeof CHECKPOINT_LABE
         className="size-4 accent-[var(--accent)]"
         checked={on}
         onChange={(e) => onChange(e.target.checked)}
-        aria-label={`Stop for ${CHECKPOINT_LABEL[kind]}`}
+        aria-label={`Stop for ${label}`}
       />
       <Icon name="flag" size={16} />
-      <span className="max-w-56 truncate">{CHECKPOINT_LABEL[kind]}</span>
+      <span className="max-w-56 truncate">{label}</span>
     </label>
   );
 }

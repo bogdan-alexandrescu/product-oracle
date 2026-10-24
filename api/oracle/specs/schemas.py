@@ -165,6 +165,10 @@ class SpecOut(SpecSummary):
     stale: list[TraceOutput] = []
     run_id: uuid.UUID | None = None
     run_status: str | None = None
+    # #481: the proposed regeneration's run while it has not ended (proposed, waiting or
+    # running). Proposing it settles nothing: the versions stay as stale as they were until
+    # its import supersedes them, and no second regeneration may be proposed meanwhile.
+    regeneration_run_id: uuid.UUID | None = None
 
 
 class SpecRequestCreated(BaseModel):

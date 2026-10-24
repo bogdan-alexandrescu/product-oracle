@@ -171,13 +171,22 @@ async def _lose_standing(ctx, how: str, user_id, token_id=None) -> None:
         await s.commit()
 
 
-ROUTES = ["set_role", "disable", "restore", "revoke_token", "create_invite", "revoke_invite"]
+ROUTES = [
+    "set_role",
+    "disable",
+    "restore",
+    "revoke_token",
+    "create_invite",
+    "revoke_invite",
+    "resend_invite",
+]
 
 
 @pytest.mark.parametrize(
     "route,how",
     [(r, "disabled") for r in ROUTES]
-    + [("set_role", "demoted"), ("create_invite", "demoted"), ("disable", "token_revoked")],
+    + [(r, "demoted") for r in ("set_role", "create_invite", "revoke_invite", "resend_invite")]
+    + [("disable", "token_revoked")],
 )
 async def test_a_caller_who_lost_standing_while_waiting_on_the_gate_is_refused(
     client, monkeypatch, route, how
@@ -196,6 +205,7 @@ async def test_a_caller_who_lost_standing_while_waiting_on_the_gate_is_refused(
     target = await person(ctx.tenant_id, "approver", "target")
     async with tenant_session(ctx.tenant_id) as s:
         other_token, _ = await create_api_token(s, "other", user_id=target.user_id)
+        # Someone else's invite: only an owner revokes or resends it (A5).
         invite = Invite(email="queued@example.com", role="viewer")
         s.add(invite)
         if route == "restore":
@@ -225,8 +235,12 @@ async def test_a_caller_who_lost_standing_while_waiting_on_the_gate_is_refused(
     elif route == "revoke_token":
         resp = await client.delete(f"/v1/api-tokens/{other_token_id}", headers=headers)
     elif route == "create_invite":
-        body = {"email": "new@example.com", "role": "viewer"}
+        # An approver invites viewers and commenters only (A5), so the owner demoted to
+        # approver while waiting is refused an approver invite.
+        body = {"email": "new@example.com", "role": "approver"}
         resp = await client.post("/v1/invites", json=body, headers=headers)
+    elif route == "resend_invite":
+        resp = await client.post(f"/v1/invites/{invite_id}/resend", headers=headers)
     else:
         resp = await client.delete(f"/v1/invites/{invite_id}", headers=headers)
     assert fired, "the route did not take the gate"
@@ -236,7 +250,8 @@ async def test_a_caller_who_lost_standing_while_waiting_on_the_gate_is_refused(
         assert user.role == "approver"
         assert (user.disabled_at is not None) == (route == "restore")
         assert await s.scalar(select(Invite.id).where(Invite.email == "new@example.com")) is None
-        assert (await s.get(Invite, invite_id)).revoked_at is None
+        queued = await s.get(Invite, invite_id)
+        assert (queued.revoked_at, queued.resend_count) == (None, 0)
 
 
 @pytest.fixture

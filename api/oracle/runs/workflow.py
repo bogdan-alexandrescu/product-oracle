@@ -45,6 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
+from oracle import wording
 from oracle.docs.schemas import ImportProblem, citation_contract
 from oracle.runs import flows, rejection
 from oracle.runtokens import SCOPES
@@ -416,9 +417,10 @@ ADVICE: dict[str, str] = {
     "(mcp_server_withheld; its result_summary.mcp_check gives the cause). Check that "
     "ORACLE_PUBLIC_URL/mcp answers over public https and that Oracle's MCP server is "
     "enabled in SwarmCloud, then start the run again.",
-    "CREDENTIAL_MISSING": "SwarmCloud parked a step with CREDENTIAL_MISSING: Oracle's MCP "
-    "server is disabled there. Enable it (PATCH /v1/mcp-servers/oracle, enabled: true); "
-    "the step resumes on its own.",
+    # #481: these two are read by a person; the operator detail is in ADVICE_REFS.
+    "CREDENTIAL_MISSING": "A step is waiting: Oracle's connection to SwarmCloud is switched "
+    "off there, so its agents cannot read Oracle's data. Whoever runs Oracle's SwarmCloud "
+    "setup switches it back on; the step then resumes on its own.",
     "already_answered": "SwarmCloud already held an answer for this checkpoint's wait (409 "
     "already_answered): Oracle's post was not recorded and the workflow went on with the "
     "first answer. Oracle followed it when the workflow ran what the Inbox decision needs "
@@ -434,14 +436,49 @@ ADVICE: dict[str, str] = {
     "expired": "The checkpoint's wait in SwarmCloud expired (W2b: nothing is approved by "
     "default). The checkpoint stays open in the Inbox; deciding it continues the run as a "
     "new workflow.",
-    "person_required": "SwarmCloud lets only a person answer this wait (403 "
-    "person_required): Oracle's principal may not answer yet, so Oracle records service "
-    "answers as off, cancelled the workflow and continued the run as a new workflow from "
-    "the Inbox decision. Later runs keep checkpoints in the Inbox, one workflow per "
-    "segment, until SwarmCloud reports service answers on (GET /v1/capacity) or Oracle's "
-    "API restarts; nothing to do meanwhile.",
+    "person_required": "SwarmCloud lets only a person answer this checkpoint for now, so "
+    "Oracle continued the run as a new workflow from the Inbox decision. Later runs keep "
+    "their checkpoints in the Inbox, one workflow per segment, until SwarmCloud lets "
+    "Oracle answer them; nobody needs to act.",
 }
+
+# #481: what an operator needs beside the two notes a person reads (served as the run's
+# ``note_refs``): the code, and the call that fixes or checks it.
+ADVICE_REFS: dict[str, wording.Refs] = {
+    "CREDENTIAL_MISSING": {
+        "code": "CREDENTIAL_MISSING",
+        "mcp_server": "oracle",
+        "operator_action": "PATCH /v1/mcp-servers/oracle with enabled: true (SwarmCloud)",
+    },
+    "person_required": {
+        "code": "person_required",
+        "status": "403",
+        "service_answers": "off",
+        "operator_check": "GET /v1/capacity (SwarmCloud) until service answers are on, or "
+        "restart Oracle's API",
+    },
+}
+# The two notes as stored on runs before #481, served in the words above.
+_LEGACY_ADVICE = {
+    "SwarmCloud parked a step with CREDENTIAL_MISSING: Oracle's MCP server is disabled "
+    "there. Enable it (PATCH /v1/mcp-servers/oracle, enabled: true); the step resumes on its "
+    "own.": "CREDENTIAL_MISSING",
+    "SwarmCloud lets only a person answer this wait (403 person_required): Oracle's "
+    "principal may not answer yet, so Oracle records service answers as off, cancelled the "
+    "workflow and continued the run as a new workflow from the Inbox decision. Later runs "
+    "keep checkpoints in the Inbox, one workflow per segment, until SwarmCloud reports "
+    "service answers on (GET /v1/capacity) or Oracle's API restarts; nothing to do "
+    "meanwhile.": "person_required",
+}
+_NOTE_CODES = {**_LEGACY_ADVICE, **{ADVICE[code]: code for code in ADVICE_REFS}}
 
 
 def advice(code: str | None, fallback: str) -> str:
     return ADVICE.get(code or "", fallback)
+
+
+def noted(note: str) -> tuple[str, wording.Refs]:
+    """A run's stored note as served, and its refs: one of ADVICE_REFS's (in its current
+    words, when stored before #481) with them; any other note as it is, with none."""
+    code = _NOTE_CODES.get(note)
+    return (ADVICE[code], dict(ADVICE_REFS[code])) if code else (note, {})

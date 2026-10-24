@@ -58,6 +58,7 @@ from oracle.llm.transports import (
     NoClaudeAccount,
     get_llm_settings,
 )
+from oracle.runs.scope_models import PrdScope
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.models import ProductIntake
 
@@ -169,6 +170,7 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
                     LlmJob.intake_id,
                     LlmJob.decision_id,
                     LlmJob.interview_id,
+                    LlmJob.scope_id,
                 )
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
@@ -176,17 +178,20 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
             )
         ).all()
         busy: set[uuid.UUID] = set()
-        for job_id, document_id, intake_id, decision_id, interview_id in candidates:
-            # A document's jobs run one at a time; so do an intake's, a decision's and an
-            # interview's (they have no document).
+        for job_id, document_id, intake_id, decision_id, interview_id, scope_id in candidates:
+            # A document's jobs run one at a time; so do an intake's, a decision's, an
+            # interview's and a scope's (they have no document).
             if document_id is not None:
                 owner, model, column = document_id, Document, LlmJob.document_id
             elif intake_id is not None:
                 owner, model, column = intake_id, ProductIntake, LlmJob.intake_id
             elif decision_id is not None:
                 owner, model, column = decision_id, Decision, LlmJob.decision_id
-            else:
+            elif interview_id is not None:
                 owner, model, column = interview_id, Interview, LlmJob.interview_id
+            else:
+                # C7: a scope's enhancements, under its prd_scopes row's lock.
+                owner, model, column = scope_id, PrdScope, LlmJob.scope_id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.

@@ -37,6 +37,8 @@ export type DiscussionRow = {
   updated_at: string;
   /** G2 (mock only): the intake author's private findings on the subject (G1 §3.4.6). */
   private_findings?: { author: string; count: number; intake_id: string } | null;
+  /** G8: its live link to a Slack thread (./slack.ts), or none. */
+  slack?: Schemas["DiscussionSlackOut"] | null;
 };
 type ParticipantRow = {
   discussion_id: string;
@@ -46,7 +48,7 @@ type ParticipantRow = {
   last_read_at: string | null;
   created_at: string;
 };
-type MessageRow = {
+export type MessageRow = {
   id: string;
   discussion_id: string;
   author_kind: "person" | "oracle" | "system";
@@ -63,12 +65,55 @@ type MessageRow = {
   citations?: Record<string, unknown>[];
   error_reason?: string | null;
   cancel_requested?: boolean;
+  /** Pushback (G2, B6): the reason Oracle pushed back. */
+  pushback?: { reason: string } | null;
+  /** The mock's scripted reply for this message (a goals interview), in the pieces it streams. */
+  script?: string[];
+  script_citations?: Record<string, unknown>[];
+  /** Where it was written: "web" unless stored otherwise (G8: a reply in the Slack thread). */
+  via?: Schemas["DiscussionMessageOut"]["via"];
 };
 
-/** G3 (mock only): a typed change Oracle proposed in a discussion. */
-type ChangeRow = Schemas["DiscussionChangeOut"] & { discussion_id: string };
+/** G3/B6: a change Oracle or a person offered in a discussion (a section_edit, a goal_measure version). */
+export type ChangeRow = {
+  id: string;
+  discussion_id: string;
+  kind: string;
+  label: string;
+  target: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  edited_payload: Record<string, unknown> | null;
+  rationale: string | null;
+  proposed_by_kind: "oracle" | "person";
+  proposed_by: string | null;
+  suggested_by: string | null;
+  status: Schemas["DiscussionChangeOut"]["status"];
+  created_at: string;
+  lock_version: number;
+  result_ref?: { proposal_id: string } | null;
+  pushback?: { reason: string } | null;
+  override_reason?: string | null;
+};
+/** G6: a person's Invited or Mentioned row (the API's discussion_inbox_items). */
+type InboxItemRow = {
+  id: string;
+  user_id: string;
+  discussion_id: string;
+  kind: "invited" | "mentioned";
+  message_id: string | null;
+  by_user_id: string | null;
+  created_at: string;
+  done_at: string | null;
+};
 
-export type DiscussionsDb = { discussions: DiscussionRow[]; participants: ParticipantRow[]; messages: MessageRow[]; changes?: ChangeRow[] };
+export type DiscussionsDb = {
+  discussions: DiscussionRow[];
+  participants: ParticipantRow[];
+  messages: MessageRow[];
+  /** G6 (the "discussions" scenario): Inbox rows and the changes discussions ended in. */
+  inbox?: InboxItemRow[];
+  changes?: ChangeRow[];
+};
 
 /** A subject as the mock resolves it: its key, label, link and document or run. */
 export type SubjectInfo = { key: string; label: string; url: string; document_id?: string | null; run_id?: string | null };
@@ -85,6 +130,10 @@ export type DiscussionsContext = {
   persist?: (change: (db: DiscussionsDb) => void) => Promise<void>;
   /** The saved state now (a streaming reply checks for Stop). */
   current?: () => DiscussionsDb;
+  /** B6: Oracle's scripted reply to a person's message (a goals interview); null: the canned one. */
+  replyScript?: (d: DiscussionRow, asked: MessageRow) => { pieces: string[]; citations: Record<string, unknown>[] } | null;
+  /** G8 POST/DELETE …/slack on a discussion the caller may read (./slack.ts). */
+  slack?: (d: DiscussionRow, req: Request) => Promise<Response | null>;
   /** The gateway's refusal while the Claude account pool is spent, worded; null otherwise. */
   refusal?: () => string | null;
   /** #406: the text of the document version a discussion is on, the section it is on first. */
@@ -211,6 +260,169 @@ export function seedDiscussions(ctx: Omit<DiscussionsContext, "me" | "db">, docu
 }
 
 /**
+ * G6, the "discussions" scenario only: the commenter's open discussion on the Saved carts PRD.
+ * Its first message mentions the viewer (who is invited), the approver replies, then the
+ * commenter mentions the approver (already in it); Oracle proposed one change and the
+ * commenter suggested another, so 2 wait on the approver.
+ */
+export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, db: DiscussionsDb, documentId: string, label: string, url: string) {
+  const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
+  const commenter = by("commenter@example.com");
+  const approver = by("approver@example.com");
+  const viewer = by("viewer@example.com");
+  const id = ctx.uuid();
+  const at = (min: number) => `2026-10-21T08:${String(min).padStart(2, "0")}:00Z`;
+  db.discussions.push({
+    id,
+    subject_kind: "document",
+    subject: { document_id: documentId, version: 2 },
+    subject_key: `document:${documentId}`,
+    subject_label: label,
+    subject_url: url,
+    document_id: documentId,
+    run_id: null,
+    title: "Saved carts: keep carts for guests?",
+    visibility: "open",
+    author_only: false,
+    status: "open",
+    origin: "discuss",
+    started_by: commenter,
+    summary: null,
+    summary_status: "none",
+    summary_shared: true,
+    last_message_at: at(20),
+    lock_version: 1,
+    created_at: at(0),
+    updated_at: at(20),
+  });
+  for (const [user_id, added_via] of [
+    [commenter, "started"],
+    [viewer, "mention"],
+    [approver, "posted"],
+  ] as const)
+    db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
+  const lines: [string, string, string[]][] = [
+    [commenter, "Viewer, guests lose their cart today. Should we keep it?", [viewer]],
+    [approver, "Only with a clear expiry.", []],
+    [commenter, "Approver, can guests keep a cart for 30 days?", [approver]],
+  ];
+  const ids = lines.map(([author, body, mentions], i) => {
+    const mid = ctx.uuid();
+    db.messages.push({
+      id: mid,
+      discussion_id: id,
+      author_kind: "person",
+      author_id: author,
+      body,
+      mentions,
+      mentions_oracle: false,
+      reply_to: null,
+      created_at: at(10 * i),
+      edited_at: null,
+      deleted_at: null,
+    });
+    return mid;
+  });
+  const item = { discussion_id: id, by_user_id: commenter, done_at: null };
+  db.inbox = [
+    { ...item, id: ctx.uuid(), user_id: viewer, kind: "invited", message_id: null, created_at: at(0) },
+    { ...item, id: ctx.uuid(), user_id: approver, kind: "mentioned", message_id: ids[2], created_at: at(20) },
+  ];
+  const change = {
+    discussion_id: id,
+    kind: "section_edit" as const,
+    target: { section_key: "scope" },
+    edited_payload: null,
+    rationale: null,
+    proposed_by: null,
+    created_at: at(21),
+    lock_version: 1,
+  };
+  db.changes = [
+    {
+      ...change,
+      id: ctx.uuid(),
+      label: "Scope: keep a guest's cart for 30 days",
+      payload: { section_key: "scope", instruction: "Keep a guest's cart for 30 days." },
+      proposed_by_kind: "oracle",
+      suggested_by: null,
+      status: "proposed",
+    },
+    {
+      ...change,
+      id: ctx.uuid(),
+      label: "Scope: show the expiry on the cart",
+      payload: { section_key: "scope", instruction: "Show the expiry on the cart." },
+      proposed_by_kind: "oracle",
+      suggested_by: commenter,
+      status: "suggested",
+    },
+  ];
+}
+
+/**
+ * G6: my discussion rows for GET /v1/inbox, as the API derives them (oracle.discussions.inbox):
+ * Invited and Mentioned rows of discussions I can read, and for approvers the changes waiting
+ * on them (participants: proposed and suggested; others, of open discussions: suggested).
+ */
+export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { id: string; role: Role }, seen: string | null): Schemas["InboxDiscussionItem"][] {
+  const name = (id: string | null) => {
+    const m = id ? members.find((x) => x.id === id) : undefined;
+    return m ? displayName(m.email) : null;
+  };
+  const active = (d: DiscussionRow) => db.participants.filter((x) => x.discussion_id === d.id && !x.left_at);
+  const fresh = (at: string) => (seen === null || at > seen ? "new" : "open") as "new" | "open";
+  const link = (d: DiscussionRow) => {
+    const [path, ...anchor] = d.subject_url.split("#");
+    return `${path}${path.includes("?") ? "&" : "?"}discussion=${d.id}${anchor.length ? `#${anchor.join("#")}` : ""}`;
+  };
+  const base = (d: DiscussionRow) => {
+    const names = active(d).map((p) => name(p.user_id)).filter((n): n is string => !!n);
+    return {
+      discussion_id: d.id,
+      title: d.title,
+      visibility: d.visibility,
+      subject_label: d.subject_label,
+      subject_url: link(d),
+      people: names.slice(0, 3),
+      people_more: Math.max(names.length - 3, 0),
+      can_write: atLeast(me.role, "commenter"),
+    };
+  };
+  const readable = (d: DiscussionRow) => d.visibility === "open" || active(d).some((p) => p.user_id === me.id);
+  const out: Schemas["InboxDiscussionItem"][] = [];
+  for (const r of db.inbox ?? []) {
+    const d = db.discussions.find((x) => x.id === r.discussion_id);
+    if (r.user_id !== me.id || !d || !readable(d)) continue;
+    const msg = r.message_id ? db.messages.find((x) => x.id === r.message_id) : undefined;
+    const by = name(r.by_user_id);
+    out.push({
+      ...base(d),
+      id: `${r.kind === "invited" ? "inv" : "men"}_${r.id}`,
+      kind: r.kind,
+      by: r.by_user_id && by ? { user_id: r.by_user_id, name: by } : null,
+      excerpt: msg ? msg.body.slice(0, 140) : null,
+      count: null,
+      at: r.created_at,
+      state: r.done_at ? "done" : fresh(r.created_at),
+    });
+  }
+  if (atLeast(me.role, "approver")) {
+    for (const d of db.discussions) {
+      if (!readable(d)) continue;
+      const inIt = active(d).some((p) => p.user_id === me.id);
+      const waiting = (db.changes ?? []).filter(
+        (c) => c.discussion_id === d.id && (c.status === "suggested" || (inIt && c.status === "proposed")),
+      );
+      if (!waiting.length) continue;
+      const at = waiting.map((c) => c.created_at).sort().at(-1)!;
+      out.push({ ...base(d), id: `chg_${d.id}`, kind: "changes_proposed", by: null, excerpt: null, count: waiting.length, at, state: fresh(at) });
+    }
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/**
  * The "discussion-replies" scenario (G2): the "discussions" seed, plus an open discussion
  * whose Oracle reply failed for want of a Claude account, and one on the Problem whose
  * intake has 2 of the commenter's private findings.
@@ -312,6 +524,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         ...(d.private_findings?.author === me.id ? { private_findings: { count: d.private_findings.count, intake_id: d.private_findings.intake_id } } : {}),
       },
       exposure: d.visibility === "private" && starter(d) ? exposure(d) : null,
+      slack: d.slack ?? null,
     };
   };
   const messageOut = (x: MessageRow): Schemas["DiscussionMessageOut"] => ({
@@ -319,7 +532,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     discussion_id: x.discussion_id,
     author_kind: x.author_kind,
     author: x.author_kind === "person" && x.author_id ? ref(x.author_id) : null,
-    via: "web",
+    via: x.via ?? "web",
     body: x.deleted_at ? "" : x.body,
     mentions: x.deleted_at ? [] : x.mentions.map(ref),
     mentions_oracle: x.mentions_oracle,
@@ -331,7 +544,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     deleted: !!x.deleted_at,
     error_reason: x.error_reason ?? null,
     error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? (ctx.refusal?.() ?? NO_ACCOUNT_MESSAGE) : "Oracle can't reply right now.") : null,
-    pushback: null,
+    pushback: x.pushback ?? null,
     usage: null,
   });
   const add = (d: DiscussionRow, user_id: string, added_via: ParticipantRow["added_via"]) => {
@@ -392,8 +605,19 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (!res.ok) return res;
     const message = (await res.json()) as Schemas["DiscussionMessageOut"];
     const row = db.messages.find((x) => x.id === message.id)!;
+    const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? null) : null;
     const reply = wantsReply(d, row)
-      ? push(d, { author_kind: "oracle", author_id: null, body: "", mentions: [], mentions_oracle: false, reply_to: row.id, status: "pending", citations: [] })
+      ? push(d, {
+          author_kind: "oracle",
+          author_id: null,
+          body: "",
+          mentions: [],
+          mentions_oracle: false,
+          reply_to: row.id,
+          status: "pending",
+          citations: [],
+          ...(script ? { script: script.pieces, script_citations: script.citations } : {}),
+        })
       : null;
     if (reply) proposeSectionEdit(d, row);
     return json(201, { message, reply: reply ? messageOut(reply) : null });
@@ -454,8 +678,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         const d = db.discussions.find((y) => y.id === x.discussion_id);
         const asked = [...db.messages].reverse().find((y) => y.discussion_id === x.discussion_id && y.author_kind === "person");
         const read = d && asked ? documentReply(asked.body, ctx.documentText?.(d) ?? []) : null;
-        const pieces = read?.pieces ?? CANNED_REPLY;
-        const citations = read?.citations ?? CANNED_CITATIONS;
+        // B6: a goals interview's scripted reply comes first.
+        const pieces = x.script ?? read?.pieces ?? CANNED_REPLY;
+        const citations = x.script ? (x.script_citations ?? []) : (read?.citations ?? CANNED_CITATIONS);
         let text = "";
         let cited = 0;
         for (const [i, piece] of pieces.entries()) {
@@ -596,6 +821,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       for (const x of active(d)) if (x.added_via === "followed" && !writers.has(x.user_id)) x.left_at = ctx.now();
       d.visibility = "private";
       d.summary_shared = false;
+      // G8: a private discussion never mirrors; the thread gets its closing line, without the link.
+      d.slack = null;
     }
     if (manages && !starter(d)) return refuse(403, "Only the starter can change this");
     if (patch.title) d.title = patch.title.trim().slice(0, 200) || d.title;
@@ -691,12 +918,25 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const row = db.messages.find((x) => x.id === message_id);
     const mine = active(d).find((x) => x.user_id === me.id);
     if (row && mine && (!mine.last_read_at || mine.last_read_at < row.created_at)) mine.last_read_at = row.created_at;
+    // G6: the invitation and the mentions read past are done.
+    if (row)
+      for (const item of db.inbox ?? []) {
+        const at = item.message_id ? db.messages.find((x) => x.id === item.message_id)?.created_at : null;
+        if (item.user_id === me.id && item.discussion_id === d.id && !item.done_at && (item.kind === "invited" || (at && at <= row.created_at)))
+          item.done_at = ctx.now();
+      }
     return json(204, null);
   }
   if (p[3] === "changes" && m === "GET")
     return json(
       200,
-      (db.changes ?? []).filter((c) => c.discussion_id === d.id && (!q.get("status") || c.status === q.get("status"))).map((c) => ({ ...c, discussion_id: undefined })),
+      (db.changes ?? [])
+        .filter((c) => c.discussion_id === d.id && (!q.get("status") || c.status === q.get("status")))
+        .map((c) => {
+          const rest: Partial<ChangeRow> = { ...c };
+          delete rest.discussion_id;
+          return rest;
+        }),
     );
   // G7 Share as discussion: a new open discussion on the chat's subject from its edited summary.
   if (p[3] === "share" && m === "POST") {
@@ -724,6 +964,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     push(shared, { author_kind: "person", author_id: me.id, body: input.first_message.trim(), mentions: [], mentions_oracle: false, reply_to: null });
     return json(201, out(shared));
   }
+  if (p[3] === "slack" && !p[4] && ctx.slack) return ctx.slack(d, req);
   return null;
 }
 

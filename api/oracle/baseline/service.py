@@ -190,6 +190,7 @@ def _revision(
             after=after,
             actor=writer.actor,
             reason=writer.reason,
+            run_id=writer.run_id,
         )
     )
 
@@ -668,6 +669,11 @@ async def decide_proposal(
         proposal.id,
         {k: v for k, v in (("note", note), ("skipped_fields", skipped)) if v} or None,
     )
+    if accept:
+        # B6: a goals interview's proposal that leaves its goal measurable closes it.
+        from oracle.baseline import goal_interview
+
+        await goal_interview.on_proposal_accepted(db, proposal, principal)
     await db.flush()
     return proposal
 
@@ -1327,3 +1333,80 @@ async def delete_edge(db: AsyncSession, writer: Writer, edge: Edge) -> WriteResu
     if type_ == "supports":
         await scoring.rescore_around(db, [src_id])
     return WriteResult()
+
+
+# --- merge (B2) ----------------------------------------------------------------------------
+
+
+async def merge_entity(
+    db: AsyncSession, principal: Principal, source: Entity, into: Entity, reason: str | None
+) -> Entity:
+    """Merge a duplicate a run created into ``into`` (B2 Merge into…): its evidence and
+    edges move to the target (an edge the target already has, or one that would link the
+    target to itself, is dropped), its open proposals are rejected "Merged into <title>",
+    and it is deleted. A person's write: revisions on both and an audit row. Refused (409,
+    nothing changed) unless both have the same type, a run created the source, nobody
+    locked it and no PRD section links it."""
+    from oracle.baseline.from_run import LINKED, LOCKED, NOT_SAME_TYPE, NOT_THIS_RUN
+
+    if source.id == into.id or source.type != into.type:
+        raise ConflictError(NOT_SAME_TYPE)
+    if source.run_id is None:
+        raise ConflictError(NOT_THIS_RUN)
+    if source.locked:
+        raise ConflictError(LOCKED)
+    if await db.scalar(
+        select(DocumentSectionLink.id).where(DocumentSectionLink.entity_id == source.id).limit(1)
+    ):
+        raise ConflictError(LINKED)
+    writer = Writer(principal, "user", reason=reason or f"merged {source.type}:{source.key}")
+    moved = list(await db.scalars(select(Evidence).where(Evidence.entity_id == source.id)))
+    for ev in moved:
+        ev.entity_id = into.id
+    edges = list(
+        await db.scalars(
+            select(Edge).where(or_(Edge.src_id == source.id, Edge.dst_id == source.id))
+        )
+    )
+    dropped = 0
+    for edge in edges:
+        src = into.id if edge.src_id == source.id else edge.src_id
+        dst = into.id if edge.dst_id == source.id else edge.dst_id
+        before = edge_snapshot(edge)
+        if src == dst or await find_edge(db, src, dst, edge.type) is not None:
+            await db.delete(edge)
+            dropped += 1
+            continue
+        edge.src_id, edge.dst_id = src, dst
+        await db.flush()
+        _revision(db, writer, before, edge_snapshot(edge), edge=edge)
+    await db.flush()
+    note = f"Merged into {into.title}"
+    for p in await db.scalars(
+        select(Proposal).where(Proposal.entity_id == source.id, Proposal.status == "open")
+    ):
+        p.status = "rejected"
+        p.decided_by = principal.id
+        p.decided_at = _now()
+        await _detach(db, p)
+        p.payload = {**p.payload, "note": note}
+        await audit.record(
+            db, principal, "baseline.proposal.rejected", "proposal", p.id, {"note": note}
+        )
+    snapshot = entity_snapshot(into)
+    _revision(
+        db, writer, snapshot, {**snapshot, "merged_from": f"{source.type}:{source.key}"},
+        entity=into,
+    )  # fmt: skip
+    _revision(db, writer, entity_snapshot(source), None, entity=source)
+    await audit.record(
+        db, principal, "baseline.entity.merged", "entity", into.id,
+        {"source": entity_snapshot(source), "source_id": str(source.id), "reason": reason,
+         "evidence_moved": len(moved), "edges_moved": len(edges) - dropped,
+         "edges_dropped": dropped},
+    )  # fmt: skip
+    await db.flush()
+    await delete_entity(db, writer, source)
+    await scoring.rescore_around(db, [into.id], include_supporters=True)
+    await db.flush()
+    return into

@@ -213,6 +213,7 @@ async def test_iap_refuses_a_disabled_email_and_never_provisions_it_again(client
     iap._keys.clear()
     try:
         ctx = await setup(client)
+        await test_iap._join_at_once(ctx.tenant_id)  # A5: an uninvited sign-in joins at once
         email = "iap-pm@example.com"
         signed = {HEADER: assertion(email)}
         assert (await client.get("/v1/me", headers=signed)).status_code == 200

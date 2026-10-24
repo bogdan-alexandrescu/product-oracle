@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import {
   Chip,
@@ -23,6 +24,7 @@ import {
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { DOC_STATUS_LABEL, formatDateTime } from "@/lib/format";
+import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
@@ -127,6 +129,8 @@ export default function RoadmapDocumentsPage() {
   const q = useQuery("documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
+  useArtifactsChanged(q.reload);
+  useArtifactsChanged(prds.reload);
   const { can, capsReady } = useMe();
   const canBuild = can("create_run");
   const [selected, setSelected] = useState<string | null>(null);
@@ -227,7 +231,9 @@ export default function RoadmapDocumentsPage() {
           <span className="flex justify-end">
             <BuildRoadmapButton prd={r.d} size="sm" />
           </span>
-        ) : null,
+        ) : (
+          <ArtifactMenu doc={{ ...r.d, kind: "roadmap" }} />
+        ),
     },
   ];
 

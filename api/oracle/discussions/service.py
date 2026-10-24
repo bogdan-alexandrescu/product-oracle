@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
-from oracle.discussions import access, kinds, replies
+from oracle.discussions import access, inbox, kinds, replies
 from oracle.discussions.models import (
     MAX_BODY,
     MAX_SUMMARY,
@@ -621,7 +621,7 @@ async def _summary_fields(
         "origin": d.origin,
         "started_by": DiscussionStarter(
             user_id=d.started_by,
-            name=display_name(starter.email) if starter else "Someone",
+            name=display_name(starter.email, starter.name) if starter else "Someone",
             role=starter.role if starter else "viewer",  # type: ignore[arg-type]
         ),
         "started_on_version": _started_on(d),
@@ -658,7 +658,7 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
         participants=[
             DiscussionParticipantOut(
                 user_id=p.user_id,
-                name=display_name(users[p.user_id].email),
+                name=display_name(users[p.user_id].email, users[p.user_id].name),
                 role=users[p.user_id].role,  # type: ignore[arg-type]
                 can_write=_writes(users[p.user_id]),
                 added_via=p.added_via,  # type: ignore[arg-type]
@@ -671,6 +671,9 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
         messages, people = await exposure(db, d)
         out.exposure = DiscussionExposure(messages=messages, people=people)
     out.me.private_findings = await private_findings(db, principal, d)
+    from oracle.slack import bridge  # G8; it builds on this module
+
+    out.slack = await bridge.slack_out(db, await bridge.live_link(db, d.id))
     return out
 
 
@@ -783,7 +786,9 @@ def message_out(
 ) -> DiscussionMessageOut:
     def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
-        return DiscussionPerson(user_id=uid, name=display_name(user.email) if user else "Someone")
+        return DiscussionPerson(
+            user_id=uid, name=display_name(user.email, user.name) if user else "Someone"
+        )
 
     deleted = m.deleted_at is not None
     return DiscussionMessageOut(
@@ -855,24 +860,28 @@ async def list_changes(
     if status:
         stmt = stmt.where(DiscussionChange.status == status)
     rows = await db.scalars(stmt.order_by(DiscussionChange.created_at, DiscussionChange.id))
-    return [
-        DiscussionChangeOut(
-            id=c.id,
-            kind=c.kind,
-            label=kinds.label(c.kind, c.edited_payload or c.payload),
-            target=c.target,
-            payload=c.payload,
-            edited_payload=c.edited_payload,
-            rationale=c.rationale,
-            proposed_by_kind=c.proposed_by_kind,  # type: ignore[arg-type]
-            proposed_by=c.proposed_by,
-            suggested_by=c.suggested_by,
-            status=c.status,  # type: ignore[arg-type]
-            created_at=c.created_at,
-            lock_version=c.lock_version,
-        )
-        for c in rows
-    ]
+    return [change_out(c) for c in rows]
+
+
+def change_out(c: DiscussionChange) -> DiscussionChangeOut:
+    return DiscussionChangeOut(
+        id=c.id,
+        kind=c.kind,
+        label=kinds.label(c.kind, c.edited_payload or c.payload, c.target),
+        target=c.target,
+        payload=c.payload,
+        edited_payload=c.edited_payload,
+        rationale=c.rationale,
+        proposed_by_kind=c.proposed_by_kind,  # type: ignore[arg-type]
+        proposed_by=c.proposed_by,
+        suggested_by=c.suggested_by,
+        status=c.status,  # type: ignore[arg-type]
+        created_at=c.created_at,
+        lock_version=c.lock_version,
+        result_ref=c.result_ref,
+        pushback=c.pushback,
+        override_reason=c.override_reason,
+    )
 
 
 # --- writing ------------------------------------------------------------------------------
@@ -941,11 +950,15 @@ async def _post(
     seat: access.Seat,
     body: DiscussionMessageIn,
     via: str,
+    invited: frozenset[uuid.UUID] = frozenset(),
 ) -> DiscussionMessage:
+    """``invited``: people this request already invited (a start's picks): a mention of
+    them is not a second Inbox row."""
     me = _person(principal)
     text = _check_body(body.body)
     mentions = list(dict.fromkeys(body.mentions))
-    await _bring_in(db, principal, d, parts, seat, mentions, "mention")
+    already = set(_active(parts)) - invited
+    added = await _bring_in(db, principal, d, parts, seat, mentions, "mention")
     if body.reply_to is not None:
         parent = await db.get(DiscussionMessage, body.reply_to)
         if parent is None or parent.discussion_id != d.id:
@@ -965,6 +978,9 @@ async def _post(
     )
     db.add(message)
     await db.flush()
+    # G6: who it adds is invited; who was in it already is mentioned.
+    await inbox.invited(db, d, added, me)
+    await inbox.mentioned(db, message, [u for u in mentions if u in already])
     await _touch_thread(db, d, message.created_at)
     await _record(
         db, principal, "message_post", d,
@@ -1028,10 +1044,14 @@ async def start(
     )  # fmt: skip
     for u in picked:
         await _record(db, principal, "participant_add", d, user_id=str(u), via=via)
+    await db.flush()
+    await inbox.invited(db, d, picked, me)
     first = None
     if body.message is not None:
         seat = await _seat(db, principal, d, parts)
-        first = await _post(db, principal, d, parts, seat, body.message, _via(principal))
+        first = await _post(
+            db, principal, d, parts, seat, body.message, _via(principal), frozenset(picked)
+        )
     await db.flush()
     return d, first
 
@@ -1221,7 +1241,7 @@ async def _make_open(
     d.visibility = "open"
     users = await users_by_id(db, {principal.user_id}) if principal.user_id else {}
     starter = users.get(principal.user_id)  # type: ignore[arg-type]
-    name = display_name(starter.email) if starter else "The starter"
+    name = display_name(starter.email, starter.name) if starter else "The starter"
     today = company_time.day_in_words(datetime.now(UTC), await company_time.company_time_zone(db))
     await _system_line(db, d, f"{name} made this discussion open on {today}")
     await _record(
@@ -1253,10 +1273,15 @@ async def _make_private(
     for user_id, p in _active(parts).items():
         if p.added_via == "followed" and user_id not in writers:
             p.left_at, p.removed_by = now, principal.user_id
+            await inbox.removed(db, d, user_id)
             await _record(db, principal, "participant_remove", d, user_id=str(user_id))
     messages, people = await exposure(db, d)
     d.visibility = "private"
     d.summary_shared = False
+    from oracle.slack import bridge  # G8; it builds on this module
+
+    # A mirrored discussion stops mirroring: the closing line, without the link.
+    await bridge.made_private(db, principal, d)
     await _record(
         db, principal, "visibility", d, **{"from": "open", "to": "private"},
         messages=messages, people=people,
@@ -1278,7 +1303,10 @@ async def add_participants(
             await _record(db, principal, "participant_add", d, user_id=str(me), via="followed")
     else:
         others = [u for u in user_ids if u != me]
-        await _bring_in(db, principal, d, parts, seat, others, "added")
+        added = await _bring_in(db, principal, d, parts, seat, others, "added")
+        # G6: the starter's add to a private discussion is an invitation.
+        if d.visibility == "private":
+            await inbox.invited(db, d, added, me)
     await flush_or_conflict(db)
     return (await discussion_out(db, principal, d)).participants
 
@@ -1302,6 +1330,8 @@ async def remove_participant(
     if row is None:
         return
     row.left_at, row.removed_by = datetime.now(UTC), me
+    # G6: a private discussion's title never stays in the Inbox of someone out of it.
+    await inbox.removed(db, d, user_id)
     await _record(db, principal, "participant_remove", d, user_id=str(user_id))
     await flush_or_conflict(db)
 
@@ -1317,6 +1347,9 @@ async def mark_read(
     if row is not None and (row.last_read_at is None or row.last_read_at < message.created_at):
         row.last_read_at = message.created_at
         await db.flush()
+    # G6: the invitation and the mentions read past are done.
+    if principal.user_id is not None:
+        await inbox.read_to(db, d, principal.user_id, message)
 
 
 async def hand_over(db: AsyncSession, principal: "Principal", user_id: uuid.UUID) -> None:

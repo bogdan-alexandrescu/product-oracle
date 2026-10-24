@@ -1,9 +1,10 @@
 import uuid
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from oracle.baseline.schemas import EntityOut, ProposalRun
 from oracle.docs.schemas import DocumentKind, ImportProblem, VersionSource
 from oracle.jobs.schemas import LlmJobsTick, SuggestionStatus
 from oracle.priorities.schemas import PriorityCheck
@@ -72,6 +73,10 @@ class KnobsIn(BaseModel):
     # goal trace covers them (422 for a goal that is not confirmed, or another flow).
     # Omitted on create: none (a run from a brief: the brief's goals); on PATCH: unchanged.
     goals: list[str] | None = Field(default=None, max_length=10)
+    # Build roadmap only (E1 part B, "Reuse items"): false derives the roadmap items again
+    # instead of reusing the approved version's draft items ("Derive the items again").
+    # Omitted on create: true; on PATCH: unchanged.
+    reuse_draft_items: bool | None = None
 
 
 class ReusedBaseline(BaseModel):
@@ -98,6 +103,9 @@ class KnobsOut(BaseModel):
     reuse_baseline: ReusedBaseline | None = None
     # The goals the run serves, in the order named (#260).
     goals: list[TargetGoal] = []
+    # Build roadmap (E1 part B): whether its items step reuses the source version's draft
+    # items when they are ready; null on other flows.
+    reuse_draft_items: bool | None = None
 
 
 class StrategyBriefIn(BaseModel):
@@ -171,6 +179,9 @@ class FlowSegmentOut(BaseModel):
     # None: the segment opens no stop (the code_map flow's index).
     checkpoint: CheckpointKind | None
     approver_role: Role
+    # F4: who decides the stop: by role, or the engineering lead (owners too; approvers
+    # while no lead is named), so the screens can say "Waits for the engineering lead".
+    decider: Literal["role", "engineering_lead"] = "role"
 
 
 class FlowStart(BaseModel):
@@ -218,6 +229,10 @@ class SegmentEstimate(BaseModel):
     # C4: the baseline segment of a run that uses the current baseline: $0.00, with the
     # note "Current baseline, approved Oct 12".
     reused: bool = False
+    # E1 part B: the roadmap_items segment of a Build roadmap run reusing the draft items
+    # of this PRD version: $0.00, with the note "Reused: the roadmap items of v3, derived
+    # 20 Oct".
+    reused_from_version: int | None = None
     note: str | None = None
 
 
@@ -317,6 +332,16 @@ class ItemReason(BaseModel):
     text: str
     data: dict[str, Any] = {}
     fixes: list[ReasonFix] = []
+
+
+class RowReason(ItemReason):
+    """B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's
+    reasons read as they are stored."""
+
+    # Whether an approver may waive it (a blocking reason), and a detail line (the chip's
+    # tooltip, "Missing: target, owner").
+    waivable: bool | None = None
+    detail: str | None = None
 
 
 class ReasonBase(BaseModel):
@@ -506,6 +531,170 @@ class PrdScopeOut(BaseModel):
     lock_version: int
 
 
+# --------------------------------------------------------------------------- C7 Scope review
+
+ScopeLeaveOut = Literal["no_goal", "not_now", "out_of_scope", "duplicate"]
+
+
+class ScopeReason(BaseModel):
+    """Why a feature needs a person (C7): a blocking problem of the scope's check, or a
+    flag to confirm. ``answered``: a staged D8 waiver (blocking) or accept (to confirm)
+    answers it."""
+
+    code: str
+    severity: Literal["blocking", "to_confirm"]
+    label: str
+    requirement: str | None = None
+    waivable: bool = False
+    answered: bool = False
+
+
+class ScopeHistory(BaseModel):
+    """The agent's value of a row and who changed it last."""
+
+    original: dict[str, Any] = {}
+    decided_by: uuid.UUID | None = None
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+
+
+class ScopeReviewRequirement(ScopeRequirementOut):
+    parent_id: uuid.UUID
+    position: int
+    lock_version: int
+    # A person changed it since the agents wrote it (or added it).
+    edited: bool = False
+    added: bool = False
+    history: ScopeHistory = ScopeHistory()
+
+
+class ScopeReviewFeature(ScopeFeatureOut):
+    text: str | None = None
+    position: int
+    lock_version: int
+    evidence_ids: list[uuid.UUID] = []
+    edited: bool = False
+    reasons: list[ScopeReason] = []
+    # Open reasons left (not answered): the row needs a person.
+    needs_you: bool = False
+    history: ScopeHistory = ScopeHistory()
+    requirements: list[ScopeReviewRequirement] = []  # type: ignore[assignment]
+
+
+class ScopeSummary(BaseModel):
+    """The scope's tally (C7): features, those that need a person, open blocking and
+    to-confirm reasons, those handled, rows a person changed and suggestions waiting."""
+
+    features: int = 0
+    needs_you: int = 0
+    blocking: int = 0
+    to_confirm: int = 0
+    handled: int = 0
+    edits: int = 0
+    suggestions_open: int = 0
+
+
+class ScopeGoalChoice(BaseModel):
+    goal_id: uuid.UUID
+    key: str
+    title: str
+
+
+class PrdScopeReview(PrdScopeOut):
+    """A PRD scope as its review screen reads it (C7): each feature's reasons and
+    history, the tally, the previous attempt's decisions (key -> decision) and kept
+    requirements (key -> requirement keys) for the Changed filter, and the confirmed goals
+    a person may pick. Suggestions, waivers and accepts come from the D8 review read."""
+
+    checkpoint_id: uuid.UUID | None = None
+    title: str | None = None
+    features: list[ScopeReviewFeature]  # type: ignore[assignment]
+    summary: ScopeSummary
+    previous: dict[str, str] | None = None
+    previous_requirements: dict[str, list[str]] | None = None
+    goals_available: list[ScopeGoalChoice] = []
+    can_edit: bool = False
+
+
+class ScopeGoalIn(BaseModel):
+    goal_id: uuid.UUID
+    contribution: int = Field(default=1, ge=0, le=3)
+
+
+class ScopeItemPatch(BaseModel):
+    """One person's change to one scope row (C7); every field optional. ``revert`` puts
+    the row back to the agent's values. ``decision_reason`` of a left-out feature:
+    no_goal | not_now | out_of_scope | duplicate | other:<text>."""
+
+    lock_version: int
+    decision: Literal["include", "exclude", "defer", "keep", "cut"] | None = None
+    decision_reason: str | None = Field(default=None, max_length=500)
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    acceptance: list[Annotated[str, Field(min_length=1, max_length=500)]] | None = Field(
+        default=None, max_length=20
+    )
+    goals: list[ScopeGoalIn] | None = Field(default=None, max_length=20)
+    depends_on: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None, max_length=50
+    )
+    blocker_keys: list[Annotated[str, Field(min_length=1, max_length=200)]] | None = Field(
+        default=None, max_length=50
+    )
+    revert: bool = False
+
+
+class ScopeRequirementIn(BaseModel):
+    """A requirement a person adds to a feature (C7); its goals default to the
+    feature's."""
+
+    parent_id: uuid.UUID
+    text: str = Field(min_length=1, max_length=1000)
+    acceptance: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
+        default=[], max_length=20
+    )
+    goals: list[ScopeGoalIn] | None = Field(default=None, max_length=20)
+
+
+class ScopeEnhanceIn(BaseModel):
+    instruction: str | None = Field(default=None, max_length=1000)
+
+
+class ScopeEnhanceAccept(BaseModel):
+    """The enhanced text and acceptance as the approver accepts them (edited, or the
+    job's own when absent)."""
+
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    acceptance: list[Annotated[str, Field(min_length=1, max_length=500)]] | None = Field(
+        default=None, max_length=20
+    )
+
+
+class ScopeItemOut(BaseModel):
+    """One scope row after a write (C7), with the scope's new tally and the checkpoint's
+    draft revision (D8) to decide with."""
+
+    id: uuid.UUID
+    kind: Literal["feature", "requirement"]
+    key: str
+    parent_id: uuid.UUID | None = None
+    title: str
+    text: str | None = None
+    acceptance: list[str] = []
+    decision: Literal["include", "exclude", "defer", "keep", "cut"]
+    decision_reason: str | None = None
+    origin: Literal["agent", "person"]
+    goals: list[ScopeGoal] = []
+    depends_on: list[str] = []
+    blocker_keys: list[str] = []
+    lock_version: int
+    edited: bool = False
+    added: bool = False
+    original: dict[str, Any] = {}
+    summary: ScopeSummary
+    revision: int
+    scope_lock_version: int
+
+
 class SegmentOut(BaseModel):
     id: uuid.UUID
     seq: int
@@ -612,6 +801,8 @@ class GateLeft(BaseModel):
     code: str
     label: str
     waivable: bool
+    # F4's blocking_question: the question left unanswered.
+    question_id: str | None = None
 
 
 class Gate(BaseModel):
@@ -650,6 +841,9 @@ class CheckpointOut(BaseModel):
     created_at: datetime
     # Whether the caller's role may decide it (pending checkpoints only).
     can_decide: bool = False
+    # F4: an engineering stop that waits for the engineering leads and owners (a lead is
+    # named); False: it goes by its approver role, as every other stop.
+    lead_stop: bool = False
     # Why approving it is refused now (owner, 2026-10-20): the draft its segment left was
     # not imported (Request changes, or Retry import on the segment, first), or the feature
     # set has blocking problems (C6: Request changes).
@@ -667,6 +861,9 @@ class CheckpointOut(BaseModel):
     # D10: a PRD or roadmap review whose draft was imported is decided in its version:
     # "/documents/{slug}/v/{n}?run_review={id}", the same place for every client.
     review_link: str | None = None
+    # B6: on an approved baseline_confirm, the confirmed and proposed goals that are not
+    # measurable ("2 goals are not measurable · Interview"); None on every other.
+    vague_goals: int | None = None
 
 
 class RunDecision(BaseModel):
@@ -782,6 +979,11 @@ class CancelAgain(BaseModel):
     workflow_id: str = Field(min_length=1, max_length=200)
 
 
+class RunNoteRefs(BaseModel):
+    note: str
+    refs: dict[str, str | list[str]]
+
+
 class RunOut(RunSummary):
     knobs: KnobsOut
     snapshot_id: uuid.UUID | None = None
@@ -793,6 +995,9 @@ class RunOut(RunSummary):
     overrun_ceiling_usd: float | None = None
     runtime: str
     notes: list[str]
+    # #481: the operator detail of the notes a person reads (SwarmCloud's code, the call
+    # that fixes it), one entry per such note; the note's text carries none of it.
+    note_refs: list[RunNoteRefs] = []
     segments: list[SegmentOut]
     checkpoints: list[CheckpointOut]
     # W5: while a console answer that did not count waits for an approver, the run's
@@ -1012,6 +1217,20 @@ class InboxRevokeFailure(BaseModel):
     retry_until: datetime
 
 
+class InboxAccessRequest(BaseModel):
+    """Someone from the company's email domains who signed in with Google without an
+    invite and waits for an owner, or an approver, to let them in (A5)."""
+
+    id: uuid.UUID
+    email: str
+    note: str | None = None
+    requested_at: datetime
+    last_seen_at: datetime
+    # The role the approve control starts on, and the roles the caller may approve as.
+    default_role: Role
+    roles: list[Role]
+
+
 class InboxAccessFailure(BaseModel):
     """A change to someone's Google IAP access still failing after 24 hours of retries
     (#245): retried once a day until it is done or no longer needed; Retry runs it now."""
@@ -1107,6 +1326,39 @@ from oracle.rituals.schemas import InboxRitual  # noqa: E402
 from oracle.roadmap.schemas import InboxTrack  # noqa: E402
 
 
+class InboxDiscussionPerson(BaseModel):
+    user_id: uuid.UUID
+    name: str
+
+
+class InboxDiscussionItem(BaseModel):
+    """G6: a discussion row. ``invited`` (added by a mention or a private one's starter),
+    ``mentioned`` (mentioned again) or ``changes_proposed`` (approvers: changes waiting on
+    them, derived on read; id ``chg_<discussion id>``). Shown only to those who can read
+    the discussion now."""
+
+    id: str
+    kind: Literal["invited", "mentioned", "changes_proposed"]
+    discussion_id: uuid.UUID
+    title: str
+    visibility: Literal["open", "private"]
+    subject_label: str
+    # The thread on its subject's page: "...?discussion=<id>".
+    subject_url: str
+    by: InboxDiscussionPerson | None = None
+    # A mention's message, its first 140 characters.
+    excerpt: str | None = None
+    # changes_proposed: the changes left for me.
+    count: int | None = None
+    # The people in it, up to 3, and how many more.
+    people: list[str] = []
+    people_more: int = 0
+    at: datetime
+    state: Literal["new", "open", "done"]
+    # Commenters and up join (write in) it; viewers read it.
+    can_write: bool = False
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -1135,6 +1387,9 @@ class InboxOut(BaseModel):
     revoke_failures: list[InboxRevokeFailure] = []
     # Owners only (#245): access changes still failing after 24 hours.
     access_failures: list[InboxAccessFailure] = []
+    # Owners and approvers (A5): pending access requests, oldest first; not in ``total``
+    # (no Inbox screen shows them yet).
+    access_requests: list[InboxAccessRequest] = []
     # Owners only (F6): the newest weekly alignment reports, unread ones in ``total``; and
     # the reports Slack refused for 24 hours (Retry, Dismiss), in ``total`` too.
     reports: list[InboxReport] = []
@@ -1171,6 +1426,9 @@ class InboxOut(BaseModel):
     # owners; slips and overdue items also the engineering leads); new and open ones
     # count in ``total``.
     tracks: list[InboxTrack] = []
+    # G6: invitations, mentions and changes proposed in discussions; new and open ones
+    # count in ``total``.
+    discussions: list[InboxDiscussionItem] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]
@@ -1296,6 +1554,41 @@ class ReviewMilestone(BaseModel):
     date: str | None = None
 
 
+class FromRunEdges(BaseModel):
+    new: int = 0
+    changed: int = 0
+
+
+class FromRunMerge(BaseModel):
+    allowed: bool
+    why_not: str | None = None
+
+
+class FromRunProposal(BaseModel):
+    id: uuid.UUID
+    status: str
+
+
+class FromRunRow(BaseModel):
+    """One baseline item a run created (``new``), changed (``changed``) or proposed a
+    change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+    (recomputed on every read), the shared draft's actions on its key and its state."""
+
+    key: str
+    entity: EntityOut
+    change: Literal["new", "changed", "proposal"]
+    # The run's open proposals on it, and every one it made (with its status).
+    proposal_ids: list[uuid.UUID] = []
+    proposals: list[FromRunProposal] = []
+    # Open material conflicts on it.
+    conflict_ids: list[uuid.UUID] = []
+    edges: FromRunEdges = FromRunEdges()
+    reasons: list[RowReason] = []
+    actions: list["ReviewAction"] = []
+    state: Literal["needs_you", "handled", "waiting", "fine"]
+    merge: FromRunMerge
+
+
 class ReviewItem(BaseModel):
     """One item of the reviewed file, its reasons (recomputed on every read) and its
     actions. ``state``: ``needs_you`` (an open reason no staged action answers),
@@ -1316,6 +1609,8 @@ class ReviewItem(BaseModel):
     reasons: list[ItemReason] = []
     actions: list[ReviewAction] = []
     state: Literal["needs_you", "handled", "waiting", "fine"]
+    # B2: a baseline_confirm checkpoint's row, as GET /v1/baseline/from-run/{run_id} has it.
+    baseline: FromRunRow | None = None
     # D6: the answer to this item's review entry, and its changes since the previous
     # attempt.
     resolution: ResolutionEntry | None = None
@@ -1368,6 +1663,52 @@ class CheckpointReview(BaseModel):
     # D6: the attempt's changes since the previous one (added and removed ids); None on a
     # first attempt.
     diff: ItemsAttemptDiff | None = None
+
+
+# --------------------------------------------------------------------------- B2 from-run
+
+
+class FromRunSummary(BaseModel):
+    items: int = 0
+    need_you: int = 0
+    # Goals from the run still proposed with no staged waiver.
+    not_decided: int = 0
+    handled: int = 0
+    # Goals from the run left proposed by a staged waiver (Leave proposed).
+    left_proposed: int = 0
+    other_proposed_goals: int = 0
+
+
+class FromRunCheckpoint(BaseModel):
+    """The run's latest Confirm the baseline stop, as the caller may use it."""
+
+    id: uuid.UUID
+    kind: CheckpointKind
+    status: CheckpointStatus
+    approver_role: str
+    revision: int = 0
+    can_suggest: bool = False
+    can_stage: bool = False
+    can_decide: bool = False
+    gate: Gate | None = None
+    note: str | None = None
+    wait: WaitInfo
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+    # The send-back note the agents got (3.1 (7)), once sent back.
+    review_note: str | None = None
+
+
+class FromRunOut(BaseModel):
+    """GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+    person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
+    baseline."""
+
+    run: ProposalRun
+    checkpoint: FromRunCheckpoint | None = None
+    summary: FromRunSummary
+    rows: list[FromRunRow] = []
+    other_proposed_goals: list[EntityOut] = []
 
 
 class RunReviewOut(BaseModel):

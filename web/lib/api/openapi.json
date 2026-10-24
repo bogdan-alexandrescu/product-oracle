@@ -67,6 +67,73 @@
         }
       }
     },
+    "/v1/auth/access": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get Access State",
+        "description": "Where the Google-signed person stands (A5), read from the Google sign-in alone (no\nmember needed) and creating nothing: ``member``, ``pending`` (an owner has not\ndecided their access request yet), ``approved`` (the next page load signs them in),\n``declined``, ``invite_expired``, ``invite_only``, ``outside_domains``, ``removed``;\n``no_google_sign_in`` without Google sign-in. Browser only: not an MCP tool.",
+        "operationId": "get_access_state",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessStateOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/access/note": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Send Access Note",
+        "description": "Set the note an owner reads on the caller's pending access request (A5). Browser\nonly: not an MCP tool.",
+        "operationId": "send_access_note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessStateOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No pending access request"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/logout": {
       "post": {
         "tags": [
@@ -221,6 +288,915 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/documents/{doc}/dependents": {
+      "get": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Document Dependents",
+        "description": "What a delete of this document takes to Trash with it (the delete dialog).",
+        "operationId": "document_dependents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependentsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/documents/{doc}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Delete Document",
+        "description": "Move the document and its dependents to Trash (30 days, then purged). A published\none needs ``confirm_published`` (409 without): its external copy stays where it is.\n409 while a run is working on any of them.",
+        "operationId": "delete_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "confirm_published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Confirm Published"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Document",
+        "operationId": "get_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/documents/{doc}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Document",
+        "description": "Restore the document with everything that went to Trash with it.",
+        "operationId": "restore_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/intakes/{intake_id}/dependents": {
+      "get": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Intake Dependents",
+        "operationId": "intake_dependents",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependentsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/intakes/{intake_id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Delete Intake",
+        "description": "Move the brief, the PRD it became and that PRD's dependents to Trash.",
+        "operationId": "delete_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "confirm_published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Confirm Published"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/intakes/{intake_id}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Intake",
+        "operationId": "restore_intake",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/runs/{run_id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Delete Run",
+        "description": "Move a finished, cancelled or draft run to Trash (409 while it works).",
+        "operationId": "delete_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run",
+        "operationId": "get_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      },
+      "patch": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Update Run",
+        "description": "Change a draft's document or knobs; its estimate is cleared.",
+        "operationId": "update_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/runs/{run_id}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Run",
+        "operationId": "restore_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/trash": {
+      "get": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "List Trash",
+        "description": "What is in Trash, newest first: who deleted it, when, why, what went with it and\nthe days left before the ticker purges it.",
+        "operationId": "list_trash",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrashEntryOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Trash"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/trash/{entry_id}/restore": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Restore Trash Entry",
+        "description": "Restore everything the delete took, together; ``not_restored`` says what could not\ncome back with it (what it was built from, purged or still in Trash, and what was\ntrashed separately).",
+        "operationId": "restore_trash_entry",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/trash/{entry_id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Purge Trash Entry",
+        "description": "Delete for good now, without waiting for the 30 days.",
+        "operationId": "purge_trash_entry",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/documents/{doc}/regenerate/estimate": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Estimate Regeneration",
+        "description": "A draft run of the document's flow, estimated: the inputs it will use and the cost.\nFor the document's decider or an approver (403 otherwise); 422 for a kind no flow\nwrites (edit it instead).",
+        "operationId": "estimate_regeneration",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateEstimateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegenerateEstimateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/documents/{doc}/regenerate": {
+      "post": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Start Regeneration",
+        "description": "Start the estimated run, through the same cost gates as starting any run. Its\nresult is imported as the document's next version.",
+        "operationId": "start_regeneration",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/oracle__trash__schemas__RegenerateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/documents": {
       "get": {
         "tags": [
@@ -274,57 +1250,6 @@
                     "$ref": "#/components/schemas/DocumentSummary"
                   },
                   "title": "Response List Documents"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/documents/{doc}": {
-      "get": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Get Document",
-        "operationId": "get_document",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "doc",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Doc"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentOut"
                 }
               }
             }
@@ -3029,6 +3954,171 @@
           }
         },
         "x-min-role": "viewer"
+      }
+    },
+    "/v1/inbox/discussion-items/{item_id}": {
+      "delete": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Dismiss Inbox Discussion Item",
+        "description": "Dismiss my Invited or Mentioned row (G6): it moves to Done. A changes-proposed row\ncannot be dismissed; it goes when its changes are handled.",
+        "operationId": "dismiss_inbox_discussion_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such Inbox row of the caller's"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/discussions/{discussion_id}/slack": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Mirror Discussion To Slack",
+        "description": "Mirror an open discussion to a new thread in a Slack channel Oracle's Slack app is\nin (the starter or an approver). Oracle posts the root message (title, subject, link,\nsummary or first message), then every new message; replies in the thread from members\nwho can write come back as messages. Earlier messages are not copied.",
+        "operationId": "mirror_discussion_to_slack",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscussionSlackIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionSlackOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the starter or an approver"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Already mirrored, closed, or Slack is not connected"
+          },
+          "422": {
+            "description": "Private discussions stay in Oracle"
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      },
+      "delete": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Stop Slack Mirror",
+        "description": "Stop mirroring: Oracle posts a closing line with a link to the discussion, and\nreplies in the thread no longer come back. What was posted stays in Slack.",
+        "operationId": "stop_slack_mirror",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Not the starter or an approver"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/staging": {
@@ -6716,121 +7806,6 @@
         "x-min-role": "owner"
       }
     },
-    "/v1/invites": {
-      "get": {
-        "tags": [
-          "members"
-        ],
-        "summary": "List Invites",
-        "description": "Invites, newest first: open ones unless ``status`` asks for others (or ``all``).",
-        "operationId": "list_invites",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "open",
-                    "accepted",
-                    "revoked"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "const": "all",
-                  "type": "string"
-                }
-              ],
-              "default": "open",
-              "title": "Status"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/InviteOut"
-                  },
-                  "title": "Response List Invites"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "owner"
-      },
-      "post": {
-        "tags": [
-          "members"
-        ],
-        "summary": "Create Invite",
-        "description": "Pre-assign a role to an email: its first Google sign-in lands with that role, and as\nan engineering lead when ``engineering_lead`` (never with role viewer: 422).\n\nThe invitee is granted Google IAP access on Oracle's backend services\n(``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with\n``access_error`` when the grant failed: the invite is kept, and\n``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in\nlink in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;\n``not_sent`` with no sender configured: send them ``sign_in_url``). Refused (422)\nfor an address outside the domains that can sign in.",
-        "operationId": "create_invite",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InviteCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InviteOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Already a member, or an open invite exists"
-          },
-          "422": {
-            "description": "Not an address that can sign in (ORACLE_IAP_ALLOWED_DOMAINS)"
-          }
-        },
-        "x-min-role": "owner"
-      }
-    },
     "/v1/invites/{invite_id}/access": {
       "post": {
         "tags": [
@@ -6937,52 +7912,6 @@
           },
           "429": {
             "description": "Its email went out under a minute ago (Retry-After: seconds)"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "owner"
-      }
-    },
-    "/v1/invites/{invite_id}": {
-      "delete": {
-        "tags": [
-          "members"
-        ],
-        "summary": "Revoke Invite",
-        "description": "Revoke an open invite. Revoking twice is a no-op; an accepted invite is a 409.\nThe invitee's Google IAP access is taken away, unless they are an active member or\nhave another open invite (audited).",
-        "operationId": "revoke_invite",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "invite_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Invite Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -7116,6 +8045,37 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/sign-in-rules": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Get Sign In Rules",
+        "description": "Who becomes a member through Google sign-in: whether it is on, whether new\nsign-ins are off where Oracle is deployed, the company's email domains and where\neach is set, the rule for people without an invite and the default role. Change\nthem with ``PUT /v1/settings/{key}`` (``sign_in_without_invite``,\n``iap_default_role``, ``company_email_domains``).",
+        "operationId": "get_sign_in_rules",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInRulesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
     "/v1/people": {
       "get": {
         "tags": [
@@ -7156,7 +8116,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 500,
               "minimum": 1,
               "default": 20,
               "title": "Limit"
@@ -7213,13 +8173,494 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/invites": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Invites",
+        "description": "Invites, newest first: open ones (expired included, as both still need an action)\nunless ``status`` asks for others (or ``all``). Owners see every invite, approvers the\nones they sent.",
+        "operationId": "list_invites",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "expired",
+                    "accepted",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "all",
+                  "type": "string"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InviteOut"
+                  },
+                  "title": "Response List Invites"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Create Invite",
+        "description": "Pre-assign a role (and a name) to an email: its first Google sign-in lands with\nthat role, and as an engineering lead when ``engineering_lead`` (never with role\nviewer: 422). Owners invite with any role; approvers viewers and commenters (A5).\nThe invite expires in 14 days (``expires_at``; Resend gives 14 more).\n\nThe invitee is granted Google IAP access on Oracle's backend services\n(``access``: ``granted``; ``skipped`` with no backends configured; ``pending`` with\n``access_error`` when the grant failed: the invite is kept, and\n``POST /v1/invites/{invite_id}/access`` retries it). Oracle emails them the sign-in\nlink in the background (``email_status``: ``queued``, then ``sent`` or ``failed``;\n``not_sent`` with no sender configured: send them ``sign_in_url``). With Google\nsign-in on, refused (422) for an address outside the company's email domains.",
+        "operationId": "create_invite",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A role the caller may not invite with"
+          },
+          "409": {
+            "description": "Already a member, or an open or expired invite exists"
+          },
+          "422": {
+            "description": "Outside the company's email domains (outside_company_domains)"
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/invites/{invite_id}/resend": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Resend Invite",
+        "description": "Give an open or expired invite 14 more days from now (A5): ``expires_at``,\n``resent_at`` and ``resend_count``; audited ``invite.resend``. Its email goes out\nagain when a sender is configured and its last one is over a minute old. Approvers\nresend only the invites they sent.",
+        "operationId": "resend_invite",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invite Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such invite"
+          },
+          "409": {
+            "description": "Accepted or revoked"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/invites/{invite_id}": {
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Revoke Invite",
+        "description": "Revoke an open invite (approvers: one they sent). Revoking twice is a no-op; an\naccepted invite is a 409.\nThe invitee's Google IAP access is taken away, unless they are an active member or\nhave another open invite (audited).",
+        "operationId": "revoke_invite",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Invite Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/access-requests": {
+      "get": {
+        "tags": [
+          "members"
+        ],
+        "summary": "List Access Requests",
+        "description": "People from the company's email domains who signed in with Google without an\ninvite (rule ``request``), newest first: pending ones unless ``status`` asks for\nothers.",
+        "operationId": "list_access_requests",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "declined",
+                "closed",
+                "all"
+              ],
+              "type": "string",
+              "default": "pending",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessRequestOut"
+                  },
+                  "title": "Response List Access Requests"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/access-requests/{request_id}/approve": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Approve Access Request",
+        "description": "Let them in with ``role`` (and a ``name``): an open invite is made for their email\n(14 days), so their next page load signs them in. Owners approve with any role,\napprovers as viewer or commenter. Audited.",
+        "operationId": "approve_access_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessApprove"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A role the caller may not approve with"
+          },
+          "404": {
+            "description": "No such request"
+          },
+          "409": {
+            "description": "Not pending, or already a member"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/access-requests/{request_id}/decline": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Decline Access Request",
+        "description": "Turn the request down: later sign-ins stay refused (an invite still lets them in).",
+        "operationId": "decline_access_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request"
+          },
+          "409": {
+            "description": "Not pending"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/access-requests/{request_id}/reopen": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Reopen Access Request",
+        "description": "Undo: a declined request, or an approved one whose invite is not claimed yet (the\ninvite is revoked), is pending again. Approvers undo only the approvals they gave:\nthey revoke only the invites they sent.",
+        "operationId": "reopen_access_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An approval another person gave (approvers)"
+          },
+          "404": {
+            "description": "No such request"
+          },
+          "409": {
+            "description": "Cannot reopen"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/me/account": {
       "get": {
         "tags": [
           "account"
         ],
         "summary": "Get My Account",
-        "description": "Your email, role, when you last signed in and how you sign in: with a password,\nwith Google (when this deployment signs in through Google), or both.",
+        "description": "Your email, name, role, when you last signed in and how you sign in: with a\npassword, with Google (when this deployment signs in through Google), or both.",
         "operationId": "get_my_account",
         "responses": {
           "200": {
@@ -7228,6 +8669,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MyAccountOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      },
+      "patch": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Update My Account",
+        "description": "Set your name (A5), shown to your teammates instead of your email; null clears\nit. Any role; a read-only token or MCP client cannot change it. Audited.",
+        "operationId": "update_my_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NamePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAccountOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A read-only credential"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -11342,6 +12835,125 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/baseline/entities/{entity_id}/merge": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Merge Entity",
+        "description": "Merge into\u2026 (B2): a duplicate a run created goes into an item of the same type (its\nevidence and edges move, its open proposals are rejected, it is deleted). Returns the\ntarget.",
+        "operationId": "merge_entity",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/oracle__baseline__schemas__MergeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not mergeable: the detail says why"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/baseline/from-run/{run_id}": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Get Baseline From Run",
+        "description": "What a run wrote to the baseline, for a person to review (B2): every item it\ncreated, changed or proposed a change to, with the reasons each needs a person and the\nshared draft's actions on it; the run's Confirm the baseline stop with its gate; the\nother proposed goals.",
+        "operationId": "get_baseline_from_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FromRunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/baseline/entities/{entity_id}/unlock": {
       "post": {
         "tags": [
@@ -13235,6 +14847,310 @@
             "application/yaml": {
               "schema": {
                 "type": "string"
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/baseline/entities/{goal_id}/interview": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Start Goal Interview",
+        "description": "Start a goals interview on a vague goal (B6): a discussion on the goal with its\nowner in it, Oracle's opening turn pending (stream it from G2's\n``GET /v1/discussions/{id}/messages/{reply_id}/stream``). An open interview on the\ngoal is returned instead (200, ``created`` false).",
+        "operationId": "start_goal_interview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/InterviewIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalInterviewOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "An open interview on this goal exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalInterviewOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found"
+          },
+          "422": {
+            "description": "Only goals can be interviewed | This goal is already measurable"
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/baseline/goals/interview": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Start Goal Interviews",
+        "description": "Start (or reopen) a goals interview per goal, in the order given; ``entity_ids``\nomitted: every vague goal. Each discussion's opening turn costs a model call, so the\nweb asks for one goal at a time as its stepper reaches it.",
+        "operationId": "start_goal_interviews",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterviewsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/baseline/goals/vague": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "List Vague Goals",
+        "description": "The confirmed and proposed goals that are not measurable, with what each misses\nand the open interview on it (the Goals panel's Interview vague goals).",
+        "operationId": "list_vague_goals",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VagueGoalOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Vague Goals"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/baseline/goal-measures/{change_id}/propose": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Propose Goal Measure",
+        "description": "Propose a measurable version of the goal: a baseline proposal (\"From discussion\n<title>\") an approver accepts. ``payload``: the person's Edit (it may set owner_id and\nweight). Its fields pass B5's checks first (422, nothing created). A target the start\nor current value already meets gets Oracle's pushback once (409); sending it again,\nor with ``keep``, proposes it and records the override in the summary.",
+        "operationId": "propose_goal_measure",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GoalMeasureAct"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionChangeOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Change not found"
+          },
+          "409": {
+            "description": "Oracle's pushback (once), closed, or the version was acted on",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMeasurePushback"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Goal fields rejected (B5), every problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YamlImportError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/baseline/goal-measures/{change_id}/dismiss": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Dismiss Goal Measure",
+        "description": "Dismiss one of Oracle's versions (approvers).",
+        "operationId": "dismiss_goal_measure",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionChangeOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Change not found"
+          },
+          "409": {
+            "description": "Not proposed"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -16798,119 +18714,6 @@
         "x-per-item": "owner"
       }
     },
-    "/v1/runs/{run_id}": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Run",
-        "operationId": "get_run",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Run Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      },
-      "patch": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Update Run",
-        "description": "Change a draft's document or knobs; its estimate is cleared.",
-        "operationId": "update_run",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Run Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunPatch"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "approver"
-      }
-    },
     "/v1/runs/{run_id}/decisions": {
       "get": {
         "tags": [
@@ -18365,6 +20168,410 @@
         ],
         "x-min-role": "viewer",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}": {
+      "get": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Get Prd Scope Review",
+        "description": "A PRD scope as its review screen reads it, any member: each feature with its\nrequirements, reasons (blocking and to confirm, answered by D8 waivers and accepts)\nand history, the tally, and the previous attempt's decisions for the Changed filter.",
+        "operationId": "get_prd_scope_review",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrdScopeReview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Patch Scope Item",
+        "description": "Decide or edit one row (approver role or above): a feature's decision (a left-out\none with its reason), goals (confirmed goals only), dependencies and blockers; a\nrequirement's decision, text and acceptance; ``revert`` puts the agent's values back.\nThe scope is re-checked: the answer carries the new tally.",
+        "operationId": "patch_scope_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeItemPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      },
+      "delete": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Delete Scope Item",
+        "description": "Remove a requirement a person added (approver role or above); 409 for a row the\nagents wrote (cut it instead).",
+        "operationId": "delete_scope_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items": {
+      "post": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Add Scope Requirement",
+        "description": "Add a requirement to a feature (approver role or above): ``origin: person``; its\ngoals default to the feature's. Approving writes it to the baseline as the approver's.",
+        "operationId": "add_scope_requirement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeRequirementIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance": {
+      "post": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Enhance Scope Requirement",
+        "description": "Ask Oracle to deepen a requirement (approver role or above): a queued\n``scope_enhance`` job on Oracle's own model; poll ``GET /v1/llm-jobs/{job_id}``. Its\noutput is a suggestion: nothing changes until it is accepted.",
+        "operationId": "enhance_scope_requirement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeEnhanceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/prd-scopes/{scope_id}/items/{item_id}/enhance/{job_id}/accept": {
+      "post": {
+        "tags": [
+          "scope"
+        ],
+        "summary": "Accept Scope Enhancement",
+        "description": "Accept an enhancement (approver role or above), as Oracle wrote it or edited: the\nrequirement's text and acceptance become the person's.",
+        "operationId": "accept_scope_enhancement",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scope Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScopeEnhanceAccept"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/modules": {
@@ -27935,7 +30142,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegenerateIn"
+                "$ref": "#/components/schemas/oracle__specs__schemas__RegenerateIn"
               }
             }
           }
@@ -31425,7 +33632,7 @@
           "company integrations"
         ],
         "summary": "List Company Integrations",
-        "description": "The company's own integrations (Oracle's Slack app); never a credential.",
+        "description": "The company's own integrations (Oracle's Slack app); never a credential. A\ndisconnected one is not listed.",
         "operationId": "list_company_integrations",
         "responses": {
           "200": {
@@ -31566,34 +33773,24 @@
         "x-min-role": "viewer"
       }
     },
-    "/v1/company-integrations/slack/channels": {
+    "/v1/company-integrations/slack/status": {
       "get": {
         "tags": [
           "company integrations"
         ],
-        "summary": "List Slack Notification Channels",
-        "description": "The channels the report can post to: public ones, and the private ones the bot was\ninvited to when the install can read them.",
-        "operationId": "list_slack_notification_channels",
+        "summary": "Slack Status",
+        "description": "Whether Oracle's Slack app is connected and can mirror discussions (G8); any member.",
+        "operationId": "slack_status",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NotificationChannelOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Slack Notification Channels"
+                  "$ref": "#/components/schemas/SlackStatusOut"
                 }
               }
             }
-          },
-          "409": {
-            "description": "Slack is not connected"
-          },
-          "502": {
-            "description": "Slack"
           }
         },
         "security": [
@@ -31604,7 +33801,70 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "owner"
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/company-integrations/slack/channels": {
+      "get": {
+        "tags": [
+          "company integrations"
+        ],
+        "summary": "List Slack Notification Channels",
+        "description": "The channels the report can post to, or a discussion can be mirrored to (G8:\ncommenters and up): public ones, and the private ones the bot was invited to when\nthe install can read them. ``mirror`` keeps only the ones the bot is in, the only\nones whose replies come back.",
+        "operationId": "list_slack_notification_channels",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mirror",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mirror"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationChannelOut"
+                  },
+                  "title": "Response List Slack Notification Channels"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slack is not connected"
+          },
+          "502": {
+            "description": "Slack"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/company-integrations/slack/test": {
@@ -31670,7 +33930,7 @@
           "company integrations"
         ],
         "summary": "Delete Company Integration",
-        "description": "Disconnect: revoke the bot token at Slack (best effort) and delete it. The report\nstops posting (and the report's channel is cleared); people's own Slack connections\nare untouched.",
+        "description": "Disconnect: every mirrored discussion thread gets its closing line and stops\nmirroring (G8), then the bot token is revoked at Slack (best effort) and the install is\nset ``revoked``: its token is erased, and its row and ``bot_user_id`` are kept, so\npeople's Slack sources keep skipping Oracle's own posts (S6). The report stops posting\n(and the report's channel is cleared); people's own Slack connections are untouched.",
         "operationId": "delete_company_integration",
         "security": [
           {
@@ -32273,7 +34533,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MergeIn"
+                "$ref": "#/components/schemas/oracle__requests__schemas__MergeIn"
               }
             }
           }
@@ -35869,6 +38129,244 @@
           "parts"
         ],
         "title": "AcceptSuggestionIn"
+      },
+      "AccessApprove": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Role"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "AccessApprove"
+      },
+      "AccessNote": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "AccessNote"
+      },
+      "AccessRequestOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "declined",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "viewer",
+                  "commenter",
+                  "approver",
+                  "owner"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "invite_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "status",
+          "created_at",
+          "last_seen_at"
+        ],
+        "title": "AccessRequestOut",
+        "description": "Someone who signed in with Google without an invite, asking to join (A5)."
+      },
+      "AccessStateOut": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "member",
+              "pending",
+              "approved",
+              "declined",
+              "invite_expired",
+              "invite_only",
+              "outside_domains",
+              "removed",
+              "no_google_sign_in"
+            ],
+            "title": "State"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "invite_expired_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Expired At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "AccessStateOut",
+        "description": "Where a Google-signed person stands (A5): never anything about other people."
       },
       "AccountCreated": {
         "properties": {
@@ -43102,6 +45600,11 @@
             "title": "Can Decide",
             "default": false
           },
+          "lead_stop": {
+            "type": "boolean",
+            "title": "Lead Stop",
+            "default": false
+          },
           "cannot_approve": {
             "anyOf": [
               {
@@ -43166,6 +45669,17 @@
               }
             ],
             "title": "Review Link"
+          },
+          "vague_goals": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vague Goals"
           }
         },
         "type": "object",
@@ -48314,6 +50828,41 @@
         ],
         "title": "DependenciesCreate"
       },
+      "DependentsOut": {
+        "properties": {
+          "root": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "published": {
+            "type": "boolean",
+            "title": "Published"
+          },
+          "working_runs": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Working Runs",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "root",
+          "items",
+          "published"
+        ],
+        "title": "DependentsOut",
+        "description": "What the delete dialog lists: the root and everything that goes to Trash with it.\n``published``: ask once more, the external copy stays where it is. ``working_runs``:\nruns to cancel before the delete is allowed."
+      },
       "DeriveIn": {
         "properties": {
           "depth": {
@@ -48706,6 +51255,41 @@
           "lock_version": {
             "type": "integer",
             "title": "Lock Version"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "pushback": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pushback"
+          },
+          "override_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Reason"
           }
         },
         "type": "object",
@@ -49329,6 +51913,16 @@
             "type": "object",
             "title": "Subject"
           },
+          "slack": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionSlackOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "participants": {
             "items": {
               "$ref": "#/components/schemas/DiscussionParticipantOut"
@@ -49634,6 +52228,69 @@
         "title": "DiscussionShareIn",
         "description": "G7 Share as discussion: the new open discussion's title and first message (the\nchat's summary as the person edited it)."
       },
+      "DiscussionSlackIn": {
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Channel Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel_id"
+        ],
+        "title": "DiscussionSlackIn"
+      },
+      "DiscussionSlackOut": {
+        "properties": {
+          "channel_name": {
+            "type": "string",
+            "title": "Channel Name"
+          },
+          "thread_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Url"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "posting",
+              "live",
+              "failing",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel_name",
+          "thread_url",
+          "status"
+        ],
+        "title": "DiscussionSlackOut",
+        "description": "G8: the Slack thread an open discussion is mirrored to."
+      },
       "DiscussionStarted": {
         "properties": {
           "id": {
@@ -49782,6 +52439,16 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Subject"
+          },
+          "slack": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscussionSlackOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "participants": {
             "items": {
@@ -55766,6 +58433,15 @@
               "owner"
             ],
             "title": "Approver Role"
+          },
+          "decider": {
+            "type": "string",
+            "enum": [
+              "role",
+              "engineering_lead"
+            ],
+            "title": "Decider",
+            "default": "role"
           }
         },
         "type": "object",
@@ -55973,6 +58649,364 @@
         ],
         "title": "FreshnessCounts",
         "description": "Live items by age: fresh up to one half-life, aging up to two, stale older."
+      },
+      "FromRunCheckpoint": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_confirm",
+              "feature_set",
+              "priority_order",
+              "prd_review",
+              "eng_review",
+              "roadmap_items",
+              "roadmap_review",
+              "request_triage",
+              "strategy_review",
+              "launch_review",
+              "update_review"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "changes_requested",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "approver_role": {
+            "type": "string",
+            "title": "Approver Role"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "default": 0
+          },
+          "can_suggest": {
+            "type": "boolean",
+            "title": "Can Suggest",
+            "default": false
+          },
+          "can_stage": {
+            "type": "boolean",
+            "title": "Can Stage",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/WaitInfo"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "approver_role",
+          "wait"
+        ],
+        "title": "FromRunCheckpoint",
+        "description": "The run's latest Confirm the baseline stop, as the caller may use it."
+      },
+      "FromRunEdges": {
+        "properties": {
+          "new": {
+            "type": "integer",
+            "title": "New",
+            "default": 0
+          },
+          "changed": {
+            "type": "integer",
+            "title": "Changed",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "FromRunEdges"
+      },
+      "FromRunMerge": {
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed"
+        ],
+        "title": "FromRunMerge"
+      },
+      "FromRunOut": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ProposalRun"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FromRunCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FromRunSummary"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/FromRunRow"
+            },
+            "type": "array",
+            "title": "Rows",
+            "default": []
+          },
+          "other_proposed_goals": {
+            "items": {
+              "$ref": "#/components/schemas/EntityOut"
+            },
+            "type": "array",
+            "title": "Other Proposed Goals",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "run",
+          "summary"
+        ],
+        "title": "FromRunOut",
+        "description": "GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a\nperson to review (B2). ``checkpoint`` null when the run never stopped at Confirm the\nbaseline."
+      },
+      "FromRunProposal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "FromRunProposal"
+      },
+      "FromRunRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/EntityOut"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "new",
+              "changed",
+              "proposal"
+            ],
+            "title": "Change"
+          },
+          "proposal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Proposal Ids",
+            "default": []
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/FromRunProposal"
+            },
+            "type": "array",
+            "title": "Proposals",
+            "default": []
+          },
+          "conflict_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Conflict Ids",
+            "default": []
+          },
+          "edges": {
+            "$ref": "#/components/schemas/FromRunEdges",
+            "default": {
+              "new": 0,
+              "changed": 0
+            }
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/RowReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewAction"
+            },
+            "type": "array",
+            "title": "Actions",
+            "default": []
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "needs_you",
+              "handled",
+              "waiting",
+              "fine"
+            ],
+            "title": "State"
+          },
+          "merge": {
+            "$ref": "#/components/schemas/FromRunMerge"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "entity",
+          "change",
+          "state",
+          "merge"
+        ],
+        "title": "FromRunRow",
+        "description": "One baseline item a run created (``new``), changed (``changed``) or proposed a\nchange to (``proposal``), as B2 Baseline review from this run lists it: its reasons\n(recomputed on every read), the shared draft's actions on its key and its state."
+      },
+      "FromRunSummary": {
+        "properties": {
+          "items": {
+            "type": "integer",
+            "title": "Items",
+            "default": 0
+          },
+          "need_you": {
+            "type": "integer",
+            "title": "Need You",
+            "default": 0
+          },
+          "not_decided": {
+            "type": "integer",
+            "title": "Not Decided",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "left_proposed": {
+            "type": "integer",
+            "title": "Left Proposed",
+            "default": 0
+          },
+          "other_proposed_goals": {
+            "type": "integer",
+            "title": "Other Proposed Goals",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "FromRunSummary"
       },
       "GapCreate": {
         "properties": {
@@ -56195,6 +59229,17 @@
           "waivable": {
             "type": "boolean",
             "title": "Waivable"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
           }
         },
         "type": "object",
@@ -56478,6 +59523,25 @@
         ],
         "title": "GoalCheck"
       },
+      "GoalInterviewOut": {
+        "properties": {
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discussion_id",
+          "created"
+        ],
+        "title": "GoalInterviewOut"
+      },
       "GoalLink": {
         "properties": {
           "entity_id": {
@@ -56527,6 +59591,48 @@
           "matched_on"
         ],
         "title": "GoalLink"
+      },
+      "GoalMeasureAct": {
+        "properties": {
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "keep": {
+            "type": "boolean",
+            "title": "Keep",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GoalMeasureAct"
+      },
+      "GoalMeasurePushback": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "pushback": {
+            "type": "boolean",
+            "const": true,
+            "title": "Pushback",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "GoalMeasurePushback"
       },
       "GoalProblem": {
         "properties": {
@@ -57486,6 +60592,74 @@
         "title": "InboxAccessFailure",
         "description": "A change to someone's Google IAP access still failing after 24 hours of retries\n(#245): retried once a day until it is done or no longer needed; Retry runs it now."
       },
+      "InboxAccessRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "default_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Default Role"
+          },
+          "roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "viewer",
+                "commenter",
+                "approver",
+                "owner"
+              ]
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "requested_at",
+          "last_seen_at",
+          "default_role",
+          "roles"
+        ],
+        "title": "InboxAccessRequest",
+        "description": "Someone from the company's email domains who signed in with Google without an\ninvite and waits for an owner, or an approver, to let them in (A5)."
+      },
       "InboxCheckpoint": {
         "properties": {
           "id": {
@@ -57608,6 +60782,11 @@
             "title": "Can Decide",
             "default": false
           },
+          "lead_stop": {
+            "type": "boolean",
+            "title": "Lead Stop",
+            "default": false
+          },
           "cannot_approve": {
             "anyOf": [
               {
@@ -57672,6 +60851,17 @@
               }
             ],
             "title": "Review Link"
+          },
+          "vague_goals": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vague Goals"
           },
           "flow": {
             "type": "string",
@@ -58182,6 +61372,145 @@
         ],
         "title": "InboxDecision",
         "description": "A decision row (H1): a proposal I decide, a review that came due (both counted),\na decision made that I am informed of, or one I just handled (shown only)."
+      },
+      "InboxDiscussionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "invited",
+              "mentioned",
+              "changes_proposed"
+            ],
+            "title": "Kind"
+          },
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "open",
+              "private"
+            ],
+            "title": "Visibility"
+          },
+          "subject_label": {
+            "type": "string",
+            "title": "Subject Label"
+          },
+          "subject_url": {
+            "type": "string",
+            "title": "Subject Url"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxDiscussionPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "people": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "People",
+            "default": []
+          },
+          "people_more": {
+            "type": "integer",
+            "title": "People More",
+            "default": 0
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "done"
+            ],
+            "title": "State"
+          },
+          "can_write": {
+            "type": "boolean",
+            "title": "Can Write",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "discussion_id",
+          "title",
+          "visibility",
+          "subject_label",
+          "subject_url",
+          "at",
+          "state"
+        ],
+        "title": "InboxDiscussionItem",
+        "description": "G6: a discussion row. ``invited`` (added by a mention or a private one's starter),\n``mentioned`` (mentioned again) or ``changes_proposed`` (approvers: changes waiting on\nthem, derived on read; id ``chg_<discussion id>``). Shown only to those who can read\nthe discussion now."
+      },
+      "InboxDiscussionPerson": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "InboxDiscussionPerson"
       },
       "InboxDocument": {
         "properties": {
@@ -58755,6 +62084,14 @@
             "title": "Access Failures",
             "default": []
           },
+          "access_requests": {
+            "items": {
+              "$ref": "#/components/schemas/InboxAccessRequest"
+            },
+            "type": "array",
+            "title": "Access Requests",
+            "default": []
+          },
           "reports": {
             "items": {
               "$ref": "#/components/schemas/InboxReport"
@@ -58882,6 +62219,14 @@
             },
             "type": "array",
             "title": "Tracks",
+            "default": []
+          },
+          "discussions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxDiscussionItem"
+            },
+            "type": "array",
+            "title": "Discussions",
             "default": []
           }
         },
@@ -61088,6 +64433,17 @@
         ],
         "title": "InterviewGuideItemIn"
       },
+      "InterviewIn": {
+        "properties": {
+          "private": {
+            "type": "boolean",
+            "title": "Private",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "InterviewIn"
+      },
       "InterviewJobState": {
         "properties": {
           "id": {
@@ -61496,6 +64852,31 @@
         ],
         "title": "InterviewPatch"
       },
+      "InterviewRow": {
+        "properties": {
+          "discussion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Discussion Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Entity Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discussion_id",
+          "created",
+          "entity_id"
+        ],
+        "title": "InterviewRow"
+      },
       "InterviewSubject": {
         "properties": {
           "intake_id": {
@@ -61644,6 +65025,44 @@
         ],
         "title": "InterviewSummary"
       },
+      "InterviewsIn": {
+        "properties": {
+          "entity_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Ids"
+          }
+        },
+        "type": "object",
+        "title": "InterviewsIn"
+      },
+      "InterviewsOut": {
+        "properties": {
+          "discussions": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewRow"
+            },
+            "type": "array",
+            "title": "Discussions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discussions"
+        ],
+        "title": "InterviewsOut"
+      },
       "InviteCreate": {
         "properties": {
           "email": {
@@ -61662,10 +65081,34 @@
             ],
             "title": "Role"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "engineering_lead": {
             "type": "boolean",
             "title": "Engineering Lead",
             "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
           }
         },
         "type": "object",
@@ -61705,10 +65148,22 @@
             "type": "string",
             "enum": [
               "open",
+              "expired",
               "accepted",
               "revoked"
             ],
             "title": "Status"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           },
           "invited_by": {
             "anyOf": [
@@ -61722,10 +65177,55 @@
             ],
             "title": "Invited By"
           },
+          "invited_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invited By Name"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "resent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resent At"
+          },
+          "resend_count": {
+            "type": "integer",
+            "title": "Resend Count",
+            "default": 0
+          },
+          "access_request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Request Id"
           },
           "accepted_at": {
             "anyOf": [
@@ -61821,6 +65321,17 @@
           "sign_in_url": {
             "type": "string",
             "title": "Sign In Url"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
           }
         },
         "type": "object",
@@ -61830,6 +65341,7 @@
           "role",
           "status",
           "created_at",
+          "expires_at",
           "sign_in_url"
         ],
         "title": "InviteOut"
@@ -63159,6 +66671,17 @@
               }
             ],
             "title": "Goals"
+          },
+          "reuse_draft_items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reuse Draft Items"
           }
         },
         "type": "object",
@@ -63220,6 +66743,17 @@
             "type": "array",
             "title": "Goals",
             "default": []
+          },
+          "reuse_draft_items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reuse Draft Items"
           }
         },
         "type": "object",
@@ -64597,7 +68131,8 @@
               "quality_review",
               "refinement_batch",
               "intake_analysis",
-              "decision_options"
+              "decision_options",
+              "scope_enhance"
             ],
             "title": "Kind"
           },
@@ -64636,6 +68171,18 @@
               }
             ],
             "title": "Decision Id"
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Id"
           },
           "version_number": {
             "anyOf": [
@@ -65290,6 +68837,31 @@
             ],
             "title": "Token Name"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "invite_roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "viewer",
+                "commenter",
+                "approver",
+                "owner"
+              ]
+            },
+            "type": "array",
+            "title": "Invite Roles",
+            "default": []
+          },
           "company_timezone": {
             "type": "string",
             "title": "Company Timezone",
@@ -65430,6 +69002,17 @@
             "type": "string",
             "title": "Email"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -65555,31 +69138,23 @@
               }
             ],
             "title": "Engineering Lead"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           }
         },
         "type": "object",
         "title": "MemberPatch",
-        "description": "A role, the engineering lead flag, or both (applied in one change, role first)."
-      },
-      "MergeIn": {
-        "properties": {
-          "lock_version": {
-            "type": "integer",
-            "title": "Lock Version"
-          },
-          "into_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Into Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "lock_version",
-          "into_id"
-        ],
-        "title": "MergeIn"
+        "description": "A role, the engineering lead flag, a name (A5), or several (applied in one\nchange: role first). ``\"name\": null`` clears the name."
       },
       "MilestoneCreate": {
         "properties": {
@@ -66365,6 +69940,17 @@
             "type": "string",
             "title": "Email"
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -66429,6 +70015,28 @@
         ],
         "title": "MyAccountOut",
         "description": "The signed-in member: who they are, their role and how they sign in."
+      },
+      "NamePatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NamePatch",
+        "description": "``PATCH /v1/me/account``: your name (A5); null clears it."
       },
       "NeedsAgents": {
         "properties": {
@@ -67524,6 +71132,24 @@
         ],
         "title": "NotReadCounts",
         "description": "Entries of ``unavailable_items`` by status (a missing status is unavailable)."
+      },
+      "NotRestored": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "reason"
+        ],
+        "title": "NotRestored",
+        "description": "Something a restore could not bring back with the entry, and why."
       },
       "NoteCounts": {
         "properties": {
@@ -70403,6 +74029,171 @@
         ],
         "title": "PrdScopeOut",
         "description": "A PRD scope (C6): the features and requirements a feature-set stop approves for one\nPRD, in file order. Later segments and the document's next drafts read the approved\none."
+      },
+      "PrdScopeReview": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "segment_seq": {
+            "type": "integer",
+            "title": "Segment Seq"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "approved",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "check": {
+            "$ref": "#/components/schemas/FeatureSetCheck"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeReviewFeature"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ScopeSummary"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "previous_requirements": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Requirements"
+          },
+          "goals_available": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoalChoice"
+            },
+            "type": "array",
+            "title": "Goals Available",
+            "default": []
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "segment_seq",
+          "attempt",
+          "status",
+          "check",
+          "features",
+          "lock_version",
+          "summary"
+        ],
+        "title": "PrdScopeReview",
+        "description": "A PRD scope as its review screen reads it (C7): each feature's reasons and\nhistory, the tally, the previous attempt's decisions (key -> decision) and kept\nrequirements (key -> requirement keys) for the Changed filter, and the confirmed goals\na person may pick. Suggestions, waivers and accepts come from the D8 review read."
       },
       "PreRead": {
         "properties": {
@@ -74356,21 +78147,9 @@
         ],
         "title": "RefreshSweepOut"
       },
-      "RegenerateIn": {
+      "RegenerateEstimateIn": {
         "properties": {
-          "prd_version": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prd Version"
-          },
-          "reason": {
+          "note": {
             "anyOf": [
               {
                 "type": "string",
@@ -74380,19 +78159,75 @@
                 "type": "null"
               }
             ],
-            "title": "Reason"
-          },
-          "knobs": {
-            "$ref": "#/components/schemas/KnobsIn",
-            "default": {
-              "depth": "standard",
-              "roles": {},
-              "checkpoints": {}
-            }
+            "title": "Note"
           }
         },
         "type": "object",
-        "title": "RegenerateIn"
+        "title": "RegenerateEstimateIn"
+      },
+      "RegenerateEstimateOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "flow": {
+            "type": "string",
+            "title": "Flow"
+          },
+          "inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "estimate_usd": {
+            "type": "number",
+            "title": "Estimate Usd"
+          },
+          "approval_threshold_usd": {
+            "type": "number",
+            "title": "Approval Threshold Usd"
+          },
+          "needs_owner_approval": {
+            "type": "boolean",
+            "title": "Needs Owner Approval"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "document_slug",
+          "kind",
+          "flow",
+          "inputs",
+          "estimate_usd",
+          "approval_threshold_usd",
+          "needs_owner_approval"
+        ],
+        "title": "RegenerateEstimateOut",
+        "description": "A draft run that would regenerate the document, estimated; nothing is spent until\nit is started. Over the threshold an owner approves it first."
       },
       "RegenerationOut": {
         "properties": {
@@ -77472,6 +81307,16 @@
             ],
             "title": "State"
           },
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FromRunRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resolution": {
             "anyOf": [
               {
@@ -78349,6 +82194,18 @@
               }
             ],
             "title": "Reason"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           },
           "created_at": {
             "type": "string",
@@ -79512,6 +83369,91 @@
         "title": "RowOverride",
         "description": "The active move or pin that placed a row (C9)."
       },
+      "RowReason": {
+        "properties": {
+          "item": {
+            "type": "string",
+            "title": "Item"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "default": {}
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonFix"
+            },
+            "type": "array",
+            "title": "Fixes",
+            "default": []
+          },
+          "waivable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waivable"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "code",
+          "severity",
+          "label",
+          "text"
+        ],
+        "title": "RowReason",
+        "description": "B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's\nreasons read as they are stored."
+      },
       "RunCreate": {
         "properties": {
           "flow": {
@@ -79942,6 +83884,37 @@
         "title": "RunDiscussionsOut",
         "description": "The discussions about a run: its checkpoints', its intake's and, for a feedback\nloop, its document's with staged next-draft changes. Newest activity first, at most\n50 and 40,000 characters; ``omitted`` counts the rest."
       },
+      "RunNoteRefs": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "refs": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Refs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note",
+          "refs"
+        ],
+        "title": "RunNoteRefs"
+      },
       "RunOut": {
         "properties": {
           "id": {
@@ -80359,6 +84332,14 @@
             },
             "type": "array",
             "title": "Notes"
+          },
+          "note_refs": {
+            "items": {
+              "$ref": "#/components/schemas/RunNoteRefs"
+            },
+            "type": "array",
+            "title": "Note Refs",
+            "default": []
           },
           "segments": {
             "items": {
@@ -81612,6 +85593,61 @@
         ],
         "title": "ScheduleBasisWithdraw"
       },
+      "ScopeEnhanceAccept": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance"
+          }
+        },
+        "type": "object",
+        "title": "ScopeEnhanceAccept",
+        "description": "The enhanced text and acceptance as the approver accepts them (edited, or the\njob's own when absent)."
+      },
+      "ScopeEnhanceIn": {
+        "properties": {
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          }
+        },
+        "type": "object",
+        "title": "ScopeEnhanceIn"
+      },
       "ScopeFeatureOut": {
         "properties": {
           "id": {
@@ -81777,6 +85813,383 @@
         ],
         "title": "ScopeGoal"
       },
+      "ScopeGoalChoice": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id",
+          "key",
+          "title"
+        ],
+        "title": "ScopeGoalChoice"
+      },
+      "ScopeGoalIn": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Goal Id"
+          },
+          "contribution": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Contribution",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id"
+        ],
+        "title": "ScopeGoalIn"
+      },
+      "ScopeHistory": {
+        "properties": {
+          "original": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Original",
+            "default": {}
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "title": "ScopeHistory",
+        "description": "The agent's value of a row and who changed it last."
+      },
+      "ScopeItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "requirement"
+            ],
+            "title": "Kind"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Acceptance",
+            "default": []
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude",
+              "defer",
+              "keep",
+              "cut"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "blocker_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocker Keys",
+            "default": []
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "original": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Original",
+            "default": {}
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ScopeSummary"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "scope_lock_version": {
+            "type": "integer",
+            "title": "Scope Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "key",
+          "title",
+          "decision",
+          "origin",
+          "lock_version",
+          "summary",
+          "revision",
+          "scope_lock_version"
+        ],
+        "title": "ScopeItemOut",
+        "description": "One scope row after a write (C7), with the scope's new tally and the checkpoint's\ndraft revision (D8) to decide with."
+      },
+      "ScopeItemPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "include",
+                  "exclude",
+                  "defer",
+                  "keep",
+                  "cut"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance"
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScopeGoalIn"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
+          },
+          "depends_on": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depends On"
+          },
+          "blocker_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker Keys"
+          },
+          "revert": {
+            "type": "boolean",
+            "title": "Revert",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ScopeItemPatch",
+        "description": "One person's change to one scope row (C7); every field optional. ``revert`` puts\nthe row back to the agent's values. ``decision_reason`` of a left-out feature:\nno_goal | not_now | out_of_scope | duplicate | other:<text>."
+      },
       "ScopeOut": {
         "properties": {
           "name": {
@@ -81794,6 +86207,103 @@
           "description"
         ],
         "title": "ScopeOut"
+      },
+      "ScopeReason": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "to_confirm"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement"
+          },
+          "waivable": {
+            "type": "boolean",
+            "title": "Waivable",
+            "default": false
+          },
+          "answered": {
+            "type": "boolean",
+            "title": "Answered",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "label"
+        ],
+        "title": "ScopeReason",
+        "description": "Why a feature needs a person (C7): a blocking problem of the scope's check, or a\nflag to confirm. ``answered``: a staged D8 waiver (blocking) or accept (to confirm)\nanswers it."
+      },
+      "ScopeRequirementIn": {
+        "properties": {
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parent Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Acceptance",
+            "default": []
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScopeGoalIn"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parent_id",
+          "text"
+        ],
+        "title": "ScopeRequirementIn",
+        "description": "A requirement a person adds to a feature (C7); its goals default to the\nfeature's."
       },
       "ScopeRequirementOut": {
         "properties": {
@@ -81890,6 +86400,359 @@
           "origin"
         ],
         "title": "ScopeRequirementOut"
+      },
+      "ScopeReviewFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude",
+              "defer"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "blocker_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocker Keys",
+            "default": []
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeReviewRequirement"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "default": []
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence Ids",
+            "default": []
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeReason"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "needs_you": {
+            "type": "boolean",
+            "title": "Needs You",
+            "default": false
+          },
+          "history": {
+            "$ref": "#/components/schemas/ScopeHistory",
+            "default": {
+              "original": {}
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "decision",
+          "origin",
+          "position",
+          "lock_version"
+        ],
+        "title": "ScopeReviewFeature"
+      },
+      "ScopeReviewRequirement": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "acceptance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Acceptance",
+            "default": []
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "cut"
+            ],
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "person"
+            ],
+            "title": "Origin"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Parent Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "added": {
+            "type": "boolean",
+            "title": "Added",
+            "default": false
+          },
+          "history": {
+            "$ref": "#/components/schemas/ScopeHistory",
+            "default": {
+              "original": {}
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "decision",
+          "origin",
+          "parent_id",
+          "position",
+          "lock_version"
+        ],
+        "title": "ScopeReviewRequirement"
+      },
+      "ScopeSummary": {
+        "properties": {
+          "features": {
+            "type": "integer",
+            "title": "Features",
+            "default": 0
+          },
+          "needs_you": {
+            "type": "integer",
+            "title": "Needs You",
+            "default": 0
+          },
+          "blocking": {
+            "type": "integer",
+            "title": "Blocking",
+            "default": 0
+          },
+          "to_confirm": {
+            "type": "integer",
+            "title": "To Confirm",
+            "default": 0
+          },
+          "handled": {
+            "type": "integer",
+            "title": "Handled",
+            "default": 0
+          },
+          "edits": {
+            "type": "integer",
+            "title": "Edits",
+            "default": 0
+          },
+          "suggestions_open": {
+            "type": "integer",
+            "title": "Suggestions Open",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ScopeSummary",
+        "description": "The scope's tally (C7): features, those that need a person, open blocking and\nto-confirm reasons, those handled, rows a person changed and suggestions waiting."
       },
       "SearchHit": {
         "properties": {
@@ -83987,6 +88850,17 @@
             "title": "Reused",
             "default": false
           },
+          "reused_from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reused From Version"
+          },
           "note": {
             "anyOf": [
               {
@@ -84575,6 +89449,75 @@
         "type": "object",
         "title": "ShippedIn"
       },
+      "SignInDomain": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "from": {
+            "type": "string",
+            "enum": [
+              "deployment",
+              "settings"
+            ],
+            "title": "From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "from"
+        ],
+        "title": "SignInDomain"
+      },
+      "SignInRulesOut": {
+        "properties": {
+          "google_sign_in": {
+            "type": "boolean",
+            "title": "Google Sign In"
+          },
+          "new_sign_ins_off": {
+            "type": "boolean",
+            "title": "New Sign Ins Off"
+          },
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/SignInDomain"
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "without_invite": {
+            "type": "string",
+            "enum": [
+              "request",
+              "join",
+              "refuse"
+            ],
+            "title": "Without Invite"
+          },
+          "default_role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "commenter",
+              "approver",
+              "owner"
+            ],
+            "title": "Default Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "google_sign_in",
+          "new_sign_ins_off",
+          "domains",
+          "without_invite",
+          "default_role"
+        ],
+        "title": "SignInRulesOut"
+      },
       "SignedOutEverywhere": {
         "properties": {
           "sessions_valid_after": {
@@ -84732,6 +89675,42 @@
           "next_cursor"
         ],
         "title": "SlackChannelPage"
+      },
+      "SlackStatusOut": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "mirroring": {
+            "type": "boolean",
+            "title": "Mirroring"
+          },
+          "needs_reconnect": {
+            "type": "boolean",
+            "title": "Needs Reconnect"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "label",
+          "mirroring",
+          "needs_reconnect"
+        ],
+        "title": "SlackStatusOut",
+        "description": "What any member's discussion menu needs to know (G8): connected, the Slack name,\nwhether discussions can be mirrored, and whether an owner must reconnect first."
       },
       "SlackTestIn": {
         "properties": {
@@ -85913,6 +90892,18 @@
               }
             ],
             "title": "Run Status"
+          },
+          "regeneration_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regeneration Run Id"
           }
         },
         "type": "object",
@@ -87624,6 +92615,29 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
+          },
+          "discussion_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Title"
           }
         },
         "type": "object",
@@ -94073,6 +99087,143 @@
         "title": "TrackerRecordsImport",
         "description": "Engineering status as read from a tracker, posted by an approver (an export, the\nCLI, an MCP client acting for them; not a run's token). Oracle stores it; it never\nwrites back."
       },
+      "TrashEntryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "root": {
+            "$ref": "#/components/schemas/TrashItem"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "deleted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted By"
+          },
+          "deleted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted By Name"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deleted At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "published": {
+            "type": "boolean",
+            "title": "Published"
+          },
+          "purge_after": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Purge After"
+          },
+          "days_left": {
+            "type": "integer",
+            "title": "Days Left"
+          },
+          "not_restored": {
+            "items": {
+              "$ref": "#/components/schemas/NotRestored"
+            },
+            "type": "array",
+            "title": "Not Restored",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "root",
+          "items",
+          "deleted_at",
+          "published",
+          "purge_after",
+          "days_left"
+        ],
+        "title": "TrashEntryOut",
+        "description": "One delete in Settings \u203a Trash: restored together, purged after ``days_left``."
+      },
+      "TrashItem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "document",
+              "intake",
+              "run"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "title",
+          "kind"
+        ],
+        "title": "TrashItem",
+        "description": "A document, intake or run as it was when it went to Trash."
+      },
       "TriageDailyIn": {
         "properties": {
           "on": {
@@ -94627,6 +99778,38 @@
           "title"
         ],
         "title": "UsedItem"
+      },
+      "VagueGoalOut": {
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/EntityOut"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "missing"
+        ],
+        "title": "VagueGoalOut"
       },
       "ValidationError": {
         "properties": {
@@ -95632,6 +100815,33 @@
         "type": "object",
         "title": "YamlImportResult"
       },
+      "oracle__baseline__schemas__MergeIn": {
+        "properties": {
+          "into": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Into"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "into"
+        ],
+        "title": "MergeIn",
+        "description": "Merge into\u2026 (B2): the item to merge the duplicate into, and why."
+      },
       "oracle__claude_accounts__router__AuthorizeOut": {
         "properties": {
           "authorize_url": {
@@ -95911,6 +101121,90 @@
         ],
         "title": "PredictionIn",
         "description": "A prediction a person writes: its typed figures must agree with each other."
+      },
+      "oracle__requests__schemas__MergeIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "into_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Into Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version",
+          "into_id"
+        ],
+        "title": "MergeIn"
+      },
+      "oracle__specs__schemas__RegenerateIn": {
+        "properties": {
+          "prd_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "knobs": {
+            "$ref": "#/components/schemas/KnobsIn",
+            "default": {
+              "depth": "standard",
+              "roles": {},
+              "checkpoints": {}
+            }
+          }
+        },
+        "type": "object",
+        "title": "RegenerateIn"
+      },
+      "oracle__trash__schemas__RegenerateIn": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "title": "RegenerateIn"
       },
       "GoalAttrs": {
         "description": "The typed fields of a goal's ``attrs`` (published so MCP clients see the shape).",

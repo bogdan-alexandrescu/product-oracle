@@ -14,7 +14,7 @@ from oracle.docs.models import Document
 from oracle.runs import flows
 from oracle.swarm import Outcome
 from oracle.tenancy import tenant_session
-from tests.test_runs import RUN_BASELINE, as_user, decide, get, tick
+from tests.test_runs import RUN_BASELINE, as_user, confirm_goal, decide, get, tick
 from tests.test_runs import owner as owner  # (tenant id, owner token headers)
 from tests.test_runs import runtime as runtime  # the FakeRuntime fixture
 
@@ -68,7 +68,7 @@ def test_baseline_to_prd_shares_the_one_baseline_segment():
     # first segment differs from the new flow's in any field, or it loses a segment;
     # no_claim=the later segments' content.
     b2p = flows.FLOWS["baseline_to_prd"]
-    assert len(b2p.segments) == 4
+    assert len(b2p.segments) == 5  # with the Engineering check
     assert b2p.segments[0] is flows.BASELINE_SEGMENT
     assert flows.FLOWS["baseline"].segments == (flows.BASELINE_SEGMENT,)
     for f in fields(flows.SegmentDef):
@@ -193,6 +193,8 @@ async def test_baseline_run_writes_no_document(client, owner, runtime):
     proposals = (await client.get("/v1/baseline/proposals", headers=auth)).json()
     assert [p["run_id"] for p in proposals] == [run["id"]]
 
+    # B2: the run's proposed goal is decided before Approve.
+    await confirm_goal(client, auth, by_key["activation"]["id"])
     run = await decide(client, auth, run)
     assert run["status"] == "succeeded"
     assert run["document_id"] is None and run["document_slug"] is None

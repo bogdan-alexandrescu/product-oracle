@@ -32,7 +32,22 @@ from oracle.integrations import slack_api
 from oracle.integrations.models import CompanyIntegration
 
 AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize"
-BOT_SCOPES = ("chat:write", "chat:write.public", "channels:read", "groups:read")
+BOT_SCOPES = (
+    "chat:write",
+    "chat:write.public",
+    "channels:read",
+    "groups:read",
+    # G8 Slack bridge: who wrote a reply (users.info with the e-mail), and the replies in
+    # the threads it starts (Slack sends message.channels / message.groups events only with
+    # the history scopes).
+    "users:read",
+    "users:read.email",
+    "channels:history",
+    "groups:history",
+)
+# What mirroring discussions needs beyond F6's install: without it the Slack card asks an
+# owner to reconnect, and mirroring stays off.
+MIRROR_SCOPES = BOT_SCOPES[3:]
 STATE_PROVIDER = "slack-notifications"
 PROVIDER, PURPOSE = "slack", "notifications"
 TEST_MESSAGE = "Product Oracle will post the weekly alignment report here."
@@ -78,6 +93,7 @@ class Install:
     team_id: str
     team_name: str | None
     scopes: list[str]
+    bot_user_id: str | None = None
 
 
 async def exchange_code(http: httpx.AsyncClient, c: oauth.Client, code: str) -> Install:
@@ -96,7 +112,25 @@ async def exchange_code(http: httpx.AsyncClient, c: oauth.Client, code: str) -> 
     if not isinstance(token, str) or not token or not team.get("id"):
         raise slack_api.SlackError("Slack returned no bot token for this install")
     scopes = [s for s in str(body.get("scope") or "").split(",") if s]
-    return Install(token=token, team_id=str(team["id"]), team_name=team.get("name"), scopes=scopes)
+    bot_user = body.get("bot_user_id")
+    return Install(
+        token=token,
+        team_id=str(team["id"]),
+        team_name=team.get("name"),
+        scopes=scopes,
+        bot_user_id=str(bot_user) if bot_user else None,
+    )
+
+
+def can_mirror(row: CompanyIntegration | None) -> bool:
+    """An active install with the bridge's scopes."""
+    return (
+        row is not None and row.status == "active" and set(MIRROR_SCOPES) <= set(row.scopes or [])
+    )
+
+
+def needs_reconnect(row: CompanyIntegration | None) -> bool:
+    return row is not None and row.status == "active" and not can_mirror(row)
 
 
 # --- the stored credential ---------------------------------------------------------------
@@ -110,10 +144,16 @@ def token_of(row: CompanyIntegration) -> str:
     return json.loads(crypto.decrypt(row.ciphertext))["access_token"]
 
 
-async def installed(db: AsyncSession, *, for_update: bool = False) -> CompanyIntegration | None:
+async def installed(
+    db: AsyncSession, *, for_update: bool = False, with_revoked: bool = False
+) -> CompanyIntegration | None:
+    """The company's install; a disconnected (``revoked``) one only ``with_revoked`` (the
+    callback reuses its row)."""
     stmt = select(CompanyIntegration).where(
         CompanyIntegration.provider == PROVIDER, CompanyIntegration.purpose == PURPOSE
     )
+    if not with_revoked:
+        stmt = stmt.where(CompanyIntegration.status != "revoked")
     if for_update:
         stmt = stmt.with_for_update()
     return await db.scalar(stmt)
@@ -128,9 +168,13 @@ async def revoke(http: httpx.AsyncClient, token: str) -> bool:
     return True
 
 
-async def channels(http: httpx.AsyncClient, row: CompanyIntegration) -> list[dict[str, Any]]:
+async def channels(
+    http: httpx.AsyncClient, row: CompanyIntegration, *, member_only: bool = False
+) -> list[dict[str, Any]]:
     """Public channels, and the private ones the bot was invited to (``groups:read``, in
-    :data:`BOT_SCOPES`; an install made without it lists public ones only), by name."""
+    :data:`BOT_SCOPES`; an install made without it lists public ones only), by name.
+    ``member_only`` keeps the ones the bot is in (G8 mirroring: Slack sends a channel's
+    ``message.channels`` events only to apps in it, so replies elsewhere never come back)."""
     types = "public_channel,private_channel" if "groups:read" in row.scopes else "public_channel"
     token = token_of(row)
     out: dict[str, dict[str, Any]] = {}
@@ -141,6 +185,8 @@ async def channels(http: httpx.AsyncClient, row: CompanyIntegration) -> list[dic
             fields["cursor"] = cursor
         body = await slack_api.call(http, "conversations.list", token=token, data=fields)
         for ch in body.get("channels") or []:
+            if member_only and not (isinstance(ch, dict) and ch.get("is_member")):
+                continue
             if isinstance(ch, dict) and ch.get("id") and ch.get("name"):
                 out[str(ch["id"])] = {
                     "id": str(ch["id"]),

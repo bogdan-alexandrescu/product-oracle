@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, changes
 from oracle.auth.models import ROLES, ApiToken, Role, User
 from oracle.config import get_settings
-from oracle.members.models import Invite, MemberFollowUp
+from oracle.members.models import INVITE_TTL, Invite, MemberFollowUp
 from oracle.members.schemas import InviteOut, InviteStatus, MemberOut, plain_address
 from oracle.tenant_settings import TenantSetting
 
@@ -39,27 +39,36 @@ class MemberError(Exception):
         super().__init__(message)
 
 
-def invite_status(invite: Invite) -> InviteStatus:
+def invite_status(invite: Invite, now: datetime | None = None) -> InviteStatus:
     if invite.revoked_at is not None:
         return "revoked"
     if invite.accepted_at is not None:
         return "accepted"
+    # A5: an open invite past its expiry is not claimed until it is resent.
+    if invite.expires_at <= (now or datetime.now(UTC)):
+        return "expired"
     return "open"
 
 
-def invite_out(invite: Invite) -> InviteOut:
+def invite_out(invite: Invite, invited_by_name: str | None = None) -> InviteOut:
     from oracle.members.delivery import sign_in_url
 
     return InviteOut(
         id=invite.id,
         email=invite.email,
+        name=invite.name,
         role=invite.role,
         engineering_lead=invite.engineering_lead,
         status=invite_status(invite),
         invited_by=invite.invited_by,
+        invited_by_name=invited_by_name,
         created_at=invite.created_at,
         accepted_at=invite.accepted_at,
         revoked_at=invite.revoked_at,
+        expires_at=invite.expires_at,
+        resent_at=invite.resent_at,
+        resend_count=invite.resend_count,
+        access_request_id=invite.access_request_id,
         access=invite.access,
         access_error=invite.access_error,
         access_at=invite.access_at,
@@ -67,7 +76,24 @@ def invite_out(invite: Invite) -> InviteOut:
         email_error=invite.email_error,
         email_at=invite.email_at,
         sign_in_url=sign_in_url(),
+        message=invite.message,
     )
+
+
+async def invites_out(session: AsyncSession, invites: list[Invite]) -> list[InviteOut]:
+    """Invites as the API shows them, each with its inviter's name."""
+    from oracle.members.names import display_name
+
+    ids = {i.invited_by for i in invites if i.invited_by is not None}
+    users = (
+        (
+            await session.execute(select(User.id, User.email, User.name).where(User.id.in_(ids)))
+        ).all()
+        if ids
+        else []
+    )
+    names = {u.id: display_name(u.email, u.name) for u in users}
+    return [invite_out(i, names.get(i.invited_by)) for i in invites]  # type: ignore[arg-type]
 
 
 def _open() -> list:
@@ -276,17 +302,43 @@ async def update_member(
     user_id: uuid.UUID,
     role: Role | None,
     engineering_lead: bool | None,
+    name: str | None | object = ...,
 ) -> User:
-    """``PATCH /v1/members/{user_id}``: the role, the engineering lead flag, or both, in
-    one change, role first (so a viewer made commenter can be named at once)."""
-    if role is None and engineering_lead is None:
-        raise MemberError("invalid", "Send role, engineering_lead or both")
+    """``PATCH /v1/members/{user_id}``: the role, the engineering lead flag, the name
+    (A5; None clears it), or several, in one change, role first (so a viewer made
+    commenter can be named at once). ``name`` left out (``...``) is unchanged."""
+    if role is None and engineering_lead is None and name is ...:
+        raise MemberError("invalid", "Send role, name or both")
     user: User | None = None
+    if name is not ...:
+        user = await set_name(session, principal, user_id, name)  # type: ignore[arg-type]
     if role is not None:
         user = await set_role(session, principal, user_id, role)
     if engineering_lead is not None:
         user = await set_engineering_lead(session, principal, user_id, engineering_lead)
     assert user is not None
+    return user
+
+
+async def set_name(
+    session: AsyncSession,
+    principal: "Principal",
+    user_id: uuid.UUID,
+    name: str | None,
+    *,
+    own: bool = False,
+) -> User:
+    """Set or clear a member's name (A5): an owner's (or, ``own``, the member's own) change,
+    audited ``member.name`` with before and after. Unchanged: no event."""
+    await _gate(session, principal, shared=True, role="viewer" if own else "owner")
+    user = await session.get(User, user_id, with_for_update=True)
+    if user is None:
+        raise MemberError("not_found", f"Member {user_id} not found")
+    if user.name != name:
+        before, user.name = user.name, name
+        await session.flush()
+        await audit.record(session, principal, "member.name", "user", user.id,
+                           {"before": before, "after": name})  # fmt: skip
     return user
 
 
@@ -1395,11 +1447,42 @@ async def token_approvals(
 # --- Invites -----------------------------------------------------------------------------
 
 
-async def list_invites(session: AsyncSession, status: str) -> list[Invite]:
-    """Invites with ``status`` (open / accepted / revoked), or every invite for ``all``."""
-    stmt = select(Invite).order_by(Invite.created_at.desc())
+def _own(principal: "Principal | None") -> list:
+    """Approvers act on the invites they sent only (A5); owners on every invite."""
+    if principal is None or principal.role == "owner":
+        return []
+    return [Invite.invited_by == principal.id]
+
+
+async def _may_act_on(
+    session: AsyncSession, principal: "Principal", invite: Invite | None, invite_id: uuid.UUID
+) -> Invite:
+    """The invite, when the caller may act on it: an approver only on the invites they sent
+    (404 otherwise), and on another's only an owner, re-read under the gate the caller
+    holds (an owner demoted while waiting is refused)."""
+    from oracle.auth.service import caller_refusal
+
+    if invite is None or (_own(principal) and invite.invited_by != principal.id):
+        raise MemberError("not_found", f"Invite {invite_id} not found")
+    if invite.invited_by != principal.id:
+        refusal = await caller_refusal(session, principal, "owner")
+        if refusal is not None:
+            raise MemberError("forbidden", refusal)
+    return invite
+
+
+async def list_invites(
+    session: AsyncSession, status: str, principal: "Principal | None" = None
+) -> list[Invite]:
+    """Invites with ``status``, or every invite for ``all``: ``open`` lists open and
+    expired ones (both still need an action), ``expired`` only those past their expiry.
+    An approver sees only the invites they sent."""
+    now = datetime.now(UTC)
+    stmt = select(Invite).where(*_own(principal)).order_by(Invite.created_at.desc())
     if status == "open":
         stmt = stmt.where(*_open())
+    elif status == "expired":
+        stmt = stmt.where(*_open(), Invite.expires_at <= now)
     elif status == "accepted":
         stmt = stmt.where(Invite.accepted_at.is_not(None))
     elif status == "revoked":
@@ -1413,10 +1496,20 @@ async def create_invite(
     email: str,
     role: Role,
     engineering_lead: bool = False,
+    name: str | None = None,
+    message: str | None = None,
 ) -> Invite:
     from oracle.auth.service import ReservedEmailError, check_email_allowed
+    from oracle.members.access import invite_roles, least_inviter
     from oracle.members.leads import VIEWER_REFUSED
 
+    if role not in invite_roles(principal):
+        raise MemberError(
+            "forbidden",
+            "Approvers invite viewers and commenters. Ask an owner to invite an approver.",
+        )
+    if engineering_lead and principal.role != "owner":
+        raise MemberError("forbidden", "Only an owner names an engineering lead")
     if engineering_lead and role == "viewer":
         raise MemberError("invalid", VIEWER_REFUSED)
     try:
@@ -1428,17 +1521,26 @@ async def create_invite(
         check_email_allowed(email)
     except ReservedEmailError as e:
         raise MemberError("invalid", str(e)) from None
-    check_invite_domain(email)
-    await _gate(session, principal, shared=True)
+    await check_invite_domain(session, email)
+    await _gate(session, principal, shared=True, role=least_inviter(role, engineering_lead))
     member = await session.scalar(select(User).where(User.email == email))
     if member is not None and member.disabled_at is not None:
         raise MemberError("conflict", f"{email} is a removed member; restore them instead")
     if member is not None:
         raise MemberError("conflict", f"{email} is already a member")
-    if await session.scalar(select(Invite.id).where(Invite.email == email, *_open())) is not None:
+    existing = await session.scalar(select(Invite).where(Invite.email == email, *_open()))
+    if existing is not None and invite_status(existing) == "expired":
+        raise MemberError("conflict", f"{email} has an expired invite; resend it")
+    if existing is not None:
         raise MemberError("conflict", f"{email} already has an open invite; revoke it first")
     invite = Invite(
-        email=email, role=role, engineering_lead=engineering_lead, invited_by=principal.id
+        email=email,
+        name=name,
+        role=role,
+        engineering_lead=engineering_lead,
+        invited_by=principal.id,
+        expires_at=datetime.now(UTC) + INVITE_TTL,
+        message=message,
     )
     session.add(invite)
     try:
@@ -1449,18 +1551,59 @@ async def create_invite(
     data: dict[str, object] = {"email": email, "role": role}
     if engineering_lead:
         data["engineering_lead"] = True
+    if name:
+        data["name"] = name
     await audit.record(session, principal, "invite.create", "invite", invite.id, data)
     return invite
 
 
-def check_invite_domain(email: str) -> None:
-    """Refuse an address Google sign-in would refuse: one outside ORACLE_IAP_ALLOWED_DOMAINS
-    (when set; with none set every domain is let through, as sign-in has no IAP then)."""
-    domains = [d.strip().lower().lstrip("@") for d in get_settings().iap_allowed_domains]
-    domains = [d for d in domains if d]
-    if domains and email.partition("@")[2] not in domains:
-        named = domains[0] if len(domains) == 1 else ", ".join(domains[:-1]) + " or " + domains[-1]
-        raise MemberError("invalid", f"Only addresses at {named} can sign in to Oracle")
+async def check_invite_domain(session: AsyncSession, email: str) -> None:
+    """With Google sign-in on, refuse an address sign-in would refuse: one outside the
+    company's email domains (A5: ORACLE_IAP_ALLOWED_DOMAINS and the owner's
+    company_email_domains), as such an invite can never be claimed. With Google sign-in
+    off, invites are made as before."""
+    from oracle.members.access import sign_in_domains
+
+    settings = get_settings()
+    if not settings.iap_audiences:
+        # No Google sign-in: only the deployment's list, when set, as before A5.
+        domains = [d.strip().lower().lstrip("@") for d in settings.iap_allowed_domains]
+        domains = [d for d in domains if d]
+        if domains and email.partition("@")[2] not in domains:
+            named = (
+                domains[0] if len(domains) == 1 else ", ".join(domains[:-1]) + " or " + domains[-1]
+            )
+            raise MemberError("invalid", f"Only addresses at {named} can sign in to Oracle")
+        return
+    domains = sorted(await sign_in_domains(session))
+    if email.partition("@")[2] not in domains:
+        named = ", ".join(domains) or "none set yet"
+        raise MemberError(
+            "invalid",
+            f"{email} is outside the company's email domains ({named}), so Google sign-in "
+            "can't let them join. Add the domain under Sign-in first.",
+        )
+
+
+async def resend_invite(
+    session: AsyncSession, principal: "Principal", invite_id: uuid.UUID
+) -> Invite:
+    """Give an open or expired invite 14 more days (A5). An approver resends only the
+    invites they sent (404 otherwise)."""
+    await _gate(session, principal, shared=True, role="approver")
+    invite = await _may_act_on(
+        session, principal, await session.get(Invite, invite_id, with_for_update=True), invite_id
+    )
+    if invite.accepted_at is not None or invite.revoked_at is not None:
+        raise MemberError("conflict", f"This invite was {invite_status(invite)}; invite them again")
+    now = datetime.now(UTC)
+    invite.expires_at = now + INVITE_TTL
+    invite.resent_at = now
+    invite.resend_count += 1
+    await session.flush()
+    data = {"email": invite.email, "expires_at": invite.expires_at.isoformat()}
+    await audit.record(session, principal, "invite.resend", "invite", invite.id, data)
+    return invite
 
 
 async def get_open_invite(session: AsyncSession, invite_id: uuid.UUID) -> Invite:
@@ -1476,10 +1619,10 @@ async def get_open_invite(session: AsyncSession, invite_id: uuid.UUID) -> Invite
 async def revoke_invite(
     session: AsyncSession, principal: "Principal", invite_id: uuid.UUID
 ) -> Invite:
-    await _gate(session, principal, shared=True)
-    invite = await session.get(Invite, invite_id, with_for_update=True)
-    if invite is None:
-        raise MemberError("not_found", f"Invite {invite_id} not found")
+    await _gate(session, principal, shared=True, role="approver")
+    invite = await _may_act_on(
+        session, principal, await session.get(Invite, invite_id, with_for_update=True), invite_id
+    )
     if invite.accepted_at is not None:
         raise MemberError("conflict", "This invite was already accepted; change the role instead")
     if invite.revoked_at is None:
@@ -1503,10 +1646,23 @@ async def iap_default_role(session: AsyncSession) -> Role:
 
 
 async def claim_open_invite(session: AsyncSession, email: str) -> Invite | None:
-    """Lock and mark accepted the open invite for ``email``, if any (caller commits)."""
+    """Lock and mark accepted the open, unexpired invite for ``email``, if any (caller
+    commits)."""
+    now = datetime.now(UTC)
     invite = await session.scalar(
-        select(Invite).where(Invite.email == email, *_open()).with_for_update()
+        select(Invite)
+        .where(Invite.email == email, *_open(), Invite.expires_at > now)
+        .with_for_update()
     )
     if invite is not None:
-        invite.accepted_at = datetime.now(UTC)
+        invite.accepted_at = now
     return invite
+
+
+async def expired_invite(session: AsyncSession, email: str) -> Invite | None:
+    """The open invite for ``email`` past its expiry, if any (A5: never claimed)."""
+    return await session.scalar(
+        select(Invite).where(
+            Invite.email == email, *_open(), Invite.expires_at <= datetime.now(UTC)
+        )
+    )

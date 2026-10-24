@@ -16,6 +16,7 @@ Nothing is ever rewritten: a stale spec, flow or wireframe gets a proposed regen
 
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -72,6 +73,8 @@ from oracle.v2.models import (
 from oracle.v2.schemas import ArtifactRequestOut, ArtifactReviewEventOut, ArtifactVersionOut
 
 FLOW = "prd_to_spec"
+# Run statuses after which a spec may be regenerated again.
+RUN_ENDED = ("succeeded", "failed", "cancelled")
 # The design check (parse, sanitise, static check) runs in a worker thread, never in the
 # event loop; past this many seconds the import fails it cleanly.
 DESIGN_CHECK_SECONDS = 20.0
@@ -1139,6 +1142,11 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
         stale=stale,
         run_id=run.id if run else None,
         run_status=run.status if run else None,
+        regeneration_run_id=run.id
+        if run is not None
+        and _regeneration_for(request, run) is not None
+        and run.status not in RUN_ENDED
+        else None,
     )
 
 
@@ -1332,11 +1340,23 @@ async def is_spec(session: AsyncSession, doc: str) -> bool:
 # --------------------------------------------------------------------------- regenerate
 
 
-async def regenerate(
-    db: AsyncSession, principal: Principal, request_id: uuid.UUID, body: RegenerateIn
-) -> RegenerationOut:
-    """Propose a regeneration: a draft run on the latest approved PRD version (or the one
-    named). Nothing is rewritten; the run writes new versions for review."""
+@dataclass
+class _Regeneration:
+    """A regeneration as planned: checked, nothing written yet."""
+
+    request: ArtifactRequest
+    prd: Document
+    version: DocumentVersion
+    regeneration: dict[str, Any]
+    dropped: list[str]
+    reasons: list[str]
+    run_body: RunCreate
+
+
+async def _plan_regeneration(
+    db: AsyncSession, request_id: uuid.UUID, body: RegenerateIn
+) -> _Regeneration:
+    """Check a regeneration and work out its run: reads only."""
     request = await _spec_request(db, request_id)
     if request.source_version_id is None:
         raise Invalid("the PRD version this spec was built from no longer exists")
@@ -1351,7 +1371,7 @@ async def regenerate(
     # E1: every requirement of the spec must be adopted by the version it is rebuilt from.
     await _adopted(db, prd, version, list(request.requirement_ids))
     run = await db.get(Run, request.run_id) if request.run_id else None
-    if run is not None and run.status not in ("succeeded", "failed", "cancelled"):
+    if run is not None and run.status not in RUN_ENDED:
         raise SpecError(
             f"this spec's run has not ended (it is {run.status}): let it finish, or cancel it "
             "on its run page, first",
@@ -1376,8 +1396,6 @@ async def regenerate(
     ]
     reasons = list(dict.fromkeys(r for v in stale_views for r in v.reasons))
     params = request.params or {}
-    # Nothing on the request changes until the run imports (_apply_regeneration): a
-    # proposal that is never started, or is cancelled, leaves the spec as it was.
     regeneration = {
         "reason": body.reason,
         "reasons": reasons[:20],
@@ -1386,26 +1404,67 @@ async def regenerate(
         "prd_version_id": str(version.id),
         "section_keys": kept,
     }
-    document_id = params.get("document_id")
+    run_body = RunCreate(
+        flow=FLOW,
+        document=params.get("document_id") or params.get("document_slug"),
+        source=str(prd.id),
+        source_version=version.number,
+        knobs=_knobs_for(body.knobs, bool(params.get("design", True))),
+    )
+    return _Regeneration(request, prd, version, regeneration, dropped, reasons, run_body)
+
+
+async def _draft_run(db: AsyncSession, principal: Principal, plan: _Regeneration) -> uuid.UUID:
     try:
-        run_id = await runs_service.create_run(
+        return await runs_service.create_run(
             db,
             principal,
-            RunCreate(
-                flow=FLOW,
-                document=document_id or params.get("document_slug"),
-                source=str(prd.id),
-                source_version=version.number,
-                knobs=_knobs_for(body.knobs, bool(params.get("design", True))),
-            ),
-            entry_knobs={"artifact_request_id": str(request.id)},
+            plan.run_body,
+            entry_knobs={"artifact_request_id": str(plan.request.id)},
             commit=False,
         )
     except runs_service.RunError as exc:
         raise Invalid(str(exc)) from exc
+
+
+async def regeneration_draft(
+    db: AsyncSession, principal: Principal, request_id: uuid.UUID, body: RegenerateIn
+) -> tuple[uuid.UUID, int]:
+    """The draft run a regeneration would start, to estimate it (Regenerate, #482): the
+    request is left as it is (nothing is proposed until :func:`regenerate` takes the run).
+    Returns the run and the PRD version it builds from."""
+    plan = await _plan_regeneration(db, request_id, body)
+    return await _draft_run(db, principal, plan), plan.version.number
+
+
+async def regenerate(
+    db: AsyncSession,
+    principal: Principal,
+    request_id: uuid.UUID,
+    body: RegenerateIn,
+    *,
+    run_id: uuid.UUID | None = None,
+) -> RegenerationOut:
+    """Propose a regeneration: a draft run on the latest approved PRD version (or the one
+    named). Nothing is rewritten; the run writes new versions for review. ``run_id``: the
+    draft :func:`regeneration_draft` made (Regenerate, #482), proposed as it is."""
+    plan = await _plan_regeneration(db, request_id, body)
+    request, prd, version = plan.request, plan.prd, plan.version
+    if run_id is None:
+        run_id = await _draft_run(db, principal, plan)
+    else:
+        run = await db.get(Run, run_id)
+        if run is None or (run.knobs or {}).get("source_version_id") != str(version.id):
+            raise Invalid(
+                f"{prd.slug}'s latest approved version changed since the estimate: "
+                "estimate it again"
+            )
+    params = request.params or {}
+    # Nothing on the request changes until the run imports (_apply_regeneration): a
+    # proposal that is never started, or is cancelled, leaves the spec as it was.
     for r in await _family(db, request):
         r.run_id = run_id
-    request.params = {**params, "regeneration": {**regeneration, "run_id": str(run_id)}}
+    request.params = {**params, "regeneration": {**plan.regeneration, "run_id": str(run_id)}}
     await audit.record(
         db,
         principal,
@@ -1414,9 +1473,9 @@ async def regenerate(
         request.id,
         {
             "run_id": str(run_id),
-            "from_prd_version": current.number,
+            "from_prd_version": plan.regeneration["from_prd_version"],
             "prd_version": version.number,
-            "dropped_section_keys": dropped,
+            "dropped_section_keys": plan.dropped,
             "reason": body.reason,
         },
     )
@@ -1425,7 +1484,7 @@ async def regenerate(
         request_id=request.id,
         run_id=run_id,
         prd_version=version.number,
-        section_keys=kept,
-        dropped_section_keys=dropped,
-        reasons=reasons,
+        section_keys=plan.regeneration["section_keys"],
+        dropped_section_keys=plan.dropped,
+        reasons=plan.reasons,
     )

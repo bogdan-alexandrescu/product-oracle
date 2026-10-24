@@ -10,6 +10,8 @@ import { displayName } from "@/lib/names";
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
+import type { RowTally } from "./from-run";
+import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -60,6 +62,16 @@ export interface RunsDb {
   drafts?: Record<string, DraftRow>;
 }
 
+/** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
+export interface BaselineReviewOf {
+  /** The approve gate's reasons: each goal from the run still proposed (goal_undecided). */
+  goals: GateReason[];
+  /** The Inbox row's counts (D9's summary). */
+  summary: RowTally;
+  /** item key -> title, for the send-back note. */
+  titles: Record<string, string>;
+}
+
 /** B1's Set up step: when the last Build the baseline run finished, or null when none succeeded. */
 export function lastBaselineBuild(db: RunsDb | undefined): string | null {
   if (!db) return null;
@@ -89,6 +101,12 @@ export interface RunsContext {
    * one is named). Absent: anyone may, as the mock had it.
    */
   mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
+  /** As oracle.members.leads.lead_stop: an engineering stop outside prd_to_spec once a lead is named. */
+  leadStop?: (c: Pick<CheckpointOut, "kind">, flow: RunOut["flow"]) => boolean;
+  /** F4: Approve at the Engineering check sets a feature's effort (a person's edit, locked). */
+  setEffort?: (featureKey: string, size: string, runId: string) => void;
+  /** B2: the baseline's rows of a run under its shared draft's actions (absent: no goals rule). */
+  baselineReview?: (runId: string, actions: DraftActionRow[]) => BaselineReviewOf;
   /** D10: the designated decider of the document a run review reviews (its review policy), if any. */
   reviewDecider?: (c: CheckpointOut) => string | null;
   /**
@@ -120,6 +138,8 @@ export interface RunsContext {
   sectionKeys: (versionId: string) => string[];
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
   sourceVersion: (documentId: string, number: number | null) => VersionSource | string;
+  /** E1 part B: the PRD version's draft items a Build roadmap run may reuse, or null. */
+  draftItemsToReuse?: (documentId: string, version: number) => { version: number; ready_at: string | null } | null;
   /** Imports a run's draft as the document's next version. */
   importDraft: (
     slug: string,
@@ -127,6 +147,10 @@ export interface RunsContext {
   ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
+  /** B6: the confirmed and proposed goals not measurable (an approved baseline_confirm's vague_goals). */
+  vagueGoals?: () => number;
+  /** C7: Approve with edits: the requirements a person added, written to the baseline as `by`'s. */
+  scopeApproved?: (scope: StoredScope, by: string) => void;
   uuid: () => string;
   now: () => string;
 }
@@ -134,6 +158,10 @@ export interface RunsContext {
 /** A3: the engineering stops (the check and the dates), as oracle.members.leads.ENGINEERING_KINDS. */
 export const ENGINEERING_KINDS: readonly string[] = ["eng_review", "eng_dates"];
 const LEAD_ONLY = "Only an engineering lead or an owner decides the engineering stops";
+/** F4, as flows.SegmentDef.skip_when_off: with its stop off, the whole segment is skipped. */
+const SKIP_WHEN_OFF = ["eng_review"];
+const OFF_NOTE = "Turned off when the run started.";
+const skippedOff = (s: Pick<SegmentOut, "name" | "checkpoint_on">) => SKIP_WHEN_OFF.includes(s.name) && !s.checkpoint_on;
 
 const ROLES: Schemas["AgentRoleOut"][] = [
   { key: "researcher", title: "Researcher", description: "Gathers and weighs evidence", base_usd: 4 },
@@ -154,6 +182,7 @@ const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
   outputs: ["baseline.yaml", "summary.md"],
   checkpoint: "baseline_confirm",
   approver_role: "approver",
+  decider: "role",
 };
 
 /** E1: the draft-items flow (the generated Flow literal gains it when the schema is regenerated). */
@@ -174,9 +203,11 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       writes_document: true,
       segments: [
         BASELINE_SEGMENT,
-        { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver" },
-        { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver" },
-        { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
+        { name: "feature_set", title: "Feature set, dependencies and design", roles: ["analyst", "architect"], scopes: [...READ, "write:proposals"], outputs: ["feature_set.yaml", "design.md"], checkpoint: "feature_set", approver_role: "approver", decider: "role" },
+        // F4: the Engineering check, on by default; off, the whole segment is skipped.
+        { name: "eng_review", title: "Engineering check", roles: ["architect"], scopes: [...READ, "read:documents"], outputs: ["tech_briefs.yaml"], checkpoint: "eng_review", approver_role: "approver", decider: "engineering_lead" },
+        { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver", decider: "role" },
+        { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -191,7 +222,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       starts_from: { label: "Build next draft · open a PRD or roadmap and use Build next draft", href: null },
       writes_document: true,
       segments: [
-        { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver" },
+        { name: "next_draft", title: "Next draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -205,8 +236,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       starts_from: { label: "PRD to roadmap · Plan › Roadmap documents", href: "/plan/documents" },
       writes_document: true,
       segments: [
-        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
-        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver" },
+        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver", decider: "role" },
+        { name: "roadmap_draft", title: "Roadmap draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents"], outputs: ["roadmap.md"], checkpoint: "roadmap_review", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -222,7 +253,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       starts_from: null,
       writes_document: false,
       segments: [
-        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver" },
+        { name: "roadmap_items", title: "Roadmap items", roles: ["analyst", "prioritizer"], scopes: [...READ, "read:documents"], outputs: ["roadmap_items.yaml"], checkpoint: "roadmap_items", approver_role: "approver", decider: "role" },
       ],
     },
     {
@@ -237,7 +268,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       in_new_run_dialog: false,
       starts_from: { label: "Vision or strategy · Company › Strategy, New vision or Draft next version", href: "/company/strategy" },
       segments: [
-        { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner" },
+        { name: "strategy_draft", title: "Vision or strategy draft", roles: ["researcher", "writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["{draft}"], checkpoint: "strategy_review", approver_role: "owner", decider: "role" },
       ],
     },
     {
@@ -266,7 +297,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       // Started from New update on Company › Updates only (owners); the New run dialog does not point at it.
       starts_from: null,
       segments: [
-        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner" },
+        { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner", decider: "role" },
       ],
     },
   ],
@@ -412,6 +443,7 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
   for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
   const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [] };
   if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
+  if (flowKey === "prd_to_roadmap") knobs.reuse_draft_items = raw?.reuse_draft_items !== false;
   return knobs;
 }
 
@@ -517,20 +549,23 @@ export const CONSOLE_HELD = "Blocking problems are open: fix or waive them, then
 
 /** As oracle.runs.gate (C6): a key the baseline does not know is fixed, never waived. */
 const UNKNOWN_CODES = ["unknown_feature", "unknown_requirement", "unknown_goal", "unknown_dependency"];
-const UNKNOWN_NOT_WAIVED = "an unknown key is never waived: fix it or send it back to the agents";
+const UNKNOWN_NOT_WAIVED = "This cannot be waived; leave it out or send it back";
 /** As oracle.runs.feature_set.FILE_PROBLEMS: problems of the file itself. */
 const FEATURE_SET_FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document"];
 
 /** As oracle.runs.gate.waivable: what each kind's spec lets a waiver answer (C8: nothing). */
 function waivable(kind: string, code: string): boolean {
+  if (kind === "baseline_confirm") return code === "goal_undecided";
   if (kind === "roadmap_items") return !DATE_CODES.includes(code);
-  if (kind === "feature_set") return !UNKNOWN_CODES.includes(code);
+  if (kind === "feature_set") return !UNKNOWN_CODES.includes(code) && !FEATURE_SET_FILE_PROBLEMS.includes(code) && code !== "no_features";
   return false;
 }
 
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
-type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"] };
-function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number } | null {
+export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"] };
+function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReason[]; files: number } | null {
+  // B2: Confirm the baseline's reasons are read live (a goal confirmed anywhere clears its own).
+  if (cp.kind === "baseline_confirm") return live ? { reasons: live, files: 0 } : null;
   if (cp.kind === "roadmap_items") {
     const check = (cp.payload?.items_check ?? null) as ItemsCheck | null;
     return { reasons: check?.reasons ?? [], files: check?.file_problems ?? 0 };
@@ -550,10 +585,11 @@ function blockingOf(cp: CheckpointOut): { reasons: GateReason[]; files: number }
  * As oracle.runs.gate.approve_gate: the stored blocking reasons a staged waiver does not
  * answer. D7: with `edits`, the gate Approve with edits re-checks: in the mock a staged edit
  * fixes the reasons it is a fix of (Remove date, Move to Later) and a drop the item's reasons.
- * A console approval applies no edits, so its gate is read without them.
+ * A console approval applies no edits, so its gate is read without them. B2: `live`, the
+ * reasons read live (Confirm the baseline's undecided goals).
  */
-function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
-  const blocking = cp.status === "pending" ? blockingOf(cp) : null;
+function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true, live?: GateReason[]): Schemas["Gate"] | null {
+  const blocking = cp.status !== "pending" ? null : cp.kind === "eng_review" ? engReasons(cp, actions) : blockingOf(cp, live);
   if (!blocking) return null;
   const waives = (x: GateReason) =>
     waivable(cp.kind, x.code) &&
@@ -573,13 +609,39 @@ export function cannotApproveNow(db: RunsDb | undefined, cp: CheckpointOut): str
   return cannotApprove(cp) ?? (gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null);
 }
 
+/** B2: the goals from the run nobody decided, at Confirm the baseline (the gate's live reasons). */
+function liveOf(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[]): GateReason[] | undefined {
+  return cp.kind === "baseline_confirm" ? ctx.baselineReview?.(cp.run_id, actions).goals : undefined;
+}
+
+/** The gate of `cp` now, with its live reasons. */
+function gateNow(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
+  return gateOf(cp, actions, edits, liveOf(ctx, cp, actions));
+}
+
+/**
+ * B2 (3.1 (7)): a Confirm the baseline send-back's note: the staged look-again actions, each
+ * with its item and note, then the shared draft's note as "General".
+ */
+function lookAgainNote(ctx: RunsContext, cp: CheckpointOut, staged: DraftActionRow[], note: string | null): string | null {
+  const looks = staged.filter((a) => a.kind === "look_again");
+  if (cp.kind !== "baseline_confirm" || !looks.length) return note;
+  const titles = ctx.baselineReview?.(cp.run_id, staged).titles ?? {};
+  const lines = looks.map((a) => {
+    const [type, key] = a.item_key.split(/:(.*)/);
+    const said = (a.value as { note?: string } | null)?.note ?? a.note ?? "";
+    return `- ${type} ${key} (${titles[a.item_key] ?? key})${said ? `: ${said}` : ""}`;
+  });
+  return ["Look again at these items:", ...lines, ...(note ? [`General: ${note}`] : [])].join("\n");
+}
+
 /**
  * The checkpoint with its gate, and Approve refused while the gate is closed (D3); D7: the
  * Approve button's words and the staged actions only the agents can carry out.
  */
 function gated(ctx: RunsContext, cp: CheckpointOut): CheckpointOut {
   const actions = ctx.db.drafts?.[cp.id]?.actions ?? [];
-  const gate = gateOf(cp, actions);
+  const gate = gateNow(ctx, cp, actions);
   const closed = gate && !gate.open ? gateMessage(gate.blocking_open + gate.file_problems) : null;
   return { ...cp, gate, cannot_approve: cp.cannot_approve ?? closed, approve_label: approveLabel(editsOf(cp, actions).length), needs_agents: needsAgentsOf(cp, actions) };
 }
@@ -787,7 +849,7 @@ function finish(ctx: RunsContext, r: RunOut, status: RunOut["status"]) {
 }
 
 function next(ctx: RunsContext, r: RunOut, s: SegmentOut) {
-  const later = r.segments.find((x) => x.seq === s.seq + 1);
+  const later = r.segments.find((x) => x.seq > s.seq && x.status !== "skipped");
   if (later) submit(ctx, r, later);
   else finish(ctx, r, "succeeded");
 }
@@ -1068,6 +1130,7 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunO
 }
 
 function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
+  if (name === "tech_briefs.yaml") return briefsYaml(LOCAL_BRIEFS, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
   if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
   if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
@@ -1096,6 +1159,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   }
   // C8: the local runtime's order checks against the approved scope, and becomes a proposed snapshot.
   let snapshot: SnapshotRow | null = null;
+  // F4: the architect's briefs, one per feature of the run's feature set, checked as the stop reads them.
+  const briefs = def.outputs.includes("tech_briefs.yaml") ? briefsCheckOf(r.id === ENG_CHECK_RUN ? SEEDED_BRIEFS : LOCAL_BRIEFS) : null;
   if (def.outputs.includes("priority.yaml")) {
     s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r));
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
@@ -1115,6 +1180,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     artifacts: s.artifacts,
     ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
     ...(snapshot ? { priority_check: s.priority_check, priority_snapshot_id: snapshot.id } : {}),
+    ...(briefs ? { briefs_check: briefs } : {}),
     // As the API: the review of an imported draft names its version.
     ...(s.draft_import?.version ? { import: { document_id: s.draft_import.document_id, slug: s.draft_import.slug, kind: r.document_kind, version: s.draft_import.version } } : {}),
   };
@@ -1139,6 +1205,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     payload,
     created_at: ctx.now(),
     can_decide: on,
+    lead_stop: false,
     cannot_approve: null,
     approve_label: "Approve",
     needs_agents: [],
@@ -1244,9 +1311,34 @@ function finishRunning(ctx: RunsContext, r: RunOut): "none" | "paused" | "advanc
   return "advanced";
 }
 
+/** E1 part B: the draft items a Build roadmap run's items step reuses, unless it derives them again. */
+function itemsReuse(ctx: RunsContext, r: RunOut) {
+  if (r.flow !== "prd_to_roadmap" || r.knobs.reuse_draft_items === false || !r.source) return null;
+  return ctx.draftItemsToReuse?.(r.source.document_id, r.source.version) ?? null;
+}
+
+type ItemsReused = { version: number; ready_at: string | null };
+
+/** The draft items the run's estimate reused (the API's draft_items_reused knob): Start uses them. */
+const estimated = (r: RunOut) => r as RunOut & { draft_items_reused?: ItemsReused | null };
+
+/** As the API: a run estimated with reused draft items still has the same ones at start (else 409). */
+function itemsChanged(ctx: RunsContext, r: RunOut): Response | null {
+  const knob = estimated(r).draft_items_reused;
+  if (!knob || JSON.stringify(itemsReuse(ctx, r)) === JSON.stringify(knob)) return null;
+  return fail(409, "the PRD version's draft roadmap items changed since the estimate: estimate the run again");
+}
+
+/** "Reused: the roadmap items of v3, derived 20 Oct", as the API: the Company time zone's day. */
+function itemsReusedNote(reuse: ItemsReused) {
+  const on = reuse.ready_at ? monthDay(reuse.ready_at).split(" ").reverse().join(" ") : null;
+  return `Reused: the roadmap items of v${reuse.version}${on ? `, derived ${on}` : ""}`;
+}
+
 function launch(ctx: RunsContext, r: RunOut) {
   r.started_at = ctx.now();
   r.overrun_ceiling_usd = round2((r.estimate_usd ?? 0) * FACTOR);
+  for (const s of r.segments.filter(skippedOff)) Object.assign(s, { status: "skipped", cost_usd: 0, estimate_usd: 0, note: OFF_NOTE, finished_at: ctx.now() });
   const reused = reusedReview(r);
   const first = r.segments[0];
   if (reused && first?.name === "baseline") {
@@ -1256,9 +1348,18 @@ function launch(ctx: RunsContext, r: RunOut) {
     r.checkpoints.push({
       id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
       segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
-      created_at: ctx.now(), can_decide: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
+      created_at: ctx.now(), can_decide: false, lead_stop: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
     });
     submit(ctx, r, r.segments[1]);
+    return;
+  }
+  const items = estimated(r).draft_items_reused;
+  if (items && first?.name === "roadmap_items") {
+    // E1 part B: the items step runs nothing and costs nothing; its stop opens at once.
+    Object.assign(first, { status: "succeeded", cost_usd: 0, estimate_usd: 0, note: itemsReusedNote(items), started_at: ctx.now(), finished_at: ctx.now() });
+    first.attempts.push({ attempt: first.attempts.length + 1, workflow_id: null, submitted_at: ctx.now(), cost_usd: 0, note: null, state: "succeeded" });
+    r.status = "running";
+    advance(ctx, r, first);
     return;
   }
   submit(ctx, r, first);
@@ -1351,12 +1452,16 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   return {
     // Launch rows (H6) are added by the server (./launches.ts); date rows (F3) too.
     launches: [],
+    // A5: no access requests in the mock yet.
+    access_requests: [],
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],
     // Ritual rows (H2): the mock has no rituals yet (the UI lane adds them); outcome rows (H3) are added by ./quality.ts.
     rituals: [],
     outcomes: [],
+    // G6: discussion rows are added by the server (./discussions.ts).
+    discussions: [],
     checkpoints,
     deliveries,
     approvals,
@@ -1406,6 +1511,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       .sort((a, b) => (b.approved_at ?? "").localeCompare(a.approved_at ?? ""))[0];
     return found ? json(200, found) : fail(404, `document ${p[2]} has no approved PRD scope`);
   }
+  // C7: the feature-set stop's rows (./scope.ts), and a run's latest scope.
+  const scoped = await routeScopes(ctx, req, p);
+  if (scoped) return scoped;
   if (p[1] !== "runs") return null;
 
   if (p.length === 2 && m === "GET") {
@@ -1515,6 +1623,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       overrun_ceiling_usd: null,
       runtime: "fake",
       notes: FLOW_CATALOG.runtime_notes,
+      note_refs: [],
       segments: segmentsFor(input.flow, knobs, ctx.uuid),
       checkpoints: [],
       token_read_only: false,
@@ -1535,6 +1644,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_decide:
         c.can_decide &&
         (ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind) ? ctx.mayDecide(c, r.flow) : atLeast(ctx.userRole, c.approver_role)),
+      // B6: Oracle offers a goals interview once the baseline is approved; it starts nothing itself.
+      ...(c.kind === "baseline_confirm" && c.status === "approved" && ctx.vagueGoals ? { vague_goals: ctx.vagueGoals() } : {}),
+      lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
     return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
@@ -1554,6 +1666,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       const goals = targetGoals(ctx, r.flow, patch.knobs.goals);
       if (typeof goals === "string") return fail(422, goals);
       knobs.goals = goals ?? r.knobs.goals ?? [];
+      // As the API: an omitted reuse_draft_items keeps the run's choice.
+      if (r.flow === "prd_to_roadmap" && patch.knobs.reuse_draft_items == null) knobs.reuse_draft_items = r.knobs.reuse_draft_items;
       r.knobs = knobs;
     }
     if (patch.document) {
@@ -1567,6 +1681,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     r.segments = segmentsFor(r.flow, r.knobs, ctx.uuid);
     r.estimate_usd = null;
+    // As the API: what the run reuses is decided again by its next estimate.
+    estimated(r).draft_items_reused = null;
     r.needs_approval = false;
     return done();
   }
@@ -1578,7 +1694,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (stale) return stale;
     // C4: a reused baseline segment does not run, so it costs nothing.
     const reused = reusedReview(r);
-    for (const s of r.segments) s.estimate_usd = reused && s.name === "baseline" ? 0 : segEstimate(s.roles, r.knobs.depth);
+    // E1 part B: a Build roadmap run reusing the draft items runs no items step.
+    const items = itemsReuse(ctx, r);
+    estimated(r).draft_items_reused = items;
+    const free = (name: string) => (!!reused && name === "baseline") || (!!items && name === "roadmap_items");
+    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : segEstimate(s.roles, r.knobs.depth);
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;
@@ -1589,9 +1709,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       total_usd: total,
       segments: r.segments.map((s) => {
         const skip = !!reused && s.name === "baseline";
+        const fromDraft = items && s.name === "roadmap_items" ? items : null;
         return {
-          seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0, reused: skip,
-          note: skip && reused ? `Current baseline, approved ${monthDay(reused.approved_at)}` : null,
+          seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0, reused: skip || !!fromDraft,
+          reused_from_version: fromDraft?.version ?? null,
+          note: skip && reused ? `Current baseline, approved ${monthDay(reused.approved_at)}` : fromDraft ? itemsReusedNote(fromDraft) : skippedOff(s) ? OFF_NOTE : null,
         };
       }),
       approval_threshold_usd: THRESHOLD,
@@ -1603,7 +1725,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "start" && m === "POST") {
     if (r.status !== "draft") return fail(409, `run is ${r.status}, not a draft`);
     if (r.estimate_usd == null) return fail(409, "estimate the run first");
-    const stale = notReusable(r);
+    const stale = notReusable(r) ?? itemsChanged(ctx, r);
     if (stale) return stale;
     const refused = buildUnderWay(ctx, r.flow);
     if (refused) return refused;
@@ -1618,6 +1740,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   }
   if (action === "approve" && m === "POST") {
     if (r.status !== "awaiting_approval") return fail(409, `run is ${r.status}, not awaiting approval`);
+    const changed = itemsChanged(ctx, r);
+    if (changed) return changed;
     r.approved_by = ctx.userId;
     r.approved_at = ctx.now();
     launch(ctx, r);
@@ -1707,7 +1831,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return fail(409, `already decided: this checkpoint is ${cp.status.replace("_", " ")}; a recorded decision is final`);
     }
     if (cp.status !== "pending" || r.status !== "awaiting_checkpoint") return fail(409, `checkpoint is ${cp.status}`);
-    if (ctx.mayDecide && !ctx.mayDecide(cp, r.flow)) return fail(403, ENGINEERING_KINDS.includes(cp.kind) ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
+    if (!mayStage(ctx, r, cp, ctx.userRole ?? null)) return fail(403, ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
     // H8: an update's review stop is an owner's to decide.
     if (cp.approver_role === "owner" && ctx.userRole !== "owner") return fail(403, "Only an owner can decide this stop");
     // D10: a run review's Approve draft and Send back are the designated decider's.
@@ -1728,7 +1852,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const confirming = decision === "confirm" && cp.console?.needs === "confirm" && cp.console.verdict === "MERGE";
     if (decision === "confirm" && !confirming) return fail(422, "nothing recorded in SwarmCloud's console waits to be confirmed here");
     // W5: a console approval applies no staged edits, so its gate reads none.
-    const gate = gateOf(cp, draft.actions, !confirming);
+    const gate = gateNow(ctx, cp, draft.actions, !confirming);
     if ((decision === "approved" || confirming) && gate && !gate.open) {
       const n = gate.blocking_open + gate.file_problems;
       if (edits.length) {
@@ -1749,15 +1873,21 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       return json(409, { detail: { code: "edits_leave_problems", message, left: [] } });
     }
     // D8: the note defaults to the shared draft's.
-    const text = (note ?? draft.note)?.trim() || null;
+    const general = (note ?? draft.note)?.trim() || null;
+    // D4: a send-back says something: a staged action or a note.
+    const staged = draft.actions.filter((a) => a.state === "staged");
+    // B2: Confirm the baseline sends its staged look-again actions as one structured note.
+    const text = decision === "changes_requested" ? lookAgainNote(ctx, cp, staged, general) : general;
     // D10: a run review sends back the document's own feedback; the note is optional.
     const reviewed = reviewedVersion(cp);
     if (decision === "changes_requested" && !text && reviewed && !sendBackEntries(ctx, reviewed.document_id, reviewed.version)) {
       return fail(422, "Nothing to send back: comment, request changes on a section, or write a note.");
     }
     // D4: any other send-back says something: a staged action or a note.
-    const staged = draft.actions.filter((a) => a.state === "staged");
-    if (decision === "changes_requested" && !text && !reviewed && !staged.length) return fail(422, "Stage a change, ask a question, or write a note to send back.");
+    // C7: a feature set's edits and adds are its rows (counted as edits), never staged actions.
+    const sent = staged.filter((a) => cp.kind !== "feature_set" || (a.kind !== "edit" && a.kind !== "add"));
+    const scopeEdited = cp.kind === "feature_set" ? scopeEdits(ctx.db, r.id) : 0;
+    if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
@@ -1778,8 +1908,14 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
         cp.payload = { ...cp.payload, items_check: seg.items_check };
       }
     }
-    if (cp.kind === "feature_set" && (decision === "approved" || decision === "changes_requested")) decideScope(ctx, r, decision, ctx.userId);
+    if (cp.kind === "feature_set") {
+      // C7: Approve with edits writes the requirements a person added to the baseline as theirs.
+      const scope = latestScope(ctx.db, r.id);
+      if (status === "approved" && scope?.status === "proposed") ctx.scopeApproved?.(scope, ctx.member?.id ?? ctx.userId);
+      decideScope(ctx, r, status, ctx.userId);
+    }
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
+    if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
     cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
@@ -1855,8 +1991,11 @@ function seedClock() {
 /** A seeded draft run, estimated, added to `db`. */
 function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string): RunOut {
   const doc = ctx.documents.find((d) => d.slug === document);
-  const k = resolveKnobs(flow, knobs) as RunOut["knobs"];
-  const segments = segmentsFor(flow, k, ctx.uuid);
+  // Seeded runs stand for runs started before F4: no Engineering check unless they name it.
+  const k = resolveKnobs(flow, { ...knobs, checkpoints: { eng_review: false, ...knobs.checkpoints } }) as RunOut["knobs"];
+  const segments = segmentsFor(flow, k, ctx.uuid)
+    .filter((s) => !skippedOff(s))
+    .map((s, i) => ({ ...s, seq: i + 1 }));
   for (const s of segments) s.estimate_usd = segEstimate(s.roles, k.depth);
   const estimate = round2(segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
   const run: RunOut = {
@@ -1893,6 +2032,7 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
     overrun_ceiling_usd: null,
     runtime: "fake",
     notes: FLOW_CATALOG.runtime_notes,
+    note_refs: [],
     segments,
     checkpoints: [],
     token_read_only: false,
@@ -1994,7 +2134,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
     id: ctx.uuid(), run_id: done.id, kind: "prd_review", status: "skipped", approver_role: "approver", segment_seq: 1,
-    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, cannot_approve: null,
+    decided_by: null, decided_at: "2026-10-16T09:20:00Z", note: "Turned off when the run started.", payload: {}, created_at: "2026-10-16T09:20:00Z", can_decide: false, lead_stop: false, cannot_approve: null,
     approve_label: "Approve", needs_agents: [],
   });
   Object.assign(done, { status: "succeeded", started_at: "2026-10-16T09:00:00Z", finished_at: "2026-10-16T09:20:00Z", overrun_ceiling_usd: 13.5 });
@@ -2187,6 +2327,75 @@ export function seedEngReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   return r;
 }
 
+/** The run the "eng-check" scenario seeds (F4). */
+export const ENG_CHECK_RUN = "7a11c0de-0000-4000-8000-0000000000f4";
+
+/**
+ * The "eng-check" scenario (F4): a Baseline to PRD run for a new PRD (guided-onboarding),
+ * its baseline and feature set approved, waiting at its Engineering check with three briefs
+ * on the baseline's features, one with a blocking question.
+ */
+export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline_to_prd", "guided-onboarding", { checkpoints: { eng_review: true } }, "2026-10-17T11:00:00Z");
+  r.id = ENG_CHECK_RUN;
+  from(r.created_at);
+  launch(full, r);
+  for (const kind of ["baseline_confirm", "feature_set"]) {
+    tick(full);
+    const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === kind)!;
+    Object.assign(cp, { status: "approved", decided_by: ctx.userId, decided_at: now() });
+    if (kind === "feature_set") decideScope(full, r, "approved", ctx.userId);
+    next(full, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
+  }
+  tick(full);
+  refresh(r);
+  db.runs.push(r);
+  return r;
+}
+
+/** The run the "baseline-review" scenarios seed (B2). */
+export const BASELINE_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
+
+/**
+ * The "baseline-review" scenarios (B2): a Build the baseline run of Oct 20 waiting at Confirm
+ * the baseline (./from-run.ts seeds what it wrote to the baseline). `consoleHeld`: approved in
+ * SwarmCloud's console while its goals are undecided, so Oracle holds it (D3 "Console gate").
+ */
+export function seedBaselineReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">, consoleHeld = false): RunOut {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline", "", {}, "2026-10-20T16:14:00Z");
+  r.id = BASELINE_REVIEW_RUN;
+  Object.assign(r, { document_id: null, document_slug: null });
+  from(r.created_at);
+  launch(full, r);
+  tick(full);
+  const cp = r.checkpoints.find((c) => c.status === "pending")!;
+  cp.run_id = r.id;
+  if (consoleHeld) {
+    cp.console = {
+      answered_by: "lead@example.com",
+      answered_at: "2026-10-20T17:00:00Z",
+      via: null,
+      verdict: "MERGE",
+      findings: [],
+      counted: true,
+      reason: CONSOLE_HELD,
+      needs: "confirm",
+      revise: false,
+      can_redo: false,
+    };
+    r.token_read_only = true;
+  }
+  refresh(r);
+  db.runs.push(r);
+  return r;
+}
+
 /** D10 "run-review" scenario: a Baseline to PRD run waiting at its PRD review of the Usage alerts PRD's v2. */
 export const RUN_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000da";
 
@@ -2194,7 +2403,7 @@ export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   const { from, now } = seedClock();
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
   const full = { ...ctx, db: own, now };
-  const off = { baseline_confirm: false, feature_set: false, priority_order: false };
+  const off = { baseline_confirm: false, feature_set: false, priority_order: false, eng_review: false };
   const r = seedRun(ctx, own, "baseline_to_prd", "usage-alerts", { checkpoints: off }, "2026-10-21T08:00:00Z");
   r.id = RUN_REVIEW_RUN;
   from(r.created_at);
@@ -2203,6 +2412,41 @@ export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   refresh(r);
   db.runs.push(r);
   return r;
+}
+
+/** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */
+export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schemas["ProposalRun"]; checkpoint: Schemas["FromRunCheckpoint"] | null; actions: Schemas["ReviewAction"][] } | null {
+  const r = ctx.db.runs.find((x) => x.id === runId);
+  if (!r) return null;
+  const run = { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at };
+  const cp = r.checkpoints.filter((c) => c.kind === "baseline_confirm").pop();
+  if (!cp) return { run, checkpoint: null, actions: [] };
+  const role = ctx.member?.role ?? ctx.userRole ?? null;
+  const draft = draftOf(ctx, cp.id);
+  const review = reviewOut(ctx, r, cp, draft, role);
+  const people = new Map((ctx.members ?? []).map((x) => [x.id, x]));
+  const decider = cp.decided_by ? people.get(cp.decided_by) : undefined;
+  const pending = cp.status === "pending";
+  return {
+    run,
+    checkpoint: {
+      id: cp.id,
+      kind: cp.kind,
+      status: cp.status,
+      approver_role: cp.approver_role,
+      revision: draft.revision,
+      can_suggest: review.can_suggest,
+      can_stage: review.can_stage,
+      can_decide: review.can_decide && (!ctx.mayDecide || ctx.mayDecide(cp, r.flow)),
+      gate: review.gate,
+      note: draft.note,
+      wait: review.wait,
+      decided_by_name: cp.decided_by ? displayName(decider?.email ?? ctx.userName ?? "admin@example.com") : null,
+      decided_at: cp.decided_at ?? null,
+      review_note: !pending && cp.status === "changes_requested" ? (cp.note ?? null) : null,
+    },
+    actions: pending ? review.items.flatMap((i) => i.actions) : [],
+  };
 }
 
 /** The runs the "priority-order" scenario seeds (C8). */
@@ -2491,6 +2735,7 @@ function roadmapReviewRun(): RunOut {
     overrun_ceiling_usd: round2(estimate * FACTOR),
     runtime: "fake",
     notes: FLOW_CATALOG.runtime_notes,
+    note_refs: [],
     segments,
     checkpoints: [
       {
@@ -2514,6 +2759,7 @@ function roadmapReviewRun(): RunOut {
         },
         created_at: "2026-10-20T09:04:00Z",
         can_decide: true,
+        lead_stop: false,
         cannot_approve: null,
         approve_label: "Approve",
         needs_agents: [],
@@ -2731,6 +2977,101 @@ export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
 };
 
 
+// ---------------------------------------------------------------- F4 Engineering check
+
+type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null }[]; code_map_used: boolean };
+const SIZES = ["xs", "s", "m", "l", "xl"];
+const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
+const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
+
+/** The local runtime's briefs: one per feature of its feature set (LOCAL_FEATURE_SET). */
+const LOCAL_BRIEFS: Brief[] = [
+  { key: "price-early", title: "Show the price early", approach: "Compute the total on the cart page from the existing pricing call.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Can the pricing call answer within 200 ms?", blocking: true }] },
+  { key: "guest-checkout", title: "Guest checkout", approach: "A guest session that carries the cart to payment.", size: "l", depends_on: ["price-early"], questions: [] },
+  { key: "saved-cards", title: "Saved cards", approach: "Store the payment provider's card token on the account.", size: "s", depends_on: [], questions: [] },
+];
+
+/** The "eng-check" scenario's briefs, on the baseline's own features (their efforts M, S, L). */
+const SEEDED_BRIEFS: Brief[] = [
+  { key: "f.guided-setup", title: "Guided setup", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
+  { key: "f.sample-data", title: "Sample data", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
+  { key: "f.saved-carts", title: "Saved carts", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
+];
+
+function briefsCheckOf(briefs: Brief[]): BriefsCheck {
+  return { features: briefs, problems: [], code_map_used: false };
+}
+
+function briefsYaml(briefs: Brief[], attempt: number): string {
+  const lines = [`# eng_review (local agent runtime, attempt ${attempt})`, "version: 1", "code_map: {used: false, repos: []}", "features:"];
+  for (const b of briefs) {
+    lines.push(`  - feature: ${b.key}`, `    title: ${b.title}`, `    approach: ${b.approach}`, `    size: ${b.size}`, `    depends_on: [${b.depends_on.join(", ")}]`, "    questions:");
+    for (const q of b.questions) lines.push(`      - {id: ${q.id}, question: "${q.question}", blocking: ${q.blocking}}`);
+    if (!b.questions.length) lines[lines.length - 1] = "    questions: []";
+  }
+  return lines.join("\n") + "\n";
+}
+
+const briefsOf = (cp: CheckpointOut) => ((cp.payload as { briefs_check?: BriefsCheck } | undefined)?.briefs_check ?? null);
+const stagedEdit = (actions: DraftActionRow[], key: string, field: string) => actions.find((a) => a.state === "staged" && a.kind === "edit" && a.item_key === key && a.field === field);
+
+/** As oracle.engineering.check.reasons: a verdict per feature and an answer per blocking question, never waived. */
+function engReasons(cp: CheckpointOut, actions: DraftActionRow[]): { reasons: GateReason[]; files: number } | null {
+  const check = briefsOf(cp);
+  if (!check) return null;
+  const reasons: GateReason[] = [];
+  for (const f of check.features) {
+    if (!stagedEdit(actions, f.key, "verdict")) reasons.push({ item: f.key, item_title: f.title, code: "no_verdict", severity: "blocking", label: "No verdict yet" });
+    for (const q of f.questions) {
+      if (q.blocking && !stagedEdit(actions, f.key, `answer:${q.id}`)) reasons.push({ item: f.key, item_title: f.title, code: "blocking_question", severity: "blocking", label: "Blocking question unanswered" });
+    }
+  }
+  return { reasons, files: check.problems.length };
+}
+
+/** As oracle.engineering.check.validate: the Engineering check's vocabulary; the refusal, or null. */
+function engInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
+  const f = briefsOf(cp)?.features.find((x) => x.key === a.item_key);
+  if (!f) return `${a.item_key} is not a feature of the briefs`;
+  if (a.kind === "question") return null;
+  if (a.kind !== "edit") return "an engineering check takes edit (verdict, size, answer:<id>) or question";
+  if (a.field === "verdict") {
+    const v = (a.value ?? {}) as { verdict?: string; note?: string | null };
+    if (!VERDICTS.includes(v.verdict ?? "")) return "verdict is feasible, feasible_with_changes or not_feasible";
+    if (v.verdict !== "feasible" && !(v.note ?? "").trim()) return `${VERDICT_WORDS[v.verdict!]} needs a note saying why`;
+    return null;
+  }
+  if (a.field === "size") return SIZES.includes(a.value as string) ? null : `size is one of ${SIZES.join(", ")}`;
+  if (a.field?.startsWith("answer:")) {
+    const id = a.field.slice("answer:".length);
+    if (!f.questions.some((q) => q.id === id)) return `${a.item_key} has no question ${id}`;
+    return typeof a.value === "string" && a.value.trim() ? null : "an answer is text of 1 to 2000 characters";
+  }
+  return "edit takes the field verdict, size or answer:<question id>";
+}
+
+/** As oracle.engineering.check.on_approved: the choices recorded, each changed size a person's locked effort. */
+function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: DraftActionRow[]) {
+  const check = briefsOf(cp);
+  if (!check) return;
+  const verdicts: Record<string, unknown> = {};
+  const sizes: Record<string, string> = {};
+  for (const f of check.features) {
+    const v = stagedEdit(staged, f.key, "verdict");
+    if (v) verdicts[f.key] = { value: (v.value as { verdict: string }).verdict, note: (v.value as { note?: string | null }).note ?? null };
+    sizes[f.key] = (stagedEdit(staged, f.key, "size")?.value as string | undefined) ?? f.size;
+    ctx.setEffort?.(f.key, sizes[f.key], r.id);
+  }
+  cp.payload = { ...cp.payload, briefs: { verdicts, sizes } };
+}
+
+/** Who stages at the checkpoint (and so decides): A3's rule at an engineering stop, else its role floor. */
+function mayStage(ctx: RunsContext, r: RunOut, cp: CheckpointOut, role: Schemas["Me"]["role"] | null): boolean {
+  if (ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide) return ctx.mayDecide(cp, r.flow);
+  return atLeast(role, cp.approver_role);
+}
+
 // ---------------------------------------------------------------- D8 shared draft decision
 
 const RANK: Record<Schemas["Me"]["role"], number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -2780,12 +3121,12 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   const out = () => json(200, reviewOut(ctx, r, cp, draft, role));
   if (rest[0] === "review" && rest.length === 1 && m === "GET") return out();
   const stage = (rest[0] === "actions" && rest[2] === "stage") || rest[0] === "note";
-  const need = stage ? cp.approver_role : "commenter";
-  if (!atLeast(role, need)) return fail(403, `Requires the ${need} role`);
+  const stages = mayStage(ctx, r, cp, role);
+  if (stage && !stages) return fail(403, ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide ? LEAD_ONLY : `Requires the ${cp.approver_role} role`);
+  if (!atLeast(role, "commenter")) return fail(403, "Requires the commenter role");
   if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
   const who = me?.id ?? ctx.userId;
   const name = displayName(me?.email ?? ctx.userName ?? "admin@example.com");
-  const stages = atLeast(role, cp.approver_role);
   const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
   if (rest[0] === "note" && m === "PUT") {
     const { note } = await body<Schemas["DraftNoteIn"]>();
@@ -2800,15 +3141,37 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   if (rest[0] === "actions" && rest.length === 1 && m === "POST") {
     const a = await body<Schemas["ActionIn"]>();
     if (!KINDS.includes(a.kind)) return fail(422, `unknown action kind ${a.kind}: one of ${KINDS.join(", ")}`);
+    if (cp.kind === "eng_review") {
+      const invalid = engInvalid(cp, a);
+      if (invalid) return fail(422, invalid);
+    }
+    // C7: the feature set's vocabulary: edit a field of a row, add a requirement, accept, waive, question.
+    if (cp.kind === "feature_set") {
+      if (!["edit", "add", "accept", "waive", "question"].includes(a.kind)) return fail(422, `a feature set takes edit, add, accept, waive or question, not ${a.kind}`);
+      if (a.kind === "edit" && !SCOPE_EDIT_FIELDS.includes(a.field ?? "")) return fail(422, `field: one of ${SCOPE_EDIT_FIELDS.join(", ")}`);
+    }
     if (a.kind === "waive") {
       // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
       if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
       if ((a.answers ?? []).some((code) => !waivable(cp.kind, code))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
       if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
+      // B2: Leave proposed is for a goal from this run nobody decided, with a reason.
+      if (cp.kind === "baseline_confirm") {
+        if (!liveOf(ctx, cp, draft.actions)?.some((x) => x.item === a.item_key)) return fail(422, "only an undecided goal from this run is waived (Leave proposed)");
+        if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
+      }
     }
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
+    if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
+      // C7, as the API: an approver's own edit or add changes the row at once (nothing staged).
+      const refused = applySuggestion(ctx, r.id, { ...a, field: a.field ?? null, value: a.value ?? null } as DraftActionRow, who);
+      if (refused) return refused;
+      draft.actions = draft.actions.filter((x) => x !== existing);
+      bump(draft, name);
+      return out();
+    }
     const row: DraftActionRow = {
       id: existing?.id ?? ctx.uuid(),
       item_key: a.item_key,
@@ -2829,6 +3192,14 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
   const action = draft.actions.find((x) => x.id === rest[1]);
   if (rest[0] === "actions" && !action) return fail(404, `action ${rest[1]} not found`);
   if (action && rest[2] === "stage" && m === "POST") {
+    // C7: an approver's Accept of a suggested edit or add applies it to the scope row, and the action goes.
+    if (cp.kind === "feature_set" && action.state === "suggested" && (action.kind === "edit" || action.kind === "add")) {
+      const refused = applySuggestion(ctx, r.id, action, who);
+      if (refused) return refused;
+      draft.actions = draft.actions.filter((x) => x !== action);
+      bump(draft, name);
+      return out();
+    }
     if (action.state !== "staged") {
       Object.assign(action, { state: "staged", updated_by: who, updated_at: ctx.now() });
       bump(draft, name);
@@ -2882,7 +3253,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     };
   });
   const pending = cp.status === "pending";
-  const stages = pending && atLeast(role, cp.approver_role);
+  const stages = pending && mayStage(ctx, r, cp, role);
   return {
     checkpoint_id: cp.id,
     run_id: r.id,
@@ -2903,7 +3274,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     can_suggest: pending && atLeast(role, "commenter"),
     can_stage: stages,
     can_decide: stages,
-    gate: gateOf(cp, draft.actions),
+    gate: gateNow(ctx, cp, draft.actions),
     diff: check?.diff ?? null,
   };
 }
@@ -3048,9 +3419,17 @@ function determined(kind: string, field: string | null | undefined, value: unkno
 
 /** As oracle.runs.actions.inbox_summary: the review's tally and up to three items still needing me, blocking first. */
 function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["InboxSummary"] | null {
-  if (cp.kind !== "roadmap_items") return null;
+  if (cp.kind !== "roadmap_items" && cp.kind !== "baseline_confirm") return null;
   const role = ctx.member?.role ?? ctx.userRole ?? null;
-  const review = reviewOut(ctx, r, cp, ctx.db.drafts?.[cp.id] ?? { revision: 0, note: null, actions: [], log: [] }, role);
+  const draft = ctx.db.drafts?.[cp.id] ?? { revision: 0, note: null, actions: [], log: [] };
+  const review = reviewOut(ctx, r, cp, draft, role);
+  if (cp.kind === "baseline_confirm") {
+    // B2: Confirm the baseline's counts, read from the run's rows.
+    const t = ctx.baselineReview?.(r.id, draft.actions).summary;
+    if (!t) return null;
+    const none = { waiting_on: 0, children: [], more: 0, title: null, source: null, sections: null };
+    return { ...t, ...none, wait: review.wait, console_held: cp.console?.needs === "confirm" && t.blocking > 0 };
+  }
   const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
     a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code));
   const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
@@ -3151,6 +3530,7 @@ export function startDraftItemsRun(
     overrun_ceiling_usd: round2(estimate * FACTOR),
     runtime: "fake",
     notes: FLOW_CATALOG.runtime_notes,
+    note_refs: [],
     segments,
     checkpoints: [],
     token_read_only: false,
@@ -3172,8 +3552,224 @@ export function finishDraftItemsRun(db: RunsDb, runId: string | null, args: { uu
   run.checkpoints.push({
     id: args.uuid(), run_id: run.id, kind: "roadmap_items", status: "skipped", approver_role: "approver",
     segment_seq: s.seq, decided_by: null, decided_at: args.now, note: "No checkpoint: draft items are reviewed on the Roadmap tab", payload: {},
-    created_at: args.now, can_decide: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
+    created_at: args.now, can_decide: false, lead_stop: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
   });
   Object.assign(run, { status: "succeeded", finished_at: args.now });
   refresh(run);
+}
+
+// --------------------------------------------------------------------------- C7 scope review
+
+/** The runs the "scope-review" scenario seeds (C7): attempt 1, attempt 2, and a held console approval. */
+export const SCOPE_REVIEW_RUN = "7a11c0de-0000-4000-8000-0000000000f6";
+export const SCOPE_ATTEMPT2_RUN = "7a11c0de-0000-4000-8000-0000000000f7";
+export const SCOPE_CONSOLE_RUN = "7a11c0de-0000-4000-8000-0000000000f8";
+
+type SpecFeature = FeatureSetSpec["features"][number];
+const req = (key: string, text: string, acceptance: string[]) => ({ key, text, acceptance });
+const SAVED: SpecFeature = {
+  key: "saved-addresses",
+  title: "Saved addresses",
+  summary: "Returning buyers pick a saved address at checkout",
+  goals: [{ key: "g.paid-conversion", contribution: 3 }],
+  depends_on: ["address-lookup"],
+  confidence: 0.8,
+  requirements: [
+    req("saved-addresses-pick", "The buyer picks one of up to five saved addresses", ["Five addresses at most", "The last used one is preselected"]),
+    req("saved-addresses-save", "A new address can be saved while paying", ["Saving is opt-in"]),
+    req("saved-addresses-remove", "The buyer removes a saved address from their account", ["Removed addresses are gone at the next checkout"]),
+  ],
+};
+const LOOKUP: SpecFeature = {
+  key: "address-lookup",
+  title: "Address lookup",
+  summary: "The buyer finds their address from a postcode",
+  goals: [{ key: "g.activation", contribution: 2 }],
+  depends_on: [],
+  confidence: 0.75,
+  requirements: [
+    req("address-lookup-postcode", "A postcode lists the matching addresses", ["Results show within a second"]),
+    req("address-lookup-manual", "The buyer can type the address by hand", ["Manual entry is one tap away"]),
+  ],
+};
+const BULK: SpecFeature = {
+  key: "bulk-edit",
+  title: "Bulk edit",
+  summary: "Business buyers update many saved addresses at once",
+  goals: [{ key: "g.paid-conversion", contribution: 1 }],
+  depends_on: ["saved-addresses", "address-book-export"],
+  confidence: 0.7,
+  requirements: [
+    req("bulk-edit-import", "A buyer uploads a file of address changes", ["Up to 200 rows"]),
+    req("bulk-edit-review", "The buyer reviews each change before it is saved", ["Rejected rows are listed"]),
+  ],
+};
+const LABELS: SpecFeature = {
+  key: "address-labels",
+  title: "Address labels",
+  summary: "Buyers name saved addresses (Home, Work)",
+  goals: [],
+  depends_on: ["saved-addresses"],
+  confidence: 0.65,
+  requirements: [
+    req("address-labels-name", "A saved address takes a short label", ["Labels are 20 characters at most"]),
+    req("address-labels-show", "Labels show first in the address picker", ["Unlabelled addresses show the street"]),
+  ],
+};
+const PICK: SpecFeature = {
+  key: "pick-address",
+  title: "Pick address in one step",
+  summary: "Address and delivery choice on one screen",
+  goals: [{ key: "g.activation", contribution: 2 }],
+  depends_on: ["saved-addresses"],
+  confidence: 0.35,
+  requirements: [
+    req("pick-address-one-screen", "Address and delivery option are chosen on one screen", ["No extra page load"]),
+    req("pick-address-summary", "The chosen address shows in the order summary", ["It can be changed from the summary"]),
+  ],
+};
+const EDIT: SpecFeature = {
+  key: "address-edit",
+  title: "Edit a saved address",
+  summary: "Buyers correct a saved address without retyping it",
+  goals: [{ key: "g.early-churn", contribution: 1 }],
+  depends_on: ["saved-addresses"],
+  confidence: 0.7,
+  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout", ["Changes apply to this order"])],
+};
+const NOTES: SpecFeature = {
+  key: "delivery-notes",
+  title: "Delivery notes",
+  summary: "Buyers leave a note for the courier on a saved address",
+  goals: [{ key: "g.early-churn", contribution: 1 }],
+  depends_on: ["saved-addresses"],
+  confidence: 0.7,
+  requirements: [req("delivery-notes-text", "A saved address keeps a note for the courier", ["Notes are 140 characters at most"])],
+};
+const EXPORT_OUT = { key: "address-book-export", reason: "not_now" };
+const SHARING_OUT = { key: "address-sharing", reason: "out_of_scope" };
+
+/** Attempt 1: three rows need a person (a blocking dependency, no goal, low confidence). */
+const SCOPE_REVIEW_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK, LABELS, PICK, EDIT], excluded: [EXPORT_OUT, SHARING_OUT] };
+/** Attempt 2 after a send-back: Bulk edit is back in, Delivery notes is new, a requirement of Saved addresses went. */
+const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
+  features: [
+    { ...SAVED, requirements: SAVED.requirements.slice(0, 2) },
+    LOOKUP,
+    { ...BULK, depends_on: ["saved-addresses"] },
+    { ...LABELS, goals: [{ key: "g.early-churn", contribution: 1 }] },
+    { ...PICK, confidence: 0.7 },
+    NOTES,
+  ],
+  excluded: [EXPORT_OUT],
+};
+/** The held console approval: one blocking row (Bulk edit depends on the export left out). */
+const SCOPE_CONSOLE_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK], excluded: [EXPORT_OUT] };
+
+function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
+  const full = { ...ctx, db: own, now };
+  const r = seedRun(ctx, own, "baseline_to_prd", slug, {}, created_at);
+  r.id = id;
+  for (const c of r.checkpoints) c.run_id = id;
+  from(r.created_at);
+  launch(full, r);
+  tick(full);
+  const [baseline, featureSet] = r.segments;
+  Object.assign(r.checkpoints[0], { status: "approved", decided_by: ctx.userId, decided_at: now() });
+  next(full, r, baseline);
+  tick(full);
+  if (attempt > 1) {
+    const first = featureSet.attempts[featureSet.attempts.length - 1];
+    featureSet.attempts.push({ ...first, attempt, note: "Bring bulk edit back without the export; drop removing addresses for now" });
+    featureSet.previous_attempt = { attempt: attempt - 1, artifacts: ["design.md", "feature_set.yaml"] };
+  }
+  featureSet.artifacts = ["design.md", "feature_set.yaml"];
+  db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(spec, r.document_slug, featureSet.name, attempt);
+  db.artifacts[`${r.id}|${featureSet.seq}|design.md`] = SAVED_ADDRESSES_DESIGN;
+  if (attempt > 1) {
+    db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml|${attempt - 1}`] = featureSetYaml(SCOPE_REVIEW_SET, r.document_slug, featureSet.name, attempt - 1);
+    db.artifacts[`${r.id}|${featureSet.seq}|design.md|${attempt - 1}`] = SAVED_ADDRESSES_DESIGN;
+  }
+  own.scopes![r.id] = [];
+  proposeScope(full, r, featureSet.seq, attempt, spec, checkOf(spec));
+  const scope = own.scopes![r.id][0] as StoredScope;
+  // The goals by id, as the API stores a confirmed goal; the excluded rows' reasons as a person would pick.
+  const goals = new Map((ctx.confirmedGoals?.() ?? []).map((g) => [g.key, g.id]));
+  for (const f of scope.features) {
+    f.goals = f.goals.map((g) => ({ ...g, goal_id: goals.get(g.key) ?? null }));
+    const s = spec.features.find((x) => x.key === f.key);
+    if (s) f.text = s.summary;
+    // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
+    if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
+    f.flags = [];
+  }
+  prepareScope(scope);
+  const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
+  if (attempt > 1) cp.payload = { ...cp.payload, attempt };
+  recheckScope(own, scope);
+  refresh(r);
+  db.runs.push(r);
+  return { run: r, scope, cp };
+}
+
+/**
+ * The "scope-review" scenario (C7): the default company plus three Baseline to PRD runs at
+ * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
+ * goal, one with low confidence, and a commenter's suggestion), saved-addresses-next (attempt
+ * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
+ * blocking row is open, so the approval is held).
+ */
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
+  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1);
+  const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
+  if (commenter) {
+    db.drafts![first.cp.id] = {
+      revision: 1,
+      note: null,
+      actions: [
+        {
+          id: ctx.uuid(),
+          item_key: "address-edit",
+          kind: "edit",
+          field: "decision",
+          value: { decision: "exclude", reason: "not_now" },
+          answers: [],
+          note: null,
+          state: "suggested",
+          created_by: commenter.id,
+          updated_by: commenter.id,
+          updated_at: "2026-10-17T09:30:00Z",
+        },
+      ],
+      log: [{ revision: 1, by: displayName(commenter.email) }],
+    };
+  }
+  const second = seedScopeRun(db, ctx, SCOPE_ATTEMPT2_RUN, "saved-addresses-next", "2026-10-17T08:00:00Z", SCOPE_ATTEMPT2_SET, 2);
+  second.scope.previous = { "saved-addresses": "include", "address-lookup": "include", "bulk-edit": "exclude", "address-labels": "include", "pick-address": "include", "address-book-export": "exclude", "address-sharing": "exclude" };
+  second.scope.previous_requirements = {
+    "saved-addresses": ["saved-addresses-pick", "saved-addresses-save", "saved-addresses-remove"],
+    "address-lookup": ["address-lookup-postcode", "address-lookup-manual"],
+    "bulk-edit": ["bulk-edit-import", "bulk-edit-review"],
+    "address-labels": ["address-labels-name", "address-labels-show"],
+    "pick-address": ["pick-address-one-screen", "pick-address-summary"],
+    "address-book-export": [],
+    "address-sharing": [],
+  };
+  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1);
+  held.cp.console = {
+    answered_by: "lead@example.com",
+    answered_at: "2026-10-17T07:40:00Z",
+    via: null,
+    verdict: "MERGE",
+    findings: [],
+    counted: true,
+    reason: CONSOLE_HELD,
+    needs: "confirm",
+    revise: false,
+    can_redo: false,
+  };
+  held.run.token_read_only = true;
+  refresh(held.run);
 }

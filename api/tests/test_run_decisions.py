@@ -131,7 +131,7 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_no_names(
     run = await decide(client, approver, run, note="Good enough")
     run = await at(client, auth, run["id"], "feature_set")
     run = await decide(client, auth, run, note=NOTE)
-    run = await at(client, auth, run["id"], "priority_order")
+    run = await at(client, auth, run["id"], "eng_review")
 
     # Any member reads them, a viewer included.
     body = await decisions(client, viewer, run["id"])
@@ -159,9 +159,9 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_no_names(
     assert first["summary"] == (
         "Baseline · changes requested by an approver · note: Name the owner of G1"
     )
-    # The pending priority_order checkpoint is absent.
-    assert pending(run)["kind"] == "priority_order"
-    assert all(d["kind"] != "priority_order" for d in body)
+    # The pending Engineering check is absent.
+    assert pending(run)["kind"] == "eng_review"
+    assert all(d["kind"] != "eng_review" for d in body)
     # No member's name, email or id reaches the list.
     raw = json.dumps(body)
     assert "pat.approver" not in raw and "@" not in raw

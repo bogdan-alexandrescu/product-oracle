@@ -30,6 +30,7 @@ import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
+import { SpecStaleness } from "@/components/SpecStaleness";
 import { buildCodeIndex } from "@/lib/code-index";
 import { useCodeEntities } from "@/lib/codes";
 import { BuildDraftButton } from "@/components/NextDraft";
@@ -150,7 +151,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // D13: "Comment on the whole draft" is open in the Feedback tab.
   const [generalOpen, setGeneralOpen] = useState(false);
   // G1: a discussion open in the Feedback tab (its thread), or one being started.
-  const [discussion, setDiscussion] = useState<{ id: string } | { start: DiscussionSubject } | null>(null);
+  const [discussion, setDiscussion] = useState<{ id: string; changes?: boolean } | { start: DiscussionSubject } | null>(null);
   const [discussionsKey, setDiscussionsKey] = useState(0);
   // A link with ?feedback=open (the Inbox's): the Feedback tab on every section's open items,
   // the first one brought into view, once (ffb19 lane).
@@ -189,13 +190,20 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     // ?tab=reports: where applying a next draft lands, on the version's History (C1e);
     // ?tab=history: the overview's link to Oracle's work on this version (D15).
     const toHistory = params.get("tab") === "reports" || params.get("tab") === "history";
+    // ?discussion=<id> (G6, the Inbox's link): its thread in the Feedback tab; &changes=1
+    // scrolls the thread to its changes card.
+    const toDiscussion = params.get("discussion");
     // Next writes an in-app navigation's URL, #hash included, only once the new page has
     // committed, so the hash cannot be read while rendering: read it here. This also runs
     // when Next shows a kept route again.
     /* eslint-disable react-hooks/set-state-in-effect */
     setHash(h);
     setHashLink(h ? { n, hash: h } : null);
-    if (toFeedback) {
+    if (toDiscussion) {
+      setTab("feedback");
+      setDiscussion({ id: toDiscussion, changes: params.get("changes") === "1" });
+      if (window.matchMedia("(max-width: 639px)").matches) setSheet("review");
+    } else if (toFeedback) {
       setTab("feedback");
       setFilters({ ...DEFAULT_FILTERS, state: feedbackParam === "staged" ? "staged" : "open", scope: "all" });
       setFeedbackFocus(true);
@@ -725,7 +733,13 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         />
       </div>
     ) : (
-      <DiscussionThread key={discussion.id} id={discussion.id} onBack={closeDiscussion} onChanged={() => setDiscussionsKey((k) => k + 1)} />
+      <DiscussionThread
+        key={discussion.id}
+        id={discussion.id}
+        focusChanges={discussion.changes}
+        onBack={closeDiscussion}
+        onChanged={() => setDiscussionsKey((k) => k + 1)}
+      />
     ));
 
   // H8: on an update, approvers comment and suggest; owners also set section verdicts.
@@ -1093,6 +1107,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           )}
           {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         </div>
+        {/* #481: a spec version that may be stale is reviewed or reconciled here. */}
+        {document_?.kind === "spec" && version && !version.approved_at && (
+          <SpecStaleness doc={doc} n={n} mayApprove={canApprove} onChanged={() => void verQ.reload()} />
+        )}
 
         {onDocument && hasBrief && (
           <p

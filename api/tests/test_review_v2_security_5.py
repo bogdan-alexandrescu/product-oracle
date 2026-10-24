@@ -70,7 +70,7 @@ ROGUE_WRITES = ["iap_default_role", "review_policy", "document_review_policy"]
 async def _rogue_write(client, what: str, headers):
     if what == "iap_default_role":
         return await client.put(
-            "/v1/settings/iap_default_role", json={"value": "owner"}, headers=headers
+            "/v1/settings/iap_default_role", json={"value": "viewer"}, headers=headers
         )
     if what == "review_policy":
         return await client.put(
@@ -249,7 +249,7 @@ async def test_an_active_owner_still_writes_settings_and_policies(client):
         resp = await _rogue_write(client, what, owner.headers)
         assert resp.status_code == 200, (what, resp.text)
     settings = await _settings(ctx)
-    assert settings["iap_default_role"] == "owner"
+    assert settings["iap_default_role"] == "viewer"
     assert settings["review_policy"]["rereview_on_change"] is False
     assert await _document_policy(ctx) is not None
     async with tenant_session(ctx.tenant_id) as s:

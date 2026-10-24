@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
+import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { Loading } from "@/components/ui";
+import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
@@ -17,24 +19,31 @@ import { goalTags, KPI_PHONE } from "./_components/common";
 import { ConflictsTab } from "./_components/ConflictsTab";
 import { EntityDrawer } from "./_components/EntityDrawer";
 import { FlaggedTab } from "./_components/FlaggedTab";
+import { FromRunBand, FromRunTab, RowActions, WhyCard } from "./_components/FromRunTab";
 import { fillNotice } from "./_components/goal-fields";
+import type { Stepper } from "./_components/GoalInterview";
 import { GraphTab } from "./_components/GraphTab";
 import { ItemsTab } from "./_components/ItemsTab";
 import { fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
 
-type Tab = "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
-const TABS: readonly Tab[] = ["graph", "items", "flagged", "conflicts", "proposals", "blockers"];
+type Tab = "from-run" | "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
+const TABS: readonly Tab[] = ["from-run", "graph", "items", "flagged", "conflicts", "proposals", "blockers"];
 
-/** ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review links here). */
-function TabFromUrl({ onTab, onFrom }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void }) {
+/**
+ * ?tab=<tab> opens that tab; ?run=<run id or none> filters the proposals (a run page's Review
+ * links here) and, without a tab, opens From this run (B2: the Inbox's and the run page's Review).
+ */
+function TabFromUrl({ onTab, onFrom, onRun }: { onTab: (tab: Tab) => void; onFrom: (from: FromFilter) => void; onRun: (run: string) => void }) {
   const params = useSearchParams();
   const tab = params.get("tab");
   const run = params.get("run") ?? "";
   useEffect(() => {
     if (tab && (TABS as readonly string[]).includes(tab)) onTab(tab as Tab);
-  }, [tab, onTab]);
+    else if (!tab && run && run !== "none") onTab("from-run");
+  }, [tab, run, onTab]);
   useEffect(() => onFrom(run), [run, onFrom]);
+  useEffect(() => onRun(run && run !== "none" ? run : ""), [run, onRun]);
   return null;
 }
 
@@ -61,11 +70,39 @@ function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBl
   return null;
 }
 
+/**
+ * B6: ?interview=1 with ?entity=<goal> starts (or reopens) that goal's interview (Home's Make
+ * measurable); ?interview=vague steps through the vague goals (a run page's Interview).
+ */
+function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; onVague: () => void }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const interview = params.get("interview");
+  const entity = params.get("entity");
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    if (!interview) return;
+    const key = `${interview}:${entity ?? ""}`;
+    if (done.current === key) return;
+    done.current = key;
+    if (interview === "vague") onVague();
+    else if (entity) onGoal(entity);
+    // Once: a reload does not start another.
+    const next = new URLSearchParams(params.toString());
+    next.delete("interview");
+    const rest = next.toString();
+    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+  }, [interview, entity, onGoal, onVague, params, router]);
+  return null;
+}
+
 export default function BaselinePage() {
   const { me, can, capsReady } = useMe();
   // #370: approvers change the baseline, commenters propose; a viewer only reads it.
   const canWrite = can("confirm_entity");
   const canComment = can("create_proposal");
+  // B6: a goals interview is a commenter's to start, like a proposal.
+  const canInterview = can("start_goal_interview");
   const onAuth = useAuthRedirect();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
@@ -75,6 +112,13 @@ export default function BaselinePage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("graph");
   const [from, setFrom] = useState<FromFilter>("");
+  // B2: the run whose review this is (?run=), and what it wrote to the baseline.
+  const [runId, setRunId] = useState("");
+  const fromRun = useQuery(
+    `baseline-from-run:${runId}`,
+    () => (runId ? unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })) : Promise.resolve(null)),
+    { keepPrevious: true },
+  );
   // Every open proposal (the tab's count and the From select's runs), and the From filter's.
   const proposals = useQuery("baseline-proposals", () =>
     unwrap(api.GET("/v1/baseline/proposals", { params: { query: { status: "open" } } })),
@@ -122,9 +166,17 @@ export default function BaselinePage() {
   const { reload: reloadProposals } = proposals;
   const { reload: reloadFiltered } = filtered;
   const { reload: reloadBlockers } = blockers;
+  // B6: the vague goals (the Goals panel's Interview vague goals), read only, nothing started.
+  const vague = useQuery("baseline-vague", vagueGoals);
+  const { reload: reloadVague } = vague;
+  const { reload: reloadFromRun } = fromRun;
   const refresh = useCallback(() => {
-    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers()]);
-  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers]);
+    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers(), reloadVague(), reloadFromRun()]);
+  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers, reloadVague, reloadFromRun]);
+  // B6: the goal whose interview the drawer's Discuss view shows, and the stepper over the vague goals.
+  const [discuss, setDiscuss] = useState<{ entityId: string; discussionId: string } | null>(null);
+  const [steps, setSteps] = useState<{ ids: string[]; at: number } | null>(null);
+  const [starting, setStarting] = useState(false);
   // #337: Add item, on the kind the button that opened it names.
   const [adding, setAdding] = useState<AddKind | null>(null);
   const added = (message: string) => {
@@ -136,11 +188,79 @@ export default function BaselinePage() {
   const close = useCallback(() => {
     setOpenId(null);
     setPromoteId(null);
+    setDiscuss(null);
+    setSteps(null);
   }, []);
   const openItem = useCallback((id: string) => {
     setBlockerId(null);
     setOpenId(id);
+    setDiscuss((x) => (x && x.entityId !== id ? null : x));
   }, []);
+  const interview = useCallback(
+    async (start: () => Promise<{ entityId: string; discussionId: string }>) => {
+      setStarting(true);
+      setError(null);
+      try {
+        const next = await start();
+        setBlockerId(null);
+        setPromoteId(null);
+        setOpenId(next.entityId);
+        setDiscuss(next);
+        void reloadVague();
+      } catch (e) {
+        if (!onAuth(e)) setError(errorMessage(e));
+      } finally {
+        setStarting(false);
+      }
+    },
+    [onAuth, reloadVague],
+  );
+  /** Make measurable: the goal's open interview, or a new one. */
+  const makeMeasurable = useCallback(
+    (id: string) => {
+      setSteps(null);
+      void interview(async () => ({ entityId: id, discussionId: (await startInterview(id)).discussion_id }));
+    },
+    [interview],
+  );
+  /** The stepper reaches goal `at`: only now is its discussion created. */
+  const reach = useCallback(
+    (ids: string[], at: number) => {
+      setSteps({ ids, at });
+      void interview(async () => {
+        const [row] = await startInterviews([ids[at]]);
+        return { entityId: ids[at], discussionId: row.discussion_id };
+      });
+    },
+    [interview],
+  );
+  const interviewVague = useCallback(async () => {
+    try {
+      const ids = (await vagueGoals()).map((v) => v.entity.id);
+      if (ids.length === 0) return setNotice("Every goal is measurable.");
+      reach(ids, 0);
+    } catch (e) {
+      if (!onAuth(e)) setError(errorMessage(e));
+    }
+  }, [reach, onAuth]);
+  const stepper: Stepper | null = steps
+    ? {
+        at: steps.at,
+        of: steps.ids.length,
+        busy: starting,
+        next: steps.at + 1 < steps.ids.length ? () => reach(steps.ids, steps.at + 1) : undefined,
+        // Skip passes over the next goal: its discussion is never created.
+        skip: steps.at + 1 < steps.ids.length ? () => (steps.at + 2 < steps.ids.length ? reach(steps.ids, steps.at + 2) : setSteps(null)) : undefined,
+        done: () => setSteps(null),
+      }
+    : null;
+  // B6: the run the From filter names, for its after-review line.
+  const filterRun = useQuery(`baseline-filter-run:${from}`, () =>
+    from && from !== "none" ? unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: from } } })) : Promise.resolve(null),
+  );
+  const reviewed = filterRun.data?.checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as
+    | { vague_goals?: number | null }
+    | undefined;
   const openBlocker = useCallback((id: string) => {
     setOpenId(null);
     setPromoteId(null);
@@ -226,7 +346,9 @@ export default function BaselinePage() {
     });
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
+  const view = runId ? fromRun.data : null;
   const tabs: TabItem<Tab>[] = [
+    ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
@@ -235,6 +357,7 @@ export default function BaselinePage() {
     { id: "blockers", label: "Blockers", count: blockers.data?.length, kind: "warn" },
   ];
   const openEntity = openId ? graph.data?.entities.find((e) => e.id === openId) : undefined;
+  const openRow = openEntity && view ? view.rows.find((r) => r.entity.id === openEntity.id) : undefined;
   const low = trace.data?.low;
   const tags = useMemo(() => goalTags(graph.data), [graph.data]);
   // The From select's runs: each run with open proposals, newest first, and the one chosen.
@@ -271,7 +394,8 @@ export default function BaselinePage() {
     <Page>
       <Suspense fallback={null}>
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
-        <TabFromUrl onTab={setTab} onFrom={setFrom} />
+        <TabFromUrl onTab={setTab} onFrom={setFrom} onRun={setRunId} />
+        {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
       {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
@@ -333,6 +457,22 @@ export default function BaselinePage() {
               onChanged={refresh}
               promote={promoteId === openEntity.id}
               onOpenBlocker={blockers.data?.some((b) => b.id === openEntity.id) ? () => openBlocker(openEntity.id) : undefined}
+              discussionId={discuss?.entityId === openEntity.id ? discuss.discussionId : null}
+              stepper={discuss?.entityId === openEntity.id ? stepper : null}
+              onMakeMeasurable={canInterview ? () => makeMeasurable(openEntity.id) : undefined}
+              onCloseDiscuss={() => {
+                setDiscuss(null);
+                setSteps(null);
+              }}
+              why={
+                openRow &&
+                view && (
+                  <WhyCard
+                    row={openRow}
+                    fixes={<RowActions view={view} row={openRow} entities={graph.data?.entities ?? []} busy={busy} act={act} onOpen={openItem} inDrawer />}
+                  />
+                )
+              }
             />
             )
           )
@@ -343,6 +483,8 @@ export default function BaselinePage() {
         </div>
 
         {build && <BuildBanner build={build} />}
+        {view && <FromRunBand view={view} />}
+        {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
 
         <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
 
@@ -350,6 +492,9 @@ export default function BaselinePage() {
         {notice && <Notice>{notice}</Notice>}
 
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="flex min-w-0 flex-col gap-4">
+          {tab === "from-run" && view && (
+            <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
+          )}
           {tab === "graph" && (
             <>
               {graph.error && <Notice tone="error">{graph.error}</Notice>}
@@ -366,6 +511,9 @@ export default function BaselinePage() {
                   onOpen={openItem}
                   onConfirm={confirmGoal}
                   onFill={fillFromText}
+                  onMakeMeasurable={canInterview ? (g) => makeMeasurable(g.id) : undefined}
+                  vague={vague.data?.length ?? 0}
+                  onInterviewVague={canInterview ? () => void interviewVague() : undefined}
                   onAdd={setAdding}
                   onAddSubgoal={canWrite ? addSubgoal : undefined}
                 />
@@ -436,6 +584,12 @@ export default function BaselinePage() {
                   onOpen={openItem}
                   onDecide={decide}
                   onPromote={promote}
+                  afterReview={
+                    canInterview && reviewed?.vague_goals ? (
+                      <VagueGoalsLine count={reviewed.vague_goals} busy={starting} onInterview={() => void interviewVague()} />
+                    ) : undefined
+                  }
+                  onMakeMeasurable={canInterview ? makeMeasurable : undefined}
                 />
               )}
             </>

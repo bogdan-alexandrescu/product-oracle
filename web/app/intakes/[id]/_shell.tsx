@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
+import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, confirmInPage, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
@@ -54,6 +56,7 @@ type Tab = "questions" | "gaps" | "proposals" | "findings";
  */
 export function BeforeDrafting({ id }: { id: string }) {
   const { me, role, can } = useMe();
+  const router = useRouter();
   const phone = useIsPhone();
   const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>("questions");
@@ -187,6 +190,14 @@ export function BeforeDrafting({ id }: { id: string }) {
               </Button>
             )}
             {more}
+            {/* #482: owners delete a brief (and the PRD it became) to Trash. */}
+            <DeleteMenu
+              op="delete_intake"
+              title={s.intake.title}
+              dependents={() => unwrap(api.GET("/v1/intakes/{intake_id}/dependents", { params: { path: { intake_id: id } } }))}
+              remove={(query) => unwrap(api.DELETE("/v1/intakes/{intake_id}", { params: { path: { intake_id: id }, query } }))}
+              onDeleted={() => router.push("/documents")}
+            />
           </>
         }
       />

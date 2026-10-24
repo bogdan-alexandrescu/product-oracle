@@ -115,11 +115,11 @@ test("Settings › Notifications: connect Slack, pick a channel, send a test mes
   await page.goto("/settings");
   await page.getByTestId("settings-nav").getByRole("link", { name: "Notifications" }).click();
   await expect(page).toHaveURL(/\/settings\/notifications$/);
-  await page.getByRole("button", { name: "Connect Slack for notifications" }).click();
+  await page.getByRole("button", { name: "Connect Oracle to Slack" }).click();
   await expect(page.getByText("Slack is connected for notifications.")).toBeVisible();
   const slack = page.getByTestId("slack-notifications");
   await expect(slack).toContainText("Example Co");
-  await expect(slack.getByRole("button", { name: "Connect Slack for notifications" })).toHaveCount(0);
+  await expect(slack.getByRole("button", { name: "Connect Oracle to Slack" })).toHaveCount(0);
 
   await slack.getByLabel("Channel").selectOption({ label: "#plan" });
   await slack.getByRole("button", { name: "Save channel" }).click();
@@ -148,7 +148,7 @@ test("Settings › Notifications: connect Slack, pick a channel, send a test mes
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toContainText("revokes");
   await dialog.getByRole("button", { name: "Disconnect" }).click();
-  await expect(page.getByRole("button", { name: "Connect Slack for notifications" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect Oracle to Slack" })).toBeVisible();
   await expect(page.getByTestId("slack-notifications")).not.toContainText("Example Co");
 });
 

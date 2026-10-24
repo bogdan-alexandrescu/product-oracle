@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
 import { Button, Chip, CodeChip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
@@ -37,6 +37,11 @@ type Props = {
   onAdd: (kind: AddKind) => void;
   /** B5: read the goals' `*_text` values into typed fields (approvers). */
   onFill?: () => void;
+  /** B6: Make measurable on a Not measurable chip (commenters and up). */
+  onMakeMeasurable?: (goal: EntityOut) => void;
+  /** B6: the vague goals and the header's Interview vague goals (commenters and up). */
+  vague?: number;
+  onInterviewVague?: () => void;
   /** #345: add a subgoal under a goal (approvers); resolves true once it is saved. */
   onAddSubgoal?: (parent: EntityOut, title: string) => Promise<boolean>;
 };
@@ -126,7 +131,7 @@ function TitleButton({
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onAddSubgoal }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, onAddSubgoal }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -158,6 +163,13 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     if (e.type !== "part_of" || e.status === "rejected") continue;
     if (products.some((p) => p.id === e.dst_id) && !productOf.has(e.src_id)) productOf.set(e.src_id, e.dst_id);
   }
+  // C7: a feature's requirements (part_of the feature), each under its feature.
+  const requirementsOf = new Map<string, EntityOut[]>();
+  for (const e of graph.edges) {
+    if (e.type !== "part_of" || e.status === "rejected") continue;
+    const r = live.find((x) => x.id === e.src_id && x.type === "requirement");
+    if (r) requirementsOf.set(e.dst_id, [...(requirementsOf.get(e.dst_id) ?? []), r]);
+  }
   /** feature id -> goal id -> its supports edge */
   const links = new Map<string, Map<string, EdgeOut>>();
   for (const e of graph.edges) {
@@ -177,43 +189,68 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     {
       key: "goal",
       header: "Goal",
-      cell: (g) => (
-        <span className={`flex min-w-0 items-center gap-2 ${tree.get(g.id)?.depth ? "pl-6" : ""}`}>
-          {(tree.get(g.id)?.children ?? 0) > 0 && (
-            <button
-              type="button"
-              aria-expanded={!folded.has(g.id)}
-              aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(tree.get(g.id)!)}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                fold(g.id);
-              }}
-              className="-ml-1 flex size-6 flex-none items-center justify-center rounded text-text2 hover:bg-surface2"
-            >
-              {folded.has(g.id) ? "▸" : "▾"}
-            </button>
-          )}
-          <CodeChip
-            kind="goal"
-            entityId={g.id}
-            entityKey={g.key}
-            title={g.title}
-            code={tree.get(g.id)?.code}
-            proposed={g.status === "proposed"}
-            codeOnly
-          />
-          {/* The title keeps room beside an indent and its chips (#345); the chips give way first. */}
-          <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="min-w-[8rem] font-medium" />
-          {g.goal_check?.measurable === false && (
-            <span className="flex-none">
-              <Chip kind="warn" title={missingTip(g.goal_check)} data-testid="not-measurable">
-                Not measurable
-              </Chip>
+      cell: (g) => {
+        const vague = g.goal_check?.measurable === false;
+        const indent = tree.get(g.id)?.depth ? "pl-6" : "";
+        const chip = (
+          <Chip kind="warn" title={missingTip(g.goal_check)} data-testid="not-measurable">
+            Not measurable
+          </Chip>
+        );
+        const head = (
+          <span className={`flex min-w-0 items-center gap-2 ${indent}`}>
+            {(tree.get(g.id)?.children ?? 0) > 0 && (
+              <button
+                type="button"
+                aria-expanded={!folded.has(g.id)}
+                aria-label={`${folded.has(g.id) ? "Show" : "Hide"} subgoals of ${namedText(tree.get(g.id)!)}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fold(g.id);
+                }}
+                className="-ml-1 flex size-6 flex-none items-center justify-center rounded text-text2 hover:bg-surface2"
+              >
+                {folded.has(g.id) ? "▸" : "▾"}
+              </button>
+            )}
+            <CodeChip
+              kind="goal"
+              entityId={g.id}
+              entityKey={g.key}
+              title={g.title}
+              code={tree.get(g.id)?.code}
+              proposed={g.status === "proposed"}
+              codeOnly
+            />
+            {/* The title keeps room beside an indent and its chips (#345); the chips give way first. */}
+            <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="min-w-[8rem] font-medium" />
+            {vague && !onMakeMeasurable && <span className="flex-none">{chip}</span>}
+            <LockMark entity={g} meId={meId} />
+          </span>
+        );
+        if (!vague || !onMakeMeasurable) return head;
+        // B6: the chip and its Make measurable on a line of their own, so the title keeps its room;
+        // a subgoal's line keeps its indent.
+        return (
+          <span className="flex min-w-0 flex-col gap-1 py-1">
+            {head}
+            <span className={`flex min-w-0 items-center gap-1 ${indent}`}>
+              <span className="flex-none">{chip}</span>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                data-testid="make-measurable"
+                onClick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  onMakeMeasurable(g);
+                }}
+              >
+                Make measurable
+              </Button>
             </span>
-          )}
-          <LockMark entity={g} meId={meId} />
-        </span>
-      ),
+          </span>
+        );
+      },
     },
     {
       key: "status",
@@ -388,6 +425,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             tags={tags}
             codes={codes}
             links={links}
+            requirementsOf={requirementsOf}
             traceById={traceById}
             low={low}
             meId={meId}
@@ -402,6 +440,16 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         count={goals.length}
         tools={
           <>
+            {onInterviewVague && vague > 0 && (
+              <>
+                <Button disabled={busy} onClick={onInterviewVague}>
+                  {`Interview vague goals (${vague})`}
+                </Button>
+                <InfoTip label="the goals interview">
+                  Oracle asks one question at a time and proposes measurable versions. Nothing runs until you start.
+                </InfoTip>
+              </>
+            )}
             {add("goal")}
             {canWrite && onFill && toFill > 0 && (
               <>
@@ -452,12 +500,14 @@ function Ledger({
   tags,
   codes,
   links,
+  requirementsOf,
   traceById,
   low,
   meId,
   selectedId,
   onOpen,
 }: {
+  requirementsOf: Map<string, EntityOut[]>;
   goals: EntityOut[];
   groups: { id: string; product: EntityOut | null; features: EntityOut[] }[];
   tags: Map<string, string>;
@@ -563,6 +613,7 @@ function Ledger({
               </th>
             </tr>
             {group.features.map((f) => (
+              <Fragment key={f.id}>
               <FeatureRow
                 key={f.id}
                 feature={f}
@@ -575,6 +626,18 @@ function Ledger({
                 selected={selectedId === f.id}
                 onOpen={onOpen}
               />
+              {(requirementsOf.get(f.id) ?? []).map((r) => (
+                <tr key={r.id} role="row" data-testid={`requirement-${r.key}`} className="border-t border-line max-[600px]:block">
+                  <td role="cell" colSpan={cols} className="px-2 py-1.5 pl-10 text-sm max-[600px]:block max-[600px]:pl-6">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="text-text2">Requirement</span>
+                      <TitleButton entity={r} onOpen={onOpen} className="max-[600px]:whitespace-normal" />
+                      <LockMark entity={r} meId={meId} />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              </Fragment>
             ))}
           </tbody>
         ))}

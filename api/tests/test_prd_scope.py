@@ -503,6 +503,9 @@ async def test_draft_reads_scope(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime)
     run = await decide(client, auth, run)
+    # The Engineering check (on by default): verdicts staged, approved.
+    await tick(client, auth)
+    run = await decide(client, auth, await get(client, auth, run["id"]))
     priority = runtime.submitted[-1].steps[-1].prompt
     await tick(client, auth)
     run = await decide(client, auth, await get(client, auth, run["id"]))
@@ -625,8 +628,10 @@ async def test_get_prd_scope_falls_back_to_the_documents_approved_scope(client, 
     tenant_id, auth = owner
     run = await at_feature_set(client, owner, runtime)
     run = await decide(client, auth, run)
-    await tick(client, auth)
-    run = await decide(client, auth, await get(client, auth, run["id"]))
+    # The Engineering check (on by default), then the priority order.
+    for _ in range(2):
+        await tick(client, auth)
+        run = await decide(client, auth, await get(client, auth, run["id"]))
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     (scope,) = await scopes(tenant_id, run["id"])

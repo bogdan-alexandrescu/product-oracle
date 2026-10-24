@@ -445,3 +445,76 @@ async def known_items(
             known.setdefault(i.item_key, {"id": i.item_key, "title": i.title, "horizon": i.horizon})
         sources.append(f"approved roadmap v{approved.number}")
     return ", ".join(sources), list(known.values())
+
+
+# --- Build roadmap reuses them (part B, decided 2026-10-21, "Reuse items") ----------------
+
+
+async def reusable(
+    db: AsyncSession, version_id: uuid.UUID
+) -> tuple[DraftRoadmap, list[RoadmapItem]] | None:
+    """The PRD version's draft roadmap and its items when a Build roadmap run may reuse
+    them: ``ready``, at least one item, and no ``wrong_prd`` problem."""
+    row = await _row(db, version_id)
+    if row is None or row.status != "ready":
+        return None
+    problems = (row.items_check or {}).get("problems") or []
+    if any(p.get("code") == "wrong_prd" for p in problems):
+        return None
+    found = await draft_items(db, row)
+    return (row, found) if found else None
+
+
+def _declared(item: RoadmapItem, target: str) -> list[str]:
+    """The keys the item's file named for ``target`` (a section link is derived again)."""
+    return [
+        str(t["key"])
+        for t in item.trace or []
+        if t.get("target") == target and t.get("via") == "declared" and t.get("key")
+    ]
+
+
+def _milestone_out(milestone: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A milestone as the file writes it: its date only when one was kept (a refused date
+    is left out, so the reused file never proposes it again)."""
+    if not milestone:
+        return None
+    out: dict[str, Any] = {"name": milestone.get("name")}
+    if milestone.get("date"):
+        out["date"] = str(milestone["date"])
+        if milestone.get("date_source"):
+            out["date_source"] = milestone["date_source"]
+    return out
+
+
+def items_yaml(slug: str, number: int, rows: list[RoadmapItem]) -> str:
+    """The draft's items as ``roadmap_items.yaml`` (oracle.runs.roadmap's format), in their
+    stored order, so a Build roadmap run's items stop opens on them."""
+    items: list[dict[str, Any]] = []
+    for i in rows:
+        raw: dict[str, Any] = {
+            "id": i.item_key,
+            "title": i.title,
+            "outcome": i.outcome or "",
+            "horizon": i.horizon,
+        }
+        if (milestone := _milestone_out(i.milestone)) is not None:
+            raw["milestone"] = milestone
+        raw["depends_on"] = list(i.depends_on or [])
+        if i.priority:
+            raw["priority"] = i.priority
+        if i.confidence:
+            raw["confidence"] = i.confidence
+        raw["prd_section"] = i.prd_section_key
+        if feature := _declared(i, "feature"):
+            raw["feature"] = feature[0]
+        for field_name, target in (("requirements", "requirement"), ("blockers", "blocker")):
+            if keys := _declared(i, target):
+                raw[field_name] = keys
+        if i.validation_gates:
+            raw["validation_gates"] = i.validation_gates
+        if i.economics:
+            raw["economics"] = i.economics
+        items.append(raw)
+    data = {"version": 1, "prd": {"document": slug, "version": number}, "items": items}
+    return safe_yaml.dump(data, sort_keys=False, allow_unicode=True)

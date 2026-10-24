@@ -11,7 +11,9 @@ import asyncio
 import base64
 import copy
 import email
+import html
 import json
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from email import policy as email_policy
@@ -359,9 +361,11 @@ async def test_the_invite_email_says_who_what_and_where(client, owner, iap, mail
     await delivery.drain()
     [message] = mail.sent
     assert message.to == "pat@example.com"
-    assert message.subject == "You're invited to Example Co Product Oracle as Approver"
-    for part in (message.text, message.html):
-        assert "admin@example.com" in part
+    assert message.subject == "You're invited to join Example Co on Product Oracle as Approver"
+    # The HTML part as a reader sees it (#203's template: tags, entities, no-break spaces).
+    seen = html.unescape(re.sub(r"<[^>]+>", "", message.html)).replace("\u00a0", " ")
+    for part in (message.text, seen):
+        assert "Admin invited you to join Example Co on Product Oracle" in part
         assert "Approver" in part
         assert f"{PUBLIC}/" in part
         assert "Sign in with Google using pat@example.com" in part
@@ -509,10 +513,11 @@ async def test_the_gmail_mailer_posts_a_base64url_rfc822_message():
     parsed = email.message_from_bytes(base64.urlsafe_b64decode(raw), policy=email_policy.default)
     assert parsed["To"] == "pat@example.com"
     assert parsed["From"] == "oracle@example.com"
-    assert parsed["Subject"] == "You're invited to Example Co Product Oracle as Approver"
+    assert parsed["Subject"] == "You're invited to join Example Co on Product Oracle as Approver"
     assert parsed.get_content_type() == "multipart/alternative"
     kinds = [p.get_content_type() for p in parsed.iter_parts()]
-    assert kinds == ["text/plain", "text/html"]
+    # #203: the HTML part travels with the Oracle mark inline.
+    assert kinds == ["text/plain", "multipart/related"]
     assert f"{PUBLIC}/" in parsed.get_body(("plain",)).get_content()
 
 
