@@ -267,3 +267,15 @@ async def test_a_promoted_title_reaches_the_next_digest_as_an_untrusted_field(cl
         [{"key": "competitor_changes", "title": "Changes", "rows": rows}],
     )  # fmt: skip
     assert found["title"] not in md
+
+
+@pytest.mark.parametrize("url", ["/\\evil.example", "//evil.example", "\\\\evil.example",
+                                 "\\/evil.example", "/\t/evil.example"])  # fmt: skip
+def test_a_link_a_browser_reads_as_another_host_is_dropped(url):
+    """protects=a finding's Markdown keeps a link to an Oracle page (/...) but drops one
+    starting /\\ or // (a browser reads both as //host, another site); fails_when=such a
+    link survives as an internal one; no_claim=links recorded from the search (kept)."""
+    from oracle.market.findings import safe_markdown
+
+    assert safe_markdown(f"See [the page]({url}).", set()) == "See the page."
+    assert safe_markdown("See [the plan](/plan).", set()) == "See [the plan](/plan)."

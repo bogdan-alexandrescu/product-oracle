@@ -6,6 +6,7 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -29,6 +30,8 @@ from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import make_entity
 from tests.decision_helpers import clock, freeze, in_days  # noqa: F401
 from tests.pricing_helpers import (
+    FLAT,
+    KEEP,
     OPTIONS,
     QUESTION,
     add_owner,
@@ -134,6 +137,36 @@ def test_the_warnings_uncited_price_research_plan_and_levels():
     assert _check(memo_md("m", options=none), None) == []
     assert [w.code for w in _check(memo_md("m"), "draft")] == ["recommended_at_draft"]
     assert _check(memo_md("m"), "recommend") == []
+
+
+def test_a_long_run_of_digits_is_parsed_in_linear_time():
+    """protects=50,000 digits with no unit in an option section are checked in well under
+    100 ms, and the prices found are the ones found before; fails_when=the price pattern
+    retries from every digit (seconds per import); no_claim=other sections (no prices read
+    there)."""
+    # A line holds at most 20,000 characters (oracle.docs.parser): five lines of 10,000.
+    digits = "\n".join(["1" * 10_000] * 5)
+    d = parse_draft(memo_md("m", bodies={"flat-team": f"{digits} then $450 a month, 15% more."}))
+    start = time.perf_counter()
+    uncited = frontmatter.check_import(d.front_matter, d.sections, level=None)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 0.1, elapsed
+    assert [w.code for w in uncited] == ["uncited_figure"]
+    assert "$450" in uncited[0].message and "15%" in uncited[0].message
+    found = [
+        [m.group(0).strip() for m in frontmatter._PRICE.finditer(text)]
+        for text in (
+            KEEP,
+            FLAT,
+            "Up 15% to €1,200 or 20 USD, 3 percent, 12.5 euros, $2.5k, £30m, "
+            "1,000 dollars; 7 apples, 45,000",
+        )
+    ]
+    assert found == [
+        ["$20"],
+        ["$400"],
+        ["15%", "€1,200", "20 USD", "3 percent", "12.5 euros", "$2.5k", "£30m", "1,000 dollars"],
+    ]
 
 
 # --------------------------------------------------------------------------- start
