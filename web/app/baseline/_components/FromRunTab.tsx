@@ -71,7 +71,14 @@ export function FromRunBand({ view }: { view: FromRunOut }) {
           {cp.decided_at ? ` · ${formatDateTime(cp.decided_at)}` : ""}
         </span>
       )}
-      {(decided || !cp?.can_suggest) && <Chip kind="na">View only</Chip>}
+      {/* #514: what is closed is the run's review; its proposals may still be decided on the page. */}
+      {decided ? (
+        <Chip kind="na" title="The run's review is decided. Its proposals can still be accepted or rejected here." data-testid="band-closed">
+          Run review closed
+        </Chip>
+      ) : (
+        !cp?.can_suggest && <Chip kind="na">View only</Chip>
+      )}
     </div>
   );
 }

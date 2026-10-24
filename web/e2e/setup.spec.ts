@@ -87,7 +87,8 @@ test("setup: a new company's owner sees the checklist with what is already done"
     ["sources", "None"],
     ["eng_lead", "None"],
     ["horizons", "Not checked"],
-    ["timezone", "Not set"],
+    // #514: an unset zone says which one is used meanwhile.
+    ["timezone", "Not set · Pacific is used"],
     ["build_baseline", "Not built"],
   ]) {
     await expect(row(page, key)).toHaveAttribute("data-done", "false");

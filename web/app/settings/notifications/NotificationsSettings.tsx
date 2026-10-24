@@ -16,6 +16,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { ZONE_NOT_SET } from "@/lib/zone";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
 
@@ -229,8 +230,10 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The report runs in the Company time zone (Settings › Company), not a zone of its own.
+  // The report runs in the Company time zone (Settings › Company), not a zone of its own;
+  // until an owner stores one, it says so and names the zone used (#514, as Home's Set up).
   const zone = useCompanyZone();
+  const stored = useQuery("settings|company_timezone", () => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })));
 
   async function save() {
     setBusy(true);
@@ -277,7 +280,7 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
           <div className="flex h-9 items-center gap-2 text-sm">
             <span className="font-semibold text-text2">Company time zone</span>
             <span data-testid="report-zone" className="tnum">
-              {zone}
+              {stored.data?.is_default ? ZONE_NOT_SET : zone}
             </span>
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
               Change

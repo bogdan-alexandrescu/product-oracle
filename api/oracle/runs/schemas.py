@@ -1423,8 +1423,8 @@ class InboxOut(BaseModel):
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
     # F2 Track health: one row per track with alerts for me (the track's owner, else the
-    # owners; slips and overdue items also the engineering leads); new and open ones
-    # count in ``total``.
+    # owners; slips and overdue items also the engineering leads); a track with new or
+    # open alerts counts once in ``total`` (#514: one per row, as Home and /inbox count).
     tracks: list[InboxTrack] = []
     # G6: invitations, mentions and changes proposed in discussions; new and open ones
     # count in ``total``.

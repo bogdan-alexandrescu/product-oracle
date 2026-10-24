@@ -9877,7 +9877,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(1 for r in outcome_inbox if r.counts)
         + sum(a.counts for a in oracle_actions)
         + sum(1 for r in discussions if r.state in ("new", "open"))
-        + sum(t.counts.new + t.counts.open for t in track_groups)
+        # A track is one row, its open alerts its children (#514: as a checkpoint's items).
+        + sum(1 for t in track_groups if t.counts.new + t.counts.open > 0)
         + counted,
         tracks=track_groups,
         launches=launch_rows,
