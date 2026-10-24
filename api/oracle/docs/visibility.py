@@ -20,7 +20,14 @@ The rule lives here only:
 A read that reaches a document's rows without selecting :class:`Document` (a comment by
 id, an Inbox row) checks :func:`hidden_document_ids` or joins the document. The decision
 an approval captured ("Publish <document> v<n>", H1) follows its document the same way,
-as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``).
+as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``), and so
+does a decided decision's baseline ``decision`` entity (``Decision.entity_id``): absent
+from the entity list, the graph, an entity read, its revisions, evidence, proposals and
+conflicts, and every edge to or from it, whatever reads them (the web, MCP read:baseline,
+a run).
+
+A new document's visibility comes from its kind (:func:`default_for`), on every path
+that creates one (a template start, an import).
 """
 
 import uuid
@@ -29,6 +36,7 @@ from typing import Any
 
 from sqlalchemy import (
     ColumnElement,
+    Select,
     Text,
     and_,
     cast,
@@ -55,6 +63,13 @@ APPROVERS = "approvers"
 MIN_ROLE = "approver"
 PRINCIPAL_KEY = "principal"
 WORDS = {COMPANY: "Company", APPROVERS: "Owners and approvers"}
+# H8: an update (H9: a pricing memo) is for owners and approvers until an owner opens it.
+APPROVERS_KINDS = ("update", "pricing")
+
+
+def default_for(kind: str) -> str:
+    """A new document's visibility, from its kind."""
+    return APPROVERS if kind in APPROVERS_KINDS else COMPANY
 
 
 def restricted(principal: Any) -> bool:
@@ -110,12 +125,20 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     principal = state.session.info.get(PRINCIPAL_KEY)
     if not restricted(principal):
         return
+    from oracle.baseline.models import Conflict, Edge, Entity, EntityRevision, Evidence, Proposal
     from oracle.decisions.models import Decision
 
     state.statement = state.statement.options(
         with_loader_criteria(Document, lambda cls: cls.visibility == COMPANY, include_aliases=True),
         # The decision an approval of such a document captured (H1) names it: absent too.
         with_loader_criteria(Decision, _decision_visible, include_aliases=True),
+        # As is the baseline entity of such a decision, and what hangs off it.
+        with_loader_criteria(Entity, _entity_visible, include_aliases=True),
+        with_loader_criteria(Edge, _edge_visible, include_aliases=True),
+        *(
+            with_loader_criteria(model, _attached_visible, include_aliases=True)
+            for model in (EntityRevision, Evidence, Proposal, Conflict)
+        ),
     )
 
 
@@ -173,4 +196,39 @@ def _decision_visible(cls: Any) -> ColumnElement[bool]:
         ),
         or_(cls.run_id.is_(None), cls.run_id.not_in(hidden_runs)),
         not_(names_hidden),
+    )
+
+
+def _hidden_entities() -> Select[Any]:
+    """The baseline entities of the decisions :func:`_decision_visible` hides."""
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    return select(decisions.c.entity_id).where(
+        decisions.c.entity_id.is_not(None), not_(_decision_visible(decisions.c))
+    )
+
+
+def _hidden_edges() -> Select[Any]:
+    from oracle.baseline.models import Edge
+
+    edges = Edge.__table__
+    hidden = _hidden_entities()
+    return select(edges.c.id).where(or_(edges.c.src_id.in_(hidden), edges.c.dst_id.in_(hidden)))
+
+
+def _entity_visible(cls: Any) -> ColumnElement[bool]:
+    return or_(cls.type != "decision", cls.id.not_in(_hidden_entities()))
+
+
+def _edge_visible(cls: Any) -> ColumnElement[bool]:
+    hidden = _hidden_entities()
+    return and_(cls.src_id.not_in(hidden), cls.dst_id.not_in(hidden))
+
+
+def _attached_visible(cls: Any) -> ColumnElement[bool]:
+    """A revision, evidence row, proposal or conflict on a hidden entity or edge."""
+    return and_(
+        or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
+        or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
     )

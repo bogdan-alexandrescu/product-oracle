@@ -28,6 +28,7 @@ from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.parser import DraftError, split_front_matter
 from oracle.docs.schemas import UpdatePeriod
+from oracle.docs.visibility import default_for as default_visibility
 from oracle.templates import validation
 from oracle.templates.builtins import (
     BUILTIN_TEMPLATES_BY_KEY,
@@ -1012,9 +1013,7 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         template=template.key,
         template_version=str(version.version),
         theme=theme_key,
-        # H8: an update (H9: a pricing memo) is for owners and approvers until an owner
-        # opens it.
-        visibility="approvers" if data.kind in ("update", "pricing") else "company",
+        visibility=default_visibility(data.kind),
     )
     db.add(document)
     try:

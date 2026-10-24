@@ -33,10 +33,12 @@ OPTION_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,59}$")
 ASK_QUESTION = "Say the pricing question in one sentence"
 ONE_RECOMMENDATION = "Recommend one option at most"
 RECOMMENDED_AT_DRAFT = "recommended_at_draft"
-# A price or a percentage as a reader sees it: $20, €1,200, 20 USD, 15%.
+# A price or a percentage as a reader sees it: $20, €1,200, 20 USD, 15%. A number with a
+# unit after it starts where its digits start, as updates.frontmatter._FIGURE does: never
+# again inside a run of digits, so a long run with no unit is read once, not once per digit.
 _PRICE = re.compile(
     r"[$€£]\s?\d[\d,]*(?:\.\d+)?[kKmM]?"
-    r"|\d[\d,]*(?:\.\d+)?\s?(?:%|percent\b|USD\b|EUR\b|GBP\b|dollars?\b|euros?\b)"
+    r"|(?<![\d,])\d[\d,]*(?:\.\d+)?\s?(?:%|percent\b|USD\b|EUR\b|GBP\b|dollars?\b|euros?\b)"
 )
 
 

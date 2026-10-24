@@ -40,7 +40,9 @@ def excerpt_found(excerpt: str, source: str) -> bool:
 
 
 def _oracle(url: str) -> bool:
-    return url.startswith("/") and not url.startswith("//")
+    # A browser reads a backslash as "/": "/" then "/" or a backslash is "//host", another
+    # site (_LINK's destination holds no whitespace).
+    return url.startswith("/") and url[1:2] not in ("/", "\\")
 
 
 def safe_markdown(text: str, recorded: set[str]) -> str:

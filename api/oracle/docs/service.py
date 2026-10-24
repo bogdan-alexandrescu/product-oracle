@@ -43,6 +43,7 @@ from oracle.docs.schemas import (
     VersionSummary,
     VersionWarning,
 )
+from oracle.docs.visibility import default_for as default_visibility
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.review import service as review_service
@@ -920,11 +921,13 @@ async def import_draft(
             raise _unknown_base(base_version, None)
         # The same kind the check on an existing document reads: the run's, else the
         # draft's front matter kind, else its template's.
+        new_kind = kind or await _draft_kind(db, draft) or "prd"
         document = Document(
             slug=doc,
             title=draft.title,
             status="draft",
-            kind=kind or await _draft_kind(db, draft) or "prd",
+            kind=new_kind,
+            visibility=default_visibility(new_kind),
             template=draft.template,
             template_version=draft.template_version,
             theme=theme,

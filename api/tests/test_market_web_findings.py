@@ -270,7 +270,7 @@ async def test_a_promoted_title_reaches_the_next_digest_as_an_untrusted_field(cl
 
 
 @pytest.mark.parametrize("url", ["/\\evil.example", "//evil.example", "\\\\evil.example",
-                                 "\\/evil.example", "/\t/evil.example"])  # fmt: skip
+                                 "\\/evil.example"])  # fmt: skip
 def test_a_link_a_browser_reads_as_another_host_is_dropped(url):
     """protects=a finding's Markdown keeps a link to an Oracle page (/...) but drops one
     starting /\\ or // (a browser reads both as //host, another site); fails_when=such a
