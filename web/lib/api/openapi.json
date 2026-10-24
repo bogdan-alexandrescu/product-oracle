@@ -1227,7 +1227,8 @@
                     "spec",
                     "vision",
                     "strategy",
-                    "update"
+                    "update",
+                    "pricing"
                   ],
                   "type": "string"
                 },
@@ -16906,10 +16907,10 @@
                   "type": "null"
                 }
               ],
-              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated",
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, pricing, comma-separated",
               "title": "Origin"
             },
-            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated"
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, pricing, comma-separated"
           },
           {
             "name": "chosen",
@@ -18513,7 +18514,8 @@
                     "roadmap",
                     "vision",
                     "strategy",
-                    "update"
+                    "update",
+                    "pricing"
                   ],
                   "type": "string"
                 },
@@ -18970,6 +18972,7 @@
                     "vision",
                     "strategy",
                     "update",
+                    "pricing",
                     "any"
                   ],
                   "type": "string"
@@ -36254,7 +36257,7 @@
           "interviews"
         ],
         "summary": "Create Interview",
-        "description": "Create a Draft customer interview and queue Oracle's draft of its questions.",
+        "description": "Create a Draft customer interview and queue Oracle's draft of its questions; with\n``preset=pricing``, its guide is the fixed pricing questions and no job is queued.",
         "operationId": "create_interview",
         "security": [
           {
@@ -36303,7 +36306,7 @@
           "interviews"
         ],
         "summary": "List Interviews",
-        "description": "Interviews, newest first.",
+        "description": "Interviews, newest first; ``preset=pricing`` for pricing interviews.",
         "operationId": "list_interviews",
         "security": [
           {
@@ -36390,6 +36393,23 @@
                 }
               ],
               "title": "Kind"
+            }
+          },
+          {
+            "name": "preset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "pricing",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preset"
             }
           }
         ],
@@ -36543,7 +36563,7 @@
           "interviews"
         ],
         "summary": "Redraft Interview Guide",
-        "description": "Ask Oracle to draft a Draft's questions again.",
+        "description": "Ask Oracle to draft a Draft's questions again (not a pricing interview's: 409).",
         "operationId": "redraft_interview_guide",
         "security": [
           {
@@ -37072,6 +37092,486 @@
             }
           }
         }
+      }
+    },
+    "/v1/deal-outcomes": {
+      "get": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "List Deal Outcomes",
+        "description": "Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are\ninclusive days.",
+        "operationId": "list_deal_outcomes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "result",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "won",
+                    "lost",
+                    "no_decision",
+                    "churned"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Result"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "price",
+                    "value",
+                    "product_gap",
+                    "alternative",
+                    "timing",
+                    "no_budget",
+                    "champion",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DealOutcomeOut"
+                  },
+                  "title": "Response List Deal Outcomes"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Below approver (writes), or a run's agents"
+          },
+          "404": {
+            "description": "No such record in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Stale lock_version"
+          },
+          "422": {
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "post": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "Create Deal Outcome",
+        "description": "Record one deal's result and its main reason.",
+        "operationId": "create_deal_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealOutcomeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealOutcomeOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Below approver (writes), or a run's agents"
+          },
+          "404": {
+            "description": "No such record in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Stale lock_version"
+          },
+          "422": {
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/deal-outcomes/{outcome_id}": {
+      "patch": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "Update Deal Outcome",
+        "description": "Change a record (lock_version required; null clears an optional field).",
+        "operationId": "update_deal_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealOutcomePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealOutcomeOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Below approver (writes), or a run's agents"
+          },
+          "404": {
+            "description": "No such record in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Stale lock_version"
+          },
+          "422": {
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "delete": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "Delete Deal Outcome",
+        "description": "Delete a record.",
+        "operationId": "delete_deal_outcome",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "outcome_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outcome Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Below approver (writes), or a run's agents"
+          },
+          "404": {
+            "description": "No such record in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Stale lock_version"
+          },
+          "422": {
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/deal-outcomes/import": {
+      "post": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "Import Deal Outcomes",
+        "description": "Import records from CSV: a header row naming ``result, account, segment, plan,\nannual_value, currency, decided_on, reason, reason_note, alternative, price_quoted``,\nthen at most 2,000 rows (1 MB). Bad rows are listed with their line number (the header\nis line 1) and good rows still import; ``dry_run`` creates nothing and returns the\nsame counts. Result and reason take their keys or plain labels, in either case.",
+        "operationId": "import_deal_outcomes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Dry Run"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Below approver (writes), or a run's agents"
+          },
+          "404": {
+            "description": "No such record in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Stale lock_version"
+          },
+          "422": {
+            "description": "Over 1 MB or 2,000 rows, no header row, or not UTF-8 CSV"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/pricing-memos": {
+      "get": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "List Pricing Memos",
+        "description": "Pricing memos with their state (draft, in review, approved, decided) and their\ndecision; owners and approvers only.",
+        "operationId": "list_pricing_memos",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PricingMemoSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Pricing Memos"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Decide by anyone but the pricing owner"
+          },
+          "404": {
+            "description": "No such pricing memo in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Decide before the memo's latest version is approved"
+          },
+          "422": {
+            "description": "replaces names no decision"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/pricing-memos/{doc}/decide": {
+      "post": {
+        "tags": [
+          "pricing"
+        ],
+        "summary": "Decide Pricing Memo",
+        "description": "Decide: the pricing owner opens the approved memo's proposed decision in the\ndecision log (created on the first call, the same one on a repeat), with the memo's\noptions, the pricing owner as its approver and origin ``pricing``.",
+        "operationId": "decide_pricing_memo",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DecideMemoIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Decide by anyone but the pricing owner"
+          },
+          "404": {
+            "description": "No such pricing memo in this company, or a reader below approver"
+          },
+          "409": {
+            "description": "Decide before the memo's latest version is approved"
+          },
+          "422": {
+            "description": "replaces names no decision"
+          },
+          "200": {
+            "description": "The memo's existing proposal"
+          }
+        },
+        "x-min-role": "approver",
+        "x-per-item": null
       }
     },
     "/v1/plan": {
@@ -46854,7 +47354,8 @@
               "request_triage",
               "strategy_review",
               "launch_review",
-              "update_review"
+              "update_review",
+              "pricing_review"
             ],
             "title": "Kind"
           },
@@ -47070,7 +47571,8 @@
               "request_triage",
               "strategy_review",
               "launch_review",
-              "update_review"
+              "update_review",
+              "pricing_review"
             ],
             "title": "Kind"
           },
@@ -50669,6 +51171,572 @@
         ],
         "title": "DateRightsOut"
       },
+      "DealOutcomeIn": {
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "won",
+              "lost",
+              "no_decision",
+              "churned"
+            ],
+            "title": "Result"
+          },
+          "account": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Account"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "annual_value": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Value"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "USD",
+                  "EUR",
+                  "GBP"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decided_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Decided On"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "price",
+              "value",
+              "product_gap",
+              "alternative",
+              "timing",
+              "no_budget",
+              "champion",
+              "other"
+            ],
+            "title": "Reason"
+          },
+          "reason_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Note"
+          },
+          "competitor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competitor Id"
+          },
+          "price_quoted": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Quoted"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "result",
+          "account",
+          "decided_on",
+          "reason"
+        ],
+        "title": "DealOutcomeIn",
+        "description": "One deal's result and its main reason. ``reason: other`` needs ``reason_note``;\n``annual_value`` and ``currency`` come together; ``decided_on`` is not in the\nfuture (the company's today)."
+      },
+      "DealOutcomeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "won",
+              "lost",
+              "no_decision",
+              "churned"
+            ],
+            "title": "Result"
+          },
+          "account": {
+            "type": "string",
+            "title": "Account"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "annual_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Value"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "USD",
+                  "EUR",
+                  "GBP"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decided_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Decided On"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "price",
+              "value",
+              "product_gap",
+              "alternative",
+              "timing",
+              "no_budget",
+              "champion",
+              "other"
+            ],
+            "title": "Reason"
+          },
+          "reason_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Note"
+          },
+          "competitor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competitor Id"
+          },
+          "price_quoted": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Quoted"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          },
+          "source_item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DealSourceItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recorded_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Recorded By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "result",
+          "account",
+          "segment",
+          "plan",
+          "annual_value",
+          "currency",
+          "decided_on",
+          "reason",
+          "reason_note",
+          "competitor_id",
+          "price_quoted",
+          "source_item_id",
+          "source_item",
+          "recorded_by",
+          "created_at",
+          "updated_at",
+          "lock_version"
+        ],
+        "title": "DealOutcomeOut"
+      },
+      "DealOutcomePatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "won",
+                  "lost",
+                  "no_decision",
+                  "churned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "annual_value": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Value"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "USD",
+                  "EUR",
+                  "GBP"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decided_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided On"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "price",
+                  "value",
+                  "product_gap",
+                  "alternative",
+                  "timing",
+                  "no_budget",
+                  "champion",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reason_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Note"
+          },
+          "competitor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competitor Id"
+          },
+          "price_quoted": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Quoted"
+          },
+          "source_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Item Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "DealOutcomePatch",
+        "description": "Change some fields (lock_version required); null clears an optional one."
+      },
+      "DealSourceItem": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "url",
+          "excerpt"
+        ],
+        "title": "DealSourceItem",
+        "description": "What the record shares of its source item: title, link and a 400-character\nexcerpt (C1 \"Found items\")."
+      },
       "DecideIn": {
         "properties": {
           "option_key": {
@@ -50743,6 +51811,24 @@
           "expected_outcome"
         ],
         "title": "DecideIn"
+      },
+      "DecideMemoIn": {
+        "properties": {
+          "replaces": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces"
+          }
+        },
+        "type": "object",
+        "title": "DecideMemoIn"
       },
       "DecisionCreate": {
         "properties": {
@@ -51033,7 +52119,8 @@
               "pushback_override",
               "priority_override",
               "autonomy",
-              "checkpoint"
+              "checkpoint",
+              "pricing"
             ],
             "title": "Origin"
           },
@@ -51892,7 +52979,8 @@
               "pushback_override",
               "priority_override",
               "autonomy",
-              "checkpoint"
+              "checkpoint",
+              "pricing"
             ],
             "title": "Origin"
           },
@@ -54288,7 +55376,8 @@
               "spec",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind",
             "default": "prd"
@@ -54694,7 +55783,8 @@
               "spec",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind",
             "default": "prd"
@@ -54890,7 +55980,8 @@
                   "spec",
                   "vision",
                   "strategy",
-                  "update"
+                  "update",
+                  "pricing"
                 ]
               },
               {
@@ -59662,7 +60753,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "pricing_memo"
             ],
             "title": "Key"
           },
@@ -59688,7 +60780,8 @@
                   "spec",
                   "vision",
                   "strategy",
-                  "update"
+                  "update",
+                  "pricing"
                 ]
               },
               {
@@ -59707,7 +60800,8 @@
                   "spec",
                   "vision",
                   "strategy",
-                  "update"
+                  "update",
+                  "pricing"
                 ]
               },
               {
@@ -59811,7 +60905,8 @@
                   "request_triage",
                   "strategy_review",
                   "launch_review",
-                  "update_review"
+                  "update_review",
+                  "pricing_review"
                 ]
               },
               {
@@ -60066,7 +61161,8 @@
               "request_triage",
               "strategy_review",
               "launch_review",
-              "update_review"
+              "update_review",
+              "pricing_review"
             ],
             "title": "Kind"
           },
@@ -62287,6 +63383,32 @@
         ],
         "title": "ImportIssue"
       },
+      "ImportOut": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ImportSkipped"
+            },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dry_run",
+          "created",
+          "skipped"
+        ],
+        "title": "ImportOut"
+      },
       "ImportProblem": {
         "properties": {
           "code": {
@@ -62367,6 +63489,24 @@
           "message"
         ],
         "title": "ImportProblem"
+      },
+      "ImportSkipped": {
+        "properties": {
+          "line": {
+            "type": "integer",
+            "title": "Line"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line",
+          "message"
+        ],
+        "title": "ImportSkipped"
       },
       "InboxAccessFailure": {
         "properties": {
@@ -62529,7 +63669,8 @@
               "request_triage",
               "strategy_review",
               "launch_review",
-              "update_review"
+              "update_review",
+              "pricing_review"
             ],
             "title": "Kind"
           },
@@ -62721,7 +63862,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "pricing_memo"
             ],
             "title": "Flow"
           },
@@ -66198,6 +67340,18 @@
           },
           "subject": {
             "$ref": "#/components/schemas/InterviewSubject"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "pricing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           }
         },
         "additionalProperties": false,
@@ -66426,6 +67580,18 @@
               "revoked"
             ],
             "title": "Status"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "pricing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "title": {
             "type": "string",
@@ -66792,6 +67958,18 @@
               "revoked"
             ],
             "title": "Status"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "pricing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "title": {
             "type": "string",
@@ -71203,6 +72381,40 @@
         "type": "object",
         "title": "MemberPatch",
         "description": "A role, the engineering lead flag, a name (A5), or several (applied in one\nchange: role first). ``\"name\": null`` clears the name."
+      },
+      "MemoDecision": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "chosen_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "title",
+          "status"
+        ],
+        "title": "MemoDecision"
       },
       "MilestoneCreate": {
         "properties": {
@@ -76464,6 +77676,70 @@
         "title": "PreviousAttempt",
         "description": "The attempt before the current one, kept when a person sent the segment back (D5):\nits number and file names (read with ``?attempt=``)."
       },
+      "PricingMemoSummary": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "in_review",
+              "approved",
+              "decided"
+            ],
+            "title": "State"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "slug",
+          "title",
+          "question",
+          "state",
+          "decision",
+          "updated_at"
+        ],
+        "title": "PricingMemoSummary"
+      },
       "PriorityCheck": {
         "properties": {
           "method": {
@@ -79745,7 +81021,8 @@
               "roadmap",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
@@ -85571,7 +86848,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "pricing_memo"
             ],
             "title": "Flow"
           },
@@ -85703,7 +86981,8 @@
               "request_triage",
               "strategy_review",
               "launch_review",
-              "update_review"
+              "update_review",
+              "pricing_review"
             ],
             "title": "Kind"
           },
@@ -86037,7 +87316,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "pricing_memo"
             ],
             "title": "Flow"
           },
@@ -86092,7 +87372,8 @@
                   "spec",
                   "vision",
                   "strategy",
-                  "update"
+                  "update",
+                  "pricing"
                 ]
               },
               {
@@ -86204,7 +87485,8 @@
                   "request_triage",
                   "strategy_review",
                   "launch_review",
-                  "update_review"
+                  "update_review",
+                  "pricing_review"
                 ]
               },
               {
@@ -86327,7 +87609,8 @@
                   "request_triage",
                   "strategy_review",
                   "launch_review",
-                  "update_review"
+                  "update_review",
+                  "pricing_review"
                 ]
               },
               {
@@ -86643,7 +87926,8 @@
               "request_triage",
               "strategy_review",
               "launch_review",
-              "update_review"
+              "update_review",
+              "pricing_review"
             ],
             "title": "Kind"
           },
@@ -86847,7 +88131,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "pricing_memo"
             ],
             "title": "Flow"
           },
@@ -86902,7 +88187,8 @@
                   "spec",
                   "vision",
                   "strategy",
-                  "update"
+                  "update",
+                  "pricing"
                 ]
               },
               {
@@ -87014,7 +88300,8 @@
                   "request_triage",
                   "strategy_review",
                   "launch_review",
-                  "update_review"
+                  "update_review",
+                  "pricing_review"
                 ]
               },
               {
@@ -87137,7 +88424,8 @@
                   "request_triage",
                   "strategy_review",
                   "launch_review",
-                  "update_review"
+                  "update_review",
+                  "pricing_review"
                 ]
               },
               {
@@ -91044,7 +92332,8 @@
                   "request_triage",
                   "strategy_review",
                   "launch_review",
-                  "update_review"
+                  "update_review",
+                  "pricing_review"
                 ]
               },
               {
@@ -94916,7 +96205,8 @@
               "roadmap",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
@@ -94974,6 +96264,19 @@
                 "type": "null"
               }
             ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
           }
         },
         "type": "object",
@@ -95006,7 +96309,8 @@
               "roadmap",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
@@ -96715,7 +98019,8 @@
               "roadmap",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
@@ -96983,7 +98288,8 @@
               "roadmap",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
@@ -97092,7 +98398,8 @@
               "roadmap",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
@@ -97456,6 +98763,7 @@
               "vision",
               "strategy",
               "update",
+              "pricing",
               "any"
             ],
             "title": "Kind",
@@ -97613,6 +98921,7 @@
               "vision",
               "strategy",
               "update",
+              "pricing",
               "any"
             ],
             "title": "Kind"
@@ -97650,6 +98959,7 @@
               "vision",
               "strategy",
               "update",
+              "pricing",
               "any"
             ],
             "title": "Kind"
@@ -97910,6 +99220,7 @@
                   "vision",
                   "strategy",
                   "update",
+                  "pricing",
                   "any"
                 ]
               },
@@ -102419,7 +103730,8 @@
               "spec",
               "vision",
               "strategy",
-              "update"
+              "update",
+              "pricing"
             ],
             "title": "Kind"
           },
