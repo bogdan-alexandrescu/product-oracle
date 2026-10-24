@@ -20,8 +20,9 @@ const ALL = [
   "nav-templates",
   "nav-themes",
   "nav-autonomy",
+  "nav-trash",
 ];
-// Company, API tokens and Notifications read owner-only routes; Members reads the people list
+// Company, API tokens, Notifications and Trash read owner-only routes; Members reads the people list
 // (A5: everyone sees who is in the company, read-only below owner).
 const EVERYONE = ["nav-members", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-templates", "nav-themes", "nav-autonomy"];
 

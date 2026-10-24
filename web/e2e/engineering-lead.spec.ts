@@ -40,6 +40,8 @@ test("engineering lead: the owner ticks Eng lead, it stays after a reload and th
   await box.check();
   await expect(box).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
+  // The tick shows at once; the box is disabled until the save lands.
+  await expect(box).toBeEnabled();
   await page.reload();
   await expect(leadBox(page, "commenter@example.com")).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
