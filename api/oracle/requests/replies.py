@@ -392,6 +392,7 @@ async def replies_out(db: AsyncSession, rows: list[RequestReply]) -> list[dict[s
                 "sent_by_name": names.get(r.sent_by) if r.sent_by else None,
                 "skip_reason": r.skip_reason,
                 "notified_at": r.notified_at,
+                "opened_at": r.opened_at,
                 "drafting": r.job_id in running and r.status == OPEN and r.draft_source != "person",
                 "lock_version": r.lock_version,
             }

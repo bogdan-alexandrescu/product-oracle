@@ -181,6 +181,8 @@ PER_ITEM: dict[str, Role | None] = {
     # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
     "explain_metric_variance": "approver",
     "get_checkpoint_draft": "owner",
+    # Company coverage is owners' only (owner 2026-10-24): its handler reads the role.
+    "get_company_source_coverage": "owner",
     "get_next_question_batch": "approver",
     "keep_request_no": None,
     "mark_metric_variance_unknown": "approver",
@@ -188,6 +190,8 @@ PER_ITEM: dict[str, Role | None] = {
     "mirror_discussion_to_slack": "approver",
     "notify_request_reply": "approver",
     "open_oracle_action": "owner",
+    # H10: an answer told in Oracle is its asker's alone to mark opened.
+    "open_request_reply": None,
     "patch_interview": "approver",
     "patch_scope_item": "approver",
     "propose_discussion_change": "commenter",
