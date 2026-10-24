@@ -180,3 +180,24 @@ async def test_declining_again_after_a_reopen_logs_a_new_decision(client, ctx):
     decisions = sorted(await rows(ctx, Decision), key=lambda d: d.number)
     assert [d.status for d in decisions] == ["reversed", "decided"]
     assert resp.json()["decision_number"] == decisions[1].number
+
+
+async def test_a_no_without_a_note_after_a_reopen_shows_no_reversed_decision(client, ctx):
+    """protects=a request shows only its standing decided no (#532 review): declined with a
+    note, reopened, then declined as Won't do with no note; fails_when=the reversed
+    decision's number or status still shows beside "No note", in the request, the queue or
+    the merge picker's list; no_claim=the inspector (Playwright)."""
+    root = await declined(client, ctx, reason="wont_do", note="Not part of the product we sell")
+    assert root["decision_number"] is not None
+    assert (await act(client, ctx, root["id"], "reopen")).status_code == 200
+    resp = await act(client, ctx, root["id"], "disqualify", reason="wont_do")
+    assert resp.status_code == 200, resp.text
+    [d] = await rows(ctx, Decision)
+    assert d.status == "reversed"
+    for got in (resp.json(), await get(client, ctx, root["id"])):
+        assert got["no_reply_reason"] == "no_note"
+        assert got["decision_number"] is None and got["decision_status"] is None
+        assert got["decision_title"] is None
+    listed = (await client.get("/v1/requests?state=disqualified", headers=ctx.as_("viewer"))).json()
+    [item] = [r for r in listed["items"] if r["id"] == root["id"]]
+    assert item["decision_number"] is None and item["decision_status"] is None

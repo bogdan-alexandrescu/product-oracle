@@ -351,6 +351,30 @@ async def test_draft_again_queues_one_job_and_refuses_a_second(client, ctx):
     assert len(await rows(ctx, LlmJob)) == 2
 
 
+async def test_draft_again_reads_drafting_until_its_job_ends(client, ctx):
+    """protects=Draft again with Oracle on replies that have a body (#532 review): they and
+    the request read drafting while the job is queued, so the panel shows "Drafting the
+    replies…" and the button is held; fails_when=drafting needs an empty body, or stays on
+    after the job ends; no_claim=the panel (Playwright)."""
+    r = await add(client, ctx)
+    assert (await act(client, ctx, r["id"], "disqualify", reason="no_goal")).status_code == 200
+    await worker.run_pending(ctx.tenant_id)  # no account in the pool: the template
+    [reply] = await replies(client, ctx, r["id"])
+    assert reply["body"] and not reply["drafting"]
+    assert (await get(client, ctx, r["id"]))["drafting"] is False
+    resp = await client.post(f"/v1/requests/{r['id']}/replies/draft", headers=ctx.as_("approver"))
+    assert resp.status_code == 202, resp.text
+    [reply] = await replies(client, ctx, r["id"])
+    assert reply["body"] and reply["drafting"] is True
+    assert (await get(client, ctx, r["id"]))["drafting"] is True
+    resp = await client.post(f"/v1/requests/{r['id']}/replies/draft", headers=ctx.as_("approver"))
+    assert resp.status_code == 409
+    await worker.run_pending(ctx.tenant_id)
+    [reply] = await replies(client, ctx, r["id"])
+    assert reply["drafting"] is False
+    assert (await get(client, ctx, r["id"]))["drafting"] is False
+
+
 # --- the promise check -------------------------------------------------------------------
 
 
@@ -378,12 +402,46 @@ def test_promise_check_flags_dates_and_later(body):
         "You can already do this with Board export.",
         "",
         None,
+        "Our support team answers 24/7.",
+        "It suits later-stage teams better than yours.",
     ],
 )
 def test_promise_check_leaves_a_plain_no_alone(body):
     """protects=criterion 3 (no false warning); fails_when=a plain no is flagged;
     no_claim=wording quality."""
     assert replies_module.promise_warnings(body) == []
+
+
+@pytest.mark.parametrize(
+    ("asked", "body", "flagged"),
+    [
+        (
+            "Remind me later",
+            'Thanks for asking for "Remind me later". We\'ve decided not to.',
+            False,
+        ),
+        ("Boards soon please", "You asked for \u201cBoards soon please\u201d: no.", False),
+        ("Export boards", 'Thanks for asking for "Export boards". Maybe later.', True),
+        ("Export boards", 'We said "soon" before. No.', True),
+    ],
+)
+def test_promise_check_skips_the_askers_quoted_words(asked, body, flagged):
+    """protects=the promise check reads only what the company says (#532 review): the
+    asker's own words, quoted, never warn; fails_when=a quote of the asker is flagged, or a
+    promise outside it (or a quote that is not theirs) passes; no_claim=every way to quote."""
+    got = replies_module.promise_warnings(body, asked=asked)
+    assert got == (["sounds_like_a_promise"] if flagged else [])
+
+
+async def test_a_template_quoting_the_askers_later_is_not_a_promise(client, ctx):
+    """protects=a template draft that quotes an asker's "later" carries no warning (#532
+    review); fails_when=the quote is flagged; no_claim=the model's drafts."""
+    r = await add(client, ctx, title="Remind me later about boards")
+    assert (await act(client, ctx, r["id"], "disqualify", reason="no_goal")).status_code == 200
+    await worker.run_pending(ctx.tenant_id)  # no account in the pool: the template
+    [reply] = await replies(client, ctx, r["id"])
+    assert reply["draft_source"] == "template" and '"Remind me later about boards"' in reply["body"]
+    assert reply["warnings"] == []
 
 
 async def test_a_persons_edit_is_checked_too(client, ctx):

@@ -269,3 +269,109 @@ test("Phone: the Why not panel stacks with no horizontal scroll", async ({ page 
   const widths = await whyNot(page).evaluate((el) => ({ panel: el.scrollWidth - el.clientWidth, page: document.documentElement.scrollWidth - window.innerWidth }));
   expect(widths).toEqual({ panel: 0, page: 0 });
 });
+
+test("Reopen, then Won't do with no note: no reversed D-number and no Why not panel", async ({ page }) => {
+  // protects=#515 "a request declined without a note" after an earlier logged no (#532
+  // review: only a standing decided decision shows); fails_when=the reversed decision's chip
+  // or the Why not panel shows beside "No note"; no_claim=the API (its own tests).
+  await open(page, "approver@example.com");
+  await pick(page, "Print a board as a poster");
+  const panel = inspector(page);
+  await panel.getByRole("button", { name: "Disqualify", exact: true }).click();
+  await panel.getByLabel("Reason").selectOption({ label: "Won't do" });
+  await panel.getByLabel("Note").fill("Not part of the product we sell");
+  await panel.getByRole("button", { name: "Disqualify request" }).click();
+  await expect(panel.getByTestId("decision-chip")).toHaveText(/^D-\d+ Say no to Print a board as a poster$/);
+  await panel.getByRole("button", { name: "Reopen", exact: true }).click();
+  await expect(row(page, "Print a board as a poster")).toContainText("New");
+
+  await panel.getByRole("button", { name: "Disqualify", exact: true }).click();
+  await panel.getByLabel("Reason").selectOption({ label: "Won't do" });
+  await panel.getByRole("button", { name: "Disqualify request" }).click();
+  await expect(row(page, "Print a board as a poster")).toContainText("Disqualified");
+  await expect(panel.getByTestId("no-reply-reason")).toHaveText("No note: no decision was logged and no replies were drafted");
+  await expect(panel.getByTestId("decision-chip")).toHaveCount(0);
+  await expect(whyNot(page)).toHaveCount(0);
+});
+
+test("Draft again with Oracle reads Drafting the replies… and holds the button until the job ends", async ({ page }) => {
+  // protects=#515 Draft again with Oracle on replies that already have words (#532 review);
+  // fails_when=no Drafting line shows, or the button can be clicked again while the job
+  // runs (a 409); no_claim=the real job's words.
+  await open(page, "approver@example.com");
+  await pick(page, ROOT);
+  await sayNoOnStopList(page);
+  await expect(whyNot(page)).not.toContainText("Drafting the replies…", { timeout: 10_000 });
+  const again = whyNot(page).getByRole("button", { name: "Draft again with Oracle" });
+  await again.click();
+  await expect(whyNot(page)).toContainText("Drafting the replies…");
+  await expect(again).toBeDisabled();
+  await expect(whyNot(page)).not.toContainText("Drafting the replies…", { timeout: 10_000 });
+  await expect(again).toBeEnabled();
+  await expect(whyNot(page).getByRole("alert")).toHaveCount(0);
+});
+
+test("Asked again in the Inbox: Keep the no takes the person's own note", async ({ page }) => {
+  // protects=#515 "Keep the no: records an H1 review with verdict reaffirmed and the
+  // person's note" from the Inbox row (#532 review); fails_when=a fixed note is recorded or
+  // the row stays; no_claim=the threshold setting.
+  await open(page, "approver@example.com");
+  await pick(page, ROOT);
+  await sayNoOnStopList(page);
+  const decision = (await inspector(page).getByTestId("decision-chip").textContent())!;
+  for (const title of ["Print a board as a poster", "Animated board backgrounds", "Export one board to CSV"]) {
+    await pick(page, title);
+    await inspector(page).getByRole("button", { name: "Merge", exact: true }).click();
+    await inspector(page).getByLabel("Merge into").selectOption({ label: `${ROOT} · Said no on Oct 23 · ${decision}` });
+    await inspector(page).getByRole("button", { name: "Merge request" }).click();
+    await expect(row(page, title)).toContainText("Merged");
+  }
+
+  await page.goto("/inbox");
+  const need = page.locator("tr, li, [role=row]").filter({ has: page.getByTestId("request-need").filter({ hasText: `Asked again 3 times since you said no · ${ROOT}` }) }).last();
+  await expect(need).toBeVisible();
+  await need.getByRole("button", { name: "Keep the no" }).click();
+  await need.getByLabel("Why keep the no").fill("Still on the stop list; one board exports today");
+  await need.getByRole("button", { name: "Keep the no" }).click();
+  await expect(page.getByTestId("request-need").filter({ hasText: "Asked again" })).toHaveCount(0);
+
+  await page.goto("/company/decisions?state=all");
+  await page.getByTestId("decision-row").filter({ hasText: `Say no to ${ROOT}` }).click();
+  await expect(page.getByTestId("decision-inspector").filter({ visible: true })).toContainText("Still on the stop list; one board exports today");
+});
+
+test("The promise check leaves 24/7 and the asker's quoted later alone, and flags the company's own", async ({ page }) => {
+  // protects=#515 criterion 3 without false warnings (#532 review: whole words, the asker's
+  // quoted words skipped); fails_when="24/7" or the asker's quoted "later" warns, or a
+  // promise of the company's own passes; no_claim=every way to promise.
+  const TITLE = "Remind me later about boards";
+  await open(page, "approver@example.com");
+  await page.getByRole("button", { name: "New request" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New request" });
+  await dialog.getByLabel("Title").fill(TITLE);
+  await dialog.getByLabel("What it is and why").fill("Asked on a call");
+  await dialog.getByRole("button", { name: "File request" }).click();
+  await expect(inspector(page).getByRole("heading", { name: TITLE })).toBeVisible();
+  const panel = inspector(page);
+  await panel.getByRole("button", { name: "Disqualify", exact: true }).click();
+  await panel.getByLabel("Reason").selectOption({ label: "No goal" });
+  await panel.getByRole("button", { name: "Disqualify request" }).click();
+  const theirs = whyNot(page).getByTestId("reply");
+  await expect(theirs).toContainText(`"${TITLE}"`, { timeout: 10_000 });
+  await expect(whyNot(page)).not.toContainText("Drafting the replies…", { timeout: 10_000 });
+  await expect(theirs.getByTestId("promise-warning")).toHaveCount(0);
+  await theirs.getByRole("button", { name: "Edit" }).click();
+  const text = theirs.getByRole("textbox");
+  await text.fill(`${await text.inputValue()} Our support team answers 24/7.`);
+  await theirs.getByRole("button", { name: "Save" }).click();
+  await expect(theirs).toContainText("answers 24/7");
+  await expect(theirs.getByTestId("promise-warning")).toHaveCount(0);
+  // The saved reply is read again (a new lock_version); edit once it has settled.
+  await expect(async () => {
+    await theirs.getByRole("button", { name: "Edit" }).click();
+    await expect(text).toBeVisible({ timeout: 1_000 });
+  }).toPass();
+  await text.fill(`${await text.inputValue()} We may build it later.`);
+  await theirs.getByRole("button", { name: "Save" }).click();
+  await expect(theirs.getByTestId("promise-warning")).toHaveText("Sounds like a promise");
+});
