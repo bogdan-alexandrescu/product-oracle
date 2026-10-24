@@ -5,6 +5,7 @@ check), reply actions and roles, Inbox rows, isolation and run-token scopes.
 Each test's card is one line: protects / fails_when / no_claim. Made-up names only.
 """
 
+import asyncio
 import uuid
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -660,3 +661,30 @@ async def test_replies_to_send_filter_lists_declines_with_drafted_replies(client
     assert resp.status_code == 200, resp.text
     assert [r["id"] for r in resp.json()["items"]] == [waiting["id"]]
     assert resp.json()["total"] == 1
+
+
+async def test_a_persons_edit_while_oracle_drafts_is_kept(client, ctx, fake):
+    """protects=a person's words over Oracle's: an edit made while the job runs stays;
+    fails_when=the job's answer overwrites it; no_claim=the panel's Drafting state."""
+    r = await add(client, ctx)
+    assert (await act(client, ctx, r["id"], "disqualify", reason="no_goal")).status_code == 200
+    [reply] = await replies(client, ctx, r["id"])
+    await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+
+    async def person_edits(kind, payload):
+        # Bounded: an edit must not wait for the model call to end.
+        resp = await asyncio.wait_for(
+            client.patch(
+                f"/v1/request-replies/{reply['id']}",
+                json={"lock_version": reply["lock_version"], "body": "No: we focus on activation."},
+                headers=ctx.as_("approver"),
+            ),
+            timeout=10,
+        )
+        assert resp.status_code == 200, resp.text
+
+    fake.on_call = person_edits
+    fake.script["why_not_reply"].append({"replies": [{"id": reply["id"], "body": "Oracle's no"}]})
+    await worker.run_pending(ctx.tenant_id)
+    [got] = await replies(client, ctx, r["id"])
+    assert got["body"] == "No: we focus on activation." and got["draft_source"] == "person"
