@@ -201,10 +201,9 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
                     f"(${per_summary_usd():.2f}, within your limit)"
                 ),
                 subject={
-                    "type": "ritual_occurrence",
-                    "occurrence_id": str(occ_id),
-                    "ritual_id": str(ritual_id),
-                    "run_id": str(run_id),
+                    "kind": "ritual",
+                    "key": str(ritual_id),
+                    "href": f"/company/rituals/{occ_id}",
                 },
                 undo={"method": "POST", "path": f"/v1/runs/{run_id}/cancel", "body": None},
                 notify=[owner_id],

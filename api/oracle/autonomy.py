@@ -415,6 +415,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=LaunchesLimits,
         wired_by="H6",
         wired_by_name="H6 Launches and changelog",
+        wired=True,
     ),
     Responsibility(
         key="strategy",

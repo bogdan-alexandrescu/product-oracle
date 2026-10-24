@@ -44,7 +44,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
+import { emptyAutonomy, inboxActions, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -1823,6 +1823,17 @@ function load(): Db {
               ? seedDiscussionRecordScenario(db)
               : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
+  // #524: what Oracle did at Act within limits on a launch (H6) and a ritual (H2), each row
+  // linking to its subject.
+  if (scenario === "oracle-did-launch-ritual") {
+    const owner = db.members.find((x) => x.id === db.user_id)!;
+    db.launches = seedLaunches(launchesContext(db, owner));
+    db.rituals = seedRituals(ritualsContext(db, owner), true);
+    const launched = db.launches.launches.find((l) => l.state === "launched")!;
+    const refresh = db.rituals.rituals.find((r) => r.kind === "roadmap_refresh")!;
+    const occurrence = db.rituals.occurrences.find((o) => o.ritual_id === refresh.id)!;
+    db.autonomy.actions.push(seedLaunchDid(db.user_id, uuid(), launched), seedRitualDid(db.user_id, uuid(), refresh, occurrence.id));
+  }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {

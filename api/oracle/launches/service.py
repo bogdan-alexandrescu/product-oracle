@@ -708,7 +708,11 @@ async def mark_launched(
                 db,
                 "launches",
                 summary=_acted_summary(launch, published, notified),
-                subject={"kind": "launch", "id": str(launch.id)},
+                subject={
+                    "kind": "launch",
+                    "key": str(launch.id),
+                    "href": f"/roadmap/launches?launch={launch.id}",
+                },
                 undo=None,
                 notify=[launch.owner_id or principal.id],
             )

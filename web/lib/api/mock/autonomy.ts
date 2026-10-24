@@ -542,7 +542,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "internal_only"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H6",
     "wired_by_name": "H6 Launches and changelog",
     "limits_default": {
@@ -699,6 +699,42 @@ export function seedOracleDid(ownerId: string, id: string, summary = "Moved 'Sav
     subject: { kind: "feature", key: "saved-addresses", href: "/priorities" },
     undo: { method: "POST", path: "/v1/priorities/moves/undo", body: { feature: "saved-addresses" } },
     created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+    undone_at: null,
+    notify_ids: [ownerId],
+    opened_by: [],
+    undone_by: null,
+  };
+}
+
+/** The "oracle-did-launch-ritual" scenario: at Act within limits, Oracle published a launch's
+ * internal entries and told its member requester (as the API's launches.service does). */
+export function seedLaunchDid(ownerId: string, id: string, launch: { id: string; title: string }): OracleActionRow {
+  return {
+    id,
+    responsibility: "launches",
+    responsibility_title: "Internal launch work",
+    summary: `${launch.title} launched: Oracle published 1 internal changelog entry and told 1 member requester`,
+    subject: { kind: "launch", key: launch.id, href: `/roadmap/launches?launch=${launch.id}` },
+    undo: null,
+    created_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+    undone_at: null,
+    notify_ids: [ownerId],
+    opened_by: [],
+    undone_by: null,
+  };
+}
+
+/** The same scenario: at Act within limits, Oracle started the summary of a ritual's pre-read
+ * (as the API's rituals.summaries does). No Undo: the mock has no run of it to cancel. */
+export function seedRitualDid(ownerId: string, id: string, ritual: { id: string; title: string }, occurrenceId: string): OracleActionRow {
+  return {
+    id,
+    responsibility: "rituals",
+    responsibility_title: "Run rituals",
+    summary: `Started a summary of the pre-read for '${ritual.title}' ($3.00, within your limit)`,
+    subject: { kind: "ritual", key: ritual.id, href: `/company/rituals/${occurrenceId}` },
+    undo: null,
+    created_at: new Date(Date.now() - 25 * 60_000).toISOString(),
     undone_at: null,
     notify_ids: [ownerId],
     opened_by: [],
