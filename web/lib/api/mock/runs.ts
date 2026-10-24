@@ -1465,6 +1465,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     launches: [],
     // A5: no access requests in the mock yet.
     access_requests: [],
+    // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).
+    requests: [],
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],
