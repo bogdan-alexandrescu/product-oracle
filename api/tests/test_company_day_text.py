@@ -157,6 +157,8 @@ HELPERS = {"company_time.py"}
 EXCEPTIONS = {
     ("reports/alignment.py", "short_day"): "words a date already in the Company zone",
     ("discussions/kinds.py", "_measure"): "a goal's due day: a calendar date, no time of day",
+    ("market/blocks.py", "finding_row"): "a finding's published date: a calendar date, no time",
+    ("metrics/review.py", "variances"): "a metric week's Monday: a calendar date, no time of day",
     ("priorities/service.py", "_cited_as"): "machine field: a citation's ISO date",
     ("requests/triage.py", "prompt_lines"): "agent prompt, labelled UTC",
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",

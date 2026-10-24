@@ -7,7 +7,7 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -19,6 +19,7 @@ from oracle.runtokens import mint_run_token
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx, make_item
+from tests.day_helpers import company_today
 from tests.test_mcp import mcp_client, text_of
 
 URL = "/v1/deal-outcomes"
@@ -106,7 +107,7 @@ async def test_the_rules_refuse_with_422(client, ctx):
     without its currency, a currency outside USD/EUR/GBP, a result or reason outside its
     list, an empty or 121-character account and an H7 competitor_id are 422s; fails_when=
     any of them creates a row; no_claim=the CSV path (its own test)."""
-    tomorrow = (date.today() + timedelta(days=2)).isoformat()
+    tomorrow = (company_today() + timedelta(days=2)).isoformat()
     bad = [
         {"reason": "other", "reason_note": None},
         {"reason": "other", "reason_note": "   "},
@@ -286,7 +287,7 @@ async def test_csv_rows_break_the_rules_one_by_one(client, ctx):
     account), a quoted multi-line note keeps later line numbers right, and good rows still
     import; fails_when=a bad row imports or a message names the wrong line; no_claim=
     every message's exact wording."""
-    future = (date.today() + timedelta(days=2)).isoformat()
+    future = (company_today() + timedelta(days=2)).isoformat()
     body = _csv(
         f"lost,Account 1,,,,,{future},price,,,",  # line 2
         "lost,Account 2,,,,,2026-09-01,other,,,",  # 3

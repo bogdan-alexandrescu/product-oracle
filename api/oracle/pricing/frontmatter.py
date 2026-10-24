@@ -194,9 +194,10 @@ def check_import(
         warnings.append(
             VersionWarning(
                 code=RECOMMENDED_AT_DRAFT,
-                message=f"Option {recommended[0].id} is marked recommended, but Oracle's "
+                message=f"{recommended[0].title} is marked recommended, but Oracle's "
                 "pricing input is at Draft: Decide ignores the recommendation",
                 section_keys=[RECOMMENDATION_KEY],
+                refs={"option": recommended[0].id},
             )
         )
     refs = [layers.SectionRef(s.section_key, s.level) for s in sections]
