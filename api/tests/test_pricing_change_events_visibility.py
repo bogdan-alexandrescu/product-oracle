@@ -12,12 +12,30 @@ no_claim=<what green does not prove>.
 import pytest
 from sqlalchemy import select
 
+from oracle.docs.models import Document
+from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
+from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import make_entity
 from tests.decision_helpers import clock  # noqa: F401
+from tests.pricing_helpers import approved_memo
 from tests.test_mcp import api_token, mcp_client, run_token, text_of
-from tests.test_pricing_baseline_visibility import _decided, _leaks, ctx, runtime  # noqa: F401
+from tests.test_pricing_baseline_visibility import _decided, _leaks
+
+
+@pytest.fixture
+async def ctx():
+    return await make_ctx()
+
+
+@pytest.fixture(autouse=True)
+def runtime():
+    """The local runtime: run tokens from any address."""
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
 
 ROLES = [("owner", True), ("approver", True), ("commenter", False), ("viewer", False)]
 
@@ -128,3 +146,32 @@ async def test_a_run_token_reads_no_change_event_of_the_decision(client, ctx, wh
             except Exception:  # noqa: BLE001 - a tool not offered to the run
                 continue
             assert got.is_error or not _leaks(text_of(got), entity_id), (name, text_of(got))
+
+
+@pytest.mark.parametrize(("who", "sees"), ROLES)
+async def test_a_hidden_memo_s_change_events_follow_the_memo(client, ctx, who, sees):
+    """protects=the change events recorded against an approvers-only pricing memo (its
+    versions) are listed for an owner and an approver and absent for a commenter and a
+    viewer, by list, by document and by id; fails_when=a commenter or viewer reads the
+    hidden memo's id or slug through a change event; no_claim=other documents' events."""
+    slug = await approved_memo(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        doc_id = await s.scalar(select(Document.id).where(Document.slug == slug))
+        event_ids = [
+            str(i)
+            for i in await s.scalars(
+                select(ChangeEvent.id).where(ChangeEvent.document_id == doc_id)
+            )
+        ]
+    assert event_ids
+    me = ctx.as_(who)
+    listed = await client.get("/v1/change-events", headers=me)
+    by_doc = await client.get("/v1/change-events", params={"document_id": str(doc_id)}, headers=me)
+    assert listed.status_code == 200 and by_doc.status_code == 200
+    for event_id in event_ids:
+        one = await client.get(f"/v1/change-events/{event_id}", headers=me)
+        assert (event_id in listed.text) is sees
+        assert one.status_code == (200 if sees else 404)
+    if not sees:
+        for resp in (listed, by_doc):
+            assert str(doc_id) not in resp.text and slug not in resp.text
