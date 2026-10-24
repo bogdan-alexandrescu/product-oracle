@@ -23,7 +23,7 @@ from oracle.docs import layers
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.members.names import display_name
 from oracle.pricing import frontmatter
-from oracle.pricing.schemas import MemoDecision, PricingMemoSummary
+from oracle.pricing.schemas import MemoDecision, PricingMemoSummary, PricingOwner
 from oracle.tenant_settings_api import InvalidSetting, get_setting
 
 SOURCE_KIND = "pricing_memo_version"
@@ -115,6 +115,8 @@ async def list_memos(db: AsyncSession, principal: Principal) -> list[PricingMemo
         )
     )
     found = await _decisions(db, [d.id for d in documents])
+    decider = await pricing_owner(db) if documents else None
+    owner = PricingOwner(id=decider.id, name=name_of(decider)) if decider is not None else None
     out = []
     for document in documents:
         latest = await _latest(db, document.id)
@@ -144,6 +146,7 @@ async def list_memos(db: AsyncSession, principal: Principal) -> list[PricingMemo
                     else None
                 ),
                 updated_at=document.updated_at,
+                pricing_owner=owner,
             )
         )
     return out

@@ -25308,6 +25308,17 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            pricing_owner?: components["schemas"]["PricingOwner"] | null;
+        };
+        /** PricingOwner */
+        PricingOwner: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /**
          * PriorityCheck

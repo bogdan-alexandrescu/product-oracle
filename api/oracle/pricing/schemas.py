@@ -126,6 +126,11 @@ class MemoDecision(BaseModel):
     chosen_label: str | None = None
 
 
+class PricingOwner(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class PricingMemoSummary(BaseModel):
     document_id: uuid.UUID
     slug: str
@@ -134,6 +139,9 @@ class PricingMemoSummary(BaseModel):
     state: MemoState
     decision: MemoDecision | None
     updated_at: datetime
+    # Who decides (the memo header's Decide, or "Waiting for <name> to decide"); the
+    # setting itself is an owner's read.
+    pricing_owner: PricingOwner | None = None
 
 
 class DecideMemoIn(BaseModel):

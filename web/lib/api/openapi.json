@@ -77726,6 +77726,16 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "pricing_owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingOwner"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -77739,6 +77749,25 @@
           "updated_at"
         ],
         "title": "PricingMemoSummary"
+      },
+      "PricingOwner": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PricingOwner"
       },
       "PriorityCheck": {
         "properties": {
