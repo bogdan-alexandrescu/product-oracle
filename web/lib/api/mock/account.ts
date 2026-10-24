@@ -27,7 +27,13 @@ export type AccountContext = {
   now: () => string;
   /** Ends the mock's one session (sign out everywhere, a password change elsewhere). */
   endSession: () => void;
+  /** The "read-only-credential" scenario: signed in with an oracle:read personal token (AC1). */
+  readOnly?: boolean;
 };
+
+/** The API's refusal of any change through a read-only credential (oracle.auth.deps.READ_ONLY). */
+export const READ_ONLY =
+  "This credential can only read (oracle:read): it cannot add, change or delete anything. Approve the MCP client, or create the personal API token, with oracle:write to make changes";
 
 const MIN_LENGTH = 12;
 const ATTEMPTS = 5;
@@ -215,6 +221,7 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
     // A5: your own name, shown to teammates instead of your email; null clears it.
     const row = ctx.members.find((x) => x.id === me.id) ?? me;
     if (m === "PATCH") {
+      if (ctx.readOnly) return json(403, { detail: READ_ONLY });
       const { name } = await body<Schemas["NamePatch"]>();
       if ((name ?? "").trim().length > 80) return json(422, { detail: "A name is at most 80 characters" });
       row.name = name?.trim() || null;
@@ -228,7 +235,8 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       last_sign_in_at: me.last_sign_in_at ?? null,
       sign_in_methods: ["password"],
       password_min_length: MIN_LENGTH,
-      signed_in_via: "browser",
+      signed_in_via: ctx.readOnly ? "api_token" : "browser",
+      read_only: !!ctx.readOnly,
     };
     return json(200, out);
   }

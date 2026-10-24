@@ -514,8 +514,10 @@ async def _access[T](op: Awaitable[T]) -> T:
         raise HTTPException(_ACCESS_STATUS[e.kind], e.message) from e
 
 
-def _request_out(row) -> AccessRequestOut:
-    return AccessRequestOut.model_validate(row)
+async def _request_out(db: TenantDB, principal: Principal, row) -> AccessRequestOut:
+    out = AccessRequestOut.model_validate(row)
+    out.default_role = await access.preset_role(db, principal)
+    return out
 
 
 @invites_router.get("/access-requests", response_model=list[AccessRequestOut])
@@ -529,7 +531,7 @@ async def list_access_requests(
     others."""
     if not access.invite_roles(principal):
         raise HTTPException(403, "Requires the approver role")
-    return [_request_out(r) for r in await access.list_requests(db, status)]
+    return [await _request_out(db, principal, r) for r in await access.list_requests(db, status)]
 
 
 @invites_router.post(
@@ -554,7 +556,7 @@ async def approve_access_request(
             await db.commit()  # a request whose email became a member is closed
         raise HTTPException(_ACCESS_STATUS[e.kind], e.message) from e
     await db.commit()
-    return _request_out(row)
+    return await _request_out(db, principal, row)
 
 
 @invites_router.post(
@@ -569,7 +571,7 @@ async def decline_access_request(
     """Turn the request down: later sign-ins stay refused (an invite still lets them in)."""
     row = await _access(access.decline(db, principal, request_id))
     await db.commit()
-    return _request_out(row)
+    return await _request_out(db, principal, row)
 
 
 @invites_router.post(
@@ -590,7 +592,7 @@ async def reopen_access_request(
     they revoke only the invites they sent."""
     row = await _access(access.reopen(db, principal, request_id))
     await db.commit()
-    return _request_out(row)
+    return await _request_out(db, principal, row)
 
 
 @router.get("/sign-in-rules", response_model=SignInRulesOut)

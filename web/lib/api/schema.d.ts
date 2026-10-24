@@ -11357,6 +11357,8 @@ export interface components {
             role?: ("viewer" | "commenter" | "approver" | "owner") | null;
             /** Invite Id */
             invite_id?: string | null;
+            /** Default Role */
+            default_role?: ("viewer" | "commenter" | "approver" | "owner") | null;
         };
         /**
          * AccessStateOut
@@ -23375,6 +23377,11 @@ export interface components {
              * @enum {string}
              */
             signed_in_via: "browser" | "api_token" | "mcp_client";
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
         };
         /**
          * NamePatch

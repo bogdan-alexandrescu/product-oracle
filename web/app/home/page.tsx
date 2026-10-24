@@ -10,6 +10,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
 
+import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
 import { allNeeds, CountChip, NeedTable, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
 import { useQuestionRows } from "../inbox/_questions";
@@ -142,17 +143,19 @@ export default function HomePage() {
   // The API filters (asked of me, still open): Home counts exactly what the badge counts.
   // Answered here, a question stays in its line with its outcome (C2).
   const questionRows = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
+  // A5: access requests, approved or declined in their line (as the Inbox).
+  const requestRows = useAccessRequestRows(inbox?.access_requests ?? [], inboxQ.reload);
   // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20); a question
   // answered here stays shown, no longer counted.
-  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true) : [];
+  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows) : [];
   const needs = waitingNeeds(all);
-  const visible = all.filter((r) => needs.includes(r) || (r.group === "questions" && !r.counted && r.state !== "done"));
+  const visible = all.filter((r) => needs.includes(r) || ((r.group === "questions" || r.group === "access-requests") && !r.counted && r.state !== "done"));
   const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
   // Revokes a removed member's disable could not make, and access changes still failing
-  // (owners only), as the Inbox lists them.
-  const access = needs.filter((r) => r.group === "revoke-failures" || r.group === "access-failures");
+  // (owners only), as the Inbox lists them; access requests (owners and approvers, A5).
+  const access = needs.filter((r) => r.group === "revoke-failures" || r.group === "access-failures" || r.group === "access-requests");
   const reviews = needs.filter((r) => r.group === "feedback");
   const asked = needs.filter((r) => r.group === "questions");
   const shownNeeds = pickNeeds(visible, MAX_NEEDS);
