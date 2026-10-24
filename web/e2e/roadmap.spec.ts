@@ -127,12 +127,17 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(items.getByTestId("items-check")).toContainText("1 roadmap item: 1 now, 0 next, 0 later");
   // D2: the item's problem reads as its blocking reason (chip, sentence naming the PRD version, fix).
   await expect(items.getByTestId("items-check")).toContainText("1 roadmap item: 1 now, 0 next, 0 later · 1 blocking");
-  await expect(items.getByTestId("reason-chip")).toHaveText(["No PRD section"]);
-  await expect(items.getByTestId("reason-text")).toHaveText(/^Section features is not in .+ v\d+\.$/);
-  await expect(items.getByTestId("reason-fixes")).toHaveText("Fix: Link section");
-  // D1: the run page shows the stop's summary; it is decided on the Roadmap items review screen.
+  // D1 (#542): the run page shows the stop's summary; the item, its reason and its fix are on
+  // the Roadmap items review screen, where it is decided.
+  await expect(items.getByTestId("items-review-line")).toContainText("1 need you · 1 blocking");
+  await expect(items.getByTestId("reason-chip")).toHaveCount(0);
   await items.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+  const item = page.locator('[data-testid="roadmap-item-row"][data-key="price-early"]');
+  await expect(item.getByTestId("reason-chip")).toHaveText(["No PRD section"]);
+  await expect(item.getByRole("button", { name: "Link section", exact: true })).toBeVisible();
+  await item.locator('[data-phone="title"]').click();
+  await expect(page.getByTestId("roadmap-item-inspector").getByTestId("reason-card")).toContainText(/Section features is not in .+ v\d+\./);
   await page.getByTestId("decision-bar").getByRole("button", { name: /^Approve/ }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
   await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();

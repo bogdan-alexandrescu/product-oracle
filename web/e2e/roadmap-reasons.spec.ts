@@ -4,8 +4,9 @@ import { login, seedRoadmapReview } from "./helpers";
 
 /**
  * D2 product reasons: at the Roadmap items checkpoint every item says why it needs a person,
- * blocking (red) or to confirm (amber), each sentence in full on its own line with its fixes
- * as plain text. Readable at 1366 px and at 390 px, with no horizontal page scroll.
+ * blocking or to confirm, each sentence in full with its fixes. Since D1 (#542) the run page
+ * shows the counts and the review screen the items. Readable at 1366 px and at 390 px, with
+ * no horizontal page scroll.
  */
 
 const CHIPS = [
@@ -36,61 +37,71 @@ async function openRun(page: Page) {
   return check;
 }
 
-/** Every chip and sentence fully shown: nothing ellipsised or clipped inside the check. */
+/** D1 (#542): the reasons are read on the review screen, opened from the run page's Review items. */
+async function openReview(page: Page) {
+  await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+}
+
+const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`);
+const inspector = (page: Page) => page.getByTestId("roadmap-item-inspector");
+
+/** The item's reasons in its inspector (a sheet on a phone). */
+async function pick(page: Page, key: string) {
+  await row(page, key).locator('[data-phone="title"]').click();
+}
+
+/** Every reason chip fully shown, and no horizontal page scroll. */
 async function expectNothingCut(page: Page) {
-  const cut = await page.getByTestId("items-check").evaluate((root) => {
-    const out: string[] = [];
-    for (const el of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
-      const style = getComputedStyle(el);
-      if (style.textOverflow === "ellipsis") out.push(`ellipsis: ${el.textContent}`);
-      if (el.scrollWidth > el.clientWidth + 1 && style.overflowX !== "visible") out.push(`clipped: ${el.textContent}`);
-    }
-    return out;
-  });
-  expect(cut).toEqual([]);
+  const clipped = await page.getByTestId("reason-chip").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
+  expect(clipped).toBe(0);
   const scroll = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(scroll).toBeLessThanOrEqual(0);
 }
 
-test("the roadmap items check counts blocking and to-confirm reasons and shows every chip in full", async ({ page }) => {
+test("the roadmap items check counts blocking and to-confirm reasons; the review screen shows every chip in full", async ({ page }) => {
   const check = await openRun(page);
   await expect(check.getByTestId("items-check-summary")).toHaveText(
     "9 roadmap items: 4 now, 2 next, 3 later · 3 blocking · 8 to confirm",
   );
-  // Reasons are listed per item, under the item's title.
-  const budget = check.getByTestId("item-reasons").filter({ hasText: "Budget caps" });
-  await expect(budget.getByTestId("reason-chip")).toHaveText(["Depends on a later item"]);
-  await expect(budget.getByTestId("reason-text")).toHaveText(
-    "Needs Anomaly detection, which is in Later. An item cannot ship before what it depends on.",
-  );
-  await expect(budget.getByTestId("reason-fixes")).toHaveText("Fix: Move to Later, Pull dependency to Now or Remove dependency");
-  // Blocking chips are red, to-confirm chips amber.
-  await expect(check.locator('[data-testid="reason-chip"][data-kind="crit"]')).toHaveCount(3);
-  await expect(check.locator('[data-testid="reason-chip"][data-kind="warn"]')).toHaveCount(8);
-  for (const chip of CHIPS) await expect(check.getByTestId("reason-chip").filter({ hasText: chip }).first()).toBeVisible();
+  // D1 (#542): the run page lists no item; its reasons are on the review screen.
+  await expect(check.getByTestId("item-reasons")).toHaveCount(0);
+  await openReview(page);
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
+  for (const chip of CHIPS) await expect(page.getByTestId("reason-chip").filter({ hasText: chip }).first()).toBeVisible();
+  // Reasons are read per item, with every fix.
+  await expect(row(page, "budget-caps").getByTestId("reason-chip")).toHaveText(["Depends on a later item"]);
+  await pick(page, "budget-caps");
+  const card = inspector(page).getByTestId("reason-card");
+  await expect(card).toContainText("Needs Anomaly detection, which is in Later. An item cannot ship before what it depends on.");
+  for (const fix of ["Move to Later", "Pull dependency to Now", "Remove dependency"]) await expect(card.getByRole("button", { name: fix, exact: true })).toBeVisible();
   // A dropped item is still listed, under its title from the last roadmap.
-  await expect(check.getByTestId("item-reasons").filter({ hasText: "Weekly digest" })).toContainText(
-    "It was in roadmap v1 and is not in this file.",
-  );
+  await pick(page, "weekly-digest");
+  await expect(inspector(page).getByTestId("reason-card")).toContainText("It was in roadmap v1 and is not in this file.");
   await expectNothingCut(page);
 });
 
-test("on a phone every reason stays readable with no horizontal scroll", async ({ page }) => {
+test("on a phone the summary and every reason stay readable with no horizontal scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const check = await openRun(page);
   await expect(check.getByTestId("items-check-summary")).toContainText("3 blocking · 8 to confirm");
-  await expect(check.getByTestId("reason-chip")).toHaveCount(11);
-  for (const text of await check.getByTestId("reason-text").all()) await expect(text).toBeVisible();
+  await expect(page.getByTestId("items-review-line")).toBeVisible();
+  await expectNothingCut(page);
+  await openReview(page);
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
   await expectNothingCut(page);
 });
 
 test("the Date unverified sentence reads in full with its fix", async ({ page }) => {
-  const check = await openRun(page);
-  const slack = check.getByTestId("item-reasons").filter({ hasText: "Slack alerts" });
+  await openRun(page);
+  await openReview(page);
+  const slack = row(page, "slack-alerts");
   await expect(slack.getByTestId("reason-chip")).toHaveText(["Date unverified"]);
-  await expect(slack.getByTestId("reason-text")).toHaveText(UNVERIFIED);
-  await expect(slack.getByTestId("reason-fixes")).toHaveText("Fix: Remove date");
+  await expect(slack.getByRole("button", { name: "Remove date", exact: true })).toBeVisible();
+  await pick(page, "slack-alerts");
+  const card = inspector(page).getByTestId("reason-card");
+  await expect(card).toContainText(UNVERIFIED);
   // The sentence is on its own line, never cut: its box is as wide as its text.
-  const text = slack.getByTestId("reason-text");
+  const text = card.getByText(UNVERIFIED);
   expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 });

@@ -55,23 +55,27 @@ async function openReview(page: Page) {
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
 }
-const item = (page: Page, title: string) => page.getByTestId("item-reasons").filter({ hasText: title });
+const item = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`);
 
-/** Stages one reason's fix from its item, as an approver does, and waits for it to show as staged. */
-async function stage(page: Page, title: string, fix: string) {
-  const row = item(page, title);
-  const before = await row.getByTestId("draft-action").count();
+/** Stages one reason's fix from its row on the review screen, as an approver does, and waits for it to show as done. */
+async function stage(page: Page, key: string, fix: string, done: string) {
+  const row = item(page, key);
   await row.getByRole("button", { name: fix, exact: true }).click();
-  await expect(row.getByTestId("draft-action")).toHaveCount(before + 1);
-  await expect(row.getByTestId("draft-action").last()).toHaveText(/Staged by/);
+  await expect(row.getByTestId("row-done")).toHaveText(new RegExp(`✓ ${done}`));
 }
 
-/** Remove date, Drop and Move to Later staged on the run page; the review screen opened. */
+/**
+ * The review screen opened; Remove date, Drop and Move to Later staged on it (D1, #542: no
+ * longer on the run page). Budget caps moves from its inspector's Horizon: with a split staged
+ * its row shows the split, not its fixes.
+ */
 async function stageEdits(page: Page) {
-  await stage(page, "Slack alerts", "Remove date");
-  await stage(page, "Mobile push", "Drop");
-  await stage(page, "Budget caps", "Move to Later");
   await openReview(page);
+  await stage(page, "slack-alerts", "Remove date", "Date removed");
+  await stage(page, "mobile-push", "Drop", "Dropped");
+  await item(page, "budget-caps").locator('[data-phone="title"]').click();
+  await page.getByTestId("roadmap-item-inspector").getByRole("group", { name: "Horizon" }).getByRole("button", { name: "Later" }).click();
+  await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "Budget caps: moved to Later" })).toHaveCount(1);
 }
 
 /** On the review screen, the section reason waived: the gate opens on the edits. */

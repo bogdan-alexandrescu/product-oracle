@@ -15,14 +15,8 @@ import { login, openSeeded, seedRoadmapReview, signOut } from "./helpers";
  * new tab starts as the last one signed in).
  */
 
-/** Opens the seeded roadmap review run from the runs list, as a person would. */
-async function openRun(page: Page) {
-  await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
-}
-
 const bar = (page: Page) => page.getByTestId("decision-bar");
+const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`);
 
 /** D1: Roadmap items are decided on their review screen, opened from the run page's Review items. */
 async function openReview(page: Page) {
@@ -63,26 +57,29 @@ test("the decision header says how long the wait has left", async ({ page }) => 
 test("a commenter's suggestion shows on the approver's page within one poll", async ({ page, context }) => {
   await login(page);
   await seedRoadmapReview(page);
-  await openRun(page);
-  const budget = page.getByTestId("item-reasons").filter({ hasText: "Budget caps" });
-  await expect(budget.getByTestId("draft-action")).toHaveCount(0);
+  // D1 (#542): items are suggested and staged on the review screen; the run page has no per-item buttons.
+  await openReview(page);
+  const screen = page.url();
+  const budget = row(page, "budget-caps");
+  await expect(budget.getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();
+  await expect(budget.getByTestId("suggested-by")).toHaveCount(0);
 
   // A second tab opens signed in as the owner: sign out there, then in as the commenter.
   const other = await context.newPage();
   await other.goto("/home");
   await signOut(other);
   await login(other, "commenter@example.com");
-  await openRun(other);
-  const theirs = other.getByTestId("item-reasons").filter({ hasText: "Budget caps" });
+  await other.goto(screen);
+  const theirs = row(other, "budget-caps");
   await theirs.getByRole("button", { name: "Move to Later", exact: true }).click();
-  await expect(theirs.getByTestId("draft-action")).toHaveText(/Move to Later · Suggested by Commenter/);
+  await expect(theirs.getByTestId("suggested-by")).toHaveText(/Suggested by you/);
   // A commenter suggests; deciding stays with the approver.
-  await expect(other.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
+  await expect(bar(other).getByRole("button", { name: /^Approve/ })).toHaveCount(0);
 
   // The approver's page reads the draft every 10 s.
-  await expect(budget.getByTestId("draft-action")).toHaveText(/Move to Later · Suggested by Commenter/, { timeout: 12_000 });
+  await expect(budget.getByTestId("suggested-by")).toHaveText(/Suggested by Commenter: Move to Later/, { timeout: 12_000 });
   await budget.getByRole("button", { name: "Stage" }).click();
-  await expect(budget.getByTestId("draft-action")).toHaveText(/Move to Later · Staged by Commenter/);
+  await expect(budget.getByTestId("row-done")).toHaveText(/✓ Moved to Later/);
 });
 
 // Card stale-revision: protects = nothing is decided over changes the approver has not seen;
