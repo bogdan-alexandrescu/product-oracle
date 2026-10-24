@@ -484,6 +484,43 @@ async def test_an_approver_cannot_undo_an_approval_another_person_gave(client, f
         assert (await s.get(Invite, uuid.UUID(mine.json()["invite_id"]))).revoked_at is not None
 
 
+async def test_an_owner_demoted_while_waiting_cannot_undo_another_persons_approval(
+    client, fetches, monkeypatch
+):
+    """The reopen authenticates the owner, then waits on the gate; a demotion to approver
+    commits meanwhile. Re-read under the gate, they may no longer revoke the invite another
+    person's approval made."""
+    from oracle.review import publish
+
+    r = await _seed_request()
+    await client.get("/v1/me", headers=_as(NEW))
+    [req] = await _requests(r.tenant_id)
+    owner = await _owner(r.tenant_id)
+    approver = await person(r.tenant_id, "approver")
+    url = f"/v1/access-requests/{req.id}"
+    body = {"role": "viewer"}
+    approved = await client.post(f"{url}/approve", json=body, headers=approver.headers)
+    invite_id = uuid.UUID(approved.json()["invite_id"])
+    real = publish.gate_lock
+    fired: list[bool] = []
+
+    async def spy(db, *, shared):
+        if not fired:
+            fired.append(True)
+            async with tenant_session(r.tenant_id) as s:
+                (await s.get(User, owner.user_id)).role = "approver"
+                await s.commit()
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    resp = await client.post(f"{url}/reopen", headers=owner.headers)
+    assert fired, "the reopen did not take the gate"
+    assert resp.status_code == 403, resp.text
+    async with tenant_session(r.tenant_id) as s:
+        assert (await s.get(Invite, invite_id)).revoked_at is None
+        assert (await s.get(AccessRequest, req.id)).status == "approved"
+
+
 async def test_a_run_token_gets_403_on_every_new_route(client, fetches):
     """AC 20: a run token never reaches an A5 route (``not_for_runs``). The two
     ``/v1/auth/access`` routes read the Google sign-in alone, never a credential."""

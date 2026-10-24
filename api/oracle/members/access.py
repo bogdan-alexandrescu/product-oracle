@@ -316,6 +316,8 @@ async def reopen(
 ) -> AccessRequest:
     """Undo: a declined request, or an approved one whose invite is unclaimed (revoked
     now), back to pending. Approvers revoke only the invites they sent."""
+    from oracle.auth.service import caller_refusal
+
     await _gate(session, principal)
     row = await _locked(session, request_id)
     invite = (
@@ -325,11 +327,17 @@ async def reopen(
         if invite is not None and invite.accepted_at is not None:
             raise AccessError("conflict", f"{row.email} already signed in with that invite")
         if invite is not None and invite.revoked_at is None:
-            # Approvers revoke only the invites they sent (as DELETE /v1/invites/{id}).
-            if principal.role != "owner" and invite.invited_by != principal.id:
-                raise AccessError(
-                    "forbidden", "Another person approved this request; ask an owner to undo it"
+            # Approvers revoke only the invites they sent (as DELETE /v1/invites/{id}); another
+            # person's takes an owner, re-read under the gate (one demoted while waiting is
+            # refused).
+            if invite.invited_by != principal.id:
+                refusal = (
+                    "Another person approved this request; ask an owner to undo it"
+                    if principal.role != "owner"
+                    else await caller_refusal(session, principal, "owner")
                 )
+                if refusal is not None:
+                    raise AccessError("forbidden", refusal)
             invite.revoked_at = datetime.now(UTC)
             await audit.record(session, principal, "invite.revoke", "invite", invite.id,
                                {"email": invite.email})  # fmt: skip
