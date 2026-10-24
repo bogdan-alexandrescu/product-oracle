@@ -59,7 +59,8 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   // warning; every reply action; Loop closed; the Inbox rows); fails_when=the stop choice is
   // not preselected, the count of askers is wrong, no D-number shows, drafts never appear,
   // the warning does not follow the words, the loop does not close or the member's Inbox has
-  // no answer; no_claim=the real why_not_reply job's words or the API's role checks.
+  // no answer, or the answer row has no Open, or stays after it (Train N, owner 2026-10-24);
+  // no_claim=the real why_not_reply job's words or the API's role checks.
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await open(page, "approver@example.com");
   await pick(page, ROOT);
@@ -133,6 +134,33 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   const answer = page.getByTestId("request-need").filter({ hasText: "Answer to your request · Download all my boards" });
   await expect(answer).toBeVisible();
   await expect(page.getByTestId("request-answer").filter({ hasText: '"Download all my boards"' })).toBeVisible();
+
+  // Train N (owner 2026-10-24): the row stays until its Open, which opens the request and
+  // marks the answer opened; then it is gone from every state, after a reload too. Seen once,
+  // the row moves from New to Open, so each state tab is read.
+  const answers = async () => {
+    let n = 0;
+    for (const tab of [/^New/, /^Open/, /^Done/]) {
+      await tabs.getByRole("tab", { name: tab }).click();
+      n += await answer.count();
+    }
+    return n;
+  };
+  await page.reload();
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
+  expect(await answers()).toBe(1);
+  await tabs.getByRole("tab", { name: /^New/ }).click();
+  if (!(await answer.count())) await tabs.getByRole("tab", { name: /^Open/ }).click();
+  const answerRow = page.locator("tr, li, [role=row]").filter({ has: answer }).last();
+  await answerRow.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page).toHaveURL(/\/requests\?request=/);
+  await expect(inspector(page)).toContainText("Download all my boards");
+  await page.goto("/inbox");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
+  expect(await answers()).toBe(0);
+  await page.reload();
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
+  expect(await answers()).toBe(0);
 });
 
 test("Asked again: merging a New request into a declined one drafts its asker's reply", async ({ page }) => {
