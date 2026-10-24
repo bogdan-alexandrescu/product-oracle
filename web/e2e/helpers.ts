@@ -228,42 +228,41 @@ export async function seedSentBack(page: Page): Promise<string> {
  * of them a dropped item). Returns the run's id.
  */
 export async function seedRoadmapReview(page: Page): Promise<string> {
-  return page.evaluate((seed) => {
-    const key = "po-mock-db-v2";
-    const db = JSON.parse(localStorage.getItem(key)!);
-    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
-    db.runs.runs.push(seed.run);
-    Object.assign(db.runs.artifacts, seed.artifacts);
-    localStorage.setItem(key, JSON.stringify(db));
-    return seed.run.id;
-  }, ROADMAP_REVIEW_RUN);
+  return seedRun(page, ROADMAP_REVIEW_RUN);
 }
 
 /**
- * Seeds the mock and opens `url`; seeds again when the app's own writes right after sign-in
- * landed over the seed (the page then says "run … not found").
+ * Seeds the mock and opens `url`. The seed takes its turn with the app's own calls (sign-in's
+ * writes included), so it is never written over and is seeded once.
  */
 export async function openSeeded(page: Page, seed: (page: Page) => Promise<string>, url: string) {
-  const missing = page.getByText(/^run [0-9a-f-]+ not found$/);
-  for (let i = 0; i < 3; i++) {
-    await seed(page);
-    await page.goto(url);
-    await expect(page.locator("main h1").or(missing).first()).toBeVisible();
-    if (!(await missing.isVisible())) return;
-  }
+  await seed(page);
+  await page.goto(url);
+}
+
+type RunSeed = { run: { id: string }; artifacts: Record<string, string> };
+
+/**
+ * Adds a seeded run (and its files) to the mock's data in the mock's own turn
+ * (`__poMockWrite`, lib/api/mock/server.ts): a call of the app's in flight cannot save over it.
+ */
+async function seedRun(page: Page, seed: RunSeed): Promise<string> {
+  return page.evaluate((seed) => {
+    type Db = { runs: { runs: { id: string }[]; artifacts: Record<string, string> } };
+    const write = (globalThis as { __poMockWrite?: (change: (db: Db) => string) => Promise<string> }).__poMockWrite;
+    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    return write((db) => {
+      db.runs.runs = db.runs.runs.filter((r) => r.id !== seed.run.id);
+      db.runs.runs.push(seed.run);
+      Object.assign(db.runs.artifacts, seed.artifacts);
+      return seed.run.id;
+    });
+  }, seed);
 }
 
 /** Seeds the mock with the roadmap review run whose file cannot be read as items (ROADMAP_FILE_PROBLEM_RUN, D1). */
 export async function seedRoadmapFileProblem(page: Page): Promise<string> {
-  return page.evaluate((seed) => {
-    const key = "po-mock-db-v2";
-    const db = JSON.parse(localStorage.getItem(key)!);
-    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
-    db.runs.runs.push(seed.run);
-    Object.assign(db.runs.artifacts, seed.artifacts);
-    localStorage.setItem(key, JSON.stringify(db));
-    return seed.run.id;
-  }, ROADMAP_FILE_PROBLEM_RUN);
+  return seedRun(page, ROADMAP_FILE_PROBLEM_RUN);
 }
 
 /**
@@ -272,15 +271,7 @@ export async function seedRoadmapFileProblem(page: Page): Promise<string> {
  * claimed and did not make, and one change nobody asked for.
  */
 export async function seedRoadmapAttempt2(page: Page): Promise<string> {
-  return page.evaluate((seed) => {
-    const key = "po-mock-db-v2";
-    const db = JSON.parse(localStorage.getItem(key)!);
-    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
-    db.runs.runs.push(seed.run);
-    Object.assign(db.runs.artifacts, seed.artifacts);
-    localStorage.setItem(key, JSON.stringify(db));
-    return seed.run.id;
-  }, ROADMAP_REVIEW_RUN_ATTEMPT2);
+  return seedRun(page, ROADMAP_REVIEW_RUN_ATTEMPT2);
 }
 
 /**
@@ -288,15 +279,7 @@ export async function seedRoadmapAttempt2(page: Page): Promise<string> {
  * SwarmCloud's console while one waivable blocking reason is open, so the approval is held.
  */
 export async function seedConsoleHeld(page: Page): Promise<string> {
-  return page.evaluate((seed) => {
-    const key = "po-mock-db-v2";
-    const db = JSON.parse(localStorage.getItem(key)!);
-    db.runs.runs = db.runs.runs.filter((r: { id: string }) => r.id !== seed.run.id);
-    db.runs.runs.push(seed.run);
-    Object.assign(db.runs.artifacts, seed.artifacts);
-    localStorage.setItem(key, JSON.stringify(db));
-    return seed.run.id;
-  }, CONSOLE_HELD_RUN);
+  return seedRun(page, CONSOLE_HELD_RUN);
 }
 
 /** The finished run seedDecidedRun adds. */

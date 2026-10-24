@@ -384,7 +384,8 @@ async def test_the_inbox_carries_the_track_row_to_its_audience(client, owner, ru
     assert row["counts"]["new"] + row["counts"]["open"] == 2
     assert {a["kind"] for a in row["alerts"]} == {"date_slip", "unplanned"}
     assert all(a["inbox_state"] == "new" for a in row["alerts"])
-    without = inbox["total"] - 2
+    # The track is one row in the total, however many of its alerts are open (#514).
+    without = inbox["total"] - 1
     approver = await as_user(tenant_id, "approver")
     assert (await client.get("/v1/inbox", headers=approver)).json()["tracks"] == []
     lead = await as_user(tenant_id, "commenter")
@@ -394,7 +395,7 @@ async def test_the_inbox_carries_the_track_row_to_its_audience(client, owner, ru
     (lead_row,) = (await client.get("/v1/inbox", headers=lead)).json()["tracks"]
     assert [a["kind"] for a in lead_row["alerts"]] == ["date_slip"]
 
-    # Kept: out of the count, in Done with its note.
+    # Kept: out of the track's count, in Done with its note; the track still has one open.
     await client.post(
         f"/v1/track-alerts/{slip['id']}/keep", json={"note": "Watching"}, headers=auth
     )
