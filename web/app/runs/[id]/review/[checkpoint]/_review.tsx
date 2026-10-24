@@ -10,6 +10,7 @@ import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { briefsCheck, CHECKPOINT_LABEL } from "../../../_lib";
+import { draftKey, loadDraft } from "./_draft";
 import { EngReview } from "./_eng-review";
 
 /**
@@ -18,9 +19,8 @@ import { EngReview } from "./_eng-review";
  * them to its kind's view; a kind without a view here is decided on the run page.
  */
 export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string; checkpointId: string }) {
-  const path = { params: { path: { run_id: runId, checkpoint_id: checkpointId } } };
   const run = useQuery(`run|${runId}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })));
-  const draft = useQuery(`draft|${runId}|${checkpointId}`, () => unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", path)));
+  const draft = useQuery(draftKey(runId, checkpointId), () => loadDraft(runId, checkpointId));
   const { setData, reload } = draft;
   const accept = useCallback((out: Schemas["CheckpointReview"]) => setData(() => out), [setData]);
   const reloadAll = useCallback(async () => {

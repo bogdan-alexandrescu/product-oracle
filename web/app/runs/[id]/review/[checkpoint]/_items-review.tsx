@@ -36,6 +36,7 @@ import {
   type Reason,
   type Review,
 } from "./_items-lib";
+import { draftKey, loadDraft } from "./_draft";
 import type { ReviewViewProps } from "./_shell";
 
 type Filter = "needs" | "all" | "changed";
@@ -137,7 +138,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const { can, me } = useMe();
   const phone = usePhone();
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
-  const reviewQ = useQuery(`draft|${run.id}|${cp.id}`, () => unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", path)));
+  const reviewQ = useQuery(draftKey(run.id, cp.id), () => loadDraft(run.id, cp.id));
   const review = reviewQ.data ?? null;
   const reload = reviewQ.reload;
   const [error, setError] = useState<string | null>(null);
