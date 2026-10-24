@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login, signOut } from "./helpers";
@@ -7,7 +7,7 @@ const memberRow = (page: Page, email: string) => page.getByTestId("member-row").
 const tokenRow = (page: Page, name: string) => page.getByTestId("token-row").filter({ hasText: name });
 const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
 /** "Jan 18, 2027": the date `days` from now, as the app shows it (the browser's time zone). */
-const inDays = (days: number) => dateFmt.format(new Date(Date.now() + days * 86_400_000));
+const inDays = (days: number) => dateFmt.format(new Date(mockNow().getTime() + days * 86_400_000));
 
 test("members: remove asks in an in-app dialog, then restore lets them sign in again", async ({ page }) => {
   let nativeDialog = false;

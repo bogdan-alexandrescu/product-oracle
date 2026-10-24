@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login, openSection, outlineRow, section, sectionStrip, showAll } from "./helpers";
 

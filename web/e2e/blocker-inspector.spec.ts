@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { DEPOSITS_IDS } from "../lib/api/mock/blockers";
 import { login } from "./helpers";
@@ -25,7 +25,7 @@ async function openBlocker(page: Page, statement: string) {
   return insp;
 }
 
-const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+const inDays = (n: number) => new Date(mockNow().getTime() + n * 86_400_000).toISOString().slice(0, 10);
 
 test("blockers tab: status counts, and a status change moves the count", async ({ page }) => {
   await openBlockers(page);

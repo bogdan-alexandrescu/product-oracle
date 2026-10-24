@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
@@ -202,12 +202,16 @@ test("setup: Hide puts the checklist behind a header chip, and a reload keeps th
   await expect(panel(page)).toHaveCount(0);
   const chip = page.getByRole("button", { name: "Set up 4/8" });
   await expect(chip).toBeVisible();
+  // Hide shows the chip at once and saves the choice meanwhile (the chip is disabled until it
+  // is saved): a reload before then would cut the save (#520).
+  await expect(chip).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("button", { name: "Set up 4/8" })).toBeVisible();
   await expect(panel(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Set up 4/8" }).click();
   await expect(panel(page)).toBeVisible();
   await expect(page.getByRole("button", { name: "Set up 4/8" })).toHaveCount(0);
+  await expect(panel(page).getByRole("button", { name: "Hide" })).toBeEnabled();
   await page.reload();
   await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
 });

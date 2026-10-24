@@ -143,7 +143,8 @@ export default function RunsPage() {
           </>
         }
         action={
-          can("create_run") && (
+          // #370: an approver starts any run but an update draft (the run decides), as Plan does.
+          can("create_run", true) && (
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
               New run
             </Button>

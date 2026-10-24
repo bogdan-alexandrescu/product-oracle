@@ -132,7 +132,9 @@ export default function RoadmapDocumentsPage() {
   useArtifactsChanged(q.reload);
   useArtifactsChanged(prds.reload);
   const { can, capsReady } = useMe();
-  const canBuild = can("create_run");
+  // create_run's item check refuses only an update draft below owner (runs/service.py); a
+  // roadmap build is not one, so the item lets an approver in.
+  const canBuild = can("create_run", true);
   const [selected, setSelected] = useState<string | null>(null);
   const roadmaps = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const approved = (prds.data ?? []).filter((d) => d.approved_version != null);

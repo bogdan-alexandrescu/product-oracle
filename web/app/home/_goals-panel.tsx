@@ -9,7 +9,19 @@ import { percent } from "@/lib/goal-tree";
 import { amount, assess, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
 
 /** One goal: id and title, current over target, confidence ring, trend when there is history, distance to go. */
-function GoalCard({ g, subs, history, canInterview }: { g: GoalView; subs: GoalView[]; history: Point[] | undefined; canInterview: boolean }) {
+function GoalCard({
+  g,
+  subs,
+  history,
+  historyPending,
+  canInterview,
+}: {
+  g: GoalView;
+  subs: GoalView[];
+  history: Point[] | undefined;
+  historyPending: boolean;
+  canInterview: boolean;
+}) {
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
   const p = assess(g, history);
@@ -45,6 +57,9 @@ function GoalCard({ g, subs, history, canInterview }: { g: GoalView; subs: GoalV
         </span>
         <Ring value={g.confidence} size={44} label={g.confidence == null ? "No confidence" : `Confidence ${g.confidence}`} />
       </div>
+      {/* The trend's room (the Sparkline's 240 x 40) is kept while it loads, so the band does not
+          grow under the page a moment after it is drawn (#520: a goal chip's card below it closed). */}
+      {history === undefined && historyPending && g.currentText && <div aria-hidden className="aspect-[6/1] w-full" data-testid="goal-trend-pending" />}
       {trend && (
         <div className="min-w-0 [&>svg]:h-auto [&>svg]:w-full" data-testid="goal-trend">
           <Sparkline
@@ -125,6 +140,7 @@ function Subgoals({ g, subs }: { g: GoalView; subs: GoalView[] }) {
 export function GoalsPanel({
   goals,
   history,
+  historyPending = false,
   error,
   loading,
   canImport,
@@ -133,6 +149,8 @@ export function GoalsPanel({
 }: {
   goals: GoalView[] | undefined;
   history: Map<string, Point[]>;
+  /** The trends are still loading (useGoals). */
+  historyPending?: boolean;
   error: string | null;
   loading: boolean;
   /** Approvers and owners build the baseline; a viewer sees no action they cannot take. */
@@ -202,7 +220,14 @@ export function GoalsPanel({
           style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
           {shown.map((g) => (
-            <GoalCard key={g.id} g={g} subs={goals!.filter((s) => s.parentId === g.id)} history={history.get(g.id)} canInterview={canInterview} />
+            <GoalCard
+              key={g.id}
+              g={g}
+              subs={goals!.filter((s) => s.parentId === g.id)}
+              history={history.get(g.id)}
+              historyPending={historyPending}
+              canInterview={canInterview}
+            />
           ))}
         </ul>
       )}

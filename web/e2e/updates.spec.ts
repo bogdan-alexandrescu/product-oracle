@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { login, openSection, section, selectText, signOut } from "./helpers";
 
@@ -46,7 +46,7 @@ test("10a: New update › Investor update drafts with Oracle: metrics first, Ask
   const sheet = page.getByRole("dialog", { name: "New update" });
   await sheet.getByRole("radio", { name: /Board product section/ }).check();
   await sheet.getByRole("radio", { name: /Investor update/ }).check();
-  const now = new Date();
+  const now = mockNow();
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   await expect(sheet.getByLabel("From", { exact: true })).toHaveValue("2026-10-01");
   await expect(sheet.getByLabel("To", { exact: true })).toHaveValue(today);

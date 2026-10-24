@@ -544,12 +544,14 @@ function HopDock() {
     return () => window.removeEventListener("keydown", onKey);
   }, [shown, open]);
   if (!shown) return null;
+  // The strip is 44 px and the dock's left border 1 px more: a 44 px dock would push the
+  // strip 1 px past the right edge (sideways scroll).
   return (
     <aside
       aria-label="Ask Oracle"
       data-testid="hop-dock"
       data-open={open ? "true" : "false"}
-      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-l border-line bg-surface max-[600px]:hidden ${open ? "w-11 min-[1280px]:w-[400px]" : "w-11"}`}
+      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-l border-line bg-surface max-[600px]:hidden ${open ? "w-[45px] min-[1280px]:w-[400px]" : "w-[45px]"}`}
     >
       <button
         type="button"

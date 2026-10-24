@@ -28,6 +28,7 @@ import { assess, goalViews } from "@/app/home/_goals";
 import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 type Kind = "prd" | "roadmap";
 type PrdAnswers = Schemas["PrdAnswers"];
@@ -791,6 +792,10 @@ export function NewPrd() {
     try {
       const out = await unwrap(api.POST("/v1/intakes", { body }));
       if (templateKey) saveLastChoice(kind, templateKey, themeKey);
+      // The brief asks its first questions of me: the Inbox and its badge read them now, not a
+      // count shared from before (lib/waiting.ts; #520, as Archive retires them).
+      invalidateWaiting();
+      waitingChanged();
       router.push(`/intakes/${out.intake.id}`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : errorMessage(err));

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { VERSION_WARNINGS_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
