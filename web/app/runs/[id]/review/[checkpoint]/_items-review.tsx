@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, FilterChips, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
+import { Button, Chip, FilterChips, LinkButton, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
 import { DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
@@ -11,7 +11,7 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -134,7 +134,7 @@ function decidedText(cp: Schemas["CheckpointOut"]): string {
  * Approvers stage, commenters suggest, viewers read.
  */
 export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
-  const { role, can, me } = useMe();
+  const { can, me } = useMe();
   const phone = usePhone();
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
   const reviewQ = useQuery(`draft|${run.id}|${cp.id}`, () => unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", path)));
@@ -148,6 +148,8 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const [menu, setMenu] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(null);
   const [raw, setRaw] = useState<"file" | "agents" | null>(null);
+  // Enter on a row asks to confirm its first fix here (criterion 16: no single-key decisions).
+  const [confirm, setConfirm] = useState<string | null>(null);
 
   // D8: the draft is read again every 10 s while the page is visible (a teammate's suggestion).
   useEffect(() => {
@@ -160,9 +162,11 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const mode: Mode =
     cp.status !== "pending" || !review
       ? "viewer"
-      : review.can_stage && can("stage_checkpoint_action", hasRole(role, cp.approver_role))
+      : // #370 fixes 4: the review's can_stage/can_suggest are the API's item answer (the stop's
+        // role); can() adds the route role, without a second check of the signed-in role here.
+        review.can_stage && can("stage_checkpoint_action", review.can_stage)
         ? "approver"
-        : review.can_suggest && can("create_checkpoint_action", hasRole(role, "commenter"))
+        : review.can_suggest && can("create_checkpoint_action", review.can_suggest)
           ? "commenter"
           : "viewer";
 
@@ -250,6 +254,19 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     setSelected(it.key);
     if (phone) setSheet(true);
   };
+  // Enter on a row: its first fix waits for a Confirm (focused); a row with none is picked.
+  const activate = (key: string) => {
+    const it = byKey.get(key)!;
+    const first = mode !== "viewer" && it.state !== "handled" ? rowFixes(openReasons(it))[0] : undefined;
+    if (first) {
+      setSelected(key);
+      setConfirm(key);
+    } else pick(it);
+  };
+  const leaveConfirm = (key: string) => {
+    setConfirm(null);
+    [...document.querySelectorAll<HTMLElement>(`tr[data-testid="roadmap-item-row"][data-key="${CSS.escape(key)}"]`)].find((el) => el.checkVisibility())?.focus();
+  };
   const columns: Column<TableRow>[] = [
     {
       key: "reasons",
@@ -271,7 +288,11 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           // A row action is not a selection: the click stays in the cell.
           <div className="flex flex-col items-end gap-1 max-[600px]:items-start" onClick={(e) => e.stopPropagation()}>
             <span className="flex min-w-0 flex-wrap items-center justify-end gap-1 max-[600px]:justify-start" data-testid="your-call">
+              {confirm === it.key && rowFixes(openReasons(it))[0] ? (
+                <ConfirmFix {...rowFixes(openReasons(it))[0]} ops={ops} onDone={() => leaveConfirm(it.key)} />
+              ) : (
               <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
+              )}
               {mode !== "viewer" && it.position != null && (
                 <RowMenu it={it} open={openReasons(it)} mode={mode} ops={ops} menuOpen={menu === it.key} setMenu={(o) => setMenu(o ? it.key : null)} setForm={setForm} onSelect={() => pick(it)} />
               )}
@@ -320,6 +341,9 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
         }
         action={
           <span className="flex flex-wrap gap-2">
+            <LinkButton variant="ghost" icon="chevron-left" href={`/runs/${run.id}`}>
+              Back to run
+            </LinkButton>
             <Button icon="doc" onClick={() => setRaw("file")}>
               Raw file
             </Button>
@@ -389,6 +413,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               rows={tableRows}
               selected={selectedItem?.key ?? null}
               onSelect={(k) => pick(byKey.get(k)!)}
+              onActivate={activate}
               hide={["depends_on", "prd", "state"]}
               widths={{ position: "36px", horizon: "72px", milestone: "112px" }}
               extraColumns={columns}
@@ -519,18 +544,47 @@ function YourCall({ it, open, staged, mode, ops, titleOf, meId }: { it: Item; op
   );
 }
 
+/** Stages a fix (or suggests it, for a commenter), answering its reason when it is the row's. */
+const applyFix = (fix: Fix, reason: Reason, ops: Ops) =>
+  ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value: fix.action.value ?? null, answers: fix.action.item === reason.item ? [reason.code] : [] });
+
 export function FixButton({ fix, reason, mode, ops, primary }: { fix: Fix; reason: Reason; mode: Mode; ops: Ops; primary?: boolean }) {
   return (
     <Button
       variant={primary ? "primary" : "secondary"}
       className="h-8 px-2.5 text-sm max-[600px]:h-10"
       title={mode === "commenter" ? "Suggest: an approver stages it" : undefined}
-      onClick={() =>
-        void ops.act({ item_key: fix.action.item, kind: fix.action.kind, field: fix.action.field ?? null, value: fix.action.value ?? null, answers: fix.action.item === reason.item ? [reason.code] : [] })
-      }
+      onClick={() => void applyFix(fix, reason, ops)}
     >
       {fix.label}
     </Button>
+  );
+}
+
+/**
+ * Enter on a row (criterion 16): the row's first fix as "Confirm: {fix}", focused, so Enter
+ * again applies it; Cancel or Escape goes back to the row with nothing staged.
+ */
+function ConfirmFix({ fix, reason, ops, onDone }: { fix: Fix; reason: Reason; ops: Ops; onDone: () => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => ref.current?.querySelector("button")?.focus(), []);
+  return (
+    <span
+      ref={ref}
+      className="flex flex-wrap items-center justify-end gap-1"
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        onDone();
+      }}
+    >
+      <Button variant="primary" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={() => void applyFix(fix, reason, ops).then(onDone)}>
+        Confirm: {fix.label}
+      </Button>
+      <Button variant="ghost" className="h-8 px-2.5 text-sm max-[600px]:h-10" onClick={onDone}>
+        Cancel
+      </Button>
+    </span>
   );
 }
 

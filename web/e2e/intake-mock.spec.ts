@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { routeIntake, type IntakeContext } from "../lib/api/mock/intake";
 import { seedV2 } from "../lib/api/mock/v2";

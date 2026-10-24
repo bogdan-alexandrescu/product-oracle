@@ -55,8 +55,8 @@ export interface RoadmapDb {
   alerts?: StoredAlert[];
   /** F2: tracker record history, one row per changed field. */
   recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
-  /** F2: dates accepted from the tracker, by item key (the Plan row reads them). */
-  accepted?: Record<string, string>;
+  /** F2: dates accepted from the tracker, by item key, with the reference of the basis they rest on (the Plan row reads them). */
+  accepted?: Record<string, { day: string; reference: string }>;
 }
 
 export interface RoadmapContext {
@@ -236,7 +236,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
-    if (scenario === TRACK_ALERTS_SCENARIO) seedAlerts(db, track.id);
+    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO) seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO);
     return db;
   });
 }
@@ -1162,8 +1162,10 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     ];
     const href = `/documents/${prd.slug}/v/${prdVersion}`;
     // F2: a slip accepted from its alert: the item rests on the tracker's date now.
-    const acceptedDay = origin === "approved" && prd.slug === "usage-alerts" ? db.accepted?.[s.key] : undefined;
-    if (acceptedDay) s = { ...s, date: acceptedDay, dateStatus: "verified", slipDays: undefined, state: "on_track", reasons: [], next: undefined };
+    // Its date source names the new basis (the API moves the milestone onto it), so F3's
+    // dateStatus reads it verified rather than the withdrawn basis of the old date.
+    const accepted = origin === "approved" && prd.slug === "usage-alerts" ? db.accepted?.[s.key] : undefined;
+    if (accepted) s = { ...s, date: accepted.day, dateSource: accepted.reference, dateStatus: "verified", slipDays: undefined, state: "on_track", reasons: [], next: undefined };
     const next: Schemas["PlanNext"] =
       origin === "draft"
         ? { action: "review_prd", label: "PRD review", who: { role: "approver", user_id: null }, href, viewer_may: may("approver") }
@@ -1392,13 +1394,18 @@ function trackerLinks(
 
 /** The mock scenario (MOCK_SCENARIO_KEY) with one open date slip on Usage alerts (F2). */
 export const TRACK_ALERTS_SCENARIO = "track-alerts";
+/** "track-alerts" plus two tracker issues not on the roadmap: one track row, three open alerts (#514). */
+export const TRACK_ALERTS_MANY_SCENARIO = "track-alerts-many";
 type StoredAlert = Omit<TrackAlertOut, "prd" | "actions" | "inbox_state">;
 /** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
 const SLIP_RECORD_ID = stableUuid("plan:record:ENG-405#0");
 const DONE_DAYS = 30;
 
-/** One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests on Nov 30. */
-function seedAlerts(db: RoadmapDb, trackId: string) {
+/**
+ * One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests
+ * on Nov 30. `many` adds two open "not on the roadmap" alerts on the same track.
+ */
+function seedAlerts(db: RoadmapDb, trackId: string, many = false) {
   db.alerts = [
     {
       id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Daily alert digest email",
@@ -1410,6 +1417,15 @@ function seedAlerts(db: RoadmapDb, trackId: string) {
       state: "open", opened_at: "2026-10-20T15:02:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null,
     },
   ];
+  if (many) {
+    for (const [ref, title] of [["ENG-501", "Export retries"], ["ENG-502", "Alert sounds"]]) {
+      db.alerts.push({
+        id: stableUuid(`track-alert/${ref}/unplanned`), track_id: trackId, item_key: null, item_title: null,
+        kind: "unplanned", detail: `${ref} (${title}) is not on the roadmap.`, data: { tracker_ref: ref },
+        state: "open", opened_at: "2026-10-20T15:05:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null,
+      });
+    }
+  }
   db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
 }
 
@@ -1504,7 +1520,7 @@ function trackAlerts(
         moved.push({ id: ms.id, from, to: day });
         Object.assign(ms, { target_date: day, basis_ids: [basis.id], lock_version: ms.lock_version + 1, updated_at: now() });
       }
-      if (a.item_key) (db.accepted ??= {})[a.item_key] = day;
+      if (a.item_key) (db.accepted ??= {})[a.item_key] = { day, reference: ref };
       Object.assign(a, { state: "resolved", resolved_at: now() });
       const out: AcceptDateOut = {
         alert: alertOut(ctx, db, a), basis, withdrawn_basis_ids: withdrawn.map((b) => b.id), milestones_moved: moved, stale_item_ids: [],
@@ -1517,7 +1533,8 @@ function trackAlerts(
 
 /**
  * The Inbox's track group (F2 §4): for the track's owner, else every owner, one entry per
- * track with open alerts or alerts done in the last 30 days. `total` counts the new and open.
+ * track with open alerts or alerts done in the last 30 days. `total` counts each track with new
+ * or open alerts once: its alerts are the row's children (#514, as the API counts).
  */
 export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | null): { tracks: InboxTrack[]; total: number } {
   const tracks: InboxTrack[] = [];
@@ -1543,7 +1560,7 @@ export function inboxTracks(ctx: RoadmapContext, db: RoadmapDb, seen: string | n
       more: Math.max(0, open.length - 3),
       done,
     });
-    total += open.length;
+    if (open.length) total += 1;
   }
   return { tracks, total };
 }

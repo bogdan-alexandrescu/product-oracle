@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login, openSeeded, seedConsoleHeld, seedRoadmapReview } from "./helpers";
 
@@ -94,12 +94,21 @@ test("the run page's console Confirm is held to the same gate", async ({ page })
 // runtime's real console.
 test("a console approval held by blocking problems is confirmed once they are waived", async ({ page }) => {
   await login(page);
-  await openSeeded(page, seedConsoleHeld, "/inbox");
+  // openSeeded re-seeds a run page that says "not found"; the Inbox does not say so. Once the
+  // page has navigated no older mock write can land over the seed, so check the store itself.
+  const held = () =>
+    page.evaluate((id) => JSON.parse(localStorage.getItem("po-mock-db-v2")!).runs.runs.some((r: { id: string }) => r.id === id), CONSOLE_HELD_RUN_ID);
+  for (let i = 0; i < 3; i++) {
+    await openSeeded(page, seedConsoleHeld, "/inbox");
+    if (await held()) break;
+  }
   const badge = page.getByTestId("nav-inbox-badge");
-  const before = Number(await badge.textContent());
   // D9's counted row names the roadmap and its PRD, not the run's document slug.
   const row = page.locator("tr[data-row]").filter({ hasText: "console approval held" }).filter({ visible: true });
   await expect(row).toHaveCount(1);
+  // Read the count once the Inbox has loaded (the row is listed), not while it is loading.
+  await expect(badge).toHaveText(/^\d+$/);
+  const before = Number(await badge.textContent());
   await expect(row).toContainText("Console approval held");
   await expect(row).toContainText("Blocking problems are open: fix or waive them, then confirm");
   // D1: Review opens the Roadmap items review screen, where C7's decision bar holds the

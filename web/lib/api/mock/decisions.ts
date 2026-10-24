@@ -36,6 +36,14 @@ export interface DecisionsContext {
   members: Member[];
   runs: RunLike[];
   documentTitle: (slug: string) => string | null;
+  /** H8: whether the document (by id, slug or a version's id) is hidden from me (approvers-only, and I am a commenter or viewer). */
+  hiddenDocument: (key: string) => boolean;
+  /**
+   * H9 (as docs/visibility._decision_visible): whether the signed-in member may see a
+   * decision; commenters and viewers never see a pricing decision, nor the record of a stop
+   * of a run on an owners-and-approvers document. Everyone sees everything without it.
+   */
+  visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
 }
@@ -45,7 +53,7 @@ const MAX_REVIEW_DAYS = 365;
 const SHOWN_DAYS = 7;
 const CHECKPOINT_LOCKED = "A checkpoint record is not edited; it records the run's decision";
 const DECIDED_LOCKED = "Decided decisions are not edited. Revisit it instead.";
-const CAPTURED = ["version_approval", "assumption", "blocker", "pushback_override", "priority_override", "checkpoint"];
+const CAPTURED = ["version_approval", "assumption", "blocker", "pushback_override", "priority_override", "checkpoint", "request_decline"];
 const STOP_LABELS: Record<string, string> = {
   baseline_confirm: "Baseline confirm",
   feature_set: "Feature set",
@@ -55,7 +63,11 @@ const STOP_LABELS: Record<string, string> = {
   eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
+  update_review: "Update review",
+  pricing_review: "Pricing memo review",
 };
+/** The API's fallback for a stop with no label: "update_review" reads "Update review". */
+const stopLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1).replace(/_/g, " ");
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
 
@@ -274,7 +286,7 @@ export function syncCheckpointRecords(ctx: DecisionsContext, db: DecisionsDb) {
     const approver = c.decided_by ?? r.created_by ?? ctx.me.id;
     db.decisions.push(
       blank(ctx, db, {
-        title: `${approve ? "Approve" : "Send back"} ${STOP_LABELS[c.kind] ?? c.kind} · ${name} run`,
+        title: `${approve ? "Approve" : "Send back"} ${STOP_LABELS[c.kind] ?? stopLabel(c.kind)} · ${name} run`,
         origin: "checkpoint",
         approver_id: approver,
         status: "decided",
@@ -292,6 +304,46 @@ export function syncCheckpointRecords(ctx: DecisionsContext, db: DecisionsDb) {
       }),
     );
   }
+}
+
+/**
+ * H10: what the requests mock records here. Saying no to a request captures a decided judgement
+ * call (origin request_decline, reviewed in 90 days); Reopen reverses it with a review by the
+ * person who reopened; Keep the no is a reaffirmed review.
+ */
+export function requestDecisions(ctx: DecisionsContext, db: () => DecisionsDb) {
+  const review = (id: string, verdict: "reaffirmed" | "reversed", note: string) => {
+    const d = db().decisions.find((x) => x.id === id);
+    if (!d) return;
+    if (verdict === "reversed") d.status = "reversed";
+    else d.review_at = day(REVIEW_DAYS);
+    d.updated_at = ctx.now();
+    db().reviews.push({
+      id: ctx.uuid(), decision_id: d.id, verdict, note, outcome_status: null, next_review_at: verdict === "reaffirmed" ? d.review_at : null,
+      revisit_id: null, reviewed_by: ctx.me.id, reviewed_by_email: ctx.me.email, created_at: ctx.now(),
+    });
+  };
+  return {
+    capture: (input: { title: string; question: string; rationale: string; entity_ids: string[]; request_id: string; request_title: string }) => {
+      const log = db();
+      const row = blank(ctx, log, {
+        title: input.title, question: input.question, origin: "request_decline", approver_id: ctx.me.id, status: "decided",
+        options: [option("say_no", "Say no"), option("keep_open", "Keep it open")], chosen_option: "say_no",
+        rationale: input.rationale, decided_by: ctx.me.id, decided_actor: "user", decided_at: ctx.now(), review_at: day(REVIEW_DAYS),
+        driver: `user:${ctx.me.id}`, created_by: ctx.me.id, entity_ids: input.entity_ids,
+        source: { kind: "product_request", id: input.request_id } as Row["source"],
+        subjects: [{ kind: "request", id: input.request_id, ref: input.request_title }],
+      });
+      log.decisions.push(row);
+      return { id: row.id, number: row.number };
+    },
+    get: (id: string) => {
+      const d = db().decisions.find((x) => x.id === id);
+      return d ? { number: d.number, title: d.title, status: d.status, approver_id: d.approver_id } : null;
+    },
+    reverse: (id: string, note: string) => review(id, "reversed", note),
+    reaffirm: (id: string, note: string) => review(id, "reaffirmed", note),
+  };
 }
 
 function emailOf(ctx: DecisionsContext, id: string | null | undefined): string | null {
@@ -356,9 +408,28 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
   };
 }
 
-function find(db: DecisionsDb, key: string): Row | undefined {
+/**
+ * H8 (#519): a decision about a document I may not see is absent, whatever recorded it: the
+ * approval of one of its versions, a stop of a run on it, or a subject naming it or a version.
+ */
+function hidden(ctx: DecisionsContext, d: Row): boolean {
+  const run = d.run_id ? ctx.runs.find((r) => r.id === d.run_id) : undefined;
+  if (run?.document_slug && ctx.hiddenDocument(run.document_slug)) return true;
+  if ((d.source?.kind === "document_version" || d.source?.kind === "pricing_memo_version") && ctx.hiddenDocument(d.source.id)) return true;
+  // H9: the context's own rule (a pricing decision is hidden from commenters and viewers).
+  if (ctx.visible && !ctx.visible(d)) return true;
+  return d.subjects.some(
+    (s) => (s.kind === "document" || s.kind === "document_version") && (ctx.hiddenDocument(String(s.id)) || (typeof s.ref === "string" && ctx.hiddenDocument(s.ref.split("@")[0]))),
+  );
+}
+
+function visible(ctx: DecisionsContext, db: DecisionsDb): Row[] {
+  return db.decisions.filter((d) => !hidden(ctx, d));
+}
+
+function find(ctx: DecisionsContext, db: DecisionsDb, key: string): Row | undefined {
   const n = /^(?:D-)?(\d+)$/i.exec(key)?.[1];
-  return db.decisions.find((d) => d.id === key || (n !== undefined && d.number === Number(n)));
+  return visible(ctx, db).find((d) => d.id === key || (n !== undefined && d.number === Number(n)));
 }
 
 function checkReviewAt(value: string): string | null {
@@ -372,6 +443,47 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
   return m && m.status !== "disabled" && atLeast(m.role, "approver") ? m : undefined;
 }
 
+/**
+ * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
+ * pricing, the pricing owner its approver; the same one again on a repeat.
+ */
+export function proposePricing(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  memo: { versionId: string; documentId: string; version: number; slug: string; question: string; context: string; options: { id: string; title: string; summary: string; recommended: boolean; reversibility: string }[] },
+  pricingOwner: string,
+): { row: DecisionOut; created: boolean } {
+  const had = db.decisions.find((d) => d.origin === "pricing" && d.source?.id === memo.versionId);
+  if (had) return { row: outOf(ctx, db, had), created: false };
+  const recommended = memo.options.find((o) => o.recommended);
+  const row = blank(ctx, db, {
+    title: `Price: ${memo.question}`.slice(0, 200),
+    question: memo.question,
+    context: memo.context.slice(0, 4000) || null,
+    options: memo.options.map((o) => option(o.id, o.title, { summary: o.summary || null, recommended: o.recommended })),
+    approver_id: pricingOwner,
+    reversibility: recommended?.reversibility === "reversible" ? "reversible" : "irreversible",
+    informed_ids: ctx.members.filter((x) => (x.role === "owner" || x.role === "approver") && x.status !== "disabled").map((x) => x.id),
+    subjects: [
+      { kind: "document", id: memo.documentId, ref: memo.slug },
+      { kind: "document_version", id: memo.versionId, ref: `${memo.slug} v${memo.version}` },
+    ],
+    origin: "pricing",
+    source: { kind: "pricing_memo_version", id: memo.versionId },
+    driver: `user:${ctx.me.id}`,
+    created_by: ctx.me.id,
+  });
+  db.decisions.push(row);
+  return { row: outOf(ctx, db, row), created: true };
+}
+
+/** A decided pricing decision, for the pricing scenario's earlier memo. */
+export function decidePricing(ctx: DecisionsContext, db: DecisionsDb, number: number, key: string, rationale: string, expected: string, at: string) {
+  const d = db.decisions.find((x) => x.number === number);
+  if (!d) return;
+  Object.assign(d, { status: "decided", chosen_option: key, rationale, expected_outcome: expected, decided_at: at, decided_by: d.approver_id, decided_actor: "user", review_at: day(90), updated_at: at });
+}
+
 /** /v1/decisions…; null for other routes. */
 export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "decisions") return null;
@@ -381,7 +493,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
   const me = ctx.me;
 
   if (!p[2] && m === "GET") {
-    let rows = [...db.decisions];
+    let rows = visible(ctx, db);
     const cls = q.get("class");
     if (cls === "judgement" || cls === "checkpoint") rows = rows.filter((d) => classOf(d) === cls);
     const status = q.get("status");
@@ -450,7 +562,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     );
   }
 
-  const d = p[2] ? find(db, p[2]) : undefined;
+  const d = p[2] ? find(ctx, db, p[2]) : undefined;
   if (!d) return fail(404, `decision ${p[2]} not found`);
   const action = p[3];
   if (!action && m === "GET") return json(200, outOf(ctx, db, d));
@@ -647,7 +759,7 @@ export function decisionInbox(ctx: DecisionsContext, db: DecisionsDb, seen: stri
   const me = ctx.me.id;
   const since = new Date(Date.now() - SHOWN_DAYS * 86_400_000).toISOString();
   const fresh = (at: string) => (seen === null || at > seen ? "new" : "open");
-  const judgement = db.decisions.filter((d) => classOf(d) === "judgement");
+  const judgement = visible(ctx, db).filter((d) => classOf(d) === "judgement");
   const revisited = new Set(judgement.filter((d) => d.status === "proposed" && d.supersedes_id).map((d) => d.supersedes_id));
   const rows: Schemas["InboxDecision"][] = [];
   const row = (d: Row, reason: Schemas["InboxDecision"]["reason"], state: Schemas["InboxDecision"]["state"], counts: boolean, at: string) =>

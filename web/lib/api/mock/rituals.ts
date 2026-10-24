@@ -19,7 +19,7 @@ type Member = { id: string; email: string; role: Role; status?: string };
 /** A stored ritual: the API's record without what is derived on the way out. */
 type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string };
 /** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
-type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions"> & {
+type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions" | "summary_offered"> & {
   summary_reads?: number;
   read_by: string[];
 };
@@ -43,6 +43,10 @@ export interface RitualsContext {
   companyTimezone: () => string;
   /** The decision log, for the decisions recorded with an occurrence. */
   decisions: () => LoggedDecision[];
+  /** H5: how many of a metrics review's variances are open (./metrics.ts). */
+  openVariances?: (occurrenceId: string) => number;
+  /** H11 "Watch the market" above Observe: Oracle writes the competitive digest. */
+  marketWrites: () => boolean;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -58,7 +62,14 @@ const DAY_MS = 86_400_000;
 const EPOCH = Date.UTC(2024, 0, 1);
 const PER_SUMMARY_USD = 3;
 /** Kinds whose pre-read is figures and lists (summaries.py COVERED). */
-const COVERED = new Set(["goals_checkin", "roadmap_refresh", "goals_review", "decision_review", "strategy_review", "alignment_report", "custom"]);
+const COVERED = new Set(["goals_checkin", "roadmap_refresh", "goals_review", "decision_review", "strategy_review", "alignment_report", "custom", "metrics_review"]);
+/** Kinds whose summary is another flow's run (summaries.py FLOW_FOR_KIND), and its price: H5's "Explain with Oracle", H7's digest. */
+const FLOW_FOR_KIND: Record<string, { flow: "metrics_variance" | "competitive_digest"; usd: number }> = {
+  metrics_review: { flow: "metrics_variance", usd: 1.5 },
+  // H7: the competitive digest is the competitive_digest run, $7.00.
+  competitive_digest: { flow: "competitive_digest", usd: 7 },
+};
+const priceOf = (kind: string) => FLOW_FOR_KIND[kind]?.usd ?? PER_SUMMARY_USD;
 const MISSED_AFTER_MS = 7 * DAY_MS;
 
 /** The calendar day (as a UTC-midnight number) of `at` in `tz`. */
@@ -277,6 +288,41 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
   return db;
 }
 
+/** H7: the Monthly competitive digest (kinds.py), seeded paused; the first alternative resumes it. */
+const DIGEST = { kind: "competitive_digest", title: "Monthly competitive digest", schedule: sched("monthly", { week_of_month: 1, weekday: 3, time: "10:00" }), duration_min: 30, prep_hours: 72 };
+
+/**
+ * The "market" scenario (H7, ./market.ts): the Monthly competitive digest, resumed by the
+ * company's alternatives, with its next pre-read prepared early (`blocks`, the market's four)
+ * under the occurrence id `occurrenceId` the web findings name.
+ */
+export function addDigest(ctx: RitualsContext, db: RitualsDb, occurrenceId: string, blocks: (asOf: string) => unknown[]) {
+  const owner = ctx.members.find((m) => m.role === "owner" && m.status !== "disabled")!;
+  const attendees = ctx.members.filter((m) => (m.role === "owner" || m.role === "approver") && m.status !== "disabled").map((m) => m.id);
+  const t = now();
+  const schedule = { ...DIGEST.schedule, timezone: ctx.companyTimezone() };
+  const r: Ritual = {
+    id: ctx.uuid(),
+    kind: DIGEST.kind,
+    title: DIGEST.title,
+    builtin: true,
+    schedule,
+    duration_min: DIGEST.duration_min,
+    prep_hours: DIGEST.prep_hours,
+    owner_id: owner.id,
+    attendee_ids: attendees,
+    status: "active",
+    next_due_at: null,
+    lock_version: 1,
+    created_at: t.toISOString(),
+  };
+  const due = nextOccurrence(schedule, t);
+  const asOf = t.toISOString();
+  db.rituals.push(r);
+  db.occurrences.push({ ...occurrence(ctx, r, due, { status: "ready", pre_read: { built_at: asOf, blocks: blocks(asOf) as Occurrence["pre_read"]["blocks"] } }), id: occurrenceId });
+  r.next_due_at = nextOccurrence(schedule, due).toISOString();
+}
+
 function occurrence(ctx: RitualsContext, r: Ritual, due: Date, fields: Partial<Occurrence>): Occurrence {
   return {
     id: ctx.uuid(),
@@ -358,16 +404,18 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
     attendee_ids: r.attendee_ids,
     timezone: r.schedule.timezone,
     read_by_me: o.read_by.includes(ctx.me.id),
+    summary_offered: r.kind !== DIGEST.kind || ctx.marketWrites(),
     decisions: decisionsOf(ctx, o).map((d) => ({ id: d.id, number: d.number, title: d.title, href: `/company/decisions?d=${d.number}` })),
   };
 }
 
 function estimate(db: RitualsDb): Schemas["Estimate"] {
   const rows = db.rituals
-    .filter((r) => r.status === "active" && COVERED.has(r.kind))
-    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule) }));
+    .filter((r) => r.status === "active" && (COVERED.has(r.kind) || r.kind in FLOW_FOR_KIND))
+    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule), per_summary_usd: priceOf(r.kind) }));
   const runs = Math.round(rows.reduce((n, r) => n + r.runs_per_month, 0) * 100) / 100;
-  return { per_summary_usd: PER_SUMMARY_USD, runs_per_month: runs, usd_per_month: Math.round(runs * PER_SUMMARY_USD * 100) / 100, rituals: rows };
+  const usd = rows.reduce((n, r) => n + r.runs_per_month * r.per_summary_usd, 0);
+  return { per_summary_usd: PER_SUMMARY_USD, runs_per_month: runs, usd_per_month: Math.round(usd * 100) / 100, rituals: rows };
 }
 
 /** The signed-in member's ritual rows of the Inbox (service.inbox_rows). */
@@ -397,6 +445,57 @@ export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxR
 
 const SUMMARY_TEXT =
   "One track is at risk: Usage alerts PRD, whose Threshold alerts beta slipped two weeks to Nov 24. Digest emails may be stale. Usage alerts rose from #5 to #2 in the priorities; a roadmap run from that track is the suggested next step.";
+
+const METRICS_SUMMARY_TEXT =
+  "Weekly active teams rose 37 to 412, above its normal range: the Team invites launch on Oct 14 is the likely cause. Invites sent per team fell to 3.9; nothing Oracle can read explains it yet.";
+
+/**
+ * H5: the "metrics" scenario's Weekly metrics review, as metrics.activate_review leaves it:
+ * on, with the goals check-in's schedule, owner and attendees; the goals check-in paused and
+ * marked replaced. This Monday's occurrence is ready, its pre-read built by `blocks`.
+ */
+export function addMetricsReview(ctx: RitualsContext, db: RitualsDb, blocks: (occurrenceId: string, asOf: string) => OccurrenceOut["pre_read"]["blocks"]) {
+  const checkin = db.rituals.find((r) => r.kind === "goals_checkin")!;
+  const t = now();
+  const review: Ritual = {
+    ...checkin,
+    id: ctx.uuid(),
+    kind: "metrics_review",
+    title: "Weekly metrics review",
+    duration_min: 45,
+    prep_hours: 6,
+    status: "active",
+    lock_version: 1,
+    created_at: t.toISOString(),
+  };
+  Object.assign(checkin, { status: "paused", next_due_at: null, replaced_by: "Weekly metrics review" });
+  db.rituals.push(review);
+  // This week's: the first due after a day ago (Monday 09:00 in the Company time zone), prepared 6 hours before.
+  const week = nextOccurrence(review.schedule, new Date(t.getTime() - DAY_MS));
+  const asOf = new Date(week.getTime() - 6 * 3_600_000).toISOString();
+  const o = occurrence(ctx, review, week, { status: "ready", period: { from: new Date(week.getTime() - 7 * DAY_MS).toISOString(), to: week.toISOString() } });
+  o.pre_read = { built_at: asOf, blocks: blocks(o.id, asOf) };
+  db.occurrences.push(o);
+  review.next_due_at = nextOccurrence(review.schedule, week).toISOString();
+}
+
+/** The mock digest run's digest.md (H7): per alternative, then Battlecard inputs; made-up names. */
+const DIGEST_TEXT = [
+  "## Competitor A",
+  "",
+  "Competitor A replaced its per-seat plan with a $400 team plan (Pricing, Oct 14). A review site says setup takes two weeks (from the web, not vetted). One request asks for roadmap sharing because Competitor A has it.",
+  "",
+  "## Competitor B",
+  "",
+  "A news site reports a 20% price rise (from the web, not vetted). Its docs page is blocked by robots.txt.",
+  "",
+  "## Battlecard inputs",
+  "",
+  "- **Where we win:** set up in an afternoon; reads the company's own sources.",
+  "- **Where they win:** a free plan for small teams.",
+  "- **Traps to avoid:** matching the team plan feature for feature.",
+  "- **Proof points:** time to first roadmap.",
+].join("\n");
 
 /** Handles /v1/rituals* and /v1/ritual-occurrences*; null for any other path. */
 export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
@@ -530,7 +629,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   if (p.length === 3 && m === "GET") {
     // The mock summary run finishes on the second read after it starts.
     if (o.summary_state === "running" && (o.summary_reads = (o.summary_reads ?? 0) + 1) >= 2) {
-      Object.assign(o, { summary_state: "ready", summary: SUMMARY_TEXT, summary_note: null });
+      Object.assign(o, { summary_state: "ready", summary: r.kind === "metrics_review" ? METRICS_SUMMARY_TEXT : r.kind === DIGEST.kind ? DIGEST_TEXT : SUMMARY_TEXT, summary_note: null });
     }
     return json(200, occurrenceOut(ctx, r, o));
   }
@@ -564,10 +663,13 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   }
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+    if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
     if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
+    const special = FLOW_FOR_KIND[r.kind];
+    if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "No open variance to explain");
     const id = ctx.uuid();
     Object.assign(o, { summary_state: "running", summary_run_id: id, summary_reads: 0, summary_note: null });
-    return json(201, { id, flow: "ritual_summary", status: "running", estimate_usd: PER_SUMMARY_USD });
+    return json(201, { id, flow: special?.flow ?? "ritual_summary", status: "running", estimate_usd: priceOf(r.kind) });
   }
   return fail(404, "Route not found");
 }

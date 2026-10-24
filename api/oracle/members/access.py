@@ -68,6 +68,18 @@ def invite_roles(principal: "Principal") -> tuple[Role, ...]:
     return () if principal.is_run else roles_for(principal.role)
 
 
+async def preset_role(session: AsyncSession, principal: "Principal") -> Role | None:
+    """The role an approve control starts on: the company's stored default role when the
+    caller may approve as it, else the least they may (None: they approve nothing)."""
+    from oracle.members.service import iap_default_role
+
+    roles = invite_roles(principal)
+    if not roles:
+        return None
+    default = await iap_default_role(session)
+    return default if default in roles else roles[0]
+
+
 def least_inviter(role: Role, engineering_lead: bool = False) -> Role:
     """The least role that may invite with ``role`` (and name an engineering lead): what the
     caller is re-read against under the gate, so one demoted while waiting is refused."""

@@ -57,8 +57,16 @@ from every member's Google Docs sources in the same request, with no Drive call
   its prediction's ``by`` and this many days after it shipped.
 - ``calibration_min_outcomes`` (H3): 1-100, default 5: assessed outcomes a goal (or the
   company) needs before its track record sets a factor.
+- ``request_asked_again_threshold`` (H10): 1-20, default 3: requests merged into a
+  declined one with a logged decision before its approver hears it was asked again.
 - ``outcome_calibration`` (H3): ``apply`` (default) multiplies priority confidence by the
   track record; ``show`` only displays it.
+- ``pricing_owner`` (H9): the one person who decides prices, an active owner's user id;
+  null reads as the earliest active owner (:func:`oracle.pricing.decide.pricing_owner`).
+
+- ``web_searches_per_month`` (H7): 0-2,000, default 200: the open-web searches Oracle's
+  digest runs may make in the Company time zone's month (counted from ``web_searches``);
+  0 turns web search off.
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -134,7 +142,14 @@ DEFAULTS: dict[str, Any] = {
     "outcome_measure_days": 30,
     "calibration_min_outcomes": 5,
     "outcome_calibration": "apply",
+    # H10 Reasoned no: asked again this many times since the no, the decider hears.
+    "request_asked_again_threshold": 3,
+    # H9 Pricing input: the pricing owner's user id; null is the earliest active owner.
+    "pricing_owner": None,
+    # H7 Competitive digest: open-web searches per month across runs; 0 turns them off.
+    "web_searches_per_month": 200,
 }
+MAX_WEB_SEARCHES_PER_MONTH = 2000
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
 # key takes it shared; either way the caller is re-read under it.
@@ -311,10 +326,19 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
                 f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
             )
         return value
-    if key in ("outcome_measure_days", "calibration_min_outcomes"):
-        lo, hi = (7, 365) if key == "outcome_measure_days" else (1, 100)
+    if key in ("outcome_measure_days", "calibration_min_outcomes", "request_asked_again_threshold"):
+        lo, hi = {
+            "outcome_measure_days": (7, 365),
+            "calibration_min_outcomes": (1, 100),
+            "request_asked_again_threshold": (1, 20),
+        }[key]
         if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
             raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
+        return value
+    if key == "web_searches_per_month":
+        hi = MAX_WEB_SEARCHES_PER_MONTH
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= hi:
+            raise InvalidSetting(f"web_searches_per_month must be a whole number from 0 to {hi}")
         return value
     if key == "outcome_calibration":
         if value not in ("apply", "show"):
@@ -345,6 +369,10 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         if value not in ("on_demand", "always"):
             raise InvalidSetting("ritual_summaries must be on_demand or always")
         return value
+    if key == "pricing_owner":
+        from oracle.pricing.decide import check_pricing_owner
+
+        return await check_pricing_owner(session, value)
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: change it on "

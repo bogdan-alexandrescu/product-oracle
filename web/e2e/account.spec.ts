@@ -1,12 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login, signOut } from "./helpers";
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
 const tokenRow = (page: Page, name: string) => page.getByTestId("token-row").filter({ hasText: name });
 const dateFmt = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
 /** "Jan 18, 2027": the date `days` from now, as the app shows it (the browser's time zone). */
-const inDays = (days: number) => dateFmt.format(new Date(Date.now() + days * 86_400_000));
+const inDays = (days: number) => dateFmt.format(new Date(mockNow().getTime() + days * 86_400_000));
 
 test("members: remove asks in an in-app dialog, then restore lets them sign in again", async ({ page }) => {
   let nativeDialog = false;
@@ -275,4 +276,19 @@ test("my account: sign out everywhere ends the session, personal tokens, MCP cli
   await expect(page.getByTestId("my-token-row").filter({ hasText: "staging sync" })).toContainText("Expired");
   await page.goto("/settings/api-tokens");
   await expect(tokenRow(page, "Run · baseline to prd")).toContainText("Revoked");
+});
+
+test("my account: a read-only credential sees Name disabled, with the reason", async ({ page }) => {
+  /* protects: someone signed in with an oracle:read credential is told why they cannot set
+   *   their name, before trying. fails_when: the field or Save is enabled, or no reason shows.
+   * no_claim: the API's 403 (api/tests/test_account.py). */
+  await page.addInitScript((key) => localStorage.setItem(key, "read-only-credential"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await page.goto("/account");
+  const form = page.getByRole("form", { name: "Your name" });
+  await expect(form.getByLabel("Name", { exact: true })).toBeDisabled();
+  await expect(form.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(form.getByTestId("name-read-only")).toHaveText(
+    "This credential can only read (oracle:read): it cannot add, change or delete anything.",
+  );
 });

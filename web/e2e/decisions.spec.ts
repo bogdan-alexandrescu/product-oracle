@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection, sectionAction, seedDecidedRun } from "./helpers";
@@ -99,7 +99,7 @@ test("a Review due row is reaffirmed in place in the Inbox: it moves to Done and
   const due = decisions.locator("tr[data-row]").filter({ hasText: "Review due · D-4 Price the team plan per seat" });
   await expect(due).toBeVisible();
   // The review date reads like the Inbox's other dates, never a raw ISO date.
-  const was = new Date();
+  const was = mockNow();
   was.setDate(was.getDate() - 2);
   const shown = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(was);
   await expect(due).toContainText(`Review was due ${shown}`);
@@ -151,6 +151,8 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
   await expect(row(page, "Approve Feature set · Checkout redesign PRD run")).toContainText("—");
 
   await chip(page, "Class", "All").click();
+  // Each filter rewrites the URL from the one before it: pick From once All has taken.
+  await expect(chip(page, "Class", "All")).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("From").selectOption({ label: "Pushback overrides" });
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toContainText("Keep the reviewer's call over Oracle's pushback");

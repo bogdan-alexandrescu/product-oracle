@@ -10,7 +10,9 @@ nothing more: no review date, no Inbox row, no baseline entity.
 
 Captured calls name what they are about in ``subjects`` only, never ``entity_ids``: their
 baseline entity gets no ``affects`` edges, so recording a call made elsewhere never adds a
-change of its own to the graph (the source already recorded its change).
+change of its own to the graph (the source already recorded its change). A request's no
+(H10) is the one exception: it cites its basis (a stop choice, a feature or a goal) in
+``entity_ids``, so agents asking "why didn't we build X?" find it from that record.
 
 Every hook runs in the transaction of the decision it records; the caller commits.
 """
@@ -21,7 +23,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
     from oracle.baseline.models import Entity
     from oracle.docs.models import Document, DocumentVersion
     from oracle.jobs.models import LlmSuggestion
+    from oracle.requests.models import ProductRequest
     from oracle.runs.models import Checkpoint, Run
     from oracle.v2.models import AssumptionDecision, BlockerOption, BlockerResolutionEvent
 
@@ -49,6 +52,7 @@ STOP_LABELS = {
     "strategy_review": "Vision or strategy review",
     "request_triage": "Request triage",
     "launch_review": "Launch kit review",
+    "pricing_review": "Pricing memo review",
 }
 CHECKPOINT_OPTIONS = (("approve", "Approve"), ("request_changes", "Send back"))
 NO_OUTCOME = "See the document's success metrics"
@@ -492,3 +496,78 @@ async def checkpoint_voided(db: AsyncSession, checkpoint_id: uuid.UUID) -> None:
             Decision.source_kind == "checkpoint", Decision.source_id == checkpoint_id
         )
     )
+
+
+# --- requests (H10 Reasoned no) ---------------------------------------------------------------
+
+
+async def request_declined(
+    db: AsyncSession,
+    principal: "Principal",
+    request: "ProductRequest",
+    *,
+    reason_label: str,
+    basis_entity: "Entity | None" = None,
+) -> Decision:
+    """A request said no to for a reason that answers the asker: "Say no to <title>",
+    reviewed in 90 days. Its basis entity (a stop choice, a feature, a goal) is the one
+    record the no cites, in ``entity_ids``. A request declined again after a reopen gets
+    a record of its own (the earlier one stays reversed)."""
+    approver = _person(principal)
+    assert approver is not None
+    earlier = await db.scalar(
+        select(func.count(Decision.id)).where(
+            Decision.origin == "request_decline",
+            Decision.subjects.contains([{"kind": "request", "id": str(request.id)}]),
+        )
+    )
+    source_id = request.id if not earlier else uuid.uuid5(request.id, f"request_decline:{earlier}")
+    note = (request.decision_note or "").strip()
+    return await capture(
+        db,
+        principal,
+        origin="request_decline",
+        source_kind="product_request",
+        source_id=source_id,
+        title=f"Say no to {request.title}",
+        question=f"Build {request.title}?",
+        options=[_option("say_no", "Say no"), _option("keep_open", "Keep it open")],
+        chosen_option="say_no",
+        rationale=f"{reason_label}: {note}" if note else reason_label,
+        approver_id=approver,
+        reversibility="reversible",
+        entity_ids=[basis_entity.id] if basis_entity is not None else [],
+        subjects=[{"kind": "request", "id": str(request.id), "ref": _title(request.title)}],
+    )
+
+
+async def request_reopened(
+    db: AsyncSession, principal: "Principal", request: "ProductRequest", reason: str | None
+) -> Decision | None:
+    """A declined request reopened: its decided ``request_decline`` record is reversed,
+    with a review by the reopener (who may not be the decision's approver; the reopen
+    route's own approver check stands). None when the decline logged no decision."""
+    from oracle.decisions.models import DecisionReview
+    from oracle.requests.replies import live_decision
+
+    d = await live_decision(db, request.id)
+    if d is None or d.status != "decided":
+        return None
+    note = (
+        f"Request reopened: {reason.strip()}" if reason and reason.strip() else "Request reopened"
+    )
+    who = _person(principal)
+    assert who is not None
+    d.status = "reversed"
+    db.add(DecisionReview(decision_id=d.id, verdict="reversed", note=note, reviewed_by=who))
+    await db.flush()
+    await service.reject_entity(db, principal, d, f"reversed: {note}")
+    await audit.record(
+        db,
+        principal,
+        "decision.review_reversed",
+        "decision",
+        d.id,
+        {"note": note, "revisit_id": None},
+    )
+    return d

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { routeModules, seedModules } from "../lib/api/mock/modules";
 

@@ -22,7 +22,7 @@ class RitualKind:
     # Pre-read block builders, in order.
     blocks: tuple[str, ...]
     # A feature that must exist: "decisions" (H1), "strategy" (H4), "launches" (H6),
-    # "updates" (H8).
+    # "updates" (H8), "metrics" (H5), "market" (H7).
     requires: str | None
     enabled_by_default: bool
 
@@ -60,11 +60,23 @@ KINDS: dict[str, RitualKind] = {
         RitualKind("board_meeting", "Board meeting",
                    _s("every_n_weeks", interval=7, weekday=3, time="10:00"), 120, 72,
                    ("update_draft", "goals", "outcomes_assessed"), "updates", False),
+        # H5: seeded paused; the first stored weekly value resumes it on the goals
+        # check-in's schedule and pauses the check-in (oracle.metrics.activate).
+        RitualKind("metrics_review", "Weekly metrics review",
+                   _s("weekly", weekday=0, time="09:00"), 45, 6,
+                   ("metrics_table", "variances", "goals", "outcomes_due", "needs_decision"),
+                   "metrics", False),
         # F6's weekly report on the ritual clock: seeded on F6's stored day, time and zone
         # (oracle.reports.alignment settings), built at its moment with no lead time.
         RitualKind("alignment_report", "Weekly alignment report",
                    _s("weekly", weekday=0, time="08:00"), 15, 0,
                    ("alignment_report",), None, True),
+        # H7 Competitive digest: seeded paused; the first alternative or watched page
+        # resumes it once (oracle.market.service.resume_digest_once).
+        RitualKind("competitive_digest", "Monthly competitive digest",
+                   _s("monthly", week_of_month=1, weekday=3, time="10:00"), 30, 72,
+                   ("competitor_changes", "competitor_web", "competitor_mentions",
+                    "watch_problems"), "market", False),
         RitualKind("custom", "Custom ritual",
                    _s("weekly", weekday=0, time="09:00"), 30, 12,
                    ("since_last", "needs_decision"), None, True),
@@ -76,9 +88,10 @@ KINDS: dict[str, RitualKind] = {
 # Launches and changelog (oracle.launches) and H8 Board and investor drafts (the update
 # document kind and the update_draft flow). H8's kinds stay off by default
 # (enabled_by_default); their update_draft block links the latest update draft and does
-# not start the update draft run yet. A kind whose feature is not listed here is not
-# listed and never fires.
-FEATURES: set[str] = {"decisions", "strategy", "launches", "updates"}
+# not start the update draft run yet. H5 Metrics review (oracle.metrics) adds "metrics";
+# H7 Competitive digest (oracle.market) adds "market". A kind whose feature is not
+# listed here is not listed and never fires.
+FEATURES: set[str] = {"decisions", "strategy", "launches", "updates", "metrics", "market"}
 
 
 def available(kind: RitualKind) -> bool:

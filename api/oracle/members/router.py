@@ -371,13 +371,17 @@ async def resend_invite(invite_id: uuid.UUID, principal: Approver, db: TenantDB)
 @router.post(
     "/invites/{invite_id}/access",
     response_model=InviteOut,
-    responses={404: {"description": "No such invite"}, 409: {"description": "Not open"}},
+    responses={
+        403: {"description": "No longer an owner"},
+        404: {"description": "No such invite"},
+        409: {"description": "Not open"},
+    },
     dependencies=[Depends(same_origin)],
 )
 async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: TenantDB) -> InviteOut:
     """Grant an open invite's Google IAP access again (Retry on "Access not granted
     yet"). Each attempt is audited; ``access`` says how it went."""
-    invite = await _call(service.get_open_invite(db, invite_id))
+    invite = await _call(service.get_open_invite(db, principal, invite_id))
     await delivery.grant_invite_access(db, principal, invite)
     await db.refresh(invite)
     return (await service.invites_out(db, [invite]))[0]
@@ -387,6 +391,7 @@ async def retry_invite_access(invite_id: uuid.UUID, principal: Owner, db: Tenant
     "/invites/{invite_id}/email",
     response_model=InviteOut,
     responses={
+        403: {"description": "No longer an owner"},
         404: {"description": "No such invite"},
         409: {"description": "Not open, or its email is being sent"},
         429: {"description": "Its email went out under a minute ago (Retry-After: seconds)"},
@@ -397,7 +402,7 @@ async def resend_invite_email(invite_id: uuid.UUID, principal: Owner, db: Tenant
     """Email an open invite again (Resend): queued and sent in the background
     (``email_status``), or ``not_sent`` with no sender configured. Refused (429) under
     a minute after its last send."""
-    invite = await _call(service.get_open_invite(db, invite_id))
+    invite = await _call(service.get_open_invite(db, principal, invite_id))
     if invite.email_status == "queued":
         raise HTTPException(status.HTTP_409_CONFLICT, "Oracle is sending this invite's email")
     wait = delivery.resend_wait(invite)
@@ -514,8 +519,10 @@ async def _access[T](op: Awaitable[T]) -> T:
         raise HTTPException(_ACCESS_STATUS[e.kind], e.message) from e
 
 
-def _request_out(row) -> AccessRequestOut:
-    return AccessRequestOut.model_validate(row)
+async def _request_out(db: TenantDB, principal: Principal, row) -> AccessRequestOut:
+    out = AccessRequestOut.model_validate(row)
+    out.default_role = await access.preset_role(db, principal)
+    return out
 
 
 @invites_router.get("/access-requests", response_model=list[AccessRequestOut])
@@ -529,7 +536,7 @@ async def list_access_requests(
     others."""
     if not access.invite_roles(principal):
         raise HTTPException(403, "Requires the approver role")
-    return [_request_out(r) for r in await access.list_requests(db, status)]
+    return [await _request_out(db, principal, r) for r in await access.list_requests(db, status)]
 
 
 @invites_router.post(
@@ -554,7 +561,7 @@ async def approve_access_request(
             await db.commit()  # a request whose email became a member is closed
         raise HTTPException(_ACCESS_STATUS[e.kind], e.message) from e
     await db.commit()
-    return _request_out(row)
+    return await _request_out(db, principal, row)
 
 
 @invites_router.post(
@@ -569,7 +576,7 @@ async def decline_access_request(
     """Turn the request down: later sign-ins stay refused (an invite still lets them in)."""
     row = await _access(access.decline(db, principal, request_id))
     await db.commit()
-    return _request_out(row)
+    return await _request_out(db, principal, row)
 
 
 @invites_router.post(
@@ -590,7 +597,7 @@ async def reopen_access_request(
     they revoke only the invites they sent."""
     row = await _access(access.reopen(db, principal, request_id))
     await db.commit()
-    return _request_out(row)
+    return await _request_out(db, principal, row)
 
 
 @router.get("/sign-in-rules", response_model=SignInRulesOut)

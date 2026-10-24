@@ -5,7 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { displayZone, formatInZone } from "@/lib/dates";
+import { addDays, displayZone, formatInZone, zoneInstant } from "@/lib/dates";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -67,6 +67,8 @@ export type Need = {
   quote?: string | null;
   /** Next to the age: the wait's time left ("19 h left"). */
   left?: string | null;
+  /** The Age tooltip when `at` is a calendar day (no time): the day as written ("Oct 12"). */
+  atTip?: string;
   /** D9: rows drawn indented under this one (Inbox only, never Home); not items of their own. */
   children?: Need[];
   /** The parent's key, on a child row. */
@@ -118,7 +120,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     align: "right",
     phone: "meta",
     cell: (n) => (
-      <span className="tnum text-text2" title={n.at ? formatDateTime(n.at) : undefined}>
+      <span className="tnum text-text2" title={n.atTip ?? (n.at ? formatDateTime(n.at) : undefined)}>
         {age(n.at)}
         {n.left && (
           <span className="block text-[12px] leading-4 text-warn max-[600px]:ml-1.5 max-[600px]:inline" data-testid="need-left">
@@ -279,6 +281,7 @@ export type NeedGroup =
   | "imports"
   | "revoke-failures"
   | "access-failures"
+  | "access-requests"
   | "report-failures"
   | "reports"
   | "strategy"
@@ -290,8 +293,10 @@ export type NeedGroup =
   | "revising"
   | "decisions"
   | "launches"
+  | "requests"
   | "dates"
   | "rituals"
+  | "metrics"
   | "outcomes"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
@@ -1509,6 +1514,122 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
   return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
 }
 
+/**
+ * H10 request rows: Replies to send (the filer and the decider) and Asked again N times since
+ * you said no (the decision's approver: Keep the no, Reopen) count; Answer to your request
+ * (the member who asked) is shown only, carrying the reply.
+ */
+export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { counted: Need[]; shown: Need[] } {
+  const rows = inbox.requests ?? [];
+  const href = (id: string) => `/requests?request=${id}`;
+  const need = (r: (typeof rows)[number]): Need => {
+    const label =
+      r.reason === "replies_to_send"
+        ? `Replies to send · ${r.count ?? 0} · ${r.title}`
+        : r.reason === "asked_again"
+          ? `Asked again ${r.count ?? 0} ${r.count === 1 ? "time" : "times"} since you said no · ${r.title}`
+          : `Answer to your request · ${r.title}`;
+    return {
+      key: `request-${r.reason}-${r.request_id}`,
+      icon: r.reason === "answer" ? "check" : "flag",
+      kind: r.reason === "answer" ? "Answer" : "Request",
+      item: (
+        <span className="truncate" title={label} data-testid="request-need">
+          {label}
+        </span>
+      ),
+      context:
+        r.reason === "answer" && r.body ? (
+          <span className="block truncate text-text2" title={r.body} data-testid="request-answer">
+            {r.body}
+          </span>
+        ) : (
+          <span className="block truncate text-text2">{r.decision_number ? `D-${r.decision_number} · Requests` : "Requests"}</span>
+        ),
+      at: r.at,
+      action: (
+        <>
+          {r.reason === "asked_again" && <AskedAgainActions requestId={r.request_id} title={r.title} busy={busy} act={act} />}
+          <LinkButton variant="secondary" href={href(r.request_id)}>
+            Open
+          </LinkButton>
+        </>
+      ),
+    };
+  };
+  return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
+/** Asked again: Keep the no with the person's own note (a reaffirmed review), or Reopen. */
+function AskedAgainActions({ requestId, title, busy, act }: { requestId: string; title: string; busy: string | null; act: Act }) {
+  const [keeping, setKeeping] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const fieldId = useId();
+  const path = { params: { path: { request_id: requestId } } };
+  const run = (key: string, call: () => Promise<unknown>) => {
+    setError(null);
+    void act(key, () => call().catch((e) => setError(errorMessage(e))));
+  };
+  const errorLine = error && (
+    <span role="alert" className="basis-full text-right text-[13px] text-crit max-[600px]:text-left">
+      {error}
+    </span>
+  );
+  if (keeping) {
+    return (
+      <form
+        className="flex w-full flex-col items-stretch gap-1.5 py-1 text-left whitespace-normal"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(`keep-no-${requestId}`, () => unwrap(api.POST("/v1/requests/{request_id}/keep-no", { ...path, body: { note: note.trim() } })));
+        }}
+      >
+        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+          Why keep the no
+        </label>
+        <input
+          id={fieldId}
+          autoFocus
+          value={note}
+          maxLength={2000}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
+          className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+        />
+        {errorLine}
+        <span className="flex justify-end gap-1.5 max-[600px]:flex-col">
+          <Button type="submit" disabled={busy !== null || !note.trim()} className="max-[600px]:w-full">
+            Keep the no
+          </Button>
+          <Button variant="ghost" disabled={busy !== null} onClick={() => setKeeping(false)} className="max-[600px]:w-full">
+            Cancel
+          </Button>
+        </span>
+      </form>
+    );
+  }
+  return (
+    <>
+      <Button disabled={busy !== null} aria-label={`Keep the no on ${title}`} onClick={() => setKeeping(true)}>
+        Keep the no
+      </Button>
+      <Button
+        disabled={busy !== null}
+        onClick={() =>
+          run(`reopen-${requestId}`, async () => {
+            const request = await unwrap(api.GET("/v1/requests/{request_id}", path));
+            return unwrap(api.POST("/v1/requests/{request_id}/reopen", { ...path, body: { lock_version: request.lock_version, reason: "Asked again since we said no" } }));
+          })
+        }
+      >
+        Reopen
+      </Button>
+      {errorLine}
+    </>
+  );
+}
+
 const ritualWhen = (iso: string) => formatInZone(iso, displayZone(), { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /**
@@ -1555,6 +1676,49 @@ export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): Sta
   });
 }
 
+/**
+ * H5 metric rows, all counted: Explain a variance and Find out (the metric's owner; each
+ * opens the metrics review that lists it) and Metric not read for a day (owners; opens the
+ * metric). Days are calendar days of the Company time zone. New until the visit after: a row
+ * is raised as its day begins in the Company time zone (Find out on its due day, the others
+ * once the week has ended), compared with my previous visit as instants.
+ */
+export function metricNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+  return (inbox.metrics ?? []).map((r) => {
+    const day = r.due_on ?? r.week_start;
+    const raised = Date.parse(zoneInstant(r.due_on ?? addDays(r.week_start, 7), "00:00", displayZone()));
+    const fresh = seenBefore !== undefined && (seenBefore === null || raised > Date.parse(seenBefore));
+    const label =
+      r.reason === "explain"
+        ? `Explain a variance · ${r.metric_title} · week of ${calendarDay(r.week_start)}`
+        : r.reason === "find_out"
+          ? `Find out · ${r.metric_title} · due ${r.due_on ? calendarDay(r.due_on) : "now"}`
+          : `Metric not read for a day · ${r.metric_title}`;
+    const href = r.reason !== "pull_failed" && r.occurrence_id ? `/company/rituals/${r.occurrence_id}` : `/company/metrics?metric=${r.metric_id}`;
+    return {
+      key: `metric-${r.reason}-${r.variance_id ?? r.metric_id}`,
+      icon: "flag",
+      kind: "Metric",
+      item: (
+        <span className="truncate" title={label} data-testid="metric-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Company › Metrics</span>,
+      at: day,
+      atTip: calendarDay(day),
+      action: (
+        <LinkButton variant="secondary" href={href} aria-label="Open">
+          Open
+        </LinkButton>
+      ),
+      state: fresh ? ("new" as const) : ("open" as const),
+      counted: r.counts,
+      group: "metrics" as const,
+    };
+  });
+}
+
 /** H3 outcome rows: Add predictions (the roadmap's approver) and Outcome check due (the
  * record's owner) count; Oracle recorded (H11 at Act within limits) is shown, with Change. */
 export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] } {
@@ -1581,7 +1745,7 @@ export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] 
 
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
- * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
+ * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), access requests (owners and approvers), feedback items and the questions asked
  * of me are New or Open; feedback items also Staged, Declined or Done. Home's Needs you is
  * the New and Open rows, so the badge, Home and /inbox count the same items.
  */
@@ -1594,10 +1758,13 @@ export function allNeeds(
   onActed: OnActed,
   compact = false,
   fixed?: FixedHere,
+  /** A5: the access request rows (./_access), decided in place. */
+  accessRequests: Need[] = [],
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
+  const requests = requestNeeds(inbox, busy, act);
   const outcomes = outcomeNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
     rows.map((r) => ({
@@ -1621,17 +1788,21 @@ export function allNeeds(
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...stated(dateNeeds(inbox, busy, act), "dates"),
     ...stated(launches.counted, "launches"),
+    ...stated(requests.counted, "requests"),
     ...ritualNeeds(inbox, busy, act),
+    ...metricNeeds(inbox, seenBefore),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),
+    ...stated(accessRequests, "access-requests"),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(launches.shipped, "shipped", false),
+    ...stated(requests.shown, "requests", false),
     ...stated(outcomes.shown, "outcomes", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }

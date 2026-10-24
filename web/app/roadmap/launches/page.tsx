@@ -633,6 +633,12 @@ function TaskRow({ task, canEdit, mine, busy, act }: { task: Task; canEdit: bool
       </div>
       {task.skip_reason && <p className="text-sm text-text2">Skipped: {task.skip_reason}</p>}
       <div className="flex flex-wrap gap-1.5">
+        {/* H7: the Positioning check has no draft; it opens the company's positioning inputs. */}
+        {task.key === "positioning_check" && (
+          <Link href="/company/market?tab=positioning" className="inline-flex h-9 items-center px-2 text-sm font-medium text-accent-ink hover:underline">
+            Open positioning
+          </Link>
+        )}
         {(task.body || canEdit) && task.drafts !== "no" && (
           <Button variant="ghost" onClick={() => setDraftOpen((o) => !o)} aria-expanded={draftOpen}>
             {draftOpen ? "Close draft" : "Open draft"}

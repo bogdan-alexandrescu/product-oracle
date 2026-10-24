@@ -548,6 +548,22 @@ async def test_read_only_credentials_change_nothing(client):
     assert (await client.get("/v1/me/tokens", headers=headers)).status_code == 200
 
 
+async def test_my_account_says_when_the_credential_can_only_read(client):
+    """protects: My account knows a read-only credential cannot change the name, so the
+    field shows disabled with the reason. fails_when: read_only is false for an
+    oracle:read token, or true for the browser. no_claim: the page's copy."""
+    await seed(password=PASSWORD)
+    await _login(client)
+    browser = (await client.get("/v1/me/account")).json()
+    assert browser["read_only"] is False
+    ro = (await client.post("/v1/me/tokens", json={"name": "ro", "scopes": ["oracle:read"]})).json()
+    headers = {"Authorization": f"Bearer {ro['secret']}"}
+    mine = (await client.get("/v1/me/account", headers=headers)).json()
+    assert (mine["signed_in_via"], mine["read_only"]) == ("api_token", True)
+    refused = await client.patch("/v1/me/account", json={"name": "Lee"}, headers=headers)
+    assert refused.status_code == 403
+
+
 async def test_personal_tokens_expire(client):
     r = await seed(password=PASSWORD)
     await _login(client)

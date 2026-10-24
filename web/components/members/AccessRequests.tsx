@@ -21,13 +21,15 @@ const LABEL: Record<Role, string> = { viewer: "Viewer", commenter: "Commenter", 
  * more pending. Approve makes an open invite (`onInvited` refreshes Open invites); the row
  * shows "Approved as <Role>" or "Declined" with Undo (reopen) while it settles. #370: drawn
  * only for a role that can read them; Approve, Decline and Undo only where it can use them.
+ * The role select starts on the request's `default_role`: the company's stored default role
+ * when the caller may approve as it (the API's preset, as the Inbox's row).
  */
-export function AccessRequests(props: { roles: Role[]; defaultRole: Role; onInvited: () => void }) {
+export function AccessRequests(props: { roles: Role[]; onInvited: () => void }) {
   const { can } = useMe();
   return can("list_access_requests") ? <Requests {...props} /> : null;
 }
 
-function Requests({ roles, defaultRole, onInvited }: { roles: Role[]; defaultRole: Role; onInvited: () => void }) {
+function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }) {
   const { can } = useMe();
   const canApprove = can("approve_access_request");
   const canDecline = can("decline_access_request");
@@ -37,7 +39,7 @@ function Requests({ roles, defaultRole, onInvited }: { roles: Role[]; defaultRol
   const [error, setError] = useState<string | null>(null);
   const rows = q.data;
   if (!rows?.length || !roles.length || !(canApprove || canDecline)) return null;
-  const preset = roles.includes(defaultRole) ? defaultRole : roles[0];
+  const preset = (r: AccessRequest): Role => (r.default_role && roles.includes(r.default_role) ? r.default_role : roles[0]);
 
   async function reopen(r: AccessRequest) {
     setError(null);
@@ -52,7 +54,7 @@ function Requests({ roles, defaultRole, onInvited }: { roles: Role[]; defaultRol
 
   async function decide(r: AccessRequest, action: "approve" | "decline") {
     setError(null);
-    const role = chosen[r.id] ?? preset;
+    const role = chosen[r.id] ?? preset(r);
     try {
       const done =
         action === "approve"
@@ -100,7 +102,7 @@ function Requests({ roles, defaultRole, onInvited }: { roles: Role[]; defaultRol
                     <>
                       <select
                         aria-label={`Role for ${r.email}`}
-                        value={chosen[r.id] ?? preset}
+                        value={chosen[r.id] ?? preset(r)}
                         onChange={(e) => setChosen((c) => ({ ...c, [r.id]: e.target.value as Role }))}
                         className={SELECT}
                       >
@@ -110,7 +112,7 @@ function Requests({ roles, defaultRole, onInvited }: { roles: Role[]; defaultRol
                           </option>
                         ))}
                       </select>
-                      <Button variant="primary" onClick={() => decide(r, "approve")}>
+                      <Button onClick={() => decide(r, "approve")}>
                         Approve
                       </Button>
                     </>

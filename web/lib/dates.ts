@@ -70,6 +70,13 @@ export function addDays(day: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
+/** `day` (YYYY-MM-DD) plus `n` calendar months; the month's last day when it is shorter (Aug 31 less 6 months is Feb 28). */
+export function addMonths(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + n, Math.min(d, last))).toISOString().slice(0, 10);
+}
+
 /** The ISO instant of `time` (HH:MM) on `day` (YYYY-MM-DD) in `zone`: what the API receives for a picked day. */
 export function zoneInstant(day: string, time: string, zone: string): string {
   const [y, mo, d] = day.split("-").map(Number);

@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
 import { SELECT } from "@/app/settings/_components/fields";
 import { Chip } from "@/components/ds";
+import { MemberApprovals } from "@/components/members/MemberApprovals";
 import type { Member } from "@/lib/api/client";
 import { hasRole, membersApi, type HandOver, type Impact, type Responsibility, type Role } from "@/lib/api/members-types";
 import { errorMessage } from "@/lib/use-query";
@@ -102,7 +103,8 @@ function BackToInbox({ voids }: { voids: Impact["voids"] }) {
   );
 }
 
-function Lapses({ lapses }: { lapses: Impact["lapses"] }) {
+function Lapses({ lapses, memberId }: { lapses: Impact["lapses"]; memberId: string }) {
+  const [seeing, setSeeing] = useState(false);
   const parts = [
     lapses.section_approvals ? plural(lapses.section_approvals, "section approval") : null,
     lapses.version_approvals.length
@@ -112,7 +114,13 @@ function Lapses({ lapses }: { lapses: Impact["lapses"] }) {
   if (!parts.length) return null;
   return (
     <Group title="Lapses for good" testId="preview-lapses">
-      <p className="text-[15px] leading-[22px]">{parts.join(" and ")}</p>
+      <p className="text-[15px] leading-[22px]">
+        {parts.join(" and ")}{" "}
+        <button type="button" aria-expanded={seeing} onClick={() => setSeeing((v) => !v)} className="font-semibold text-accent-ink hover:underline">
+          See them
+        </button>
+      </p>
+      {seeing && <MemberApprovals memberId={memberId} />}
     </Group>
   );
 }
@@ -292,7 +300,7 @@ export function RemoveDialog({
         <>
           {impact.ends && <EndsNow ends={impact.ends} />}
           <BackToInbox voids={impact.voids} />
-          <Lapses lapses={impact.lapses} />
+          <Lapses lapses={impact.lapses} memberId={member.id} />
           <HandOverRows
             title="Responsibilities"
             testId="preview-responsibilities"
@@ -354,7 +362,7 @@ export function RoleDialog({
     >
       {impact && member && (
         <>
-          <Lapses lapses={impact.lapses} />
+          <Lapses lapses={impact.lapses} memberId={member.id} />
           <BackToInbox voids={impact.voids} />
           <HandOverRows
             title="Needs a new holder"

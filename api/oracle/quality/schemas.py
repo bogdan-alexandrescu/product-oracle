@@ -272,7 +272,7 @@ class ProposedAssessment(BaseModel):
     observed: str | None = None
     actual_value: float | None = None
     measured_at: date | None = None
-    source: Literal["goal_history", "measurement"] | None = None
+    source: Literal["goal_history", "measurement", "metric"] | None = None
     # "measured early" when no value was recorded on or after ``by``.
     note: str | None = None
 

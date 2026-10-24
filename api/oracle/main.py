@@ -48,14 +48,17 @@ from oracle.jobs.worker import (
     run_worker,
 )
 from oracle.launches.router import router as launches_router
+from oracle.market.router import router as market_router
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
 from oracle.members.router import invites_router, people_router
 from oracle.members.router import router as members_router
+from oracle.metrics.router import router as metrics_router
 from oracle.modules.router import router as modules_router
 from oracle.modules.service import seed_all_companies
 from oracle.plan.router import router as plan_router
 from oracle.preferences.router import router as preferences_router
+from oracle.pricing.router import router as pricing_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
 from oracle.reports.router import router as reports_router
@@ -83,6 +86,7 @@ from oracle.ticker.router import router as ticker_router
 from oracle.trace.router import router as trace_router
 from oracle.trash.router import router as trash_router
 from oracle.v2.router import router as v2_router
+from oracle.web.router import router as web_router
 
 log = logging.getLogger(__name__)
 
@@ -261,10 +265,16 @@ def create_app() -> FastAPI:
     # credential, never MCP tools: oracle.mcp.tools.PUBLIC_OPERATIONS).
     app.include_router(interviews_router)
     app.include_router(public_interviews_router)
+    # H9 Pricing input: win and loss records and pricing memos (approvers and owners).
+    app.include_router(pricing_router)
     # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
     app.include_router(plan_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)
+    app.include_router(metrics_router)
+    app.include_router(market_router)
+    # H7 lane 1: the web tools, for the competitive digest's run token only (read:web).
+    app.include_router(web_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).

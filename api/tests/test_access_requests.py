@@ -130,17 +130,39 @@ async def test_inbox_lists_requests_for_owners_and_approvers_only(client, fetche
     assert (await client.get("/v1/inbox", headers=commenter.headers)).json()[
         "access_requests"
     ] == []
-    # The badge does not count it: no Inbox screen shows it yet, so approving it leaves
-    # the owner's and the approver's totals as they were.
+    # The badge counts it (AC 2, part 3: the Inbox shows the row now): approving it
+    # drops the owner's and the approver's totals by one.
     theirs_before = theirs["total"]
     await client.post(
         f"/v1/access-requests/{row['id']}/approve", json={"role": "viewer"}, headers=owner.headers
     )
     after = (await client.get("/v1/inbox", headers=owner.headers)).json()
-    assert after["access_requests"] == [] and after["total"] == mine["total"]
+    assert after["access_requests"] == [] and after["total"] == mine["total"] - 1
     assert (await client.get("/v1/inbox", headers=approver.headers)).json()[
         "total"
-    ] == theirs_before
+    ] == theirs_before - 1
+
+
+async def test_the_requests_list_presets_the_stored_default_role(client, fetches):
+    """protects: an approve control starts on the company's stored default role, on the
+    Members page as in the Inbox. fails_when: it starts on commenter whatever is stored,
+    or on a role the caller may not approve as. no_claim: the page's select itself."""
+    r = await _seed_request()
+    await _setting(r.tenant_id, "iap_default_role", "viewer")
+    await client.get("/v1/me", headers=_as(NEW))
+    owner = await _owner(r.tenant_id)
+    approver = await person(r.tenant_id, "approver")
+    [mine] = (await client.get("/v1/access-requests", headers=owner.headers)).json()
+    assert mine["default_role"] == "viewer"
+    [theirs] = (await client.get("/v1/access-requests", headers=approver.headers)).json()
+    assert theirs["default_role"] == "viewer"
+    # A stored approver (honoured until changed) is no preset for an approver, who may
+    # approve as viewer or commenter only: theirs starts on the first of those.
+    await _setting(r.tenant_id, "iap_default_role", "approver")
+    [mine] = (await client.get("/v1/access-requests", headers=owner.headers)).json()
+    assert mine["default_role"] == "approver"
+    [theirs] = (await client.get("/v1/access-requests", headers=approver.headers)).json()
+    assert theirs["default_role"] == "viewer"
 
 
 async def test_approve_lets_them_in_with_the_role_and_name(client, fetches):

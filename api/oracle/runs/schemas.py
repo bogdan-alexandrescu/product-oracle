@@ -25,6 +25,9 @@ Flow = Literal[
     "update_draft",
     "prd_draft_items",
     "ritual_summary",
+    "metrics_variance",
+    "pricing_memo",
+    "competitive_digest",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -51,6 +54,7 @@ CheckpointKind = Literal[
     "strategy_review",
     "launch_review",
     "update_review",
+    "pricing_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]
@@ -1321,6 +1325,7 @@ class InboxStrategy(BaseModel):
 
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
+from oracle.metrics.schemas import InboxMetric  # noqa: E402
 from oracle.quality.schemas import InboxOutcome  # noqa: E402
 from oracle.rituals.schemas import InboxRitual  # noqa: E402
 from oracle.roadmap.schemas import InboxTrack  # noqa: E402
@@ -1357,6 +1362,23 @@ class InboxDiscussionItem(BaseModel):
     state: Literal["new", "open", "done"]
     # Commenters and up join (write in) it; viewers read it.
     can_write: bool = False
+
+
+class InboxRequestReply(BaseModel):
+    """H10 rows: Replies to send (the request's filer and its decider; counted until
+    every reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said
+    no (the decision's approver; counted until Reopen or Keep the no) and Answer to your
+    request (the member who asked; shown only, with the reply)."""
+
+    request_id: uuid.UUID
+    title: str
+    reason: Literal["replies_to_send", "asked_again", "answer"]
+    count: int | None = None
+    decision_number: int | None = None
+    # Answer to your request: the reply's text.
+    body: str | None = None
+    at: datetime | None = None
+    counts: bool
 
 
 class InboxOut(BaseModel):
@@ -1420,15 +1442,20 @@ class InboxOut(BaseModel):
     # Outcome rows (H3): Add predictions and Outcome check due (counted in ``total``),
     # Oracle recorded (shown only).
     outcomes: list[InboxOutcome] = []
+    # Metric rows (H5): Explain a variance and Find out (the metric's owner), Metric not
+    # read for a day (owners); all counted in total and needs_me.
+    metrics: list[InboxMetric] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
     # F2 Track health: one row per track with alerts for me (the track's owner, else the
-    # owners; slips and overdue items also the engineering leads); new and open ones
-    # count in ``total``.
+    # owners; slips and overdue items also the engineering leads); a track with new or
+    # open alerts counts once in ``total`` (#514: one per row, as Home and /inbox count).
     tracks: list[InboxTrack] = []
     # G6: invitations, mentions and changes proposed in discussions; new and open ones
     # count in ``total``.
     discussions: list[InboxDiscussionItem] = []
+    # H10: replies to send, asked again, answers to my requests; counted ones in ``total``.
+    requests: list[InboxRequestReply] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

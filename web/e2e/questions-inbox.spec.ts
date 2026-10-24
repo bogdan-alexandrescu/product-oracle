@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { login, openSection, openTab } from "./helpers";
 
@@ -65,7 +65,8 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Approver asks");
   await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · 7. Success metrics");
-  await expect(badge(page)).toHaveText("12");
+  // The pending access request (A5, #203 part 3) counts too.
+  await expect(badge(page)).toHaveText("13");
 
   await row.getByRole("button", { name: "Answer" }).click();
   const form = page.getByTestId("answer-question");
@@ -80,8 +81,8 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   // In place until the tab changes; the badge counts it no more.
   await expect(row).toContainText("Answered ✓");
   await expect(page.getByTestId("answer-question")).toHaveCount(0);
-  await expect(badge(page)).toHaveText("11");
-  await expect(page.getByText("11 waiting")).toBeVisible();
+  await expect(badge(page)).toHaveText("12");
+  await expect(page.getByText("12 waiting")).toBeVisible();
 
   await tab(page, "Done").click();
   await expect(questionRow(page, CLINIC)).toContainText("Answered ✓");
@@ -109,7 +110,7 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await form.getByLabel("Find a person").fill("appr");
   await form.getByRole("option", { name: /Approver/ }).click();
   await expect(questionRow(page, TIERS)).toContainText("Asked Approver ✓");
-  await expect(badge(page)).toHaveText("9");
+  await expect(badge(page)).toHaveText("10");
 
   // Neither under New nor under Open any more: all three are Done.
   for (const name of ["New", "Open"]) {
@@ -179,7 +180,7 @@ test("Home: Needs you shows the same question row, answered in place", async ({ 
   await form.getByLabel("Your answer").fill("The two downtown clinics.");
   await form.getByRole("button", { name: "Send answer" }).click();
   await expect(row).toContainText("Answered ✓");
-  await expect(badge(page)).toHaveText("11");
+  await expect(badge(page)).toHaveText("12");
 });
 
 test("private finding: Ask someone is refused until it is shared, and the question stays mine", async ({ page }) => {

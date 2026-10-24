@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -28,7 +28,7 @@ test("an approver sees no Draft on the vision or strategy cards; an owner does",
   await expect(strategyPage(page).getByRole("button", { name: "Open vision" }).or(strategyPage(page).getByRole("link", { name: "Open vision" }))).toHaveCount(1);
   await expect(strategyPage(page).getByRole("button", { name: DRAFT })).toHaveCount(0);
   // Approvers still see the Updates tab and start PRDs (start_draft for a PRD is theirs).
-  await expect(page.getByRole("navigation", { name: "Company" }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates"]);
+  await expect(page.getByRole("navigation", { name: "Company" }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics", "Market"]);
   await page.goto("/home");
   await expect(page.getByRole("link", { name: "New PRD" }).filter({ visible: true }).first()).toBeVisible();
 });

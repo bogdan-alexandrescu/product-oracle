@@ -50,6 +50,9 @@ class RitualOut(BaseModel):
     status: RitualStatus
     next_due_at: datetime | None
     lock_version: int
+    # H5: "Weekly metrics review" on the goals check-in the review replaced (paused while
+    # the review is active); null otherwise.
+    replaced_by: str | None = None
     # The newest occurrence with a pre-read: Company › Rituals' "Last pre-read".
     last_pre_read: "OccurrenceSummary | None" = None
 
@@ -109,6 +112,9 @@ class OccurrenceOut(BaseModel):
     summary: str | None
     summary_state: SummaryState
     summary_note: str | None
+    # Whether Oracle writes this occurrence's summary now (H7: a competitive digest's is not
+    # offered at H11 market Observe).
+    summary_offered: bool = True
     read_by_me: bool
 
 
@@ -125,6 +131,9 @@ class EstimateRitual(BaseModel):
     ritual_id: uuid.UUID
     title: str
     runs_per_month: float
+    # Its kind's run: $3.00 (ritual_summary), a metrics review's $1.50 (metrics_variance),
+    # the competitive digest's $7.00.
+    per_summary_usd: float = 3.0
 
 
 class Estimate(BaseModel):

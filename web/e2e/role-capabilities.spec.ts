@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -17,6 +17,8 @@ const ALL = [
   "nav-claude-accounts",
   "nav-sources",
   "nav-notifications",
+  // H5: Settings › Analytics (the PostHog connection), the owner's.
+  "nav-analytics",
   "nav-templates",
   "nav-themes",
   "nav-autonomy",

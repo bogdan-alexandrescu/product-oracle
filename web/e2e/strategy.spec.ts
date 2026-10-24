@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection } from "./helpers";
@@ -118,7 +118,7 @@ test("strategy: an owner opens Company and lands on Strategy with the vision, th
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
   await expect(page).toHaveURL(/\/company\/strategy$/);
   const tabs = page.getByRole("navigation", { name: "Company" });
-  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics", "Market"]);
   await expect(tabs.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
 
   const root = strategyPage(page);

@@ -23,6 +23,8 @@ Origin = Literal[
     "priority_override",
     "autonomy",
     "checkpoint",
+    "request_decline",
+    "pricing",
 ]
 SubjectKind = Literal[
     "document",
@@ -35,6 +37,7 @@ SubjectKind = Literal[
     "run",
     "ritual_occurrence",
     "discussion",
+    "request",
 ]
 Verdict = Literal["reaffirmed", "revisit", "reversed"]
 OPTION_KEY = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$"

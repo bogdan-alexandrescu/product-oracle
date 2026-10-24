@@ -28,6 +28,7 @@ from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
+from tests.day_helpers import company_today
 from tests.intake_helpers import intake_with_source
 
 AUCKLAND = "Pacific/Auckland"
@@ -156,6 +157,8 @@ HELPERS = {"company_time.py"}
 EXCEPTIONS = {
     ("reports/alignment.py", "short_day"): "words a date already in the Company zone",
     ("discussions/kinds.py", "_measure"): "a goal's due day: a calendar date, no time of day",
+    ("market/blocks.py", "finding_row"): "a finding's published date: a calendar date, no time",
+    ("metrics/review.py", "variances"): "a metric week's Monday: a calendar date, no time of day",
     ("priorities/service.py", "_cited_as"): "machine field: a citation's ISO date",
     ("requests/triage.py", "prompt_lines"): "agent prompt, labelled UTC",
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",
@@ -339,7 +342,7 @@ async def test_blocker_gate_rationales_name_the_company_day(client):
     ctx = await make_ctx()
     await company_zone(client, ctx, AUCKLAND)
     # 20:00 UTC thirty days out: the next day in Auckland.
-    soon = datetime.combine(date.today() + timedelta(days=30), time(20), tzinfo=UTC)
+    soon = datetime.combine(company_today(AUCKLAND) + timedelta(days=30), time(20), tzinfo=UTC)
     soon_day = soon.astimezone(ZoneInfo(AUCKLAND)).date().isoformat()
     assert soon_day != soon.date().isoformat()
 
@@ -436,7 +439,7 @@ async def test_the_documents_blocker_section_names_the_company_day(client):
     ctx = await make_ctx()
     await company_zone(client, ctx, AUCKLAND)
     # 20:00 UTC thirty days out: the next day in Auckland.
-    soon = datetime.combine(date.today() + timedelta(days=30), time(20), tzinfo=UTC)
+    soon = datetime.combine(company_today(AUCKLAND) + timedelta(days=30), time(20), tzinfo=UTC)
     soon_day = company_time.day(soon, AUCKLAND).isoformat()
     assert soon_day != soon.date().isoformat()
 
@@ -530,3 +533,19 @@ async def test_the_reports_download_names_the_company_time(client):
     assert "· generated 2026-10-13 09:00 NZDT" in resp.text
     assert "added 2026-10-13" in resp.text
     assert "UTC" not in resp.text
+
+
+async def test_company_today_falls_back_to_pacific_and_says_so(monkeypatch):
+    """protects=#519 item 5: with no Company time zone set, baseline company_today is the
+    Pacific day (COMPANY_ZONE: 2026-10-24T02:00Z is Oct 23), and its docstring says Pacific,
+    not UTC; fails_when=the docstring promises UTC's day while the code dates by Pacific;
+    no_claim=a set zone (the alignment report tests)."""
+    from oracle.baseline import goals
+    from tests.conftest import make_tenant
+
+    tenant_id = await make_tenant("Docstring Co")
+    monkeypatch.setattr(goals, "now", lambda: datetime(2026, 10, 24, 2, 0, tzinfo=UTC))
+    async with tenant_session(tenant_id) as s:
+        assert await goals.company_today(s) == date(2026, 10, 23)
+    doc = goals.company_today.__doc__ or ""
+    assert "UTC" not in doc and "Pacific" in doc, doc

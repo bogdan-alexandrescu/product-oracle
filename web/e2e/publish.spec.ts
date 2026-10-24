@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -311,7 +311,8 @@ test("resolve a blocker: opens its baseline item", async ({ page }) => {
   await openPublish(page, "online-deposits");
   await page.getByTestId("block-row").nth(0).getByRole("link", { name: "Resolve" }).click();
   await expect(page).toHaveURL(/\/baseline\?entity=/);
-  await expect(page.getByRole("complementary").filter({ hasText: "c.same-day-refund" })).toBeVisible();
+  // #304: slugs such as c.same-day-refund are never shown; the inspector is named by the item's title.
+  await expect(page.getByRole("complementary", { name: "Same-day refund rule unanswered" })).toBeVisible();
 });
 
 test.describe("phone", () => {

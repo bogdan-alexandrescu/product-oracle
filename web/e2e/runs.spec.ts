@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -171,6 +171,9 @@ test("#259: an approver's run over $50 waits for an owner's approval", async ({ 
  * end (the import error on the segment and in the checkpoint's payload). Returns its id.
  */
 async function seedRejectedDraft(page: Page, withProblems = false): Promise<string> {
+  // Seed from a page that runs no app code: a mock request the app still has in flight
+  // would save the store it loaded before the seed over it (seen at 4 workers).
+  await page.goto("/icon.svg");
   return page.evaluate((withProblems) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
@@ -445,8 +448,9 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
     "Approved by admin@example.com, delivering to the run… (1 try, last: SwarmCloud HTTP 503 unavailable)",
   );
   await expect(page.getByRole("alert").filter({ hasText: "did not confirm" })).toHaveCount(0);
-  // Decided: one fewer waiting on me (10 in the seeded company); the delivery is not counted.
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("9");
+  // Decided: one fewer waiting on me (11 in the seeded company, the pending access request
+  // among them, A5); the delivery is not counted.
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
   await expect(segment.getByTestId("checkpoint-baseline_confirm")).toContainText("Approved");
   await expect(segment.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
 

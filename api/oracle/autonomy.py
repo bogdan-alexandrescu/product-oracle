@@ -255,12 +255,18 @@ _ALL: tuple[Responsibility, ...] = (
         ceiling="act",
         default="recommend",
         levels={
-            "observe": "Oracle records and indexes requests.",
-            "draft": "Oracle drafts a summary of each request for its owner to edit.",
-            "recommend": "Oracle suggests duplicates and goals for each request; a person decides.",
+            "observe": "Oracle records and indexes requests. Oracle never says no on its own.",
+            "draft": (
+                "Oracle drafts a summary of each request for its owner to edit. Oracle never "
+                "says no on its own."
+            ),
+            "recommend": (
+                "Oracle suggests duplicates, goals and when to say no for each request; a "
+                "person decides. Oracle never says no on its own."
+            ),
             "act": (
                 "Oracle merges duplicates and links requests to goals at or above your "
-                "confidence, then tells the owner."
+                "confidence, then tells the owner. Oracle never says no on its own."
             ),
         },
         limits=RequestsLimits,
@@ -377,6 +383,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=RitualsLimits,
         wired_by="H2",
         wired_by_name="H2 Cadence engine",
+        wired=True,
     ),
     Responsibility(
         key="outcomes",
@@ -414,6 +421,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=LaunchesLimits,
         wired_by="H6",
         wired_by_name="H6 Launches and changelog",
+        wired=True,
     ),
     Responsibility(
         key="strategy",
@@ -449,6 +457,26 @@ _ALL: tuple[Responsibility, ...] = (
         ceiling_reason="the vision itself",
     ),
     Responsibility(
+        key="pricing_input",
+        title="Prepare pricing input",
+        group="planning",
+        ceiling="recommend",
+        default="recommend",
+        levels={
+            "observe": "Oracle keeps win and loss records and pricing interviews; it writes no "
+            "memo.",
+            "draft": "Oracle drafts pricing memos with options and evidence, without a "
+            "recommendation.",
+            "recommend": "Oracle drafts pricing memos and recommends one option; the pricing "
+            "owner decides.",
+        },
+        limits=None,
+        wired_by="H9",
+        wired_by_name="H9 Pricing input",
+        wired=True,
+        ceiling_reason="the price is decided by its one owner",
+    ),
+    Responsibility(
         key="external_messages",
         title="Words for people outside",
         group="outside",
@@ -457,14 +485,37 @@ _ALL: tuple[Responsibility, ...] = (
         levels={
             "observe": "Oracle notes what people outside may need to hear.",
             "draft": (
-                "Oracle drafts release notes, customer notes, the public changelog and board "
-                "and investor updates for a named person to edit and send."
+                "Oracle drafts release notes, customer notes, why-not replies to people who "
+                "asked, the public changelog and board and investor updates for a named "
+                "person to edit and send."
             ),
         },
         limits=None,
         wired_by="H6",
         wired_by_name="H6 Launches and changelog",
         ceiling_reason="what is said to people outside the company",
+    ),
+    Responsibility(
+        key="market",
+        title="Watch the market",
+        group="planning",
+        ceiling="recommend",
+        default="recommend",
+        levels={
+            "observe": "Oracle reads the pages you watch and lists what changed.",
+            "draft": (
+                "Oracle also searches the web each month and writes the digest for a named "
+                "person to edit."
+            ),
+            "recommend": (
+                "Oracle also suggests positioning changes with evidence; a person accepts each."
+            ),
+        },
+        limits=None,
+        wired_by="H7",
+        wired_by_name="H7 Competitive digest",
+        wired=True,
+        ceiling_reason="the category and positioning bet stay with people",
     ),
 )
 REGISTRY: dict[str, Responsibility] = {r.key: r for r in _ALL}

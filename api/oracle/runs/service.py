@@ -1907,6 +1907,9 @@ async def create_run(
     if flow.key == "update_draft" and not has_role(principal.role, "owner"):
         # H8: the CEO decides what is said to the board and investors.
         raise Forbidden("Only an owner can draft an update")
+    if flow.key == "pricing_memo" and await autonomy.level(db, "pricing_input") == "observe":
+        # H9 / H11: at Observe Oracle keeps the evidence and writes no memo.
+        raise RunError("Oracle writes no pricing memo at Observe")
     knobs = _resolve_knobs(flow, body.knobs)
     await _one_build_at_a_time(db, flow)
     document_id, oracle = await _resolve_inputs(
@@ -9820,6 +9823,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     rituals = await ritual_rows(db, principal)
     counted += sum(1 for r in rituals if r.counts)
+    from oracle.metrics.review import inbox_rows as metric_rows
+
+    metrics = await metric_rows(db, principal)
+    counted += sum(1 for m in metrics if m.counts)
     from oracle.quality.outcomes import inbox_rows as outcome_rows
 
     outcome_inbox = await outcome_rows(db, principal)
@@ -9835,6 +9842,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.discussions import inbox as discussion_inbox
 
     discussions = await discussion_inbox.rows(db, principal, seen)
+    # H10: replies to send, asked again, answers to my own requests.
+    from oracle.requests.inbox import inbox_rows as request_rows
+
+    request_inbox = await request_rows(db, principal)
+    counted += sum(1 for r in request_inbox if r.counts)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9868,7 +9880,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.open
         + len(revoke_failures)
         + len(access_failures)
-        # Access requests (A5) are not counted: no Inbox screen shows them yet.
+        # Pending access requests (A5), for those who may approve them.
+        + len(access_requests)
         + sum(1 for r in reports if not r.read)
         + len(report_failures)
         # Strategy drift: one row, however many findings.
@@ -9877,11 +9890,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(1 for r in outcome_inbox if r.counts)
         + sum(a.counts for a in oracle_actions)
         + sum(1 for r in discussions if r.state in ("new", "open"))
-        + sum(t.counts.new + t.counts.open for t in track_groups)
+        # A track is one row, its open alerts its children (#514: as a checkpoint's items).
+        + sum(1 for t in track_groups if t.counts.new + t.counts.open > 0)
         + counted,
         tracks=track_groups,
         launches=launch_rows,
         rituals=rituals,
+        metrics=metrics,
         outcomes=outcome_inbox,
         items=states,
         counts=counts,
@@ -9890,6 +9905,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
         discussions=discussions,
+        requests=request_inbox,
     )
 
 
@@ -9897,18 +9913,16 @@ async def _access_requests(db: AsyncSession, principal: Principal) -> list[Inbox
     """Pending access requests, oldest first, for callers who may approve them (A5)."""
     from oracle.members import access
     from oracle.members.models import AccessRequest
-    from oracle.members.service import iap_default_role
 
     roles = list(access.invite_roles(principal))
-    if not roles:
+    preset = await access.preset_role(db, principal)
+    if preset is None:
         return []
     rows = await db.scalars(
         select(AccessRequest)
         .where(AccessRequest.status == "pending")
         .order_by(AccessRequest.created_at, AccessRequest.id)
     )
-    default = await iap_default_role(db)
-    preset = default if default in roles else roles[0]
     return [
         InboxAccessRequest(
             id=r.id, email=r.email, note=r.note, requested_at=r.created_at,

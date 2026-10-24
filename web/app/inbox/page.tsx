@@ -9,6 +9,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
 
+import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
 import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, useFixedHere, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
@@ -33,6 +34,8 @@ export default function InboxPage() {
   const inbox = q.data;
   // Answered in place (C2): the row shows its outcome until the tab changes, then Done.
   const asked = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
+  // A5: access requests, approved or declined in place until the tab changes.
+  const requests = useAccessRequestRows(inbox?.access_requests ?? [], q.reload);
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -56,7 +59,7 @@ export default function InboxPage() {
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
   // D9: the child rows I fixed on this visit stay, done with Undo.
   const fixed = useFixedHere();
-  const rows = inbox ? allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed) : null;
+  const rows = inbox ? allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows) : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -70,7 +73,11 @@ export default function InboxPage() {
         </div>
       )}
       {inbox && rows && (
-        <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={asked.moveSettled} />
+        <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+            asked.moveSettled();
+            requests.moveSettled();
+          }}
+        />
       )}
       {asked.sheet}
       {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
@@ -121,12 +128,15 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "imports", title: "Couldn't import" },
   { id: "revoke-failures", title: "Couldn't revoke access" },
   { id: "access-failures", title: "Access to Oracle not changed" },
+  { id: "access-requests", title: "Access requests" },
   { id: "report-failures", title: "Report not posted to Slack" },
   { id: "reports", title: "Reports" },
   { id: "strategy", title: "Strategy drift" },
   { id: "dates", title: "Dates to verify" },
   { id: "launches", title: "Launches" },
+  { id: "requests", title: "Requests" },
   { id: "rituals", title: "Rituals" },
+  { id: "metrics", title: "Metrics" },
   { id: "outcomes", title: "Outcomes" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },

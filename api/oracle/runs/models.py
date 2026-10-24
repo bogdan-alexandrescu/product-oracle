@@ -43,6 +43,12 @@ FLOWS = (
     "prd_draft_items",
     # H2 Cadence engine (migration 0037_rituals): a ritual pre-read's written summary.
     "ritual_summary",
+    # H5 Metrics review (migration 0050_metrics): a metrics review's variance drafts.
+    "metrics_variance",
+    # H9 Pricing input (migration 0051_pricing): a pricing memo's draft.
+    "pricing_memo",
+    # H7 Competitive digest (migration 0052_market): the monthly digest's write-up.
+    "competitive_digest",
 )
 RUN_STATUSES = (
     "draft",
@@ -67,6 +73,7 @@ CHECKPOINT_KINDS = (
     "strategy_review",
     "launch_review",
     "update_review",
+    "pricing_review",
 )
 CHECKPOINT_STATUSES = ("pending", "approved", "changes_requested", "skipped")
 # D8: what a person does to one item of a pending checkpoint's shared draft. Every kind the

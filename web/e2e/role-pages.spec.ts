@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
@@ -85,6 +85,8 @@ for (const role of ROLES) {
   });
 
   test(`${role}: PRD and document pages show only what the role can do (#370 fixes 4)`, async ({ page }) => {
+    // The intake below (BEFORE_DRAFTING) exists only in the "before-drafting" scenario.
+    await withScenario(page, "before-drafting");
     await login(page, email(role));
 
     // A PRD: no old role note; a viewer reads it with View only.
@@ -98,12 +100,15 @@ for (const role of ROLES) {
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
     await expect(jobs).toBeVisible();
     await expect(jobs.getByTestId("llm-job-settings")).toHaveCount(role === "owner" ? 1 : 0);
-    await expect(jobs.getByRole("checkbox")).toHaveCount(role === "owner" ? 2 : 0);
+    // Four switches since refinement and quality review got theirs (JOB_SETTING_LABEL, oracle-work.spec.ts).
+    await expect(jobs.getByRole("checkbox")).toHaveCount(role === "owner" ? 4 : 0);
     await expect(jobs.getByText(/Approvers and owners/)).toHaveCount(0);
 
     // A document only an owner approves: no "Only an owner approves" note for anyone.
+    // 10d (updates.spec.ts): updates are for owners and approvers; anyone else gets "Document not found".
     await page.goto("/documents/board-update-2026-10/v/1");
-    await expect(page.getByTestId("doc-status").filter({ visible: true })).toBeVisible();
+    if (approver) await expect(page.getByTestId("doc-status").filter({ visible: true })).toBeVisible();
+    else await expect(page.getByText("Document not found").first()).toBeVisible();
     await expect(page.getByTestId("owner-approves-note")).toHaveCount(0);
     await expect(page.getByTestId("role-note")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(role === "owner" ? 1 : 0);

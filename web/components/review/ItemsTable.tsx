@@ -67,12 +67,14 @@ export function MilestoneCell({ row }: { row: ItemRow }) {
  * and count. `filter` narrows the rows shown; `hide` drops columns; `extraColumns` add
  * columns before State; `rowDecorations` add attributes to a row. D1: `groupBy`/`groupOrder`
  * group by something else (a reason), `groupLabel` heads a group ("Now · 2 of 4 need you"),
- * `detail` opens a form under a row, `empty` says why nothing shows.
+ * `detail` opens a form under a row, `empty` says why nothing shows. `onActivate`: Enter on a
+ * focused row (D1 asks to confirm the row's first fix).
  */
 export function ItemsTable({
   rows,
   selected,
   onSelect,
+  onActivate,
   filter,
   hide = [],
   extraColumns = [],
@@ -88,6 +90,7 @@ export function ItemsTable({
   rows: ItemRow[];
   selected: string | null;
   onSelect: (key: string) => void;
+  onActivate?: (key: string) => void;
   filter?: (row: ItemRow) => boolean;
   hide?: readonly (ItemColumn | string)[];
   extraColumns?: Column<ItemRow>[];
@@ -173,6 +176,7 @@ export function ItemsTable({
       rowKey={(r) => r.key}
       selected={selected}
       onSelect={(k) => onSelect(k)}
+      onActivate={onActivate && ((k) => onActivate(k))}
       group={groupOf}
       groupLabel={(g) =>
         groupLabel ? (

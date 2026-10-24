@@ -72,6 +72,8 @@ export const ORIGIN_LABEL: Record<DecisionSummary["origin"], string> = {
   priority_override: "A priority override",
   autonomy: "Decided by Oracle",
   checkpoint: "A run's stop",
+  request_decline: "A request said no to",
+  pricing: "A pricing memo",
 };
 
 export const VERDICT_LABEL: Record<Schemas["DecisionReviewOut"]["verdict"], string> = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, Icon, Sheet } from "@/components/ds";
 import { INPUT } from "@/components/ui";
@@ -105,14 +105,35 @@ export function DecisionBar({
   const canSend = (changes > 0 || !!note.trim()) && !tooLong;
   const approveLabel = held ? "Confirm" : edits > 0 ? `Approve with ${plural(edits, "edit")}` : "Approve";
 
-  async function saveNote() {
-    if (!canNote || tooLong || (note.trim() || null) === (savedNote?.trim() || null)) return;
-    await unwrap(
+  // Saving one's own note bumps the draft's revision: the decision that follows expects that
+  // revision, not the one the screen loaded, or it is refused as "the review changed" by its
+  // own note. Only our own bump (one past what we read) is taken; anyone else's still refuses.
+  // A ref, read when the decision is sent: the note's save (on blur, as Send back to agents is
+  // pressed) may answer after the decision's click, and a value of that render would be stale
+  // (#520: rerun-previous was refused "the review changed" by its own note).
+  const bumped = useRef<{ from: number | null; to: number } | null>(null);
+  const expected = () => (bumped.current && bumped.current.from === revision ? bumped.current.to : revision);
+  /** The note's save in flight, if any: the decision waits for it. */
+  const saving = useRef<Promise<void> | null>(null);
+
+  function saveNote(): Promise<void> {
+    if (!canNote || tooLong || (note.trim() || null) === (savedNote?.trim() || null)) return Promise.resolve();
+    const known = expected();
+    const save = unwrap(
       api.PUT("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note", {
         params: { path: { run_id: runId, checkpoint_id: checkpointId } },
         body: { note: note.trim() ? note : null },
       }),
-    ).catch((e) => setError(errorMessage(e)));
+    )
+      .then((r) => {
+        if (known != null && r.revision === known + 1) bumped.current = { from: revision, to: r.revision };
+      })
+      .catch((e) => setError(errorMessage(e)))
+      .finally(() => {
+        if (saving.current === save) saving.current = null;
+      });
+    saving.current = save;
+    return save;
   }
 
   async function decide(decision: "approved" | "changes_requested" | "confirm") {
@@ -120,11 +141,12 @@ export function DecisionBar({
     setError(null);
     setChanged(null);
     try {
+      if (saving.current) await saving.current;
       await saveNote();
       await unwrap(
         api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/decide", {
           params: { path: { run_id: runId, checkpoint_id: checkpointId } },
-          body: { decision, note: note.trim() || null, expected_revision: revision },
+          body: { decision, note: note.trim() || null, expected_revision: expected() },
         }),
       );
       setOpen(false);

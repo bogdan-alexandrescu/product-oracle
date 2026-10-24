@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { login } from "./helpers";
 
@@ -14,6 +14,8 @@ test("the rail places Company after Inbox, just above Settings; it lands on Stra
   // order, or not highlighted on its pages; no_claim=none beyond protects (F1 renamed Roadmap to Plan).
   await login(page);
   const nav = page.getByTestId("app-nav");
+  // The rail draws its items once the role's capabilities load; read them after that.
+  await expect(nav.getByTestId("nav-settings")).toBeVisible();
   const ids = await nav.locator("a[data-testid^='nav-']").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
   expect(ids.filter((id) => id !== "nav-brand")).toEqual([
     "nav-home",
@@ -34,7 +36,7 @@ test("the rail places Company after Inbox, just above Settings; it lands on Stra
   await expect(nav.getByTestId("nav-company")).toHaveAttribute("aria-current", "page");
   const tabs = page.getByRole("navigation", { name: "Company" });
   await expect(tabs.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
-  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics", "Market"]);
 });
 
 test("phone: Company is in the More sheet and the page never scrolls sideways", async ({ page }) => {

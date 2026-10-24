@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
 import { MOCK_TEAM_FOLLOW_UP } from "../lib/api/mock/interviews";

@@ -1762,8 +1762,12 @@ async def resend_invite(
     return invite
 
 
-async def get_open_invite(session: AsyncSession, invite_id: uuid.UUID) -> Invite:
-    """The open invite ``invite_id``, locked: Retry access and Resend act on it."""
+async def get_open_invite(
+    session: AsyncSession, principal: "Principal", invite_id: uuid.UUID
+) -> Invite:
+    """The open invite ``invite_id``, locked: Retry access and Resend email act on it.
+    Owners only, re-read under the gate (an owner demoted while waiting is refused)."""
+    await _gate(session, principal, shared=True)
     invite = await session.get(Invite, invite_id, with_for_update=True)
     if invite is None:
         raise MemberError("not_found", f"Invite {invite_id} not found")

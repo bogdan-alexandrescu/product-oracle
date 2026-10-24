@@ -95,6 +95,10 @@ EVERY_MEMBER = frozenset(
     }
 )
 
+# Run tokens only (H7: the web tools need read:web, which only the competitive digest's
+# run holds): a person's role never reaches them, whatever the route's role check says.
+RUN_ONLY = frozenset({"fetch_web_page", "search_web"})
+
 # Decided in the handler against the item: a checkpoint's approver role, the author, the
 # role Oracle acted with. Any role may hold the item, so the page reads the item's own
 # state to show or hide these.
@@ -161,24 +165,35 @@ PER_ITEM: dict[str, Role | None] = {
     "decide_checkpoint": "owner",
     "decide_decision": None,
     "decide_knowledge_gap": "owner",
+    # H9: only the pricing owner, one owner (oracle.pricing.decide).
+    "decide_pricing_memo": None,
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_scope_item": "approver",
     "dismiss_discussion_change": "approver",
     "dismiss_overrun_run": "owner",
+    # H10: a request's replies are its filer's, an approver's or an owner's.
+    "draft_request_replies": "approver",
     "edit_document_section": "approver",
     "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
     "estimate_regeneration": "approver",
+    # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
+    "explain_metric_variance": "approver",
     "get_checkpoint_draft": "owner",
     "get_next_question_batch": "approver",
+    "keep_request_no": None,
+    "mark_metric_variance_unknown": "approver",
+    "mark_request_reply_sent": "approver",
     "mirror_discussion_to_slack": "approver",
+    "notify_request_reply": "approver",
     "open_oracle_action": "owner",
     "patch_interview": "approver",
     "patch_scope_item": "approver",
     "propose_discussion_change": "commenter",
     "reassign_decision": "owner",
     "record_discussion_change": "approver",
+    "record_metric_value": "approver",
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "remove_evidence": "approver",
@@ -194,6 +209,7 @@ PER_ITEM: dict[str, Role | None] = {
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_document_visibility": "owner",
+    "skip_request_reply": "approver",
     "stage_checkpoint_action": "owner",
     "stage_discussion_change": "approver",
     "start_draft": "owner",
@@ -215,6 +231,7 @@ PER_ITEM: dict[str, Role | None] = {
     "update_knowledge_gap": "owner",
     "update_launch_task": "approver",
     "update_question": "approver",
+    "update_request_reply": "approver",
     "update_requester_note": "approver",
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
@@ -274,7 +291,8 @@ def lead_roles(app: FastAPI) -> dict[str, Role]:
 def capabilities(app: FastAPI, role: str, engineering_lead: bool = False) -> dict[str, bool]:
     leads = lead_roles(app) if engineering_lead else {}
     return {
-        op: has_role(role, need) or (op in leads and has_role(role, leads[op]))
+        op: op not in RUN_ONLY
+        and (has_role(role, need) or (op in leads and has_role(role, leads[op])))
         for op, need in operation_roles(app).items()
     }
 
@@ -296,6 +314,8 @@ def stamp_openapi(app: FastAPI) -> None:
                     op["x-lead-role"] = leads[op["operationId"]]
                 if op.get("operationId") in PER_ITEM:
                     op["x-per-item"] = PER_ITEM[op["operationId"]]
+                if op.get("operationId") in RUN_ONLY:
+                    op["x-run-only"] = True
         return schema
 
     app.openapi = openapi  # type: ignore[method-assign]

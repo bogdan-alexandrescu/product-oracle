@@ -356,9 +356,17 @@ def _ctx(**kw) -> flows.PromptContext:
     return replace(base, **kw)
 
 
+# Flows whose spec lists their tools exactly and that have no checkpoint to read: H7's
+# competitive digest (#518; test_market_digest pins its tools).
+WITHOUT_CHECKPOINT_REVIEW = {"competitive_digest"}
+
+
 def test_every_segment_prompt_of_every_flow_names_the_tool():
     assert "get_checkpoint_review" in flows.MCP_TOOLS
     for flow in flows.FLOWS.values():
+        if flow.key in WITHOUT_CHECKPOINT_REVIEW:
+            assert all(s.checkpoint is None for s in flow.segments), flow.key
+            continue
         for sdef in flow.segments:
             assert "get_checkpoint_review" in sdef.tools, (flow.key, sdef.name)
             for reachable in (True, False):

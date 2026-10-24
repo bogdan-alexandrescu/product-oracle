@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { feedbackState, login } from "./helpers";
 
@@ -109,6 +109,8 @@ test("the New run dialog no longer offers the feedback loop and points at where 
     "PRD to roadmap · Plan › Roadmap documents",
     "Vision or strategy · Company › Strategy, New vision or Draft next version",
     "Build the baseline · Baseline",
+    // H9: a pricing memo is drafted from Company › Market › Pricing (D12).
+    "Draft with Oracle · Company › Market › Pricing",
   ]);
   await expect(pointers.getByRole("link", { name: "PRD to roadmap · Plan › Roadmap documents" })).toHaveAttribute("href", "/plan/documents");
   // H4: a vision or strategy draft starts on Company › Strategy.

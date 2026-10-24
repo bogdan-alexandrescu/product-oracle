@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import signal
 import stat
 import sys
@@ -608,7 +609,8 @@ async def test_a_spent_pool_refuses_in_the_company_time_zone_never_iso(tenant_id
     message = str(info.value)
     assert message.startswith("No Claude account can take this call: every Claude account is spent")
     assert message.endswith(" JST"), message
-    assert "T" not in message.split("clears ")[1].split(",")[0]
+    # No ISO stamp ("2026-10-27T..."); a weekday such as "Tue" may hold a capital T.
+    assert not re.search(r"\d{4}-\d{2}-\d{2}T", message), message
     assert "+00:00" not in message
     assert info.value.next_reset_at is not None
 

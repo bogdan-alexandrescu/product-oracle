@@ -88,6 +88,17 @@ class Settings(BaseSettings):
     # (example.com/.org/.net, *.test, *.invalid, *.localhost). Off everywhere real, so a
     # seed or an invite can never create admin@example.com again (account management).
     allow_reserved_email_domains: bool = False
+    # H7 Competitive digest: Oracle's web tools (oracle.web), the only web its agents
+    # reach. The provider (Q5 "Web search", owner 2026-10-23: a key Oracle holds, Brave
+    # Search API) and its key, Secret Manager oracle-web-search-key mounted as
+    # ORACLE_WEB_SEARCH_KEY (docs/ops-web-search.md); never logged, never sent to agents.
+    # No key, or provider "none": POST /v1/web/search answers 503 web_search_unconfigured.
+    # Per run, at most this many searches and page reads (429 web_cap_reached above);
+    # the company's web_searches_per_month setting caps searches across runs.
+    web_search_provider: Literal["brave", "none"] = "brave"
+    web_search_key: SecretStr = SecretStr("")
+    web_search_max_per_run: int = 30
+    web_fetch_max_per_run: int = 40
 
     @model_validator(mode="after")
     def _no_reserved_domains_in_production(self) -> "Settings":

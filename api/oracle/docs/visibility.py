@@ -19,14 +19,29 @@ The rule lives here only:
 
 A read that reaches a document's rows without selecting :class:`Document` (a comment by
 id, an Inbox row) checks :func:`hidden_document_ids` or joins the document. The decision
-an approval captured ("Publish <document> v<n>", H1) follows its document the same way.
+an approval captured ("Publish <document> v<n>", H1) follows its document the same way,
+as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``).
 """
 
 import uuid
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import ColumnElement, event, or_, select, true
+from sqlalchemy import (
+    ColumnElement,
+    Text,
+    and_,
+    cast,
+    column,
+    event,
+    func,
+    literal,
+    not_,
+    or_,
+    select,
+    true,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
@@ -104,18 +119,58 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     )
 
 
+# The capture sources that name one version of a document.
+VERSION_SOURCES = ("document_version", "pricing_memo_version")
+
+
 def _decision_visible(cls: Any) -> ColumnElement[bool]:
+    """A decision about an approvers-only document is hidden with it, whatever recorded it:
+    the approval of one of its versions, a stop of a run on it (a checkpoint record), or
+    any decision naming it, or one of its versions, as a subject."""
     # Core tables, not the mapped classes: the Document criterion above must not apply
-    # inside this subquery.
+    # inside these subqueries.
+    from oracle.runs.models import Run
+
     versions = DocumentVersion.__table__
     documents = Document.__table__
-    hidden = (
-        select(versions.c.id)
-        .join(documents, documents.c.id == versions.c.document_id)
-        .where(documents.c.visibility != COMPANY)
+    runs = Run.__table__
+    hidden_docs = select(documents.c.id).where(documents.c.visibility != COMPANY)
+    hidden_versions = select(versions.c.id).where(versions.c.document_id.in_(hidden_docs))
+    hidden_runs = select(runs.c.id).where(runs.c.document_id.in_(hidden_docs))
+    subject = (
+        func.jsonb_array_elements(cls.subjects)
+        .table_valued(column("value", JSONB))
+        .alias("subject")
     )
-    return or_(
-        cls.source_kind.is_(None),
-        cls.source_kind != "document_version",
-        cls.source_id.not_in(hidden),
+    names_hidden = (
+        select(literal(1))
+        .select_from(subject)
+        .where(
+            or_(
+                and_(
+                    subject.c.value["kind"].astext == "document",
+                    subject.c.value["id"].astext.in_(
+                        select(cast(documents.c.id, Text)).where(documents.c.visibility != COMPANY)
+                    ),
+                ),
+                and_(
+                    subject.c.value["kind"].astext == "document_version",
+                    subject.c.value["id"].astext.in_(
+                        select(cast(versions.c.id, Text)).where(
+                            versions.c.document_id.in_(hidden_docs)
+                        )
+                    ),
+                ),
+            )
+        )
+        .exists()
+    )
+    return and_(
+        or_(
+            cls.source_kind.is_(None),
+            cls.source_kind.not_in(VERSION_SOURCES),
+            cls.source_id.not_in(hidden_versions),
+        ),
+        or_(cls.run_id.is_(None), cls.run_id.not_in(hidden_runs)),
+        not_(names_hidden),
     )

@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "./test";
 
 import { MOCK_CLOSING, MOCK_FOLLOW_UP, MOCK_GUIDE, MOCK_INTERVIEW_TOKEN } from "../lib/api/mock/interviews";
 import { login } from "./helpers";

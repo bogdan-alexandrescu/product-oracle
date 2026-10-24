@@ -8,7 +8,17 @@ READ_AREAS = {
     # Requester notes quote what people asked: source text (H6).
     # Code capability maps are drawn from a person's source (S6): a run reads shared
     # ones only (oracle.engineering.codemaps.visible).
-    "read:sources": {"sources", "search", "snapshots", "requester-notes", "code-maps"},
+    # Request replies quote askers' words, the same rule as requester notes (H10).
+    # H9: interviews hold customer words, source text.
+    "read:sources": {
+        "sources",
+        "search",
+        "snapshots",
+        "requester-notes",
+        "code-maps",
+        "request-replies",
+        "interviews",
+    },
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
     # Blockers are baseline constraints (CR-04): their strategy, options, experiments
@@ -52,6 +62,20 @@ READ_AREAS = {
         # H2: rituals and their pre-reads (a summary or update draft run reads them).
         "rituals",
         "ritual-occurrences",
+        # H5: the weekly metrics and their variances (reading only: an agent never
+        # writes a weekly value).
+        "metrics",
+        "metric-variances",
+        # H9: win and loss records and the pricing memos with their decision (owners and
+        # approvers only; a run reads them when its creator may).
+        "deal-outcomes",
+        "pricing-memos",
+        # H7: the alternatives, their change log, the open web's findings (public pages,
+        # read with no credential) and the positioning inputs. Run tokens never write them.
+        "competitors",
+        "competitor-changes",
+        "competitor-web-findings",
+        "positioning",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
@@ -66,11 +90,16 @@ SOURCE_READS = {
     ("intakes", "next-batch"),
     # A launch's requester notes: what people asked, in their words.
     ("launches", "notes"),
+    # H10: a request's why-not replies quote what people asked.
+    ("requests", "replies"),
 }
 # Reads for people's clients only, refused to run tokens like the runs reads: whether a
 # new PRD run may reuse the baseline (C4) is about runs, not baseline knowledge.
 # Likewise the goals an interview is offered on (B6): it names people's discussions.
 PEOPLE_READS = {("baseline", "review-status"), ("baseline", "goals", "vague")}
+# H7: Oracle's web tools (POST /v1/web/search, /v1/web/fetch) are for run tokens holding
+# read:web only (the competitive digest's): people's MCP clients are not offered them.
+RUN_ONLY_AREAS = {"web": "read:web"}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 
@@ -99,6 +128,8 @@ def required_scope(method: str, path: str) -> str | None:
         return None
     if method != "POST":
         return None
+    if area in RUN_ONLY_AREAS:
+        return RUN_ONLY_AREAS[area]
     if area == "baseline" and parts[-1] in PROPOSAL_WRITES:
         return "write:proposals"
     # POST /v1/decisions: propose a decision (as Oracle). Deciding, reviewing,
@@ -113,6 +144,7 @@ def required_scope(method: str, path: str) -> str | None:
 
 def allowed(scopes: frozenset[str] | None, method: str, path: str) -> bool:
     if scopes is None:
-        return True
+        parts = _segments(path)
+        return not (parts and parts[0] in RUN_ONLY_AREAS)
     needed = required_scope(method, path)
     return needed is not None and needed in scopes

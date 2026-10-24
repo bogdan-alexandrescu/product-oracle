@@ -179,10 +179,10 @@ const REGISTRY: RegistryRow[] = [
       "act"
     ],
     "levels": {
-      "observe": "Oracle records and indexes requests.",
-      "draft": "Oracle drafts a summary of each request for its owner to edit.",
-      "recommend": "Oracle suggests duplicates and goals for each request; a person decides.",
-      "act": "Oracle merges duplicates and links requests to goals at or above your confidence, then tells the owner."
+      "observe": "Oracle records and indexes requests. Oracle never says no on its own.",
+      "draft": "Oracle drafts a summary of each request for its owner to edit. Oracle never says no on its own.",
+      "recommend": "Oracle suggests duplicates, goals and when to say no for each request; a person decides. Oracle never says no on its own.",
+      "act": "Oracle merges duplicates and links requests to goals at or above your confidence, then tells the owner. Oracle never says no on its own."
     },
     "ceiling_reason": null,
     "limits_schema": {
@@ -454,7 +454,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "H2",
     "wired_by_name": "H2 Cadence engine",
     "limits_default": {
@@ -542,7 +542,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "internal_only"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H6",
     "wired_by_name": "H6 Launches and changelog",
     "limits_default": {
@@ -610,7 +610,7 @@ const REGISTRY: RegistryRow[] = [
     ],
     "levels": {
       "observe": "Oracle notes what people outside may need to hear.",
-      "draft": "Oracle drafts release notes, customer notes, the public changelog and board and investor updates for a named person to edit and send."
+      "draft": "Oracle drafts release notes, customer notes, why-not replies to people who asked, the public changelog and board and investor updates for a named person to edit and send."
     },
     "ceiling_reason": "what is said to people outside the company",
     "limits_schema": null,
@@ -618,6 +618,31 @@ const REGISTRY: RegistryRow[] = [
     "wired": false,
     "wired_by": "H6",
     "wired_by_name": "H6 Launches and changelog",
+    "limits_default": null
+  },
+  {
+    "key": "market",
+    "title": "Watch the market",
+    "group": "planning",
+    "group_title": "Planning",
+    "default": "recommend",
+    "ceiling": "recommend",
+    "allowed": [
+      "observe",
+      "draft",
+      "recommend"
+    ],
+    "levels": {
+      "observe": "Oracle reads the pages you watch and lists what changed.",
+      "draft": "Oracle also searches the web each month and writes the digest for a named person to edit.",
+      "recommend": "Oracle also suggests positioning changes with evidence; a person accepts each."
+    },
+    "ceiling_reason": "the category and positioning bet stay with people",
+    "limits_schema": null,
+    "fixed_limits": [],
+    "wired": true,
+    "wired_by": "H7",
+    "wired_by_name": "H7 Competitive digest",
     "limits_default": null
   }
 ] as RegistryRow[];
@@ -634,6 +659,13 @@ export function emptyAutonomy(): AutonomyDb {
 function levelOf(r: RegistryRow, s: Stored | undefined): Level {
   if (!s || !ORDER.includes(s.level)) return r.default;
   return rank(s.level) <= rank(r.ceiling) ? s.level : r.ceiling;
+}
+
+/** A responsibility's level as Oracle follows it now (its default with nothing stored). */
+export function levelFor(db: AutonomyDb, key: string): Level {
+  const r = REGISTRY.find((x) => x.key === key);
+  if (!r) throw new Error(`no responsibility ${key}`);
+  return levelOf(r, db.stored[key]);
 }
 
 function itemOut(r: RegistryRow, s: Stored | undefined): Item {
@@ -699,6 +731,42 @@ export function seedOracleDid(ownerId: string, id: string, summary = "Moved 'Sav
     subject: { kind: "feature", key: "saved-addresses", href: "/priorities" },
     undo: { method: "POST", path: "/v1/priorities/moves/undo", body: { feature: "saved-addresses" } },
     created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+    undone_at: null,
+    notify_ids: [ownerId],
+    opened_by: [],
+    undone_by: null,
+  };
+}
+
+/** The "oracle-did-launch-ritual" scenario: at Act within limits, Oracle published a launch's
+ * internal entries and told its member requester (as the API's launches.service does). */
+export function seedLaunchDid(ownerId: string, id: string, launch: { id: string; title: string }): OracleActionRow {
+  return {
+    id,
+    responsibility: "launches",
+    responsibility_title: "Internal launch work",
+    summary: `${launch.title} launched: Oracle published 1 internal changelog entry and told 1 member requester`,
+    subject: { kind: "launch", key: launch.id, href: `/roadmap/launches?launch=${launch.id}` },
+    undo: null,
+    created_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+    undone_at: null,
+    notify_ids: [ownerId],
+    opened_by: [],
+    undone_by: null,
+  };
+}
+
+/** The same scenario: at Act within limits, Oracle started the summary of a ritual's pre-read
+ * (as the API's rituals.summaries does). No Undo: the mock has no run of it to cancel. */
+export function seedRitualDid(ownerId: string, id: string, ritual: { id: string; title: string }, occurrenceId: string): OracleActionRow {
+  return {
+    id,
+    responsibility: "rituals",
+    responsibility_title: "Run rituals",
+    summary: `Started a summary of the pre-read for '${ritual.title}' ($3.00, within your limit)`,
+    subject: { kind: "ritual", key: ritual.id, href: `/company/rituals/${occurrenceId}` },
+    undo: null,
+    created_at: new Date(Date.now() - 25 * 60_000).toISOString(),
     undone_at: null,
     notify_ids: [ownerId],
     opened_by: [],

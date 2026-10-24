@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useState, type FormEvent, type ReactNode } from "react";
 
 import { Field, INPUT } from "@/app/settings/_components/fields";
 import { Button, Chip, InfoTip, Inspector, InspectorRow, InspectorSection, Notice } from "@/components/ds";
 import { HandOverSelect, personName } from "@/components/members/ChangePreview";
+import { MemberApprovals } from "@/components/members/MemberApprovals";
 import type { Member } from "@/lib/api/client";
 import { hasRole, membersApi, type MemberDetail, type Responsibility } from "@/lib/api/members-types";
 import { formatDateTime, formatDay } from "@/lib/format";
@@ -25,16 +26,41 @@ function joinedLine(d: MemberDetail): string {
   return day;
 }
 
-/** "3 section approvals · 1 version approval · 1 checkpoint decision not yet delivered". */
-function holdsLine(d: MemberDetail): string {
+type Approvals = "section" | "version";
+
+/**
+ * "3 section approvals · 1 version approval · 1 checkpoint decision not yet delivered"; the
+ * approval counts open the approvals behind them (#203 part 3).
+ */
+function HoldsLine({ d }: { d: MemberDetail }) {
+  const [open, setOpen] = useState<Approvals | null>(null);
   const h = d.holds;
+  const toggle = (kind: Approvals, label: string) => (
+    <button type="button" aria-expanded={open === kind} onClick={() => setOpen((o) => (o === kind ? null : kind))} className="font-semibold text-accent-ink hover:underline">
+      {label}
+    </button>
+  );
   const parts = [
-    h.section_approvals ? plural(h.section_approvals, "section approval") : null,
-    h.version_approvals ? plural(h.version_approvals, "version approval") : null,
+    h.section_approvals ? toggle("section", plural(h.section_approvals, "section approval")) : null,
+    h.version_approvals ? toggle("version", plural(h.version_approvals, "version approval")) : null,
     h.spend_approvals ? plural(h.spend_approvals, "spend approval") : null,
     h.checkpoint_decisions ? `${plural(h.checkpoint_decisions, "checkpoint decision")} not yet delivered` : null,
-  ].filter(Boolean);
-  return parts.join(" · ") || "Nothing";
+  ].filter((x) => x !== null);
+  return (
+    <>
+      <p className="text-[15px]">
+        {parts.length === 0
+          ? "Nothing"
+          : parts.map((x, i) => (
+              <Fragment key={i}>
+                {i > 0 && " · "}
+                {x}
+              </Fragment>
+            ))}
+      </p>
+      {open && <MemberApprovals memberId={d.id} kind={open} />}
+    </>
+  );
 }
 
 /** One responsibility: its label, count, the items behind an (i), and Hand over in place. */
@@ -208,7 +234,7 @@ export function MemberInspector({
         </InspectorRow>
       </InspectorSection>
       <InspectorSection label="Holds" testId="member-holds">
-        <p className="text-[15px]">{detail ? holdsLine(detail) : "—"}</p>
+        {detail ? <HoldsLine d={detail} /> : <p className="text-[15px]">—</p>}
       </InspectorSection>
       <InspectorSection label={removed ? "Still assigned" : "Responsibilities"} testId="member-responsibilities">
         {!detail ? (

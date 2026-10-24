@@ -37,6 +37,8 @@ export type Holding = {
   version_approvals: { document: string; title: string; version: number }[];
   checkpoint_decisions: { run_id: string; checkpoint_id: string; kind: string; title: string }[];
   spend_approvals: { run_id: string; title: string }[];
+  /** GET …/approvals: their section verdicts and version approvals, live or lapsed. */
+  approvals: Schemas["TokenApprovalOut"][];
 };
 
 export type MembersDb = {
@@ -58,7 +60,19 @@ export type MembersContext = {
 const json = (status: number, body?: unknown) =>
   new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-const empty = (): Holding => ({ held: {}, section_approvals: 0, version_approvals: [], checkpoint_decisions: [], spend_approvals: [] });
+const empty = (): Holding => ({ held: {}, section_approvals: 0, version_approvals: [], checkpoint_decisions: [], spend_approvals: [], approvals: [] });
+
+/** A live approval of usage-alerts v4 by `who`: a section's verdict, or the version's (no section). */
+const approval = (who: string, at: string, section_key: string | null): Schemas["TokenApprovalOut"] => ({
+  kind: section_key ? "section" : "version",
+  document: "usage-alerts",
+  version: 4,
+  section_key,
+  approver_id: who,
+  approved_at: at,
+  lapsed_at: null,
+  lapse_reason: null,
+});
 
 /** The seeded holdings (3.11), made once per mock db. */
 function holdings(ctx: MembersContext): Record<string, Holding> {
@@ -79,6 +93,12 @@ function holdings(ctx: MembersContext): Record<string, Holding> {
       version_approvals: [{ document: "usage-alerts", title: "Usage alerts", version: 4 }],
       checkpoint_decisions: [{ run_id: "run-mock-feature-set", checkpoint_id: "cp-mock-feature-set", kind: "feature_set", title: "Baseline to PRD · Usage alerts" }],
       spend_approvals: [],
+      approvals: [
+        approval(approver.id, "2026-10-18T10:00:00Z", "problem"),
+        approval(approver.id, "2026-10-18T10:05:00Z", "goals"),
+        approval(approver.id, "2026-10-18T10:10:00Z", "scope"),
+        approval(approver.id, "2026-10-18T11:00:00Z", null),
+      ],
     };
   }
   const former = ctx.db.members.find((m) => m.email === "former.pm@example.com");
@@ -203,6 +223,9 @@ export function applied(ctx: MembersContext, target: MemberRow, change: "remove"
   const h = holdingOf(ctx, target.id);
   if (change === "remove" || !hasRole(target.role, "approver")) {
     Object.assign(h, { section_approvals: 0, version_approvals: [], checkpoint_decisions: [], spend_approvals: [] });
+    // Lapsed for good: still listed with ?lapsed=true.
+    const at = ctx.now();
+    for (const a of h.approvals) if (!a.lapsed_at) Object.assign(a, { lapsed_at: at, lapse_reason: change === "remove" ? "member was removed (disabled)" : `approver demoted to ${target.role}` });
   }
 }
 
@@ -242,7 +265,11 @@ export async function membersDetailRoute(ctx: MembersContext, req: Request, p: s
     if (change === "role" && (!role || !ORDER.includes(role))) return json(422, { detail: "role is viewer, commenter, approver or owner" });
     return json(200, impact(ctx, target, change, change === "role" ? role : null));
   }
-  if (m === "GET" && p[3] === "approvals") return json(200, []);
+  if (m === "GET" && p[3] === "approvals") {
+    // As member_approvals: live ones, and lapsed ones too with ?lapsed=true.
+    const lapsed = url.searchParams.get("lapsed") === "true";
+    return json(200, holdingOf(ctx, target.id).approvals.filter((a) => lapsed || !a.lapsed_at));
+  }
   if (m === "POST" && p[3] === "hand-over") {
     const input = JSON.parse((await req.text()) || "null") as { hand_over?: HandOver[] } | null;
     const refused = handOver(ctx, target.id, input?.hand_over ?? []);

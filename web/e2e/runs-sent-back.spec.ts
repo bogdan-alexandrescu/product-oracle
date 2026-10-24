@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
-import { login, seedSentBack, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers";
+import { login, seedSentBack as seedOnPage, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers";
 
 /**
  * A refused draft goes back to the writer before a person is asked (owner, 2026-10-20). While
@@ -12,6 +12,15 @@ import { login, seedSentBack, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers
 const ID = SENT_BACK_RUN;
 const SUMMARY = SENT_BACK_SUMMARY;
 const REVISING = "Revising: sent back by Oracle";
+
+/**
+ * Seeds the sent-back run from a page that runs no app code: a mock request the app still
+ * has in flight would save the store it loaded before the seed over it (seen at 4 workers).
+ */
+async function seedSentBack(page: Page): Promise<string> {
+  await page.goto("/icon.svg");
+  return seedOnPage(page);
+}
 
 /** The run's status badge (Next keeps the list page mounted but hidden). */
 function status(page: Page) {
@@ -55,10 +64,11 @@ test("the Inbox shows a draft Oracle sent back as Revising, not a decision, and 
   await seedSentBack(page);
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
-  // The seed's 10 waiting, unchanged: nothing of this run asks for a decision.
-  await expect(page.getByText("10 waiting").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("10");
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New10");
+  // The seed's 11 waiting (the pending access request among them, A5), unchanged: nothing of
+  // this run asks for a decision.
+  await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New11");
   await expect(page.getByTestId("inbox-checkpoints")).not.toContainText("guest-checkout");
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);
 
@@ -99,7 +109,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
 
   // The Inbox: the review is a decision now, counted; the Revising row is gone.
   await page.goto("/inbox");
-  await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("12 waiting").filter({ visible: true })).toBeVisible();
   await expect(page.getByTestId("inbox-checkpoints")).toContainText("guest-checkout");
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);

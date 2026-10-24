@@ -47,6 +47,17 @@ const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50";
 /** The invite's personal note (#203): plain text, at most this long; a counter shows near it. */
 const MESSAGE_MAX = 500;
 const MESSAGE_COUNT_FROM = 400;
+/** A name is at most 80 characters (A5). */
+const NAME_MAX = 80;
+
+const RESENT = ["", "resent once", "resent twice"];
+
+/** An invite row's tooltip: "Invited by Admin on Oct 21 · resent once". */
+function invitedLine(i: Invite): string {
+  const by = i.invited_by_name ? `Invited by ${i.invited_by_name} on` : "Invited on";
+  const n = i.resend_count ?? 0;
+  return [`${by} ${formatDay(i.created_at)}`, n ? (RESENT[n] ?? `resent ${n} times`) : null].filter(Boolean).join(" · ");
+}
 
 function RoleSelect({
   value,
@@ -107,7 +118,7 @@ export function MembersSettings() {
 
 /** "Your role is commenter. Owners manage members and sign-in." (A5, 3.10) */
 function RoleNote() {
-  const { role, engineeringLead } = useMe();
+  const { role, engineeringLead, can } = useMe();
   return (
     <p
       role="note"
@@ -116,7 +127,7 @@ function RoleNote() {
     >
       <span>
         Your role is <b>{role ? ROLE_LABEL[role].toLowerCase() : "unknown"}</b>.{" "}
-        {role === "approver" ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
+        {can("create_invite") ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
       </span>
       {engineeringLead && <span>You are an engineering lead.</span>}
     </p>
@@ -301,6 +312,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   const [inviteRole, setInviteRole] = useState<Role>("commenter");
   const [inviteLead, setInviteLead] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [pending, setPending] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -324,21 +336,21 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   const activeOwners = members?.filter((m) => m.role === "owner" && !removed(m)).length ?? 0;
   const replace = (updated: Member) => membersQ.setData((prev) => prev?.map((x) => (x.id === updated.id ? updated : x)));
 
-  async function changeRole(m: Member, role: Role, hand_over: HandOver[] = []) {
+  async function changeRole(m: Member, next: Role, hand_over: HandOver[] = []) {
     setSaving(m.id);
     setError(null);
     try {
       // A5: a lower role first reads what it lapses and voids; with something to show, the
       // dialog asks (the select stays on the old role until Change role).
-      if (!demoting && !hasRole(role, m.role)) {
-        const impact = await membersApi.impact(m.id, { role });
+      if (!demoting && !hasRole(next, m.role)) {
+        const impact = await membersApi.impact(m.id, { role: next });
         if (!impact.nothing) {
           setDemoteError(null);
-          setDemoting({ member: m, role, impact });
+          setDemoting({ member: m, role: next, impact });
           return;
         }
       }
-      replace(await membersApi.patch(m.id, hand_over.length ? { role, hand_over } : { role }));
+      replace(await membersApi.patch(m.id, hand_over.length ? { role: next, hand_over } : { role: next }));
       setDemoting(null);
     } catch (e) {
       if (demoting) setDemoteError(errorMessage(e));
@@ -404,7 +416,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           undo: async () => {
             const again = await unwrap(
               api.POST("/v1/invites", {
-                body: { email: invite.email, role: invite.role, engineering_lead: invite.engineering_lead, message: invite.message ?? null },
+                body: { email: invite.email, name: invite.name ?? null, role: invite.role, engineering_lead: invite.engineering_lead, message: invite.message ?? null },
               }),
             ).catch((e) => {
               setError(errorMessage(e));
@@ -477,6 +489,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         api.POST("/v1/invites", {
           body: {
             email: email.trim(),
+            name: inviteName.trim() || null,
             role: inviteRole,
             engineering_lead: inviteLead && inviteRole !== "viewer",
             message: inviteMessage.trim() || null,
@@ -487,6 +500,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       polls.current = 0;
       setMade(created);
       setEmail("");
+      setInviteName("");
       setInviteLead(false);
       setInviteMessage("");
     } catch (err) {
@@ -728,6 +742,15 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               {inviteError}
             </p>
           )}
+          <Field label="Name (optional)">
+            <input
+              value={inviteName}
+              maxLength={NAME_MAX}
+              onChange={(e) => setInviteName(e.target.value)}
+              placeholder="As teammates know them"
+              className={INPUT}
+            />
+          </Field>
           <Field label="Role">
             <RoleSelect
               value={inviteRole}
@@ -785,8 +808,14 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 {...inviteActs.rowAttrs(i.id)}
                 className="flex min-h-11 flex-wrap items-center gap-1.5 border-t border-line py-1.5 first:border-t-0"
               >
-                <span className="min-w-0 flex-1 truncate font-medium max-[600px]:min-w-[9rem]" title={`${i.email} · invited ${formatDate(i.created_at)}`}>
-                  {i.email}
+                <span data-testid="invite-who" className="min-w-0 flex-1 truncate font-medium max-[600px]:min-w-[9rem]" title={invitedLine(i)}>
+                  {i.name ? (
+                    <>
+                      {i.name} <span className="font-normal text-text2">{i.email}</span>
+                    </>
+                  ) : (
+                    i.email
+                  )}
                 </span>
                 {inviteActs.acted?.key === i.id ? (
                   <ActedCell acted={inviteActs.acted} onUndo={inviteActs.undo} />
@@ -880,7 +909,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       >
         {error && <Notice tone="error">{error}</Notice>}
         {!manage && <RoleNote />}
-        <AccessRequests roles={inviteRoles} defaultRole="commenter" onInvited={() => void invitesQ.reload()} />
+        <AccessRequests roles={inviteRoles} onInvited={() => void invitesQ.reload()} />
         {!manage && <PeopleReadOnly />}
         {manage && <Panel title="People" count={members?.length} tools={<FindPerson value={find} onChange={setFind} />}>
           {membersQ.error ? (

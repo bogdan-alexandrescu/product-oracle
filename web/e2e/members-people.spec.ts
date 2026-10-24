@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { login, signOut } from "./helpers";
 
@@ -14,8 +14,8 @@ import { login, signOut } from "./helpers";
  *   leaves the new role; a name does not show in the People table; a commenter gets role
  *   selects, Remove or the Invite form; an approver is offered Approver or sees others' invites.
  * no_claim: the mock stands in for the API (AC 1-21 cover it); the Inbox access row (AC 24)
- *   is not built; the Sign-in panel and /access are in members-access.spec.ts and
- *   access-page.spec.ts.
+ *   is in inbox-access-requests.spec.ts; the Sign-in panel and /access are in
+ *   members-access.spec.ts and access-page.spec.ts.
  */
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });
@@ -23,7 +23,7 @@ const inviteRow = (page: Page, email: string) => page.getByTestId("invite-row").
 const chosen = (page: Page, label: string) => page.getByLabel(label, { exact: true }).locator("option:checked");
 /** "Nov 6": a date `days` from now in the Company time zone (the mock's is America/Los_Angeles, #460). */
 const inDays = (days: number) =>
-  new Date(Date.now() + days * 86_400_000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
+  new Date(mockNow().getTime() + days * 86_400_000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
 
 async function openMember(page: Page, email: string) {
   await memberRow(page, email).getByTestId("member-open").click();

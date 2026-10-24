@@ -285,6 +285,9 @@ class AccessRequestOut(BaseModel):
     # The role it was approved with, and the invite made for it.
     role: Role | None = None
     invite_id: uuid.UUID | None = None
+    # The role the caller's approve control starts on: the company's stored default role
+    # when the caller may approve as it, else the least they may (as the Inbox's row).
+    default_role: Role | None = None
 
 
 class AccessApprove(BaseModel):

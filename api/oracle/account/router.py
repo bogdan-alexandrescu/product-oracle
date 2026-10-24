@@ -81,6 +81,7 @@ def _account_out(principal: Principal, user: User) -> MyAccountOut:
         last_sign_in_at=user.last_sign_in_at,
         sign_in_methods=methods,
         signed_in_via=via,
+        read_only=principal.read_only,
     )
 
 

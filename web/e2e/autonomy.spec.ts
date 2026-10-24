@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
@@ -112,7 +112,7 @@ test("autonomy: at 390 px every control fits on one line, no horizontal scroll",
   await page.goto("/settings/autonomy");
   await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
   const groups = page.getByTestId(/^autonomy-row-/).getByRole("group");
-  await expect(groups).toHaveCount(15);
+  await expect(groups).toHaveCount(16); // H7 adds Watch the market
   for (const g of await groups.all()) {
     await g.scrollIntoViewIfNeeded();
     const tops = await g.getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));

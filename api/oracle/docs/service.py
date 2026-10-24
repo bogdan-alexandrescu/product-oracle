@@ -362,10 +362,10 @@ async def set_visibility(
     document = await find_document(db, doc, for_update=True)
     if document is None:
         raise NotFoundError(f"document '{doc}' not found")
-    if document.kind != "update":
+    if document.kind not in ("update", "pricing"):
         raise VisibilityKindError(
-            "Only an update can be limited to owners and approvers; every other document "
-            "is visible to the whole company"
+            "Only an update or a pricing memo can be limited to owners and approvers; every "
+            "other document is visible to the whole company"
         )
     before = document.visibility
     if before != visibility:
@@ -1080,6 +1080,22 @@ async def import_draft(
                 template=named,
                 template_body=body,
                 from_run=origin == "run",
+            )
+        except DraftError:
+            await db.rollback()
+            raise
+    if document.kind == "pricing":
+        # H9: one question, two to four options each with its section, one recommendation
+        # at most (and only at Recommend), cited prices, a research plan.
+        from oracle import autonomy
+        from oracle.pricing import frontmatter as pricing_frontmatter
+
+        try:
+            warnings += pricing_frontmatter.check_import(
+                draft.front_matter,
+                draft.sections,
+                level=await autonomy.level(db, "pricing_input") if origin == "run" else None,
+                template_only=template_only,
             )
         except DraftError:
             await db.rollback()

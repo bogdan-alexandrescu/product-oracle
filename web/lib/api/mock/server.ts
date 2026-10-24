@@ -4,6 +4,7 @@
  * will against the real API. State lives in localStorage, so it survives reloads.
  */
 import type { Schemas } from "@/lib/api/client";
+import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
@@ -20,7 +21,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -44,7 +45,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { emptyAutonomy, inboxActions, routeAutonomy, seedOracleDid, type AutonomyDb } from "./autonomy";
+import { emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -76,8 +77,10 @@ import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./so
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
-import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
-import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
+import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
+import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
+import { addInterviewRequest, requestInboxRows, routeRequests, seedRequests, seedWhyNot, WHY_NOT_SCENARIO, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import {
@@ -99,6 +102,19 @@ import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
+import {
+  DRAFT_OPTIONS,
+  memoOptions,
+  PRICING_TEMPLATE,
+  pricingDraftSections,
+  pricingFrontMatter,
+  pricingTemplateSections,
+  routeDeals,
+  seedDeals,
+  type EvidenceWindow,
+  type PricingContext,
+  type PricingDb,
+} from "./pricing";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
@@ -190,8 +206,14 @@ export interface Db {
   decisions?: DecisionsDb;
   /** Rituals, their occurrences and the summaries mode (./rituals.ts, H2); seeded on first use. */
   rituals?: RitualsDb;
+  /** H5: metrics, their weekly values and variances, and the PostHog connection (./metrics.ts); seeded in the "metrics" scenario only. */
+  metrics?: MetricsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
+  /** H9: win and loss records (./pricing.ts); seeded in the "pricing" scenario only. */
+  pricing?: PricingDb;
+  /** Alternatives, watched pages, the change log, web findings and positioning (./market.ts, H7). */
+  market?: MarketDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -350,6 +372,12 @@ const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
 /**
+ * Tests set this localStorage key before signing in, as MOCK_ROLE_KEY, to a comma-separated
+ * list of operation ids that GET /v1/me/capabilities answers false (#370: a control is absent
+ * when its operation is not allowed, also when the role would allow it).
+ */
+export const MOCK_DENY_KEY = "po-mock-deny";
+/**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
  * (30 goals, 50 more active runs, 250 more decisions, questions asked of the signed-in member); "suggestions" as the
@@ -375,6 +403,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "rituals" as the default company plus a Monthly roadmap refresh pre-read prepared early
  * (the owner and the approver attend) and last week's goals check-in, held, whose summary
  * failed (H2, ./rituals.ts);
+ * "market" as the default company plus three made-up alternatives with a page change, three
+ * not-vetted web findings and two positioning suggestions, and the Monthly competitive
+ * digest's pre-read prepared early (H7, ./market.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
@@ -400,7 +431,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242; a plus
  * address never gets it, in any scenario: Google answers 400, #330);
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
- * tick retries it).
+ * tick retries it);
+ * "read-only-credential" where My account is read through an oracle:read personal token
+ * (AC1: it changes nothing, the name included).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -529,6 +562,8 @@ function seedEmpty(): Db {
     user_id: uuid(),
     members: [],
     invites: [],
+    // A5: nobody has asked to join a new company yet.
+    access_requests: [],
     documents: [],
     versions: [],
     comments: [],
@@ -1481,9 +1516,174 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
     documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
+    hiddenDocument: (key) => {
+      const versionOf = db.versions.find((v) => v.id === key)?.document_id;
+      const doc = db.documents.find((d) => d.id === key || d.slug === key || d.id === versionOf);
+      return !!doc && !canSee(me.role, doc.visibility);
+    },
+    // H9 (docs/visibility._decision_visible): a pricing decision, and the record of a stop of
+    // a run on an owners-and-approvers document, are absent for commenters and viewers.
+    visible: (d) => {
+      if (atLeast(me.role, "approver")) return true;
+      if (d.origin === "pricing") return false;
+      const run = d.run_id ? db.runs?.runs.find((r) => r.id === d.run_id) : undefined;
+      const doc = run?.document_slug ? findDocument(db, run.document_slug) : undefined;
+      return !doc || canSee(me.role, doc.visibility);
+    },
     uuid,
     now,
   };
+}
+
+/** What the pricing mock reads: the signed-in member, today in the Company time zone. */
+function pricingContext(me: MemberRow): PricingContext {
+  return {
+    me: { id: me.id, role: me.role },
+    uuid,
+    now,
+    today: () => todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles")),
+  };
+}
+
+/** The pricing owner (oracle.pricing.decide.pricing_owner): the setting's active owner, else the earliest active owner. */
+function pricingOwner(db: Db): MemberRow | undefined {
+  const owners = db.members.filter((m) => m.role === "owner" && m.status === "active").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const chosen = mockSettingValue("pricing_owner");
+  return owners.find((m) => m.id === chosen) ?? owners[0];
+}
+
+/** A member's name as the API shows it (oracle.members.names.display_name). */
+function memberName(m: MemberRow | undefined): string {
+  return m ? displayName(m.email, m.name) : "the pricing owner";
+}
+
+/** A memo version's sections as Decide and the list read them. */
+function memoOf(db: Db, doc: DocumentRow) {
+  const latest = docVersions(db, doc).pop();
+  const fm = (latest?.front_matter ?? {}) as Record<string, unknown>;
+  return { latest, question: typeof fm.question === "string" ? fm.question : null, fm };
+}
+
+/** GET /v1/pricing-memos: the pricing documents with their decision and who decides. */
+function pricingMemos(db: Db): Schemas["PricingMemoSummary"][] {
+  const owner = pricingOwner(db);
+  const decisions = db.decisions?.decisions ?? [];
+  return db.documents
+    .filter((d) => d.kind === "pricing")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .map((doc) => {
+      const { latest, question } = memoOf(db, doc);
+      const ids = new Set(docVersions(db, doc).map((v) => v.id));
+      const d = decisions.filter((x) => x.origin === "pricing" && x.source && ids.has(x.source.id)).pop();
+      const state = d?.status === "decided" ? "decided" : latest?.approved_at ? "approved" : doc.status === "in_review" ? "in_review" : "draft";
+      return {
+        document_id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        question,
+        state,
+        decision: d ? { number: d.number, title: d.title, status: d.status, chosen_label: d.options.find((o) => o.key === d.chosen_option)?.label ?? null } : null,
+        updated_at: doc.updated_at,
+        pricing_owner: owner ? { id: owner.id, name: memberName(owner) } : null,
+      };
+    });
+}
+
+/** POST /v1/pricing-memos/{doc}/decide: the pricing owner opens the approved memo's proposed decision. */
+function decideMemo(db: Db, me: MemberRow, slug: string): Response {
+  const doc = findDocument(db, slug);
+  if (!doc || doc.kind !== "pricing") return json(404, { detail: `pricing memo '${slug}' not found` });
+  const owner = pricingOwner(db);
+  if (!owner || owner.id !== me.id) return json(403, { detail: `Only ${memberName(owner)} decides prices` });
+  const { latest, question, fm } = memoOf(db, doc);
+  if (!latest?.approved_at) return json(409, { detail: "Approve the memo's latest version before deciding" });
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  const ctx = decisionsContext(db, me);
+  db.decisions ??= seeded("decisions", () => seedDecisions(ctx));
+  const recommendation = latest.sections.find((s) => s.section_key === "recommendation")?.body_md ?? "";
+  const { row, created } = proposePricing(
+    ctx,
+    db.decisions,
+    {
+      versionId: latest.id,
+      documentId: doc.id,
+      version: latest.number,
+      slug: doc.slug,
+      question: question ?? doc.title,
+      context: recommendation,
+      options: memoOptions(fm, latest.sections),
+    },
+    owner.id,
+  );
+  return json(created ? 201 : 200, row);
+}
+
+/** /v1/pricing-memos…, /v1/deal-outcomes… and the pricing_owner setting (H9); null for other routes. */
+async function routePricing(db: Db, me: MemberRow, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  if (p[1] === "pricing-memos") {
+    // H8's rule: below approver, there is no such memo.
+    if (!atLeast(me.role, "approver")) return notFound("Pricing memo");
+    if (p.length === 2 && req.method === "GET") return json(200, pricingMemos(db));
+    if (p.length === 4 && p[3] === "decide" && req.method === "POST") return decideMemo(db, me, p[2]);
+    return null;
+  }
+  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q);
+  if (p[1] === "settings" && p[2] === "pricing_owner" && req.method === "PUT" && me.role === "owner") {
+    const { value } = (JSON.parse((await req.clone().text()) || "{}") ?? {}) as { value?: unknown };
+    if (value != null && !db.members.some((m) => m.id === value && m.role === "owner" && m.status === "active")) {
+      return json(422, { detail: "The pricing owner must be an active owner" });
+    }
+  }
+  return null;
+}
+
+/** H9 "pricing" scenario: Riley Park, a second owner; Team plan pricing approved, Starter plan price decided; made-up deals. */
+function seedPricingScenario(db: Db) {
+  const second: MemberRow = {
+    ...db.members.find((m) => m.id === db.user_id)!,
+    id: uuid(),
+    email: "riley@example.com",
+    name: "Riley Park",
+    role: "owner",
+    created_at: "2026-09-05T09:00:00Z",
+    last_sign_in_at: "2026-10-20T08:00:00Z",
+  };
+  db.members.push(second);
+  db.pricing = { deals: seedDeals(pricingContext(db.members.find((m) => m.id === db.user_id)!), db.user_id) };
+  const window: EvidenceWindow = { from: "2026-04-24", to: "2026-10-23" };
+  const memo = (slug: string, title: string, question: string, approvedAt: string) => {
+    const doc: DocumentRow = {
+      id: uuid(), slug, title, status: "approved", kind: "pricing", template: PRICING_TEMPLATE, template_version: "1",
+      theme: "one-page-brief", visibility: "approvers", created_at: "2026-10-12T16:00:00Z", updated_at: approvedAt,
+    };
+    db.documents.push(doc);
+    const v1 = buildVersion(doc, { number: 1, created_at: doc.created_at, sections: pricingTemplateSections(title), citations: [], brief: ["question", "recommendation", "options"] });
+    v1.front_matter = pricingFrontMatter(slug, title, question, window);
+    v1.imported_by = "draft-picker";
+    const v2 = buildVersion(doc, { number: 2, created_at: "2026-10-13T16:00:00Z", sections: pricingDraftSections(title, question, window), citations: [], brief: ["question", "recommendation", "options"] });
+    v2.front_matter = pricingFrontMatter(slug, title, question, window, DRAFT_OPTIONS);
+    v2.imported_by = "agent-track";
+    v2.approved_at = approvedAt;
+    db.versions.push(v1, v2);
+  };
+  memo("team-plan-pricing", "Team plan pricing", "Should the team plan move from per-seat to a flat price per team?", "2026-10-15T17:00:00Z");
+  memo("starter-plan-price", "Starter plan price", "Should the Starter plan cost less for teams under 5 seats?", "2026-10-08T17:00:00Z");
+}
+
+/** The pricing scenario's earlier memo, decided by the pricing owner (a pricing decision in the log). */
+function seedPricingDecisions(db: Db, ctx: DecisionsContext, log: DecisionsDb) {
+  const doc = findDocument(db, "starter-plan-price");
+  const owner = pricingOwner(db);
+  if (!doc || !owner) return;
+  const { latest, question, fm } = memoOf(db, doc);
+  if (!latest) return;
+  const { row } = proposePricing(
+    { ...ctx, me: { id: owner.id, email: owner.email, role: owner.role } },
+    log,
+    { versionId: latest.id, documentId: doc.id, version: latest.number, slug: doc.slug, question: question ?? doc.title, context: "", options: memoOptions(fm, latest.sections) },
+    owner.id,
+  );
+  decidePricing(ctx, log, row.number, "keep", "Small teams churn on budget, not on price.", "Starter churn stays under 3% a month.", "2026-10-09T17:00:00Z");
 }
 
 /** What the rituals mock reads: the signed-in member and the members. */
@@ -1494,7 +1694,54 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     uuid,
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
+    openVariances: (id) => openVariances(ensureMetrics(db, me), id),
+    marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
   };
+}
+
+/** What the metrics mock reads: the signed-in member, the members and the goals. */
+function metricsContext(db: Db, me: MemberRow): MetricsContext {
+  return {
+    me: { id: me.id, email: me.email, name: me.name, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, name: m.name, role: m.role, status: m.status })),
+    uuid,
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    goals: () =>
+      db.baseline.entities
+        .filter((e) => e.type === "goal")
+        .map((e) => ({ id: e.id, title: e.title, unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null, confirmed: e.status === "confirmed" })),
+  };
+}
+
+/** H5: the metrics; the "metrics" scenario seeds them, every other company has none. */
+function ensureMetrics(db: Db, me: MemberRow): MetricsDb {
+  db.metrics ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "metrics" ? seedMetrics(metricsContext(db, me)) : emptyMetrics();
+  return db.metrics;
+}
+
+/** The rituals; the "metrics" scenario adds the Weekly metrics review that replaced the goals check-in. */
+function ensureRituals(db: Db, me: MemberRow): RitualsDb {
+  if (db.rituals) return db.rituals;
+  const ctx = ritualsContext(db, me);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  db.rituals = seedRituals(ctx, scenario === "rituals");
+  if (scenario === "metrics") {
+    const metrics = ensureMetrics(db, me);
+    addMetricsReview(ctx, db.rituals, (id, asOf) => reviewBlocks(metricsContext(db, me), metrics, id, asOf));
+  }
+  if (scenario === "market") {
+    const market = ensureMarket(db);
+    addDigest(ctx, db.rituals, MARKET_DIGEST_ID, (asOf) => digestBlocks(market, ctx.companyTimezone(), asOf));
+  }
+  return db.rituals;
+}
+
+/** The "market" scenario's digest ritual, which the seeded change log and findings link to. */
+const MARKET_DIGEST_ID = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
+
+/** H7: the market's alternatives, change log and positioning; seeded in the "market" scenario only. */
+function ensureMarket(db: Db): MarketDb {
+  return (db.market ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "market" ? seedMarket(MARKET_DIGEST_ID) : emptyMarket());
 }
 
 /** The next version: the base with some sections replaced, and the resolutions recorded. */
@@ -1676,6 +1923,17 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const number = (latest?.number ?? 0) + 1;
       // H8: an update_draft run writes the update for the period in its front matter.
       const period = latest?.front_matter.period as UpdatePeriod | undefined;
+      // H9: a pricing_memo run writes the memo for the question in its front matter.
+      const question = latest?.front_matter.question as string | undefined;
+      if (doc.kind === "pricing" && question) {
+        const window = (latest?.front_matter.evidence_window as EvidenceWindow | undefined) ?? { from: now().slice(0, 10), to: now().slice(0, 10) };
+        const v = buildVersion(doc, { number, created_at: now(), sections: pricingDraftSections(doc.title, question, window), citations: [], brief: ["question", "recommendation", "options"] });
+        v.front_matter = pricingFrontMatter(doc.slug, doc.title, question, window, DRAFT_OPTIONS);
+        v.imported_by = "agent-track";
+        db.versions.push(v);
+        touch(db, doc.id);
+        return { document_id: doc.id, slug: doc.slug, kind: doc.kind, version: v.number, source: null, prd_links: null };
+      }
       if (doc.kind === "update" && isUpdateTemplate(doc.template) && period) {
         const v = buildVersion(doc, {
           number,
@@ -1794,6 +2052,8 @@ function load(): Db {
       roadmap.status = "approved";
     }
   }
+  // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
+  if (scenario === "pricing") seedPricingScenario(db);
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
   // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
   if (scenario === "outcomes" || scenario === "outcomes-recorded") {
@@ -1818,6 +2078,17 @@ function load(): Db {
               ? seedDiscussionRecordScenario(db)
               : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
+  // #524: what Oracle did at Act within limits on a launch (H6) and a ritual (H2), each row
+  // linking to its subject.
+  if (scenario === "oracle-did-launch-ritual") {
+    const owner = db.members.find((x) => x.id === db.user_id)!;
+    db.launches = seedLaunches(launchesContext(db, owner));
+    db.rituals = seedRituals(ritualsContext(db, owner), true);
+    const launched = db.launches.launches.find((l) => l.state === "launched")!;
+    const refresh = db.rituals.rituals.find((r) => r.kind === "roadmap_refresh")!;
+    const occurrence = db.rituals.occurrences.find((o) => o.ritual_id === refresh.id)!;
+    db.autonomy.actions.push(seedLaunchDid(db.user_id, uuid(), launched), seedRitualDid(db.user_id, uuid(), refresh, occurrence.id));
+  }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
@@ -2526,6 +2797,31 @@ function settleInviteEmails(db: Db) {
   }
 }
 
+type AccessRequestRow = Schemas["AccessRequestOut"];
+
+/** The A5 access requests, seeded once per mock db (one pending: new.person@example.com). */
+function accessRequests(db: Db): AccessRequestRow[] {
+  return (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
+}
+
+/** As oracle.members.access.preset_role: the stored default role when `roles` has it, else the least of them. */
+function presetRole(roles: readonly Role[]): Role | null {
+  if (!roles.length) return null;
+  const stored = String(mockSettingValue("iap_default_role") ?? "commenter") as Role;
+  return roles.includes(stored) ? stored : roles[0];
+}
+
+/** The Inbox's access request rows (A5): pending ones, oldest first, for those who may approve them. */
+function inboxAccessRequests(db: Db, me: MemberRow): Schemas["InboxAccessRequest"][] {
+  const roles = meOut(db, me).invite_roles;
+  const preset = presetRole(roles);
+  if (!preset) return [];
+  return accessRequests(db)
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((r) => ({ id: r.id, email: r.email, note: r.note ?? null, requested_at: r.created_at, last_seen_at: r.last_seen_at, default_role: preset, roles }));
+}
+
 /**
  * Members: owners only, as in the API. Invites and access requests (A5): approvers too, with
  * their invite_roles (viewer and commenter), and only the invites they sent.
@@ -2603,10 +2899,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   if (p[1] === "access-requests") {
     // A5, as oracle.members.access: approve makes an open invite (14 days), decline
     // turns it down, reopen (Undo) puts it back to pending and revokes an unclaimed invite.
-    const rows = (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
+    const rows = accessRequests(db);
+    // As the API's preset_role: the stored default role when the caller may approve as it.
+    const withPreset = (r: AccessRequestRow): AccessRequestRow => ({ ...r, default_role: presetRole(inviteRoles) });
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "pending";
-      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(withPreset));
     }
     const row = rows.find((r) => r.id === p[2]);
     if (!row) return notFound("Access request");
@@ -2637,12 +2935,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       };
       db.invites.unshift(invite);
       Object.assign(row, { status: "approved", role, invite_id: invite.id, decided_by: me.id, decided_at: now() });
-      return json(200, row);
+      return json(200, withPreset(row));
     }
     if (p[3] === "decline" && m === "POST") {
       if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
       Object.assign(row, { status: "declined", decided_by: me.id, decided_at: now() });
-      return json(200, row);
+      return json(200, withPreset(row));
     }
     if (p[3] === "reopen" && m === "POST") {
       if (row.status !== "approved" && row.status !== "declined") return json(409, { detail: `This request is ${row.status}` });
@@ -2652,11 +2950,16 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         return json(403, { detail: "Another person approved this request; ask an owner to undo it" });
       if (invite) Object.assign(invite, { status: "revoked", revoked_at: now() });
       Object.assign(row, { status: "pending", role: null, invite_id: null, decided_by: null, decided_at: null });
-      return json(200, row);
+      return json(200, withPreset(row));
     }
   }
   if (p[1] === "invites") {
     settleInviteEmails(db);
+    // As invites_out: each invite with who sent it, by name (the email when they have none).
+    const withInviter = (i: InviteRow): InviteRow => {
+      const by = db.members.find((x) => x.id === i.invited_by);
+      return { ...i, invited_by_name: by ? by.name || by.email : null };
+    };
     const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "open";
@@ -2665,6 +2968,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         db.invites
           // A5: an open invite past its expiry reads expired; ?status=open lists both (each needs an action).
           .map((i) => (expired(i) ? { ...i, status: "expired" as const } : i))
+          .map(withInviter)
           .filter((i) => (status === "all" || i.status === status || (status === "open" && i.status === "expired")) && (owner || i.invited_by === me.id))
           .sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
@@ -2689,6 +2993,8 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const invite: InviteRow = {
         id: uuid(),
         email,
+        // A5: how teammates know them; the member takes it at their first sign-in.
+        name: input.name?.trim() || null,
         role: input.role,
         engineering_lead: !!input.engineering_lead,
         status: "open",
@@ -2708,7 +3014,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         message: input.message?.trim() || null,
       };
       db.invites.push(invite);
-      return json(201, invite);
+      return json(201, withInviter(invite));
     }
     // Approvers act on their own invites only; another's is not found.
     const invite = db.invites.find((i) => i.id === p[2] && (owner || i.invited_by === me.id));
@@ -2722,7 +3028,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         resent_at: now(),
         resend_count: (invite.resend_count ?? 0) + 1,
       });
-      return json(200, invite);
+      return json(200, withInviter(invite));
     }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
@@ -2744,7 +3050,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         (db.invites_resent ??= []).push(invite.id);
         Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }
-      return json(200, invite);
+      return json(200, withInviter(invite));
     }
     if (m === "DELETE") {
       if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
@@ -2914,10 +3220,27 @@ function ensureV2(db: Db): V2Db {
   return db.v2;
 }
 
+/** The decision log, seeded on first use (the requests mock records a no in it, H10). */
+function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
+  db.decisions ??= seeded("decisions", () => {
+    const log = seedDecisions(ctx);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);
+    return log;
+  });
+  return db.decisions;
+}
+
 function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
+  const me = db.members.find((x) => x.id === userId);
+  const decisionsCtx = me ? decisionsContext(db, me) : null;
   return {
     userId,
     role,
+    entities: () => db.baseline.entities,
+    edges: () => db.baseline.edges,
+    decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
+    zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
     people: () => db.members,
@@ -2941,13 +3264,34 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
 
 /** The requests rows, seeded on first use against the baseline's confirmed goals. */
 function ensureRequests(db: Db): RequestsDb {
-  db.requests ??= seeded("requests", () =>
-    seedRequests({
+  db.requests ??= seeded("requests", () => {
+    const features = db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected");
+    const out = seedRequests({
       ownerId: db.user_id,
       goals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed"),
-      features: db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
-    }),
-  );
+      features,
+    });
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === WHY_NOT_SCENARIO) {
+      // H10: a confirmed stop choice that affects the first feature, and the why-not requests on it.
+      const feature = features[0];
+      const at = "2026-10-12T09:00:00Z";
+      const stop = {
+        id: uuid(), type: "strategy_choice" as const, key: "s.stop-custom-exports", title: "Stop custom exports",
+        body: "We stop building one-off export formats; the API covers bulk data.", attrs: { stance: "stop" }, status: "confirmed" as const,
+        origin: "agent" as const, locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
+      };
+      db.baseline.entities.push(stop as (typeof db.baseline.entities)[number]);
+      if (feature) {
+        db.baseline.edges.push({
+          id: uuid(), src_id: stop.id, dst_id: feature.id, type: "affects", attrs: {}, status: "confirmed", origin: "agent",
+          locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
+        } as (typeof db.baseline.edges)[number]);
+      }
+      const commenter = db.members.find((x) => x.email === "commenter@example.com")!;
+      seedWhyNot(out, { ownerId: db.user_id, member: { id: commenter.id, name: displayName(commenter.email) }, featureId: feature?.id ?? null });
+    }
+    return out;
+  });
   return db.requests;
 }
 
@@ -3050,6 +3394,31 @@ function startUpdate(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Res
   } satisfies Schemas["StartDraftOut"]);
 }
 
+/** H9: a pricing memo from its template, for owners and approvers; the question and evidence window in its front matter. */
+function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Response {
+  if (!atLeast(me.role, "approver")) return json(403, { detail: "Only an approver can start a pricing memo" });
+  const question = input.question?.trim() ?? "";
+  if (!question || question.length > 300) return json(422, { detail: "Say the pricing question in one sentence" });
+  const today = todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"));
+  const window: EvidenceWindow = input.period ?? { from: addMonths(today, -6), to: today };
+  if (!ISO_DAY.test(window.from) || !ISO_DAY.test(window.to) || window.from > window.to) return json(422, { detail: "evidence_window: from and to are dates, from on or before to" });
+  const title = input.title?.trim() || "Pricing memo";
+  const base = slugOf(input.slug || title);
+  let slug = base;
+  for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${base}-${n}`;
+  const created = now();
+  const doc: DocumentRow = {
+    id: uuid(), slug, title, status: "draft", kind: "pricing", template: PRICING_TEMPLATE, template_version: "1",
+    theme: input.theme ?? "one-page-brief", visibility: "approvers", created_at: created, updated_at: created,
+  };
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: pricingTemplateSections(title), citations: [], brief: ["question", "recommendation", "options"] });
+  v.front_matter = pricingFrontMatter(slug, title, question, window);
+  v.imported_by = "draft-picker";
+  db.documents.push(doc);
+  db.versions.push(v);
+  return json(201, { document_id: doc.id, slug, title, kind: "pricing", template: PRICING_TEMPLATE, template_version: 1, theme: doc.theme ?? null, version: 1 } satisfies Schemas["StartDraftOut"]);
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -3112,6 +3481,13 @@ async function route(db: Db, req: Request): Promise<Response> {
     const hidden = findDocument(db, p[2]);
     if (hidden && !canSee(me.role, hidden.visibility)) return notFound("Document");
   }
+  // H9 Pricing input: pricing memos, Decide, win and loss records, the pricing owner.
+  if (p[1] === "pricing-memos" && atLeast(me.role, "approver")) {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    ensureDecisions(db, decisionsContext(db, me));
+  }
+  const priced = await routePricing(db, me, req, p, q);
+  if (priced) return priced;
   // #482: delete, restore, Settings › Trash and Regenerate (./trash.ts).
   const trashOut = await routeTrash(
     {
@@ -3146,7 +3522,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
-  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") return json(200, await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0));
+  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
+    const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
+    for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
+    return json(200, caps);
+  }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
@@ -3173,6 +3553,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         setSession(db, null);
         db.tab_sessions = {};
       },
+      readOnly: localStorage.getItem(MOCK_SCENARIO_KEY) === "read-only-credential",
     },
     req,
     p,
@@ -3327,6 +3708,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
   if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
+  // H5: metrics, their variances and the analytics connection check roles themselves (./metrics.ts).
+  const metricsOut = await routeMetrics(metricsContext(db, me), ensureMetrics(db, me), req, p, q);
+  if (metricsOut) return metricsOut;
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
@@ -3484,7 +3868,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (interviews) return interviews;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
-  if (["requests", "request-themes", "request-candidates"].includes(p[1])) {
+  if (["requests", "request-themes", "request-candidates", "request-replies"].includes(p[1])) {
     const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
     if (requests) return requests;
   }
@@ -3495,9 +3879,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
   // the decision log (./decisions.ts): commenters propose, edit and withdraw.
   // A decision checks who decides itself (A3: an engineering lead below the approver role).
+  // So do F3's schedule bases (./roadmap.ts date rights): a named engineering lead below the
+  // approver role records, verifies, rejects and withdraws them.
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   const need: Role | null =
-    m === "GET" || draftWrite || p[1] === "decisions"
+    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.
@@ -3584,6 +3970,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "drafts" && p.length === 2 && m === "POST") {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
     if (input?.kind === "update") return startUpdate(db, me, input);
+    if (input?.kind === "pricing") return startPricing(db, me, input);
   }
   if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
   const handled = await laneF(db, req, p, m, me.role);
@@ -3601,17 +3988,21 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   // The decision log (H1): judgement calls, and a record of every run stop decided.
   const decisionsCtx = decisionsContext(db, me);
-  db.decisions ??= seeded("decisions", () => {
-    const log = seedDecisions(decisionsCtx);
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(decisionsCtx, log, 250);
-    return log;
-  });
-  const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
+  ensureDecisions(db, decisionsCtx);
+  const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
-  db.rituals ??= seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
-  const ritual = await routeRituals(ritualsCtx, db.rituals, req, p, q);
+  // Market (H7): alternatives, the change log and positioning; seeded in the "market" scenario only.
+  const market = await routeMarket(
+    { me: { id: me.id, email: me.email, name: me.name ?? null, role: me.role }, uuid, companyTimezone: ritualsCtx.companyTimezone },
+    ensureMarket(db),
+    req,
+    p,
+    q,
+  );
+  if (market) return market;
+  const ritual = await routeRituals(ritualsCtx, ensureRituals(db, me), req, p, q);
   if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
@@ -3623,7 +4014,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     tick(llm);
     const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
     // Decision rows: proposals I decide and reviews due count; informed and done do not.
-    const decisions = decisionInbox(decisionsCtx, db.decisions, seenBefore);
+    const decisions = decisionInbox(decisionsCtx, db.decisions!, seenBefore);
     const counted = decisions.filter((d) => d.counts).length;
     const inbox = { ...withStates, decisions, total: withStates.total + counted, needs_me: (withStates.needs_me ?? 0) + counted };
     // Launch rows (H6): Ready to launch, Set tier and Notes to send count; Shipped is shown only.
@@ -3631,7 +4022,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
-    const ritualRows = ritualInbox(ritualsCtx, db.rituals);
+    const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;
     inbox.rituals = ritualRows;
     inbox.total += ritualCounted;
@@ -3640,6 +4031,17 @@ async function route(db: Db, req: Request): Promise<Response> {
     const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;
+    // Request rows (H10): Replies to send and Asked again count; Answer to your request is shown.
+    const requestRows = requestInboxRows(db.requests, requestsContext(db, me.id, me.role));
+    inbox.requests = requestRows;
+    inbox.total += requestRows.filter((r) => r.counts).length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + requestRows.filter((r) => r.counts).length;
+    // Metric rows (H5): Explain a variance, Find out and Metric not read for a day; all count.
+    const metricRows = metricInbox(metricsContext(db, me), ensureMetrics(db, me));
+    const metricCounted = metricRows.filter((r) => r.counts).length;
+    inbox.metrics = metricRows;
+    inbox.total += metricCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")
@@ -3670,8 +4072,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
     const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
     const discussing = discussions.filter((r) => r.state !== "done").length;
+    // A5: pending access requests, for owners and approvers; each counts.
+    const accessRequestRows = inboxAccessRequests(db, me);
     return json(200, {
       ...inbox,
+      access_requests: accessRequestRows,
       tracks: tracked.tracks,
       revoke_failures: failures,
       access_failures: accessFailures,
@@ -3681,7 +4086,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       oracle_actions: did,
       dates,
       discussions,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length,
     });
   }
   if (runs) return runs;
@@ -3877,7 +4282,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const decider = db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id;
     if (decider && decider !== me.id) return json(403, { detail: "Only the designated decider approves this document's versions" });
     // H4: a vision or a product strategy is an owner's to approve.
-    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : null;
+    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : doc.kind === "pricing" ? "a pricing memo" : null;
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // #346: a proposal a later one superseded can't be approved, and says why.
     const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
@@ -4022,6 +4427,24 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") 
       queue = next.catch(() => undefined);
       return next;
     },
+  };
+}
+
+/**
+ * Tests seed the mock's data through `__poMockWrite(change)`: the change takes its turn with
+ * the app's own calls (each reads the data, answers, then saves it), so a call in flight never
+ * saves over a seed. Resolves with what `change` returns, once saved.
+ */
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
+  (globalThis as { __poMockWrite?: unknown }).__poMockWrite = <T>(change: (db: Db) => T): Promise<T> => {
+    const next = queue.then(() => {
+      const db = load();
+      const out = change(db);
+      save(db);
+      return out;
+    });
+    queue = next.catch(() => undefined);
+    return next;
   };
 }
 

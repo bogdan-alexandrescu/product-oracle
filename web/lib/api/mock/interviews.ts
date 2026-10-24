@@ -15,6 +15,9 @@
  * id; a call without that cookie answers 410 "used" (a fresh browser context reseeds the whole
  * mock, so a spec stands in for a second browser by clearing the cookies of this one).
  *
+ * H9: `preset: "pricing"` fills the guide at once with the six fixed pricing questions (no
+ * guide job, no model cost), GET filters by `?preset=`, and redrafting such a guide is a 409.
+ *
  * Seed: one invited interview of the fixture's customer, Ana Lima of Example Co, whose link
  * token is `i-mock-token`. Synthetic placeholders only.
  */
@@ -35,6 +38,10 @@ import type {
 import { mockUuid } from "./ids";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
+/** H9: the one interview preset (the API's `preset` column). */
+export type Preset = "pricing";
+/** The API's InterviewOut and InterviewSummary carry the preset; ../interviews.ts does not yet. */
+type WithPreset<T> = T & { preset: Preset | null };
 
 /** An interview as the mock stores it: the API's row plus its link and turn state. */
 interface Row extends Omit<InterviewOut, "can_manage" | "created_by_name"> {
@@ -51,6 +58,8 @@ interface Row extends Omit<InterviewOut, "can_manage" | "created_by_name"> {
   guide_ready_at: string | null;
   /** A team interview's member (lane 2). */
   interviewee_user_id?: string | null;
+  /** H9: absent on rows stored before the preset. */
+  preset?: Preset | null;
 }
 
 export interface InterviewsDb {
@@ -89,6 +98,16 @@ export const MOCK_GUIDE: { prompt: string; purpose: string }[] = [
   { prompt: "Tell me about something you tried before that did not work out. Why not?", purpose: "Alternatives already tried" },
   { prompt: "Think of the last time it cost you time or money. How much was it?", purpose: "How much it matters" },
 ];
+/** H9: the pricing guide, as api/oracle/interviews/service.py PRICING_GUIDE; 1 to 4 are Van Westendorp's. */
+export const PRICING_GUIDE: { prompt: string; purpose: string }[] = [
+  { prompt: "At what price would this be so cheap you would doubt its quality?", purpose: "Too cheap" },
+  { prompt: "At what price would it start to feel like a bargain?", purpose: "Bargain" },
+  { prompt: "At what price would it start to feel expensive, though you would still consider it?", purpose: "Expensive" },
+  { prompt: "At what price would it be too expensive to consider?", purpose: "Too expensive" },
+  { prompt: "What would you stop using or paying for if you bought this?", purpose: "What it replaces" },
+  { prompt: "Who approves a purchase like this, and from which budget?", purpose: "Budget owner" },
+];
+const PRICING_FIXED = "A pricing interview's guide is fixed; edit it instead";
 const ACK = "Thank you, that helps.";
 export const MOCK_FOLLOW_UP = "Could you tell me about one specific time? What happened, step by step?";
 export const MOCK_CLOSING = "That was my last question. Press Send my answers when you're ready.";
@@ -104,8 +123,8 @@ function json(status: number, body: unknown): Response {
 const fail = (status: number, detail: string) => json(status, { detail });
 const refuse = (status: number, reason: "used" | "expired" | "withdrawn") => json(status, { reason });
 
-function guideItems(): GuideItem[] {
-  return MOCK_GUIDE.map((g, i) => ({ id: `q${i + 1}`, prompt: g.prompt, purpose: g.purpose }));
+function guideItems(preset: Preset | null = null): GuideItem[] {
+  return (preset === "pricing" ? PRICING_GUIDE : MOCK_GUIDE).map((g, i) => ({ id: `q${i + 1}`, prompt: g.prompt, purpose: g.purpose }));
 }
 
 function message(role: InterviewMessage["role"], kind: InterviewMessage["kind"], body: string, guide_item: string | null): InterviewMessage {
@@ -289,11 +308,11 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
 
 const canManageRow = (r: Row, ctx: InterviewsContext) => r.created_by === ctx.userId || atLeast(ctx.role, "approver");
 
-function outOf(r: Row, ctx: InterviewsContext): InterviewOut {
+function outOf(r: Row, ctx: InterviewsContext): WithPreset<InterviewOut> {
   const { token: _t, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, interviewee_user_id: _u, ...rest } = r;
   void [_t, _o, _p, _f, _c, _g, _u];
   const email = ctx.memberEmail(r.created_by);
-  return { ...rest, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
+  return { ...rest, preset: r.preset ?? null, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
 }
 
 /** The members' routes (/v1/interviews...); null when the path is not one of them. */
@@ -302,9 +321,9 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
   const m = req.method;
   const body = async <T>() => (JSON.parse((await req.text()) || "null") ?? {}) as T;
   const canManage = (r: Row) => canManageRow(r, ctx);
-  const out = (r: Row): InterviewOut => outOf(r, ctx);
-  const summary = (r: Row): InterviewSummary => ({
-    id: r.id, kind: r.kind, status: r.status, title: r.title, interviewee_name: r.interviewee_name,
+  const out = (r: Row): WithPreset<InterviewOut> => outOf(r, ctx);
+  const summary = (r: Row): WithPreset<InterviewSummary> => ({
+    id: r.id, kind: r.kind, status: r.status, preset: r.preset ?? null, title: r.title, interviewee_name: r.interviewee_name,
     interviewee_company: r.interviewee_company, created_by: r.created_by, created_by_name: out(r).created_by_name,
     created_at: r.created_at, finished_at: r.finished_at, request_count: r.request_ids.length,
   });
@@ -316,15 +335,18 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
       .filter((r) => !q.get("intake_id") || r.intake_id === q.get("intake_id"))
       .filter((r) => !q.get("theme_id") || r.theme_id === q.get("theme_id"))
       .filter((r) => !q.get("kind") || r.kind === q.get("kind"))
+      .filter((r) => !q.get("preset") || r.preset === q.get("preset"))
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
     return json(200, rows.map(summary));
   }
   if (p.length === 2 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return fail(403, "Requires the commenter role");
-    const input = await body<{ kind?: string; interviewee_name?: string; interviewee_company?: string | null; subject?: Record<string, string> }>();
+    const input = await body<{ kind?: string; interviewee_name?: string; interviewee_company?: string | null; subject?: Record<string, string>; preset?: string | null }>();
     const name = (input.interviewee_name ?? "").trim();
     const company = (input.interviewee_company ?? "").trim() || null;
     if (input.kind !== "customer") return fail(422, "kind must be customer");
+    if (input.preset != null && input.preset !== "pricing") return fail(422, "preset must be pricing");
+    const preset: Preset | null = input.preset === "pricing" ? "pricing" : null;
     if (!name || name.length > 120) return fail(422, "Customer name: 1 to 120 characters");
     if (company && company.length > 120) return fail(422, "Company: at most 120 characters");
     const s = input.subject ?? {};
@@ -340,11 +362,13 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     if (!title) return fail(404, s.intake_id ? "Intake not found" : "Theme not found");
     const row: Row = {
       id: mockUuid(), kind: "customer", status: "draft", title: title.length > 120 ? `${title.slice(0, 119)}…` : title,
-      intake_id: s.intake_id ?? null, theme_id: s.theme_id ?? null, topic: s.topic?.trim() ?? null, intro: null, guide: [],
-      guide_job: { id: mockUuid(), status: "queued", error: null } satisfies JobState, interviewee_name: name,
+      intake_id: s.intake_id ?? null, theme_id: s.theme_id ?? null, topic: s.topic?.trim() ?? null, intro: null,
+      // The preset is the guide: no guide job, no model cost.
+      guide: preset ? guideItems(preset) : [], preset,
+      guide_job: preset ? null : ({ id: mockUuid(), status: "queued", error: null } satisfies JobState), interviewee_name: name,
       interviewee_company: company, link_expires_at: null, link_opened_at: null, created_by: ctx.userId, created_at: now(),
       finished_at: null, lock_version: 1, messages: [], snapshot: {}, snapshot_job: null, request_ids: [], token: null,
-      opener: null, position: 0, followed_up: false, customer_messages: 0, guide_ready_at: later(GUIDE_MS),
+      opener: null, position: 0, followed_up: false, customer_messages: 0, guide_ready_at: preset ? null : later(GUIDE_MS),
     };
     db.interviews.push(row);
     return json(201, out(row));
@@ -383,6 +407,7 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
   }
   if (p.length === 4 && m === "POST" && p[3] === "guide") {
     if (r.status !== "draft") return fail(409, "Only a draft interview can be redrafted");
+    if (r.preset) return fail(409, PRICING_FIXED);
     r.guide_job = { id: mockUuid(), status: "queued", error: null };
     r.guide_ready_at = later(GUIDE_MS);
     r.lock_version += 1;

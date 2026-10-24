@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection } from "./helpers";
@@ -174,7 +174,12 @@ test("the card reads in the dark theme", async ({ page }) => {
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
-  await planGoal(page, "Daily alert digest email").getByTestId("code-chip").click();
+  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  // Scroll to the chip first, as a person does: a scroll closes an open card, and the event of
+  // the scroll Playwright makes inside click() arrives a frame after the card has opened.
+  await chip.scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await chip.click();
   const card = page.getByTestId("code-card");
   await expect(card).toBeVisible();
   const [fg, bg] = await card.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
@@ -195,6 +200,8 @@ test("Before drafting's Goals draws each goal with its chip, never a place code"
     .getByRole("textbox", { name: "What problem does it solve?" })
     .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
   const door = page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox");
+  // The goals load after the form draws (Loading meanwhile): all() lists only what is drawn (#520).
+  await expect(door.first()).toBeVisible();
   for (const box of await door.all()) await box.check();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);

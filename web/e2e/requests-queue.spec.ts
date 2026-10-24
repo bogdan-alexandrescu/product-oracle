@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { login } from "./helpers";
 
@@ -161,7 +161,7 @@ test("Inspector: decline Oracle's suggestion; it stays declined, with who and wh
   await login(page);
   await openRequests(page);
   await pick(page, "Save my card for the next order");
-  const declinedOn = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date());
+  const declinedOn = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(mockNow());
   await inspector(page).getByTestId("request-suggestion").getByRole("button", { name: "Decline" }).click();
   const suggestion = inspector(page).getByTestId("request-suggestion");
   await expect(suggestion).toContainText(`Declined by Admin, ${declinedOn}`);
@@ -187,6 +187,8 @@ test("Inspector: Oracle's suggestion names the feature it suggests", async ({ pa
   const feature = inspector(page).getByTestId("suggested-feature");
   await expect(feature).toHaveText(/^Feature: \S/);
   await expect(feature).not.toContainText("A feature");
+  // The features load with the page; read the title once it has replaced "Loading…".
+  await expect(feature).not.toContainText("Loading");
   const title = ((await feature.textContent()) ?? "").replace(/^Feature: /, "");
   await inspector(page).getByRole("button", { name: "Accept suggestion" }).click();
   await expect(inspector(page).getByTestId("request-suggestion")).toHaveCount(0);

@@ -96,6 +96,8 @@ export const membersApi = {
     call<Member>(loose.POST("/v1/members/{user_id}/disable", { params: path(id), body: hand_over.length ? { hand_over } : undefined })),
   patch: (id: string, body: { role?: Role; name?: string | null; hand_over?: HandOver[] }) =>
     call<Member>(loose.PATCH("/v1/members/{user_id}", { params: path(id), body })),
+  /** #203 part 3: their live section verdicts and version approvals. */
+  approvals: (id: string) => call<Schemas["TokenApprovalOut"][]>(loose.GET("/v1/members/{user_id}/approvals", { params: path(id) })),
   handOver: (id: string, hand_over: HandOver[]) =>
     call<{ responsibilities: Responsibility[] }>(loose.POST("/v1/members/{user_id}/hand-over", { params: path(id), body: { hand_over } })),
 };

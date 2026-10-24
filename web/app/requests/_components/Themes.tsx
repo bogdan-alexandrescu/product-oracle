@@ -13,6 +13,8 @@ type Theme = Schemas["RequestThemeOut"];
 /**
  * The Themes tab (#348): every theme, archived ones last, with how many requests it holds.
  * Approvers and owners create, rename, archive and restore them; others only read.
+ * Each theme shows its problem (H10): Oracle's suggestion to Confirm, Edit or Dismiss, or the
+ * confirmed problem with its definition of success, which replies and agents cite.
  * Every change hands the saved theme to `onChange`.
  */
 export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme: Theme) => void }) {
@@ -66,7 +68,10 @@ export function Themes({ themes, onChange }: { themes: Theme[]; onChange: (theme
       ) : (
         <ul className="divide-y divide-line">
           {sorted.map((t) => (
-            <ThemeRow key={t.id} theme={t} canChange={approver} busy={busy} run={run} />
+            <li key={t.id} data-testid="theme-row" className="flex flex-col gap-2 px-4 py-3">
+              <ThemeRow theme={t} canChange={approver} busy={busy} run={run} />
+              {(t.problem_state !== "none" || t.problem) && <ProblemBlock theme={t} canChange={can("confirm_request_theme_problem")} onChange={onChange} />}
+            </li>
           ))}
         </ul>
       )}
@@ -96,7 +101,7 @@ function ThemeRow({
     if (await patch({ title: title.trim() })) setRenaming(false);
   };
   return (
-    <li data-testid="theme-row" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
       {renaming ? (
         <form className="flex min-w-0 flex-1 basis-64 flex-wrap items-end gap-2" onSubmit={rename}>
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-semibold text-text2">
@@ -139,6 +144,118 @@ function ThemeRow({
           </>
         )}
       </span>
-    </li>
+    </div>
+  );
+}
+
+const PROBLEM_FIELDS = [
+  { key: "problem", label: "The problem", hint: "Who has it, what they are trying to do, what stops them", max: 1000 },
+  { key: "success", label: "How we would know it is solved", hint: null, max: 500 },
+  { key: "constraints", label: "Limits set by others", hint: "Legal, finance, sales", max: 500 },
+] as const;
+
+/**
+ * A theme's problem (H10): Oracle's suggestion, marked, with Confirm, Edit and Dismiss, or
+ * the confirmed problem with Edit, for approvers and owners; others read it. Shared by the
+ * Themes tab and the request inspector.
+ */
+export function ProblemBlock({ theme, canChange, onChange }: { theme: Theme; canChange: boolean; onChange: (theme: Theme) => void }) {
+  const suggested = theme.problem_state === "suggested" && theme.problem_suggestion ? theme.problem_suggestion : null;
+  const shown = suggested ?? { problem: theme.problem, success: theme.success, constraints: theme.constraints };
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ problem: "", success: "", constraints: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const path = { params: { path: { theme_id: theme.id } } };
+  async function run(call: () => Promise<Theme>) {
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await call());
+      setEditing(false);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    run(() =>
+      unwrap(
+        api.PATCH("/v1/request-themes/{theme_id}", {
+          ...path,
+          body: { lock_version: theme.lock_version, problem: draft.problem.trim() || null, success: draft.success.trim() || null, constraints: draft.constraints.trim() || null },
+        }),
+      ),
+    );
+  };
+  if (editing) {
+    return (
+      <form data-testid="theme-problem" className="flex flex-col gap-2" onSubmit={save}>
+        {PROBLEM_FIELDS.map((f) => (
+          <label key={f.key} className="flex flex-col gap-1 text-sm font-semibold text-text2">
+            {f.label}
+            {f.hint && <span className="font-normal">{f.hint}</span>}
+            <textarea className={INPUT} rows={f.key === "problem" ? 3 : 2} maxLength={f.max} value={draft[f.key]} onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))} />
+          </label>
+        ))}
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
+          <Button variant="solid" type="submit" disabled={busy || !draft.problem.trim()}>
+            Save problem
+          </Button>
+        </div>
+      </form>
+    );
+  }
+  return (
+    <div data-testid="theme-problem" className="flex min-w-0 flex-col gap-1.5 text-[15px]">
+      {suggested && <p className="text-sm font-semibold text-text2">Oracle suggests this problem</p>}
+      <dl className="flex min-w-0 flex-col gap-1.5">
+        {PROBLEM_FIELDS.filter((f) => shown[f.key]).map((f) => (
+          <div key={f.key} className="min-w-0">
+            <dt className="text-sm font-semibold text-text2">{f.label}</dt>
+            <dd className="break-words whitespace-pre-wrap">{shown[f.key]}</dd>
+          </div>
+        ))}
+      </dl>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {canChange && (
+        <div className="flex flex-wrap gap-2">
+          {suggested && (
+            <Button
+              variant="solid"
+              disabled={busy}
+              onClick={() => run(() => unwrap(api.POST("/v1/request-themes/{theme_id}/problem/confirm", { ...path, body: { lock_version: theme.lock_version } })))}
+            >
+              Confirm
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              setDraft({ problem: shown.problem ?? "", success: shown.success ?? "", constraints: shown.constraints ?? "" });
+              setEditing(true);
+            }}
+          >
+            Edit
+          </Button>
+          {suggested && (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => run(() => unwrap(api.POST("/v1/request-themes/{theme_id}/problem/dismiss", { ...path, body: { lock_version: theme.lock_version } })))}
+            >
+              Dismiss
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

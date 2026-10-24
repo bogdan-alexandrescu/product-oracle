@@ -10085,6 +10085,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/company-integrations/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Analytics Integration
+         * @description The analytics connection (PostHog): host, project and state; never the key.
+         */
+        get: operations["get_analytics_integration"];
+        /**
+         * Put Analytics Integration
+         * @description Connect PostHog, or replace its host, project or key. The key is tested with one
+         *     trivial query first: a refused key is 422 with the provider's message (no key). An
+         *     own host must be ``https`` and resolve to public addresses only.
+         */
+        put: operations["put_analytics_integration"];
+        post?: never;
+        /**
+         * Delete Analytics Integration
+         * @description Disconnect PostHog: the key is deleted and PostHog metrics are paused ("Analytics
+         *     disconnected"); their values stay.
+         */
+        delete: operations["delete_analytics_integration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/company-integrations/{integration_id}": {
         parameters: {
             query?: never;
@@ -10261,7 +10292,10 @@ export interface paths {
         put?: never;
         /**
          * Disqualify Request
-         * @description Disqualify with a reason; Other needs a note.
+         * @description Disqualify with a reason; Other needs a note. A reason that answers the asker (and
+         *     Won't do with a note) is a no (H10): a decided decision in the log, reviewed in 90
+         *     days, and a reply to everyone who asked, drafted by Oracle. On the stop list needs a
+         *     stop choice and Already possible a feature as its ``basis``.
          */
         post: operations["disqualify_request"];
         delete?: never;
@@ -10281,7 +10315,8 @@ export interface paths {
         put?: never;
         /**
          * Reopen Request
-         * @description Bring a merged or disqualified request back to New.
+         * @description Bring a merged or disqualified request back to New. A logged no is reversed (a
+         *     review by you) and its Drafted replies are withdrawn.
          */
         post: operations["reopen_request"];
         delete?: never;
@@ -10324,6 +10359,215 @@ export interface paths {
          * @description Decline Oracle's suggestion; nothing else changes.
          */
         post: operations["decline_request_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Request Replies
+         * @description The replies to the people who asked for a request said no to: name as given, how
+         *     they asked, state and the draft. A run token reads them under ``read:sources``: they
+         *     quote what people asked.
+         */
+        get: operations["list_request_replies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Request Reply
+         * @description Edit a Drafted reply (at most 2,000 characters). The filer of the request, an
+         *     approver or an owner. A date or "later" carries the warning "Sounds like a promise".
+         */
+        patch: operations["update_request_reply"];
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Request Reply Sent
+         * @description Mark sent: how (Email, Slack, Call, In the app, Other) and the day (default today
+         *     in the Company time zone). Oracle sends nothing itself.
+         */
+        post: operations["mark_request_reply_sent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Skip Request Reply
+         * @description Skip a reply, with a reason (for example "Asked anonymously").
+         */
+        post: operations["skip_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Notify Request Reply
+         * @description Tell them in Oracle: the member who asked finds the reply in their Inbox. 409 when
+         *     the asker is not a member.
+         */
+        post: operations["notify_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Request Replies
+         * @description Draft again with Oracle: one ``why_not_reply`` job on Oracle's own model for the
+         *     replies still Drafted; poll ``GET /v1/llm-jobs/{job_id}``. 409 while one runs and
+         *     while Words for people outside is at Observe.
+         */
+        post: operations["draft_request_replies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies/reopened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tell Reopened
+         * @description Tell the people who asked, after Reopen: a reply saying it is being looked at
+         *     again, for each asker whose no was sent or told.
+         */
+        post: operations["tell_reopened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/keep-no": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Request No
+         * @description Keep the no: the decision's approver records a reaffirmed review, and asked again
+         *     counts from now.
+         */
+        post: operations["keep_request_no"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}/problem/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Request Theme Problem
+         * @description Confirm Oracle's suggested problem: what replies and agents cite.
+         */
+        post: operations["confirm_request_theme_problem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}/problem/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Request Theme Problem
+         * @description Dismiss Oracle's suggested problem.
+         */
+        post: operations["dismiss_request_theme_problem"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10439,13 +10683,14 @@ export interface paths {
         };
         /**
          * List Interviews
-         * @description Interviews, newest first.
+         * @description Interviews, newest first; ``preset=pricing`` for pricing interviews.
          */
         get: operations["list_interviews"];
         put?: never;
         /**
          * Create Interview
-         * @description Create a Draft customer interview and queue Oracle's draft of its questions.
+         * @description Create a Draft customer interview and queue Oracle's draft of its questions; with
+         *     ``preset=pricing``, its guide is the fixed pricing questions and no job is queued.
          */
         post: operations["create_interview"];
         delete?: never;
@@ -10490,7 +10735,7 @@ export interface paths {
         put?: never;
         /**
          * Redraft Interview Guide
-         * @description Ask Oracle to draft a Draft's questions again.
+         * @description Ask Oracle to draft a Draft's questions again (not a pricing interview's: 409).
          */
         post: operations["redraft_interview_guide"];
         delete?: never;
@@ -10659,6 +10904,122 @@ export interface paths {
          * @description Send my answers: the interview finishes and the link stops working.
          */
         post: operations["public_interview_finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/deal-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Deal Outcomes
+         * @description Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are
+         *     inclusive days.
+         */
+        get: operations["list_deal_outcomes"];
+        put?: never;
+        /**
+         * Create Deal Outcome
+         * @description Record one deal's result and its main reason.
+         */
+        post: operations["create_deal_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/deal-outcomes/{outcome_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Deal Outcome
+         * @description Delete a record.
+         */
+        delete: operations["delete_deal_outcome"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Deal Outcome
+         * @description Change a record (lock_version required; null clears an optional field).
+         */
+        patch: operations["update_deal_outcome"];
+        trace?: never;
+    };
+    "/v1/deal-outcomes/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Deal Outcomes
+         * @description Import records from CSV: a header row naming ``result, account, segment, plan,
+         *     annual_value, currency, decided_on, reason, reason_note, alternative, price_quoted``,
+         *     then at most 2,000 rows (1 MB). Bad rows are listed with their line number (the header
+         *     is line 1) and good rows still import; ``dry_run`` creates nothing and returns the
+         *     same counts. Result and reason take their keys or plain labels, in either case.
+         */
+        post: operations["import_deal_outcomes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing-memos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pricing Memos
+         * @description Pricing memos with their state (draft, in review, approved, decided) and their
+         *     decision; owners and approvers only.
+         */
+        get: operations["list_pricing_memos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing-memos/{doc}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Pricing Memo
+         * @description Decide: the pricing owner opens the approved memo's proposed decision in the
+         *     decision log (created on the first call, the same one on a repeat), with the memo's
+         *     options, the pricing owner as its approver and origin ``pricing``.
+         */
+        post: operations["decide_pricing_memo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11121,6 +11482,585 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metrics
+         * @description The company's weekly metrics: outputs, each followed by the inputs that drive it,
+         *     with last week's value, its change and the last 12 weeks.
+         */
+        get: operations["list_metrics"];
+        put?: never;
+        /**
+         * Create Metric
+         * @description Add a metric. A PostHog metric reads its last 12 complete weeks at once (409 when
+         *     PostHog is not connected).
+         */
+        post: operations["create_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Metric Query
+         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. The
+         *     provider's error, when it refuses, is in ``error``.
+         */
+        post: operations["test_metric_query"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Metric
+         * @description A metric with up to 52 weekly values, its variances and its definition history.
+         */
+        get: operations["get_metric"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Metric
+         * @description Edit a metric (``lock_version``). A query or unit change raises its definition
+         *     version: later values carry the new one.
+         */
+        patch: operations["update_metric"];
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Metric
+         * @description Archive a metric: it is no longer read or reviewed; its values stay.
+         */
+        post: operations["archive_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Metric
+         * @description Restore an archived metric.
+         */
+        post: operations["restore_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull Metric
+         * @description Pull now: read the last complete week from PostHog again and replace its value
+         *     (409 unless the metric's source is PostHog; 502 with the provider's message).
+         */
+        post: operations["pull_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/values/{week_start}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record Metric Value
+         * @description Record a week's value on a metric typed by hand or written by API (an approver or
+         *     the metric's owner). 409 for a PostHog metric; 422 for a week_start that is not a
+         *     Monday or a week that has not ended.
+         */
+        put: operations["record_metric_value"];
+        post?: never;
+        /**
+         * Delete Metric Value
+         * @description Delete a week's value typed by hand or written by API.
+         */
+        delete: operations["delete_metric_value"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metric Variances
+         * @description The variances, latest week first: each with its possible causes, its explanation
+         *     state and Oracle's draft if any.
+         */
+        get: operations["list_metric_variances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explain Metric Variance
+         * @description Explain a variance (10 to 1,000 characters): the metric's owner or an approver.
+         */
+        post: operations["explain_metric_variance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/unknown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Metric Variance Unknown
+         * @description Don't know yet, with a day to find out by (1 to 28 days ahead): the metric's owner
+         *     or an approver.
+         */
+        post: operations["mark_metric_variance_unknown"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/noise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Metric Variance Noise
+         * @description Mark a variance as noise, with a reason (approvers).
+         */
+        post: operations["mark_metric_variance_noise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitors
+         * @description The alternatives the company tracks (direct, indirect and status quo) with their
+         *     latest changes.
+         */
+        get: operations["list_competitors"];
+        put?: never;
+        /** Create Competitor */
+        post: operations["create_competitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Competitor
+         * @description One alternative: its pages, its last 20 changes and its open web findings.
+         */
+        get: operations["get_competitor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Competitor */
+        patch: operations["update_competitor"];
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Competitor
+         * @description Archive an alternative: its pages are paused.
+         */
+        post: operations["archive_competitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Competitor */
+        post: operations["restore_competitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitors/{competitor_id}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Watch Competitor Page
+         * @description Watch a public page of an alternative; it is read at once, then weekly.
+         */
+        post: operations["watch_competitor_page"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-pages/{page_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Competitor Page
+         * @description Stop watching a page: its snapshots and page changes go with it.
+         */
+        delete: operations["delete_competitor_page"];
+        options?: never;
+        head?: never;
+        /** Update Competitor Page */
+        patch: operations["update_competitor_page"];
+        trace?: never;
+    };
+    "/v1/competitor-pages/{page_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Competitor Page
+         * @description Check now: read the page at once (409 when its robots.txt disallows it).
+         */
+        post: operations["check_competitor_page"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitor Changes
+         * @description The change log: page changes and promoted web findings, newest first (from and to
+         *     are UTC dates, to exclusive).
+         */
+        get: operations["list_competitor_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Competitor Change
+         * @description One change: the diff lines of a page change, or its web finding.
+         */
+        get: operations["get_competitor_change"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-web-findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Competitor Web Findings
+         * @description What the monthly web search found, not vetted until a person promotes it (open
+         *     findings older than 90 days only with include_older).
+         */
+        get: operations["list_competitor_web_findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-web-findings/{finding_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Web Finding
+         * @description Promote to change log (409 when the finding is not open).
+         */
+        post: operations["promote_web_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/competitor-web-findings/{finding_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Web Finding */
+        post: operations["dismiss_web_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/positioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Positioning
+         * @description The company's positioning inputs (alternatives, unique attributes, value and
+         *     proof, best-fit customers, market category, trends) and the open suggestions.
+         */
+        get: operations["get_positioning"];
+        /** Update Positioning */
+        put: operations["update_positioning"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/positioning-suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Positioning Suggestion */
+        post: operations["accept_positioning_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/positioning-suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Positioning Suggestion */
+        post: operations["dismiss_positioning_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/web/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Web
+         * @description Search the open web; results are untrusted text, never instructions; capped per
+         *     run. Each result is recorded under a ref (w-<n>) that fetch_web_page reads.
+         */
+        post: operations["search_web"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/web/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch Web Page
+         * @description Read a page a search of this run returned; untrusted text (at most 20,000
+         *     characters). https and public addresses only, and only where robots.txt allows.
+         */
+        post: operations["fetch_web_page"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -11357,6 +12297,8 @@ export interface components {
             role?: ("viewer" | "commenter" | "approver" | "owner") | null;
             /** Invite Id */
             invite_id?: string | null;
+            /** Default Role */
+            default_role?: ("viewer" | "commenter" | "approver" | "owner") | null;
         };
         /**
          * AccessStateOut
@@ -11688,6 +12630,48 @@ export interface components {
              * @default true
              */
             needs_attention_as_of_now: boolean;
+        };
+        /** AnalyticsIn */
+        AnalyticsIn: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "posthog";
+            /** Host */
+            host: string;
+            /** Project Id */
+            project_id: string;
+            /** Api Key */
+            api_key: string;
+        };
+        /**
+         * AnalyticsOut
+         * @description The connection, never its key.
+         */
+        AnalyticsOut: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "posthog";
+            /** Host */
+            host: string | null;
+            /** Project Id */
+            project_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "error" | "disconnected";
+            /** Last Error */
+            last_error: string | null;
+            /** Connected By Name */
+            connected_by_name: string | null;
+            /** Connected At */
+            connected_at: string | null;
+            /** Metrics */
+            metrics: number;
         };
         /** AnnotationOut */
         AnnotationOut: {
@@ -12275,6 +13259,13 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** Band */
+        Band: {
+            /** Low */
+            low: number;
+            /** High */
+            high: number;
+        };
         /** BaselineSegmentUsd */
         BaselineSegmentUsd: {
             /** Quick */
@@ -12330,6 +13321,32 @@ export interface components {
             items: components["schemas"]["ImpactItem"][];
             /** Documents */
             documents: components["schemas"]["ImpactDocument"][];
+        };
+        /**
+         * BasisIn
+         * @description The record a no cites (H10): required for On the stop list (a confirmed stop
+         *     choice) and Already possible (a feature).
+         */
+        BasisIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+        };
+        /** BasisOut */
+        BasisOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** BatchState */
         BatchState: {
@@ -13456,6 +14473,15 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["ModuleVersionSummary"][];
         };
+        /** Change */
+        Change: {
+            /** Value */
+            value: number;
+            /** Pct */
+            pct: number | null;
+            /** Variance */
+            variance: ("better" | "worse") | null;
+        };
         /** ChangeActIn */
         ChangeActIn: {
             /** Lock Version */
@@ -13501,6 +14527,58 @@ export interface components {
              * @default false
              */
             dismiss: boolean;
+        };
+        /** ChangeDetail */
+        ChangeDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Competitor Name */
+            competitor_name: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "page" | "web";
+            /** Page Label */
+            page_label: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
+            /** Page Url */
+            page_url: string | null;
+            /** Web Host */
+            web_host?: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Added Lines */
+            added_lines: number;
+            /** Removed Lines */
+            removed_lines: number;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "minor" | "notable" | "major";
+            /**
+             * Rated By
+             * @enum {string}
+             */
+            rated_by: "rule" | "oracle" | "person";
+            /** Summary */
+            summary: string | null;
+            /** Web Finding Id */
+            web_finding_id: string | null;
+            /** Diff */
+            diff: components["schemas"]["DiffLine"][];
+            web_finding?: components["schemas"]["WebFindingOut"] | null;
         };
         /** ChangeDismissIn */
         ChangeDismissIn: {
@@ -13585,6 +14663,55 @@ export interface components {
             schema: {
                 [key: string]: unknown;
             };
+        };
+        /** ChangeOut */
+        ChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Competitor Name */
+            competitor_name: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "page" | "web";
+            /** Page Label */
+            page_label: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
+            /** Page Url */
+            page_url: string | null;
+            /** Web Host */
+            web_host?: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Added Lines */
+            added_lines: number;
+            /** Removed Lines */
+            removed_lines: number;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "minor" | "notable" | "major";
+            /**
+             * Rated By
+             * @enum {string}
+             */
+            rated_by: "rule" | "oracle" | "person";
+            /** Summary */
+            summary: string | null;
+            /** Web Finding Id */
+            web_finding_id: string | null;
         };
         /**
          * ChangeResult
@@ -13912,7 +15039,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -13995,7 +15122,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -14467,14 +15594,14 @@ export interface components {
             id: string;
             /**
              * Provider
-             * @constant
+             * @enum {string}
              */
-            provider: "slack";
+            provider: "slack" | "posthog";
             /**
              * Purpose
-             * @constant
+             * @enum {string}
              */
-            purpose: "notifications";
+            purpose: "notifications" | "metrics";
             /** Account Id */
             account_id: string;
             /** Account Label */
@@ -14606,6 +15733,119 @@ export interface components {
             status: string;
             /** Document Slug */
             document_slug?: string | null;
+        };
+        /** CompetitorCreate */
+        CompetitorCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "direct" | "indirect" | "status_quo";
+            /** Website */
+            website?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Aliases */
+            aliases?: string[];
+        };
+        /** CompetitorDetail */
+        CompetitorDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "direct" | "indirect" | "status_quo";
+            /** Website */
+            website: string | null;
+            /** Aliases */
+            aliases: string[];
+            /** Description */
+            description: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** Pages */
+            pages: number;
+            /** Last Change On */
+            last_change_on: string | null;
+            /** Changes This Month */
+            changes_this_month: number;
+            /** Open Web Findings */
+            open_web_findings: number;
+            /** Watch Problem */
+            watch_problem?: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Page List */
+            page_list: components["schemas"]["PageOut"][];
+            /** Changes */
+            changes: components["schemas"]["ChangeOut"][];
+            /** Web Findings */
+            web_findings: components["schemas"]["WebFindingOut"][];
+        };
+        /** CompetitorOut */
+        CompetitorOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "direct" | "indirect" | "status_quo";
+            /** Website */
+            website: string | null;
+            /** Aliases */
+            aliases: string[];
+            /** Description */
+            description: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** Pages */
+            pages: number;
+            /** Last Change On */
+            last_change_on: string | null;
+            /** Changes This Month */
+            changes_this_month: number;
+            /** Open Web Findings */
+            open_web_findings: number;
+            /** Watch Problem */
+            watch_problem?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** CompetitorPatch */
+        CompetitorPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Name */
+            name?: string | null;
+            /** Kind */
+            kind?: ("direct" | "indirect" | "status_quo") | null;
+            /** Website */
+            website?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Aliases */
+            aliases?: string[] | null;
         };
         /**
          * ComposedModule
@@ -15403,6 +16643,151 @@ export interface components {
             /** Lead Named */
             lead_named: boolean;
         };
+        /**
+         * DealOutcomeIn
+         * @description One deal's result and its main reason. ``reason: other`` needs ``reason_note``;
+         *     ``annual_value`` and ``currency`` come together; ``decided_on`` is not in the
+         *     future (the company's today).
+         */
+        DealOutcomeIn: {
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "won" | "lost" | "no_decision" | "churned";
+            /** Account */
+            account: string;
+            /** Segment */
+            segment?: string | null;
+            /** Plan */
+            plan?: string | null;
+            /** Annual Value */
+            annual_value?: number | string | null;
+            /** Currency */
+            currency?: ("USD" | "EUR" | "GBP") | null;
+            /**
+             * Decided On
+             * Format: date
+             */
+            decided_on: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other";
+            /** Reason Note */
+            reason_note?: string | null;
+            /** Competitor Id */
+            competitor_id?: string | null;
+            /** Price Quoted */
+            price_quoted?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /** DealOutcomeOut */
+        DealOutcomeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "won" | "lost" | "no_decision" | "churned";
+            /** Account */
+            account: string;
+            /** Segment */
+            segment: string | null;
+            /** Plan */
+            plan: string | null;
+            /** Annual Value */
+            annual_value: number | null;
+            /** Currency */
+            currency: ("USD" | "EUR" | "GBP") | null;
+            /**
+             * Decided On
+             * Format: date
+             */
+            decided_on: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other";
+            /** Reason Note */
+            reason_note: string | null;
+            /** Competitor Id */
+            competitor_id: string | null;
+            /** Price Quoted */
+            price_quoted: string | null;
+            /** Source Item Id */
+            source_item_id: string | null;
+            source_item: components["schemas"]["DealSourceItem"] | null;
+            /**
+             * Recorded By
+             * Format: uuid
+             */
+            recorded_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /**
+         * DealOutcomePatch
+         * @description Change some fields (lock_version required); null clears an optional one.
+         */
+        DealOutcomePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Result */
+            result?: ("won" | "lost" | "no_decision" | "churned") | null;
+            /** Account */
+            account?: string | null;
+            /** Segment */
+            segment?: string | null;
+            /** Plan */
+            plan?: string | null;
+            /** Annual Value */
+            annual_value?: number | string | null;
+            /** Currency */
+            currency?: ("USD" | "EUR" | "GBP") | null;
+            /** Decided On */
+            decided_on?: string | null;
+            /** Reason */
+            reason?: ("price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other") | null;
+            /** Reason Note */
+            reason_note?: string | null;
+            /** Competitor Id */
+            competitor_id?: string | null;
+            /** Price Quoted */
+            price_quoted?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /**
+         * DealSourceItem
+         * @description What the record shares of its source item: title, link and a 400-character
+         *     excerpt (C1 "Found items").
+         */
+        DealSourceItem: {
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+        };
         /** DecideIn */
         DecideIn: {
             /** Option Key */
@@ -15418,6 +16803,11 @@ export interface components {
             prediction?: components["schemas"]["oracle__decisions__schemas__PredictionIn"] | null;
             /** Lock Version */
             lock_version?: number | null;
+        };
+        /** DecideMemoIn */
+        DecideMemoIn: {
+            /** Replaces */
+            replaces?: number | null;
         };
         /** DecisionCreate */
         DecisionCreate: {
@@ -15544,7 +16934,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing";
             /**
              * Reversibility
              * @enum {string}
@@ -15822,7 +17212,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing";
             /**
              * Reversibility
              * @enum {string}
@@ -15904,6 +17294,20 @@ export interface components {
             op: "defer";
             /** Key */
             key: string;
+        };
+        /** Definition */
+        Definition: {
+            /** Version */
+            version: number;
+            /** Unit */
+            unit: string;
+            /** Query */
+            query: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /** DependenciesCreate */
         DependenciesCreate: {
@@ -16020,6 +17424,16 @@ export interface components {
         DesignReviewOut: {
             event: components["schemas"]["ArtifactReviewEventOut"];
             version: components["schemas"]["ArtifactVersionOut"];
+        };
+        /** DiffLine */
+        DiffLine: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "+" | "-";
+            /** Text */
+            text: string;
         };
         /** DiffOut */
         DiffOut: {
@@ -16660,9 +18074,10 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other";
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers";
             /** Note */
             note?: string | null;
+            basis?: components["schemas"]["BasisIn"] | null;
         };
         /** DocumentBlockerStrategy */
         DocumentBlockerStrategy: {
@@ -16723,7 +18138,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -16868,7 +18283,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -16923,7 +18338,7 @@ export interface components {
             /** Slug */
             slug?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             /** Version */
             version?: number | null;
             /** Created */
@@ -16944,6 +18359,14 @@ export interface components {
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DraftJobOut */
+        DraftJobOut: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
         };
         /** DraftNoteIn */
         DraftNoteIn: {
@@ -17619,6 +19042,11 @@ export interface components {
             title: string;
             /** Runs Per Month */
             runs_per_month: number;
+            /**
+             * Per Summary Usd
+             * @default 3
+             */
+            per_summary_usd: number;
         };
         /** EvaluationFindingOut */
         EvaluationFindingOut: {
@@ -18005,6 +19433,13 @@ export interface components {
             heading: string;
             /** Html */
             html: string;
+        };
+        /** ExplainIn */
+        ExplainIn: {
+            /** Explanation */
+            explanation: string;
+            /** Lock Version */
+            lock_version?: number | null;
         };
         /** Explanation */
         Explanation: {
@@ -18433,6 +19868,11 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** FindingDismissIn */
+        FindingDismissIn: {
+            /** Reason */
+            reason?: string | null;
+        };
         /**
          * FindingOut
          * @description A finding drawn from the author's own sources and what others see of it (S6).
@@ -18600,7 +20040,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
             /** Title */
             title: string;
             /** Description */
@@ -18608,9 +20048,9 @@ export interface components {
             /** Requires Document */
             requires_document: boolean;
             /** Target Kind */
-            target_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            target_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             /** Source Kind */
-            source_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            source_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             /** Entry */
             entry?: string | null;
             /** Segments */
@@ -18640,7 +20080,7 @@ export interface components {
             /** Outputs */
             outputs: string[];
             /** Checkpoint */
-            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /**
              * Approver Role
              * @enum {string}
@@ -18738,7 +20178,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -19638,6 +21078,15 @@ export interface components {
             /** Where */
             where?: string | null;
         };
+        /** ImportOut */
+        ImportOut: {
+            /** Dry Run */
+            dry_run: boolean;
+            /** Created */
+            created: number;
+            /** Skipped */
+            skipped: components["schemas"]["ImportSkipped"][];
+        };
         /** ImportProblem */
         ImportProblem: {
             /** Code */
@@ -19657,6 +21106,13 @@ export interface components {
             refs: {
                 [key: string]: string | string[];
             };
+        };
+        /** ImportSkipped */
+        ImportSkipped: {
+            /** Line */
+            line: number;
+            /** Message */
+            message: string;
         };
         /**
          * InboxAccessFailure
@@ -19739,7 +21195,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -19804,7 +21260,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -20203,6 +21659,40 @@ export interface components {
             at?: string | null;
         };
         /**
+         * InboxMetric
+         * @description A metric row of the Inbox (H5): Explain a variance and Find out (the metric's
+         *     owner; Find out from its find-out-by day), Metric not read for a day (owners).
+         *     ``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that
+         *     lists the variance, when one does.
+         */
+        InboxMetric: {
+            /** Variance Id */
+            variance_id?: string | null;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "explain" | "find_out" | "pull_failed";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Due On */
+            due_on?: string | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Counts */
+            counts: boolean;
+        };
+        /**
          * InboxOracleAction
          * @description "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
          *     for one of the people it notified. Counted until that person opens it.
@@ -20363,6 +21853,11 @@ export interface components {
              * @default []
              */
             outcomes: components["schemas"]["InboxOutcome"][];
+            /**
+             * Metrics
+             * @default []
+             */
+            metrics: components["schemas"]["InboxMetric"][];
             /** Last Seen At */
             last_seen_at?: string | null;
             /**
@@ -20375,6 +21870,11 @@ export interface components {
              * @default []
              */
             discussions: components["schemas"]["InboxDiscussionItem"][];
+            /**
+             * Requests
+             * @default []
+             */
+            requests: components["schemas"]["InboxRequestReply"][];
         };
         /**
          * InboxOutcome
@@ -20481,6 +21981,37 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * InboxRequestReply
+         * @description H10 rows: Replies to send (the request's filer and its decider; counted until
+         *     every reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said
+         *     no (the decision's approver; counted until Reopen or Keep the no) and Answer to your
+         *     request (the member who asked; shown only, with the reply).
+         */
+        InboxRequestReply: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "replies_to_send" | "asked_again" | "answer";
+            /** Count */
+            count?: number | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Body */
+            body?: string | null;
+            /** At */
+            at?: string | null;
+            /** Counts */
+            counts: boolean;
         };
         /**
          * InboxRevokeFailure
@@ -21259,6 +22790,8 @@ export interface components {
             /** Interviewee Company */
             interviewee_company?: string | null;
             subject: components["schemas"]["InterviewSubject"];
+            /** Preset */
+            preset?: "pricing" | null;
         };
         /** InterviewGuideItem */
         InterviewGuideItem: {
@@ -21354,6 +22887,8 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Preset */
+            preset?: "pricing" | null;
             /** Title */
             title: string;
             /** Intake Id */
@@ -21460,6 +22995,8 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Preset */
+            preset?: "pricing" | null;
             /** Title */
             title: string;
             /** Interviewee Name */
@@ -21590,6 +23127,13 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** Item */
+        Item: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
         /**
          * ItemChange
          * @description How a draft item differs from its approved twin (roadmap.diff.diff_items).
@@ -21699,6 +23243,13 @@ export interface components {
             tracker_events: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ItemIn */
+        ItemIn: {
+            /** Id */
+            id?: string | null;
+            /** Text */
+            text: string;
         };
         /** ItemOut */
         ItemOut: {
@@ -22048,6 +23599,14 @@ export interface components {
             by?: string | null;
             /** By Name */
             by_name?: string | null;
+        };
+        /**
+         * KeepNoIn
+         * @description Keep the no (H10): a reaffirmed review on the decision; asked again counts anew.
+         */
+        KeepNoIn: {
+            /** Note */
+            note: string;
         };
         /** KindCoverage */
         KindCoverage: {
@@ -22605,7 +24164,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -22614,6 +24173,8 @@ export interface components {
             decision_id?: string | null;
             /** Scope Id */
             scope_id?: string | null;
+            /** Request Id */
+            request_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -23014,6 +24575,248 @@ export interface components {
             /** Hand Over */
             hand_over?: components["schemas"]["HandOver"][] | null;
         };
+        /** MemoDecision */
+        MemoDecision: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Chosen Label */
+            chosen_label?: string | null;
+        };
+        /** MetricCreate */
+        MetricCreate: {
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Drives Metric Id */
+            drives_metric_id?: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query?: string | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
+        };
+        /** MetricDetail */
+        MetricDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id: string | null;
+            /** Drives Metric Id */
+            drives_metric_id: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query: string | null;
+            /** Threshold Pct */
+            threshold_pct: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "archived";
+            /** Definition Version */
+            definition_version: number;
+            last_week: components["schemas"]["WeekValue"] | null;
+            change: components["schemas"]["Change"] | null;
+            /** Spark */
+            spark: (number | null)[];
+            /** Last Pulled At */
+            last_pulled_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Values */
+            values: components["schemas"]["MetricValueOut"][];
+            /** Variances */
+            variances: components["schemas"]["VarianceOut"][];
+            /** Definitions */
+            definitions: components["schemas"]["Definition"][];
+        };
+        /** MetricOut */
+        MetricOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id: string | null;
+            /** Drives Metric Id */
+            drives_metric_id: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query: string | null;
+            /** Threshold Pct */
+            threshold_pct: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "archived";
+            /** Definition Version */
+            definition_version: number;
+            last_week: components["schemas"]["WeekValue"] | null;
+            change: components["schemas"]["Change"] | null;
+            /** Spark */
+            spark: (number | null)[];
+            /** Last Pulled At */
+            last_pulled_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** MetricPatch */
+        MetricPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("up" | "down") | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Drives Metric Id */
+            drives_metric_id?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Query */
+            query?: string | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
+        };
+        /** MetricTestOut */
+        MetricTestOut: {
+            /** Values */
+            values: components["schemas"]["MetricTestWeek"][];
+            /** Error */
+            error: string | null;
+        };
+        /** MetricTestWeek */
+        MetricTestWeek: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number | null;
+        };
+        /** MetricValueOut */
+        MetricValueOut: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Definition Version */
+            definition_version: number;
+            /** Note */
+            note: string | null;
+            /** Recorded By */
+            recorded_by: string | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+        };
         /** MilestoneCreate */
         MilestoneCreate: {
             /** Name */
@@ -23375,6 +25178,11 @@ export interface components {
              * @enum {string}
              */
             signed_in_via: "browser" | "api_token" | "mcp_client";
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
         };
         /**
          * NamePatch
@@ -23830,6 +25638,13 @@ export interface components {
             /** Milestone Id */
             milestone_id?: string | null;
         };
+        /** NoiseIn */
+        NoiseIn: {
+            /** Reason */
+            reason: string;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
         /**
          * NotReadCounts
          * @description Entries of ``unavailable_items`` by status (a missing status is unavailable).
@@ -24070,6 +25885,11 @@ export interface components {
             summary_state: "none" | "running" | "ready" | "failed" | "not_started";
             /** Summary Note */
             summary_note: string | null;
+            /**
+             * Summary Offered
+             * @default true
+             */
+            summary_offered: boolean;
             /** Read By Me */
             read_by_me: boolean;
         };
@@ -24368,6 +26188,58 @@ export interface components {
             categories: string[];
             /** Modules */
             modules: components["schemas"]["PackModuleOut"][];
+        };
+        /** PageIn */
+        PageIn: {
+            /** Url */
+            url: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "pricing" | "changelog" | "product" | "docs" | "blog" | "other";
+        };
+        /** PageOut */
+        PageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Url */
+            url: string;
+            /** Host */
+            host: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "pricing" | "changelog" | "product" | "docs" | "blog" | "other";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "blocked" | "error";
+            /** Last Checked At */
+            last_checked_at: string | null;
+            /** Last Changed At */
+            last_changed_at: string | null;
+            /** Attempts */
+            attempts: number;
+            /** Last Error */
+            last_error: string | null;
+        };
+        /** PagePatch */
+        PagePatch: {
+            /** Label */
+            label?: ("pricing" | "changelog" | "product" | "docs" | "blog" | "other") | null;
+            /** Status */
+            status?: ("active" | "paused") | null;
         };
         /** PasswordChange */
         PasswordChange: {
@@ -24765,6 +26637,99 @@ export interface components {
             /** Until */
             until: string | null;
         };
+        /** PositioningFields */
+        PositioningFields: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["Item"][];
+            /** Unique Attributes */
+            unique_attributes?: components["schemas"]["Item"][];
+            /** Value And Proof */
+            value_and_proof?: components["schemas"]["Item"][];
+            /** Best Fit Customers */
+            best_fit_customers?: components["schemas"]["Item"][];
+            /** Market Category */
+            market_category?: components["schemas"]["Item"][];
+            /** Trends */
+            trends?: components["schemas"]["Item"][];
+        };
+        /** PositioningFieldsIn */
+        PositioningFieldsIn: {
+            /** Alternatives */
+            alternatives?: components["schemas"]["ItemIn"][];
+            /** Unique Attributes */
+            unique_attributes?: components["schemas"]["ItemIn"][];
+            /** Value And Proof */
+            value_and_proof?: components["schemas"]["ItemIn"][];
+            /** Best Fit Customers */
+            best_fit_customers?: components["schemas"]["ItemIn"][];
+            /** Market Category */
+            market_category?: components["schemas"]["ItemIn"][];
+            /** Trends */
+            trends?: components["schemas"]["ItemIn"][];
+        };
+        /** PositioningIn */
+        PositioningIn: {
+            fields: components["schemas"]["PositioningFieldsIn"];
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** PositioningOut */
+        PositioningOut: {
+            fields: components["schemas"]["PositioningFields"];
+            /** Suggestions */
+            suggestions: components["schemas"]["PositioningSuggestionOut"][];
+            /** Updated By Name */
+            updated_by_name: string | null;
+            /** Updated At */
+            updated_at: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** PositioningSuggestionOut */
+        PositioningSuggestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "alternatives" | "unique_attributes" | "value_and_proof" | "best_fit_customers" | "market_category" | "trends";
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add" | "replace" | "remove";
+            /** Item Id */
+            item_id: string | null;
+            /** Text */
+            text: string | null;
+            /** Rationale */
+            rationale: string;
+            /** Refs */
+            refs: components["schemas"]["SuggestionRef"][];
+            /** Occurrence Id */
+            occurrence_id: string | null;
+        };
+        /** PossibleCause */
+        PossibleCause: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "launch" | "changelog" | "roadmap_item" | "decision" | "definition";
+            /** Title */
+            title: string;
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            /** Href */
+            href: string;
+        };
         /** PrdAnchor */
         PrdAnchor: {
             document: components["schemas"]["DocumentRef"] | null;
@@ -24983,6 +26948,42 @@ export interface components {
             attempt: number;
             /** Artifacts */
             artifacts: string[];
+        };
+        /** PricingMemoSummary */
+        PricingMemoSummary: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Question */
+            question: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "in_review" | "approved" | "decided";
+            decision: components["schemas"]["MemoDecision"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            pricing_owner?: components["schemas"]["PricingOwner"] | null;
+        };
+        /** PricingOwner */
+        PricingOwner: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /**
          * PriorityCheck
@@ -25233,6 +27234,11 @@ export interface components {
              */
             updated_at: string;
         };
+        /** PromoteIn */
+        PromoteIn: {
+            /** Rating */
+            rating?: ("minor" | "notable" | "major") | null;
+        };
         /** ProposalAccept */
         ProposalAccept: {
             /** Note */
@@ -25404,7 +27410,7 @@ export interface components {
             /** Measured At */
             measured_at?: string | null;
             /** Source */
-            source?: ("goal_history" | "measurement") | null;
+            source?: ("goal_history" | "measurement" | "metric") | null;
             /** Note */
             note?: string | null;
         };
@@ -25779,6 +27785,11 @@ export interface components {
             goal_ids?: string[] | null;
             /** Note */
             note?: string | null;
+        };
+        /** QueryIn */
+        QueryIn: {
+            /** Query */
+            query: string;
         };
         /** Question */
         Question: {
@@ -26186,7 +28197,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             template: components["schemas"]["TemplateOption"];
             /** Reason */
             reason: string;
@@ -26441,6 +28452,8 @@ export interface components {
         ReopenIn: {
             /** Lock Version */
             lock_version: number;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * ReorderChange
@@ -26457,10 +28470,111 @@ export interface components {
             /** Position */
             position: number;
         };
+        /** ReplyCounts */
+        ReplyCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
             body: string;
+        };
+        /**
+         * ReplyOut
+         * @description One reply to one person who asked (H10).
+         */
+        ReplyOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Root Request Id
+             * Format: uuid
+             */
+            root_request_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "no" | "reopened";
+            /** Decision Number */
+            decision_number: number | null;
+            /** Asker */
+            asker: string;
+            /**
+             * Asker Kind
+             * @enum {string}
+             */
+            asker_kind: "customer" | "team" | "unknown";
+            /** Member Id */
+            member_id: string | null;
+            /** Channel Asked */
+            channel_asked: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
+            /** Asked */
+            asked: string | null;
+            /** Body */
+            body: string | null;
+            /** Draft Source */
+            draft_source: ("oracle" | "template" | "person") | null;
+            /** Warnings */
+            warnings: "sounds_like_a_promise"[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "sent" | "notified" | "skipped" | "withdrawn";
+            /** Channel */
+            channel: ("email" | "slack" | "call" | "in_app" | "other") | null;
+            /** Sent On */
+            sent_on: string | null;
+            /** Sent By Name */
+            sent_by_name: string | null;
+            /** Skip Reason */
+            skip_reason: string | null;
+            /** Notified At */
+            notified_at: string | null;
+            /** Drafting */
+            drafting: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** ReplyPatch */
+        ReplyPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Body */
+            body: string;
+        };
+        /** ReplySent */
+        ReplySent: {
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "email" | "slack" | "call" | "in_app" | "other";
+            /** Sent On */
+            sent_on?: string | null;
+        };
+        /** ReplySkip */
+        ReplySkip: {
+            /** Reason */
+            reason: string;
         };
         /** ReplyUsage */
         ReplyUsage: {
@@ -26777,7 +28891,7 @@ export interface components {
             /** Merged Into Id */
             merged_into_id: string | null;
             /** Disqualify Reason */
-            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers") | null;
             /** Decision Note */
             decision_note: string | null;
             theme: components["schemas"]["RequestThemeRef"] | null;
@@ -26800,6 +28914,29 @@ export interface components {
             decided_by: string | null;
             /** Decided At */
             decided_at: string | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Decision Title */
+            decision_title?: string | null;
+            /** Decision Status */
+            decision_status?: string | null;
+            basis?: components["schemas"]["BasisOut"] | null;
+            /**
+             * Asked Again
+             * @default 0
+             */
+            asked_again: number;
+            /**
+             * @default {
+             *       "total": 0,
+             *       "open": 0
+             *     }
+             */
+            replies: components["schemas"]["ReplyCounts"];
+            /** Loop Closed On */
+            loop_closed_on?: string | null;
+            /** No Reply Reason */
+            no_reply_reason?: ("no_note" | "housekeeping") | null;
             /**
              * Created At
              * Format: date-time
@@ -26814,6 +28951,18 @@ export interface components {
             lock_version: number;
             /** Merged */
             merged: components["schemas"]["RequestOut"][];
+            /**
+             * Suggested Basis
+             * @default {}
+             */
+            suggested_basis: {
+                [key: string]: components["schemas"]["BasisOut"];
+            };
+            /**
+             * Drafting
+             * @default false
+             */
+            drafting: boolean;
         };
         /**
          * RequestDocumentProgress
@@ -26900,7 +29049,7 @@ export interface components {
             /** Merged Into Id */
             merged_into_id: string | null;
             /** Disqualify Reason */
-            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers") | null;
             /** Decision Note */
             decision_note: string | null;
             theme: components["schemas"]["RequestThemeRef"] | null;
@@ -26923,6 +29072,29 @@ export interface components {
             decided_by: string | null;
             /** Decided At */
             decided_at: string | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Decision Title */
+            decision_title?: string | null;
+            /** Decision Status */
+            decision_status?: string | null;
+            basis?: components["schemas"]["BasisOut"] | null;
+            /**
+             * Asked Again
+             * @default 0
+             */
+            asked_again: number;
+            /**
+             * @default {
+             *       "total": 0,
+             *       "open": 0
+             *     }
+             */
+            replies: components["schemas"]["ReplyCounts"];
+            /** Loop Closed On */
+            loop_closed_on?: string | null;
+            /** No Reply Reason */
+            no_reply_reason?: ("no_note" | "housekeeping") | null;
             /**
              * Created At
              * Format: date-time
@@ -26989,6 +29161,21 @@ export interface components {
             archived_at: string | null;
             /** Request Count */
             request_count: number;
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
+            /**
+             * Problem State
+             * @default none
+             * @enum {string}
+             */
+            problem_state: "none" | "suggested" | "confirmed";
+            problem_suggestion?: components["schemas"]["SuggestedProblem"] | null;
+            /** Problem Confirmed At */
+            problem_confirmed_at?: string | null;
             /** Created By */
             created_by: string | null;
             /**
@@ -27016,6 +29203,12 @@ export interface components {
             goal_ids?: string[] | null;
             /** Archived */
             archived?: boolean | null;
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
         };
         /** RequestThemeRef */
         RequestThemeRef: {
@@ -27872,6 +30065,8 @@ export interface components {
             next_due_at: string | null;
             /** Lock Version */
             lock_version: number;
+            /** Replaced By */
+            replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
         };
         /** RitualPatch */
@@ -28192,7 +30387,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
             /** Document */
             document?: string | null;
             /** Source */
@@ -28240,7 +30435,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /** Segment Seq */
             segment_seq?: number | null;
             /** Segment Title */
@@ -28357,7 +30552,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
             /** Flow Title */
             flow_title: string;
             /**
@@ -28370,7 +30565,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -28392,7 +30587,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Review Link */
             review_link?: string | null;
             /** Error */
@@ -28436,7 +30631,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -28536,7 +30731,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -28619,7 +30814,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
             /** Flow Title */
             flow_title: string;
             /**
@@ -28632,7 +30827,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -28654,7 +30849,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Review Link */
             review_link?: string | null;
             /** Error */
@@ -28698,7 +30893,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -30156,7 +32351,7 @@ export interface components {
             /** Scopes */
             scopes: string[];
             /** Checkpoint */
-            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -31477,7 +33672,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Title */
             title: string;
             /** Slug */
@@ -31489,6 +33684,8 @@ export interface components {
             /** Theme */
             theme?: string | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
+            /** Question */
+            question?: string | null;
         };
         /** StartDraftOut */
         StartDraftOut: {
@@ -31505,7 +33702,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Template */
             template: string;
             /** Template Version */
@@ -31637,7 +33834,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion";
+            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion" | "request";
             /**
              * Id
              * Format: uuid
@@ -31645,6 +33842,46 @@ export interface components {
             id: string;
             /** Ref */
             ref?: string | null;
+        };
+        /** SuggestedBasis */
+        SuggestedBasis: {
+            /**
+             * Kind
+             * @default none
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+        };
+        /**
+         * SuggestedDecline
+         * @description "Oracle suggests saying no": shown only; nothing is disqualified until an
+         *     approver submits the Disqualify form (H10).
+         */
+        SuggestedDecline: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers";
+            /**
+             * @default {
+             *       "kind": "none"
+             *     }
+             */
+            basis: components["schemas"]["SuggestedBasis"];
+            /** Why */
+            why?: string | null;
+        };
+        /** SuggestedProblem */
+        SuggestedProblem: {
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
         };
         /**
          * Suggestion
@@ -31668,6 +33905,8 @@ export interface components {
             confidence?: number | null;
             /** Rationale */
             rationale?: string | null;
+            decline?: components["schemas"]["SuggestedDecline"] | null;
+            problem?: components["schemas"]["SuggestedProblem"] | null;
             /** Run Id */
             run_id?: string | null;
             /** At */
@@ -31773,6 +34012,20 @@ export interface components {
         SuggestionPatch: {
             /** Text */
             text: string;
+        };
+        /** SuggestionRef */
+        SuggestionRef: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "change" | "web" | "request" | "source_item";
+            /** Id */
+            id: string;
+            /** Title */
+            title?: string | null;
+            /** Vetted */
+            vetted?: boolean | null;
         };
         /** SummaryAsk */
         SummaryAsk: {
@@ -32118,7 +34371,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Description */
             description?: string | null;
             /** Body */
@@ -32211,7 +34464,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -32247,7 +34500,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -32370,7 +34623,7 @@ export interface components {
              * @default any
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any";
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"];
@@ -32433,7 +34686,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any";
         };
         /** ThemeOut */
         ThemeOut: {
@@ -32450,7 +34703,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any";
             /** Description */
             description: string | null;
             tokens: components["schemas"]["ThemeTokens"];
@@ -32513,6 +34766,11 @@ export interface components {
             /** Slide Variant */
             slide_variant?: string | null;
         };
+        /** ThemeProblemIn */
+        ThemeProblemIn: {
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ThemeSpacing */
         ThemeSpacing: {
             /** Base Size Pt */
@@ -32540,7 +34798,7 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "any") | null;
+            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any") | null;
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"] | null;
@@ -33795,6 +36053,16 @@ export interface components {
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
         };
+        /** UnknownIn */
+        UnknownIn: {
+            /**
+             * Find Out By
+             * Format: date
+             */
+            find_out_by: string;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
         /**
          * UnrequestedChange
          * @description A field of an item the review left alone (``unchanged``) that changed anyway.
@@ -33932,6 +36200,73 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ValueIn */
+        ValueIn: {
+            /** Value */
+            value: number;
+            /** Note */
+            note?: string | null;
+        };
+        /** VarianceOut */
+        VarianceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
+            /** Previous */
+            previous: number;
+            /** Change */
+            change: number;
+            /** Change Pct */
+            change_pct: number | null;
+            band: components["schemas"]["Band"] | null;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "better" | "worse";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "explained" | "unknown" | "noise";
+            /** Explanation */
+            explanation: string | null;
+            /** Explained By Name */
+            explained_by_name: string | null;
+            /** Find Out By */
+            find_out_by: string | null;
+            /** Noise Reason */
+            noise_reason: string | null;
+            /** Oracle Draft */
+            oracle_draft: string | null;
+            /** Oracle Confidence */
+            oracle_confidence: ("high" | "medium" | "low") | null;
+            /** Possible Causes */
+            possible_causes: components["schemas"]["PossibleCause"][];
+            /** Lock Version */
+            lock_version: number;
         };
         /**
          * VersionAnchors
@@ -34105,7 +36440,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing";
             /** Version */
             version: number;
             /**
@@ -34249,6 +36584,145 @@ export interface components {
         WaiveIn: {
             /** Reason */
             reason: string;
+        };
+        /** WebFetchIn */
+        WebFetchIn: {
+            /**
+             * Ref
+             * @description The ref (w-<n>) of a result of this run.
+             */
+            ref?: string | null;
+            /**
+             * Url
+             * @description The URL of a result of this run.
+             */
+            url?: string | null;
+        };
+        /** WebFindingOut */
+        WebFindingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Competitor Id
+             * Format: uuid
+             */
+            competitor_id: string;
+            /** Competitor Name */
+            competitor_name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "news" | "review" | "launch" | "pricing" | "other";
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Excerpt */
+            excerpt: string;
+            /** Url */
+            url: string;
+            /** Host */
+            host: string;
+            /** Published On */
+            published_on: string | null;
+            /**
+             * Found On
+             * Format: date
+             */
+            found_on: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "promoted" | "dismissed";
+            /** Vetted */
+            vetted: boolean;
+            /** Occurrence Id */
+            occurrence_id: string | null;
+            /** Dismiss Reason */
+            dismiss_reason?: string | null;
+        };
+        /** WebPageOut */
+        WebPageOut: {
+            /** Ref */
+            ref: string;
+            /** Url */
+            url: string;
+            /** Title */
+            title: string | null;
+            /**
+             * Text
+             * @description The page's text, at most 20,000 characters.
+             */
+            text: string;
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+            /** Note */
+            note: string;
+            /** Pages Left */
+            pages_left: number;
+        };
+        /** WebResultOut */
+        WebResultOut: {
+            /** Ref */
+            ref: string;
+            /** Url */
+            url: string;
+            /** Host */
+            host: string;
+            /** Title */
+            title: string;
+            /** Snippet */
+            snippet: string;
+            /** Published On */
+            published_on: string | null;
+        };
+        /** WebSearchIn */
+        WebSearchIn: {
+            /**
+             * Query
+             * @description What to search for, at most 200 characters.
+             */
+            query: string;
+            /**
+             * Max Results
+             * @description 1-10 results (default 8).
+             * @default 8
+             */
+            max_results: number;
+        };
+        /** WebSearchOut */
+        WebSearchOut: {
+            /** Results */
+            results: components["schemas"]["WebResultOut"][];
+            /**
+             * Untrusted
+             * @default true
+             * @constant
+             */
+            untrusted: true;
+            /** Note */
+            note: string;
+            /** Searches Left */
+            searches_left: number;
+        };
+        /** WeekValue */
+        WeekValue: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
         };
         /** WindowOut */
         WindowOut: {
@@ -35244,7 +37718,7 @@ export interface operations {
     list_documents: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             };
             header?: never;
             path?: never;
@@ -39816,6 +42290,13 @@ export interface operations {
                     "application/json": components["schemas"]["InviteOut"];
                 };
             };
+            /** @description No longer an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description No such invite */
             404: {
                 headers: {
@@ -39860,6 +42341,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InviteOut"];
                 };
+            };
+            /** @description No longer an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No such invite */
             404: {
@@ -44531,12 +47019,12 @@ export interface operations {
                 /** @description me or a member id */
                 approver?: string | null;
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
                 run_id?: string | null;
-                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion") | null;
+                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion" | "request") | null;
                 subject_id?: string | null;
                 q?: string | null;
                 limit?: number;
@@ -45818,7 +48306,7 @@ export interface operations {
     list_templates: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -46083,7 +48571,7 @@ export interface operations {
     list_themes: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "any") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -54137,6 +56625,75 @@ export interface operations {
             };
         };
     };
+    get_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+        };
+    };
+    put_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+            /** @description The host or the key was refused */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     delete_company_integration: {
         parameters: {
             query?: never;
@@ -54183,6 +56740,8 @@ export interface operations {
                 channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
                 /** @description Title or body search */
                 q?: string | null;
+                /** @description Only declined requests with replies still to send (H10) */
+                replies_to_send?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -54607,6 +57166,340 @@ export interface operations {
             };
         };
     };
+    list_request_replies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_request_reply_sent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplySent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    skip_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplySkip"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notify_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_request_replies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tell_reopened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_request_no: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepNoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_request_theme_problem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeProblemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_request_theme_problem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeProblemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_request_themes: {
         parameters: {
             query?: {
@@ -54810,6 +57703,7 @@ export interface operations {
                 intake_id?: string | null;
                 theme_id?: string | null;
                 kind?: ("team" | "customer") | null;
+                preset?: "pricing" | null;
             };
             header?: never;
             path?: never;
@@ -55297,6 +58191,376 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_deal_outcomes: {
+        parameters: {
+            query?: {
+                result?: ("won" | "lost" | "no_decision" | "churned") | null;
+                reason?: ("price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other") | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DealOutcomeOut"][];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_deal_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DealOutcomeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DealOutcomeOut"];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_deal_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_deal_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DealOutcomePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DealOutcomeOut"];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_deal_outcomes: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportOut"];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Over 1 MB or 2,000 rows, no header row, or not UTF-8 CSV */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_pricing_memos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingMemoSummary"][];
+                };
+            };
+            /** @description Decide by anyone but the pricing owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pricing memo in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Decide before the memo's latest version is approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description replaces names no decision */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decide_pricing_memo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DecideMemoIn"] | null;
+            };
+        };
+        responses: {
+            /** @description The memo's existing proposal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Decide by anyone but the pricing owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pricing memo in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Decide before the memo's latest version is approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description replaces names no decision */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -56101,6 +59365,1654 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_metrics: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_metric_query: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTestOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description PostHog refused or failed the query */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_metric_value: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValueIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricValueOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_metric_value: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metric_variances: {
+        parameters: {
+            query?: {
+                status?: ("open" | "explained" | "unknown" | "noise") | null;
+                metric_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    explain_metric_variance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_metric_variance_unknown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnknownIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_metric_variance_noise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoiseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_competitors: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorDetail"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archive_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restore_competitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    watch_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    check_competitor_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_competitor_changes: {
+        parameters: {
+            query?: {
+                competitor_id?: string | null;
+                from?: string | null;
+                to?: string | null;
+                rating?: ("minor" | "notable" | "major") | null;
+                origin?: ("page" | "web") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_competitor_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeDetail"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_competitor_web_findings: {
+        parameters: {
+            query?: {
+                status?: ("open" | "promoted" | "dismissed") | null;
+                competitor_id?: string | null;
+                occurrence_id?: string | null;
+                include_older?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFindingOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_web_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_web_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebFindingOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_positioning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+        };
+    };
+    update_positioning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositioningIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    accept_positioning_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_positioning_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositioningOut"];
+                };
+            };
+            /** @description Role too low */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such alternative, page, change, finding or suggestion */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, blocked by robots.txt, or already decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid URL, over the limits, a duplicate, or a field too long */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_web: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebSearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebSearchOut"];
+                };
+            };
+            /** @description Web search is for Oracle's monthly digest, or the URL is not from this run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description robots.txt asks bots not to read the page */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description web_cap_reached: the run's or the month's cap */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description web_search_unconfigured or unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fetch_web_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebFetchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebPageOut"];
+                };
+            };
+            /** @description Web search is for Oracle's monthly digest, or the URL is not from this run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No result of this run has that ref */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description robots.txt asks bots not to read the page */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description web_cap_reached: the run's or the month's cap */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

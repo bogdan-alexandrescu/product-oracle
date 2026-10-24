@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { ROADMAP_REVIEW_RUN_ID } from "../lib/api/mock/runs";
 import { MOCK_REVIEW_CHANGE_KEY } from "../lib/api/mock/server";

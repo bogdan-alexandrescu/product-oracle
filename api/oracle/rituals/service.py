@@ -10,7 +10,8 @@ own ``try``), per company and per tick:
    calls) and advance ``next_due_at``;
 3. build each scheduled occurrence's pre-read in a savepoint (the ``monitor_due``
    pattern): ready, or ``attempts`` + 1 and ``failed`` after :data:`MAX_ATTEMPTS`; then,
-   with summaries on Every pre-read, start its summary run (oracle.rituals.summaries);
+   with summaries on Every pre-read, or Run rituals at "Act within limits" (H11) and
+   the run within its limit, start its summary run (oracle.rituals.summaries);
 3b. F6's catch-up: this week's alignment report occurrence, built while there was no
    track to report, is built again once there is (:func:`_alignment_catch_up`); a
    rebuild that fails leaves it ready as it was, and one that succeeds starts its
@@ -270,6 +271,7 @@ async def _build(
         period_from=occ.period_from or occ.due_at - timedelta(days=7),
         period_to=occ.period_to or occ.due_at,
         now=now,
+        occurrence_id=occ.id,
     )
     try:
         async with db.begin_nested():
@@ -442,12 +444,15 @@ async def _last_pre_read(db: AsyncSession, ritual_id: uuid.UUID) -> OccurrenceSu
 
 
 async def ritual_out(db: AsyncSession, r: Ritual) -> RitualOut:
+    from oracle.metrics.activate import replaced_by
+
     return RitualOut(
         id=r.id, kind=r.kind, title=r.title, builtin=r.builtin, schedule=r.schedule,
         duration_min=r.duration_min, prep_hours=r.prep_hours, owner_id=r.owner_id,
         attendee_ids=list(r.attendee_ids), status=r.status,  # type: ignore[arg-type]
         next_due_at=r.next_due_at, lock_version=r.lock_version,
         last_pre_read=await _last_pre_read(db, r.id),
+        replaced_by=await replaced_by(db, r),
     )  # fmt: skip
 
 
@@ -656,6 +661,7 @@ async def occurrence_out(
         decision_ids=list(occ.decision_ids), summary_run_id=occ.summary_run_id,
         summary=occ.summary, summary_state=occ.summary_state,  # type: ignore[arg-type]
         summary_note=occ.summary_note, read_by_me=read is not None,
+        summary_offered=await summaries.offered(db, ritual.kind),
         decisions=[
             OccurrenceDecision(id=d.id, number=d.number, title=d.title,
                                href=f"/company/decisions?d={d.number}")

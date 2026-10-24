@@ -12,6 +12,7 @@ import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
+import { mockNowMs } from "./clock";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
@@ -311,6 +312,21 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
         { name: "update_draft", title: "Update draft", roles: ["analyst", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["update.md"], checkpoint: "update_review", approver_role: "owner", decider: "role" },
       ],
     },
+    {
+      // H9: an approver or owner drafts a pricing memo from Company › Market › Pricing (New pricing memo).
+      key: "pricing_memo",
+      title: "Pricing memo",
+      description: "Draft a pricing options memo from willingness-to-pay and win and loss evidence; the pricing owner decides.",
+      requires_document: true,
+      writes_document: true,
+      target_kind: null,
+      source_kind: null,
+      in_new_run_dialog: false,
+      starts_from: { label: "Draft with Oracle · Company › Market › Pricing", href: "/company/market?tab=pricing" },
+      segments: [
+        { name: "pricing_memo", title: "Pricing memo", roles: ["researcher", "writer"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["pricing.md"], checkpoint: "pricing_review", approver_role: "owner", decider: "role" },
+      ],
+    },
   ],
   roles: ROLES,
   depths: { quick: 0.5, standard: 1, deep: 2 },
@@ -328,6 +344,7 @@ const KIND_NAME: Record<Kind, string> = {
   vision: "vision",
   strategy: "product strategy",
   update: "update",
+  pricing: "pricing memo",
 };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
@@ -1176,7 +1193,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r));
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
-  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md")) && r.document_slug) {
+  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md") || def.outputs.includes("pricing.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
     r.document_id = imp.document_id ?? null;
@@ -1463,14 +1480,18 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   return {
     // Launch rows (H6) are added by the server (./launches.ts); date rows (F3) too.
     launches: [],
-    // A5: no access requests in the mock yet.
+    // A5: access request rows are added by the server (./server.ts).
     access_requests: [],
+    // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).
+    requests: [],
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],
     // Ritual rows (H2): the mock has no rituals yet (the UI lane adds them); outcome rows (H3) are added by ./quality.ts.
     rituals: [],
     outcomes: [],
+    // Metric rows (H5): the mock has no metrics yet (the UI lane adds them).
+    metrics: [],
     // G6: discussion rows are added by the server (./discussions.ts).
     discussions: [],
     checkpoints,
@@ -1542,6 +1563,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const flow = flowOf(input.flow);
     // H8: only an owner drafts an update.
     if (input.flow === "update_draft" && ctx.userRole !== "owner") return fail(403, "Only an owner can draft an update");
+    // H9: approvers and owners draft a pricing memo.
+    if (input.flow === "pricing_memo" && ctx.userRole !== "owner" && ctx.userRole !== "approver") return fail(403, "Requires the approver role");
     const knobs = resolveKnobs(input.flow, input.knobs);
     if (typeof knobs === "string") return fail(422, knobs);
     const goals = targetGoals(ctx, input.flow, input.knobs?.goals);
@@ -1582,6 +1605,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (!ref && !noDocument) return fail(422, "name the PRD: an existing document, or a new slug to create");
     const doc = ref ? find(ref) : undefined;
     if (flow.requires_document && !doc) return fail(422, `document '${ref}' not found`);
+    if (input.flow === "pricing_memo" && doc && doc.kind !== "pricing") {
+      return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a pricing memo`);
+    }
     if (input.flow === "strategy_draft" && doc && doc.kind !== "vision" && doc.kind !== "strategy") {
       return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}; the ${flow.title} flow drafts a vision or a product strategy`);
     }
@@ -1745,8 +1771,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     r.snapshot_as_of = ctx.now();
     if (r.estimate_usd > THRESHOLD) r.status = "awaiting_approval";
     else launch(ctx, r);
-    // H8: the local runtime writes an update draft at once, so the new update opens on it.
-    if (r.flow === "update_draft" && (r.status as RunOut["status"]) === "running") finishRunning(ctx, r);
+    // H8, H9: the local runtime writes an update or pricing memo draft at once, so it opens on it.
+    if ((r.flow === "update_draft" || r.flow === "pricing_memo") && (r.status as RunOut["status"]) === "running") finishRunning(ctx, r);
     return done();
   }
   if (action === "approve" && m === "POST") {
@@ -2066,6 +2092,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   request_triage: "Request triage",
   launch_review: "Launch kit review",
   update_review: "Update review",
+  pricing_review: "Pricing memo review",
 };
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {
@@ -2766,7 +2793,7 @@ function roadmapReviewRun(): RunOut {
           artifacts: ["roadmap_items.yaml"],
           items_check: items.items_check,
           // D8: the step waits in SwarmCloud, 19 h 30 min left when seeded (the header's time chip).
-          wait: { workflow_id: "mock-wf-roadmap-items", expires_at: new Date(Date.now() + (19 * 60 + 30) * 60_000).toISOString() },
+          wait: { workflow_id: "mock-wf-roadmap-items", expires_at: new Date(mockNowMs() + (19 * 60 + 30) * 60_000).toISOString() },
         },
         created_at: "2026-10-20T09:04:00Z",
         can_decide: true,

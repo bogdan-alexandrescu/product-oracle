@@ -21,6 +21,7 @@ from oracle.baseline import figures
 from oracle.baseline.figures import Figure
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
 from oracle.docs.models import Document, DocumentVersion
+from oracle.market import blocks as market_blocks
 from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
@@ -50,6 +51,8 @@ TITLES = {
     "strategy_age": "Strategy age",
     "changelog_drafts": "Changelog drafts",
     "update_draft": "Update draft",
+    "metrics_table": "Metrics",
+    "variances": "Variances",
 }
 # Features that moved this many ranks between the last two snapshots.
 PRIORITY_MOVE = 3
@@ -62,6 +65,8 @@ class BlockCtx:
     period_from: datetime
     period_to: datetime
     now: datetime
+    # The occurrence being built (H5's variances block ties its variances to it).
+    occurrence_id: uuid.UUID | None = None
 
 
 # --- Home's distance to go ------------------------------------------------------------
@@ -622,6 +627,26 @@ async def update_draft(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
              "text": f"{doc.title} ({doc.status})"}]  # fmt: skip
 
 
+# --- H5 Metrics review (oracle.metrics.review) ----------------------------------------
+
+
+async def metrics_table(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """The fixed-format metrics table of the week the review reads."""
+    from oracle.metrics import review
+
+    return await review.metrics_table(db, ctx.period_to)
+
+
+async def variances(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
+    """The period's variances, tied to the occurrence being built."""
+    from oracle.metrics import review
+
+    return await review.variances(db, ctx.period_from, ctx.period_to, ctx.occurrence_id)
+
+
+# H7 Competitive digest's four blocks (oracle.market.blocks).
+TITLES.update(market_blocks.TITLES)
+
 Builder = Callable[[AsyncSession, BlockCtx], Awaitable[list[dict[str, Any]]]]
 BUILDERS: dict[str, Builder] = {
     "goals": goals,
@@ -646,6 +671,9 @@ BUILDERS: dict[str, Builder] = {
     "strategy_age": strategy_age,
     "changelog_drafts": changelog_drafts,
     "update_draft": update_draft,
+    "metrics_table": metrics_table,
+    "variances": variances,
+    **market_blocks.BUILDERS,
 }
 
 

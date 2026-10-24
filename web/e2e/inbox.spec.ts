@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -35,11 +35,14 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   // D14: a feedback row's primary action is outline too.
   await expect(feedback.getByRole("button", { name: "Accept", exact: true }).first()).toHaveAttribute("data-variant", "secondary");
 
-  // Decide goes to the run, at the decision.
+  // B2: the baseline checkpoint is reviewed in the Baseline, filtered to its run (not the run page).
+  await expect(
+    checkpoints.locator("tr[data-row]").filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Review" }),
+  ).toHaveAttribute("href", /^\/baseline\?run=[0-9a-f-]+$/);
+  // D10: a PRD review's Decide opens its version at the run review, not the run page.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();
-  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+#decide$/);
-  await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
-  await expect(page.locator("#decide")).toBeFocused();
+  await expect(page).toHaveURL(/\/documents\/[a-z0-9-]+\/v\/\d+\?run_review=[0-9a-f-]+$/);
+  await expect(page.getByTestId("run-review-bar").filter({ visible: true })).toBeVisible();
 });
 
 test("inbox: cancel a run paused on overrun", async ({ page }) => {
@@ -115,7 +118,8 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
   await login(page);
   const badge = page.getByTestId("nav-inbox-badge");
-  await expect(badge).toHaveText("10");
+  // The seed's 10 and the pending access request (A5, #203 part 3).
+  await expect(badge).toHaveText("11");
   await page.goto("/runs");
   await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
@@ -124,8 +128,8 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
 
   await page.goto("/inbox");
   // The checkpoint is decided (one fewer to do); the delivery is not counted.
-  await expect(badge).toHaveText("9");
-  await expect(page.getByText("9 waiting").filter({ visible: true })).toBeVisible();
+  await expect(badge).toHaveText("10");
+  await expect(page.getByText("10 waiting").filter({ visible: true })).toBeVisible();
   await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
   // Shown only, under Open, with a heading saying what it is.
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
