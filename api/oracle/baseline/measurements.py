@@ -3,7 +3,8 @@
 Recording or deleting a measurement sets the goal's ``attrs.current`` and
 ``current_as_of`` to the latest row by ``measured_on`` through the normal write path: a
 revision is written and the person's write locks the goal, as any edit does. One row per
-goal per day: a second on the same day replaces the value.
+goal per day: a second on the same day replaces the value. A goal with a linked metric
+(H5) takes its values from the metric (oracle.metrics.pull), never from a person (409).
 
 The caller commits.
 """
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.auth.deps import Principal
 from oracle.baseline import goals, service
 from oracle.baseline.models import Entity, GoalMeasurement
+from oracle.metrics.models import Metric
 
 
 async def _goal(db: AsyncSession, entity_id: uuid.UUID) -> Entity:
@@ -71,6 +73,14 @@ async def record(
     evidence_id: uuid.UUID | None,
 ) -> GoalMeasurement:
     goal = await _goal(db, entity_id)
+    linked = await db.scalar(
+        select(Metric.title).where(Metric.goal_id == goal.id, Metric.status != "archived")
+    )
+    if linked is not None:
+        # H5: the goal's value is read from its metric every week.
+        raise service.ConflictError(
+            f"This goal's value comes from {linked}. Record values on the metric."
+        )
     if not goals.unit_ok((goal.attrs or {}).get("unit")):
         raise service.InvalidError("give the goal its unit before recording a value")
     if measured_on > await goals.company_today(db):
