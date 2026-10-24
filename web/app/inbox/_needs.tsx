@@ -292,6 +292,7 @@ export type NeedGroup =
   | "launches"
   | "dates"
   | "rituals"
+  | "metrics"
   | "outcomes"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
@@ -1555,6 +1556,43 @@ export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): Sta
   });
 }
 
+/**
+ * H5 metric rows, all counted: Explain a variance and Find out (the metric's owner; each
+ * opens the metrics review that lists it) and Metric not read for a day (owners; opens the
+ * metric). Days are calendar days of the Company time zone. New until the visit after.
+ */
+export function metricNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+  return (inbox.metrics ?? []).map((r) => {
+    const label =
+      r.reason === "explain"
+        ? `Explain a variance · ${r.metric_title} · week of ${calendarDay(r.week_start)}`
+        : r.reason === "find_out"
+          ? `Find out · ${r.metric_title} · due ${r.due_on ? calendarDay(r.due_on) : "now"}`
+          : `Metric not read for a day · ${r.metric_title}`;
+    const href = r.reason !== "pull_failed" && r.occurrence_id ? `/company/rituals/${r.occurrence_id}` : `/company/metrics?metric=${r.metric_id}`;
+    return {
+      key: `metric-${r.reason}-${r.variance_id ?? r.metric_id}`,
+      icon: "flag",
+      kind: "Metric",
+      item: (
+        <span className="truncate" title={label} data-testid="metric-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Company › Metrics</span>,
+      at: r.due_on ?? r.week_start,
+      action: (
+        <LinkButton variant="secondary" href={href} aria-label="Open">
+          Open
+        </LinkButton>
+      ),
+      state: isNew(r.due_on ?? r.week_start, seenBefore) ? ("new" as const) : ("open" as const),
+      counted: r.counts,
+      group: "metrics" as const,
+    };
+  });
+}
+
 /** H3 outcome rows: Add predictions (the roadmap's approver) and Outcome check due (the
  * record's owner) count; Oracle recorded (H11 at Act within limits) is shown, with Change. */
 export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] } {
@@ -1622,6 +1660,7 @@ export function allNeeds(
     ...stated(dateNeeds(inbox, busy, act), "dates"),
     ...stated(launches.counted, "launches"),
     ...ritualNeeds(inbox, busy, act),
+    ...metricNeeds(inbox, seenBefore),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),

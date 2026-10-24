@@ -50,6 +50,9 @@ class RitualOut(BaseModel):
     status: RitualStatus
     next_due_at: datetime | None
     lock_version: int
+    # H5: "Weekly metrics review" on the goals check-in the review replaced (paused while
+    # the review is active); null otherwise.
+    replaced_by: str | None = None
     # The newest occurrence with a pre-read: Company › Rituals' "Last pre-read".
     last_pre_read: "OccurrenceSummary | None" = None
 
@@ -125,6 +128,8 @@ class EstimateRitual(BaseModel):
     ritual_id: uuid.UUID
     title: str
     runs_per_month: float
+    # Its kind's run: $3.00 (ritual_summary), a metrics review's $1.50 (metrics_variance).
+    per_summary_usd: float = 3.0
 
 
 class Estimate(BaseModel):

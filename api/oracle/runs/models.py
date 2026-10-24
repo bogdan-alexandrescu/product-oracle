@@ -43,6 +43,8 @@ FLOWS = (
     "prd_draft_items",
     # H2 Cadence engine (migration 0037_rituals): a ritual pre-read's written summary.
     "ritual_summary",
+    # H5 Metrics review (migration 0050_metrics_review): a metrics review's variance drafts.
+    "metrics_variance",
 )
 RUN_STATUSES = (
     "draft",

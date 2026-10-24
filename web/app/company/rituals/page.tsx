@@ -86,9 +86,10 @@ function Rituals() {
       header: "State",
       width: "96px",
       phone: "meta",
+      // H5: the goals check-in the metrics review replaced says so (an owner may resume it).
       cell: (r) => (
-        <Chip kind={r.status === "active" ? "pass" : "na"} dot>
-          {r.status === "active" ? "On" : "Paused"}
+        <Chip kind={r.status === "active" ? "pass" : "na"} dot wrap={!!r.replaced_by} title={r.replaced_by ? `Replaced by ${r.replaced_by}` : undefined}>
+          {r.status === "active" ? "On" : r.replaced_by ? `Replaced by ${r.replaced_by}` : "Paused"}
         </Chip>
       ),
     },

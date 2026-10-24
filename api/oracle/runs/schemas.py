@@ -25,6 +25,7 @@ Flow = Literal[
     "update_draft",
     "prd_draft_items",
     "ritual_summary",
+    "metrics_variance",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -1321,6 +1322,7 @@ class InboxStrategy(BaseModel):
 
 
 from oracle.launches.schemas import InboxLaunch  # noqa: E402
+from oracle.metrics.schemas import InboxMetric  # noqa: E402
 from oracle.quality.schemas import InboxOutcome  # noqa: E402
 from oracle.rituals.schemas import InboxRitual  # noqa: E402
 from oracle.roadmap.schemas import InboxTrack  # noqa: E402
@@ -1420,6 +1422,9 @@ class InboxOut(BaseModel):
     # Outcome rows (H3): Add predictions and Outcome check due (counted in ``total``),
     # Oracle recorded (shown only).
     outcomes: list[InboxOutcome] = []
+    # Metric rows (H5): Explain a variance and Find out (the metric's owner), Metric not
+    # read for a day (owners); all counted in total and needs_me.
+    metrics: list[InboxMetric] = []
     # My previous Inbox visit (what 'new' is measured from); None before the first.
     last_seen_at: datetime | None = None
     # F2 Track health: one row per track with alerts for me (the track's owner, else the

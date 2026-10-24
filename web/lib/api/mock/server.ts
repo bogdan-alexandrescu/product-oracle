@@ -76,7 +76,8 @@ import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./so
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
-import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
 import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -190,6 +191,8 @@ export interface Db {
   decisions?: DecisionsDb;
   /** Rituals, their occurrences and the summaries mode (./rituals.ts, H2); seeded on first use. */
   rituals?: RitualsDb;
+  /** H5: metrics, their weekly values and variances, and the PostHog connection (./metrics.ts); seeded in the "metrics" scenario only. */
+  metrics?: MetricsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -1494,7 +1497,41 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     uuid,
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
+    openVariances: (id) => openVariances(ensureMetrics(db, me), id),
   };
+}
+
+/** What the metrics mock reads: the signed-in member, the members and the goals. */
+function metricsContext(db: Db, me: MemberRow): MetricsContext {
+  return {
+    me: { id: me.id, email: me.email, name: me.name, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, name: m.name, role: m.role, status: m.status })),
+    uuid,
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    goals: () =>
+      db.baseline.entities
+        .filter((e) => e.type === "goal")
+        .map((e) => ({ id: e.id, title: e.title, unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null, confirmed: e.status === "confirmed" })),
+  };
+}
+
+/** H5: the metrics; the "metrics" scenario seeds them, every other company has none. */
+function ensureMetrics(db: Db, me: MemberRow): MetricsDb {
+  db.metrics ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "metrics" ? seedMetrics(metricsContext(db, me)) : emptyMetrics();
+  return db.metrics;
+}
+
+/** The rituals; the "metrics" scenario adds the Weekly metrics review that replaced the goals check-in. */
+function ensureRituals(db: Db, me: MemberRow): RitualsDb {
+  if (db.rituals) return db.rituals;
+  const ctx = ritualsContext(db, me);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  db.rituals = seedRituals(ctx, scenario === "rituals");
+  if (scenario === "metrics") {
+    const metrics = ensureMetrics(db, me);
+    addMetricsReview(ctx, db.rituals, (id, asOf) => reviewBlocks(metricsContext(db, me), metrics, id, asOf));
+  }
+  return db.rituals;
 }
 
 /** The next version: the base with some sections replaced, and the resolutions recorded. */
@@ -3327,6 +3364,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
   if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
+  // H5: metrics, their variances and the analytics connection check roles themselves (./metrics.ts).
+  const metricsOut = await routeMetrics(metricsContext(db, me), ensureMetrics(db, me), req, p, q);
+  if (metricsOut) return metricsOut;
   const reports = await reportsRoute(db, db.user_id, me, req, p, q);
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
@@ -3610,8 +3650,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
-  db.rituals ??= seedRituals(ritualsCtx, localStorage.getItem(MOCK_SCENARIO_KEY) === "rituals");
-  const ritual = await routeRituals(ritualsCtx, db.rituals, req, p, q);
+  const ritual = await routeRituals(ritualsCtx, ensureRituals(db, me), req, p, q);
   if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
@@ -3631,7 +3670,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
-    const ritualRows = ritualInbox(ritualsCtx, db.rituals);
+    const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;
     inbox.rituals = ritualRows;
     inbox.total += ritualCounted;
@@ -3640,6 +3679,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;
+    // Metric rows (H5): Explain a variance, Find out and Metric not read for a day; all count.
+    const metricRows = metricInbox(metricsContext(db, me), ensureMetrics(db, me));
+    const metricCounted = metricRows.filter((r) => r.counts).length;
+    inbox.metrics = metricRows;
+    inbox.total += metricCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

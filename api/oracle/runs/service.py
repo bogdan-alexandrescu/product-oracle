@@ -9820,6 +9820,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     rituals = await ritual_rows(db, principal)
     counted += sum(1 for r in rituals if r.counts)
+    from oracle.metrics.review import inbox_rows as metric_rows
+
+    metrics = await metric_rows(db, principal)
+    counted += sum(1 for m in metrics if m.counts)
     from oracle.quality.outcomes import inbox_rows as outcome_rows
 
     outcome_inbox = await outcome_rows(db, principal)
@@ -9882,6 +9886,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         tracks=track_groups,
         launches=launch_rows,
         rituals=rituals,
+        metrics=metrics,
         outcomes=outcome_inbox,
         items=states,
         counts=counts,
