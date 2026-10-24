@@ -150,9 +150,8 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
   await expect(row(page, "Price the team plan per seat")).toHaveCount(0);
   await expect(row(page, "Approve Feature set · Checkout redesign PRD run")).toContainText("—");
 
+  // Two quick picks: From is picked before All has taken, and both stay.
   await chip(page, "Class", "All").click();
-  // Each filter rewrites the URL from the one before it: pick From once All has taken.
-  await expect(chip(page, "Class", "All")).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("From").selectOption({ label: "Pushback overrides" });
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toContainText("Keep the reviewer's call over Oracle's pushback");

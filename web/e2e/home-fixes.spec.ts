@@ -64,9 +64,11 @@ async function editDb(page: Page, edit: string, arg?: unknown) {
  * one more for an owner: the Claude account pool (/v1/claude-accounts), for the notice
  * that Oracle's AI is off. B5 added
  * one: a shown goal with a typed current reads its trend from its measurements first, and
- * from its revisions only when it has fewer than two (here: paid conversion).
+ * from its revisions only when it has fewer than two (here: paid conversion). The owner
+ * (2026-10-24) set it at 18, accepting three fixed costs: the capabilities call, the names
+ * lookup behind goal chips and the goal-trend fallback.
  */
-const CALL_BUDGET = 15;
+const CALL_BUDGET = 18;
 
 test("Home: a large company's first paint stays within the call budget", async ({ page }) => {
   await openHome(page, "large");
