@@ -214,7 +214,7 @@ export default function PlanPage() {
             onPlanChanged={() => void q.reload()}
           />
         ))}
-        <Split inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
+        <Split wide inspector={inspector && <div className="max-[600px]:hidden">{inspector}</div>}>
           {tracks.error && <Notice tone="error">{tracks.error}</Notice>}
           {tracks.data?.map((t) => (
             <TrackPanel key={t.id} track={t} may={trackRights} picked={milestone} onPick={onPickMilestone} onChange={putTrack} />
