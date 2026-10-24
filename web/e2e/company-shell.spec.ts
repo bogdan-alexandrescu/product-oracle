@@ -14,6 +14,8 @@ test("the rail places Company after Inbox, just above Settings; it lands on Stra
   // order, or not highlighted on its pages; no_claim=none beyond protects (F1 renamed Roadmap to Plan).
   await login(page);
   const nav = page.getByTestId("app-nav");
+  // The rail draws its items once the role's capabilities load; read them after that.
+  await expect(nav.getByTestId("nav-settings")).toBeVisible();
   const ids = await nav.locator("a[data-testid^='nav-']").evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
   expect(ids.filter((id) => id !== "nav-brand")).toEqual([
     "nav-home",
