@@ -92,12 +92,16 @@ async def test_at_act_the_tick_starts_one_summary_and_tells_the_owner(
 
     (action,) = await ritual_actions(ctx.tenant_id)
     assert action.notify_ids == [ctx.users["owner"].id]
-    assert action.subject["occurrence_id"] == occ["id"]
-    assert action.subject["run_id"] == str(runs[0].id)
+    assert action.subject == {
+        "kind": "ritual",
+        "key": occ["ritual_id"],
+        "href": f"/company/rituals/{occ['id']}",
+    }
     assert action.undo == {"method": "POST", "path": f"/v1/runs/{runs[0].id}/cancel", "body": None}
     inbox = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()
     (row,) = [r for r in inbox["oracle_actions"] if r["responsibility"] == "rituals"]
     assert "Weekly goals check-in" in row["summary"] and row["counts"] is True
+    assert row["subject"]["href"] == f"/company/rituals/{occ['id']}"
     assert "workspace" not in row["summary"].lower() and "tenant" not in row["summary"].lower()
     approver = (await client.get("/v1/inbox", headers=ctx.as_("approver"))).json()
     assert not [r for r in approver["oracle_actions"] if r["responsibility"] == "rituals"]

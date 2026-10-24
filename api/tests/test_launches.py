@@ -665,3 +665,40 @@ async def test_act_within_limits_publishes_and_notifies_on_launch(client, owner,
         actions = list(await s.scalars(select(OracleAction)))
     assert [a.responsibility for a in actions] == ["launches"]
     assert "Payment step" in actions[0].summary
+
+
+async def test_oracle_did_on_launch_links_to_the_launch(client, owner, runtime):  # noqa: F811
+    """protects=#524 review item 3: the "Oracle did" record of a launch Oracle acted on has
+    the subject shape the other records use ({kind, key, href}) and its Inbox row links to
+    the launch; fails_when=the subject is {kind, id} with no href, so the row is no link;
+    no_claim=the Inbox screen (Playwright autonomy-launches.spec.ts)."""
+    tenant_id, auth = owner
+    by_item = await launched_world(client, auth, runtime, tenant_id)
+    await member_asked(tenant_id, "Rita", "s-5-1", "Can buyers keep their card?")
+    resp = await client.put(
+        "/v1/autonomy/launches",
+        json={"level": "act", "reason": "Internal launch notes are routine"},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    launch_id = by_item["payment-step"]["id"]
+    resp = await client.post(f"/v1/launches/{launch_id}/launched", json={}, headers=auth)
+    assert resp.status_code == 200, resp.text
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    (row,) = [r for r in inbox["oracle_actions"] if r["responsibility"] == "launches"]
+    assert row["subject"] == {
+        "kind": "launch",
+        "key": launch_id,
+        "href": f"/roadmap/launches?launch={launch_id}",
+    }
+
+
+async def test_internal_launch_work_is_wired(client, owner):  # noqa: F811
+    """protects=#524 review item 1: Settings › Autonomy shows Internal launch work as built
+    (its "Act within limits" publishes and notifies on launch); fails_when=wired is false,
+    so the screen says "Takes effect when H6 Launches and changelog ships"; no_claim=the
+    screen's chip (Playwright autonomy-launches.spec.ts)."""
+    _, auth = owner
+    got = (await client.get("/v1/autonomy", headers=auth)).json()
+    by = {r["key"]: r for r in got["items"]}
+    assert by["launches"]["wired"] is True

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -33,4 +34,18 @@ test("autonomy: Run rituals at Act within $5 a run is in effect, with no pending
   await expect(step(page, "rituals", "Act")).toHaveAttribute("aria-pressed", "true");
   await expect(rituals.getByTestId("autonomy-limits")).toHaveText("up to $5 a run");
   await expect(rituals.getByTestId("autonomy-pending")).toHaveCount(0);
+});
+
+// protects=#524 review item 3: the "Oracle did" row of a ritual summary Oracle started is a link
+// that opens that ritual's pre-read; fails_when=the row's subject has no href, so its summary is
+// plain text; no_claim=the record the API writes (pytest tests/test_rituals_autonomy.py covers it).
+test("autonomy: an Oracle did row of a ritual opens the ritual", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "oracle-did-launch-ritual"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-inbox").click();
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Monthly roadmap refresh" });
+  await expect(did).toContainText("Run rituals");
+  await did.getByRole("link", { name: /^Started a summary of the pre-read for 'Monthly roadmap refresh'/ }).click();
+  await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Monthly roadmap refresh" })).toBeVisible();
 });

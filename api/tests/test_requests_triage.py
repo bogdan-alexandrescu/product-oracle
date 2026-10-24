@@ -858,7 +858,7 @@ async def test_daily_triage_runs_at_07_00_in_the_company_time_zone(
     with the Company time zone set to Asia/Tokyo, the daily run waits for 07:00 Tokyo
     (06:59 Tokyo is 14:59 the day before in Pacific, past Pacific's 07:00) and is that
     Tokyo day's run; fails_when=triage hard-codes Pacific and starts at 06:59 Tokyo with
-    Pacific's day; no_claim=the switch's label (still "07:00 PT", see questions.json)."""
+    Pacific's day; no_claim=the switch's label (the owner kept "07:00 PT" on 2026-10-24)."""
     tokyo = ZoneInfo("Asia/Tokyo")
     resp = await client.put(
         "/v1/settings/company_timezone", json={"value": "Asia/Tokyo"}, headers=ctx.as_("owner")
