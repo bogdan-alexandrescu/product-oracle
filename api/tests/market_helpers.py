@@ -2,6 +2,7 @@
 fetcher (LinkFetcher with a mock transport and resolver, so its guards run), made-up
 alternatives on ``.example`` hosts, and a ready digest occurrence."""
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 
@@ -28,6 +29,8 @@ class FakeWeb:
     addresses: dict[str, str] = field(default_factory=dict)
     # host -> raise a timeout on every request
     slow: set[str] = field(default_factory=set)
+    # host -> never answer (the fetcher's own time cap ends the read)
+    hang: set[str] = field(default_factory=set)
     requests: list[str] = field(default_factory=list)
 
     def page(self, url: str, body: str, status: int = 200, kind: str = "text/html") -> None:
@@ -38,8 +41,15 @@ class FakeWeb:
         self.requests.append(url)
         if request.url.host in self.slow:
             raise httpx.ReadTimeout("slow", request=request)
+        if request.url.host in self.hang:
+            return self._never()  # type: ignore[return-value]
         status, body, kind = self.pages.get(url, (404, "not found", "text/plain"))
         return httpx.Response(status, text=body, headers={"content-type": kind})
+
+    @staticmethod
+    async def _never() -> httpx.Response:
+        await asyncio.sleep(3600)
+        raise AssertionError("unreachable")
 
     def fetcher(self) -> LinkFetcher:
         async def resolve(host: str, port: int) -> list[str]:

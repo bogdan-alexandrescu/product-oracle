@@ -417,3 +417,38 @@ async def test_starts_on_its_own_at_act_within_the_cost_limit_once(client, ctx, 
         assert await _digest_runs(ctx.tenant_id) == 1
     finally:
         set_runtime(None)
+
+
+async def test_at_observe_the_occurrence_does_not_offer_the_digest(client, ctx, at, web):
+    """protects=the occurrence says whether Oracle writes its summary: a digest's is not
+    offered at H11 market Observe (the route answers 409 there) and is from Draft up;
+    other kinds are always offered; fails_when=the page offers "Write the digest with
+    Oracle" at Observe; no_claim=the button itself (web/e2e/market.spec.ts)."""
+    await _setup(client, ctx, at, web)
+    occ = await ready_digest(ctx, at)
+    url = f"/v1/ritual-occurrences/{occ.id}"
+    assert (await client.get(url, headers=ctx.as_("approver"))).json()["summary_offered"] is True
+    await _set_market(client, ctx, "observe")
+    got = (await client.get(url, headers=ctx.as_("approver"))).json()
+    assert got["summary_offered"] is False
+    await _set_market(client, ctx, "draft")
+    assert (await client.get(url, headers=ctx.as_("approver"))).json()["summary_offered"] is True
+
+
+def test_the_digest_segment_offers_exactly_the_spec_tools():
+    """protects=the digest's researcher has the spec's tools, the two web tools among
+    them, and the writer the same without the web tools (plus every segment's run
+    discussions, G5); fails_when=a tool the spec does not list (get_checkpoint_review)
+    is offered, or the writer gets web access; no_claim=the MCP server's own scope
+    checks."""
+    from oracle.runs import flows
+
+    (seg,) = flows.FLOWS["competitive_digest"].segments
+    writer = {
+        "list_competitors", "get_competitor", "get_positioning", "get_strategy_stack",
+        "get_baseline", "list_requests", "search", "get_source_item",
+        "get_ritual_occurrence_pre_read",
+    }  # fmt: skip
+    assert set(seg.tools) == writer | {flows.RUN_DISCUSSIONS_TOOL}
+    assert set(seg.role_tools.get("researcher", ())) == {"search_web", "fetch_web_page"}
+    assert "writer" not in seg.role_tools

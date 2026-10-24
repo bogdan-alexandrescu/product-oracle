@@ -199,11 +199,14 @@ test("15f: on Positioning the approver accepts a suggestion (its web evidence No
   await expect(unique.getByTestId("positioning-item").filter({ hasText: "Set up in one afternoon" })).toHaveCount(1);
   const trends = fields.filter({ has: page.getByRole("heading", { name: "Relevant trends" }) });
   await trends.getByTestId("positioning-suggestion").getByRole("button", { name: "Dismiss" }).click();
-  await expect(page.getByTestId("positioning-suggestion")).toHaveCount(0);
+  // The seeded Remove suggestion on Competitive alternatives stays (its own test).
+  await expect(unique.getByTestId("positioning-suggestion")).toHaveCount(0);
+  await expect(trends.getByTestId("positioning-suggestion")).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("positioning-field")).toHaveCount(6);
   await expect(unique.getByTestId("positioning-item").filter({ hasText: "Set up in one afternoon" })).toHaveCount(1);
-  await expect(page.getByTestId("positioning-suggestion")).toHaveCount(0);
+  await expect(unique.getByTestId("positioning-suggestion")).toHaveCount(0);
+  await expect(trends.getByTestId("positioning-suggestion")).toHaveCount(0);
 });
 
 test("15g: a viewer sees Market read-only: no Add, Watch, Check now, Promote, Accept or Dismiss, and View only", async ({ page }) => {
@@ -272,4 +275,61 @@ test("Positioning check on a tier-1 launch links to Company › Market › Posit
   await task.getByRole("link", { name: "Open positioning" }).click();
   await expect(page).toHaveURL(/\/company\/market\?tab=positioning$/);
   await expect(page.getByTestId("positioning-field")).toHaveCount(6);
+});
+
+test("at Observe the digest occurrence does not offer Write the digest with Oracle", async ({ page }) => {
+  // protects=H11 market at Observe: Oracle does not write the digest, so its occurrence
+  // offers no "Write the digest with Oracle" (the API answers 409 there); back at Recommend
+  // it is offered again; fails_when=the button shows at Observe; no_claim=the API's 409
+  // and its summary_offered (test_market_digest.py).
+  await withMarket(page);
+  await login(page);
+  await page.goto("/inbox");
+  const row = page.getByTestId("inbox-rituals").locator("tr[data-row]").filter({ hasText: "Pre-read ready · Monthly competitive digest" });
+  await row.getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
+  const occurrence = page.url();
+  const summary = page.getByTestId("occurrence-summary");
+  await expect(summary.getByRole("button", { name: "Write the digest with Oracle" })).toBeVisible();
+
+  const level = async (label: string) => {
+    await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+    await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
+    await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+    const market = page.getByTestId("autonomy-row-market");
+    await expect(market).toContainText("Watch the market");
+    await market.getByRole("group").getByRole("button", { name: label, exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Change Watch the market" });
+    await sheet.getByLabel("Why").fill("Digest test");
+    await sheet.getByRole("button", { name: "Save" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(market.getByRole("group").getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-pressed", "true");
+  };
+  await level("Observe");
+  await page.goto(occurrence);
+  await expect(page.getByRole("heading", { level: 1, name: "Monthly competitive digest" })).toBeVisible();
+  await expect(page.getByTestId("ritual-block")).toHaveCount(4);
+  await expect(summary).toContainText("No digest");
+  await expect(summary.getByRole("button", { name: "Write the digest with Oracle" })).toHaveCount(0);
+
+  await level("Recommend");
+  await page.goto(occurrence);
+  await expect(summary.getByRole("button", { name: "Write the digest with Oracle" })).toBeVisible();
+});
+
+test("a Remove suggestion names its item, and its evidence names the change and the request", async ({ page }) => {
+  // protects=a Remove or Replace suggestion says which item it acts on, and its evidence
+  // links read the change's and the request's titles; fails_when=the suggestion reads only
+  // "Remove", or the links read only "Change" and "Request"; no_claim=the API's titles
+  // (test_market.py) or a source item's (its owner's only).
+  await withMarket(page);
+  await login(page, APPROVER);
+  await openMarket(page);
+  await subTab(page, "Positioning").click();
+  const alternatives = page.getByTestId("positioning-field").filter({ has: page.getByRole("heading", { name: "Competitive alternatives" }) });
+  const remove = alternatives.getByTestId("positioning-suggestion");
+  await expect(remove).toHaveCount(1);
+  await expect(remove.locator("p").first()).toHaveText("Oracle suggests · Remove: Shared spreadsheets and a weekly meeting");
+  const refs = remove.getByTestId("suggestion-ref");
+  await expect(refs).toHaveText(["Change: A new team plan replaces the old per-seat plan.", "Request: Import our roadmap from a spreadsheet"]);
 });

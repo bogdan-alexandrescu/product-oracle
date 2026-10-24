@@ -182,3 +182,92 @@ async def test_a_run_token_reads_positioning_and_cannot_write(client, ctx, at):
         set_runtime(None)
     got = (await client.get("/v1/competitors", headers=ctx.as_("viewer"))).json()
     assert got == []
+
+
+async def test_two_first_saves_of_positioning_at_once_give_a_409(client, ctx, at):
+    """protects=two first saves of positioning at once: the one that loses the race gets
+    409 (reload), not a 500 from the one-row-per-company constraint; fails_when=the
+    second insert surfaces as a server error; no_claim=the order in which the two
+    arrive."""
+    import asyncio
+
+    from oracle.market.models import Positioning
+    from oracle.tenancy import tenant_session
+
+    body = {"lock_version": 0, "fields": {"trends": [{"text": "Teams leave spreadsheets"}]}}
+    async with tenant_session(ctx.tenant_id) as other:
+        # Another person's first save, not committed yet.
+        other.add(Positioning(fields={"trends": [{"id": "t1", "text": "Theirs"}]}))
+        await other.flush()
+        put = asyncio.create_task(
+            client.put("/v1/positioning", json=body, headers=ctx.as_("approver"))
+        )
+        await asyncio.sleep(1.0)
+        assert not put.done()  # waiting on the other save's row
+        await other.commit()
+    resp = await put
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Someone else changed the positioning; reload"
+    got = (await client.get("/v1/positioning", headers=ctx.as_("viewer"))).json()
+    assert [i["text"] for i in got["fields"]["trends"]] == ["Theirs"]
+
+
+async def test_suggestion_evidence_names_its_change_request_and_source_item(client, ctx, at):
+    """protects=a suggestion's evidence links carry the title of the change, the request
+    and the source item they cite (the source item's only for its owner: a person's
+    source stays private, S3); fails_when=the links read only "Change", "Request" or
+    "Source", or another person sees a private item's title; no_claim=the screen."""
+    from datetime import UTC, datetime
+
+    from oracle.market.models import (
+        Competitor,
+        CompetitorChange,
+        CompetitorPage,
+        CompetitorPageSnapshot,
+        PositioningSuggestion,
+    )
+    from oracle.requests.models import ProductRequest
+    from oracle.sources.models import Source, SourceItem
+    from oracle.tenancy import tenant_session
+
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    async with tenant_session(ctx.tenant_id) as db:
+        c = Competitor(name="Competitor A", kind="direct")
+        db.add(c)
+        await db.flush()
+        page = CompetitorPage(competitor_id=c.id, url="https://competitor-a.example/pricing",
+                              label="pricing")  # fmt: skip
+        db.add(page)
+        await db.flush()
+        snap = CompetitorPageSnapshot(page_id=page.id, fetched_at=now, final_url=page.url,
+                                      text="Team $50", content_hash="h")  # fmt: skip
+        db.add(snap)
+        await db.flush()
+        ch = CompetitorChange(competitor_id=c.id, origin="page", page_id=page.id,
+                              after_id=snap.id, detected_at=now,
+                              summary="A team plan replaces per-seat pricing.")  # fmt: skip
+        req = ProductRequest(title="Bulk export like CompA", channel="sales", origin="person")
+        src = Source(owner_user_id=ctx.users["approver"].id, kind="upload", name="Notes")
+        db.add_all([ch, req, src])
+        await db.flush()
+        item = SourceItem(source_id=src.id, external_id="n-1", kind="file",
+                          title="Call notes: Example Corp")  # fmt: skip
+        db.add(item)
+        await db.flush()
+        db.add(PositioningSuggestion(
+            field="trends", action="add", text="Teams leave per-seat pricing",
+            rationale="Seen this month.",
+            refs=[{"kind": "change", "id": str(ch.id)}, {"kind": "request", "id": str(req.id)},
+                  {"kind": "source_item", "id": str(item.id)}],
+        ))  # fmt: skip
+        await db.commit()
+    mine = (await client.get("/v1/positioning", headers=ctx.as_("approver"))).json()
+    titles = {r["kind"]: r["title"] for r in mine["suggestions"][0]["refs"]}
+    assert titles == {
+        "change": "A team plan replaces per-seat pricing.",
+        "request": "Bulk export like CompA",
+        "source_item": "Call notes: Example Corp",
+    }
+    theirs = (await client.get("/v1/positioning", headers=ctx.as_("viewer"))).json()
+    titles = {r["kind"]: r["title"] for r in theirs["suggestions"][0]["refs"]}
+    assert titles["source_item"] is None and titles["request"] == "Bulk export like CompA"

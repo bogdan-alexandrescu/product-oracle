@@ -176,3 +176,134 @@ async def test_private_address_and_sign_in_end_in_error(client, ctx, at, web):
     assert page.last_error == "The page took too long to respond."
     got = (await client.get("/v1/competitors", headers=ctx.as_("viewer"))).json()
     assert got[0]["watch_problem"] == "Not read for 3 weeks"
+
+
+def test_robots_5xx_disallows_everything_and_an_empty_agent_matches_nobody():
+    """protects=RFC 9309: a robots.txt that answers 5xx disallows every path; an empty
+    User-agent line names no crawler, so its rules are not ProductOracleBot's;
+    fails_when=a 5xx reads as "no rules" or an empty agent catches Oracle;
+    no_claim=other unreachable answers (a timeout allows, as before)."""
+    assert not robots.Rules(disallow_all=True).allows("/anything")
+    empty = robots.parse("User-agent:\nDisallow: /\n")
+    assert empty.allows("/pricing")
+    both = robots.parse("User-agent:\nDisallow: /\n\nUser-agent: *\nDisallow: /private\n")
+    assert both.allows("/pricing") and not both.allows("/private")
+
+
+async def test_robots_txt_answering_503_blocks_the_page(client, ctx, at, web):
+    """protects=a robots.txt that answers 503 leaves the page unread and blocked;
+    fails_when=the page is fetched while its site's robots.txt is down; no_claim=how long
+    the site stays down."""
+    web.page("https://competitor-a.example/robots.txt", "down", status=503)
+    web.page(PRICING, html("Team $50"))
+    cid = (await add_competitor(client, ctx)).json()["id"]
+    resp = await watch_page(client, ctx, cid, PRICING)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["status"] == "blocked"
+    assert web.hits(PRICING) == 0
+
+
+async def test_a_hanging_host_does_not_stall_the_tick(client, ctx, at, web, monkeypatch):
+    """protects=the weekly checks keep inside the tick's budget: no read starts that could
+    not finish before the deadline, each page's result is committed as it completes (a
+    tick cut off later keeps it), and a page that timed out is not due again the next
+    minute; fails_when=six hanging hosts are read one after another past the budget, or
+    the attempt is lost with the tick's rollback so the same pages are due every tick;
+    no_claim=the real 20 s cap (shortened here)."""
+    import time
+
+    from oracle.baseline import public_links
+
+    cid = (await add_competitor(client, ctx)).json()["id"]
+    pages = []
+    for i in range(6):
+        url = f"https://hang{i}.example/pricing"
+        web.page(url, html(f"page {i}"))
+        resp = await watch_page(client, ctx, cid, url, label="docs")
+        pages.append(resp.json()["id"])
+    web.hang.update(f"hang{i}.example" for i in range(6))
+    monkeypatch.setattr(public_links, "TOTAL_TIMEOUT", 0.3)
+    at(START + timedelta(days=7))
+    robots.clear()
+    started = time.monotonic()
+    async with tenant_session(ctx.tenant_id) as db:
+        n = await check_due(db, deadline=started + 1.0)
+        await db.rollback()  # the tick is cut off after the step: what it wrote stays
+    assert time.monotonic() - started < 1.0
+    assert n == 1
+    read = [await _page(ctx.tenant_id, pid) for pid in pages]
+    tried = [p for p in read if p.attempts == 1]
+    assert len(tried) == 1
+    assert tried[0].last_error == "The page took too long to respond."
+    assert tried[0].last_checked_at == START + timedelta(days=7)
+    at(START + timedelta(days=7, minutes=2))
+    async with tenant_session(ctx.tenant_id) as db:
+        assert await check_due(db, deadline=time.monotonic() + 1.0) == 1
+        await db.rollback()
+    again = await _page(ctx.tenant_id, tried[0].id)
+    assert again.attempts == 1  # not read again within the week
+
+
+async def test_the_ticker_gives_the_checks_its_remaining_budget(client, ctx, at, web):
+    """protects=_tick_company passes the tick's start budget to the weekly checks: with
+    the budget spent, no read starts; fails_when=the step ignores the tick's time;
+    no_claim=the budget's value."""
+    import time
+
+    from oracle.ticker import router as ticker
+
+    web.page(PRICING, html("Team $50"))
+    cid = (await add_competitor(client, ctx)).json()["id"]
+    assert (await watch_page(client, ctx, cid, PRICING)).status_code == 201
+    at(START + timedelta(days=7))
+    web.requests.clear()
+    out = ticker.TickerOut()
+    spent = time.monotonic() - ticker.BUDGET_SECONDS
+    await ticker._tick_company(ctx.tenant_id, out, ticker._Failures(out), started=spent)
+    assert web.requests == []
+
+
+async def test_an_unexpected_error_counts_a_failed_attempt(client, ctx, at, web, monkeypatch):
+    """protects=a read that raises something other than LinkError records a failed
+    attempt (last_error, attempts, last read) instead of rolling back, so the page is not
+    retried every tick; fails_when=the page stays due the next minute; no_claim=which
+    errors happen in production."""
+    from oracle.market import watch
+
+    web.page(PRICING, html("Team $50"))
+    cid = (await add_competitor(client, ctx)).json()["id"]
+    page_id = (await watch_page(client, ctx, cid, PRICING)).json()["id"]
+
+    def broken(_text: str) -> str:
+        raise ValueError("bad text")
+
+    monkeypatch.setattr(watch.diff, "normalise", broken)
+    at(START + timedelta(days=7))
+    assert await _tick(ctx.tenant_id) == 1
+    page = await _page(ctx.tenant_id, page_id)
+    assert page.attempts == 1 and page.status == "active"
+    assert page.last_error == watch.UNEXPECTED
+    assert page.last_checked_at == START + timedelta(days=7)
+    at(START + timedelta(days=7, minutes=2))
+    assert await _tick(ctx.tenant_id) == 0
+
+
+async def test_a_blocked_page_is_checked_again_after_30_days(client, ctx, at, web):
+    """protects=a page blocked by robots.txt is re-checked on its own after 30 days and
+    read once robots.txt allows it; fails_when=a blocked page stays blocked for good, or
+    is retried before 30 days; no_claim=the 24-hour robots.txt cache."""
+    robots_url = "https://competitor-a.example/robots.txt"
+    web.page(robots_url, "User-agent: *\nDisallow: /pricing\n", kind="text/plain")
+    web.page(PRICING, html("Team $50"))
+    cid = (await add_competitor(client, ctx)).json()["id"]
+    page_id = (await watch_page(client, ctx, cid, PRICING)).json()["id"]
+    assert (await _page(ctx.tenant_id, page_id)).status == "blocked"
+    web.page(robots_url, "User-agent: *\nAllow: /\n", kind="text/plain")
+    at(START + timedelta(days=29))
+    web.requests.clear()
+    assert await _tick(ctx.tenant_id) == 0
+    assert web.requests == []
+    at(START + timedelta(days=30, minutes=1))
+    assert await _tick(ctx.tenant_id) == 1
+    page = await _page(ctx.tenant_id, page_id)
+    assert page.status == "active" and web.hits(PRICING) == 1
