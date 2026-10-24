@@ -3,9 +3,10 @@ import { expect, test, type Page } from "./test";
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { SETUP_TOKEN_PREFIX } from "../lib/api/mock/claude-accounts";
 
-import { login } from "./helpers";
+import { login, standInClaudePage } from "./helpers";
 
 async function openAccounts(page: Page) {
+  await standInClaudePage(page);
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-claude-accounts").click();
