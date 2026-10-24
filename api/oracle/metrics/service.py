@@ -401,13 +401,18 @@ async def listed(db: AsyncSession, include_archived: bool) -> list[MetricOut]:
     stmt = select(Metric).order_by(func.lower(Metric.title))
     if not include_archived:
         stmt = stmt.where(Metric.status != "archived")
-    rows = list(await db.scalars(stmt))
-    ordered: list[Metric] = []
+    return await outs(db, ordered(list(await db.scalars(stmt))))
+
+
+def ordered(rows: list[Metric]) -> list[Metric]:
+    """Outputs first, each followed by the inputs that drive it; ``rows``' order kept
+    otherwise."""
+    out: list[Metric] = []
     for output in (m for m in rows if m.kind == "output"):
-        ordered.append(output)
-        ordered += [m for m in rows if m.drives_metric_id == output.id]
-    ordered += [m for m in rows if m not in ordered]
-    return await outs(db, ordered)
+        out.append(output)
+        out += [m for m in rows if m.drives_metric_id == output.id]
+    out += [m for m in rows if m not in out]
+    return out
 
 
 async def variance_outs(db: AsyncSession, rows: list[MetricVariance]) -> list[VarianceOut]:

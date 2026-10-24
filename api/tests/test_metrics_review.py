@@ -209,7 +209,7 @@ async def test_the_pre_read_has_the_table_and_the_variances(client, ctx, when):
     assert var["metric_title"] == "Weekly active teams" and var["direction"] == "better"
     assert var["status"] == "open" and var["owner_name"] == "Commenter"
     assert var["band"] == {"low": 90, "high": 110}
-    assert var["href"].startswith("/company/rituals/")
+    assert var["href"] == f"/company/metrics?metric={out['metric_id']}"
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(MetricVariance, uuid.UUID(var["variance_id"]))
         assert str(row.occurrence_id) == occ["id"]

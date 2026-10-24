@@ -6,12 +6,12 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from oracle.metrics import causes
-from oracle.metrics.models import Metric, MetricValue
 from sqlalchemy import func, select, update
 
 from oracle.baseline.models import Edge, Entity, EntityRevision, GoalMeasurement, Proposal
 from oracle.launches.models import Launch
+from oracle.metrics import causes
+from oracle.metrics.models import Metric, MetricValue
 from oracle.quality import shipping
 from oracle.tenancy import tenant_session
 from oracle.ticker import router as ticker

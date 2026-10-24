@@ -12,14 +12,16 @@ Adds three tables:
 ``goal_measurements`` gains ``metric_id`` (a weekly value read from a linked metric).
 ``company_integrations`` gains ``config`` (PostHog's host and project id), and its
 provider and purpose checks gain ``posthog`` and ``metrics``, extended from what the
-database holds (oracle.migration_checks). The Slack team index becomes Slack's only: two
-companies may read the same PostHog project.
+database holds (oracle.migration_checks). The runs' flow check gains ``metrics_variance``
+(the weekly metrics review's explanation run, lane 2). The Slack team index becomes
+Slack's only: two companies may read the same PostHog project.
 
 Live-safe: new tables, a nullable column and one with a constant default; the wait for
 the short locks is capped (LOCK_TIMEOUT).
 
 The downgrade deletes the PostHog connections, drops the three tables and both columns,
-and restores the checks and the index.
+and restores the checks and the index; ``metrics_variance`` leaves the flow check only
+while no run uses it.
 
 Revision ID: 0049_metrics
 Revises: 0048_scope_review
@@ -43,6 +45,8 @@ PROVIDER_CHECK = ("company_integrations", "ck_company_integrations_provider", "p
 PURPOSE_CHECK = ("company_integrations", "ck_company_integrations_purpose", "purpose")
 PROVIDERS = ("posthog",)
 PURPOSES = ("metrics",)
+FLOW_CHECK = ("runs", "ck_runs_flow", "flow")
+FLOWS = ("metrics_variance",)
 SLACK_TEAM = "uq_company_integrations_slack_team"
 
 
@@ -258,6 +262,7 @@ def upgrade() -> None:
     )
     add_check_values(*PROVIDER_CHECK, PROVIDERS)
     add_check_values(*PURPOSE_CHECK, PURPOSES)
+    add_check_values(*FLOW_CHECK, FLOWS)
     op.drop_index(SLACK_TEAM, table_name="company_integrations")
     _slack_team_index("status = 'active' AND provider = 'slack'")
 
@@ -269,6 +274,11 @@ def downgrade() -> None:
     _slack_team_index("status = 'active'")
     remove_check_values(*PURPOSE_CHECK, PURPOSES)
     remove_check_values(*PROVIDER_CHECK, PROVIDERS)
+    in_use = op.get_bind().scalar(
+        sa.text("SELECT EXISTS (SELECT 1 FROM runs WHERE flow = 'metrics_variance')")
+    )
+    if not in_use:
+        remove_check_values(*FLOW_CHECK, FLOWS)
     op.drop_column("company_integrations", "config")
     op.drop_constraint(
         op.f("fk_goal_measurements_metric_id_metrics"), "goal_measurements", type_="foreignkey"

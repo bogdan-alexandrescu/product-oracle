@@ -5,12 +5,12 @@ no_claim (every test here): the real PostHog API's shape is not exercised; the f
 live connection is checked through the UI after deploy."""
 
 import pytest
-from oracle.metrics import posthog
-from oracle.metrics.models import MetricValue
 from sqlalchemy import select
 
 from oracle import crypto
 from oracle.integrations.models import CompanyIntegration
+from oracle.metrics import posthog
+from oracle.metrics.models import MetricValue
 from oracle.tenancy import tenant_session
 from tests import metrics_helpers
 from tests.baseline_helpers import make_ctx

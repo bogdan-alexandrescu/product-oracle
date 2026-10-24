@@ -24,7 +24,7 @@ from oracle import company_time
 from oracle.baseline import service as baseline
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.integrations.models import CompanyIntegration
-from oracle.metrics import causes, posthog, variance
+from oracle.metrics import activate, causes, posthog, variance
 from oracle.metrics.models import Metric, MetricValue, MetricVariance
 from oracle.tenancy import current_tenant
 
@@ -251,6 +251,8 @@ async def store(
     await _goal_measurement(db, metric, week, amount)
     if check:
         await evaluate(db, metric, week, zone)
+    # The company's first weekly value: the metrics review takes over the goals check-in.
+    await activate.activate_review(db)
     return True
 
 

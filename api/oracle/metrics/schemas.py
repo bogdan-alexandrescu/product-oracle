@@ -187,3 +187,19 @@ class AnalyticsOut(BaseModel):
     connected_at: datetime | None
     # PostHog metrics not archived (Disconnect pauses them).
     metrics: int
+
+
+class InboxMetric(BaseModel):
+    """A metric row of the Inbox (H5): Explain a variance and Find out (the metric's
+    owner; Find out from its find-out-by day), Metric not read for a day (owners).
+    ``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that
+    lists the variance, when one does."""
+
+    variance_id: uuid.UUID | None = None
+    metric_id: uuid.UUID
+    metric_title: str
+    reason: Literal["explain", "find_out", "pull_failed"]
+    week_start: date
+    due_on: date | None = None
+    occurrence_id: uuid.UUID | None = None
+    counts: bool

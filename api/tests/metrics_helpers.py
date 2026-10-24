@@ -8,8 +8,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
-from oracle.metrics import posthog, pull
 
+from oracle.metrics import posthog, pull
 from tests.baseline_helpers import confirm, entity
 
 # Monday 19 October 2026, 12:00 UTC (05:00 in Los Angeles): the last complete week is the

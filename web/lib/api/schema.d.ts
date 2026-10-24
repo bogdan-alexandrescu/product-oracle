@@ -17963,6 +17963,11 @@ export interface components {
             title: string;
             /** Runs Per Month */
             runs_per_month: number;
+            /**
+             * Per Summary Usd
+             * @default 3
+             */
+            per_summary_usd: number;
         };
         /** EvaluationFindingOut */
         EvaluationFindingOut: {
@@ -18951,7 +18956,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Title */
             title: string;
             /** Description */
@@ -20155,7 +20160,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -20554,6 +20559,40 @@ export interface components {
             at?: string | null;
         };
         /**
+         * InboxMetric
+         * @description A metric row of the Inbox (H5): Explain a variance and Find out (the metric's
+         *     owner; Find out from its find-out-by day), Metric not read for a day (owners).
+         *     ``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that
+         *     lists the variance, when one does.
+         */
+        InboxMetric: {
+            /** Variance Id */
+            variance_id?: string | null;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "explain" | "find_out" | "pull_failed";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Due On */
+            due_on?: string | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Counts */
+            counts: boolean;
+        };
+        /**
          * InboxOracleAction
          * @description "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
          *     for one of the people it notified. Counted until that person opens it.
@@ -20714,6 +20753,11 @@ export interface components {
              * @default []
              */
             outcomes: components["schemas"]["InboxOutcome"][];
+            /**
+             * Metrics
+             * @default []
+             */
+            metrics: components["schemas"]["InboxMetric"][];
             /** Last Seen At */
             last_seen_at?: string | null;
             /**
@@ -28473,6 +28517,8 @@ export interface components {
             next_due_at: string | null;
             /** Lock Version */
             lock_version: number;
+            /** Replaced By */
+            replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
         };
         /** RitualPatch */
@@ -28793,7 +28839,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Document */
             document?: string | null;
             /** Source */
@@ -28958,7 +29004,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /**
@@ -29220,7 +29266,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /**

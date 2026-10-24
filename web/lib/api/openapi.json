@@ -58067,6 +58067,11 @@
           "runs_per_month": {
             "type": "number",
             "title": "Runs Per Month"
+          },
+          "per_summary_usd": {
+            "type": "number",
+            "title": "Per Summary Usd",
+            "default": 3.0
           }
         },
         "type": "object",
@@ -60921,7 +60926,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Key"
           },
@@ -63980,7 +63986,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -65021,6 +65028,83 @@
         "title": "InboxLaunch",
         "description": "A launch row of the Inbox: Ready to launch (owner), Set tier (approvers), Notes\nto send (owner) are counted; Shipped (a member's personal note) is shown only."
       },
+      "InboxMetric": {
+        "properties": {
+          "variance_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variance Id"
+          },
+          "metric_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Metric Id"
+          },
+          "metric_title": {
+            "type": "string",
+            "title": "Metric Title"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "explain",
+              "find_out",
+              "pull_failed"
+            ],
+            "title": "Reason"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "occurrence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Id"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric_id",
+          "metric_title",
+          "reason",
+          "week_start",
+          "counts"
+        ],
+        "title": "InboxMetric",
+        "description": "A metric row of the Inbox (H5): Explain a variance and Find out (the metric's\nowner; Find out from its find-out-by day), Metric not read for a day (owners).\n``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that\nlists the variance, when one does."
+      },
       "InboxOracleAction": {
         "properties": {
           "id": {
@@ -65302,6 +65386,14 @@
             },
             "type": "array",
             "title": "Outcomes",
+            "default": []
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/InboxMetric"
+            },
+            "type": "array",
+            "title": "Metrics",
             "default": []
           },
           "last_seen_at": {
@@ -86701,6 +86793,17 @@
             "type": "integer",
             "title": "Lock Version"
           },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
+          },
           "last_pre_read": {
             "anyOf": [
               {
@@ -87683,7 +87786,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -88149,7 +88253,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
@@ -88959,7 +89064,8 @@
               "code_map",
               "update_draft",
               "prd_draft_items",
-              "ritual_summary"
+              "ritual_summary",
+              "metrics_variance"
             ],
             "title": "Flow"
           },
