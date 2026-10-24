@@ -15,7 +15,8 @@ concurrency:
 jobs:
   api:
     runs-on: ubuntu-latest
-    # The suite takes ~80-95 min; a hung run frees its runner after 150.
+    # The suite takes ~30 min on 4 workers (89-120 min serially); a hung run frees its
+    # runner after 150.
     timeout-minutes: 150
     services:
       postgres:
@@ -42,10 +43,30 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+      # Four workers each drop and build the whole schema in their own database
+      # (oracle_test_gw0..3); Postgres's default lock table runs out of shared memory
+      # for that. The database is thrown away, so no waiting on the disk either (every
+      # test commits a TRUNCATE). Service containers take no command: set, restart.
+      - name: Postgres settings for parallel tests
+        working-directory: .
+        run: |
+          id=${{ job.services.postgres.id }}
+          docker exec "$id" psql -U oracle -d oracle_test \
+            -c "ALTER SYSTEM SET max_locks_per_transaction = 256" \
+            -c "ALTER SYSTEM SET max_connections = 200" \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off"
+          docker restart "$id"
+          for _ in $(seq 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ] && break
+            sleep 2
+          done
+          docker exec "$id" psql -U oracle -d oracle_test -tAc "SHOW max_locks_per_transaction" | grep -qx 256
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest
+      - run: uv run pytest -n 4 -p no:cacheprovider
 
   web:
     runs-on: ubuntu-latest
