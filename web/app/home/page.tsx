@@ -98,7 +98,7 @@ export default function HomePage() {
   }
   const setup = setupOpen(setupQ.data) ? setupQ.data : undefined;
 
-  const { goals, history, error: goalsError, loading: goalsLoading } = useGoals("home");
+  const { goals, history, historyPending, error: goalsError, loading: goalsLoading } = useGoals("home");
   const goalIndex: GoalIndex = useMemo(
     () => new Map((goals ?? []).map((g) => [g.id, { id: g.id, tag: g.tag, title: g.title, proposed: g.proposed }])),
     [goals],
@@ -202,6 +202,7 @@ export default function HomePage() {
         <GoalsPanel
           goals={goals}
           history={history}
+          historyPending={historyPending}
           error={goalsError}
           loading={goalsLoading}
           canImport={canBuild}

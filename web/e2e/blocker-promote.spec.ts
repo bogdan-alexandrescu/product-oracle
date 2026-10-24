@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { SUGGESTED_BLOCKER } from "../lib/api/mock/baseline";
 import { login } from "./helpers";

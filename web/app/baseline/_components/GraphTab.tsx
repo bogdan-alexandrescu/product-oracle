@@ -228,26 +228,30 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             <LockMark entity={g} meId={meId} />
           </span>
         );
-        if (!vague || !onMakeMeasurable) return head;
+        const measurable = vague && onMakeMeasurable;
         // B6: the chip and its Make measurable on a line of their own, so the title keeps its room;
-        // a subgoal's line keeps its indent.
+        // a subgoal's line keeps its indent. The head keeps its place in the tree either way: Make
+        // measurable comes in when the capabilities load (#370), and the row's title must not be
+        // mounted again then (#520: phone-tables saw a row's button lose its box mid-check).
         return (
-          <span className="flex min-w-0 flex-col gap-1 py-1">
+          <span className={measurable ? "flex min-w-0 flex-col gap-1 py-1" : "contents"}>
             {head}
-            <span className={`flex min-w-0 items-center gap-1 ${indent}`}>
-              <span className="flex-none">{chip}</span>
-              <Button
-                variant="ghost"
-                disabled={busy}
-                data-testid="make-measurable"
-                onClick={(e: MouseEvent) => {
-                  e.stopPropagation();
-                  onMakeMeasurable(g);
-                }}
-              >
-                Make measurable
-              </Button>
-            </span>
+            {measurable && (
+              <span className={`flex min-w-0 items-center gap-1 ${indent}`}>
+                <span className="flex-none">{chip}</span>
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  data-testid="make-measurable"
+                  onClick={(e: MouseEvent) => {
+                    e.stopPropagation();
+                    onMakeMeasurable(g);
+                  }}
+                >
+                  Make measurable
+                </Button>
+              </span>
+            )}
           </span>
         );
       },

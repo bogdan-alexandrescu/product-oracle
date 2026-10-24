@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { blocksText, isSafeHref, parseBlocks, storedImageSrc } from "../lib/markdown";
 

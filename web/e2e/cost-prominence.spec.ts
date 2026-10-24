@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
@@ -37,9 +37,11 @@ for (const size of SIZES) {
     test("runs list: a dollar figure only on the cost approval and the overrun", async ({ page }) => {
       await openRuns(page);
       const rows = page.getByTestId("run-row");
-      await expect(rows).toHaveCount(4);
+      // B3: the seed also holds the finished Baseline to PRD run on saved-carts whose agents made the
+      // baseline proposals (lib/api/mock/baseline.ts AGENT_RUN), so five runs, as runs.spec.ts counts.
+      await expect(rows).toHaveCount(5);
       // Waiting, running and finished rows carry no cost.
-      for (const slug of ["team-onboarding", "checkout-redesign"]) {
+      for (const slug of ["team-onboarding", "checkout-redesign", "saved-carts"]) {
         const row = rows.filter({ hasText: slug });
         await expect(row).toBeVisible();
         await expect(row).not.toContainText(DOLLARS);

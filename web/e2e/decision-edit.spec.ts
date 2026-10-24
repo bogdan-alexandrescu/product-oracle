@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { login } from "./helpers";
 
@@ -16,7 +16,7 @@ const CAPS = "Ship usage caps before anomaly detection";
 const row = (page: Page, text: string) => page.getByTestId("decision-row").filter({ hasText: text });
 const inspector = (page: Page) => page.getByTestId("decision-inspector").filter({ visible: true });
 const chip = (page: Page, name: string) => page.getByRole("group", { name: "State" }).getByRole("button", { name: new RegExp(`^${name}`) });
-const dayAhead = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+const dayAhead = (n: number) => new Date(mockNow().getTime() + n * 86_400_000).toISOString().slice(0, 10);
 
 async function openCaps(page: Page) {
   await page.goto("/company/decisions");

@@ -11,7 +11,7 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { hasRole, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -134,7 +134,7 @@ function decidedText(cp: Schemas["CheckpointOut"]): string {
  * Approvers stage, commenters suggest, viewers read.
  */
 export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
-  const { role, can, me } = useMe();
+  const { can, me } = useMe();
   const phone = usePhone();
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
   const reviewQ = useQuery(`draft|${run.id}|${cp.id}`, () => unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", path)));
@@ -162,9 +162,11 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const mode: Mode =
     cp.status !== "pending" || !review
       ? "viewer"
-      : review.can_stage && can("stage_checkpoint_action", hasRole(role, cp.approver_role))
+      : // #370 fixes 4: the review's can_stage/can_suggest are the API's item answer (the stop's
+        // role); can() adds the route role, without a second check of the signed-in role here.
+        review.can_stage && can("stage_checkpoint_action", review.can_stage)
         ? "approver"
-        : review.can_suggest && can("create_checkpoint_action", hasRole(role, "commenter"))
+        : review.can_suggest && can("create_checkpoint_action", review.can_suggest)
           ? "commenter"
           : "viewer";
 

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_PLAN_TABS_KEY } from "../app/plan/_tabs";
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
@@ -205,11 +205,13 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
 test("the tab strip lists Plan's tabs in order; Roadmap documents keeps the list", async ({ page }) => {
   await page.addInitScript(
     ([key, tabs]) => localStorage.setItem(key, tabs),
-    [MOCK_PLAN_TABS_KEY, JSON.stringify([{ key: "dates", label: "Dates", href: "/plan/dates", testId: "plan-tab-dates" }])] as const,
+    [MOCK_PLAN_TABS_KEY, JSON.stringify([{ key: "launches", label: "Launches", href: "/plan/launches", testId: "plan-tab-launches" }])] as const,
   );
   await openPlan(page);
   const strip = page.getByTestId("plan-tabs").filter({ visible: true });
-  await expect(strip.getByRole("link")).toHaveText(["Plan", "Roadmap documents", "Outcomes", "Dates"]);
+  // F3 (Dates) and H3 (Outcomes) landed in PLAN_TABS, in that order; the registered entry is
+  // now H6's Launches, whose page has not landed.
+  await expect(strip.getByRole("link")).toHaveText(["Plan", "Roadmap documents", "Dates", "Outcomes", "Launches"]);
   await expect(strip.getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
   await strip.getByRole("link", { name: "Roadmap documents" }).click();
   await expect(page).toHaveURL(/\/plan\/documents$/);

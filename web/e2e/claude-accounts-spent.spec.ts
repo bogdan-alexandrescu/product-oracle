@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { POOL_SPENT_SCENARIO, SETUP_TOKEN_PREFIX } from "../lib/api/mock/claude-accounts";

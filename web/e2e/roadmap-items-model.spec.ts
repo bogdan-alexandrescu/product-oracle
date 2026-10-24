@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { sectionFor, toItemRow } from "../components/roadmap/item-row";
 import fixture from "../lib/api/mock/roadmap-items.json";

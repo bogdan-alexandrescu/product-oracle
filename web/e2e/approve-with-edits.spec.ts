@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { ROADMAP_REVIEW_RUN_ID } from "../lib/api/mock/runs";
 import { login, seedRoadmapReview } from "./helpers";
@@ -10,6 +10,36 @@ import { login, seedRoadmapReview } from "./helpers";
  * was applied and the agents' own file is kept. A split needs the agents, so Approve waits.
  * Driven through the UI over the mock API.
  */
+
+/** Whether the seeded run (and, with `split`, its staged split) is in the mock's store. */
+function seedHeld(page: Page, split: boolean): Promise<boolean> {
+  return page.evaluate(
+    ({ runId, split }) => {
+      const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
+      const run = db.runs.runs.find((r: { id: string }) => r.id === runId);
+      const cp = run?.checkpoints.find((c: { status: string }) => c.status === "pending");
+      const actions: { kind: string }[] = (cp && db.runs.drafts?.[cp.id]?.actions) ?? [];
+      return !!cp && (!split || actions.some((a) => a.kind === "split"));
+    },
+    { runId: ROADMAP_REVIEW_RUN_ID, split },
+  );
+}
+
+/**
+ * Seeds the review run (and a staged split), then opens it from the runs list, as a person
+ * would. A mock request the app had in flight when the seed was written can save its older
+ * copy over it (as openSeeded in helpers handles); once the page has navigated nothing old can
+ * land any more, so a lost seed is written again (at most 3 times).
+ */
+async function seedAndOpenRun(page: Page, split = false) {
+  for (let i = 0; i < 3; i++) {
+    await seedRoadmapReview(page);
+    if (split) await seedStagedSplit(page);
+    await page.goto("/runs");
+    if (await seedHeld(page, split)) break;
+  }
+  await openRun(page);
+}
 
 /** Opens the seeded roadmap review run from the runs list, as a person would. */
 async function openRun(page: Page) {
@@ -99,8 +129,7 @@ async function seedStagedSplit(page: Page) {
 // transform and re-check (pytest has them).
 test("approve with 3 edits applies them, moves to the roadmap draft and keeps the agents' file", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
-  await openRun(page);
+  await seedAndOpenRun(page);
   await stageEdits(page);
   const approve = bar(page).getByRole("button", { name: "Approve with 3 edits" });
   await expect(approve).toBeDisabled();
@@ -144,9 +173,7 @@ test("approve with 3 edits applies them, moves to the roadmap draft and keeps th
 // no_claim = staging a split (no control on this page yet: the fixture stages it).
 test("a staged split disables approve and says it needs the agents", async ({ page }) => {
   await login(page);
-  await seedRoadmapReview(page);
-  await seedStagedSplit(page);
-  await openRun(page);
+  await seedAndOpenRun(page, true);
   await stageEdits(page);
   await waiveSection(page);
 

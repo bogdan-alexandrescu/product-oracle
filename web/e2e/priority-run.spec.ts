@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { PRIORITY_BLOCKED_RUN, PRIORITY_RUN } from "../lib/api/mock/runs";
