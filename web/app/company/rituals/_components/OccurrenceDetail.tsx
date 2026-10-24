@@ -6,15 +6,18 @@ import { useEffect, useState } from "react";
 
 import { Button, Chip, LinkButton, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from "./lib";
+import { MetricsTable, VarianceCards, type MetricRow, type VarianceRow } from "./MetricBlocks";
 
 type Row = { text?: string; href?: string | null; method?: string; label?: string };
 type Block = { key: string; title: string; as_of?: string; rows: Row[] };
+/** H5: the blocks drawn as their own cards across the page (the metrics review). */
+const WIDE = new Set(["metrics_table", "variances"]);
 
 const NOTES_MAX = 10_000;
 
@@ -33,6 +36,12 @@ export function OccurrenceDetail({ id }: { id: string }) {
   });
   const occ = q.data?.occ;
   const reload = q.reload;
+  // H5: a metrics review's variances, read live (their state moves after the pre-read is built).
+  const listsVariances = !!occ?.pre_read.blocks.some((b) => (b as { key?: string }).key === "variances");
+  const varianceQ = useQuery(`occurrence-variances|${id}|${listsVariances}`, () =>
+    listsVariances ? unwrap(api.GET("/v1/metric-variances")) : Promise.resolve([] as Schemas["VarianceOut"][]),
+  );
+  const live = new Map((varianceQ.data ?? []).map((v) => [v.id, v]));
   const unread = occ ? !occ.read_by_me : false;
 
   useEffect(() => {
@@ -85,7 +94,11 @@ export function OccurrenceDetail({ id }: { id: string }) {
         </span>
       </p>
       <div className="flex flex-col gap-3">
-        <SummaryCard occ={occ} canAsk={can("summarize_ritual_occurrence")} onChanged={reload} />
+        <SummaryCard
+          occ={occ}
+          canAsk={can("summarize_ritual_occurrence") && (occ.kind !== "metrics_review" || openVariances(blocks, live) > 0)}
+          onChanged={reload}
+        />
         {blocks.length === 0 ? (
           <Panel title="Pre-read">
             <p className="px-4 py-3 text-sm text-text2">The pre-read is not ready yet</p>
@@ -93,7 +106,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
         ) : (
           <div className="grid grid-cols-2 gap-3 max-[900px]:grid-cols-1">
             {blocks.map((b) => (
-              <BlockCard key={b.key} block={b} />
+              <BlockCard key={b.key} block={b} live={live} onChanged={varianceQ.reload} />
             ))}
           </div>
         )}
@@ -104,17 +117,31 @@ export function OccurrenceDetail({ id }: { id: string }) {
   );
 }
 
-function BlockCard({ block }: { block: Block }) {
+/** How many of the variances the pre-read lists nobody has answered yet. */
+function openVariances(blocks: Block[], live: Map<string, Schemas["VarianceOut"]>): number {
+  const rows = (blocks.find((b) => b.key === "variances")?.rows ?? []) as unknown as VarianceRow[];
+  return rows.filter((r) => (live.get(r.variance_id)?.status ?? r.status) === "open").length;
+}
+
+function BlockCard({ block, live, onChanged }: { block: Block; live: Map<string, Schemas["VarianceOut"]>; onChanged: () => Promise<void> }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   return (
-    <section data-testid="ritual-block" data-key={block.key} className="min-w-0 rounded-panel border border-line bg-surface shadow-panel">
+    <section
+      data-testid="ritual-block"
+      data-key={block.key}
+      className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${WIDE.has(block.key) ? "col-span-2 max-[900px]:col-span-1" : ""}`}
+    >
       <header className="border-b border-line px-4 py-2.5">
         <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
         {block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
       </header>
       {block.rows.length === 0 ? (
         <p className="px-4 py-3 text-sm text-text2">Nothing this time</p>
+      ) : block.key === "metrics_table" ? (
+        <MetricsTable rows={block.rows as unknown as MetricRow[]} />
+      ) : block.key === "variances" ? (
+        <VarianceCards rows={block.rows as unknown as VarianceRow[]} live={live} onChanged={onChanged} />
       ) : block.key === "suggested_next" ? (
         <div className="flex flex-wrap gap-2 px-4 py-3">
           {block.rows.map((r) =>
@@ -162,8 +189,14 @@ function BlockCard({ block }: { block: Block }) {
   );
 }
 
-/** Oracle's summary: written, being written, failed or not started, or Summarize with Oracle. */
+/**
+ * Oracle's summary: written, being written, failed or not started, or Summarize with Oracle.
+ * A metrics review's is Explain with Oracle (its own run drafts each variance's
+ * explanation); with no open variance the button is absent.
+ */
 function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: boolean; onChanged: () => Promise<void> }) {
+  const metrics = occ.kind === "metrics_review";
+  const label = metrics ? "Explain with Oracle" : "Summarize with Oracle";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ask = async () => {
@@ -180,7 +213,7 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
   };
   const button = canAsk && occ.pre_read.built_at && (
     <Button variant="solid" disabled={busy} onClick={ask}>
-      Summarize with Oracle
+      {label}
     </Button>
   );
   return (
@@ -192,10 +225,10 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
           <p className="mt-1 text-[13px] text-text2">Written by Oracle</p>
         </>
       ) : occ.summary_state === "running" ? (
-        <p className="text-sm text-text2">Writing the summary…</p>
+        <p className="text-sm text-text2">{metrics ? "Writing…" : "Writing the summary…"}</p>
       ) : occ.summary_state === "failed" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-crit">Summary failed · Summarize with Oracle to retry</p>
+          <p className="text-sm text-crit">Summary failed · {label} to retry</p>
           {button}
         </div>
       ) : (

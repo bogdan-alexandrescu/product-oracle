@@ -4,7 +4,7 @@ import { Page, PageTabsProvider } from "@/components/ds";
 
 import { CompanyNav } from "./_nav";
 
-/** Every Company page: the page, its tabs under the title (Strategy, Decisions, Rituals, Updates). */
+/** Every Company page: the page, its tabs under the title (Strategy, Decisions, Rituals, Updates, Metrics). */
 export default function CompanyLayout({ children }: { children: ReactNode }) {
   return (
     <Page>

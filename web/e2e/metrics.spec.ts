@@ -34,6 +34,8 @@ const badge = (page: Page) => page.getByTestId("app-nav").getByTestId("nav-inbox
 const metricNeed = (page: Page, text: string) => page.getByTestId("inbox-metrics").locator("tr[data-row]").filter({ hasText: text });
 const card = (page: Page, metric: string) => page.getByTestId("variance-card").filter({ hasText: metric });
 const metricRow = (page: Page, title: string) => page.getByTestId("metric-row").filter({ hasText: title });
+// Next keeps visited pages mounted but hidden: only what is on screen counts.
+const viewOnly = (page: Page) => page.getByTestId("view-only").filter({ visible: true });
 
 async function badgeCount(page: Page): Promise<number> {
   await expect(badge(page)).toHaveText(/^\d+$/);
@@ -51,7 +53,9 @@ async function openMetrics(page: Page) {
 /** Opens this Monday's metrics review from Company › Rituals. */
 async function openReview(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
+  await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByTestId("company-tab-rituals").filter({ visible: true }).click();
+  await expect(page).toHaveURL(/\/company\/rituals$/);
   await page.getByTestId("ritual-row").filter({ hasText: "Weekly metrics review" }).getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Weekly metrics review" })).toBeVisible();
 }
@@ -108,14 +112,14 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
     "Updates",
     "Metrics",
   ]);
-  await expect(page.getByTestId("view-only")).toHaveCount(0);
+  await expect(viewOnly(page)).toHaveCount(0);
   await expect(metricRow(page, "Weekly active teams")).toContainText("Commenter");
   await page.getByRole("button", { name: "Add metric" }).click();
   const sheet = page.getByRole("dialog", { name: "Add metric" });
   await sheet.getByLabel("Title").fill("Setup completion rate");
   await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days of signing up");
   await sheet.getByLabel("Kind").selectOption("output");
-  await sheet.getByLabel("Unit").fill("%");
+  await sheet.getByLabel("Unit", { exact: true }).fill("%");
   await sheet.getByLabel("Good direction").selectOption("up");
   // Grow paid conversion already has a metric; Raise activation is free and in %.
   await expect(sheet.getByLabel("Goal").locator("option")).toHaveText(["No goal", "Raise activation"]);
@@ -191,11 +195,11 @@ test("13e: a viewer reads Metrics and the review without any control, as View on
   await withMetrics(page);
   await login(page, VIEWER);
   await openMetrics(page);
-  await expect(page.getByTestId("view-only").first()).toBeVisible();
+  await expect(viewOnly(page).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Add metric" })).toHaveCount(0);
   await expect(metricRow(page, "Weekly active teams")).toBeVisible();
   await openReview(page);
-  await expect(page.getByTestId("view-only").first()).toBeVisible();
+  await expect(viewOnly(page).first()).toBeVisible();
   await expect(page.getByTestId("variance-card")).toHaveCount(2);
   for (const name of ["Explain", "Don't know yet", "Noise", "Explain with Oracle"]) {
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);

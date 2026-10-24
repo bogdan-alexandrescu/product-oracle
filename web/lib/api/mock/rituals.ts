@@ -43,6 +43,8 @@ export interface RitualsContext {
   companyTimezone: () => string;
   /** The decision log, for the decisions recorded with an occurrence. */
   decisions: () => LoggedDecision[];
+  /** H5: how many of a metrics review's variances are open (./metrics.ts). */
+  openVariances?: (occurrenceId: string) => number;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -58,7 +60,10 @@ const DAY_MS = 86_400_000;
 const EPOCH = Date.UTC(2024, 0, 1);
 const PER_SUMMARY_USD = 3;
 /** Kinds whose pre-read is figures and lists (summaries.py COVERED). */
-const COVERED = new Set(["goals_checkin", "roadmap_refresh", "goals_review", "decision_review", "strategy_review", "alignment_report", "custom"]);
+const COVERED = new Set(["goals_checkin", "roadmap_refresh", "goals_review", "decision_review", "strategy_review", "alignment_report", "custom", "metrics_review"]);
+/** H5: kinds whose summary is another flow's run, "Explain with Oracle" (summaries.py FLOW_FOR_KIND), and its price. */
+const FLOW_FOR_KIND: Record<string, { flow: "metrics_variance"; usd: number }> = { metrics_review: { flow: "metrics_variance", usd: 1.5 } };
+const priceOf = (kind: string) => FLOW_FOR_KIND[kind]?.usd ?? PER_SUMMARY_USD;
 const MISSED_AFTER_MS = 7 * DAY_MS;
 
 /** The calendar day (as a UTC-midnight number) of `at` in `tz`. */
@@ -365,9 +370,10 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
 function estimate(db: RitualsDb): Schemas["Estimate"] {
   const rows = db.rituals
     .filter((r) => r.status === "active" && COVERED.has(r.kind))
-    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule), per_summary_usd: PER_SUMMARY_USD }));
+    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule), per_summary_usd: priceOf(r.kind) }));
   const runs = Math.round(rows.reduce((n, r) => n + r.runs_per_month, 0) * 100) / 100;
-  return { per_summary_usd: PER_SUMMARY_USD, runs_per_month: runs, usd_per_month: Math.round(runs * PER_SUMMARY_USD * 100) / 100, rituals: rows };
+  const usd = rows.reduce((n, r) => n + r.runs_per_month * r.per_summary_usd, 0);
+  return { per_summary_usd: PER_SUMMARY_USD, runs_per_month: runs, usd_per_month: Math.round(usd * 100) / 100, rituals: rows };
 }
 
 /** The signed-in member's ritual rows of the Inbox (service.inbox_rows). */
@@ -397,6 +403,39 @@ export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxR
 
 const SUMMARY_TEXT =
   "One track is at risk: Usage alerts PRD, whose Threshold alerts beta slipped two weeks to Nov 24. Digest emails may be stale. Usage alerts rose from #5 to #2 in the priorities; a roadmap run from that track is the suggested next step.";
+
+const METRICS_SUMMARY_TEXT =
+  "Weekly active teams rose 37 to 412, above its normal range: the Team invites launch on Oct 14 is the likely cause. Invites sent per team fell to 3.9; nothing Oracle can read explains it yet.";
+
+/**
+ * H5: the "metrics" scenario's Weekly metrics review, as metrics.activate_review leaves it:
+ * on, with the goals check-in's schedule, owner and attendees; the goals check-in paused and
+ * marked replaced. This Monday's occurrence is ready, its pre-read built by `blocks`.
+ */
+export function addMetricsReview(ctx: RitualsContext, db: RitualsDb, blocks: (occurrenceId: string, asOf: string) => OccurrenceOut["pre_read"]["blocks"]) {
+  const checkin = db.rituals.find((r) => r.kind === "goals_checkin")!;
+  const t = now();
+  const review: Ritual = {
+    ...checkin,
+    id: ctx.uuid(),
+    kind: "metrics_review",
+    title: "Weekly metrics review",
+    duration_min: 45,
+    prep_hours: 6,
+    status: "active",
+    lock_version: 1,
+    created_at: t.toISOString(),
+  };
+  Object.assign(checkin, { status: "paused", next_due_at: null, replaced_by: "Weekly metrics review" });
+  db.rituals.push(review);
+  // This week's: the first due after a day ago (Monday 09:00 in the Company time zone), prepared 6 hours before.
+  const week = nextOccurrence(review.schedule, new Date(t.getTime() - DAY_MS));
+  const asOf = new Date(week.getTime() - 6 * 3_600_000).toISOString();
+  const o = occurrence(ctx, review, week, { status: "ready", period: { from: new Date(week.getTime() - 7 * DAY_MS).toISOString(), to: week.toISOString() } });
+  o.pre_read = { built_at: asOf, blocks: blocks(o.id, asOf) };
+  db.occurrences.push(o);
+  review.next_due_at = nextOccurrence(review.schedule, week).toISOString();
+}
 
 /** Handles /v1/rituals* and /v1/ritual-occurrences*; null for any other path. */
 export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
@@ -530,7 +569,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   if (p.length === 3 && m === "GET") {
     // The mock summary run finishes on the second read after it starts.
     if (o.summary_state === "running" && (o.summary_reads = (o.summary_reads ?? 0) + 1) >= 2) {
-      Object.assign(o, { summary_state: "ready", summary: SUMMARY_TEXT, summary_note: null });
+      Object.assign(o, { summary_state: "ready", summary: r.kind === "metrics_review" ? METRICS_SUMMARY_TEXT : SUMMARY_TEXT, summary_note: null });
     }
     return json(200, occurrenceOut(ctx, r, o));
   }
@@ -565,9 +604,11 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
     if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
+    const special = FLOW_FOR_KIND[r.kind];
+    if (special && !ctx.openVariances?.(o.id)) return fail(409, "No open variance to explain");
     const id = ctx.uuid();
     Object.assign(o, { summary_state: "running", summary_run_id: id, summary_reads: 0, summary_note: null });
-    return json(201, { id, flow: "ritual_summary", status: "running", estimate_usd: PER_SUMMARY_USD });
+    return json(201, { id, flow: special?.flow ?? "ritual_summary", status: "running", estimate_usd: priceOf(r.kind) });
   }
   return fail(404, "Route not found");
 }
