@@ -236,7 +236,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
-    if (scenario === TRACK_ALERTS_SCENARIO) seedAlerts(db, track.id);
+    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO) seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO);
     return db;
   });
 }
@@ -1392,13 +1392,18 @@ function trackerLinks(
 
 /** The mock scenario (MOCK_SCENARIO_KEY) with one open date slip on Usage alerts (F2). */
 export const TRACK_ALERTS_SCENARIO = "track-alerts";
+/** "track-alerts" plus two tracker issues not on the roadmap: one track row, three open alerts (#514). */
+export const TRACK_ALERTS_MANY_SCENARIO = "track-alerts-many";
 type StoredAlert = Omit<TrackAlertOut, "prd" | "actions" | "inbox_state">;
 /** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
 const SLIP_RECORD_ID = stableUuid("plan:record:ENG-405#0");
 const DONE_DAYS = 30;
 
-/** One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests on Nov 30. */
-function seedAlerts(db: RoadmapDb, trackId: string) {
+/**
+ * One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests
+ * on Nov 30. `many` adds two open "not on the roadmap" alerts on the same track.
+ */
+function seedAlerts(db: RoadmapDb, trackId: string, many = false) {
   db.alerts = [
     {
       id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Daily alert digest email",
@@ -1410,6 +1415,15 @@ function seedAlerts(db: RoadmapDb, trackId: string) {
       state: "open", opened_at: "2026-10-20T15:02:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null,
     },
   ];
+  if (many) {
+    for (const [ref, title] of [["ENG-501", "Export retries"], ["ENG-502", "Alert sounds"]]) {
+      db.alerts.push({
+        id: stableUuid(`track-alert/${ref}/unplanned`), track_id: trackId, item_key: null, item_title: null,
+        kind: "unplanned", detail: `${ref} (${title}) is not on the roadmap.`, data: { tracker_ref: ref },
+        state: "open", opened_at: "2026-10-20T15:05:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null,
+      });
+    }
+  }
   db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
 }
 

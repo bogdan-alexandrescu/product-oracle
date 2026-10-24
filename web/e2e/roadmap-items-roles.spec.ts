@@ -45,6 +45,41 @@ test("a commenter suggests; the approver stages the suggestion", async ({ page }
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
 });
 
+// Card two-reviewers: protects = criterion 10 with both people at once: the approver's review
+// screen stays open while a commenter, signed in on a second tab of their own, suggests a fix;
+// the approver's page shows it within one poll (10 s) with Stage and Dismiss, without a reload,
+// and Stage makes it count; fails_when = the suggestion needs a reload or a sign-in to show,
+// shows as staged, or Stage does not count it; no_claim = polling latency against the real API.
+// The mock's data is one browser context's localStorage, so the second person is a second
+// tab of it with its own sign-in (lib/api/mock/server.ts tab sessions).
+test("an approver's open review shows a commenter's suggestion within one poll", async ({ page, context }) => {
+  await login(page, "approver@example.com");
+  await openSeeded(page, seedRoadmapReview, SCREEN);
+  const mine = row(page, "slack-alerts");
+  await expect(mine.getByRole("button", { name: "Remove date", exact: true })).toBeVisible();
+  await expect(mine.getByTestId("suggested-by")).toHaveCount(0);
+
+  // The commenter, on a second tab that opens signed in as the approver.
+  const other = await context.newPage();
+  await other.goto("/home");
+  await signOut(other);
+  await login(other, "commenter@example.com");
+  await other.goto(SCREEN);
+  const theirs = row(other, "slack-alerts");
+  await theirs.getByRole("button", { name: "Remove date", exact: true }).click();
+  await expect(theirs.getByTestId("suggested-by")).toHaveText(/Suggested by you/);
+
+  // The approver's page was never reloaded: the next poll brings the suggestion.
+  await expect(mine.getByTestId("suggested-by")).toHaveText(/Suggested by Commenter: Remove date/, { timeout: 12_000 });
+  await expect(mine.getByRole("button", { name: "Dismiss" })).toBeVisible();
+  await mine.getByRole("button", { name: "Stage" }).click();
+  await expect(mine.getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
+  // The commenter's tab is still the commenter's.
+  await other.reload();
+  await expect(bar(other)).toContainText("An approver decides");
+});
+
 // Card ask: protects = criterion 11, Ask a teammate picks a member and asks; the row reads
 // "Asked {name}" and the tally waits on them; the asked member's Inbox has the question (C2's
 // existing row) and answering it there turns the row to "Answered" with the answer in the

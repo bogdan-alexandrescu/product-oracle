@@ -253,6 +253,120 @@ test("arrow keys move the selection; Tab reaches the row actions", async ({ page
   await expect(row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true })).toBeFocused();
 });
 
+// Card back: protects = criterion 1's Back, a control of its own on the review screen (not only
+// the breadcrumb) returns to the run; fails_when = there is no Back, or it opens another page;
+// no_claim = the browser's own back button.
+test("the review screen's Back returns to the run", async ({ page }) => {
+  await open(page);
+  await page.getByRole("main").getByRole("link", { name: "Back to run", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${RUN}$`));
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
+});
+
+/** WCAG's contrast ratio of two CSS colours (rgb()/rgba() strings, alpha ignored). */
+function contrast(a: string, b: string): number {
+  const lum = (c: string) => {
+    const [r, g, bl] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number).map((v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The focused element's focus ring: its style, width and colour, and the colour it sits on. */
+async function ring(page: Page) {
+  return page.evaluate(() => {
+    const el = document.activeElement as HTMLElement;
+    const css = getComputedStyle(el);
+    // The ring is drawn outside the element (offset): it sits on the nearest painted ancestor.
+    let bg = "rgba(0, 0, 0, 0)";
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const c = getComputedStyle(p).backgroundColor;
+      if (c !== "transparent" && !/rgba\(.*,\s*0\)$/.test(c)) {
+        bg = c;
+        break;
+      }
+    }
+    return { style: css.outlineStyle, width: parseFloat(css.outlineWidth), color: css.outlineColor, bg, name: el.textContent?.trim() ?? "" };
+  });
+}
+
+async function expectVisibleFocus(page: Page, name: string | RegExp) {
+  const r = await ring(page);
+  expect(r.name).toMatch(name);
+  expect(r.style, `${r.name}: focus outline`).not.toBe("none");
+  expect(r.width, `${r.name}: focus outline width`).toBeGreaterThanOrEqual(2);
+  // WCAG 1.4.11: a focus indicator is at least 3:1 against what it sits on.
+  expect(contrast(r.color, r.bg), `${r.name}: ${r.color} on ${r.bg}`).toBeGreaterThanOrEqual(3);
+}
+
+// Card keyboard-decide: protects = criterion 16, Enter on a row offers the row's first fix as a
+// Confirm button with focus (no single-key decisions) and Enter on Confirm stages it; Tab
+// reaches every button of the bottom bar (the staged chips' Undo, Send back, Approve) and Enter
+// on Approve decides; the focus ring is visible with at least 3:1 contrast in the light and
+// dark themes; fails_when = Enter on a row stages by itself or does nothing, a bar button is
+// skipped by Tab, or the ring is missing or too faint; no_claim = screen readers.
+test("Enter on a row asks to confirm its first fix; the bar's buttons are reached and used by keyboard", async ({ page }) => {
+  await open(page);
+  await row(page, "slack-alerts").focus();
+  await page.keyboard.press("Enter");
+  const confirm = row(page, "slack-alerts").getByRole("button", { name: "Confirm: Remove date" });
+  await expect(confirm).toBeFocused();
+  // The row's Enter alone stages nothing.
+  await expect(bar(page).getByTestId("staged-chip")).toHaveCount(0);
+  await expectVisibleFocus(page, /^Confirm: Remove date/);
+  await page.keyboard.press("Enter");
+  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  await expect(bar(page).getByTestId("staged-chip")).toHaveCount(1);
+  // Escape leaves the confirm without staging.
+  await row(page, "budget-caps").focus();
+  await page.keyboard.press("Enter");
+  await expect(row(page, "budget-caps").getByRole("button", { name: /^Confirm: / })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(row(page, "budget-caps").getByRole("button", { name: /^Confirm: / })).toHaveCount(0);
+  await expect(row(page, "budget-caps")).toBeFocused();
+  await expect(bar(page).getByTestId("staged-chip")).toHaveCount(1);
+
+  // The other two blocking reasons, so Approve opens.
+  await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
+  await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();
+  await page.getByRole("menuitem", { name: "Waive…" }).click();
+  await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill("The export section lands in the next PRD version");
+  await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
+  const approve = bar(page).getByRole("button", { name: "Approve with 2 edits" });
+  await expect(approve).toBeEnabled();
+
+  // From the note, Tab reaches Send back then Approve; Shift+Tab goes back to each chip's Undo.
+  await bar(page).getByLabel("Note to the agents").focus();
+  await page.keyboard.press("Tab");
+  await expect(bar(page).getByRole("button", { name: "Send back to agents" })).toBeFocused();
+  await expectVisibleFocus(page, "Send back to agents");
+  await page.keyboard.press("Tab");
+  await expect(approve).toBeFocused();
+  await expectVisibleFocus(page, "Approve with 2 edits");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expectVisibleFocus(page, "Approve with 2 edits");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(bar(page).getByLabel("Note to the agents")).toBeFocused();
+  const undos = bar(page).getByRole("button", { name: /^Undo / });
+  await expect(undos).toHaveCount(3);
+  for (let i = 2; i >= 0; i--) {
+    await page.keyboard.press("Shift+Tab");
+    await expect(undos.nth(i)).toBeFocused();
+  }
+  await expectVisibleFocus(page, "");
+  // Back to Approve, and Enter decides.
+  for (let i = 0; i < 5; i++) await page.keyboard.press("Tab");
+  await expect(approve).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("review-status")).toHaveText("Approved with 2 edits");
+});
+
 // Card contract: protects = criterion 18 (the mock's half), the mock's review route answers in
 // the shared fixture's shapes (lib/api/mock/checkpoint-review.json, which
 // api/tests/test_checkpoint_review_contract.py checks against the API); fails_when = a field is
