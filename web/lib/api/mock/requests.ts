@@ -40,13 +40,20 @@ interface TriageRun {
 }
 
 /** A request as stored: the API's row, before themes, PRDs and mentions are joined. */
-interface Row extends Omit<RequestOut, "theme" | "document" | "mentions" | "source"> {
+// H10 Reasoned no: what a no adds to a request (decision, basis, asked again, replies);
+// optional on stored rows, defaulted by out(). Lane 2 fills them in the requests-why-not scenario.
+type H10Fields = "asked_again" | "replies";
+interface Row extends Omit<RequestOut, "theme" | "document" | "mentions" | "source" | H10Fields> {
   theme_id: string | null;
   document_id: string | null;
   source: RequestOut["source"];
+  asked_again?: number;
+  replies?: RequestOut["replies"];
 }
 
-type Theme = Omit<ThemeOut, "request_count" | "archived">;
+type Theme = Omit<ThemeOut, "request_count" | "archived" | "problem_state"> & {
+  problem_state?: ThemeOut["problem_state"];
+};
 
 export interface RequestsDb {
   requests: Row[];
@@ -277,6 +284,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     const doc = document_id ? ctx.documents().find((d) => d.id === document_id) : undefined;
     return {
       ...rest,
+      asked_again: rest.asked_again ?? 0,
+      replies: rest.replies ?? { total: 0, open: 0 },
       theme: theme ? { id: theme.id, title: theme.title } : null,
       document: doc ? { id: doc.id, slug: doc.slug, title: doc.title } : null,
       mentions: 1 + descendants(r.id).length,
@@ -284,6 +293,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
   };
   const themeOut = (t: Theme): ThemeOut => ({
     ...t,
+    problem_state: t.problem_state ?? "none",
     archived: !!t.archived_at,
     request_count: db.requests.filter((r) => r.theme_id === t.id && r.state !== "merged").length,
   });
@@ -436,6 +446,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         ...out(row),
         merged: descendants(row.id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map(out),
         document: doc ?? null,
+        suggested_basis: {},
+        drafting: false,
       };
       return json(200, detail);
     }

@@ -16906,10 +16906,10 @@
                   "type": "null"
                 }
               ],
-              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated",
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, comma-separated",
               "title": "Origin"
             },
-            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated"
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, comma-separated"
           },
           {
             "name": "chosen",
@@ -16964,7 +16964,8 @@
                     "gap",
                     "run",
                     "ritual_occurrence",
-                    "discussion"
+                    "discussion",
+                    "request"
                   ],
                   "type": "string"
                 },
@@ -35651,7 +35652,7 @@
           "requests"
         ],
         "summary": "Disqualify Request",
-        "description": "Disqualify with a reason; Other needs a note.",
+        "description": "Disqualify with a reason; Other needs a note. A reason that answers the asker (and\nWon't do with a note) is a no (H10): a decided decision in the log, reviewed in 90\ndays, and a reply to everyone who asked, drafted by Oracle. On the stop list needs a\nstop choice and Already possible a feature as its ``basis``.",
         "operationId": "disqualify_request",
         "security": [
           {
@@ -35714,7 +35715,7 @@
           "requests"
         ],
         "summary": "Reopen Request",
-        "description": "Bring a merged or disqualified request back to New.",
+        "description": "Bring a merged or disqualified request back to New. A logged no is reversed (a\nreview by you) and its Drafted replies are withdrawn.",
         "operationId": "reopen_request",
         "security": [
           {
@@ -35879,6 +35880,610 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/requests/{request_id}/replies": {
+      "get": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "List Request Replies",
+        "description": "The replies to the people who asked for a request said no to: name as given, how\nthey asked, state and the draft. A run token reads them under ``read:sources``: they\nquote what people asked.",
+        "operationId": "list_request_replies",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReplyOut"
+                  },
+                  "title": "Response List Request Replies"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/request-replies/{reply_id}": {
+      "patch": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Update Request Reply",
+        "description": "Edit a Drafted reply (at most 2,000 characters). The filer of the request, an\napprover or an owner. A date or \"later\" carries the warning \"Sounds like a promise\".",
+        "operationId": "update_request_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/request-replies/{reply_id}/sent": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Mark Request Reply Sent",
+        "description": "Mark sent: how (Email, Slack, Call, In the app, Other) and the day (default today\nin the Company time zone). Oracle sends nothing itself.",
+        "operationId": "mark_request_reply_sent",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplySent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/request-replies/{reply_id}/skip": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Skip Request Reply",
+        "description": "Skip a reply, with a reason (for example \"Asked anonymously\").",
+        "operationId": "skip_request_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplySkip"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/request-replies/{reply_id}/notify": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Notify Request Reply",
+        "description": "Tell them in Oracle: the member who asked finds the reply in their Inbox. 409 when\nthe asker is not a member.",
+        "operationId": "notify_request_reply",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/requests/{request_id}/replies/draft": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Draft Request Replies",
+        "description": "Draft again with Oracle: one ``why_not_reply`` job on Oracle's own model for the\nreplies still Drafted; poll ``GET /v1/llm-jobs/{job_id}``. 409 while one runs and\nwhile Words for people outside is at Observe.",
+        "operationId": "draft_request_replies",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/requests/{request_id}/replies/reopened": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Tell Reopened",
+        "description": "Tell the people who asked, after Reopen: a reply saying it is being looked at\nagain, for each asker whose no was sent or told.",
+        "operationId": "tell_reopened",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReplyOut"
+                  },
+                  "title": "Response Tell Reopened"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/requests/{request_id}/keep-no": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Keep Request No",
+        "description": "Keep the no: the decision's approver records a reaffirmed review, and asked again\ncounts from now.",
+        "operationId": "keep_request_no",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeepNoIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
+      }
+    },
+    "/v1/request-themes/{theme_id}/problem/confirm": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Confirm Request Theme Problem",
+        "description": "Confirm Oracle's suggested problem: what replies and agents cite.",
+        "operationId": "confirm_request_theme_problem",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "theme_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Theme Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemeProblemIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestThemeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/request-themes/{theme_id}/problem/dismiss": {
+      "post": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Dismiss Request Theme Problem",
+        "description": "Dismiss Oracle's suggested problem.",
+        "operationId": "dismiss_request_theme_problem",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "theme_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Theme Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemeProblemIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestThemeOut"
                 }
               }
             }
@@ -42098,6 +42703,81 @@
         ],
         "title": "BasisImpactOut",
         "description": "What withdrawing a basis would change (F3), computed as the withdrawal would."
+      },
+      "BasisIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "strategy_choice",
+              "feature",
+              "none"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "BasisIn",
+        "description": "The record a no cites (H10): required for On the stop list (a confirmed stop\nchoice) and Already possible (a feature)."
+      },
+      "BasisOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "strategy_choice",
+              "feature",
+              "none"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "BasisOut"
       },
       "BatchState": {
         "properties": {
@@ -51033,7 +51713,8 @@
               "pushback_override",
               "priority_override",
               "autonomy",
-              "checkpoint"
+              "checkpoint",
+              "request_decline"
             ],
             "title": "Origin"
           },
@@ -51892,7 +52573,8 @@
               "pushback_override",
               "priority_override",
               "autonomy",
-              "checkpoint"
+              "checkpoint",
+              "request_decline"
             ],
             "title": "Origin"
           },
@@ -54137,7 +54819,10 @@
               "duplicate",
               "not_a_request",
               "wont_do",
-              "other"
+              "other",
+              "strategy_stop",
+              "already_exists",
+              "few_customers"
             ],
             "title": "Reason"
           },
@@ -54152,6 +54837,16 @@
               }
             ],
             "title": "Note"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasisIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -54982,6 +55677,20 @@
         },
         "type": "object",
         "title": "DraftImport"
+      },
+      "DraftJobOut": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "DraftJobOut"
       },
       "DraftNoteIn": {
         "properties": {
@@ -64072,6 +64781,14 @@
             "type": "array",
             "title": "Discussions",
             "default": []
+          },
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/InboxRequestReply"
+            },
+            "type": "array",
+            "title": "Requests",
+            "default": []
           }
         },
         "type": "object",
@@ -64336,6 +65053,86 @@
         ],
         "title": "InboxReportFailure",
         "description": "Owners' Inbox: a report Slack refused for 24 hours (Retry, Dismiss)."
+      },
+      "InboxRequestReply": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "replies_to_send",
+              "asked_again",
+              "answer"
+            ],
+            "title": "Reason"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "decision_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Number"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "counts": {
+            "type": "boolean",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "title",
+          "reason",
+          "counts"
+        ],
+        "title": "InboxRequestReply",
+        "description": "H10 rows: Replies to send (the request's filer and its decider; counted until\nevery reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said\nno (the decision's approver; counted until Reopen or Keep the no) and Answer to your\nrequest (the member who asked; shown only, with the reply)."
       },
       "InboxRevokeFailure": {
         "properties": {
@@ -68466,6 +69263,23 @@
         ],
         "title": "JoinedOut"
       },
+      "KeepNoIn": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "KeepNoIn",
+        "description": "Keep the no (H10): a reaffirmed review on the decision; asked again counts anew."
+      },
       "KindCoverage": {
         "properties": {
           "kind": {
@@ -70031,7 +70845,8 @@
               "refinement_batch",
               "intake_analysis",
               "decision_options",
-              "scope_enhance"
+              "scope_enhance",
+              "why_not_reply"
             ],
             "title": "Kind"
           },
@@ -70082,6 +70897,18 @@
               }
             ],
             "title": "Scope Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
           },
           "version_number": {
             "anyOf": [
@@ -80493,6 +81320,18 @@
           "lock_version": {
             "type": "integer",
             "title": "Lock Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "additionalProperties": false,
@@ -80531,6 +81370,22 @@
         "title": "ReorderChange",
         "description": "Put an item at ``position`` (0 first) within its horizon."
       },
+      "ReplyCounts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "open": {
+            "type": "integer",
+            "title": "Open",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ReplyCounts"
+      },
       "ReplyCreate": {
         "properties": {
           "body": {
@@ -80544,6 +81399,315 @@
           "body"
         ],
         "title": "ReplyCreate"
+      },
+      "ReplyOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "root_request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Root Request Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "no",
+              "reopened"
+            ],
+            "title": "Kind"
+          },
+          "decision_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Number"
+          },
+          "asker": {
+            "type": "string",
+            "title": "Asker"
+          },
+          "asker_kind": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "team",
+              "unknown"
+            ],
+            "title": "Asker Kind"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
+          },
+          "channel_asked": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "support",
+                  "sales",
+                  "team",
+                  "interview",
+                  "slack",
+                  "meeting",
+                  "doc",
+                  "other",
+                  "in_app"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Asked"
+          },
+          "asked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "draft_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "oracle",
+                  "template",
+                  "person"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Source"
+          },
+          "warnings": {
+            "items": {
+              "type": "string",
+              "const": "sounds_like_a_promise"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "drafted",
+              "sent",
+              "notified",
+              "skipped",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "email",
+                  "slack",
+                  "call",
+                  "in_app",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "sent_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent On"
+          },
+          "sent_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent By Name"
+          },
+          "skip_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Reason"
+          },
+          "notified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notified At"
+          },
+          "drafting": {
+            "type": "boolean",
+            "title": "Drafting"
+          },
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "request_id",
+          "root_request_id",
+          "kind",
+          "decision_number",
+          "asker",
+          "asker_kind",
+          "member_id",
+          "channel_asked",
+          "asked",
+          "body",
+          "draft_source",
+          "warnings",
+          "status",
+          "channel",
+          "sent_on",
+          "sent_by_name",
+          "skip_reason",
+          "notified_at",
+          "drafting",
+          "lock_version"
+        ],
+        "title": "ReplyOut",
+        "description": "One reply to one person who asked (H10)."
+      },
+      "ReplyPatch": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Body"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version",
+          "body"
+        ],
+        "title": "ReplyPatch"
+      },
+      "ReplySent": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "email",
+              "slack",
+              "call",
+              "in_app",
+              "other"
+            ],
+            "title": "Channel"
+          },
+          "sent_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent On"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channel"
+        ],
+        "title": "ReplySent"
+      },
+      "ReplySkip": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ReplySkip"
       },
       "ReplyUsage": {
         "properties": {
@@ -81463,7 +82627,10 @@
                   "duplicate",
                   "not_a_request",
                   "wont_do",
-                  "other"
+                  "other",
+                  "strategy_stop",
+                  "already_exists",
+                  "few_customers"
                 ]
               },
               {
@@ -81607,6 +82774,88 @@
             ],
             "title": "Decided At"
           },
+          "decision_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Number"
+          },
+          "decision_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Title"
+          },
+          "decision_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Status"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasisOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "asked_again": {
+            "type": "integer",
+            "title": "Asked Again",
+            "default": 0
+          },
+          "replies": {
+            "$ref": "#/components/schemas/ReplyCounts",
+            "default": {
+              "total": 0,
+              "open": 0
+            }
+          },
+          "loop_closed_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loop Closed On"
+          },
+          "no_reply_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_note",
+                  "housekeeping"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Reply Reason"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -81627,6 +82876,19 @@
             },
             "type": "array",
             "title": "Merged"
+          },
+          "suggested_basis": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BasisOut"
+            },
+            "type": "object",
+            "title": "Suggested Basis",
+            "default": {}
+          },
+          "drafting": {
+            "type": "boolean",
+            "title": "Drafting",
+            "default": false
           }
         },
         "type": "object",
@@ -81873,7 +83135,10 @@
                   "duplicate",
                   "not_a_request",
                   "wont_do",
-                  "other"
+                  "other",
+                  "strategy_stop",
+                  "already_exists",
+                  "few_customers"
                 ]
               },
               {
@@ -82016,6 +83281,88 @@
               }
             ],
             "title": "Decided At"
+          },
+          "decision_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Number"
+          },
+          "decision_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Title"
+          },
+          "decision_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Status"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasisOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "asked_again": {
+            "type": "integer",
+            "title": "Asked Again",
+            "default": 0
+          },
+          "replies": {
+            "$ref": "#/components/schemas/ReplyCounts",
+            "default": {
+              "total": 0,
+              "open": 0
+            }
+          },
+          "loop_closed_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loop Closed On"
+          },
+          "no_reply_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_note",
+                  "housekeeping"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Reply Reason"
           },
           "created_at": {
             "type": "string",
@@ -82251,6 +83598,71 @@
             "type": "integer",
             "title": "Request Count"
           },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraints"
+          },
+          "problem_state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "suggested",
+              "confirmed"
+            ],
+            "title": "Problem State",
+            "default": "none"
+          },
+          "problem_suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestedProblem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem_confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem Confirmed At"
+          },
           "created_by": {
             "anyOf": [
               {
@@ -82352,6 +83764,42 @@
               }
             ],
             "title": "Archived"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraints"
           }
         },
         "additionalProperties": false,
@@ -95391,7 +96839,8 @@
               "gap",
               "run",
               "ritual_occurrence",
-              "discussion"
+              "discussion",
+              "request"
             ],
             "title": "Kind"
           },
@@ -95419,6 +96868,116 @@
           "id"
         ],
         "title": "Subject"
+      },
+      "SuggestedBasis": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "strategy_choice",
+              "feature",
+              "none"
+            ],
+            "title": "Kind",
+            "default": "none"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "title": "SuggestedBasis"
+      },
+      "SuggestedDecline": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_goal",
+              "out_of_scope",
+              "duplicate",
+              "not_a_request",
+              "wont_do",
+              "other",
+              "strategy_stop",
+              "already_exists",
+              "few_customers"
+            ],
+            "title": "Reason"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/SuggestedBasis",
+            "default": {
+              "kind": "none"
+            }
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "SuggestedDecline",
+        "description": "\"Oracle suggests saying no\": shown only; nothing is disqualified until an\napprover submits the Disqualify form (H10)."
+      },
+      "SuggestedProblem": {
+        "properties": {
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraints"
+          }
+        },
+        "type": "object",
+        "title": "SuggestedProblem"
       },
       "Suggestion": {
         "properties": {
@@ -95499,6 +97058,26 @@
               }
             ],
             "title": "Rationale"
+          },
+          "decline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestedDecline"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestedProblem"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "run_id": {
             "anyOf": [
@@ -97809,6 +99388,20 @@
           "tokens"
         ],
         "title": "ThemePreviewIn"
+      },
+      "ThemeProblemIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ThemeProblemIn"
       },
       "ThemeSpacing": {
         "properties": {
