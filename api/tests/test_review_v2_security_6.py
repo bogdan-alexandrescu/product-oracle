@@ -704,6 +704,7 @@ async def test_a_successful_revoke_that_fails_to_save_is_not_shown_as_a_failure(
     assert await _revoke_failures(client, ctx.auth) == []
 
 
+@pytest.mark.timing
 async def test_a_budget_that_runs_out_mid_query_does_not_cut_the_query_or_fail_the_tick(
     client, monkeypatch, runtime
 ):
