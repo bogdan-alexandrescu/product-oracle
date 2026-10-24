@@ -57,6 +57,8 @@ from every member's Google Docs sources in the same request, with no Drive call
   its prediction's ``by`` and this many days after it shipped.
 - ``calibration_min_outcomes`` (H3): 1-100, default 5: assessed outcomes a goal (or the
   company) needs before its track record sets a factor.
+- ``request_asked_again_threshold`` (H10): 1-20, default 3: requests merged into a
+  declined one with a logged decision before its approver hears it was asked again.
 - ``outcome_calibration`` (H3): ``apply`` (default) multiplies priority confidence by the
   track record; ``show`` only displays it.
 
@@ -134,6 +136,8 @@ DEFAULTS: dict[str, Any] = {
     "outcome_measure_days": 30,
     "calibration_min_outcomes": 5,
     "outcome_calibration": "apply",
+    # H10 Reasoned no: asked again this many times since the no, the decider hears.
+    "request_asked_again_threshold": 3,
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -311,8 +315,12 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
                 f"blocker_risk_review_max_days must be between 1 and {MAX_REVIEW_DAYS}"
             )
         return value
-    if key in ("outcome_measure_days", "calibration_min_outcomes"):
-        lo, hi = (7, 365) if key == "outcome_measure_days" else (1, 100)
+    if key in ("outcome_measure_days", "calibration_min_outcomes", "request_asked_again_threshold"):
+        lo, hi = {
+            "outcome_measure_days": (7, 365),
+            "calibration_min_outcomes": (1, 100),
+            "request_asked_again_threshold": (1, 20),
+        }[key]
         if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
             raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
         return value

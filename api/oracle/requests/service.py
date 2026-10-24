@@ -20,21 +20,25 @@ from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
 from oracle.baseline.models import Entity
+from oracle.decisions import capture
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.members.names import display_name
-from oracle.requests.models import EXCERPT_MAX, ProductRequest, RequestTheme
+from oracle.requests import replies
+from oracle.requests.models import EXCERPT_MAX, ProductRequest, RequestReply, RequestTheme
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
+    BasisOut,
     DeclineSuggestionIn,
     DisqualifyIn,
     MergeIn,
     QualifyIn,
     ReopenIn,
+    ReplyCounts,
     RequestCreate,
     RequestDetail,
     RequestDocumentProgress,
@@ -48,6 +52,7 @@ from oracle.requests.schemas import (
     RequestThemeRef,
     SourceCopy,
     StateCounts,
+    SuggestedProblem,
     Suggestion,
 )
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
@@ -266,6 +271,12 @@ def _suggestion(raw: dict[str, Any]) -> Suggestion | None:
         return None
 
 
+def _without_decline(s: Suggestion | None, show: bool) -> Suggestion | None:
+    if s is None or show or s.decline is None:
+        return s
+    return s.model_copy(update={"decline": None})
+
+
 async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOut]:
     """The rows as the API shows them, with themes, PRDs, sources and mentions."""
     if not rows:
@@ -294,9 +305,36 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
         else set()
     )
     children = _children(await _merge_parents(db))
+    declined = [r.id for r in rows if r.state == "disqualified"]
+    decisions = await replies.decisions_for(db, declined)
+    counts = await replies.reply_counts(db, [r.id for r in rows])
+    merged_at = await _merged_at(db, [d for r in declined for d in descendants(r, children)])
+    basis_titles = await _basis_titles(db, rows)
+    # H11 requests: Oracle's decline suggestions show at Recommend and above.
+    show_decline = await autonomy.allows(db, "requests", "recommend")
     out = []
     for r in rows:
         theme = themes.get(r.theme_id) if r.theme_id else None
+        d = decisions.get(r.id)
+        total, open_ = counts.get(r.id, (0, 0))
+        basis = None
+        if r.basis and r.basis.get("kind"):
+            bid = r.basis.get("id")
+            basis = BasisOut(
+                kind=r.basis["kind"],
+                id=bid,
+                title=basis_titles.get(uuid.UUID(bid)) if bid else None,
+            )
+        since = r.asked_again_since
+        asked_again = (
+            sum(
+                1
+                for m in descendants(r.id, children)
+                if (at := merged_at.get(m)) is not None and at > since
+            )
+            if r.state == "disqualified" and since is not None
+            else 0
+        )
         doc = docs.get(r.document_id) if r.document_id else None
         source = None
         if r.source_item_id or r.source_kind or r.source_title:
@@ -332,16 +370,42 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 interview_id=r.interview_id,
                 source=source,
                 mentions=1 + len(descendants(r.id, children)),
-                suggestion=_suggestion(r.suggestion),
+                suggestion=_without_decline(_suggestion(r.suggestion), show_decline),
                 filed_by=r.filed_by,
                 decided_by=r.decided_by,
                 decided_at=r.decided_at,
+                decision_number=d.number if d else None,
+                decision_title=d.title if d else None,
+                decision_status=d.status if d else None,
+                basis=basis,
+                asked_again=asked_again,
+                replies=ReplyCounts(total=total, open=open_),
+                loop_closed_on=r.loop_closed_on,
+                no_reply_reason=replies.no_reply_reason(r),  # type: ignore[arg-type]
                 created_at=r.created_at,
                 updated_at=r.updated_at,
                 lock_version=r.lock_version,
             )
         )
     return out
+
+
+async def _merged_at(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, datetime]:
+    """When each merged request was merged (its ``decided_at``)."""
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(ProductRequest.id, ProductRequest.decided_at).where(ProductRequest.id.in_(ids))
+    )
+    return {rid: at for rid, at in rows.all() if at is not None}
+
+
+async def _basis_titles(db: AsyncSession, rows: list[ProductRequest]) -> dict[uuid.UUID, str]:
+    ids = {uuid.UUID(r.basis["id"]) for r in rows if r.basis and r.basis.get("id")}
+    if not ids:
+        return {}
+    found = await db.execute(select(Entity.id, Entity.title).where(Entity.id.in_(ids)))
+    return {eid: title for eid, title in found.all()}
 
 
 async def out_one(db: AsyncSession, row: ProductRequest) -> RequestOut:
@@ -399,6 +463,10 @@ async def detail(db: AsyncSession, request_id: uuid.UUID) -> RequestDetail:
         **data,
         merged=await to_out(db, merged),
         document=await _progress(db, row.document_id) if row.document_id else None,
+        suggested_basis={
+            k: BasisOut(**v) for k, v in (await replies.suggested_basis(db, row)).items()
+        },
+        drafting=await replies.running_job(db, row.id) is not None,
     )
 
 
@@ -651,11 +719,25 @@ async def merge(
     with db.no_autoflush:
         root = await _merge_into(db, principal, row, body.into_id)
     await flush_or_conflict(db)
-    await audit.record(
-        db, principal, "request.merged", "product_request", row.id,
-        {"into_id": str(root), "asked_into_id": str(body.into_id)},
-    )  # fmt: skip
+    data = {"into_id": str(root), "asked_into_id": str(body.into_id)}
+    data |= await _asked_again(db, principal, row, root)
+    await audit.record(db, principal, "request.merged", "product_request", row.id, data)
     return row
+
+
+async def _asked_again(
+    db: AsyncSession, principal: Principal, row: ProductRequest, root_id: uuid.UUID
+) -> dict[str, Any]:
+    """H10 Asked again: a request merged into one said no to gets the same reasoned reply,
+    under the same decision. The root stays disqualified; its ``asked_again`` counts it."""
+    root = await db.get(ProductRequest, root_id)
+    if root is None or root.state != "disqualified":
+        return {}
+    decision = await replies.live_decision(db, root.id)
+    if decision is None or decision.status != "decided":
+        return {"asked_again": True}
+    made = await _replies_for(db, root, [row], decision, principal)
+    return {"asked_again": True, "replies": len(made)}
 
 
 async def disqualify(
@@ -667,16 +749,57 @@ async def disqualify(
         raise _conflict("Only a New or Qualified request can be disqualified")
     if body.reason == "other" and not body.note:
         raise _invalid("Say why in a note when the reason is Other")
+    try:
+        basis, entity = await replies.check_basis(
+            db, body.reason, body.basis.model_dump(mode="json") if body.basis else None
+        )
+    except replies.ReplyError as e:
+        raise RequestError(e.status, str(e)) from e
     row.state = "disqualified"
     row.disqualify_reason = body.reason
     row.decision_note = body.note or None
+    row.basis = basis
+    row.loop_closed_on = None
     _decided(row, principal)
+    row.asked_again_since = row.decided_at
     await flush_or_conflict(db)
-    await audit.record(
-        db, principal, "request.disqualified", "product_request", row.id,
-        {"reason": body.reason},
-    )  # fmt: skip
+    data: dict[str, Any] = {"reason": body.reason}
+    if replies.is_no(body.reason, body.note):
+        # H10: a no is a logged decision and a reply to everyone who asked.
+        decision = await capture.request_declined(
+            db, principal, row, reason_label=replies.LABELS[body.reason], basis_entity=entity
+        )
+        made = await _replies_for(db, row, [row], decision, principal)
+        data |= {"decision_id": str(decision.id), "replies": len(made)}
+    await audit.record(db, principal, "request.disqualified", "product_request", row.id, data)
     return row
+
+
+async def _replies_for(
+    db: AsyncSession,
+    root: ProductRequest,
+    askers: list[ProductRequest],
+    decision: Any,
+    principal: Principal | None = None,
+) -> list[RequestReply]:
+    """Replies (kind no) for ``askers`` and every request merged into them, and the job
+    that drafts them (at H11 external_messages Draft; none at Observe)."""
+    children = _children(await _merge_parents(db))
+    ids = _unique([a.id for a in askers] + [d for a in askers for d in descendants(a.id, children)])
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.id.in_(ids))
+            .order_by(ProductRequest.created_at, ProductRequest.id)
+        )
+    )
+    made = await replies.create_replies(db, root, rows, kind="no", decision=decision)
+    if made and await replies.running_job(db, root.id) is None:
+        await replies.queue_job(db, principal, root, made)
+    elif made:
+        # A job under way: these are drafted by the next Draft again, or get templates now.
+        await replies.fill_templates(db, root, made)
+    return made
 
 
 async def reopen(
@@ -687,15 +810,59 @@ async def reopen(
     if row.state not in ("merged", "disqualified"):
         raise _conflict("Only a Merged or Disqualified request can be reopened")
     was = row.state
+    decision = None
+    if was == "disqualified":
+        # H10: the logged no is reversed, by the reopener's review.
+        decision = await capture.request_reopened(db, principal, row, body.reason)
+    await _reopen(db, row)
+    await flush_or_conflict(db)
+    data: dict[str, Any] = {"from": was}
+    if decision is not None:
+        data["decision_id"] = str(decision.id)
+    await audit.record(db, principal, "request.reopened", "product_request", row.id, data)
+    return row
+
+
+async def _reopen(db: AsyncSession, row: ProductRequest) -> None:
     row.state = "new"
     row.merged_into_id = None
     row.disqualify_reason = None
     row.decision_note = None
     row.decided_by = None
     row.decided_at = None
+    row.asked_again_since = None
+    # Drafted replies go: nobody is told a no that no longer stands.
+    for reply in await db.scalars(
+        select(RequestReply).where(
+            RequestReply.root_request_id == row.id, RequestReply.status == "drafted"
+        )
+    ):
+        reply.status = "withdrawn"
+
+
+async def reopen_from_decision(
+    db: AsyncSession, principal: Principal, decision: Any, note: str
+) -> None:
+    """A ``reversed`` review on a ``request_decline`` decision reopens the request in the
+    same transaction while it is still disqualified. The review is already recorded, so
+    nothing reverses the decision again (the guard: this path skips the capture)."""
+    rid = next((s.get("id") for s in decision.subjects or [] if s.get("kind") == "request"), None)
+    if rid is None:
+        return
+    row = await db.scalar(
+        select(ProductRequest)
+        .where(ProductRequest.id == uuid.UUID(rid))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if row is None or row.state != "disqualified":
+        return
+    await _reopen(db, row)
     await flush_or_conflict(db)
-    await audit.record(db, principal, "request.reopened", "product_request", row.id, {"from": was})
-    return row
+    await audit.record(
+        db, principal, "request.reopened", "product_request", row.id,
+        {"from": "disqualified", "decision_id": str(decision.id), "by_review": True},
+    )  # fmt: skip
 
 
 async def _theme_by_title(db: AsyncSession, title: str) -> RequestTheme | None:
@@ -722,10 +889,12 @@ async def accept_suggestion(
         await _accept(db, principal, row, s, parts)
     row.suggestion = {**row.suggestion, "accepted": sorted(parts | set(s.accepted))}
     await flush_or_conflict(db)
+    data: dict[str, Any] = {"parts": sorted(parts)}
+    if "duplicate" in parts and row.merged_into_id is not None:
+        data |= await _asked_again(db, principal, row, row.merged_into_id)
     await audit.record(
-        db, principal, "request.suggestion_accepted", "product_request", row.id,
-        {"parts": sorted(parts)},
-    )  # fmt: skip
+        db, principal, "request.suggestion_accepted", "product_request", row.id, data
+    )
     return row
 
 
@@ -769,6 +938,9 @@ async def _accept(
                     origin="oracle",
                     created_by=principal.id,
                 )
+                if s.problem and s.problem.problem:
+                    theme.problem_suggestion = s.problem.model_dump(exclude_none=True)
+                    theme.problem_state = "suggested"
                 db.add(theme)
                 await db.flush()
                 await audit.record(
@@ -820,6 +992,14 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Reque
             archived=t.archived_at is not None,
             archived_at=t.archived_at,
             request_count=counts.get(t.id, 0),
+            problem=t.problem,
+            success=t.success,
+            constraints=t.constraints,
+            problem_state=t.problem_state,  # type: ignore[arg-type]
+            problem_suggestion=SuggestedProblem(**t.problem_suggestion)
+            if t.problem_state == "suggested" and t.problem_suggestion
+            else None,
+            problem_confirmed_at=t.problem_confirmed_at,
             created_by=t.created_by,
             created_at=t.created_at,
             updated_at=t.updated_at,
@@ -897,6 +1077,15 @@ async def patch_theme(
     theme.title = title
     if "description" in fields:
         theme.description = body.description or None
+    problem_fields = fields & {"problem", "success", "constraints"}
+    for name in problem_fields:
+        setattr(theme, name, getattr(body, name) or None)
+    if problem_fields:
+        # A person's problem is a confirmed one (H10).
+        if theme.problem:
+            _problem_confirmed(theme, principal)
+        elif theme.problem_state == "confirmed":
+            theme.problem_state = "none"
     if goal_ids is not None:
         theme.goal_ids = goal_ids
     if archived and theme.archived_at is None:
@@ -911,3 +1100,258 @@ async def patch_theme(
         {"fields": sorted(fields)},
     )  # fmt: skip
     return theme
+
+
+# --- why-not replies (H10) ------------------------------------------------------------------
+
+NOT_YOURS = "Only an approver, an owner or the person who filed the request acts on its replies"
+
+
+async def _reply_and_root(
+    db: AsyncSession, principal: Principal, reply_id: uuid.UUID
+) -> tuple[RequestReply, ProductRequest]:
+    reply = await db.scalar(
+        select(RequestReply)
+        .where(RequestReply.id == reply_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if reply is None:
+        raise _not_found("Reply")
+    root = await _locked(db, reply.root_request_id)
+    if not replies.may_act(principal, root):
+        raise _forbidden(NOT_YOURS)
+    if has_role(principal.role, "approver"):
+        await recheck_caller(db, principal, "approver")
+    return reply, root
+
+
+async def list_replies(db: AsyncSession, request_id: uuid.UUID) -> list[dict[str, Any]]:
+    if await db.get(ProductRequest, request_id) is None:
+        raise _not_found()
+    return await replies.replies_out(db, await replies.list_for(db, request_id))
+
+
+async def reply_out(db: AsyncSession, reply: RequestReply) -> dict[str, Any]:
+    await db.refresh(reply)
+    return (await replies.replies_out(db, [reply]))[0]
+
+
+async def _reply_done(
+    db: AsyncSession, principal: Principal, reply: RequestReply, root: ProductRequest,
+    action: str, data: dict[str, Any],
+) -> None:  # fmt: skip
+    await replies.update_loop(db, root)
+    await flush_or_conflict(db)
+    await audit.record(
+        db, principal, f"request_reply.{action}", "request_reply", reply.id,
+        {"request_id": str(root.id), **data},
+    )  # fmt: skip
+
+
+async def update_reply(
+    db: AsyncSession, principal: Principal, reply_id: uuid.UUID, body: str, lock_version: int
+) -> RequestReply:
+    reply, root = await _reply_and_root(db, principal, reply_id)
+    expect_version(reply, lock_version)
+    if reply.status != "drafted":
+        raise _conflict("Only a Drafted reply is edited")
+    reply.body = body
+    reply.draft_source = "person"
+    reply.warnings = replies.promise_warnings(body)
+    await _reply_done(db, principal, reply, root, "edited", {"warnings": reply.warnings})
+    return reply
+
+
+async def mark_reply_sent(
+    db: AsyncSession, principal: Principal, reply_id: uuid.UUID, channel: str, sent_on: Any
+) -> RequestReply:
+    reply, root = await _reply_and_root(db, principal, reply_id)
+    if reply.status != "drafted":
+        raise _conflict("Only a Drafted reply is marked sent")
+    from oracle.decisions.service import company_today
+
+    day = sent_on or await company_today(db)
+    reply.status = "sent"
+    reply.channel = channel
+    reply.sent_on = day
+    reply.sent_by = principal.id
+    await _reply_done(db, principal, reply, root, "sent", {"channel": channel})
+    return reply
+
+
+async def skip_reply(
+    db: AsyncSession, principal: Principal, reply_id: uuid.UUID, reason: str
+) -> RequestReply:
+    reply, root = await _reply_and_root(db, principal, reply_id)
+    if reply.status != "drafted":
+        raise _conflict("Only a Drafted reply is skipped")
+    reply.status = "skipped"
+    reply.skip_reason = reason
+    await _reply_done(db, principal, reply, root, "skipped", {})
+    return reply
+
+
+async def notify_reply(db: AsyncSession, principal: Principal, reply_id: uuid.UUID) -> RequestReply:
+    """Tell them in Oracle: the member who asked gets a shown-only Inbox row with the
+    reply. Only for a member asker (409 for anyone else)."""
+    reply, root = await _reply_and_root(db, principal, reply_id)
+    if reply.member_id is None:
+        raise _conflict("Only a member who asked in Oracle can be told in Oracle")
+    if reply.status != "drafted":
+        raise _conflict("Only a Drafted reply is told in Oracle")
+    if not (reply.body or "").strip():
+        raise _invalid("Write the reply first")
+    reply.status = "notified"
+    reply.notified_at = _now()
+    reply.sent_by = principal.id
+    await _reply_done(db, principal, reply, root, "notified", {})
+    return reply
+
+
+def _refuse_run(principal: Principal) -> None:
+    if principal.is_run or principal.run_token_id is not None:
+        raise _forbidden("A run's agents never send, mark or edit replies")
+
+
+async def draft_replies(db: AsyncSession, principal: Principal, request_id: uuid.UUID) -> uuid.UUID:
+    """Draft again with Oracle: one job for the replies still Drafted. 409 while one runs,
+    and at H11 external_messages Observe."""
+    _refuse_run(principal)
+    root = await _locked(db, request_id)
+    if not replies.may_act(principal, root):
+        raise _forbidden(NOT_YOURS)
+    if not await replies.drafts_allowed(db):
+        raise _conflict("Oracle drafts no replies while Words for people outside is at Observe")
+    if await replies.running_job(db, root.id) is not None:
+        raise _conflict("Oracle is drafting these replies already")
+    open_ = [r for r in await replies.list_for(db, root.id) if r.status == "drafted"]
+    if not open_:
+        raise _conflict("No reply is still Drafted")
+    reopened = any(r.kind == "reopened" for r in open_)
+    job = await replies.queue_job(
+        db, principal, root, open_, instruction=replies.REOPENED if reopened else None
+    )
+    assert job is not None
+    return job.id
+
+
+async def tell_reopened(
+    db: AsyncSession, principal: Principal, request_id: uuid.UUID
+) -> list[RequestReply]:
+    """Tell the people who asked (after Reopen): a ``reopened`` reply for each asker whose
+    no was Sent or Told, drafted with "say we are looking at it again; promise nothing"."""
+    _refuse_run(principal)
+    root = await _locked(db, request_id)
+    decision = await replies.live_decision(db, root.id)
+    if root.state == "disqualified" or decision is None or decision.status != "reversed":
+        raise _conflict("Tell the people who asked comes after Reopen")
+    told = list(
+        await db.scalars(
+            select(RequestReply).where(
+                RequestReply.root_request_id == root.id,
+                RequestReply.kind == "no",
+                RequestReply.decision_id == decision.id,
+                RequestReply.status.in_(("sent", "notified")),
+            )
+        )
+    )
+    askers = list(
+        await db.scalars(
+            select(ProductRequest).where(ProductRequest.id.in_([r.request_id for r in told]))
+        )
+    )
+    made = await replies.create_replies(db, root, askers, kind="reopened", decision=decision)
+    if made and await replies.running_job(db, root.id) is None:
+        await replies.queue_job(db, principal, root, made, instruction=replies.REOPENED)
+    await flush_or_conflict(db)
+    await audit.record(
+        db, principal, "request.reopened_told", "product_request", root.id,
+        {"replies": len(made)},
+    )  # fmt: skip
+    return made
+
+
+async def keep_no(
+    db: AsyncSession, principal: Principal, request_id: uuid.UUID, note: str
+) -> ProductRequest:
+    """Keep the no: a ``reaffirmed`` review on the decision (its approver only, as every
+    review), and asked again counts from now."""
+    from oracle.decisions import service as decisions
+    from oracle.decisions.schemas import ReviewIn
+
+    _refuse_run(principal)
+    row = await _locked(db, request_id)
+    d = await replies.live_decision(db, row.id)
+    if row.state != "disqualified" or d is None or d.status != "decided":
+        raise _conflict("Only a request said no to, with its decision logged, keeps its no")
+    try:
+        await decisions.review(db, principal, d, ReviewIn(verdict="reaffirmed", note=note))
+    except decisions.DecisionError as e:
+        raise RequestError(e.status, str(e)) from e
+    row.asked_again_since = _now()
+    await flush_or_conflict(db)
+    await audit.record(
+        db, principal, "request.no_kept", "product_request", row.id, {"decision_id": str(d.id)}
+    )
+    return row
+
+
+# --- theme problems (H10) ---------------------------------------------------------------------
+
+
+async def _locked_theme(db: AsyncSession, theme_id: uuid.UUID) -> RequestTheme:
+    theme = await db.scalar(
+        select(RequestTheme)
+        .where(RequestTheme.id == theme_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if theme is None:
+        raise _not_found("Theme")
+    return theme
+
+
+async def confirm_problem(
+    db: AsyncSession, principal: Principal, theme_id: uuid.UUID, lock_version: int
+) -> RequestTheme:
+    """Confirm Oracle's suggested problem: it becomes the theme's problem."""
+    theme = await _locked_theme(db, theme_id)
+    expect_version(theme, lock_version)
+    s = theme.problem_suggestion or {}
+    if not s.get("problem"):
+        raise _conflict("Oracle has suggested no problem for this theme")
+    theme.problem = str(s.get("problem"))[:1000]
+    theme.success = (str(s["success"])[:500] if s.get("success") else None) or theme.success
+    theme.constraints = (
+        str(s["constraints"])[:500] if s.get("constraints") else None
+    ) or theme.constraints
+    _problem_confirmed(theme, principal)
+    await flush_or_conflict(db)
+    await audit.record(
+        db, principal, "request_theme.problem_confirmed", "request_theme", theme.id, {}
+    )
+    return theme
+
+
+async def dismiss_problem(
+    db: AsyncSession, principal: Principal, theme_id: uuid.UUID, lock_version: int
+) -> RequestTheme:
+    theme = await _locked_theme(db, theme_id)
+    expect_version(theme, lock_version)
+    if theme.problem_state != "suggested":
+        raise _conflict("Oracle has suggested no problem for this theme")
+    theme.problem_suggestion = {}
+    theme.problem_state = "confirmed" if theme.problem else "none"
+    await flush_or_conflict(db)
+    await audit.record(
+        db, principal, "request_theme.problem_dismissed", "request_theme", theme.id, {}
+    )
+    return theme
+
+
+def _problem_confirmed(theme: RequestTheme, principal: Principal) -> None:
+    theme.problem_state = "confirmed"
+    theme.problem_suggestion = {}
+    theme.problem_confirmed_by = principal.id
+    theme.problem_confirmed_at = _now()

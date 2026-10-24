@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role, require_role_now
-from oracle.requests import service, triage
+from oracle.requests import launch_requesters, service, triage
 from oracle.requests.schemas import (
     AcceptSuggestionIn,
     CandidateFile,
@@ -27,9 +27,15 @@ from oracle.requests.schemas import (
     Channel,
     DeclineSuggestionIn,
     DisqualifyIn,
+    DraftJobOut,
+    KeepNoIn,
     MergeIn,
     QualifyIn,
     ReopenIn,
+    ReplyOut,
+    ReplyPatch,
+    ReplySent,
+    ReplySkip,
     RequestCreate,
     RequestDetail,
     RequestList,
@@ -39,6 +45,7 @@ from oracle.requests.schemas import (
     RequestThemeOut,
     RequestThemePatch,
     State,
+    ThemeProblemIn,
     TriageDailyIn,
     TriageStart,
     TriageStatus,
@@ -47,6 +54,8 @@ from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 
 router = APIRouter(prefix="/v1", tags=["requests"])
+# H6's request lookup (H10): launch notes reach the people who filed requests too.
+launch_requesters.register()
 
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
@@ -199,7 +208,10 @@ async def merge_request(
 async def disqualify_request(
     request_id: uuid.UUID, data: DisqualifyIn, db: TenantDB, principal: Approver
 ) -> RequestOut:
-    """Disqualify with a reason; Other needs a note."""
+    """Disqualify with a reason; Other needs a note. A reason that answers the asker (and
+    Won't do with a note) is a no (H10): a decided decision in the log, reviewed in 90
+    days, and a reply to everyone who asked, drafted by Oracle. On the stop list needs a
+    stop choice and Already possible a feature as its ``basis``."""
     try:
         row = await service.disqualify(db, principal, request_id, data)
     except service.RequestError as e:
@@ -212,7 +224,8 @@ async def disqualify_request(
 async def reopen_request(
     request_id: uuid.UUID, data: ReopenIn, db: TenantDB, principal: Approver
 ) -> RequestOut:
-    """Bring a merged or disqualified request back to New."""
+    """Bring a merged or disqualified request back to New. A logged no is reversed (a
+    review by you) and its Drafted replies are withdrawn."""
     try:
         row = await service.reopen(db, principal, request_id, data)
     except service.RequestError as e:
@@ -245,6 +258,151 @@ async def decline_request_suggestion(
         raise _http(e) from e
     await db.commit()
     return await service.out_one(db, row)
+
+
+# --- why-not replies (H10) ---------------------------------------------------------------
+
+
+@router.get("/requests/{request_id}/replies", response_model=list[ReplyOut])
+async def list_request_replies(request_id: uuid.UUID, db: TenantDB, _: Viewer) -> list[ReplyOut]:
+    """The replies to the people who asked for a request said no to: name as given, how
+    they asked, state and the draft. A run token reads them under ``read:sources``: they
+    quote what people asked."""
+    try:
+        return [ReplyOut(**r) for r in await service.list_replies(db, request_id)]
+    except service.RequestError as e:
+        raise _http(e) from e
+
+
+async def _reply(db: TenantDB, reply) -> ReplyOut:  # type: ignore[no-untyped-def]
+    await db.commit()
+    return ReplyOut(**await service.reply_out(db, reply))
+
+
+@router.patch("/request-replies/{reply_id}", response_model=ReplyOut)
+async def update_request_reply(
+    reply_id: uuid.UUID, data: ReplyPatch, db: TenantDB, principal: Commenter
+) -> ReplyOut:
+    """Edit a Drafted reply (at most 2,000 characters). The filer of the request, an
+    approver or an owner. A date or "later" carries the warning "Sounds like a promise"."""
+    try:
+        reply = await service.update_reply(db, principal, reply_id, data.body, data.lock_version)
+    except service.RequestError as e:
+        raise _http(e) from e
+    return await _reply(db, reply)
+
+
+@router.post("/request-replies/{reply_id}/sent", response_model=ReplyOut)
+async def mark_request_reply_sent(
+    reply_id: uuid.UUID, data: ReplySent, db: TenantDB, principal: Commenter
+) -> ReplyOut:
+    """Mark sent: how (Email, Slack, Call, In the app, Other) and the day (default today
+    in the Company time zone). Oracle sends nothing itself."""
+    try:
+        reply = await service.mark_reply_sent(db, principal, reply_id, data.channel, data.sent_on)
+    except service.RequestError as e:
+        raise _http(e) from e
+    return await _reply(db, reply)
+
+
+@router.post("/request-replies/{reply_id}/skip", response_model=ReplyOut)
+async def skip_request_reply(
+    reply_id: uuid.UUID, data: ReplySkip, db: TenantDB, principal: Commenter
+) -> ReplyOut:
+    """Skip a reply, with a reason (for example "Asked anonymously")."""
+    try:
+        reply = await service.skip_reply(db, principal, reply_id, data.reason)
+    except service.RequestError as e:
+        raise _http(e) from e
+    return await _reply(db, reply)
+
+
+@router.post("/request-replies/{reply_id}/notify", response_model=ReplyOut)
+async def notify_request_reply(reply_id: uuid.UUID, db: TenantDB, principal: Commenter) -> ReplyOut:
+    """Tell them in Oracle: the member who asked finds the reply in their Inbox. 409 when
+    the asker is not a member."""
+    try:
+        reply = await service.notify_reply(db, principal, reply_id)
+    except service.RequestError as e:
+        raise _http(e) from e
+    return await _reply(db, reply)
+
+
+@router.post(
+    "/requests/{request_id}/replies/draft",
+    response_model=DraftJobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def draft_request_replies(
+    request_id: uuid.UUID, db: TenantDB, principal: Commenter
+) -> DraftJobOut:
+    """Draft again with Oracle: one ``why_not_reply`` job on Oracle's own model for the
+    replies still Drafted; poll ``GET /v1/llm-jobs/{job_id}``. 409 while one runs and
+    while Words for people outside is at Observe."""
+    try:
+        job_id = await service.draft_replies(db, principal, request_id)
+    except service.RequestError as e:
+        raise _http(e) from e
+    await db.commit()
+    return DraftJobOut(job_id=job_id)
+
+
+@router.post("/requests/{request_id}/replies/reopened", response_model=list[ReplyOut])
+async def tell_reopened(request_id: uuid.UUID, db: TenantDB, principal: Approver) -> list[ReplyOut]:
+    """Tell the people who asked, after Reopen: a reply saying it is being looked at
+    again, for each asker whose no was sent or told."""
+    try:
+        made = await service.tell_reopened(db, principal, request_id)
+    except service.RequestError as e:
+        raise _http(e) from e
+    await db.commit()
+    return [
+        ReplyOut(**r)
+        for r in await service.list_replies(db, request_id)
+        if r["id"] in {m.id for m in made}
+    ]
+
+
+@router.post("/requests/{request_id}/keep-no", response_model=RequestOut)
+async def keep_request_no(
+    request_id: uuid.UUID, data: KeepNoIn, db: TenantDB, principal: Commenter
+) -> RequestOut:
+    """Keep the no: the decision's approver records a reaffirmed review, and asked again
+    counts from now."""
+    try:
+        row = await service.keep_no(db, principal, request_id, data.note)
+    except service.RequestError as e:
+        raise _http(e) from e
+    await db.commit()
+    return await service.out_one(db, row)
+
+
+@router.post("/request-themes/{theme_id}/problem/confirm", response_model=RequestThemeOut)
+async def confirm_request_theme_problem(
+    theme_id: uuid.UUID, data: ThemeProblemIn, db: TenantDB, principal: Approver
+) -> RequestThemeOut:
+    """Confirm Oracle's suggested problem: what replies and agents cite."""
+    try:
+        theme = await service.confirm_problem(db, principal, theme_id, data.lock_version)
+    except service.RequestError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(theme)
+    return (await service.themes_out(db, [theme]))[0]
+
+
+@router.post("/request-themes/{theme_id}/problem/dismiss", response_model=RequestThemeOut)
+async def dismiss_request_theme_problem(
+    theme_id: uuid.UUID, data: ThemeProblemIn, db: TenantDB, principal: Approver
+) -> RequestThemeOut:
+    """Dismiss Oracle's suggested problem."""
+    try:
+        theme = await service.dismiss_problem(db, principal, theme_id, data.lock_version)
+    except service.RequestError as e:
+        raise _http(e) from e
+    await db.commit()
+    await db.refresh(theme)
+    return (await service.themes_out(db, [theme]))[0]
 
 
 @router.get("/request-themes", response_model=list[RequestThemeOut])

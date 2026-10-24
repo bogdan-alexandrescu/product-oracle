@@ -72,7 +72,10 @@ MCP_TOOLS = {
     "list_requester_notes": "the people who asked for a launch's items, each with what "
     "they asked in their own words",
     "list_requests": "the company's feature requests (state=new for those to classify), each "
-    "in the asker's words, with its channel, theme, goals and mentions",
+    "in the asker's words, with its channel, theme, goals and mentions; a declined one with "
+    "its decision_number, basis and asked_again",
+    "list_request_replies": "the replies to the people who asked for a request said no to, "
+    "each quoting what they asked; reading only",
     "list_request_themes": "the live request themes, each with the goals it serves",
     "list_code_maps": "the code capability maps shared with the company: repo, commit, as_of "
     "and what each holds",
@@ -280,6 +283,11 @@ READ = ("read:sources", "read:baseline")
 LAUNCH_FILE = "launch.yaml"
 # What a request_triage run writes (oracle.requests.triage).
 TRIAGE_FILE = "requests_triage.yaml"
+# H10: what a declined request means to an agent.
+DECLINED_LINE = (
+    "A request the company said no to (state disqualified) is not scope unless a person "
+    "reopens it; cite its decision when it comes up."
+)
 # Stated in every task that writes a draft (owner, 2026-10-20).
 CITATION_CONTRACT = citation_contract()
 
@@ -415,7 +423,8 @@ FLOWS: dict[str, FlowDef] = {
                     "segment ends; what the approver approves becomes this PRD's scope. "
                     "Write the set to feature_set.yaml in this format (YAML, version 1):\n"
                     + FEATURE_SET_FORMAT
-                    + "Write a high-level design to design.md."
+                    + "Write a high-level design to design.md. "
+                    + DECLINED_LINE
                     + STRATEGY_FLAG,
                     tools=(
                         "get_baseline",
@@ -764,11 +773,23 @@ FLOWS: dict[str, FlowDef] = {
                     "written or null, channel, theme, goals, confidence, rationale); skip "
                     "what is already a request. Write requests_triage.yaml in this format: "
                     "version: 1; requests: a list of {id, theme: {id} or {title}, goals: "
-                    "[goal keys], duplicate_of, feature, confidence, rationale}; found: a "
+                    "[goal keys], duplicate_of, feature, confidence, rationale, problem, "
+                    "decline}; found: a "
                     "list of {source_item_id, title, body, requester, channel (support | "
                     "sales | team | slack | meeting | doc | other), theme: {title}, goals, "
-                    "confidence, rationale}. You suggest; you never decide: qualifying, "
-                    "merging and disqualifying are for people.",
+                    "confidence, rationale}. problem (optional, only when the request's theme "
+                    "has no confirmed problem in list_request_themes): {problem (who has it, "
+                    "what they are trying to do, what stops them), success (how we would know "
+                    "it is solved), constraints (limits set by others: legal, finance, "
+                    "sales)}. decline (optional): {reason (no_goal | out_of_scope | "
+                    "strategy_stop | already_exists | few_customers), basis: {kind (goal | "
+                    "strategy_choice | feature | none), id (a goal or feature key, or a stop "
+                    "choice's id, a strategy_choice entity of get_baseline)}, why}, only "
+                    "when the request serves no confirmed goal, names a feature a confirmed "
+                    "stop choice affects, or "
+                    "asks for a feature that exists. duplicate_of may name a request already "
+                    "said no to (state disqualified). " + DECLINED_LINE + " You suggest; you "
+                    "never decide: qualifying, merging and disqualifying are for people.",
                     tools=(
                         "search",
                         "get_source_item",
