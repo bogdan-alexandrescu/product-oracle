@@ -503,6 +503,7 @@ async def test_dismiss_by_an_owner_disabled_while_waiting_on_the_gate_is_refused
     assert (await _follow_up_row(ctx)).ciphertext is not None
 
 
+@pytest.mark.timing
 async def test_follow_ups_run_after_runs_and_jobs_within_a_time_budget(
     client, monkeypatch, provider
 ):

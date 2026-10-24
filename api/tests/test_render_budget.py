@@ -1166,6 +1166,7 @@ async def no_place_held() -> None:
     await until(lambda: not (offload._presenters or offload._people or offload._companies))
 
 
+@pytest.mark.timing
 async def test_one_deck_refused_busy_is_one_build_attempt_for_all_its_waiters(client, monkeypatch):
     held = Held(monkeypatch)
     decks = HeldDecks(monkeypatch, held=False)
