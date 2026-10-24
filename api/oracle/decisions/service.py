@@ -777,6 +777,11 @@ async def review(db: AsyncSession, principal: Principal, d: Decision, body: Revi
     await flush_or_conflict(db)
     if body.verdict == "reversed":
         await reject_entity(db, principal, d, f"reversed: {note}")
+        if d.origin == "request_decline":
+            # H10: reversing a no reopens the request, once (no second reversal).
+            from oracle.requests import service as requests_service
+
+            await requests_service.reopen_from_decision(db, principal, d, note)
     await audit.record(
         db,
         principal,

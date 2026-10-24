@@ -8,7 +8,15 @@ READ_AREAS = {
     # Requester notes quote what people asked: source text (H6).
     # Code capability maps are drawn from a person's source (S6): a run reads shared
     # ones only (oracle.engineering.codemaps.visible).
-    "read:sources": {"sources", "search", "snapshots", "requester-notes", "code-maps"},
+    # Request replies quote askers' words, the same rule as requester notes (H10).
+    "read:sources": {
+        "sources",
+        "search",
+        "snapshots",
+        "requester-notes",
+        "code-maps",
+        "request-replies",
+    },
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
     # Blockers are baseline constraints (CR-04): their strategy, options, experiments
@@ -66,6 +74,8 @@ SOURCE_READS = {
     ("intakes", "next-batch"),
     # A launch's requester notes: what people asked, in their words.
     ("launches", "notes"),
+    # H10: a request's why-not replies quote what people asked.
+    ("requests", "replies"),
 }
 # Reads for people's clients only, refused to run tokens like the runs reads: whether a
 # new PRD run may reuse the baseline (C4) is about runs, not baseline knowledge.

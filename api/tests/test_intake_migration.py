@@ -55,7 +55,7 @@ def test_0014_intake_chains_after_mains_head():
     # The PRD review chain (0014_review ... 0014_member_follow_up_retry) chains on it and
     # v2-specs 0015_specs on that.
     assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
-    assert script.get_heads() == ["0048_scope_review"]
+    assert script.get_heads() == ["0049_request_replies"]
 
 
 def test_widened_checks_keep_other_lanes_values(scratch_db):

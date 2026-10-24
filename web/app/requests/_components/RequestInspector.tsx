@@ -23,7 +23,14 @@ export const REASON_LABEL: Record<Reason, string> = {
   not_a_request: "Not a request",
   wont_do: "Won't do",
   other: "Other",
+  strategy_stop: "On the stop list",
+  already_exists: "Already possible",
+  few_customers: "Too few would use it",
 };
+
+// H10 reasons the form offers once it has the basis picker (#515 lane 2); shown on a request
+// already declined with one.
+const NEEDS_BASIS_PICKER: Reason[] = ["strategy_stop", "already_exists", "few_customers"];
 
 const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
 
@@ -478,7 +485,7 @@ function Decision({ request, requests, canDecide, busy, run }: { request: Reques
               <label className={LABEL}>
                 Reason
                 <select className={INPUT} value={reason} onChange={(e) => setReason(e.target.value as Reason)}>
-                  {(Object.keys(REASON_LABEL) as Reason[]).map((r) => (
+                  {(Object.keys(REASON_LABEL) as Reason[]).filter((r) => !NEEDS_BASIS_PICKER.includes(r)).map((r) => (
                     <option key={r} value={r}>
                       {REASON_LABEL[r]}
                     </option>

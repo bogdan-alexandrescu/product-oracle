@@ -10,18 +10,23 @@
   most 400 characters (decided 2026-10-21, C1 "Found items"): everyone who can see the
   request reads them, and they stay when the item goes. ``suggestion`` is what Oracle's
   triage proposes; it changes nothing until an approver accepts it.
+- ``request_replies`` (H10 Reasoned no, migration 0049_request_replies): one reply to one
+  person who asked, for a request said no to (``no``) or reopened after one
+  (``reopened``). Oracle drafts it; a person sends it. Oracle never sends outside the
+  company: Mark sent records what a person did, Tell them in Oracle is an Inbox row.
 - ``request_candidates``: possible requests Oracle's triage found in one person's own
   sources, visible to that person only until they file one (decision S6).
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -32,6 +37,7 @@ from sqlalchemy import (
     text,
     true,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
@@ -54,7 +60,24 @@ ORIGINS = ("person", "oracle", "interview")
 THEME_ORIGINS = ("person", "oracle")
 REQUESTER_KINDS = ("customer", "team", "unknown")
 STATES = ("new", "qualified", "merged", "disqualified")
-DISQUALIFY_REASONS = ("no_goal", "out_of_scope", "duplicate", "not_a_request", "wont_do", "other")
+# strategy_stop, already_exists and few_customers: H10 Reasoned no.
+DISQUALIFY_REASONS = (
+    "no_goal",
+    "out_of_scope",
+    "duplicate",
+    "not_a_request",
+    "wont_do",
+    "other",
+    "strategy_stop",
+    "already_exists",
+    "few_customers",
+)
+NEW_DISQUALIFY_REASONS = ("strategy_stop", "already_exists", "few_customers")
+PROBLEM_STATES = ("none", "suggested", "confirmed")
+REPLY_KINDS = ("no", "reopened")
+REPLY_STATUSES = ("drafted", "sent", "notified", "skipped", "withdrawn")
+REPLY_CHANNELS = ("email", "slack", "call", "in_app", "other")
+DRAFT_SOURCES = ("oracle", "template", "person")
 CANDIDATE_STATUSES = ("open", "filed", "dismissed")
 EXCERPT_MAX = 400
 
@@ -63,6 +86,7 @@ class RequestTheme(TenantScoped, Base):
     __tablename__ = "request_themes"
     __table_args__ = (
         CheckConstraint(_in("origin", THEME_ORIGINS), name="origin"),
+        CheckConstraint(_in("problem_state", PROBLEM_STATES), name="problem_state"),
         Index(
             "ux_request_themes_title",
             "tenant_id",
@@ -80,6 +104,17 @@ class RequestTheme(TenantScoped, Base):
     # User or API token id, no FK, as elsewhere.
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # H10: the need behind the theme's requests. Oracle's triage suggests one
+    # (``problem_suggestion``: {problem, success, constraints}); an approver confirms it.
+    problem: Mapped[str | None] = mapped_column(Text)
+    success: Mapped[str | None] = mapped_column(Text)
+    constraints: Mapped[str | None] = mapped_column(Text)
+    problem_state: Mapped[str] = mapped_column(
+        Text, nullable=False, default="none", server_default="none"
+    )
+    problem_suggestion: Mapped[dict[str, Any]] = _json()
+    problem_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    problem_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = _updated_at()
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
@@ -139,7 +174,65 @@ class ProductRequest(TenantScoped, Base):
     filed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # H10: the record a no cites ({kind: goal|strategy_choice|feature|none, id?}), {} when
+    # none; the day every reply was sent, told or skipped; merges after this moment
+    # count as asked again (set to decided_at on Disqualify, to now on Keep the no).
+    basis: Mapped[dict[str, Any]] = _json()
+    loop_closed_on: Mapped[date | None] = mapped_column(Date)
+    asked_again_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = _updated_at()
+    lock_version: Mapped[int] = _lock_version()
+    __mapper_args__ = {"version_id_col": lock_version}
+
+
+class RequestReply(TenantScoped, Base):
+    """One reply to one person who asked (H10)."""
+
+    __tablename__ = "request_replies"
+    __table_args__ = (
+        CheckConstraint(_in("kind", REPLY_KINDS), name="kind"),
+        CheckConstraint(_in("asker_kind", REQUESTER_KINDS), name="asker_kind"),
+        CheckConstraint(_in("draft_source", DRAFT_SOURCES), name="draft_source"),
+        CheckConstraint(_in("status", REPLY_STATUSES), name="status"),
+        CheckConstraint("channel IS NULL OR " + _in("channel", REPLY_CHANNELS), name="channel"),
+        CheckConstraint("status <> 'skipped' OR skip_reason IS NOT NULL", name="skipped"),
+        CheckConstraint(
+            "status <> 'sent' OR (channel IS NOT NULL AND sent_on IS NOT NULL)", name="sent"
+        ),
+        Index("ux_request_replies", "request_id", "kind", "decision_id", unique=True),
+        Index(
+            "ix_request_replies_open",
+            "tenant_id",
+            "root_request_id",
+            postgresql_where=text("status = 'drafted'"),
+        ),
+    )
+
+    updated_at: Mapped[datetime] = _updated_at()
+    # The asker's own request, and the request that was decided (the root of its chain).
+    request_id: Mapped[uuid.UUID] = _fk("product_requests", nullable=False)
+    root_request_id: Mapped[uuid.UUID] = _fk("product_requests", nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    decision_id: Mapped[uuid.UUID | None] = _fk("decisions", "SET NULL")
+    asker: Mapped[str | None] = mapped_column(Text)
+    asker_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    # Set when the asker is a member (an in_app request filed in their own name).
+    member_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    asked: Mapped[str | None] = mapped_column(Text)
+    body: Mapped[str | None] = mapped_column(Text)
+    draft_source: Mapped[str | None] = mapped_column(Text)
+    job_id: Mapped[uuid.UUID | None] = _fk("llm_jobs", "SET NULL")
+    warnings: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, default=list, server_default="{}"
+    )
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="drafted", server_default="drafted"
+    )
+    channel: Mapped[str | None] = mapped_column(Text)
+    sent_on: Mapped[date | None] = mapped_column(Date)
+    sent_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    skip_reason: Mapped[str | None] = mapped_column(Text)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
 
