@@ -117,8 +117,11 @@ export function Button({
   );
 }
 
+/** INPUT without its width: a select in a filter row that takes its own width (#549). */
+export const INPUT_INLINE = "rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px] text-text";
+
 /** Class names of a text input, select or textarea in a settings form. */
-export const INPUT = "w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[15px] text-text";
+export const INPUT = `w-full ${INPUT_INLINE}`;
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (

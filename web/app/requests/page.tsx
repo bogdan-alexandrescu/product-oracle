@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { Button, Empty, Page, PageHeader, Panel, SegmentedControl, Split, ViewOnly } from "@/components/ds";
-import { ErrorNote, INPUT } from "@/components/ui";
+import { ErrorNote, INPUT_INLINE } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -157,11 +157,11 @@ function Requests() {
                     type="search"
                     aria-label="Search requests"
                     placeholder="Search requests"
-                    className={`${INPUT} min-w-0 flex-1 basis-48`}
+                    className={`${INPUT_INLINE} min-w-0 flex-1 basis-48`}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
-                  <select aria-label="State" className={`${INPUT} w-auto`} value={state} onChange={(e) => setState(e.target.value)}>
+                  <select aria-label="State" className={`${INPUT_INLINE} max-w-full`} value={state} onChange={(e) => setState(e.target.value)}>
                     <option value="">Any state</option>
                     {(Object.keys(STATE) as (keyof typeof STATE)[]).map((s) => (
                       <option key={s} value={s}>
@@ -169,7 +169,7 @@ function Requests() {
                       </option>
                     ))}
                   </select>
-                  <select aria-label="Goal" className={`${INPUT} w-auto max-w-full`} value={goal} onChange={(e) => setGoal(e.target.value)}>
+                  <select aria-label="Goal" className={`${INPUT_INLINE} max-w-full`} value={goal} onChange={(e) => setGoal(e.target.value)}>
                     <option value="">Any goal</option>
                     {[...goalTitles].map(([id, title]) => (
                       <option key={id} value={id}>
@@ -177,7 +177,7 @@ function Requests() {
                       </option>
                     ))}
                   </select>
-                  <select aria-label="Theme" className={`${INPUT} w-auto max-w-full`} value={theme} onChange={(e) => setTheme(e.target.value)}>
+                  <select aria-label="Theme" className={`${INPUT_INLINE} max-w-full`} value={theme} onChange={(e) => setTheme(e.target.value)}>
                     <option value="">Any theme</option>
                     {/* Archived themes too (last, marked): their requests can still be found. */}
                     {[...liveThemes, ...(themes.data ?? []).filter((t) => t.archived)].map((t) => (
