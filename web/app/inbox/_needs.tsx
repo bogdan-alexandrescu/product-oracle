@@ -1713,7 +1713,7 @@ export function allNeeds(
   compact = false,
   fixed?: FixedHere,
   /** A5: the access request rows (./_access), decided in place. */
-  requests: Need[] = [],
+  accessRequests: Need[] = [],
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
@@ -1748,7 +1748,7 @@ export function allNeeds(
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),
-    ...stated(requests, "access-requests"),
+    ...stated(accessRequests, "access-requests"),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
