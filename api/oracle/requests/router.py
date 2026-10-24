@@ -77,6 +77,9 @@ async def list_requests(
     goal_id: uuid.UUID | None = None,
     channel: Channel | None = None,
     q: Annotated[str | None, Query(max_length=200, description="Title or body search")] = None,
+    replies_to_send: Annotated[
+        bool, Query(description="Only declined requests with replies still to send (H10)")
+    ] = False,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> RequestList:
@@ -97,6 +100,7 @@ async def list_requests(
         goal_id=goal_id,
         channel=channel,
         q=q,
+        replies_to_send=replies_to_send,
         limit=limit,
         offset=offset,
     )

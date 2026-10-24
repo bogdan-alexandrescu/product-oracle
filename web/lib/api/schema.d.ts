@@ -54706,6 +54706,8 @@ export interface operations {
                 channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
                 /** @description Title or body search */
                 q?: string | null;
+                /** @description Only declined requests with replies still to send (H10) */
+                replies_to_send?: boolean;
                 limit?: number;
                 offset?: number;
             };

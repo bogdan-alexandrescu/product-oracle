@@ -35177,6 +35177,18 @@
             "description": "Title or body search"
           },
           {
+            "name": "replies_to_send",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only declined requests with replies still to send (H10)",
+              "default": false,
+              "title": "Replies To Send"
+            },
+            "description": "Only declined requests with replies still to send (H10)"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,

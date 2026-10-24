@@ -484,10 +484,16 @@ async def list_requests(
     goal_id: uuid.UUID | None = None,
     channel: str | None = None,
     q: str | None = None,
+    replies_to_send: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> RequestList:
     filters: dict[str, ColumnElement[bool]] = {}
+    if replies_to_send:
+        # H10: declined requests with replies still Drafted.
+        filters["replies"] = (ProductRequest.state == "disqualified") & ProductRequest.id.in_(
+            select(RequestReply.root_request_id).where(RequestReply.status == "drafted")
+        )
     if state:
         filters["state"] = ProductRequest.state == state
     if no_theme:
@@ -831,6 +837,7 @@ async def _reopen(db: AsyncSession, row: ProductRequest) -> None:
     row.decided_by = None
     row.decided_at = None
     row.asked_again_since = None
+    row.loop_closed_on = None
     # Drafted replies go: nobody is told a no that no longer stands.
     for reply in await db.scalars(
         select(RequestReply).where(

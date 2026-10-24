@@ -557,18 +557,20 @@ def _template_for(
     )
 
 
-async def _job_replies(s: AsyncSession, job: LlmJob) -> list[RequestReply]:
+async def _job_replies(s: AsyncSession, job: LlmJob, *, lock: bool = False) -> list[RequestReply]:
+    """The job's replies still Drafted. Locked only to write: never through a model call,
+    so a person's edit never waits for one."""
     ids = [uuid.UUID(i) for i in (job.input or {}).get("reply_ids") or []]
     if not ids:
         return []
-    return list(
-        await s.scalars(
-            select(RequestReply)
-            .where(RequestReply.id.in_(ids), RequestReply.status == OPEN)
-            .order_by(RequestReply.created_at, RequestReply.id)
-            .with_for_update()
-        )
+    stmt = (
+        select(RequestReply)
+        .where(RequestReply.id.in_(ids), RequestReply.status == OPEN)
+        .order_by(RequestReply.created_at, RequestReply.id)
     )
+    if lock:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return list(await s.scalars(stmt))
 
 
 async def run_job(s: AsyncSession, job: LlmJob, ask: Any) -> dict[str, Any]:
@@ -607,6 +609,9 @@ async def run_job(s: AsyncSession, job: LlmJob, ask: Any) -> dict[str, Any]:
             for r in replies
         ],
     }
+    # The read (nothing written yet) ends before the call: no lock while the model answers.
+    job_id = job.id
+    await s.rollback()
     answer = await ask("why_not_reply", payload)
     drafted = {
         str(x.get("id")): str(x.get("body") or "").strip()
@@ -614,6 +619,22 @@ async def run_job(s: AsyncSession, job: LlmJob, ask: Any) -> dict[str, Any]:
         if isinstance(x, dict)
     }
     oracle = template_n = 0
+    # Re-read under lock: a person's edit made meanwhile is theirs to keep.
+    job = await s.get(LlmJob, job_id, populate_existing=True)
+    if job is None:
+        return {"replies": 0}
+    root = await s.get(ProductRequest, job.request_id, populate_existing=True)
+    replies = [r for r in await _job_replies(s, job, lock=True) if r.draft_source != "person"]
+    if root is None or not replies:
+        return {"replies": 0}
+    asked = {
+        r.id: r
+        for r in await s.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.id.in_([x.request_id for x in replies]))
+            .execution_options(populate_existing=True)
+        )
+    }
     for r in replies:
         body = drafted.get(str(r.id))
         if body:
@@ -653,7 +674,7 @@ async def job_failed(s: AsyncSession, job: LlmJob) -> None:
     root = await s.get(ProductRequest, job.request_id) if job.request_id else None
     if root is None:
         return
-    await fill_templates(s, root, await _job_replies(s, job))
+    await fill_templates(s, root, await _job_replies(s, job, lock=True))
 
 
 # --- people's actions ----------------------------------------------------------------------
