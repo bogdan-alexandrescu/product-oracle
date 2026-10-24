@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
+import { PricingDecide } from "@/components/PricingDecide";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import {
   Chip,
@@ -254,6 +255,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               action={
                 <>
                   {d.kind === "prd" && <BuildRoadmapButton prd={d} />}
+                  {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
                   {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
                   {templateOnly && <DraftWithOracleButton slug={d.slug} />}
                   {d.latest_version != null && (

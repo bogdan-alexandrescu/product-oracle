@@ -28,7 +28,7 @@ from oracle.runs.schemas import RunCreate
 from oracle.trash.service import Forbidden, Invalid, NotFound
 
 FLOWS = {"prd": "baseline_to_prd", "roadmap": "prd_to_roadmap", "spec": "prd_to_spec",
-         "update": "update_draft"}  # fmt: skip
+         "update": "update_draft", "pricing": "pricing_memo"}  # fmt: skip
 
 
 async def _document(db: AsyncSession, doc: str) -> Document:

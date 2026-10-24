@@ -161,6 +161,8 @@ PER_ITEM: dict[str, Role | None] = {
     "decide_checkpoint": "owner",
     "decide_decision": None,
     "decide_knowledge_gap": "owner",
+    # H9: only the pricing owner, one owner (oracle.pricing.decide).
+    "decide_pricing_memo": None,
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_scope_item": "approver",

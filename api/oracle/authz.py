@@ -54,6 +54,20 @@ def require_role(min_role: Role) -> Callable[[Principal], Awaitable[Principal]]:
     return check_role
 
 
+def require_role_or_absent(min_role: Role) -> Callable[[Principal], Awaitable[Principal]]:
+    """:func:`require_role`, answering 404 instead of 403 below ``min_role``: for areas
+    that are absent, not disabled, for lower roles (H8's owners-and-approvers rule)."""
+    check = require_role(min_role)
+
+    async def check_role_or_absent(principal: CurrentPrincipal) -> Principal:
+        if not has_role(principal.role, min_role):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+        return principal
+
+    check_role_or_absent.min_role = check.min_role  # type: ignore[attr-defined]
+    return check_role_or_absent
+
+
 async def recheck_caller(
     session: AsyncSession, principal: Principal, min_role: Role, *, shared: bool = True
 ) -> None:

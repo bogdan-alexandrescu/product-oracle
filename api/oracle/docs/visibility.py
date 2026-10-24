@@ -19,7 +19,8 @@ The rule lives here only:
 
 A read that reaches a document's rows without selecting :class:`Document` (a comment by
 id, an Inbox row) checks :func:`hidden_document_ids` or joins the document. The decision
-an approval captured ("Publish <document> v<n>", H1) follows its document the same way.
+an approval captured ("Publish <document> v<n>", H1) follows its document the same way,
+as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``).
 """
 
 import uuid
@@ -118,6 +119,10 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     )
 
 
+# The capture sources that name one version of a document.
+VERSION_SOURCES = ("document_version", "pricing_memo_version")
+
+
 def _decision_visible(cls: Any) -> ColumnElement[bool]:
     """A decision about an approvers-only document is hidden with it, whatever recorded it:
     the approval of one of its versions, a stop of a run on it (a checkpoint record), or
@@ -163,7 +168,7 @@ def _decision_visible(cls: Any) -> ColumnElement[bool]:
     return and_(
         or_(
             cls.source_kind.is_(None),
-            cls.source_kind != "document_version",
+            cls.source_kind.not_in(VERSION_SOURCES),
             cls.source_id.not_in(hidden_versions),
         ),
         or_(cls.run_id.is_(None), cls.run_id.not_in(hidden_runs)),

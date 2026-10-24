@@ -38,6 +38,12 @@ export interface DecisionsContext {
   documentTitle: (slug: string) => string | null;
   /** H8: whether the document (by id, slug or a version's id) is hidden from me (approvers-only, and I am a commenter or viewer). */
   hiddenDocument: (key: string) => boolean;
+  /**
+   * H9 (as docs/visibility._decision_visible): whether the signed-in member may see a
+   * decision; commenters and viewers never see a pricing decision, nor the record of a stop
+   * of a run on an owners-and-approvers document. Everyone sees everything without it.
+   */
+  visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
 }
@@ -57,6 +63,8 @@ const STOP_LABELS: Record<string, string> = {
   eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
+  update_review: "Update review",
+  pricing_review: "Pricing memo review",
 };
 /** The API's fallback for a stop with no label: "update_review" reads "Update review". */
 const stopLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1).replace(/_/g, " ");
@@ -407,7 +415,9 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
 function hidden(ctx: DecisionsContext, d: Row): boolean {
   const run = d.run_id ? ctx.runs.find((r) => r.id === d.run_id) : undefined;
   if (run?.document_slug && ctx.hiddenDocument(run.document_slug)) return true;
-  if (d.source?.kind === "document_version" && ctx.hiddenDocument(d.source.id)) return true;
+  if ((d.source?.kind === "document_version" || d.source?.kind === "pricing_memo_version") && ctx.hiddenDocument(d.source.id)) return true;
+  // H9: the context's own rule (a pricing decision is hidden from commenters and viewers).
+  if (ctx.visible && !ctx.visible(d)) return true;
   return d.subjects.some(
     (s) => (s.kind === "document" || s.kind === "document_version") && (ctx.hiddenDocument(String(s.id)) || (typeof s.ref === "string" && ctx.hiddenDocument(s.ref.split("@")[0]))),
   );
@@ -431,6 +441,47 @@ function checkReviewAt(value: string): string | null {
 function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
   const m = ctx.members.find((x) => x.id === id);
   return m && m.status !== "disabled" && atLeast(m.role, "approver") ? m : undefined;
+}
+
+/**
+ * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
+ * pricing, the pricing owner its approver; the same one again on a repeat.
+ */
+export function proposePricing(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  memo: { versionId: string; documentId: string; version: number; slug: string; question: string; context: string; options: { id: string; title: string; summary: string; recommended: boolean; reversibility: string }[] },
+  pricingOwner: string,
+): { row: DecisionOut; created: boolean } {
+  const had = db.decisions.find((d) => d.origin === "pricing" && d.source?.id === memo.versionId);
+  if (had) return { row: outOf(ctx, db, had), created: false };
+  const recommended = memo.options.find((o) => o.recommended);
+  const row = blank(ctx, db, {
+    title: `Price: ${memo.question}`.slice(0, 200),
+    question: memo.question,
+    context: memo.context.slice(0, 4000) || null,
+    options: memo.options.map((o) => option(o.id, o.title, { summary: o.summary || null, recommended: o.recommended })),
+    approver_id: pricingOwner,
+    reversibility: recommended?.reversibility === "reversible" ? "reversible" : "irreversible",
+    informed_ids: ctx.members.filter((x) => (x.role === "owner" || x.role === "approver") && x.status !== "disabled").map((x) => x.id),
+    subjects: [
+      { kind: "document", id: memo.documentId, ref: memo.slug },
+      { kind: "document_version", id: memo.versionId, ref: `${memo.slug} v${memo.version}` },
+    ],
+    origin: "pricing",
+    source: { kind: "pricing_memo_version", id: memo.versionId },
+    driver: `user:${ctx.me.id}`,
+    created_by: ctx.me.id,
+  });
+  db.decisions.push(row);
+  return { row: outOf(ctx, db, row), created: true };
+}
+
+/** A decided pricing decision, for the pricing scenario's earlier memo. */
+export function decidePricing(ctx: DecisionsContext, db: DecisionsDb, number: number, key: string, rationale: string, expected: string, at: string) {
+  const d = db.decisions.find((x) => x.number === number);
+  if (!d) return;
+  Object.assign(d, { status: "decided", chosen_option: key, rationale, expected_outcome: expected, decided_at: at, decided_by: d.approver_id, decided_actor: "user", review_at: day(90), updated_at: at });
 }
 
 /** /v1/decisions…; null for other routes. */

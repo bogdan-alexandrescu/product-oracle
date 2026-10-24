@@ -96,6 +96,8 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   // The Company time zone: goals' today, the weekly report and rituals (Los Angeles until an
   // owner sets one, owner decision 2026-10-22).
   company_timezone: "America/Los_Angeles",
+  // H9: the pricing owner's member id; null is the earliest active owner.
+  pricing_owner: null,
 };
 
 /** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */

@@ -36,6 +36,7 @@ const KIND_LABEL: Record<TemplateSummary["kind"], string> = {
   vision: "Vision",
   strategy: "Product strategy",
   update: "Update",
+  pricing: "Pricing memo",
 };
 
 const COLUMNS: Column<TemplateSummary>[] = [

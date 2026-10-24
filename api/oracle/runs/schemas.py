@@ -26,6 +26,7 @@ Flow = Literal[
     "prd_draft_items",
     "ritual_summary",
     "metrics_variance",
+    "pricing_memo",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -52,6 +53,7 @@ CheckpointKind = Literal[
     "strategy_review",
     "launch_review",
     "update_review",
+    "pricing_review",
 ]
 CheckpointStatus = Literal["pending", "approved", "changes_requested", "skipped"]
 Role = Literal["viewer", "commenter", "approver", "owner"]

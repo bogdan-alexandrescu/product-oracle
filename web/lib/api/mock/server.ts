@@ -4,6 +4,7 @@
  * will against the real API. State lives in localStorage, so it survives reloads.
  */
 import type { Schemas } from "@/lib/api/client";
+import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
@@ -20,7 +21,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import { decisionInbox, enlargeDecisions, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -100,6 +101,19 @@ import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
+import {
+  DRAFT_OPTIONS,
+  memoOptions,
+  PRICING_TEMPLATE,
+  pricingDraftSections,
+  pricingFrontMatter,
+  pricingTemplateSections,
+  routeDeals,
+  seedDeals,
+  type EvidenceWindow,
+  type PricingContext,
+  type PricingDb,
+} from "./pricing";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
@@ -195,6 +209,8 @@ export interface Db {
   metrics?: MetricsDb;
   /** Launches, their checklist and notes, and the changelog (./launches.ts, H6). */
   launches?: LaunchesDb;
+  /** H9: win and loss records (./pricing.ts); seeded in the "pricing" scenario only. */
+  pricing?: PricingDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -352,6 +368,12 @@ function ensureLaunches(db: Db): LaunchesDb {
 const STORAGE_KEY = "po-mock-db-v2";
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
+/**
+ * Tests set this localStorage key before signing in, as MOCK_ROLE_KEY, to a comma-separated
+ * list of operation ids that GET /v1/me/capabilities answers false (#370: a control is absent
+ * when its operation is not allowed, also when the role would allow it).
+ */
+export const MOCK_DENY_KEY = "po-mock-deny";
 /**
  * Tests and screenshots set this localStorage key before the first call: "empty" starts as a
  * new company (members only, no goals, documents, runs or questions); "large" as a big one
@@ -1493,9 +1515,169 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
       const doc = db.documents.find((d) => d.id === key || d.slug === key || d.id === versionOf);
       return !!doc && !canSee(me.role, doc.visibility);
     },
+    // H9 (docs/visibility._decision_visible): a pricing decision, and the record of a stop of
+    // a run on an owners-and-approvers document, are absent for commenters and viewers.
+    visible: (d) => {
+      if (atLeast(me.role, "approver")) return true;
+      if (d.origin === "pricing") return false;
+      const run = d.run_id ? db.runs?.runs.find((r) => r.id === d.run_id) : undefined;
+      const doc = run?.document_slug ? findDocument(db, run.document_slug) : undefined;
+      return !doc || canSee(me.role, doc.visibility);
+    },
     uuid,
     now,
   };
+}
+
+/** What the pricing mock reads: the signed-in member, today in the Company time zone. */
+function pricingContext(me: MemberRow): PricingContext {
+  return {
+    me: { id: me.id, role: me.role },
+    uuid,
+    now,
+    today: () => todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles")),
+  };
+}
+
+/** The pricing owner (oracle.pricing.decide.pricing_owner): the setting's active owner, else the earliest active owner. */
+function pricingOwner(db: Db): MemberRow | undefined {
+  const owners = db.members.filter((m) => m.role === "owner" && m.status === "active").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const chosen = mockSettingValue("pricing_owner");
+  return owners.find((m) => m.id === chosen) ?? owners[0];
+}
+
+/** A member's name as the API shows it (oracle.members.names.display_name). */
+function memberName(m: MemberRow | undefined): string {
+  return m ? displayName(m.email, m.name) : "the pricing owner";
+}
+
+/** A memo version's sections as Decide and the list read them. */
+function memoOf(db: Db, doc: DocumentRow) {
+  const latest = docVersions(db, doc).pop();
+  const fm = (latest?.front_matter ?? {}) as Record<string, unknown>;
+  return { latest, question: typeof fm.question === "string" ? fm.question : null, fm };
+}
+
+/** GET /v1/pricing-memos: the pricing documents with their decision and who decides. */
+function pricingMemos(db: Db): Schemas["PricingMemoSummary"][] {
+  const owner = pricingOwner(db);
+  const decisions = db.decisions?.decisions ?? [];
+  return db.documents
+    .filter((d) => d.kind === "pricing")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .map((doc) => {
+      const { latest, question } = memoOf(db, doc);
+      const ids = new Set(docVersions(db, doc).map((v) => v.id));
+      const d = decisions.filter((x) => x.origin === "pricing" && x.source && ids.has(x.source.id)).pop();
+      const state = d?.status === "decided" ? "decided" : latest?.approved_at ? "approved" : doc.status === "in_review" ? "in_review" : "draft";
+      return {
+        document_id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        question,
+        state,
+        decision: d ? { number: d.number, title: d.title, status: d.status, chosen_label: d.options.find((o) => o.key === d.chosen_option)?.label ?? null } : null,
+        updated_at: doc.updated_at,
+        pricing_owner: owner ? { id: owner.id, name: memberName(owner) } : null,
+      };
+    });
+}
+
+/** POST /v1/pricing-memos/{doc}/decide: the pricing owner opens the approved memo's proposed decision. */
+function decideMemo(db: Db, me: MemberRow, slug: string): Response {
+  const doc = findDocument(db, slug);
+  if (!doc || doc.kind !== "pricing") return json(404, { detail: `pricing memo '${slug}' not found` });
+  const owner = pricingOwner(db);
+  if (!owner || owner.id !== me.id) return json(403, { detail: `Only ${memberName(owner)} decides prices` });
+  const { latest, question, fm } = memoOf(db, doc);
+  if (!latest?.approved_at) return json(409, { detail: "Approve the memo's latest version before deciding" });
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  const ctx = decisionsContext(db, me);
+  db.decisions ??= seeded("decisions", () => seedDecisions(ctx));
+  const recommendation = latest.sections.find((s) => s.section_key === "recommendation")?.body_md ?? "";
+  const { row, created } = proposePricing(
+    ctx,
+    db.decisions,
+    {
+      versionId: latest.id,
+      documentId: doc.id,
+      version: latest.number,
+      slug: doc.slug,
+      question: question ?? doc.title,
+      context: recommendation,
+      options: memoOptions(fm, latest.sections),
+    },
+    owner.id,
+  );
+  return json(created ? 201 : 200, row);
+}
+
+/** /v1/pricing-memos…, /v1/deal-outcomes… and the pricing_owner setting (H9); null for other routes. */
+async function routePricing(db: Db, me: MemberRow, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  if (p[1] === "pricing-memos") {
+    // H8's rule: below approver, there is no such memo.
+    if (!atLeast(me.role, "approver")) return notFound("Pricing memo");
+    if (p.length === 2 && req.method === "GET") return json(200, pricingMemos(db));
+    if (p.length === 4 && p[3] === "decide" && req.method === "POST") return decideMemo(db, me, p[2]);
+    return null;
+  }
+  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q);
+  if (p[1] === "settings" && p[2] === "pricing_owner" && req.method === "PUT" && me.role === "owner") {
+    const { value } = (JSON.parse((await req.clone().text()) || "{}") ?? {}) as { value?: unknown };
+    if (value != null && !db.members.some((m) => m.id === value && m.role === "owner" && m.status === "active")) {
+      return json(422, { detail: "The pricing owner must be an active owner" });
+    }
+  }
+  return null;
+}
+
+/** H9 "pricing" scenario: Riley Park, a second owner; Team plan pricing approved, Starter plan price decided; made-up deals. */
+function seedPricingScenario(db: Db) {
+  const second: MemberRow = {
+    ...db.members.find((m) => m.id === db.user_id)!,
+    id: uuid(),
+    email: "riley@example.com",
+    name: "Riley Park",
+    role: "owner",
+    created_at: "2026-09-05T09:00:00Z",
+    last_sign_in_at: "2026-10-20T08:00:00Z",
+  };
+  db.members.push(second);
+  db.pricing = { deals: seedDeals(pricingContext(db.members.find((m) => m.id === db.user_id)!), db.user_id) };
+  const window: EvidenceWindow = { from: "2026-04-24", to: "2026-10-23" };
+  const memo = (slug: string, title: string, question: string, approvedAt: string) => {
+    const doc: DocumentRow = {
+      id: uuid(), slug, title, status: "approved", kind: "pricing", template: PRICING_TEMPLATE, template_version: "1",
+      theme: "one-page-brief", visibility: "approvers", created_at: "2026-10-12T16:00:00Z", updated_at: approvedAt,
+    };
+    db.documents.push(doc);
+    const v1 = buildVersion(doc, { number: 1, created_at: doc.created_at, sections: pricingTemplateSections(title), citations: [], brief: ["question", "recommendation", "options"] });
+    v1.front_matter = pricingFrontMatter(slug, title, question, window);
+    v1.imported_by = "draft-picker";
+    const v2 = buildVersion(doc, { number: 2, created_at: "2026-10-13T16:00:00Z", sections: pricingDraftSections(title, question, window), citations: [], brief: ["question", "recommendation", "options"] });
+    v2.front_matter = pricingFrontMatter(slug, title, question, window, DRAFT_OPTIONS);
+    v2.imported_by = "agent-track";
+    v2.approved_at = approvedAt;
+    db.versions.push(v1, v2);
+  };
+  memo("team-plan-pricing", "Team plan pricing", "Should the team plan move from per-seat to a flat price per team?", "2026-10-15T17:00:00Z");
+  memo("starter-plan-price", "Starter plan price", "Should the Starter plan cost less for teams under 5 seats?", "2026-10-08T17:00:00Z");
+}
+
+/** The pricing scenario's earlier memo, decided by the pricing owner (a pricing decision in the log). */
+function seedPricingDecisions(db: Db, ctx: DecisionsContext, log: DecisionsDb) {
+  const doc = findDocument(db, "starter-plan-price");
+  const owner = pricingOwner(db);
+  if (!doc || !owner) return;
+  const { latest, question, fm } = memoOf(db, doc);
+  if (!latest) return;
+  const { row } = proposePricing(
+    { ...ctx, me: { id: owner.id, email: owner.email, role: owner.role } },
+    log,
+    { versionId: latest.id, documentId: doc.id, version: latest.number, slug: doc.slug, question: question ?? doc.title, context: "", options: memoOptions(fm, latest.sections) },
+    owner.id,
+  );
+  decidePricing(ctx, log, row.number, "keep", "Small teams churn on budget, not on price.", "Starter churn stays under 3% a month.", "2026-10-09T17:00:00Z");
 }
 
 /** What the rituals mock reads: the signed-in member and the members. */
@@ -1722,6 +1904,17 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const number = (latest?.number ?? 0) + 1;
       // H8: an update_draft run writes the update for the period in its front matter.
       const period = latest?.front_matter.period as UpdatePeriod | undefined;
+      // H9: a pricing_memo run writes the memo for the question in its front matter.
+      const question = latest?.front_matter.question as string | undefined;
+      if (doc.kind === "pricing" && question) {
+        const window = (latest?.front_matter.evidence_window as EvidenceWindow | undefined) ?? { from: now().slice(0, 10), to: now().slice(0, 10) };
+        const v = buildVersion(doc, { number, created_at: now(), sections: pricingDraftSections(doc.title, question, window), citations: [], brief: ["question", "recommendation", "options"] });
+        v.front_matter = pricingFrontMatter(doc.slug, doc.title, question, window, DRAFT_OPTIONS);
+        v.imported_by = "agent-track";
+        db.versions.push(v);
+        touch(db, doc.id);
+        return { document_id: doc.id, slug: doc.slug, kind: doc.kind, version: v.number, source: null, prd_links: null };
+      }
       if (doc.kind === "update" && isUpdateTemplate(doc.template) && period) {
         const v = buildVersion(doc, {
           number,
@@ -1840,6 +2033,8 @@ function load(): Db {
       roadmap.status = "approved";
     }
   }
+  // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
+  if (scenario === "pricing") seedPricingScenario(db);
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
   // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
   if (scenario === "outcomes" || scenario === "outcomes-recorded") {
@@ -3011,6 +3206,7 @@ function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   db.decisions ??= seeded("decisions", () => {
     const log = seedDecisions(ctx);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);
     return log;
   });
   return db.decisions;
@@ -3179,6 +3375,31 @@ function startUpdate(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Res
   } satisfies Schemas["StartDraftOut"]);
 }
 
+/** H9: a pricing memo from its template, for owners and approvers; the question and evidence window in its front matter. */
+function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Response {
+  if (!atLeast(me.role, "approver")) return json(403, { detail: "Only an approver can start a pricing memo" });
+  const question = input.question?.trim() ?? "";
+  if (!question || question.length > 300) return json(422, { detail: "Say the pricing question in one sentence" });
+  const today = todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"));
+  const window: EvidenceWindow = input.period ?? { from: addMonths(today, -6), to: today };
+  if (!ISO_DAY.test(window.from) || !ISO_DAY.test(window.to) || window.from > window.to) return json(422, { detail: "evidence_window: from and to are dates, from on or before to" });
+  const title = input.title?.trim() || "Pricing memo";
+  const base = slugOf(input.slug || title);
+  let slug = base;
+  for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${base}-${n}`;
+  const created = now();
+  const doc: DocumentRow = {
+    id: uuid(), slug, title, status: "draft", kind: "pricing", template: PRICING_TEMPLATE, template_version: "1",
+    theme: input.theme ?? "one-page-brief", visibility: "approvers", created_at: created, updated_at: created,
+  };
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: pricingTemplateSections(title), citations: [], brief: ["question", "recommendation", "options"] });
+  v.front_matter = pricingFrontMatter(slug, title, question, window);
+  v.imported_by = "draft-picker";
+  db.documents.push(doc);
+  db.versions.push(v);
+  return json(201, { document_id: doc.id, slug, title, kind: "pricing", template: PRICING_TEMPLATE, template_version: 1, theme: doc.theme ?? null, version: 1 } satisfies Schemas["StartDraftOut"]);
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -3241,6 +3462,13 @@ async function route(db: Db, req: Request): Promise<Response> {
     const hidden = findDocument(db, p[2]);
     if (hidden && !canSee(me.role, hidden.visibility)) return notFound("Document");
   }
+  // H9 Pricing input: pricing memos, Decide, win and loss records, the pricing owner.
+  if (p[1] === "pricing-memos" && atLeast(me.role, "approver")) {
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    ensureDecisions(db, decisionsContext(db, me));
+  }
+  const priced = await routePricing(db, me, req, p, q);
+  if (priced) return priced;
   // #482: delete, restore, Settings › Trash and Regenerate (./trash.ts).
   const trashOut = await routeTrash(
     {
@@ -3275,7 +3503,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
-  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") return json(200, await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0));
+  if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
+    const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
+    for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
+    return json(200, caps);
+  }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
     const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
@@ -3717,6 +3949,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "drafts" && p.length === 2 && m === "POST") {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
     if (input?.kind === "update") return startUpdate(db, me, input);
+    if (input?.kind === "pricing") return startPricing(db, me, input);
   }
   if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
   const handled = await laneF(db, req, p, m, me.role);
@@ -4019,7 +4252,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const decider = db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id;
     if (decider && decider !== me.id) return json(403, { detail: "Only the designated decider approves this document's versions" });
     // H4: a vision or a product strategy is an owner's to approve.
-    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : null;
+    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : doc.kind === "pricing" ? "a pricing memo" : null;
     if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // #346: a proposal a later one superseded can't be approved, and says why.
     const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;

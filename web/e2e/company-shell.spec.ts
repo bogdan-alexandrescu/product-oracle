@@ -36,7 +36,7 @@ test("the rail places Company after Inbox, just above Settings; it lands on Stra
   await expect(nav.getByTestId("nav-company")).toHaveAttribute("aria-current", "page");
   const tabs = page.getByRole("navigation", { name: "Company" });
   await expect(tabs.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
-  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics", "Market"]);
 });
 
 test("phone: Company is in the More sheet and the page never scrolls sideways", async ({ page }) => {

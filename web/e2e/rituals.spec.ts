@@ -64,7 +64,7 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await withRituals(page);
   await login(page);
   await openRituals(page);
-  await expect(page.getByRole("navigation", { name: "Company" }).filter({ visible: true }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics"]);
+  await expect(page.getByRole("navigation", { name: "Company" }).filter({ visible: true }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics", "Market"]);
   const row = ritualRow(page, "Monthly roadmap refresh");
   await expect(row).toContainText("First Tuesday of the month, 10:00");
   await row.click();

@@ -457,6 +457,26 @@ _ALL: tuple[Responsibility, ...] = (
         ceiling_reason="the vision itself",
     ),
     Responsibility(
+        key="pricing_input",
+        title="Prepare pricing input",
+        group="planning",
+        ceiling="recommend",
+        default="recommend",
+        levels={
+            "observe": "Oracle keeps win and loss records and pricing interviews; it writes no "
+            "memo.",
+            "draft": "Oracle drafts pricing memos with options and evidence, without a "
+            "recommendation.",
+            "recommend": "Oracle drafts pricing memos and recommends one option; the pricing "
+            "owner decides.",
+        },
+        limits=None,
+        wired_by="H9",
+        wired_by_name="H9 Pricing input",
+        wired=True,
+        ceiling_reason="the price is decided by its one owner",
+    ),
+    Responsibility(
         key="external_messages",
         title="Words for people outside",
         group="outside",

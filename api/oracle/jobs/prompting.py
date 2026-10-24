@@ -38,7 +38,7 @@ CURRENT = {
     "interview_turn": "interview_turn.v1",
     # A team member's turn runs as the interview_turn job with its own prompt.
     "interview_team_turn": "interview_team_turn.v1",
-    "interview_snapshot": "interview_snapshot.v1",
+    "interview_snapshot": "interview_snapshot.v2",
     "scope_enhance": "scope_enhance.v1",
     "why_not_reply": "why_not_reply.v1",
     "discussion_reply": "discussion_reply.v2",

@@ -57,6 +57,7 @@ from oracle.modules.router import router as modules_router
 from oracle.modules.service import seed_all_companies
 from oracle.plan.router import router as plan_router
 from oracle.preferences.router import router as preferences_router
+from oracle.pricing.router import router as pricing_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
 from oracle.reports.router import router as reports_router
@@ -262,6 +263,8 @@ def create_app() -> FastAPI:
     # credential, never MCP tools: oracle.mcp.tools.PUBLIC_OPERATIONS).
     app.include_router(interviews_router)
     app.include_router(public_interviews_router)
+    # H9 Pricing input: win and loss records and pricing memos (approvers and owners).
+    app.include_router(pricing_router)
     # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
     app.include_router(plan_router)
     app.include_router(strategy_router)

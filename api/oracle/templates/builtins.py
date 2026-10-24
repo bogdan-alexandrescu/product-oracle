@@ -195,6 +195,16 @@ KIND_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "The monthly investor update is due",
         "one-page-brief",
     ),
+    # H9 Pricing input: started on Company › Market › Pricing, never in the seed.
+    BuiltinTemplate(
+        "pricing-options-memo",
+        "pricing",
+        "Pricing options memo",
+        "One pricing question: two to four options with what each would change, the "
+        "willingness-to-pay and win and loss evidence, a recommendation and a research plan",
+        "A pricing question comes up; the pricing owner decides it in the decision log",
+        "one-page-brief",
+    ),
 )
 BUILTIN_TEMPLATES_BY_KEY = {t.key: t for t in (*BUILTIN_TEMPLATES, *KIND_TEMPLATES)}
 DEFAULT_TEMPLATE_FOR_KIND = {
@@ -203,6 +213,7 @@ DEFAULT_TEMPLATE_FOR_KIND = {
     "vision": "vision-narrative",
     "strategy": "product-strategy",
     "update": "investor-update",
+    "pricing": "pricing-options-memo",
 }
 
 
@@ -367,6 +378,7 @@ DEFAULT_THEME_FOR_KIND = {
     "vision": "editorial-memo",
     "strategy": "editorial-memo",
     "update": "one-page-brief",
+    "pricing": "one-page-brief",
 }
 
 

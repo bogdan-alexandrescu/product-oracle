@@ -44,6 +44,8 @@ ORIGINS = (
     "checkpoint",
     # H10: a request declined with a reason that answers the asker.
     "request_decline",
+    # H9: a pricing memo's Decide: proposed, then decided by the pricing owner.
+    "pricing",
 )
 # Origins Oracle records on its own: decided as they are captured.
 CAPTURED_ORIGINS = (

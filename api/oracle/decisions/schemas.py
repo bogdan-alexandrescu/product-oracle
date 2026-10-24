@@ -24,6 +24,7 @@ Origin = Literal[
     "autonomy",
     "checkpoint",
     "request_decline",
+    "pricing",
 ]
 SubjectKind = Literal[
     "document",

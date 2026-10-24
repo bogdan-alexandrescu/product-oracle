@@ -9,6 +9,7 @@ READ_AREAS = {
     # Code capability maps are drawn from a person's source (S6): a run reads shared
     # ones only (oracle.engineering.codemaps.visible).
     # Request replies quote askers' words, the same rule as requester notes (H10).
+    # H9: interviews hold customer words, source text.
     "read:sources": {
         "sources",
         "search",
@@ -16,6 +17,7 @@ READ_AREAS = {
         "requester-notes",
         "code-maps",
         "request-replies",
+        "interviews",
     },
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
@@ -64,6 +66,10 @@ READ_AREAS = {
         # writes a weekly value).
         "metrics",
         "metric-variances",
+        # H9: win and loss records and the pricing memos with their decision (owners and
+        # approvers only; a run reads them when its creator may).
+        "deal-outcomes",
+        "pricing-memos",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }
