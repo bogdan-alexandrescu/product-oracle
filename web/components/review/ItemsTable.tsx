@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { Chip, DataTable, Ring, type Column } from "@/components/ds";
 import { HORIZONS, horizonLabel, type ItemRow } from "@/components/roadmap/item-row";
@@ -48,7 +48,7 @@ export function MilestoneCell({ row }: { row: ItemRow }) {
   return (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
       {m.name && <span className="truncate">{m.name}</span>}
-      {m.date && <span className="tnum flex-none text-text2">{m.date}</span>}
+      {m.date && (m.date_removed ? <s className="tnum flex-none text-text2" title="Date removed">{m.date}</s> : <span className="tnum flex-none text-text2">{m.date}</span>)}
       {m.refused_date && (
         <>
           <s className="tnum flex-none text-text2">{m.refused_date}</s>
@@ -65,7 +65,9 @@ export function MilestoneCell({ row }: { row: ItemRow }) {
  * The one table of roadmap items (E2; D1 Items review, E1 and E3 extend it): one line per
  * item, grouped by horizon (Now, Next, Later) in stored order, each group headed by its name
  * and count. `filter` narrows the rows shown; `hide` drops columns; `extraColumns` add
- * columns before State; `rowDecorations` add attributes to a row.
+ * columns before State; `rowDecorations` add attributes to a row. D1: `groupBy`/`groupOrder`
+ * group by something else (a reason), `groupLabel` heads a group ("Now · 2 of 4 need you"),
+ * `detail` opens a form under a row, `empty` says why nothing shows.
  */
 export function ItemsTable({
   rows,
@@ -76,6 +78,12 @@ export function ItemsTable({
   extraColumns = [],
   rowDecorations,
   label = "Roadmap items",
+  groupBy,
+  groupOrder,
+  groupLabel,
+  detail,
+  empty = "No items match",
+  widths,
 }: {
   rows: ItemRow[];
   selected: string | null;
@@ -85,20 +93,31 @@ export function ItemsTable({
   extraColumns?: Column<ItemRow>[];
   rowDecorations?: (row: ItemRow) => Record<string, string | undefined>;
   label?: string;
+  /** The group of a row (default: its horizon); `groupOrder` orders the groups (default: Now, Next, Later). */
+  groupBy?: (row: ItemRow) => string;
+  groupOrder?: (group: string) => number;
+  /** A group's header (default: its name and count); `rows` are the group's rows shown. */
+  groupLabel?: (group: string, rows: ItemRow[]) => ReactNode;
+  detail?: (row: ItemRow) => ReactNode;
+  empty?: ReactNode;
+  /** Narrower or wider columns than E2's (D1 fits two more beside the inspector). */
+  widths?: Partial<Record<ItemColumn, string>>;
 }) {
   const titles = useMemo(() => new Map(rows.map((r) => [r.key, r.title])), [rows]);
+  const groupOf = groupBy ?? ((r: ItemRow) => r.horizon);
+  const orderOf = groupOrder ?? ((g: string) => HORIZON_ORDER.get(g as ItemRow["horizon"]) ?? 9);
   const shown = useMemo(
-    () =>
-      rows
-        .filter((r) => !filter || filter(r))
-        .sort((a, b) => (HORIZON_ORDER.get(a.horizon) ?? 9) - (HORIZON_ORDER.get(b.horizon) ?? 9) || a.position - b.position),
-    [rows, filter],
+    () => rows.filter((r) => !filter || filter(r)).sort((a, b) => orderOf(groupOf(a)) - orderOf(groupOf(b)) || a.position - b.position),
+    // groupOf and orderOf are the caller's: they change with the rows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, filter, groupBy, groupOrder],
   );
   const counts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of shown) if (!r.ghost) m.set(r.horizon, (m.get(r.horizon) ?? 0) + 1);
+    for (const r of shown) if (!r.ghost) m.set(groupOf(r), (m.get(groupOf(r)) ?? 0) + 1);
     return m;
-  }, [shown]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, groupBy]);
 
   const columns: Column<ItemRow>[] = [
     { key: "position", header: "#", width: "44px", align: "right", phone: "hide", className: "tnum text-text2", cell: (r) => (r.ghost ? "" : r.position + 1) },
@@ -106,9 +125,10 @@ export function ItemsTable({
       key: "title",
       header: "Item",
       phone: "title",
-      cell: (r) => (r.ghost ? <s className="text-text2">{r.title}</s> : <span className="font-medium">{r.title}</span>),
+      cell: (r) =>
+        r.ghost || r.struck ? <s className="text-text2">{r.title}</s> : <span className={`font-medium ${r.muted ? "text-text2" : ""}`}>{r.title}</span>,
     },
-    { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => <HorizonChip horizon={r.horizon} /> },
+    { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} /> : <span className="text-text2">—</span>) },
     { key: "milestone", header: "Milestone", width: "172px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
     { key: "confidence", header: "Conf.", width: "76px", phone: "meta", phoneLabel: "Conf.", cell: (r) => <Confidence value={r.confidence} /> },
     {
@@ -148,20 +168,25 @@ export function ItemsTable({
     <DataTable
       label={label}
       testId="roadmap-items-table"
-      columns={columns.filter((c) => !hide.includes(c.key))}
+      columns={columns.filter((c) => !hide.includes(c.key)).map((c) => (widths?.[c.key as ItemColumn] ? { ...c, width: widths[c.key as ItemColumn] } : c))}
       rows={shown}
       rowKey={(r) => r.key}
       selected={selected}
       onSelect={(k) => onSelect(k)}
-      group={(r) => r.horizon}
-      groupLabel={(g) => (
-        <>
-          {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{counts.get(g) ?? 0}</span>
-        </>
-      )}
-      groupProps={(g) => ({ "data-testid": "roadmap-group", "data-horizon": g })}
+      group={groupOf}
+      groupLabel={(g) =>
+        groupLabel ? (
+          groupLabel(g, shown.filter((r) => groupOf(r) === g))
+        ) : (
+          <>
+            {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{counts.get(g) ?? 0}</span>
+          </>
+        )
+      }
+      groupProps={(g) => ({ "data-testid": "roadmap-group", ...(groupBy ? { "data-group": g } : { "data-horizon": g }) })}
       rowProps={(r) => ({ "data-testid": "roadmap-item-row", ...rowDecorations?.(r) })}
-      empty="No items match"
+      detail={detail}
+      empty={empty}
     />
   );
 }

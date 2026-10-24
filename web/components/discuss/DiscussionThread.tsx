@@ -3,23 +3,23 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 
-import { CitationChip } from "@/components/CitationChip";
 import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
 import { Button, Chip, confirmInPage, Icon, InfoTip, Notice, useFocusTrap } from "@/components/ds";
 import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
 import { INPUT, Loading } from "@/components/ui";
-import { api, ApiError, unwrap, type CitationOut, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { openStream } from "@/lib/stream";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { ChangesCard } from "./ChangesCard";
+import { type Cite, ReplyBody } from "./cited";
 import { plural } from "./DiscussionList";
 
 type Discussion = Schemas["DiscussionOut"];
 type Message = Schemas["DiscussionMessageOut"];
-type Change = Schemas["DiscussionChangeOut"];
 type Channel = Schemas["NotificationChannelOut"];
 type Counts = { messages: number; people: number };
 type Loaded = { kind: "ok"; d: Discussion; messages: Message[] } | { kind: "private" } | { kind: "error"; message: string };
@@ -140,57 +140,23 @@ function MakeOpenWarning({
   );
 }
 
-type Cite = { n: number; kind: string; ref: string; title: string; url?: string | null; excerpt?: string | null; confidence?: number | null; low_confidence?: boolean };
-
-/** A discussion citation as the document citation chip reads it. */
-function chipCitation(c: Cite): CitationOut {
-  const link = c.kind === "public_link" && !!c.url;
-  return {
-    id: `c${c.n}`,
-    cite_key: `c:${c.n}`,
-    source: link ? "web" : "oracle",
-    ref: link ? c.url! : c.title,
-    title: c.title,
-    excerpt: c.excerpt ?? null,
-    added: false,
-    confidence: c.confidence ?? null,
-    low_confidence: !!c.low_confidence,
-  } as CitationOut;
-}
-
-/** A marker still being written at the end of a streaming reply ("[", "[c", "[c:1"). */
-const PARTIAL_MARKER = /\[(c(:\d{0,4})?)?$/;
-
-/**
- * Oracle's text with each `[c:n]` drawn as a citation chip. While it streams (#406) a
- * marker is held back until it is complete and its citation has arrived: no raw `[c:` shows.
- */
-function ReplyBody({ text, citations, live = false }: { text: string; citations: Cite[]; live?: boolean }) {
-  const parts = (live ? text.replace(PARTIAL_MARKER, "") : text).split(/(\[c:\d{1,4}\])/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        const n = /^\[c:(\d+)\]$/.exec(part)?.[1];
-        if (!n) return <span key={i}>{part}</span>;
-        const c = citations.find((x) => x.n === Number(n));
-        return c ? <CitationChip key={i} citeKey={`c-${n}`} citation={chipCitation(c)} number={c.n} /> : null;
-      })}
-    </>
-  );
-}
-
 /**
  * Oracle's reply (G2): "Oracle is thinking…" while pending, the text growing with a caret
  * while it streams (Stop for the person who asked), citations as chips, an amber "Oracle
  * pushes back" label, and a failed or stopped reply's copy with Retry.
  */
-function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: string; asker: boolean }) {
+function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussionId: string; asker: boolean; onEnded?: () => void }) {
   const [msg, setMsg] = useState<Message>(m);
   const [text, setText] = useState(m.body);
   const [live, setLive] = useState(m.status === "pending" || m.status === "streaming");
   const [error, setError] = useState<string | null>(m.error ?? null);
   const [run, setRun] = useState(0);
   const { can } = useMe();
+  // G3: the reply's changes land as it ends; the card under the thread reloads them.
+  const ended = useRef(onEnded);
+  useEffect(() => {
+    ended.current = onEnded;
+  });
 
   useEffect(() => {
     if (!live) return;
@@ -216,7 +182,9 @@ function OracleReply({ m, discussionId, asker }: { m: Message; discussionId: str
         setText(done.body);
         setError(null);
         setLive(false);
+        ended.current?.();
       },
+      onChanges: () => ended.current?.(),
       onError: (e) => {
         if (abort.signal.aborted) return;
         setMsg((x) => ({ ...x, status: "failed", error_reason: e.reason }));
@@ -628,6 +596,7 @@ export function DiscussionThread({
   renderAfter,
   composer,
   focusChanges = false,
+  inlineKinds,
 }: {
   id: string;
   onBack?: () => void;
@@ -644,6 +613,8 @@ export function DiscussionThread({
   composer?: Ref<ComposerHandle>;
   /** Opened from the Inbox's Review changes (G6): scroll to the changes card. */
   focusChanges?: boolean;
+  /** Kinds the caller shows under messages (B6: goal versions); the changes card leaves them out. */
+  inlineKinds?: string[];
 }) {
   const { me, can } = useMe();
   const myId = me?.user_id ?? null;
@@ -654,6 +625,8 @@ export function DiscussionThread({
   const [warning, setWarning] = useState<Counts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // G3: bumped when a reply ends, so the changes card reloads.
+  const [changesKey, setChangesKey] = useState(0);
   const [mirroring, setMirroring] = useState(false);
   const router = useRouter();
   // G8: the starter or an approver may mirror an open discussion; they need the install's state.
@@ -676,25 +649,6 @@ export function DiscussionThread({
       live = false;
     };
   }, [id, refreshKey]);
-  // The changes still waiting on a decision (proposed by Oracle, suggested by people).
-  const [changes, setChanges] = useState<Change[]>([]);
-  useEffect(() => {
-    let live = true;
-    unwrap(api.GET("/v1/discussions/{discussion_id}/changes", { params: { path: { discussion_id: id } } }))
-      .then((rows) => live && setChanges(rows.filter((c) => c.status === "proposed" || c.status === "suggested")))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [id, refreshKey]);
-  const changesRef = useRef<HTMLElement>(null);
-  const scrolled = useRef(false);
-  useEffect(() => {
-    if (focusChanges && changes.length > 0 && !scrolled.current && changesRef.current) {
-      scrolled.current = true;
-      changesRef.current.scrollIntoView({ block: "center" });
-    }
-  }, [focusChanges, changes]);
   // Reading the thread marks it read to its last message: the Inbox's invitation and
   // mentions read past are done (G6), and the rail's count reads again.
   const lastId = state?.kind === "ok" ? state.messages.at(-1)?.id : undefined;
@@ -980,29 +934,7 @@ export function DiscussionThread({
           <span className="min-w-0 truncate">{d.subject_label}</span>
         </div>
         {belowHeader}
-        {d.summary && (
-          <p className="rounded-lg bg-surface2 px-3 py-2 text-sm leading-5 break-words" data-testid="discussion-summary">
-            <span className="font-semibold">Summary: </span>
-            {d.summary}
-          </p>
-        )}
       </div>
-
-      {changes.length > 0 && (
-        <section ref={changesRef} aria-label="Changes proposed" className="flex flex-col gap-2 rounded-lg border border-line p-3" data-testid="discussion-changes">
-          <h4 className="text-sm font-semibold">{plural(changes.length, "change", "changes")} proposed</h4>
-          <ul className="flex flex-col gap-1.5">
-            {changes.map((c) => (
-              <li key={c.id} className="flex min-w-0 items-center gap-2 text-sm" data-testid="discussion-change">
-                <span className="min-w-0 flex-1 truncate" title={c.label}>
-                  {c.label}
-                </span>
-                <Chip kind="line">{c.status === "suggested" ? "Suggested" : c.proposed_by_kind === "oracle" ? "Proposed by Oracle" : "Proposed"}</Chip>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       {editing && (
         <form
@@ -1086,7 +1018,12 @@ export function DiscussionThread({
                 )}
               </p>
               {m.author_kind === "oracle" && !m.deleted ? (
-                <OracleReply m={m} discussionId={d.id} asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)} />
+                <OracleReply
+                  m={m}
+                  discussionId={d.id}
+                  asker={!!myId && messages.some((x) => x.id === m.reply_to && x.author?.user_id === myId)}
+                  onEnded={() => setChangesKey((k) => k + 1)}
+                />
               ) : (
                 <p className="text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
                   {m.deleted ? <span className="text-text2 italic">Message deleted</span> : <Body m={m} />}
@@ -1123,6 +1060,14 @@ export function DiscussionThread({
           }}
         />
       ) : null}
+
+      <ChangesCard
+        d={d}
+        refreshKey={changesKey + refreshKey}
+        focus={focusChanges}
+        leaveOut={inlineKinds}
+        onThreadChanged={() => void reload().then(() => onChanged?.())}
+      />
 
       {mirroring && (
         <MirrorDialog

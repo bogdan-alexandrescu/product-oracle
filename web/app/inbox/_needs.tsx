@@ -290,6 +290,7 @@ export type NeedGroup =
   | "revising"
   | "decisions"
   | "launches"
+  | "requests"
   | "dates"
   | "rituals"
   | "outcomes"
@@ -922,8 +923,14 @@ function actionWords(a: Pick<DraftAction, "kind" | "field" | "value">, done: boo
  * D9: up to three items of a roadmap items checkpoint, each with its first reason, its safe
  * fix (staged in one click, undone in one) and Open, then "+k more · h handled".
  */
+/** D9's child row: the item on the kind's review screen (D1 `?item=`), else the run page's decision. */
+function itemHref(c: InboxCheckpointRow, item: string): string {
+  const screen = reviewHref(c);
+  return screen ? `${screen}?item=${encodeURIComponent(item)}` : `/runs/${c.run_id}?item=${encodeURIComponent(item)}#decide`;
+}
+
 function childNeeds(c: InboxCheckpointRow, summary: InboxSummary, busy: string | null, act: Act, fixed?: FixedHere): Need[] {
-  const review = `/runs/${c.run_id}#decide`;
+  const review = reviewHref(c) ?? `/runs/${c.run_id}#decide`;
   // The rows I fixed on this visit stay in their places, done; the rest are the API's.
   const mine = Object.entries(fixed?.rows ?? {}).filter(([k]) => k.startsWith(`${c.id}-`));
   const children = summary.children.filter((child) => !fixed?.rows[`${c.id}-${child.item}`]);
@@ -1081,7 +1088,7 @@ function ChildActions({
           </Button>
         )
       )}
-      <LinkButton variant="ghost" href={`/runs/${c.run_id}?item=${encodeURIComponent(child.item)}#decide`} aria-label={`Open ${title}`}>
+      <LinkButton variant="ghost" href={itemHref(c, child.item)} aria-label={`Open ${title}`}>
         Open
       </LinkButton>
       {error && (
@@ -1168,15 +1175,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       action: c.kind === "baseline_confirm" ? (
         // B2: the run's review opens in the Baseline, filtered to the run.
         <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
+      ) : isHeld(c) ? (
+        // A held console approval is confirmed on the kind's review screen (D1, C7), else the run page.
+        <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>
+      ) : counted ? (
+        // D1: the Roadmap items review screen.
+        <LinkButton href={reviewHref(c) ?? review}>Review items</LinkButton>
       ) : reviewHref(c) ? (
         // F4: the Engineering check has its own review screen.
         <LinkButton href={reviewHref(c)!}>Review</LinkButton>
-      ) : isHeld(c) ? (
-        // The run page's checkpoint row, until the kind's review screen ships (D1).
-        <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>
-      ) : counted ? (
-        // Until D1's review screen lands, the run page opens at the decision.
-        <LinkButton href={review}>Review items</LinkButton>
       ) : (
         // The same verb as the runs list: the run page opens at the decision; a priority stop
         // opens its order next to the live ranking (C8), where it is decided too; a PRD or
@@ -1503,6 +1510,122 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
   return { counted: rows.filter((r) => r.counted).map(need), shipped: rows.filter((r) => !r.counted).map(need) };
 }
 
+/**
+ * H10 request rows: Replies to send (the filer and the decider) and Asked again N times since
+ * you said no (the decision's approver: Keep the no, Reopen) count; Answer to your request
+ * (the member who asked) is shown only, carrying the reply.
+ */
+export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { counted: Need[]; shown: Need[] } {
+  const rows = inbox.requests ?? [];
+  const href = (id: string) => `/requests?request=${id}`;
+  const need = (r: (typeof rows)[number]): Need => {
+    const label =
+      r.reason === "replies_to_send"
+        ? `Replies to send · ${r.count ?? 0} · ${r.title}`
+        : r.reason === "asked_again"
+          ? `Asked again ${r.count ?? 0} ${r.count === 1 ? "time" : "times"} since you said no · ${r.title}`
+          : `Answer to your request · ${r.title}`;
+    return {
+      key: `request-${r.reason}-${r.request_id}`,
+      icon: r.reason === "answer" ? "check" : "flag",
+      kind: r.reason === "answer" ? "Answer" : "Request",
+      item: (
+        <span className="truncate" title={label} data-testid="request-need">
+          {label}
+        </span>
+      ),
+      context:
+        r.reason === "answer" && r.body ? (
+          <span className="block truncate text-text2" title={r.body} data-testid="request-answer">
+            {r.body}
+          </span>
+        ) : (
+          <span className="block truncate text-text2">{r.decision_number ? `D-${r.decision_number} · Requests` : "Requests"}</span>
+        ),
+      at: r.at,
+      action: (
+        <>
+          {r.reason === "asked_again" && <AskedAgainActions requestId={r.request_id} title={r.title} busy={busy} act={act} />}
+          <LinkButton variant="secondary" href={href(r.request_id)}>
+            Open
+          </LinkButton>
+        </>
+      ),
+    };
+  };
+  return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
+/** Asked again: Keep the no with the person's own note (a reaffirmed review), or Reopen. */
+function AskedAgainActions({ requestId, title, busy, act }: { requestId: string; title: string; busy: string | null; act: Act }) {
+  const [keeping, setKeeping] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const fieldId = useId();
+  const path = { params: { path: { request_id: requestId } } };
+  const run = (key: string, call: () => Promise<unknown>) => {
+    setError(null);
+    void act(key, () => call().catch((e) => setError(errorMessage(e))));
+  };
+  const errorLine = error && (
+    <span role="alert" className="basis-full text-right text-[13px] text-crit max-[600px]:text-left">
+      {error}
+    </span>
+  );
+  if (keeping) {
+    return (
+      <form
+        className="flex w-full flex-col items-stretch gap-1.5 py-1 text-left whitespace-normal"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(`keep-no-${requestId}`, () => unwrap(api.POST("/v1/requests/{request_id}/keep-no", { ...path, body: { note: note.trim() } })));
+        }}
+      >
+        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+          Why keep the no
+        </label>
+        <input
+          id={fieldId}
+          autoFocus
+          value={note}
+          maxLength={2000}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
+          className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+        />
+        {errorLine}
+        <span className="flex justify-end gap-1.5 max-[600px]:flex-col">
+          <Button type="submit" disabled={busy !== null || !note.trim()} className="max-[600px]:w-full">
+            Keep the no
+          </Button>
+          <Button variant="ghost" disabled={busy !== null} onClick={() => setKeeping(false)} className="max-[600px]:w-full">
+            Cancel
+          </Button>
+        </span>
+      </form>
+    );
+  }
+  return (
+    <>
+      <Button disabled={busy !== null} aria-label={`Keep the no on ${title}`} onClick={() => setKeeping(true)}>
+        Keep the no
+      </Button>
+      <Button
+        disabled={busy !== null}
+        onClick={() =>
+          run(`reopen-${requestId}`, async () => {
+            const request = await unwrap(api.GET("/v1/requests/{request_id}", path));
+            return unwrap(api.POST("/v1/requests/{request_id}/reopen", { ...path, body: { lock_version: request.lock_version, reason: "Asked again since we said no" } }));
+          })
+        }
+      >
+        Reopen
+      </Button>
+      {errorLine}
+    </>
+  );
+}
+
 const ritualWhen = (iso: string) => formatInZone(iso, displayZone(), { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /**
@@ -1592,6 +1715,7 @@ export function allNeeds(
   const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
+  const requests = requestNeeds(inbox, busy, act);
   const outcomes = outcomeNeeds(inbox);
   const stated = (rows: Need[], group: NeedGroup, counted = true): StatedNeed[] =>
     rows.map((r) => ({
@@ -1615,6 +1739,7 @@ export function allNeeds(
     ...stated(strategyNeeds(inbox.strategy), "strategy"),
     ...stated(dateNeeds(inbox, busy, act), "dates"),
     ...stated(launches.counted, "launches"),
+    ...stated(requests.counted, "requests"),
     ...ritualNeeds(inbox, busy, act),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
@@ -1626,6 +1751,7 @@ export function allNeeds(
     ...stated(n.searches, "searches", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(n.revising, "revising", false).map((r) => ({ ...r, state: "open" as const })),
     ...stated(launches.shipped, "shipped", false),
+    ...stated(requests.shown, "requests", false),
     ...stated(outcomes.shown, "outcomes", false).map((r) => ({ ...r, state: "open" as const })),
   ];
 }

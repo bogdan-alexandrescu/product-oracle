@@ -331,6 +331,7 @@ async def _beating(coro):
     return out, time.monotonic() - started, beats
 
 
+@pytest.mark.timing
 async def test_the_scope_recheck_runs_off_the_event_loop(monkeypatch):
     def slow(rows, *, known):
         time.sleep(1)
@@ -355,6 +356,7 @@ async def test_the_scope_recheck_runs_off_the_event_loop(monkeypatch):
     assert scope.check_result is stored
 
 
+@pytest.mark.timing
 async def test_the_scope_yaml_renders_off_the_event_loop(monkeypatch):
     from oracle import safe_yaml
 
@@ -392,6 +394,7 @@ def test_flags_index_the_baseline_titles():
     assert _CountedTitles.walks <= 1
 
 
+@pytest.mark.timing
 def test_a_large_scope_checks_in_linear_time():
     n = 10_000
     features = {f"f{i}": fs.Ref(entity_id=uuid.uuid4(), title=f"Feature {i}") for i in range(n)}

@@ -58,6 +58,7 @@ from oracle.llm.transports import (
     NoClaudeAccount,
     get_llm_settings,
 )
+from oracle.requests.models import ProductRequest
 from oracle.runs.scope_models import PrdScope
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.models import ProductIntake
@@ -171,6 +172,7 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
                     LlmJob.decision_id,
                     LlmJob.interview_id,
                     LlmJob.scope_id,
+                    LlmJob.request_id,
                 )
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
@@ -178,7 +180,8 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
             )
         ).all()
         busy: set[uuid.UUID] = set()
-        for job_id, document_id, intake_id, decision_id, interview_id, scope_id in candidates:
+        for row in candidates:
+            job_id, document_id, intake_id, decision_id, interview_id, scope_id, request_id = row
             # A document's jobs run one at a time; so do an intake's, a decision's, an
             # interview's and a scope's (they have no document).
             if document_id is not None:
@@ -189,9 +192,12 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
                 owner, model, column = decision_id, Decision, LlmJob.decision_id
             elif interview_id is not None:
                 owner, model, column = interview_id, Interview, LlmJob.interview_id
-            else:
+            elif scope_id is not None:
                 # C7: a scope's enhancements, under its prd_scopes row's lock.
                 owner, model, column = scope_id, PrdScope, LlmJob.scope_id
+            else:
+                # H10: a declined request's why-not replies.
+                owner, model, column = request_id, ProductRequest, LlmJob.request_id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.
@@ -410,6 +416,8 @@ async def _finish(
         job.error = error
         job.finished_at = _now()
         result = Outcome("failed", error)
+        if job.kind in kinds.ON_FAILURE:
+            await kinds.ON_FAILURE[job.kind](s, job)
     await s.commit()
     return result
 

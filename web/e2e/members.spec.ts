@@ -30,20 +30,21 @@ test("members: invite someone, copy the link, then revoke the invite", async ({ 
   await login(page);
   await page.goto("/settings/members");
   const invites = page.getByTestId("invite-row");
-  await expect(invites).toHaveCount(1);
+  // A5: the seeded open invite and an expired one.
+  await expect(invites).toHaveCount(2);
   await expect(invites.first()).toContainText("new.hire@example.com");
 
   await page.getByLabel("Email").fill("Pat@Example.com");
   await page.getByLabel("Role", { exact: true }).selectOption("approver");
-  await page.getByRole("button", { name: "Send invite" }).click();
-  await expect(invites).toHaveCount(2);
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
+  await expect(invites).toHaveCount(3);
   await expect(invites.first()).toContainText("pat@example.com");
   await expect(invites.first()).toContainText("Approver");
   await expect(page.getByLabel("Email")).toHaveValue("");
 
   // An existing member cannot be invited.
   await page.getByLabel("Email").fill("viewer@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "already a member" })).toBeVisible();
 
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -53,9 +54,9 @@ test("members: invite someone, copy the link, then revoke the invite", async ({ 
   // Revoked: the row keeps its place with the outcome and Undo for a moment, then leaves.
   await page.getByRole("button", { name: "Revoke invite for pat@example.com" }).click();
   await expect(invites.first().getByTestId("acted")).toContainText("Revoked");
-  await expect(invites).toHaveCount(1);
+  await expect(invites).toHaveCount(2);
   await page.reload();
-  await expect(page.getByTestId("invite-row")).toHaveCount(1);
+  await expect(page.getByTestId("invite-row")).toHaveCount(2);
   await expect(page.getByText("pat@example.com")).toHaveCount(0);
 });
 
@@ -73,11 +74,12 @@ test("members: undo brings a revoked invite back", async ({ page }) => {
   await expect(page.getByTestId("invite-row").filter({ hasText: "new.hire@example.com" })).toHaveCount(1);
 });
 
-test("members: non-owners get no Members tab, and its address says it is not for their role", async ({ page }) => {
-  await login(page, "approver@example.com");
+// A5 (#203): the note became the read-only people list (AC 33 is in members-people.spec.ts).
+test("members: non-owners see the read-only list", async ({ page }) => {
+  await login(page, "commenter@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
-  await expect(page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-members")).toHaveCount(0);
+  await expect(page.getByTestId("people-readonly").getByTestId("person-row").filter({ hasText: "approver@example.com" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-members")).toBeVisible();
   await expect(page.getByTestId("member-row")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Invite", exact: true })).toHaveCount(0);
 });

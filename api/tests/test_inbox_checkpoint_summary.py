@@ -16,6 +16,7 @@ import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import event
 
 from oracle import safe_yaml
@@ -370,6 +371,7 @@ async def twenty_checkpoints(client, auth, runtime) -> None:  # noqa: F811
         await roadmap_items_check(client, auth, runtime, items)
 
 
+@pytest.mark.timing
 async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, runtime):  # noqa: F811
     """protects=the Inbox reads the company-wide inputs once per call and the traces of all
     its checkpoints' items together, so it stays quick when every checkpoint has its own

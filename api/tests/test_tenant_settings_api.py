@@ -81,6 +81,8 @@ async def test_defaults_and_unknown_keys(client, owner):
         "outcome_measure_days": 30,
         "calibration_min_outcomes": 5,
         "outcome_calibration": "apply",
+        # H10: asked again 3 times since a no, its decider hears.
+        "request_asked_again_threshold": 3,
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

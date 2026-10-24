@@ -82,6 +82,8 @@ class MemberPatch(BaseModel):
     role: Role | None = None
     engineering_lead: bool | None = None
     name: str | None = Field(default=None, max_length=200)
+    # A5: responsibilities moved first, then the role change (one transaction).
+    hand_over: list["HandOver"] | None = Field(default=None, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -311,3 +313,127 @@ class SignInRulesOut(BaseModel):
     domains: list[SignInDomain]
     without_invite: Literal["request", "join", "refuse"]
     default_role: Role
+
+
+# --- A5: preview, hand-over, member detail ------------------------------------------------
+
+
+class HandOver(BaseModel):
+    """Move one kind of responsibility to ``to`` (an active member with the kind's
+    role), or clear it (``to`` null). A kind left out stays as it is."""
+
+    kind: str
+    to: uuid.UUID | None = None
+
+
+class HandOverIn(BaseModel):
+    hand_over: list[HandOver] | None = Field(default=None, max_length=50)
+
+
+class HeldOut(BaseModel):
+    ref: str
+    title: str
+
+
+class ResponsibilityOut(BaseModel):
+    kind: str
+    label: str
+    count: int
+    items: list[HeldOut] = []
+    needs_role: Role
+    # What waits while nobody holds it (e.g. publishing), when anything does.
+    blocks: str | None = None
+
+
+class ImpactResponsibilityOut(ResponsibilityOut):
+    # Whether the member may keep it after the change (always false for a removal).
+    holder_ok: bool
+
+
+class HandOverOut(BaseModel):
+    responsibilities: list[ResponsibilityOut]
+
+
+class ImpactRun(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: str
+
+
+class ImpactEnds(BaseModel):
+    sign_in: bool
+    api_tokens: int
+    mcp_clients: int
+    # Counts by provider only: owners never see names of channels, repos or pages.
+    connections: dict[str, int]
+    sources: int
+    runs: list[ImpactRun]
+    llm_jobs: int
+    invites: int
+
+
+class ImpactRunRef(BaseModel):
+    run_id: uuid.UUID
+    title: str
+
+
+class ImpactCheckpoint(BaseModel):
+    run_id: uuid.UUID
+    checkpoint_id: uuid.UUID
+    kind: str
+    title: str
+
+
+class ImpactVoids(BaseModel):
+    spend_approvals: list[ImpactRunRef]
+    resumes: list[ImpactRunRef]
+    checkpoint_decisions: list[ImpactCheckpoint]
+
+
+class ImpactVersion(BaseModel):
+    document: str
+    title: str
+    version: int
+
+
+class ImpactLapses(BaseModel):
+    section_approvals: int
+    version_approvals: list[ImpactVersion]
+
+
+class ImpactOut(BaseModel):
+    """What removing or demoting the member would do, read as of ``as_of``."""
+
+    member_id: uuid.UUID
+    change: Literal["remove", "role"]
+    role: Role | None = None
+    as_of: datetime
+    # What a removal ends; null for a role change.
+    ends: ImpactEnds | None = None
+    voids: ImpactVoids
+    lapses: ImpactLapses
+    responsibilities: list[ImpactResponsibilityOut]
+    nothing: bool
+
+
+class JoinedOut(BaseModel):
+    at: datetime | None = None
+    via: Literal["invite", "access_request", "domain", "seeded", "unknown"]
+    by: uuid.UUID | None = None
+    by_name: str | None = None
+
+
+class HoldsOut(BaseModel):
+    section_approvals: int
+    version_approvals: int
+    spend_approvals: int
+    checkpoint_decisions: int
+
+
+class MemberDetailOut(MemberOut):
+    joined: JoinedOut
+    responsibilities: list[ResponsibilityOut]
+    holds: HoldsOut
+
+
+MemberPatch.model_rebuild()

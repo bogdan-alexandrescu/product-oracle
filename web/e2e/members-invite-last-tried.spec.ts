@@ -28,7 +28,7 @@ test("invite: a plus address is warned of, and can still be sent", async ({ page
   await expect(form.getByTestId("plus-address-warning")).toHaveCount(0);
 
   await page.getByLabel("Email").fill("pat+tag@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(inviteRow(page, "pat+tag@example.com")).toBeVisible();
   await expect(form.getByTestId("plus-address-warning")).toHaveCount(0);
 });
@@ -41,7 +41,7 @@ test("invite: the row says when access was last tried and Google's reason; Retry
   await page.clock.setFixedTime(first);
   await page.goto("/settings/members");
   await page.getByLabel("Email").fill("pat+tag@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
 
   const row = inviteRow(page, "pat+tag@example.com");
   await expect(row.getByTestId("invite-access")).toHaveText("Access not granted yet");
@@ -69,7 +69,7 @@ test("invite: Retry that grants access says so with the time", async ({ page }) 
   await login(page);
   await page.goto("/settings/members");
   await page.getByLabel("Email").fill("pat@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
 
   const row = inviteRow(page, "pat@example.com");
   const access = row.getByTestId("invite-access-detail");
@@ -84,7 +84,7 @@ test("invite: a failed email's reason is text on the row", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
   await page.getByLabel("Email").fill("pat@example.com");
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
 
   const row = inviteRow(page, "pat@example.com");
   await expect(row.getByTestId("invite-email")).toHaveText("Failed");

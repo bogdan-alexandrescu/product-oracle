@@ -1114,12 +1114,255 @@ export interface paths {
         };
         /**
          * List Discussion Changes
-         * @description The typed changes the discussion ended in, read-only here (proposing, suggesting
-         *     and staging arrive with G3 and G4).
+         * @description The typed changes the discussion ended in, each with the action the caller may take
+         *     (``action``: the kind's verb, ``allowed`` and ``why_not``) and what else they may do
+         *     (``can``). Viewers read them and get no action.
          */
         get: operations["list_discussion_changes"];
         put?: never;
+        /**
+         * Create Discussion Change
+         * @description Write a change by hand (commenters and up): a commenter's is ``suggested``, an
+         *     approver's ``proposed``, ready to stage. Only the subject's available kinds; the
+         *     payload is checked as Oracle's are.
+         */
+        post: operations["create_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/change-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Discussion Change Kinds
+         * @description The kinds "Propose a change" offers on this discussion's subject: only those
+         *     available now, each with its action verb and its payload's JSON schema.
+         */
+        get: operations["list_discussion_change_kinds"];
+        put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Discussion Change
+         * @description Edit before acting: saves ``edited_payload``. A commenter's edit makes it their
+         *     suggestion; an approver's keeps the status.
+         */
+        patch: operations["update_discussion_change"];
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Discussion Change
+         * @description Suggest it for an approver to stage (commenters and up): "Suggested by <name>". At
+         *     a checkpoint it is also the item's suggested shared-draft action.
+         */
+        post: operations["suggest_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Discussion Change
+         * @description Withdraw your own suggestion: back to ``proposed`` when Oracle proposed it, else
+         *     ``dismissed``.
+         */
+        post: operations["withdraw_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Discussion Change
+         * @description Stage it (approvers and up): a shared-draft action at the checkpoint or a row for
+         *     the document's next draft (G4). When Oracle pushed back on it, ``override_reason`` is
+         *     required; from a private discussion, ``reason`` (the reason everyone will see) is.
+         */
+        post: operations["stage_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Discussion Change
+         * @description Dismiss it (approvers and up), with an optional note.
+         */
+        post: operations["dismiss_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Discussion Change
+         * @description ``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
+         *     whose reason names the discussion and links its page; approvers accept it in Baseline.
+         *     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
+         *     and a target the start or current value already meets gets Oracle's pushback once
+         *     (409); proposing it again keeps it and logs the override.
+         */
+        post: operations["propose_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Discussion Change
+         * @description ``conflict_pick`` (approvers and up): resolves the conflict with the picked claim.
+         */
+        post: operations["resolve_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer With Discussion Change
+         * @description ``answer`` (the person asked, or approvers and up): posts it as the question's
+         *     answer.
+         */
+        post: operations["answer_with_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Discussion Change
+         * @description ``basis_record`` (Record): records the schedule basis with the caller's date rights
+         *     (F3, ``leads.date_rights``): verified for an engineering lead or an owner, and for an
+         *     approver while no lead is named; ``proposed`` for the lead when an approver records it
+         *     while a lead is named. Anyone else gets 403.
+         */
+        post: operations["record_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussions/{discussion_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarize Discussion
+         * @description Ask Oracle for a summary draft now (commenters and up who can write in it), at most
+         *     1,200 characters: "Decided:", "Open:", "Context:". A summary the starter confirmed is
+         *     replaced only when the starter asks (``replace``); anyone else gets 409.
+         */
+        post: operations["summarize_discussion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2118,7 +2361,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get Member
+         * @description One member: how they joined (``joined.via``: invite, access_request, domain,
+         *     seeded or unknown), the responsibilities they hold (open items only) and the
+         *     approvals and decisions a removal would lapse or void.
+         */
+        get: operations["get_member"];
         put?: never;
         post?: never;
         /**
@@ -2160,7 +2409,9 @@ export interface paths {
          *     review gate, and retried by the tick when they fail. Their Google IAP access is
          *     taken away, and that of the invites revoked with them (audited). The member stays
          *     in the list (history keeps the name); an owner can restore them, and they sign in
-         *     fresh. A no-op for a disabled member.
+         *     fresh. A no-op for a disabled member. With ``hand_over`` (A5), those
+         *     responsibilities move first, in the same transaction; a refused target is a 422
+         *     (``hand_over_target``) and nothing is moved or removed.
          */
         post: operations["disable_member"];
         delete?: never;
@@ -2185,6 +2436,73 @@ export interface paths {
          *     Their Google IAP access is granted again (audited).
          */
         post: operations["restore_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Member Impact
+         * @description What removing the member (``change=remove``) or changing their role
+         *     (``change=role&role=commenter``) would end, void and lapse, and the responsibilities
+         *     they hold (``holder_ok``: whether they may keep each after the change). Reads only:
+         *     the same selections the change applies, no locks, no writes. ``nothing`` is true
+         *     when the change touches nothing (a promotion, their own role, a removed member).
+         */
+        get: operations["get_member_impact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Member Approvals
+         * @description The member's section verdicts and version approvals, given in person or through
+         *     their API tokens and grants, oldest first; ``lapsed=true`` includes lapsed ones.
+         */
+        get: operations["list_member_approvals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{user_id}/hand-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand Over
+         * @description Move an active or removed member's responsibilities to other members (``to``)
+         *     or clear them (``to`` null), all or none; kinds left out stay. Returns what they
+         *     still hold.
+         */
+        post: operations["hand_over"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9943,7 +10261,10 @@ export interface paths {
         put?: never;
         /**
          * Disqualify Request
-         * @description Disqualify with a reason; Other needs a note.
+         * @description Disqualify with a reason; Other needs a note. A reason that answers the asker (and
+         *     Won't do with a note) is a no (H10): a decided decision in the log, reviewed in 90
+         *     days, and a reply to everyone who asked, drafted by Oracle. On the stop list needs a
+         *     stop choice and Already possible a feature as its ``basis``.
          */
         post: operations["disqualify_request"];
         delete?: never;
@@ -9963,7 +10284,8 @@ export interface paths {
         put?: never;
         /**
          * Reopen Request
-         * @description Bring a merged or disqualified request back to New.
+         * @description Bring a merged or disqualified request back to New. A logged no is reversed (a
+         *     review by you) and its Drafted replies are withdrawn.
          */
         post: operations["reopen_request"];
         delete?: never;
@@ -10006,6 +10328,215 @@ export interface paths {
          * @description Decline Oracle's suggestion; nothing else changes.
          */
         post: operations["decline_request_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Request Replies
+         * @description The replies to the people who asked for a request said no to: name as given, how
+         *     they asked, state and the draft. A run token reads them under ``read:sources``: they
+         *     quote what people asked.
+         */
+        get: operations["list_request_replies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Request Reply
+         * @description Edit a Drafted reply (at most 2,000 characters). The filer of the request, an
+         *     approver or an owner. A date or "later" carries the warning "Sounds like a promise".
+         */
+        patch: operations["update_request_reply"];
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Request Reply Sent
+         * @description Mark sent: how (Email, Slack, Call, In the app, Other) and the day (default today
+         *     in the Company time zone). Oracle sends nothing itself.
+         */
+        post: operations["mark_request_reply_sent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Skip Request Reply
+         * @description Skip a reply, with a reason (for example "Asked anonymously").
+         */
+        post: operations["skip_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Notify Request Reply
+         * @description Tell them in Oracle: the member who asked finds the reply in their Inbox. 409 when
+         *     the asker is not a member.
+         */
+        post: operations["notify_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Request Replies
+         * @description Draft again with Oracle: one ``why_not_reply`` job on Oracle's own model for the
+         *     replies still Drafted; poll ``GET /v1/llm-jobs/{job_id}``. 409 while one runs and
+         *     while Words for people outside is at Observe.
+         */
+        post: operations["draft_request_replies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies/reopened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tell Reopened
+         * @description Tell the people who asked, after Reopen: a reply saying it is being looked at
+         *     again, for each asker whose no was sent or told.
+         */
+        post: operations["tell_reopened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/keep-no": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Request No
+         * @description Keep the no: the decision's approver records a reaffirmed review, and asked again
+         *     counts from now.
+         */
+        post: operations["keep_request_no"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}/problem/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Request Theme Problem
+         * @description Confirm Oracle's suggested problem: what replies and agents cite.
+         */
+        post: operations["confirm_request_theme_problem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}/problem/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Request Theme Problem
+         * @description Dismiss Oracle's suggested problem.
+         */
+        post: operations["dismiss_request_theme_problem"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12013,6 +12544,32 @@ export interface components {
             /** Documents */
             documents: components["schemas"]["ImpactDocument"][];
         };
+        /**
+         * BasisIn
+         * @description The record a no cites (H10): required for On the stop list (a confirmed stop
+         *     choice) and Already possible (a feature).
+         */
+        BasisIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+        };
+        /** BasisOut */
+        BasisOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
+        };
         /** BatchState */
         BatchState: {
             /** Current */
@@ -13138,6 +13695,70 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["ModuleVersionSummary"][];
         };
+        /** ChangeActIn */
+        ChangeActIn: {
+            /** Lock Version */
+            lock_version: number;
+        };
+        /**
+         * ChangeAction
+         * @description The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy.
+         */
+        ChangeAction: {
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "Stage" | "Propose" | "Resolve" | "Use as answer" | "Ask" | "Record" | "Apply";
+            /** Allowed */
+            allowed: boolean;
+            /** Why Not */
+            why_not?: string | null;
+        };
+        /**
+         * ChangeCan
+         * @description What else the caller may do with the change.
+         */
+        ChangeCan: {
+            /**
+             * Suggest
+             * @default false
+             */
+            suggest: boolean;
+            /**
+             * Edit
+             * @default false
+             */
+            edit: boolean;
+            /**
+             * Withdraw
+             * @default false
+             */
+            withdraw: boolean;
+            /**
+             * Dismiss
+             * @default false
+             */
+            dismiss: boolean;
+        };
+        /** ChangeDismissIn */
+        ChangeDismissIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Note */
+            note?: string | null;
+        };
+        /** ChangeEdit */
+        ChangeEdit: {
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rationale */
+            rationale?: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
         /** ChangeEventOut */
         ChangeEventOut: {
             /**
@@ -13171,6 +13792,50 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ChangeIn */
+        ChangeIn: {
+            /** Kind */
+            kind: string;
+            /** Target */
+            target?: {
+                [key: string]: unknown;
+            };
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Rationale */
+            rationale?: string | null;
+        };
+        /**
+         * ChangeKindOut
+         * @description A kind "Propose a change" offers on this subject, with its payload's JSON schema.
+         */
+        ChangeKindOut: {
+            /** Kind */
+            kind: string;
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "Stage" | "Propose" | "Resolve" | "Use as answer" | "Ask" | "Record" | "Apply";
+            /** Schema */
+            schema: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ChangeResult
+         * @description Every action's answer: the change, and what acting created (a staged change, a
+         *     proposal, a resolved conflict, an answer), or None.
+         */
+        ChangeResult: {
+            change: components["schemas"]["DiscussionChangeOut"];
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * ChangeSetDiffItem
@@ -13268,6 +13933,15 @@ export interface components {
             changes: (components["schemas"]["AddChange"] | components["schemas"]["MoveChange"] | components["schemas"]["DeferChange"] | components["schemas"]["CutChange"] | components["schemas"]["ReorderChange"])[];
             /** Lock Version */
             lock_version: number;
+        };
+        /** ChangeStageIn */
+        ChangeStageIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Override Reason */
+            override_reason?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** ChangedSection */
         ChangedSection: {
@@ -15109,7 +15783,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline";
             /**
              * Reversibility
              * @enum {string}
@@ -15387,7 +16061,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline";
             /**
              * Reversibility
              * @enum {string}
@@ -15625,6 +16299,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Discussion Id
+             * Format: uuid
+             */
+            discussion_id: string;
             /** Kind */
             kind: string;
             /** Label */
@@ -15648,15 +16327,42 @@ export interface components {
              * @enum {string}
              */
             proposed_by_kind: "oracle" | "person";
-            /** Proposed By */
-            proposed_by: string | null;
-            /** Suggested By */
-            suggested_by: string | null;
+            proposed_by: components["schemas"]["DiscussionPerson"] | null;
+            suggested_by: components["schemas"]["DiscussionPerson"] | null;
             /**
              * Status
              * @enum {string}
              */
             status: "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
+            action?: components["schemas"]["ChangeAction"] | null;
+            /**
+             * @default {
+             *       "suggest": false,
+             *       "edit": false,
+             *       "withdraw": false,
+             *       "dismiss": false
+             *     }
+             */
+            can: components["schemas"]["ChangeCan"];
+            /** Pushback */
+            pushback?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Needs Reason
+             * @default false
+             */
+            needs_reason: boolean;
+            /** Basis */
+            basis?: {
+                [key: string]: unknown;
+            }[];
+            /** Result Ref */
+            result_ref?: {
+                [key: string]: unknown;
+            } | null;
+            /** Decision Note */
+            decision_note?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -15664,14 +16370,6 @@ export interface components {
             created_at: string;
             /** Lock Version */
             lock_version: number;
-            /** Result Ref */
-            result_ref?: {
-                [key: string]: unknown;
-            } | null;
-            /** Pushback */
-            pushback?: {
-                [key: string]: unknown;
-            } | null;
             /** Override Reason */
             override_reason?: string | null;
         };
@@ -16201,9 +16899,10 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other";
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers";
             /** Note */
             note?: string | null;
+            basis?: components["schemas"]["BasisIn"] | null;
         };
         /** DocumentBlockerStrategy */
         DocumentBlockerStrategy: {
@@ -16485,6 +17184,14 @@ export interface components {
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DraftJobOut */
+        DraftJobOut: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
         };
         /** DraftNoteIn */
         DraftNoteIn: {
@@ -18757,6 +19464,27 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HandOver
+         * @description Move one kind of responsibility to ``to`` (an active member with the kind's
+         *     role), or clear it (``to`` null). A kind left out stays as it is.
+         */
+        HandOver: {
+            /** Kind */
+            kind: string;
+            /** To */
+            to?: string | null;
+        };
+        /** HandOverIn */
+        HandOverIn: {
+            /** Hand Over */
+            hand_over?: components["schemas"]["HandOver"][] | null;
+        };
+        /** HandOverOut */
+        HandOverOut: {
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ResponsibilityOut"][];
+        };
         /** Health */
         Health: {
             /** Status */
@@ -18776,6 +19504,13 @@ export interface components {
              * @default []
              */
             decision_ids: string[];
+        };
+        /** HeldOut */
+        HeldOut: {
+            /** Ref */
+            ref: string;
+            /** Title */
+            title: string;
         };
         /**
          * HiddenDiscussion
@@ -18849,6 +19584,17 @@ export interface components {
             /** Holders */
             holders: components["schemas"]["HolderOut"][];
         };
+        /** HoldsOut */
+        HoldsOut: {
+            /** Section Approvals */
+            section_approvals: number;
+            /** Version Approvals */
+            version_approvals: number;
+            /** Spend Approvals */
+            spend_approvals: number;
+            /** Checkpoint Decisions */
+            checkpoint_decisions: number;
+        };
         /**
          * HumanRatingIn
          * @description A person's rating of the ten criteria (all or some), for comparison with the rules.
@@ -18898,6 +19644,23 @@ export interface components {
              */
             created_at: string;
         };
+        /** ImpactCheckpoint */
+        ImpactCheckpoint: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+        };
         /** ImpactDocument */
         ImpactDocument: {
             /** Slug */
@@ -18906,6 +19669,27 @@ export interface components {
             version: number;
             /** Marks */
             marks: number;
+        };
+        /** ImpactEnds */
+        ImpactEnds: {
+            /** Sign In */
+            sign_in: boolean;
+            /** Api Tokens */
+            api_tokens: number;
+            /** Mcp Clients */
+            mcp_clients: number;
+            /** Connections */
+            connections: {
+                [key: string]: number;
+            };
+            /** Sources */
+            sources: number;
+            /** Runs */
+            runs: components["schemas"]["ImpactRun"][];
+            /** Llm Jobs */
+            llm_jobs: number;
+            /** Invites */
+            invites: number;
         };
         /** ImpactItem */
         ImpactItem: {
@@ -18920,6 +19704,13 @@ export interface components {
             version: number;
             /** Item Key */
             item_key: string;
+        };
+        /** ImpactLapses */
+        ImpactLapses: {
+            /** Section Approvals */
+            section_approvals: number;
+            /** Version Approvals */
+            version_approvals: components["schemas"]["ImpactVersion"][];
         };
         /** ImpactMilestone */
         ImpactMilestone: {
@@ -18939,6 +19730,36 @@ export interface components {
             target_date: string | null;
             /** Keeps Date */
             keeps_date: boolean;
+        };
+        /**
+         * ImpactOut
+         * @description What removing or demoting the member would do, read as of ``as_of``.
+         */
+        ImpactOut: {
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "remove" | "role";
+            /** Role */
+            role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            ends?: components["schemas"]["ImpactEnds"] | null;
+            voids: components["schemas"]["ImpactVoids"];
+            lapses: components["schemas"]["ImpactLapses"];
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ImpactResponsibilityOut"][];
+            /** Nothing */
+            nothing: boolean;
         };
         /** ImpactReport */
         ImpactReport: {
@@ -18970,6 +19791,51 @@ export interface components {
              */
             truncated: boolean;
         };
+        /** ImpactResponsibilityOut */
+        ImpactResponsibilityOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["HeldOut"][];
+            /**
+             * Needs Role
+             * @enum {string}
+             */
+            needs_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Blocks */
+            blocks?: string | null;
+            /** Holder Ok */
+            holder_ok: boolean;
+        };
+        /** ImpactRun */
+        ImpactRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /** ImpactRunRef */
+        ImpactRunRef: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Title */
+            title: string;
+        };
         /** ImpactSubject */
         ImpactSubject: {
             /** Kind */
@@ -18982,6 +19848,24 @@ export interface components {
             title?: string | null;
             /** Document Id */
             document_id?: string | null;
+        };
+        /** ImpactVersion */
+        ImpactVersion: {
+            /** Document */
+            document: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /** ImpactVoids */
+        ImpactVoids: {
+            /** Spend Approvals */
+            spend_approvals: components["schemas"]["ImpactRunRef"][];
+            /** Resumes */
+            resumes: components["schemas"]["ImpactRunRef"][];
+            /** Checkpoint Decisions */
+            checkpoint_decisions: components["schemas"]["ImpactCheckpoint"][];
         };
         /**
          * ImportErrorResponse
@@ -19739,6 +20623,11 @@ export interface components {
              * @default []
              */
             discussions: components["schemas"]["InboxDiscussionItem"][];
+            /**
+             * Requests
+             * @default []
+             */
+            requests: components["schemas"]["InboxRequestReply"][];
         };
         /**
          * InboxOutcome
@@ -19845,6 +20734,37 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * InboxRequestReply
+         * @description H10 rows: Replies to send (the request's filer and its decider; counted until
+         *     every reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said
+         *     no (the decision's approver; counted until Reopen or Keep the no) and Answer to your
+         *     request (the member who asked; shown only, with the reply).
+         */
+        InboxRequestReply: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "replies_to_send" | "asked_again" | "answer";
+            /** Count */
+            count?: number | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Body */
+            body?: string | null;
+            /** At */
+            at?: string | null;
+            /** Counts */
+            counts: boolean;
         };
         /**
          * InboxRevokeFailure
@@ -21399,6 +22319,28 @@ export interface components {
              */
             quality_review: boolean;
         };
+        /** JoinedOut */
+        JoinedOut: {
+            /** At */
+            at?: string | null;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "invite" | "access_request" | "domain" | "seeded" | "unknown";
+            /** By */
+            by?: string | null;
+            /** By Name */
+            by_name?: string | null;
+        };
+        /**
+         * KeepNoIn
+         * @description Keep the no (H10): a reaffirmed review on the decision; asked again counts anew.
+         */
+        KeepNoIn: {
+            /** Note */
+            note: string;
+        };
         /** KindCoverage */
         KindCoverage: {
             /** Kind */
@@ -21955,7 +22897,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -21964,6 +22906,8 @@ export interface components {
             decision_id?: string | null;
             /** Scope Id */
             scope_id?: string | null;
+            /** Request Id */
+            request_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -22255,6 +23199,55 @@ export interface components {
              */
             created_at: string;
         };
+        /** MemberDetailOut */
+        MemberDetailOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "commenter" | "approver" | "owner";
+            /**
+             * Engineering Lead
+             * @default false
+             */
+            engineering_lead: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Disabled At */
+            disabled_at?: string | null;
+            /** Disabled By */
+            disabled_by?: string | null;
+            /** Last Sign In At */
+            last_sign_in_at?: string | null;
+            /**
+             * Open Tokens
+             * @default 0
+             */
+            open_tokens: number;
+            /** Access Pending */
+            access_pending?: ("revoke" | "grant") | null;
+            joined: components["schemas"]["JoinedOut"];
+            /** Responsibilities */
+            responsibilities: components["schemas"]["ResponsibilityOut"][];
+            holds: components["schemas"]["HoldsOut"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            readonly status: "active" | "disabled";
+        };
         /** MemberOut */
         MemberOut: {
             /**
@@ -22312,6 +23305,8 @@ export interface components {
             engineering_lead?: boolean | null;
             /** Name */
             name?: string | null;
+            /** Hand Over */
+            hand_over?: components["schemas"]["HandOver"][] | null;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -25740,6 +26735,8 @@ export interface components {
         ReopenIn: {
             /** Lock Version */
             lock_version: number;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * ReorderChange
@@ -25756,10 +26753,111 @@ export interface components {
             /** Position */
             position: number;
         };
+        /** ReplyCounts */
+        ReplyCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
             body: string;
+        };
+        /**
+         * ReplyOut
+         * @description One reply to one person who asked (H10).
+         */
+        ReplyOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Root Request Id
+             * Format: uuid
+             */
+            root_request_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "no" | "reopened";
+            /** Decision Number */
+            decision_number: number | null;
+            /** Asker */
+            asker: string;
+            /**
+             * Asker Kind
+             * @enum {string}
+             */
+            asker_kind: "customer" | "team" | "unknown";
+            /** Member Id */
+            member_id: string | null;
+            /** Channel Asked */
+            channel_asked: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
+            /** Asked */
+            asked: string | null;
+            /** Body */
+            body: string | null;
+            /** Draft Source */
+            draft_source: ("oracle" | "template" | "person") | null;
+            /** Warnings */
+            warnings: "sounds_like_a_promise"[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "sent" | "notified" | "skipped" | "withdrawn";
+            /** Channel */
+            channel: ("email" | "slack" | "call" | "in_app" | "other") | null;
+            /** Sent On */
+            sent_on: string | null;
+            /** Sent By Name */
+            sent_by_name: string | null;
+            /** Skip Reason */
+            skip_reason: string | null;
+            /** Notified At */
+            notified_at: string | null;
+            /** Drafting */
+            drafting: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** ReplyPatch */
+        ReplyPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Body */
+            body: string;
+        };
+        /** ReplySent */
+        ReplySent: {
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "email" | "slack" | "call" | "in_app" | "other";
+            /** Sent On */
+            sent_on?: string | null;
+        };
+        /** ReplySkip */
+        ReplySkip: {
+            /** Reason */
+            reason: string;
         };
         /** ReplyUsage */
         ReplyUsage: {
@@ -26076,7 +27174,7 @@ export interface components {
             /** Merged Into Id */
             merged_into_id: string | null;
             /** Disqualify Reason */
-            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers") | null;
             /** Decision Note */
             decision_note: string | null;
             theme: components["schemas"]["RequestThemeRef"] | null;
@@ -26099,6 +27197,29 @@ export interface components {
             decided_by: string | null;
             /** Decided At */
             decided_at: string | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Decision Title */
+            decision_title?: string | null;
+            /** Decision Status */
+            decision_status?: string | null;
+            basis?: components["schemas"]["BasisOut"] | null;
+            /**
+             * Asked Again
+             * @default 0
+             */
+            asked_again: number;
+            /**
+             * @default {
+             *       "total": 0,
+             *       "open": 0
+             *     }
+             */
+            replies: components["schemas"]["ReplyCounts"];
+            /** Loop Closed On */
+            loop_closed_on?: string | null;
+            /** No Reply Reason */
+            no_reply_reason?: ("no_note" | "housekeeping") | null;
             /**
              * Created At
              * Format: date-time
@@ -26113,6 +27234,18 @@ export interface components {
             lock_version: number;
             /** Merged */
             merged: components["schemas"]["RequestOut"][];
+            /**
+             * Suggested Basis
+             * @default {}
+             */
+            suggested_basis: {
+                [key: string]: components["schemas"]["BasisOut"];
+            };
+            /**
+             * Drafting
+             * @default false
+             */
+            drafting: boolean;
         };
         /**
          * RequestDocumentProgress
@@ -26199,7 +27332,7 @@ export interface components {
             /** Merged Into Id */
             merged_into_id: string | null;
             /** Disqualify Reason */
-            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers") | null;
             /** Decision Note */
             decision_note: string | null;
             theme: components["schemas"]["RequestThemeRef"] | null;
@@ -26222,6 +27355,29 @@ export interface components {
             decided_by: string | null;
             /** Decided At */
             decided_at: string | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Decision Title */
+            decision_title?: string | null;
+            /** Decision Status */
+            decision_status?: string | null;
+            basis?: components["schemas"]["BasisOut"] | null;
+            /**
+             * Asked Again
+             * @default 0
+             */
+            asked_again: number;
+            /**
+             * @default {
+             *       "total": 0,
+             *       "open": 0
+             *     }
+             */
+            replies: components["schemas"]["ReplyCounts"];
+            /** Loop Closed On */
+            loop_closed_on?: string | null;
+            /** No Reply Reason */
+            no_reply_reason?: ("no_note" | "housekeeping") | null;
             /**
              * Created At
              * Format: date-time
@@ -26288,6 +27444,21 @@ export interface components {
             archived_at: string | null;
             /** Request Count */
             request_count: number;
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
+            /**
+             * Problem State
+             * @default none
+             * @enum {string}
+             */
+            problem_state: "none" | "suggested" | "confirmed";
+            problem_suggestion?: components["schemas"]["SuggestedProblem"] | null;
+            /** Problem Confirmed At */
+            problem_confirmed_at?: string | null;
             /** Created By */
             created_by: string | null;
             /**
@@ -26315,6 +27486,12 @@ export interface components {
             goal_ids?: string[] | null;
             /** Archived */
             archived?: boolean | null;
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
         };
         /** RequestThemeRef */
         RequestThemeRef: {
@@ -26559,6 +27736,27 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        /** ResponsibilityOut */
+        ResponsibilityOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["HeldOut"][];
+            /**
+             * Needs Role
+             * @enum {string}
+             */
+            needs_role: "viewer" | "commenter" | "approver" | "owner";
+            /** Blocks */
+            blocks?: string | null;
         };
         /**
          * ReusedBaseline
@@ -30915,7 +32113,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion";
+            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion" | "request";
             /**
              * Id
              * Format: uuid
@@ -30923,6 +32121,46 @@ export interface components {
             id: string;
             /** Ref */
             ref?: string | null;
+        };
+        /** SuggestedBasis */
+        SuggestedBasis: {
+            /**
+             * Kind
+             * @default none
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+        };
+        /**
+         * SuggestedDecline
+         * @description "Oracle suggests saying no": shown only; nothing is disqualified until an
+         *     approver submits the Disqualify form (H10).
+         */
+        SuggestedDecline: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers";
+            /**
+             * @default {
+             *       "kind": "none"
+             *     }
+             */
+            basis: components["schemas"]["SuggestedBasis"];
+            /** Why */
+            why?: string | null;
+        };
+        /** SuggestedProblem */
+        SuggestedProblem: {
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
         };
         /**
          * Suggestion
@@ -30946,6 +32184,8 @@ export interface components {
             confidence?: number | null;
             /** Rationale */
             rationale?: string | null;
+            decline?: components["schemas"]["SuggestedDecline"] | null;
+            problem?: components["schemas"]["SuggestedProblem"] | null;
             /** Run Id */
             run_id?: string | null;
             /** At */
@@ -31051,6 +32291,14 @@ export interface components {
         SuggestionPatch: {
             /** Text */
             text: string;
+        };
+        /** SummaryAsk */
+        SummaryAsk: {
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
         };
         /** SummarySettingsIn */
         SummarySettingsIn: {
@@ -31782,6 +33030,11 @@ export interface components {
             view: "document" | "slides";
             /** Slide Variant */
             slide_variant?: string | null;
+        };
+        /** ThemeProblemIn */
+        ThemeProblemIn: {
+            /** Lock Version */
+            lock_version: number;
         };
         /** ThemeSpacing */
         ThemeSpacing: {
@@ -36115,6 +37368,642 @@ export interface operations {
             };
         };
     };
+    create_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_discussion_change_kinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeKindOut"][];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    suggest_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    withdraw_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stage_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeStageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    propose_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oracle's pushback on a goal version (once), a stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMeasurePushback"];
+                };
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    answer_with_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summarize_discussion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SummaryAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionOut"];
+                };
+            };
+            /** @description This discussion is private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The starter confirmed it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     dismiss_inbox_discussion_item: {
         parameters: {
             query?: never;
@@ -37993,6 +39882,44 @@ export interface operations {
             };
         };
     };
+    get_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberDetailOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     remove_member: {
         parameters: {
             query?: never;
@@ -38067,14 +39994,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description A hand-over target cannot hold it (hand_over_target) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -38087,7 +40012,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HandOverIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -38158,6 +40087,127 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_member_impact: {
+        parameters: {
+            query: {
+                change: "remove" | "role";
+                role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_member_approvals: {
+        parameters: {
+            query?: {
+                lapsed?: boolean;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenApprovalOut"][];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hand_over: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandOverIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandOverOut"];
+                };
+            };
+            /** @description No such member */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unknown kind, or a target that cannot hold it */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -43004,12 +45054,12 @@ export interface operations {
                 /** @description me or a member id */
                 approver?: string | null;
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
                 run_id?: string | null;
-                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion") | null;
+                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion" | "request") | null;
                 subject_id?: string | null;
                 q?: string | null;
                 limit?: number;
@@ -52656,6 +54706,8 @@ export interface operations {
                 channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
                 /** @description Title or body search */
                 q?: string | null;
+                /** @description Only declined requests with replies still to send (H10) */
+                replies_to_send?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -53067,6 +55119,340 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_request_replies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_request_reply_sent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplySent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    skip_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplySkip"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notify_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_request_replies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tell_reopened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_request_no: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepNoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_request_theme_problem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeProblemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_request_theme_problem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeProblemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
                 };
             };
             /** @description Validation Error */

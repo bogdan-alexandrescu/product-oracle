@@ -20,9 +20,11 @@ const ALL = [
   "nav-templates",
   "nav-themes",
   "nav-autonomy",
+  "nav-trash",
 ];
-// Members, Company, API tokens and Notifications read owner-only routes.
-const EVERYONE = ["nav-connections", "nav-claude-accounts", "nav-sources", "nav-templates", "nav-themes", "nav-autonomy"];
+// Company, API tokens, Notifications and Trash read owner-only routes; Members reads the people list
+// (A5: everyone sees who is in the company, read-only below owner).
+const EVERYONE = ["nav-members", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-templates", "nav-themes", "nav-autonomy"];
 
 const settingsNav = (page: Page) => page.getByRole("navigation", { name: "Settings" });
 const rail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
@@ -59,7 +61,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
   test(`${role}: only the tabs the role can read, and no owner buttons`, async ({ page }) => {
     await openSettings(page, `${role}@example.com`);
     // Settings opens on the first tab the role can read.
-    await expect(page).toHaveURL(/\/settings\/connections$/);
+    await expect(page).toHaveURL(/\/settings\/members$/);
     expect(await tabsShown(page)).toEqual(EVERYONE);
 
     // Claude accounts: read the pool, no controls, View only.
@@ -94,7 +96,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
 
 test("a deep link to a hidden Settings tab says it is not available for the role", async ({ page }) => {
   await login(page, "viewer@example.com");
-  for (const path of ["/settings/members", "/settings/api-tokens", "/settings/company", "/settings/notifications"]) {
+  for (const path of ["/settings/api-tokens", "/settings/company", "/settings/notifications"]) {
     await page.goto(path);
     await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
     await expect(page.getByRole("button", { name: "Invite", exact: true })).toHaveCount(0);
@@ -102,13 +104,13 @@ test("a deep link to a hidden Settings tab says it is not available for the role
   }
   // The way out goes to a tab the role can read.
   await page.getByTestId("not-for-role").getByRole("link", { name: "Open Settings" }).click();
-  await expect(page).toHaveURL(/\/settings\/connections$/);
+  await expect(page).toHaveURL(/\/settings\/members$/);
 });
 
 test("Settings' own address opens the first tab the role can read", async ({ page }) => {
   await login(page, "commenter@example.com");
   await page.goto("/settings");
-  await expect(page).toHaveURL(/\/settings\/connections$/);
+  await expect(page).toHaveURL(/\/settings\/members$/);
 });
 
 test("a template a commenter opens has no edit, archive or restore buttons", async ({ page }) => {
@@ -124,7 +126,7 @@ test("engineering lead: the flag adds no Settings tab; the lead keeps the commen
   // The commenter carries the engineering lead flag in this scenario.
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "eng-review"]);
   await openSettings(page, "commenter@example.com");
-  await expect(page).toHaveURL(/\/settings\/connections$/);
+  await expect(page).toHaveURL(/\/settings\/members$/);
   expect(await tabsShown(page)).toEqual(EVERYONE);
   await settingsNav(page).getByTestId("nav-templates").click();
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");

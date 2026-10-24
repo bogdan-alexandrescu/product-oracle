@@ -95,7 +95,7 @@ export function MyAccount() {
         { label: "MCP clients", value: liveClients ?? "—", testId: "stat-clients" },
       ]}
     >
-      {account && <AccountDetails account={account} />}
+      {account && <AccountDetails account={account} onSaved={(a) => accountQ.setData(() => a)} />}
     </Inspector>
   );
 
@@ -161,9 +161,55 @@ export function MyAccount() {
   );
 }
 
-function AccountDetails({ account }: { account: Account }) {
+/** A5: your name, shown to teammates instead of your email (PATCH /v1/me/account). */
+function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account) => void }) {
+  const [name, setName] = useState(account.name ?? "");
+  const [pending, setPending] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+    try {
+      onSaved(await unwrap(api.PATCH("/v1/me/account", { body: { name: name.trim() || null } })));
+      setSaved(true);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <form onSubmit={submit} aria-label="Your name" className="mb-2 flex flex-wrap items-end gap-2">
+      <Field label="Name" className="min-w-0 flex-1">
+        <input
+          value={name}
+          maxLength={80}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaved(false);
+          }}
+          className={INPUT}
+        />
+      </Field>
+      <Button type="submit" disabled={pending || name.trim() === (account.name ?? "")}>
+        {pending ? "Saving…" : saved ? "Saved" : "Save"}
+      </Button>
+      <span className="basis-full text-[13px] text-text2">Shown to your teammates instead of your email.</span>
+      {error && (
+        <span role="alert" className="basis-full text-[13px] font-medium text-crit">
+          {error}
+        </span>
+      )}
+    </form>
+  );
+}
+
+function AccountDetails({ account, onSaved }: { account: Account; onSaved: (a: Account) => void }) {
   return (
     <InspectorSection label="Details">
+      <NameForm account={account} onSaved={onSaved} />
       <InspectorRow value={ROLE_LABEL[account.role]}>Role</InspectorRow>
       <InspectorRow value={account.sign_in_methods.map(methodLabel).join(" and ") || "None"}>Signs in with</InspectorRow>
       <InspectorRow value={account.last_sign_in_at ? formatDateTime(account.last_sign_in_at) : "Not known"}>Last sign-in</InspectorRow>

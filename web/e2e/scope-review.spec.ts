@@ -281,3 +281,19 @@ for (const [email, who, writes, suggests] of [
     await expect(inspector.getByRole("button", { name: "Add requirement" })).toHaveCount(writes ? 1 : 0);
   });
 }
+
+// Card c-run (train I review): protects = the run page renders at C7's feature set for every
+// role, and only a feature set shows "Review feature set"; fails_when = the page crashes
+// (F4's Engineering-check line picked a feature set), an Engineering-check line shows here,
+// or the Review link is missing; no_claim = the review screen itself (the tests above).
+for (const email of [APPROVER, COMMENTER]) {
+  test(`the run page at the feature set renders for ${email.split("@")[0]} with one Review link`, async ({ page }) => {
+    await seeded(page, email);
+    await page.getByTestId("nav-runs").click();
+    await page.getByTestId("run-row").filter({ hasText: /saved-addresses(?!-)/ }).getByRole("link").first().click();
+    await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+    const segment = page.getByTestId("segment-feature_set");
+    await expect(segment.getByRole("link", { name: "Review feature set" })).toHaveCount(1);
+    await expect(page.getByTestId("review-screen-line")).toHaveCount(0);
+  });
+}

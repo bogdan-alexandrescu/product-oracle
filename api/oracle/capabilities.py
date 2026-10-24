@@ -127,7 +127,9 @@ DECIDED_PER_ITEM = frozenset(
 # request filed for someone else an owner's (a commenter files their own); a customer
 # interview its creator's or an approver's, a team interview its interviewee's alone; a
 # slipped date's acceptance the date rights' (F3), an owner's whoever is lead; a scope
-# review's rows (C7) the feature-set stop's approver role's.
+# review's rows (C7) the feature-set stop's approver role's. A discussion's change (G3) is a
+# writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
+# (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
@@ -140,6 +142,7 @@ PER_ITEM: dict[str, Role | None] = {
     "add_discussion_participants": "commenter",
     "add_scope_requirement": "approver",
     "answer_question": "owner",
+    "answer_with_discussion_change": "approver",
     "approve_feasibility_scope": "owner",
     "approve_version": "owner",
     "ask_next_question_batch": "approver",
@@ -147,6 +150,7 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
     "create_checkpoint_action": "owner",
+    "create_discussion_change": None,
     "create_discussion_message": None,
     "create_intake": "approver",
     "create_interview_link": "approver",
@@ -160,21 +164,30 @@ PER_ITEM: dict[str, Role | None] = {
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_scope_item": "approver",
+    "dismiss_discussion_change": "approver",
     "dismiss_overrun_run": "owner",
+    # H10: a request's replies are its filer's, an approver's or an owner's.
+    "draft_request_replies": "approver",
     "edit_document_section": "approver",
+    "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
     "estimate_regeneration": "approver",
-    "mirror_discussion_to_slack": "approver",
-    "enhance_scope_requirement": "approver",
     "get_checkpoint_draft": "owner",
     "get_next_question_batch": "approver",
+    "keep_request_no": None,
+    "mark_request_reply_sent": "approver",
+    "mirror_discussion_to_slack": "approver",
+    "notify_request_reply": "approver",
     "open_oracle_action": "owner",
     "patch_interview": "approver",
     "patch_scope_item": "approver",
+    "propose_discussion_change": "commenter",
     "reassign_decision": "owner",
+    "record_discussion_change": "approver",
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "remove_evidence": "approver",
+    "resolve_discussion_change": "approver",
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",
     "retry_import_run": "owner",
@@ -186,26 +199,33 @@ PER_ITEM: dict[str, Role | None] = {
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_document_visibility": "owner",
+    "skip_request_reply": "approver",
     "stage_checkpoint_action": "owner",
+    "stage_discussion_change": "approver",
     "start_draft": "owner",
-    "start_regeneration": "approver",
     "start_intake_run": "approver",
+    "start_regeneration": "approver",
     "stop_cancelling_run": "owner",
     "stop_slack_mirror": "approver",
+    "suggest_discussion_change": None,
+    "summarize_discussion": None,
     "take_team_turn": None,
     "tick": "owner",
     "undo_oracle_action": "owner",
     "update_blocker": "owner",
     "update_decision": None,
     "update_discussion": None,
+    "update_discussion_change": None,
     "update_discussion_message": None,
     "update_intake": "owner",
     "update_knowledge_gap": "owner",
     "update_launch_task": "approver",
     "update_question": "approver",
+    "update_request_reply": "approver",
     "update_requester_note": "approver",
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
+    "withdraw_discussion_change": None,
 }
 
 

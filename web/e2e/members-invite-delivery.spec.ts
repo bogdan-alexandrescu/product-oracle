@@ -11,7 +11,7 @@ const scenario = (page: Page, name: string) => page.addInitScript(([key, value])
 async function invite(page: Page, email: string, role = "approver") {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Role", { exact: true }).selectOption(role);
-  await page.getByRole("button", { name: "Send invite" }).click();
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
 }
 
 test("invite: Oracle emails the invite and grants access, and the page says so", async ({ page }) => {
@@ -80,7 +80,7 @@ test("invite: an address outside the company's domains is refused under the fiel
   await invite(page, "pat@example.org");
 
   const form = page.getByRole("form", { name: "Invite" });
-  await expect(form.getByRole("alert")).toContainText("Only addresses at example.com can sign in to Oracle");
+  await expect(form.getByRole("alert")).toContainText("pat@example.org is outside the company's email domains (example.com)");
   await expect(page.getByLabel("Email")).toHaveAttribute("aria-invalid", "true");
   await expect(inviteRow(page, "pat@example.org")).toHaveCount(0);
   await expect(page.getByTestId("invite-outcome")).toHaveCount(0);
@@ -94,7 +94,7 @@ test("remove: Google access not removed yet shows on the member until it is", as
   await expect(row.getByTestId("member-access")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Remove commenter@example.com" }).click();
-  await page.getByRole("dialog", { name: "Remove this member?" }).getByRole("button", { name: "Remove member" }).click();
+  await page.getByRole("dialog", { name: "Remove Commenter?" }).getByRole("button", { name: "Remove member" }).click();
   await expect(row).toHaveAttribute("data-status", "disabled");
   await expect(row.getByTestId("member-access")).toHaveText("Access not removed yet");
   await page.reload();

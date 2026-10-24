@@ -31,8 +31,6 @@ type MilestoneStatus = Milestone["status"];
 /** Which milestone the inspector edits; `id` null adds a new one to the track. */
 export type MilestonePick = { trackId: string; id: string | null };
 
-export const READ_ONLY = "Changing a track needs the approver role.";
-
 const STATUS_LABEL: Record<Status, string> = {
   active: "Active",
   paused: "Paused",
@@ -98,16 +96,28 @@ export function milestoneTitle(t: Track, id: string): string {
   return `${n} · ${prev ? day(prev) : formatDay(t.created_at)} – ${day(m.target_date)}`;
 }
 
-/** A PRD's track (#339): title, owner and status edited in place, its milestones, and its actions. */
+/** What the viewer's role may do to a track, one flag per operation (#370: `can()`). */
+export type TrackRights = {
+  edit: boolean;
+  addMilestone: boolean;
+  check: boolean;
+  draftRoadmap: boolean;
+  push: boolean;
+};
+
+/**
+ * A PRD's track (#339): title, owner and status edited in place, its milestones, and its
+ * actions. #370 (#505): a control shows only to a role that can use it.
+ */
 export function TrackPanel({
   track,
-  canWrite,
+  may,
   picked,
   onPick,
   onChange,
 }: {
   track: Track;
-  canWrite: boolean;
+  may: TrackRights;
   picked: MilestonePick | null;
   onPick: (pick: MilestonePick) => void;
   onChange: (t: Track) => void;
@@ -129,8 +139,8 @@ export function TrackPanel({
     ? owner.data?.get(track.owner_id)
     : undefined;
   const health = HEALTH[track.health];
-  const off = !canWrite || busy;
-  const reason = canWrite ? undefined : READ_ONLY;
+  const off = busy;
+  const actions = may.check || may.draftRoadmap || may.push;
 
   async function act<T>(call: () => Promise<T>, done: (out: T) => void) {
     setBusy(true);
@@ -176,19 +186,20 @@ export function TrackPanel({
           <Chip kind={health.kind} data-testid="track-health">
             {health.label}
           </Chip>
-          <Button
-            variant="ghost"
-            disabled={off}
-            title={reason}
-            onClick={() => setRenaming(true)}
-          >
-            Rename
-          </Button>
+          {may.edit && (
+            <Button
+              variant="ghost"
+              disabled={off}
+              onClick={() => setRenaming(true)}
+            >
+              Rename
+            </Button>
+          )}
         </>
       }
     >
       <div className="flex flex-col gap-3 px-4 py-3 text-[15px] max-[600px]:px-3">
-        {renaming && (
+        {renaming && may.edit && (
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -233,31 +244,37 @@ export function TrackPanel({
                   ? "…"
                   : "No owner"}
             </span>
-            <Button
-              variant="ghost"
-              disabled={off}
-              title={reason}
-              onClick={() => setPicking((v) => !v)}
-            >
-              Change owner
-            </Button>
+            {may.edit && (
+              <Button
+                variant="ghost"
+                disabled={off}
+                onClick={() => setPicking((v) => !v)}
+              >
+                Change owner
+              </Button>
+            )}
           </span>
-          <SegmentedControl<Status>
-            label="Track status"
-            size="sm"
-            value={track.status}
-            onChange={(status) =>
-              status !== track.status && void patch({ status })
-            }
-            items={(["active", "paused", "closed"] as const).map((s) => ({
-              value: s,
-              label: STATUS_LABEL[s],
-              disabled: off,
-              title: reason,
-            }))}
-          />
+          {may.edit ? (
+            <SegmentedControl<Status>
+              label="Track status"
+              size="sm"
+              value={track.status}
+              onChange={(status) =>
+                status !== track.status && void patch({ status })
+              }
+              items={(["active", "paused", "closed"] as const).map((s) => ({
+                value: s,
+                label: STATUS_LABEL[s],
+                disabled: off,
+              }))}
+            />
+          ) : (
+            <span data-testid="track-status" className="text-sm text-text2">
+              {STATUS_LABEL[track.status]}
+            </span>
+          )}
         </div>
-        {picking && canWrite && (
+        {picking && may.edit && (
           <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 p-2.5">
             <PersonPicker
               writersOnly={false}
@@ -285,16 +302,17 @@ export function TrackPanel({
           <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">
             Milestones
           </span>
-          <Button
-            variant="ghost"
-            icon="plus"
-            className="ml-auto"
-            disabled={off}
-            title={reason}
-            onClick={() => onPick({ trackId: track.id, id: null })}
-          >
-            Add milestone
-          </Button>
+          {may.addMilestone && (
+            <Button
+              variant="ghost"
+              icon="plus"
+              className="ml-auto"
+              disabled={off}
+              onClick={() => onPick({ trackId: track.id, id: null })}
+            >
+              Add milestone
+            </Button>
+          )}
         </div>
         <ul className="flex flex-col pb-2">
           {sortedMilestones(track).map((m) => {
@@ -332,78 +350,83 @@ export function TrackPanel({
           )}
         </ul>
       </div>
-      <div className="flex flex-col gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            disabled={off}
-            title={reason}
-            onClick={() =>
-              void act(
-                () => unwrap(api.POST("/v1/tracks/{track_id}/monitor", path)),
-                (out) => {
-                  onChange(out.overview);
-                  setResult({
-                    tone: "pass",
-                    text: `Checked: ${out.changed.length ? `changed ${out.changed.join(", ").replaceAll("_", " ")}` : "nothing changed"}.`,
-                  });
-                },
-              )
-            }
-          >
-            Check now
-          </Button>
-          <Button
-            disabled={off}
-            title={reason}
-            onClick={() =>
-              void act(
-                () =>
-                  unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", path)),
-                (run) => router.push(`/runs/${run.id}`),
-              )
-            }
-          >
-            Draft roadmap from this track
-          </Button>
-          <Button
-            disabled={off}
-            title={reason}
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              setResult(null);
-              try {
-                await unwrap(
-                  api.POST("/v1/tracks/{track_id}/tracker-push", path),
-                );
-                setResult({ tone: "pass", text: "Sent to the tracker." });
-              } catch (e) {
-                setResult({ tone: "warn", text: errorMessage(e) });
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Push to tracker
-          </Button>
+      {(actions || result || error) && (
+        <div className="flex flex-col gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
+          {actions && (
+            <div className="flex flex-wrap gap-2">
+              {may.check && (
+                <Button
+                  disabled={off}
+                  onClick={() =>
+                    void act(
+                      () => unwrap(api.POST("/v1/tracks/{track_id}/monitor", path)),
+                      (out) => {
+                        onChange(out.overview);
+                        setResult({
+                          tone: "pass",
+                          text: `Checked: ${out.changed.length ? `changed ${out.changed.join(", ").replaceAll("_", " ")}` : "nothing changed"}.`,
+                        });
+                      },
+                    )
+                  }
+                >
+                  Check now
+                </Button>
+              )}
+              {may.draftRoadmap && (
+                <Button
+                  disabled={off}
+                  onClick={() =>
+                    void act(
+                      () =>
+                        unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", path)),
+                      (run) => router.push(`/runs/${run.id}`),
+                    )
+                  }
+                >
+                  Draft roadmap from this track
+                </Button>
+              )}
+              {may.push && (
+                <Button
+                  disabled={off}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    setResult(null);
+                    try {
+                      await unwrap(
+                        api.POST("/v1/tracks/{track_id}/tracker-push", path),
+                      );
+                      setResult({ tone: "pass", text: "Sent to the tracker." });
+                    } catch (e) {
+                      setResult({ tone: "warn", text: errorMessage(e) });
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Push to tracker
+                </Button>
+              )}
+            </div>
+          )}
+          {result && (
+            <Notice tone={result.tone} testId="track-result">
+              {result.text}
+            </Notice>
+          )}
+          {error && <InlineError>{error}</InlineError>}
         </div>
-        {result && (
-          <Notice tone={result.tone} testId="track-result">
-            {result.text}
-          </Notice>
-        )}
-        {error && <InlineError>{error}</InlineError>}
-        {!canWrite && (
-          <p data-testid="track-readonly" className="text-sm text-text2">
-            {READ_ONLY}
-          </p>
-        )}
-      </div>
+      )}
     </Panel>
   );
 }
 
-/** The milestone editor in the Plan inspector (#339): name, horizon, date with its verified bases, items and status. */
+/**
+ * A milestone in the Plan inspector (#339). #370 (#505): a role that can never change it
+ * sees it read only; any other role gets the editor.
+ */
 export function MilestoneEditor({
   track,
   milestoneId,
@@ -416,6 +439,57 @@ export function MilestoneEditor({
   onSaved: (m: Milestone) => void;
 }) {
   const m = track.milestones.find((x) => x.id === milestoneId) ?? null;
+  if (!canWrite) return m ? <MilestoneView track={track} m={m} /> : null;
+  return <MilestoneForm track={track} m={m} onSaved={onSaved} />;
+}
+
+/** A milestone read only: its name, date and state as text. */
+function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
+  const st = MILESTONE_STATUS[m.status];
+  return (
+    <Inspector
+      eyebrow="Milestone · selected"
+      title={milestoneTitle(track, m.id)}
+      label={`Milestone ${m.name}`}
+      testId="plan-milestone"
+      chips={<Chip hero>{track.title}</Chip>}
+    >
+      <InspectorSection>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[15px]">
+          <dt className="text-text2">Name</dt>
+          <dd data-testid="milestone-name">{m.name}</dd>
+          <dt className="text-text2">Horizon</dt>
+          <dd>{HORIZON_LABEL[m.horizon]}</dd>
+          <dt className="text-text2">Date</dt>
+          <dd data-testid="milestone-date">
+            {m.target_date ? day(m.target_date) : "No date"}
+          </dd>
+          <dt className="text-text2">Status</dt>
+          <dd>
+            <Chip kind={st.kind} data-testid="milestone-state">
+              {st.label}
+            </Chip>
+          </dd>
+          <dt className="text-text2">Items</dt>
+          <dd>
+            {m.item_keys.length} {m.item_keys.length === 1 ? "item" : "items"}
+          </dd>
+        </dl>
+      </InspectorSection>
+    </Inspector>
+  );
+}
+
+/** The milestone editor: name, horizon, date with its verified bases, items and status. */
+function MilestoneForm({
+  track,
+  m,
+  onSaved,
+}: {
+  track: Track;
+  m: Milestone | null;
+  onSaved: (m: Milestone) => void;
+}) {
   const [name, setName] = useState(m?.name ?? "");
   const [horizon, setHorizon] = useState<Horizon>(m?.horizon ?? "now");
   const [date, setDate] = useState(m?.target_date ?? "");
@@ -452,7 +526,7 @@ export function MilestoneEditor({
     );
   };
 
-  const off = !canWrite || busy;
+  const off = busy;
   const toggle = (list: string[], key: string, on: boolean) =>
     on ? [...list, key] : list.filter((k) => k !== key);
 
@@ -630,12 +704,10 @@ export function MilestoneEditor({
               variant="solid"
               className="self-start"
               disabled={off || !name.trim()}
-              title={canWrite ? undefined : READ_ONLY}
             >
               {m ? "Save milestone" : "Add milestone"}
             </Button>
             {error && <InlineError>{error}</InlineError>}
-            {!canWrite && <p className="text-sm text-text2">{READ_ONLY}</p>}
           </div>
         </InspectorSection>
       </form>

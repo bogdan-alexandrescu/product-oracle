@@ -116,8 +116,9 @@ export function DeliveryChip({ value, hero = false }: { value: unknown; hero?: b
   );
 }
 
-function lockTitle(entity: Pick<EntityOut, "locked_by" | "locked_at">, meId?: string | null) {
-  const who = entity.locked_by ? (entity.locked_by === meId ? "you" : `member ${entity.locked_by.slice(0, 8)}`) : "a person";
+/** #396 (#505): who locked it in person words (you, their name), never a raw id. */
+function lockTitle(entity: Pick<EntityOut, "locked_by" | "locked_at">, meId?: string | null, name?: string) {
+  const who = entity.locked_by && entity.locked_by === meId ? "you" : (name ?? "a person");
   const when = entity.locked_at ? ` on ${formatDate(entity.locked_at)}` : "";
   return `Locked by ${who}${when}: agents can only propose changes`;
 }
@@ -126,15 +127,18 @@ function lockTitle(entity: Pick<EntityOut, "locked_by" | "locked_at">, meId?: st
 export function LockBadge({
   entity,
   meId,
+  name,
   hero = false,
 }: {
   entity: Pick<EntityOut, "locked" | "locked_by" | "locked_at">;
   meId?: string | null;
+  /** The locker's display name, when the screen has read it. */
+  name?: string;
   hero?: boolean;
 }) {
   if (!entity.locked) return null;
   return (
-    <Chip kind="na" hero={hero} title={lockTitle(entity, meId)}>
+    <Chip kind="na" hero={hero} title={lockTitle(entity, meId, name)}>
       <LockIcon className="h-3.5 w-3.5" />
       Locked
     </Chip>

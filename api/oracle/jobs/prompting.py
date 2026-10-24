@@ -40,9 +40,11 @@ CURRENT = {
     "interview_team_turn": "interview_team_turn.v1",
     "interview_snapshot": "interview_snapshot.v1",
     "scope_enhance": "scope_enhance.v1",
-    "discussion_reply": "discussion_reply.v1",
+    "why_not_reply": "why_not_reply.v1",
+    "discussion_reply": "discussion_reply.v2",
     # B6: appended to discussion_reply's for a discussion on a goal.
     "discussion_reply_goal": "discussion_reply_goal.v1",
+    "discussion_summary": "discussion_summary.v1",
 }
 
 

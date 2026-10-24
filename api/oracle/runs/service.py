@@ -7756,17 +7756,7 @@ async def void_owed_decisions(
     owed (:func:`_finish_decision_now`). Returns the checkpoints voided."""
     if not deciders:
         return []
-    candidates = list(
-        await db.execute(
-            select(Checkpoint.id, Checkpoint.run_id)
-            .where(
-                Checkpoint.status.in_(DECIDED),
-                Checkpoint.payload["wait"].has_key("posting"),
-                Checkpoint.decided_by.in_(deciders),
-            )
-            .order_by(Checkpoint.run_id, Checkpoint.id)
-        )
-    )
+    candidates = list(await db.execute(_owed_q(deciders)))
     voided: list[uuid.UUID] = []
     for checkpoint_id, run_id in candidates:
         fresh = {"populate_existing": True}
@@ -7779,19 +7769,64 @@ async def void_owed_decisions(
             .with_for_update()
             .execution_options(**fresh)
         )
-        if run is None or cp is None or cp.status not in DECIDED or run.status in FINAL:
-            continue  # an ended run drops what it owed (_finish_decision_now)
-        if not isinstance(((cp.payload or {}).get("wait") or {}).get("posting"), dict):
+        if not _owed_voids(run, cp, deciders, role, kinds):
             continue
-        if cp.decided_by not in deciders:
-            continue
-        if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
-            continue
-        if role is not None and has_role(role, cp.approver_role):  # type: ignore[arg-type]
-            continue  # the new role still decides this checkpoint
         await _void_owed(db, principal, run, cp, why, via)
         voided.append(cp.id)
     return voided
+
+
+def _owed_q(deciders: set[uuid.UUID]):
+    return (
+        select(Checkpoint.id, Checkpoint.run_id)
+        .where(
+            Checkpoint.status.in_(DECIDED),
+            Checkpoint.payload["wait"].has_key("posting"),
+            Checkpoint.decided_by.in_(deciders),
+        )
+        .order_by(Checkpoint.run_id, Checkpoint.id)
+    )
+
+
+def _owed_voids(
+    run: Run | None,
+    cp: Checkpoint | None,
+    deciders: set[uuid.UUID],
+    role: str | None,
+    kinds: tuple[str, ...] | None,
+) -> bool:
+    """Whether :func:`void_owed_decisions` voids ``cp`` (read under its locks there,
+    without them in :func:`select_owed_decisions`)."""
+    if run is None or cp is None or cp.status not in DECIDED or run.status in FINAL:
+        return False  # an ended run drops what it owed (_finish_decision_now)
+    if not isinstance(((cp.payload or {}).get("wait") or {}).get("posting"), dict):
+        return False
+    if cp.decided_by not in deciders:
+        return False
+    if kinds is not None and (cp.kind not in kinds or run.flow == SPEC_FLOW):
+        return False
+    # The new role still decides this checkpoint: kept.
+    return not (role is not None and has_role(role, cp.approver_role))  # type: ignore[arg-type]
+
+
+async def select_owed_decisions(
+    db: AsyncSession,
+    deciders: set[uuid.UUID],
+    *,
+    role: str | None = None,
+    kinds: tuple[str, ...] | None = None,
+) -> list[tuple[Run, Checkpoint]]:
+    """The (run, checkpoint) :func:`void_owed_decisions` would void: no locks, no writes
+    (A5's preview)."""
+    if not deciders:
+        return []
+    out = []
+    for checkpoint_id, run_id in list(await db.execute(_owed_q(deciders))):
+        run = await db.get(Run, run_id)
+        cp = await db.get(Checkpoint, checkpoint_id)
+        if _owed_voids(run, cp, deciders, role, kinds):
+            out.append((run, cp))
+    return out
 
 
 async def _voided_while_delivered(db: AsyncSession, checkpoint_id: uuid.UUID) -> str | None:
@@ -9800,6 +9835,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.discussions import inbox as discussion_inbox
 
     discussions = await discussion_inbox.rows(db, principal, seen)
+    # H10: replies to send, asked again, answers to my own requests.
+    from oracle.requests.inbox import inbox_rows as request_rows
+
+    request_inbox = await request_rows(db, principal)
+    counted += sum(1 for r in request_inbox if r.counts)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9855,6 +9895,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
         discussions=discussions,
+        requests=request_inbox,
     )
 
 
