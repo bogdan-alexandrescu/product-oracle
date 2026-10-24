@@ -1,6 +1,7 @@
 """Migration 0049_metrics (H5 Metrics review): the metrics, metric_values and
 metric_variances tables, ``goal_measurements.metric_id``, ``company_integrations.config``
-and the ``posthog``/``metrics`` check values.
+and the ``posthog``/``metrics`` check values; lane 2 adds the ``metrics_variance`` run
+flow.
 
 Card: protects=the tables, columns and check values come and go with the revision, a
 week value must be a Monday, and two companies may connect the same PostHog project;
@@ -119,3 +120,25 @@ def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):
     assert _run("SELECT count(*) FROM company_integrations")[0][0] == 0
     command.upgrade(cfg, REVISION)
     assert TABLES <= _tables()
+
+
+def _flows() -> list[str]:
+    (definition,) = _run(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_runs_flow'"
+    )[0]
+    return definition
+
+
+# protects=lane 2: the revision lets runs.flow hold metrics_variance (the metrics review's
+# explanation run), keeps every other flow, and the downgrade removes it only while no run
+# uses it; fails_when=a metrics_variance run is refused after the upgrade, another flow is
+# lost, or a run in use breaks the downgrade; no_claim=the run itself
+# (tests/test_metrics_review.py).
+def test_the_metrics_variance_flow_comes_and_goes(scratch_db):
+    cfg = _cfg()
+    command.upgrade(cfg, PREVIOUS)
+    assert "metrics_variance" not in _flows()
+    command.upgrade(cfg, REVISION)
+    assert "'metrics_variance'" in _flows() and "'ritual_summary'" in _flows()
+    command.downgrade(cfg, PREVIOUS)
+    assert "metrics_variance" not in _flows() and "'ritual_summary'" in _flows()
