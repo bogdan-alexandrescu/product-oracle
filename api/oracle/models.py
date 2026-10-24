@@ -74,6 +74,15 @@ from oracle.launches.models import (  # noqa: E402
     LaunchTask,
     RequesterNote,
 )
+from oracle.market.models import (  # noqa: E402
+    Competitor,
+    CompetitorChange,
+    CompetitorPage,
+    CompetitorPageSnapshot,
+    CompetitorWebFinding,
+    Positioning,
+    PositioningSuggestion,
+)
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken  # noqa: E402
 from oracle.members.models import Invite, MemberFollowUp  # noqa: E402
 from oracle.preferences.models import UserPreference  # noqa: E402
@@ -149,6 +158,7 @@ from oracle.v2.models import (  # noqa: E402
     StakeholderQuestion,
     TemplateModuleAssignment,
 )
+from oracle.web.models import WebResult, WebSearch  # noqa: E402
 
 __all__ = [
     "NextDraftChange",
@@ -156,6 +166,13 @@ __all__ = [
     "Ritual",
     "RitualOccurrence",
     "RitualRead",
+    "Competitor",
+    "CompetitorChange",
+    "CompetitorPage",
+    "CompetitorPageSnapshot",
+    "CompetitorWebFinding",
+    "Positioning",
+    "PositioningSuggestion",
     "AlignmentReportRead",
     "ApiToken",
     "ArtifactDependency",
@@ -270,6 +287,8 @@ __all__ = [
     "TrackerRecord",
     "User",
     "UserPreference",
+    "WebResult",
+    "WebSearch",
 ]
 
 # Trash (#482): every read leaves trashed rows out; registered with the models.

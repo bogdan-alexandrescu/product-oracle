@@ -27,6 +27,9 @@ SCOPES = (
     "read:documents",
     "write:proposals",
     "write:drafts",
+    # H7: Oracle's web tools (search_web, fetch_web_page); the competitive digest's
+    # segment only (migration 0049_market).
+    "read:web",
 )
 
 

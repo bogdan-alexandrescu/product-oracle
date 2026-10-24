@@ -109,6 +109,9 @@ class OccurrenceOut(BaseModel):
     summary: str | None
     summary_state: SummaryState
     summary_note: str | None
+    # Whether Oracle writes this occurrence's summary now (H7: a competitive digest's is not
+    # offered at H11 market Observe).
+    summary_offered: bool = True
     read_by_me: bool
 
 
@@ -125,6 +128,8 @@ class EstimateRitual(BaseModel):
     ritual_id: uuid.UUID
     title: str
     runs_per_month: float
+    # What one written summary of this ritual costs ($7.00 for the competitive digest).
+    per_run_usd: float = 3.0
 
 
 class Estimate(BaseModel):

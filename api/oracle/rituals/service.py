@@ -656,6 +656,7 @@ async def occurrence_out(
         decision_ids=list(occ.decision_ids), summary_run_id=occ.summary_run_id,
         summary=occ.summary, summary_state=occ.summary_state,  # type: ignore[arg-type]
         summary_note=occ.summary_note, read_by_me=read is not None,
+        summary_offered=await summaries.offered(db, ritual.kind),
         decisions=[
             OccurrenceDecision(id=d.id, number=d.number, title=d.title,
                                href=f"/company/decisions?d={d.number}")

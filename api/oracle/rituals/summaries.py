@@ -40,15 +40,24 @@ COVERED = frozenset(
     {"goals_checkin", "roadmap_refresh", "goals_review", "decision_review", "strategy_review",
      "alignment_report", "custom"}
 )  # fmt: skip
+# Kinds whose write-up is a flow of its own, not the ritual_summary (H7: the competitive
+# digest; H5 Metrics review adds its own entry).
+FLOW_FOR_KIND = {"competitive_digest": "competitive_digest"}
 NOT_STARTED = "Summary not started: the ritual's owner can no longer start runs"
 FAILED = "Summary failed · Summarize with Oracle to retry"
 ACTIVE = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 
 
-def per_summary_usd() -> Decimal:
-    flow = flows.FLOWS[FLOW]
-    roles = sum((flows.ROLES[r].base_usd for s in flow.segments for r in s.roles), Decimal(0))
-    return roles * flows.DEPTHS[flow.default_depth]
+def flow_for(kind: str | None) -> str:
+    return FLOW_FOR_KIND.get(kind or "", FLOW)
+
+
+def per_summary_usd(kind: str | None = None) -> Decimal:
+    """One write-up of a ``kind`` occurrence at its flow's default knobs, each role at its
+    own depth (flows.segment_estimate): $3.00, or $7.00 for the competitive digest."""
+    flow = flows.FLOWS[flow_for(kind)]
+    knobs = flows.resolve_knobs(flow, {})
+    return sum((flows.segment_estimate(s, knobs) for s in flow.segments), Decimal(0))
 
 
 async def mode(db: AsyncSession) -> str:
@@ -64,18 +73,21 @@ async def estimate(db: AsyncSession) -> Estimate:
         for r in await db.scalars(
             select(Ritual).where(Ritual.status == "active").order_by(Ritual.created_at)
         )
-        if r.kind in COVERED
+        if r.kind in COVERED or r.kind in FLOW_FOR_KIND
     ]
     rows = [
-        EstimateRitual(ritual_id=r.id, title=r.title, runs_per_month=runs_per_month(r.schedule))
+        EstimateRitual(ritual_id=r.id, title=r.title, runs_per_month=runs_per_month(r.schedule),
+                       per_run_usd=float(per_summary_usd(r.kind)))
         for r in rituals
-    ]
+    ]  # fmt: skip
     runs = round(sum(r.runs_per_month for r in rows), 2)
     each = per_summary_usd()
+    usd = sum((Decimal(str(r.runs_per_month)) * per_summary_usd(k.kind)
+               for r, k in zip(rows, rituals, strict=True)), Decimal(0))  # fmt: skip
     return Estimate(
         per_summary_usd=float(each),
         runs_per_month=runs,
-        usd_per_month=float(round(Decimal(str(runs)) * each, 2)),
+        usd_per_month=float(round(usd, 2)),
         rituals=rows,
     )
 
@@ -110,12 +122,14 @@ async def sync_state(db: AsyncSession, occ: RitualOccurrence) -> None:
 
 
 async def _start(
-    db: AsyncSession, actor: Principal | str, occ: RitualOccurrence, created_by: uuid.UUID | None
-) -> uuid.UUID:
+    db: AsyncSession, actor: Principal | str, occ: RitualOccurrence, created_by: uuid.UUID | None,
+    kind: str | None = None,
+) -> uuid.UUID:  # fmt: skip
     from oracle.runs import service as runs_service
     from oracle.runs.schemas import KnobsIn, RunCreate
 
-    body = RunCreate(flow=FLOW, knobs=KnobsIn(depth="quick"))  # type: ignore[arg-type]
+    flow = flows.FLOWS[flow_for(kind)]
+    body = RunCreate(flow=flow.key, knobs=KnobsIn(depth=flow.default_depth))  # type: ignore[arg-type]
     run_id = await runs_service.create_run(
         db, actor, body, entry_knobs={"ritual_occurrence_id": str(occ.id)}, commit=False,
         created_by=created_by,
@@ -137,13 +151,47 @@ async def on_demand(db: AsyncSession, principal: Principal, occ: RitualOccurrenc
     from oracle.rituals.service import RitualError
 
     await sync_state(db, occ)
+    kind = await db.scalar(select(Ritual.kind).where(Ritual.id == occ.ritual_id))
+    if kind in FLOW_FOR_KIND and not await _market_writes(db):
+        from oracle.market.digest import OBSERVE
+
+        raise RitualError(409, OBSERVE)
     if occ.status not in ("ready", "held", "missed", "skipped") or not occ.pre_read:
         raise RitualError(409, "The pre-read is not ready yet")
     if occ.summary_run_id is not None:
         status = await db.scalar(select(Run.status).where(Run.id == occ.summary_run_id))
         if status in ACTIVE:
             raise RitualError(409, "Oracle is already writing this summary")
-    return await _start(db, principal, occ, principal.user_id)
+    return await _start(db, principal, occ, principal.user_id, kind)
+
+
+async def offered(db: AsyncSession, kind: str | None) -> bool:
+    """Whether Oracle writes a ``kind`` occurrence's summary now: a competitive digest's
+    not at H11 ``market`` Observe (its route answers 409 there)."""
+    return kind not in FLOW_FOR_KIND or await _market_writes(db)
+
+
+async def _market_writes(db: AsyncSession) -> bool:
+    """H11 ``market``: Oracle writes the digest from Draft up, never at Observe."""
+    from oracle import autonomy
+
+    return await autonomy.allows(db, "market", "draft")
+
+
+async def _starts_on_its_own(db: AsyncSession, kind: str) -> bool:
+    """Every pre-read, or (a kind with a flow of its own) H11 ``rituals`` at Act within
+    limits with the run's cost within ``max_run_usd``."""
+    from oracle import autonomy
+
+    if kind in FLOW_FOR_KIND and not await _market_writes(db):
+        return False
+    if await mode(db) == "always":
+        return kind in COVERED or kind in FLOW_FOR_KIND
+    if kind not in FLOW_FOR_KIND or not await autonomy.allows(db, "rituals", "act"):
+        return False
+    limits = await autonomy.limits(db, "rituals")
+    cap = Decimal(str(getattr(limits, "max_run_usd", 0)))
+    return per_summary_usd(kind) <= cap
 
 
 async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID) -> None:
@@ -153,11 +201,11 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
     import logging
 
     try:
-        if await mode(db) != "always":
+        ritual = await db.get(Ritual, ritual_id)
+        if ritual is None or not await _starts_on_its_own(db, ritual.kind):
             return
         occ = await db.get(RitualOccurrence, occ_id, with_for_update=True)
-        ritual = await db.get(Ritual, ritual_id)
-        if occ is None or ritual is None or ritual.kind not in COVERED:
+        if occ is None:
             await db.rollback()
             return
         if occ.summary_state != "none" or occ.summary_run_id is not None:
@@ -169,7 +217,7 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
             occ.summary_note = NOT_STARTED
             await db.commit()
             return
-        await _start(db, audit.ORACLE, occ, owner.id)
+        await _start(db, audit.ORACLE, occ, owner.id, ritual.kind)
     except Exception:
         logging.getLogger(__name__).exception("rituals: the summary of %s did not start", occ_id)
         await db.rollback()
@@ -227,3 +275,6 @@ async def import_summary(
 
 extensions.register_prompt_lines(FLOW, prompt_lines)
 extensions.register_importer(FLOW, import_summary)
+
+# H7: the competitive digest's prompt lines and importer register themselves.
+from oracle.market import digest as _digest  # noqa: E402,F401

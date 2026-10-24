@@ -34,6 +34,7 @@ KEYS = (
     "strategy",
     "vision",
     "external_messages",
+    "market",
 )
 CEILINGS = {
     "baseline": "act",
@@ -51,6 +52,7 @@ CEILINGS = {
     "strategy": "recommend",
     "vision": "draft",
     "external_messages": "draft",
+    "market": "recommend",
 }
 DEFAULTS = {
     "baseline": "act",
@@ -68,6 +70,7 @@ DEFAULTS = {
     "strategy": "recommend",
     "vision": "draft",
     "external_messages": "draft",
+    "market": "recommend",
 }
 STAYS_WITH_PEOPLE = [
     "Hiring, coaching and performance",
@@ -353,7 +356,7 @@ async def test_a_run_token_reads_get_autonomy_and_cannot_change_it(
         assert "get_autonomy" in names and "set_autonomy" not in names
         got = await c.call_tool("get_autonomy", {})
         assert not got.is_error, text_of(got)
-        assert len(got.structured_content["items"]) == 15
+        assert len(got.structured_content["items"]) == len(KEYS)
         refused = await c.call_tool(
             "set_autonomy",
             {"key": "baseline", "body": {"level": "observe", "reason": "x"}},
