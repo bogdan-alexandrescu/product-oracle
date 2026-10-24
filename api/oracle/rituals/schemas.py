@@ -125,6 +125,8 @@ class EstimateRitual(BaseModel):
     ritual_id: uuid.UUID
     title: str
     runs_per_month: float
+    # What one written summary of this ritual costs ($7.00 for the competitive digest).
+    per_run_usd: float = 3.0
 
 
 class Estimate(BaseModel):

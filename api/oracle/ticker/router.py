@@ -220,6 +220,17 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
         log.exception("run ticker: rituals failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
+        # Watched pages (H7): the weekly reads of alternatives' public pages and the web
+        # results purge (deterministic, no model call).
+        from oracle.market import watch as market_watch
+
+        async with tenant_session(tenant_id) as db:
+            await market_watch.check_due(db)
+            await db.commit()
+    except Exception:
+        log.exception("run ticker: watched pages failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
         # Strategy drift (H4): a daily deterministic check, no model call.
         async with tenant_session(tenant_id) as db:
             if await strategy_drift.check_due(db):
