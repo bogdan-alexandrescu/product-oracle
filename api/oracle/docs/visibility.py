@@ -23,8 +23,10 @@ an approval captured ("Publish <document> v<n>", H1) follows its document the sa
 as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``), and so
 does a decided decision's baseline ``decision`` entity (``Decision.entity_id``): absent
 from the entity list, the graph, an entity read, its revisions, evidence, proposals and
-conflicts, and every edge to or from it, whatever reads them (the web, MCP read:baseline,
-a run).
+conflicts, every edge to or from it, and every change event about it or whose record
+names it (its ``affects`` edge, a batch, a trace that reached it), whatever reads them
+(the web, MCP, a run). A change event of a hidden document (``document_id``) is hidden
+with it.
 
 A new document's visibility comes from its kind (:func:`default_for`), on every path
 that creates one (a template start, an import).
@@ -49,7 +51,7 @@ from sqlalchemy import (
     select,
     true,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, JSONPATH
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
@@ -127,6 +129,7 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
         return
     from oracle.baseline.models import Conflict, Edge, Entity, EntityRevision, Evidence, Proposal
     from oracle.decisions.models import Decision
+    from oracle.v2.models import ChangeEvent
 
     state.statement = state.statement.options(
         with_loader_criteria(Document, lambda cls: cls.visibility == COMPANY, include_aliases=True),
@@ -139,6 +142,8 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
             with_loader_criteria(model, _attached_visible, include_aliases=True)
             for model in (EntityRevision, Evidence, Proposal, Conflict)
         ),
+        # And a change event about such an entity or document, or whose record names one.
+        with_loader_criteria(ChangeEvent, _change_visible, include_aliases=True),
     )
 
 
@@ -231,4 +236,39 @@ def _attached_visible(cls: Any) -> ColumnElement[bool]:
     return and_(
         or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
         or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
+    )
+
+
+def _change_visible(cls: Any) -> ColumnElement[bool]:
+    """A change event whose subject is a hidden decision entity or document, or whose
+    record (``data``: the entity, an edge's ends, a batch's ids, the trace) holds a hidden
+    decision entity's id anywhere."""
+    hidden = _hidden_entities()
+    documents = Document.__table__
+    # Every string in the record, however deep (a literal here: the criterion is a
+    # lambda to SQLAlchemy, which would make a module constant a bound parameter).
+    strings = (
+        func.jsonb_path_query(
+            cls.data, cast(literal('strict $.** ? (@.type() == "string")'), JSONPATH)
+        )
+        .table_valued(column("value", JSONB))
+        .render_derived(name="named")
+    )
+    names_hidden = (
+        select(literal(1))
+        .select_from(strings)
+        .where(
+            strings.c.value.in_(
+                hidden.with_only_columns(func.to_jsonb(cast(hidden.selected_columns[0], Text)))
+            )
+        )
+        .exists()
+    )
+    return and_(
+        or_(cls.subject_id.is_(None), cls.subject_id.not_in(hidden)),
+        or_(
+            cls.document_id.is_(None),
+            cls.document_id.not_in(select(documents.c.id).where(documents.c.visibility != COMPANY)),
+        ),
+        not_(names_hidden),
     )
