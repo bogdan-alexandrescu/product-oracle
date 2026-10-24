@@ -13,6 +13,7 @@ Cards:
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import select
 
 from oracle.auth.models import ApiToken, User
@@ -243,3 +244,42 @@ async def test_the_invite_name_becomes_the_member_name(client, fetches):
     async with tenant_session(r.tenant_id) as s:
         user = await s.scalar(select(User).where(User.email == LEAD))
         assert user.name == "Support lead"
+
+
+@pytest.mark.parametrize("action", ["access", "email"])
+async def test_an_owner_demoted_while_waiting_cannot_retry_access_or_email(
+    client, monkeypatch, action
+):
+    """protects=#519 item 6: Retry access (POST /v1/invites/{id}/access) and Resend email
+    (POST /v1/invites/{id}/email) take the gate and re-read the owner under it, as
+    _may_act_on does; fails_when=an owner demoted to approver while the request waits
+    still re-grants IAP access or emails the invite (200); no_claim=the IAP call itself
+    (tests.test_iap)."""
+    from oracle.review import publish
+
+    r = await seed()
+    owner = await person(r.tenant_id, "owner")
+    made = await client.post(
+        "/v1/invites", json={"email": LEAD, "role": "viewer"}, headers=owner.headers
+    )
+    assert made.status_code == 201, made.text
+    invite = made.json()
+    async with tenant_session(r.tenant_id) as s:
+        before = len(list(await s.scalars(select(AuditEvent))))
+    real = publish.gate_lock
+    fired: list[bool] = []
+
+    async def spy(db, *, shared):
+        if not fired:
+            fired.append(True)
+            async with tenant_session(r.tenant_id) as s:
+                (await s.get(User, owner.user_id)).role = "approver"
+                await s.commit()
+        await real(db, shared=shared)
+
+    monkeypatch.setattr(publish, "gate_lock", spy)
+    resp = await client.post(f"/v1/invites/{invite['id']}/{action}", headers=owner.headers)
+    assert fired, f"{action} did not take the gate"
+    assert resp.status_code == 403, resp.text
+    async with tenant_session(r.tenant_id) as s:
+        assert len(list(await s.scalars(select(AuditEvent)))) == before
