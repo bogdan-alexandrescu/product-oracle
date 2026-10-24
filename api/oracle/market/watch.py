@@ -12,8 +12,8 @@ A failure (a ``LinkError``, or anything else a read raises) sets ``last_error`` 
 an attempt; after :data:`MAX_ATTEMPTS` failed weeks, or at once when the page is not public
 or its host is not a public address, the page is ``error``. A page robots.txt blocked is
 tried again after :data:`BLOCKED_RECHECK`. Each page keeps its last :data:`KEEP_SNAPSHOTS`
-snapshots plus those a change points to. The same step purges web results older than
-:data:`WEB_RESULTS_KEPT`.
+snapshots plus those a change points to. The same step purges web results and searches
+older than 13 months (oracle.web.models.purge_old).
 
 The step keeps inside the tick: each page's result is committed as it completes, and no
 read starts that could not finish before the tick's deadline (the fetcher's time cap, twice
@@ -34,7 +34,7 @@ from oracle.baseline.public_links import LinkError, LinkFetcher, get_link_fetche
 from oracle.market import diff, robots
 from oracle.market.models import CompetitorChange, CompetitorPage, CompetitorPageSnapshot
 from oracle.rituals import clock
-from oracle.web.models import WebResult
+from oracle.web.models import purge_old
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +43,6 @@ PER_TICK = 10
 HOST_GAP = timedelta(minutes=1)
 MAX_ATTEMPTS = 3
 KEEP_SNAPSHOTS = 13
-WEB_RESULTS_KEPT = timedelta(days=396)
 # Fetcher codes that end the page at once: a sign-in wall or a non-public address.
 FINAL_CODES = ("not_public", "blocked_address")
 NOT_READ = "Not read for 3 weeks"
@@ -171,7 +170,7 @@ async def check_due(db: AsyncSession, deadline: float | None = None) -> int:
     Each page's result is committed as it completes. With a ``deadline`` (a
     ``time.monotonic()`` value), no read starts that could not finish before it."""
     now = clock.now()
-    await db.execute(delete(WebResult).where(WebResult.fetched_at < now - WEB_RESULTS_KEPT))
+    await purge_old(db, now)
     await db.commit()
     due = (
         await db.execute(

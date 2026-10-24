@@ -89,7 +89,7 @@ def test_chains_on_mains_head():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0023_source_partial_sync (#249) chains on it, then 0023_intake_brief_fields (C4)
     # and 0024_segment_skipped; one head.
-    assert script.get_heads() == ["0048_scope_review"]
+    assert script.get_heads() == ["0050_web_tools"]
     assert script.get_revision("0023_source_partial_sync").down_revision == REVISION
 
 

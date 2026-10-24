@@ -77,6 +77,9 @@ SOURCE_READS = {
 # new PRD run may reuse the baseline (C4) is about runs, not baseline knowledge.
 # Likewise the goals an interview is offered on (B6): it names people's discussions.
 PEOPLE_READS = {("baseline", "review-status"), ("baseline", "goals", "vague")}
+# H7: Oracle's web tools (POST /v1/web/search, /v1/web/fetch) are for run tokens holding
+# read:web only (the competitive digest's): people's MCP clients are not offered them.
+RUN_ONLY_AREAS = {"web": "read:web"}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 
@@ -105,6 +108,8 @@ def required_scope(method: str, path: str) -> str | None:
         return None
     if method != "POST":
         return None
+    if area in RUN_ONLY_AREAS:
+        return RUN_ONLY_AREAS[area]
     if area == "baseline" and parts[-1] in PROPOSAL_WRITES:
         return "write:proposals"
     # POST /v1/decisions: propose a decision (as Oracle). Deciding, reviewing,
@@ -119,6 +124,7 @@ def required_scope(method: str, path: str) -> str | None:
 
 def allowed(scopes: frozenset[str] | None, method: str, path: str) -> bool:
     if scopes is None:
-        return True
+        parts = _segments(path)
+        return not (parts and parts[0] in RUN_ONLY_AREAS)
     needed = required_scope(method, path)
     return needed is not None and needed in scopes

@@ -84,6 +84,7 @@ from oracle.ticker.router import router as ticker_router
 from oracle.trace.router import router as trace_router
 from oracle.trash.router import router as trash_router
 from oracle.v2.router import router as v2_router
+from oracle.web.router import router as web_router
 
 log = logging.getLogger(__name__)
 
@@ -267,6 +268,8 @@ def create_app() -> FastAPI:
     app.include_router(strategy_router)
     app.include_router(launches_router)
     app.include_router(market_router)
+    # H7 lane 1: the web tools, for the competitive digest's run token only (read:web).
+    app.include_router(web_router)
     # OAuth 2.1 for external MCP clients (discovery, registration, tokens, consent).
     app.include_router(oauth_router)
     # Cloud Scheduler's run ticker (Google ID token only; not in OpenAPI, so no MCP tool).
