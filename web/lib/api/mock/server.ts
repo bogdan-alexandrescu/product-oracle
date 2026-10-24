@@ -45,7 +45,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { emptyAutonomy, inboxActions, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -77,8 +77,9 @@ import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./so
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
-import { addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
+import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
 import { addInterviewRequest, requestInboxRows, routeRequests, seedRequests, seedWhyNot, WHY_NOT_SCENARIO, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
@@ -211,6 +212,8 @@ export interface Db {
   launches?: LaunchesDb;
   /** H9: win and loss records (./pricing.ts); seeded in the "pricing" scenario only. */
   pricing?: PricingDb;
+  /** Alternatives, watched pages, the change log, web findings and positioning (./market.ts, H7). */
+  market?: MarketDb;
   /** Per-user preferences (O1f document_view), by member email. */
   preferences?: Record<string, Schemas["Preferences"]>;
   /** Provider revokes a removed member's disable could not make (C2); seeded in the
@@ -400,6 +403,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "rituals" as the default company plus a Monthly roadmap refresh pre-read prepared early
  * (the owner and the approver attend) and last week's goals check-in, held, whose summary
  * failed (H2, ./rituals.ts);
+ * "market" as the default company plus three made-up alternatives with a page change, three
+ * not-vetted web findings and two positioning suggestions, and the Monthly competitive
+ * digest's pre-read prepared early (H7, ./market.ts);
  * "roadmap-items" as the default
  * company whose usage-alerts-roadmap v1 items carry every field the Items tab shows (E2,
  * ./roadmap-items.json); "roadmap-diff" as the default company plus usage-alerts-roadmap v2,
@@ -1689,6 +1695,7 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
+    marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
   };
 }
 
@@ -1722,7 +1729,19 @@ function ensureRituals(db: Db, me: MemberRow): RitualsDb {
     const metrics = ensureMetrics(db, me);
     addMetricsReview(ctx, db.rituals, (id, asOf) => reviewBlocks(metricsContext(db, me), metrics, id, asOf));
   }
+  if (scenario === "market") {
+    const market = ensureMarket(db);
+    addDigest(ctx, db.rituals, MARKET_DIGEST_ID, (asOf) => digestBlocks(market, ctx.companyTimezone(), asOf));
+  }
   return db.rituals;
+}
+
+/** The "market" scenario's digest ritual, which the seeded change log and findings link to. */
+const MARKET_DIGEST_ID = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
+
+/** H7: the market's alternatives, change log and positioning; seeded in the "market" scenario only. */
+function ensureMarket(db: Db): MarketDb {
+  return (db.market ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "market" ? seedMarket(MARKET_DIGEST_ID) : emptyMarket());
 }
 
 /** The next version: the base with some sections replaced, and the resolutions recorded. */
@@ -3972,6 +3991,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
+  // Market (H7): alternatives, the change log and positioning; seeded in the "market" scenario only.
+  const market = await routeMarket(
+    { me: { id: me.id, email: me.email, name: me.name ?? null, role: me.role }, uuid, companyTimezone: ritualsCtx.companyTimezone },
+    ensureMarket(db),
+    req,
+    p,
+    q,
+  );
+  if (market) return market;
   const ritual = await routeRituals(ritualsCtx, ensureRituals(db, me), req, p, q);
   if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;

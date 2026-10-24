@@ -424,7 +424,7 @@ async def test_the_variance_flow_and_its_prompt(client, ctx, when):
                  "list_decisions", "search", "get_source_item"):  # fmt: skip
         assert tool in sdef.tools and tool in flows.MCP_TOOLS
     assert "write:" not in " ".join(sdef.scopes)
-    assert summaries.FLOW_FOR_KIND == {"metrics_review": "metrics_variance"}
+    assert summaries.FLOW_FOR_KIND["metrics_review"] == "metrics_variance"
     occ = await _review_ready(client, ctx)
     run = SimpleNamespace(flow="metrics_variance", knobs={"ritual_occurrence_id": occ["id"]})
     async with tenant_session(ctx.tenant_id) as s:

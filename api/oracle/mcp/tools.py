@@ -348,8 +348,11 @@ async def _run_document_refusal(caller: McpCaller, doc: str) -> str | None:
 
 
 def _writes(method: str, needed: str | None) -> bool:
-    """Whether a call writes: any method but GET, or any scope but a read scope."""
-    return method.upper() != "GET" or (needed is not None and not needed.startswith("read:"))
+    """Whether a call writes: any scope but a read scope, else any method but GET (a POST
+    under a read scope, such as H7's web search, reads)."""
+    if needed is not None:
+        return not needed.startswith("read:")
+    return method.upper() != "GET"
 
 
 async def call_operation(
@@ -365,7 +368,10 @@ async def call_operation(
     run (the REST role checks still apply)."""
     needed = scopes.required_scope(op.method, op.path)
     if check_scopes and not scopes.allowed(caller.scopes, op.method, op.path):
-        reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
+        if caller.scopes is None:
+            reason = f"is for run tokens holding {needed} only"
+        else:
+            reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")
     if caller.read_only and op.method.upper() not in ("GET", "HEAD"):
         raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {READ_ONLY}.")

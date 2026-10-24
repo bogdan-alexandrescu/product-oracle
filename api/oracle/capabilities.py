@@ -95,6 +95,10 @@ EVERY_MEMBER = frozenset(
     }
 )
 
+# Run tokens only (H7: the web tools need read:web, which only the competitive digest's
+# run holds): a person's role never reaches them, whatever the route's role check says.
+RUN_ONLY = frozenset({"fetch_web_page", "search_web"})
+
 # Decided in the handler against the item: a checkpoint's approver role, the author, the
 # role Oracle acted with. Any role may hold the item, so the page reads the item's own
 # state to show or hide these.
@@ -287,7 +291,8 @@ def lead_roles(app: FastAPI) -> dict[str, Role]:
 def capabilities(app: FastAPI, role: str, engineering_lead: bool = False) -> dict[str, bool]:
     leads = lead_roles(app) if engineering_lead else {}
     return {
-        op: has_role(role, need) or (op in leads and has_role(role, leads[op]))
+        op: op not in RUN_ONLY
+        and (has_role(role, need) or (op in leads and has_role(role, leads[op])))
         for op, need in operation_roles(app).items()
     }
 
@@ -309,6 +314,8 @@ def stamp_openapi(app: FastAPI) -> None:
                     op["x-lead-role"] = leads[op["operationId"]]
                 if op.get("operationId") in PER_ITEM:
                     op["x-per-item"] = PER_ITEM[op["operationId"]]
+                if op.get("operationId") in RUN_ONLY:
+                    op["x-run-only"] = True
         return schema
 
     app.openapi = openapi  # type: ignore[method-assign]

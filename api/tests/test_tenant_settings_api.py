@@ -85,6 +85,8 @@ async def test_defaults_and_unknown_keys(client, owner):
         "request_asked_again_threshold": 3,
         # H9: null reads as the earliest active owner.
         "pricing_owner": None,
+        # H7: 200 open-web searches a month for the competitive digest.
+        "web_searches_per_month": 200,
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404

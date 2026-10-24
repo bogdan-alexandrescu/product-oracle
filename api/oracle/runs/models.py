@@ -47,6 +47,8 @@ FLOWS = (
     "metrics_variance",
     # H9 Pricing input (migration 0051_pricing): a pricing memo's draft.
     "pricing_memo",
+    # H7 Competitive digest (migration 0052_market): the monthly digest's write-up.
+    "competitive_digest",
 )
 RUN_STATUSES = (
     "draft",

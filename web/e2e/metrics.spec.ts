@@ -126,6 +126,7 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
     "Rituals",
     "Updates",
     "Metrics",
+    "Market",
   ]);
   await expect(viewOnly(page)).toHaveCount(0);
   await expect(metricRow(page, "Weekly active teams")).toContainText("Commenter");
@@ -400,6 +401,11 @@ test("a Find out row raised after my last visit is New, and its Age tip is the d
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
   await expect(page.getByTestId("inbox-metrics")).toBeVisible();
   await expect(metricNeed(page, "Find out · Invites sent per team")).toHaveCount(0);
+  // The visit is recorded after the page has drawn (mark_seen), by the mock in the page:
+  // moving the clock before it has saved would record the visit at 05:00 instead.
+  await expect
+    .poll(() => page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("po-mock-db-v2") ?? "{}").inbox_seen ?? {}).some((v) => String(v).startsWith("2026-10-26T06"))))
+    .toBe(true);
   // Mon Oct 26, 05:00 in Los Angeles: the day has come, after that visit.
   await page.clock.setSystemTime(new Date("2026-10-26T12:00:00Z"));
   await page.reload();

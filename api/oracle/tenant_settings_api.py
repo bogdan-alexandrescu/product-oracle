@@ -64,6 +64,10 @@ from every member's Google Docs sources in the same request, with no Drive call
 - ``pricing_owner`` (H9): the one person who decides prices, an active owner's user id;
   null reads as the earliest active owner (:func:`oracle.pricing.decide.pricing_owner`).
 
+- ``web_searches_per_month`` (H7): 0-2,000, default 200: the open-web searches Oracle's
+  digest runs may make in the Company time zone's month (counted from ``web_searches``);
+  0 turns web search off.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -142,7 +146,10 @@ DEFAULTS: dict[str, Any] = {
     "request_asked_again_threshold": 3,
     # H9 Pricing input: the pricing owner's user id; null is the earliest active owner.
     "pricing_owner": None,
+    # H7 Competitive digest: open-web searches per month across runs; 0 turns them off.
+    "web_searches_per_month": 200,
 }
+MAX_WEB_SEARCHES_PER_MONTH = 2000
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
 # key takes it shared; either way the caller is re-read under it.
@@ -327,6 +334,11 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         }[key]
         if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
             raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
+        return value
+    if key == "web_searches_per_month":
+        hi = MAX_WEB_SEARCHES_PER_MONTH
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= hi:
+            raise InvalidSetting(f"web_searches_per_month must be a whole number from 0 to {hi}")
         return value
     if key == "outcome_calibration":
         if value not in ("apply", "show"):

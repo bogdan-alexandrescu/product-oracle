@@ -23,12 +23,14 @@ test.beforeEach(async ({ page }) => {
   await pricingScenario(page);
 });
 
-/** Company › Market from the rail, as a person gets there; Pricing is its first tab. */
+/** Company › Market › Pricing from the rail, as a person gets there (H7's Alternatives is Market's first tab). */
 async function openMarket(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
   await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-market").click();
   await expect(page).toHaveURL(/\/company\/market$/);
+  await page.getByTestId("market-tab-pricing").click();
+  await expect(page).toHaveURL(/tab=pricing/);
   await expect(page.getByTestId("pricing-table")).toBeVisible();
 }
 
@@ -158,12 +160,12 @@ test("10d: another owner sees Waiting for Admin to decide, and no Decide button"
   await expect(page.getByRole("button", { name: "Decide" })).toHaveCount(0);
 });
 
-test("10e: a commenter has no Market tab and no pricing decision in Company › Decisions", async ({ page }) => {
-  // protects=a commenter sees no Market tab (so no Pricing or Win and loss), "Not found" at
-  // its address, and no pricing decision among all of Company › Decisions, while an approver
-  // sees that decision; fails_when=the tab is drawn (even disabled), the page shows memos or
-  // deals, or the pricing decision is listed for the commenter; no_claim=MCP and search
-  // (tests/test_pricing_visibility.py).
+test("10e: a commenter has no Pricing or Win and loss tab and no pricing decision in Company › Decisions", async ({ page }) => {
+  // protects=a commenter reads Company › Market (H7's alternatives) but sees no Pricing or Win
+  // and loss tab, no memos or deals at their address, and no pricing decision among all of
+  // Company › Decisions, while an approver sees that decision; fails_when=either tab is drawn
+  // (even disabled), the page shows memos or deals, or the pricing decision is listed for the
+  // commenter; no_claim=MCP and search (tests/test_pricing_visibility.py).
   const decided = "Price: Should the Starter plan cost less for teams under 5 seats?";
   await login(page, APPROVER);
   await page.goto("/company/decisions");
@@ -175,14 +177,20 @@ test("10e: a commenter has no Market tab and no pricing decision in Company › 
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
   const nav = page.getByRole("navigation", { name: "Company" });
   await expect(nav.getByTestId("company-tab-decisions")).toBeVisible();
-  await expect(nav.getByTestId("company-tab-market")).toHaveCount(0);
+  await nav.getByTestId("company-tab-market").click();
+  await expect(page.getByTestId("market-tab-alternatives")).toBeVisible();
+  await expect(page.getByTestId("market-tab-pricing")).toHaveCount(0);
+  await expect(page.getByTestId("market-tab-win-loss")).toHaveCount(0);
   await nav.getByTestId("company-tab-decisions").click();
   await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
   await expect(page.getByTestId("decision-row").first()).toBeVisible();
   await expect(page.getByTestId("decision-row").filter({ hasText: decided })).toHaveCount(0);
-  await page.goto("/company/market?tab=win-loss");
-  await expect(page.getByTestId("market-not-found")).toHaveText("Not found");
-  await expect(page.getByTestId("deals-table")).toHaveCount(0);
+  for (const tab of ["pricing", "win-loss"]) {
+    await page.goto(`/company/market?tab=${tab}`);
+    await expect(page.getByTestId("market-tab-alternatives")).toBeVisible();
+    await expect(page.getByTestId("pricing-table")).toHaveCount(0);
+    await expect(page.getByTestId("deals-table")).toHaveCount(0);
+  }
 });
 
 test("10f: an owner sets the Pricing owner on Settings › Company; after a reload the new name shows", async ({ page }) => {
@@ -219,7 +227,7 @@ test("10g: at 390 px the Pricing and Win and loss tables have no horizontal scro
   // no_claim=other phone widths.
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, APPROVER);
-  await page.goto("/company/market");
+  await page.goto("/company/market?tab=pricing");
   const memos = page.getByTestId("pricing-table");
   await expect(memos.getByTestId("memo-row").first()).toBeVisible();
   await expect(memos.getByTestId("memo-state").first()).toBeVisible();

@@ -43,8 +43,11 @@ from oracle.tenancy import current_tenant, tenant_session
 from oracle.tenant_settings import TenantSetting
 
 FLOW = "ritual_summary"
-# H5: kinds whose summary is another flow's run ("Explain with Oracle").
-FLOW_FOR_KIND = {"metrics_review": "metrics_variance"}
+# Kinds whose summary is another flow's run: H5's "Explain with Oracle" on a metrics
+# review, and H7's monthly competitive digest write-up.
+FLOW_FOR_KIND = {"metrics_review": "metrics_variance", "competitive_digest": "competitive_digest"}
+# H7: kinds Oracle writes only from H11 ``market`` Draft up (never at Observe).
+MARKET_KINDS = frozenset({"competitive_digest"})
 FILE = "summary.md"
 SETTING = "ritual_summaries"
 # Kinds whose pre-read is figures and lists; changelog and the updates are already drafts.
@@ -62,10 +65,17 @@ def flow_of(kind: str) -> str:
     return FLOW_FOR_KIND.get(kind, FLOW)
 
 
+def eligible(kind: str | None) -> bool:
+    """A kind Oracle writes a summary or a write-up of."""
+    return kind in COVERED or kind in FLOW_FOR_KIND
+
+
 def per_summary_usd(flow_key: str = FLOW) -> Decimal:
+    """One run of ``flow_key`` at its default knobs, each role at its own depth
+    (flows.segment_estimate): $3.00, a metrics review's $1.50, the digest's $7.00."""
     flow = flows.FLOWS[flow_key]
-    roles = sum((flows.ROLES[r].base_usd for s in flow.segments for r in s.roles), Decimal(0))
-    return roles * flows.DEPTHS[flow.default_depth]
+    knobs = flows.resolve_knobs(flow, {})
+    return sum((flows.segment_estimate(s, knobs) for s in flow.segments), Decimal(0))
 
 
 async def mode(db: AsyncSession) -> str:
@@ -75,14 +85,14 @@ async def mode(db: AsyncSession) -> str:
 
 
 async def estimate(db: AsyncSession) -> Estimate:
-    """Runs a month x each kind's run ($3.00; a metrics review's $1.50) over the active
-    rituals Every pre-read would cover."""
+    """Runs a month x each kind's run ($3.00; a metrics review's $1.50; the competitive
+    digest's $7.00) over the active rituals Every pre-read would cover."""
     rituals = [
         r
         for r in await db.scalars(
             select(Ritual).where(Ritual.status == "active").order_by(Ritual.created_at)
         )
-        if r.kind in COVERED
+        if eligible(r.kind)
     ]
     rows = [
         EstimateRitual(ritual_id=r.id, title=r.title, runs_per_month=runs_per_month(r.schedule),
@@ -138,7 +148,8 @@ async def _start(
     from oracle.runs import service as runs_service
     from oracle.runs.schemas import KnobsIn, RunCreate
 
-    body = RunCreate(flow=flow, knobs=KnobsIn(depth="quick"))  # type: ignore[arg-type]
+    depth = flows.FLOWS[flow].default_depth
+    body = RunCreate(flow=flow, knobs=KnobsIn(depth=depth))  # type: ignore[arg-type]
     run_id = await runs_service.create_run(
         db, actor, body, entry_knobs={"ritual_occurrence_id": str(occ.id)}, commit=False,
         created_by=created_by,
@@ -177,10 +188,28 @@ async def on_demand(db: AsyncSession, principal: Principal, occ: RitualOccurrenc
         if status in ACTIVE:
             raise RitualError(409, "Oracle is already writing this summary")
     ritual = await db.get(Ritual, occ.ritual_id)
-    flow = flow_of(ritual.kind if ritual is not None else "custom")
+    kind = ritual.kind if ritual is not None else "custom"
+    if not await offered(db, kind):
+        from oracle.market.digest import OBSERVE
+
+        raise RitualError(409, OBSERVE)
+    flow = flow_of(kind)
     if await _nothing_to_explain(db, flow, occ):
         raise RitualError(409, NOTHING_TO_EXPLAIN)
     return await _start(db, principal, occ, principal.user_id, flow)
+
+
+async def offered(db: AsyncSession, kind: str | None) -> bool:
+    """Whether Oracle writes a ``kind`` occurrence's summary now: a competitive digest's
+    not at H11 ``market`` Observe (its route answers 409 there)."""
+    return kind not in MARKET_KINDS or await _market_writes(db)
+
+
+async def _market_writes(db: AsyncSession) -> bool:
+    """H11 ``market``: Oracle writes the digest from Draft up, never at Observe."""
+    from oracle import autonomy
+
+    return await autonomy.allows(db, "market", "draft")
 
 
 async def _oracle_acts(db: AsyncSession, flow: str = FLOW) -> bool:
@@ -210,7 +239,7 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
 
     try:
         ritual = await db.get(Ritual, ritual_id)
-        if ritual is None or ritual.kind not in COVERED:
+        if ritual is None or not eligible(ritual.kind) or not await offered(db, ritual.kind):
             return
         flow = flow_of(ritual.kind)
         acting = False
@@ -237,17 +266,21 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
         title, owner_id = ritual.title, ritual.owner_id
         run_id = await _start(db, audit.ORACLE, occ, owner.id, flow)
         if acting:
-            explain = flow != FLOW
+            explain = flow == "metrics_variance"
+            usd = per_summary_usd(flow)
+            if explain:
+                said = f"Started Explain with Oracle on the {title} (${usd:.2f} a run)"
+            elif flow == "competitive_digest":
+                said = f"Started writing the {title} (${usd:.2f}, within your limit)"
+            else:
+                said = (
+                    f"Started a summary of the pre-read for '{title}' "
+                    f"(${usd:.2f}, within your limit)"
+                )
             await autonomy.acted(
                 db,
                 "rituals",
-                summary=(
-                    f"Started Explain with Oracle on the {title} "
-                    f"(${per_summary_usd(flow):.2f} a run)"
-                    if explain
-                    else f"Started a summary of the pre-read for '{title}' "
-                    f"(${per_summary_usd(flow):.2f}, within your limit)"
-                ),
+                summary=said,
                 subject={
                     "kind": "ritual",
                     "key": str(ritual_id),
@@ -334,3 +367,7 @@ async def import_variances(
 
 
 extensions.register_importer("metrics_variance", import_variances)
+
+
+# H7: the competitive digest's prompt lines and importer register themselves.
+from oracle.market import digest as _digest  # noqa: E402,F401

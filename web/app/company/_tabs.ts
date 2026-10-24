@@ -18,7 +18,6 @@ export const COMPANY_TABS: CompanyTab[] = [
   { key: "updates", label: "Updates", href: "/company/updates", testId: "company-tab-updates", read: "start_draft" },
   // H5 Metrics review (owner 2026-10-23, Q2 "New pages"): everyone reads the weekly metrics.
   { key: "metrics", label: "Metrics", href: "/company/metrics", testId: "company-tab-metrics", read: "list_metrics" },
-  // H9 Pricing input: pricing memos and win and loss records are for owners and approvers (H8's
-  // rule); the tab is drawn only for a role that can list the memos.
-  { key: "market", label: "Market", href: "/company/market", testId: "company-tab-market", read: "list_pricing_memos" },
+  // H7 Competitive digest (owner 2026-10-23, "New pages"): everyone reads the market; approvers and owners change it.
+  { key: "market", label: "Market", href: "/company/market", testId: "company-tab-market", read: "list_competitors" },
 ];
