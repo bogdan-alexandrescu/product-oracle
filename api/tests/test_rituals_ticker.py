@@ -44,8 +44,9 @@ async def set_mode(client, ctx, mode: str) -> None:
 
 async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
     """protects=criterion 2: the first tick seeds every built-in whose feature exists on
-    main (H1 decisions, H4 strategy, H6 launches, H8 updates and F6's report among
-    them), active but investor_update and board_meeting (paused), owned by the earliest
+    main (H1 decisions, H4 strategy, H6 launches, H8 updates, H7 market and F6's report
+    among them), active but investor_update, board_meeting and competitive_digest
+    (paused), owned by the earliest
     owner with owners and approvers attending; a second tick seeds nothing;
     fails_when=a kind whose feature exists is missing (an empty FEATURES), one is on
     the wrong state, or a built-in is seeded twice; no_claim=the blocks' content
@@ -55,10 +56,10 @@ async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
     assert set(seeded) == {
         "goals_checkin", "roadmap_refresh", "goals_review", "decision_review",
         "strategy_review", "changelog", "investor_update", "board_meeting",
-        "alignment_report",
+        "alignment_report", "competitive_digest",
     }  # fmt: skip
     for r in seeded.values():
-        off = r.kind in ("investor_update", "board_meeting")
+        off = r.kind in ("investor_update", "board_meeting", "competitive_digest")
         assert r.status == ("paused" if off else "active") and r.builtin
         assert (r.next_due_at is None) == off
         assert r.owner_id == ctx.users["owner"].id
@@ -67,7 +68,7 @@ async def test_the_first_tick_seeds_the_built_ins_once(ctx, at):
         # by default).
         assert r.schedule["timezone"] == "America/Los_Angeles"
     await tick(ctx.tenant_id)
-    assert len(await rituals_of(ctx.tenant_id)) == 9
+    assert len(await rituals_of(ctx.tenant_id)) == 10
 
 
 async def test_an_occurrence_is_created_once_at_its_preparation_moment(ctx, at):
