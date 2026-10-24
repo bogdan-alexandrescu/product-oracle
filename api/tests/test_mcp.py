@@ -22,7 +22,7 @@ from oracle.baseline.models import Proposal
 from oracle.main import app, create_app
 from oracle.mcp import auth as mcp_auth
 from oracle.mcp.curated import CURATED, flag_low_confidence
-from oracle.mcp.scopes import required_scope
+from oracle.mcp.scopes import allowed, required_scope
 from oracle.mcp.tools import app_operations
 from oracle.runs.models import Run
 from oracle.runtokens import RunToken, mint_run_token
@@ -241,7 +241,8 @@ async def test_parity_over_the_wire(tenant_id):
         result = await c.list_tools()
     names = {t.name for t in result.tools}
     for op in app_operations(app):
-        if op.excluded:
+        # Run-only operations (H7's web tools, read:web) are never offered to people.
+        if op.excluded or not allowed(None, op.method, op.path):
             assert op.tool_name not in names, op.tool_name
             continue
         assert op.tool_name in names or f"{op.tool_name}_op" in names, op.tool_name

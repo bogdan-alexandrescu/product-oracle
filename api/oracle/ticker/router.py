@@ -38,6 +38,7 @@ import logging
 import random
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -254,6 +255,16 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             await db.commit()
     except Exception:
         log.exception("run ticker: outcome tracking failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Web results (H7): what digest runs searched and read is kept 13 months.
+        from oracle.web.models import purge_old
+
+        async with tenant_session(tenant_id) as db:
+            await purge_old(db, datetime.now(UTC))
+            await db.commit()
+    except Exception:
+        log.exception("run ticker: the web results purge failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Requests (C1 "Triage runs"): once a day at 07:00 Pacific, a quick classify-only

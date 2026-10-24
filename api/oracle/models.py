@@ -149,6 +149,7 @@ from oracle.v2.models import (  # noqa: E402
     StakeholderQuestion,
     TemplateModuleAssignment,
 )
+from oracle.web.models import WebResult, WebSearch  # noqa: E402
 
 __all__ = [
     "NextDraftChange",
@@ -270,6 +271,8 @@ __all__ = [
     "TrackerRecord",
     "User",
     "UserPreference",
+    "WebResult",
+    "WebSearch",
 ]
 
 # Trash (#482): every read leaves trashed rows out; registered with the models.
