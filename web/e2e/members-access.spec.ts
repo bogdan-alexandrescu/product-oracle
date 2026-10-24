@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { login } from "./helpers";
 
@@ -11,8 +11,9 @@ import { login } from "./helpers";
  *   The Sign-in panel (AC 25) says what a sign-in without an invite does and keeps the choice;
  *   its default role is Viewer or Commenter; the deployment's domain is locked; a public mail
  *   domain is refused.
- * no_claim: the mock stands in for the API (AC 1-21 cover it); the Inbox row (AC 24) is not
- *   built yet; the rest of A5 is in members-people.spec.ts and access-page.spec.ts.
+ * no_claim: the mock stands in for the API (AC 1-21 cover it); the Inbox row (AC 24) is in
+ *   inbox-access-requests.spec.ts; the rest of A5 is in members-people.spec.ts and
+ *   access-page.spec.ts.
  */
 
 test("members: an owner approves an access request as viewer and it becomes an invite", async ({ page }) => {
@@ -102,4 +103,75 @@ test("members: the Sign-in panel keeps Join at once, offers Viewer and Commenter
   await panel.getByRole("button", { name: "Add", exact: true }).click();
   await expect(panel.getByRole("alert")).toContainText("gmail.com is a public mail provider");
   await expect(panel.getByTestId("sign-in-domain")).toHaveCount(1);
+});
+
+/*
+ * #203 part 3, on the mock layer.
+ * protects: a request's role starts on the company's stored default role; an invite carries
+ *   the name teammates know them by; an invite row says who invited them and how often it was
+ *   resent; the counts under Holds, and "See them" in the remove dialog, open the approvals
+ *   behind them.
+ * fails_when: the select starts on Commenter whatever is stored; the Name field is missing or
+ *   its name is not shown on the row; the row's tooltip lacks the inviter or the resend; Holds
+ *   or "See them" open nothing, or not the member's approvals.
+ * no_claim: the API's preset and approvals (api/tests); what a resend sends.
+ */
+
+const inviteRow = (page: Page, email: string) => page.getByTestId("invite-row").filter({ hasText: email });
+
+test("members: an access request starts on the company's stored default role", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  const panel = page.getByTestId("sign-in-rules");
+  await panel.getByLabel("Default role", { exact: true }).selectOption("viewer");
+  // On to the Inbox through the app (the save lands meanwhile), then back to Members.
+  await page.getByTestId("nav-inbox").click();
+  await expect(page.getByTestId("inbox-access-requests")).toBeVisible();
+  await page.goto("/settings/members");
+  await expect(page.getByTestId("sign-in-rules").getByLabel("Default role", { exact: true })).toHaveValue("viewer");
+  await expect(page.getByTestId("access-row").getByLabel("Role for new.person@example.com")).toHaveValue("viewer");
+});
+
+test("members: an invite with a Name shows it on its row", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  const form = page.getByRole("form", { name: "Invite" });
+  await form.getByLabel("Email").fill("support.lead@example.com");
+  await expect(form.getByLabel("Name")).toHaveAttribute("placeholder", "As teammates know them");
+  await form.getByLabel("Name").fill("Support lead");
+  await form.getByRole("button", { name: "Send invite" }).click();
+  const row = inviteRow(page, "support.lead@example.com");
+  await expect(row.getByTestId("invite-who")).toHaveText(/^Support lead\s*support\.lead@example\.com$/);
+  await page.reload();
+  await expect(inviteRow(page, "support.lead@example.com")).toContainText("Support lead");
+});
+
+test("members: an invite row's tooltip names who invited them and the resends", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await expect(inviteRow(page, "new.hire@example.com").getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Oct 15");
+  const old = inviteRow(page, "old.invite@example.com");
+  await old.getByRole("button", { name: "Resend invite for old.invite@example.com" }).click();
+  await expect(old.getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Sep 20 · resent once");
+});
+
+test("members: Holds and See them open the approver's approvals", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByTestId("member-row").filter({ hasText: "approver@example.com" }).getByTestId("member-open").click();
+  const holds = page.getByTestId("member-holds");
+  await holds.getByRole("button", { name: "3 section approvals" }).click();
+  const list = holds.getByTestId("member-approvals");
+  await expect(list.getByRole("listitem")).toHaveCount(3);
+  await expect(list.getByRole("listitem").first()).toContainText("Section approval");
+  await expect(list.getByRole("link", { name: /usage-alerts v4/ }).first()).toHaveAttribute("href", "/documents/usage-alerts");
+  await holds.getByRole("button", { name: "1 version approval" }).click();
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(list).toContainText("Version approval");
+
+  await page.getByRole("button", { name: "Back to invites" }).click();
+  await page.getByRole("button", { name: "Remove approver@example.com" }).click();
+  const lapses = page.getByTestId("remove-dialog").getByTestId("preview-lapses");
+  await lapses.getByRole("button", { name: "See them" }).click();
+  await expect(lapses.getByTestId("member-approvals").getByRole("listitem")).toHaveCount(4);
 });

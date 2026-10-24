@@ -14,8 +14,8 @@ import { login, signOut } from "./helpers";
  *   leaves the new role; a name does not show in the People table; a commenter gets role
  *   selects, Remove or the Invite form; an approver is offered Approver or sees others' invites.
  * no_claim: the mock stands in for the API (AC 1-21 cover it); the Inbox access row (AC 24)
- *   is not built; the Sign-in panel and /access are in members-access.spec.ts and
- *   access-page.spec.ts.
+ *   is in inbox-access-requests.spec.ts; the Sign-in panel and /access are in
+ *   members-access.spec.ts and access-page.spec.ts.
  */
 
 const memberRow = (page: Page, email: string) => page.getByTestId("member-row").filter({ hasText: email });

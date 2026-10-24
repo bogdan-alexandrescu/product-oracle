@@ -39355,6 +39355,23 @@
               }
             ],
             "title": "Invite Id"
+          },
+          "default_role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "viewer",
+                  "commenter",
+                  "approver",
+                  "owner"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Role"
           }
         },
         "type": "object",
@@ -72050,6 +72067,11 @@
               "mcp_client"
             ],
             "title": "Signed In Via"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
           }
         },
         "type": "object",

@@ -279,6 +279,7 @@ export type NeedGroup =
   | "imports"
   | "revoke-failures"
   | "access-failures"
+  | "access-requests"
   | "report-failures"
   | "reports"
   | "strategy"
@@ -1581,7 +1582,7 @@ export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] 
 
 /**
  * Every row of the one Inbox, each in its state (owner, 2026-10-20): checkpoints, cost
- * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), feedback items and the questions asked
+ * approvals, overruns, stuck runs, couldn't-import, couldn't-revoke and access changes still failing (owners), access requests (owners and approvers), feedback items and the questions asked
  * of me are New or Open; feedback items also Staged, Declined or Done. Home's Needs you is
  * the New and Open rows, so the badge, Home and /inbox count the same items.
  */
@@ -1594,6 +1595,8 @@ export function allNeeds(
   onActed: OnActed,
   compact = false,
   fixed?: FixedHere,
+  /** A5: the access request rows (./_access), decided in place. */
+  requests: Need[] = [],
 ): StatedNeed[] {
   const n = inboxNeeds(inbox, busy, act, compact, fixed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
@@ -1626,6 +1629,7 @@ export function allNeeds(
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),
     ...decisionNeeds(inbox, busy, act, seenBefore),
+    ...stated(requests, "access-requests"),
     ...stated(asked, "questions"),
     // Shown only, under Open: nothing to decide, not an item.
     ...stated(n.deliveries, "deliveries", false).map((r) => ({ ...r, state: "open" as const })),
