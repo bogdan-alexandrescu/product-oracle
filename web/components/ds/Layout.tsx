@@ -80,6 +80,7 @@ export function Panel({
   testId,
   as: As = "section",
   bodyClassName = "",
+  busy,
 }: {
   title?: ReactNode;
   count?: ReactNode;
@@ -90,11 +91,14 @@ export function Panel({
   testId?: string;
   as?: "section" | "div";
   bodyClassName?: string;
+  /** aria-busy: what the panel draws may still change (its tools wait on the capabilities). */
+  busy?: boolean;
 }) {
   return (
     <As
       data-testid={testId}
       aria-label={typeof title === "string" ? title : undefined}
+      aria-busy={busy}
       className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${className}`}
     >
       {(title || tools) && (

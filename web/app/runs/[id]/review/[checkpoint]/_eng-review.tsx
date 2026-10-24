@@ -6,7 +6,6 @@ import { useState, type ReactNode } from "react";
 import { Button, Chip, Inspector, InspectorSection, Page, PageHeader, SegmentedControl, Split } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import type { BriefsCheck, CheckpointOut, RunOut } from "../../../_lib";
@@ -61,7 +60,6 @@ export function EngReview({
   onDecided: () => Promise<void>;
 }) {
   const router = useRouter();
-  const { can } = useMe();
   const [selected, setSelected] = useState(check.features[0]?.key ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,10 +67,10 @@ export function EngReview({
   const [sending, setSending] = useState(false);
   const pending = cp.status === "pending";
   const stages = pending && review.can_stage;
-  // A commenter's choices are suggestions a decider stages (AC6); an approver who is not the
-  // lead reads the screen (View only, AC24). #370 fixes 4: can() tells an approver (start_run is
-  // an approver's route, the lead flag aside), not a second check of the signed-in role.
-  const suggests = pending && !stages && review.can_suggest && !can("start_run");
+  // Choices from whoever does not stage are suggestions a decider stages (AC6). Train N (owner
+  // 2026-10-24): the review's own can_suggest says who may suggest, as the items and scope
+  // reviews read it; no route role stands in for it.
+  const suggests = pending && !stages && review.can_suggest;
   const decides = pending && review.can_decide;
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
 

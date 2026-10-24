@@ -171,7 +171,7 @@ export default function SourcesPage() {
 function SourcesSearchPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const { can } = useMe();
+  const { can, capsReady, capsError } = useMe();
   // #370: the Company coverage tab, for whoever may read the company's coverage (its
   // handler checks the role: an owner).
   const owner = can("get_company_source_coverage", false);
@@ -423,6 +423,8 @@ function SourcesSearchPage() {
           <Panel
             title="Coverage"
             testId="coverage-panel"
+            // Train N: the Company tab follows the capabilities; busy until they answer.
+            busy={!capsReady && !capsError}
             tools={
               owner ? (
                 <>
