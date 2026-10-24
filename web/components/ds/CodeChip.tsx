@@ -53,8 +53,9 @@ export function HoverCard({
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  /** Below the chip by `top`, or above it by `bottom` (so a body that loads late grows away from the chip). */
-  const [at, setAt] = useState<{ top?: number; bottom?: number; left: number; phone: boolean } | null>(null);
+  /** The chip's top and bottom edges: the card sits below it, or above it when it does not fit below. */
+  const [at, setAt] = useState<{ top: number; bottom: number; left: number; phone: boolean } | null>(null);
+  const [above, setAbove] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const pinned = useRef(false);
@@ -105,12 +106,24 @@ export function HoverCard({
     if (!open || !button.current) return;
     const r = button.current.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
     const phone = window.matchMedia(PHONE).matches;
-    const left = Math.max(12, Math.min(r.left, vw - 332));
-    // A chip low in the window opens its card above it: below, its Open link would sit off-screen.
-    setAt(vh - r.bottom < r.top ? { bottom: vh - r.top + 6, left, phone } : { top: r.bottom + 6, left, phone });
+    setAbove(false);
+    setAt({ top: r.top, bottom: r.bottom, left: Math.max(12, Math.min(r.left, vw - 332)), phone });
   }, [open]);
+
+  // A card that runs past the window's bottom (its Open link off-screen) moves above the
+  // chip when there is more room there; its body may grow once its lookup loads.
+  useLayoutEffect(() => {
+    const el = card.current;
+    if (!at || at.phone || !el) return;
+    const fit = () => {
+      const vh = document.documentElement.clientHeight;
+      setAbove(at.bottom + 6 + el.offsetHeight > vh && at.top > vh - at.bottom);
+    };
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [at]);
 
   useEffect(() => {
     if (!open) return;
@@ -214,7 +227,13 @@ export function HoverCard({
             onBlur={(e) => {
               if (!card.current?.contains(e.relatedTarget as Node) && e.relatedTarget !== button.current && !pinned.current) setOpen(false);
             }}
-            style={at.phone ? undefined : { top: at.top, bottom: at.bottom, left: at.left }}
+            style={
+              at.phone
+                ? undefined
+                : above
+                  ? { bottom: document.documentElement.clientHeight - at.top + 6, left: at.left }
+                  : { top: at.bottom + 6, left: at.left }
+            }
             className={`z-[60] text-left text-sm leading-5 font-normal tracking-normal whitespace-normal text-text ${
               at.phone
                 ? "fixed inset-x-0 bottom-0 rounded-t-inspector border-t border-line bg-surface px-4 pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] shadow-tip"
