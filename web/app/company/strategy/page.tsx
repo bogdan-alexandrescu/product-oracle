@@ -28,7 +28,9 @@ export default function StrategyPage() {
   // approver in by kind, and its per-item role (owner) is the one these kinds need.
   const owner = can("start_draft", false);
   // #370: approvers waive drift and owners draft; below that the strategy is read only.
-  const readOnly = capsReady && !can("waive_strategy_finding");
+  // Waive's per-item role is owner, and an approver waives the findings its kind allows
+  // (outside_strategy), so the page asks whether the role may waive some finding.
+  const readOnly = capsReady && !can("waive_strategy_finding", true);
   const [state, setState] = useState<FindingState>("open");
   const [picked, setPicked] = useState<string | null>(null);
   const [drafting, setDrafting] = useState<DocKind | null>(null);

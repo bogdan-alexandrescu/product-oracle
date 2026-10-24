@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 
 /**
@@ -19,9 +19,14 @@ import { login, signOut } from "./helpers";
  *   prompts to the prioritizer (api/tests/test_eng_review_stop.py).
  * - "started from the UI" (fix 1): protects=a run started in the sheet passes the stop through
  *   the UI; fails_when=its check has no briefs or no way to Approve; no_claim=the real agents.
- * - "approver, lead named" (AC24): protects=read-only for those who do not decide;
- *   fails_when=verdict, size or Approve controls show, or the waits-for line is missing;
- *   no_claim=commenter suggestions (staged by the lead, api/tests/test_eng_review_screen.py).
+ * - "approver, lead named" (AC24, Train N owner 2026-10-24): protects=who does not decide
+ *   never sees Approve; the screen reads the review's own can_suggest (an approver who is not
+ *   the lead suggests, as the API answers); fails_when=Approve or Send back shows, the
+ *   waits-for line is missing, or the screen hides Suggest the API allows; no_claim=the API's
+ *   rule (api/tests/test_eng_review_screen.py).
+ * - "can_suggest false" (Train N): protects=a role the review answers can_suggest false for
+ *   (the mock role viewer) reads the screen with no verdict or size controls; fails_when=it
+ *   is offered Suggest; no_claim=other roles.
  * - "inspector per feature" (fix 2): protects=a note half typed for one feature stays with it;
  *   fails_when=selecting another feature keeps the open note, so Save verdict would save it
  *   against that feature; no_claim=the verdict route (api/tests/test_eng_review_stop.py).
@@ -31,7 +36,7 @@ import { login, signOut } from "./helpers";
  * - "commenter suggests" (fix 2, AC6): protects=a commenter suggests from the screen, an
  *   approver (no lead named) stages it, the screen names only who decides; fails_when=the
  *   commenter has no controls, a suggestion counts before it is staged, or the screen says it
- *   waits for a lead nobody is; no_claim=AC24's approver with a lead named (view only).
+ *   waits for a lead nobody is; no_claim=AC24's approver with a lead named.
  * - "phone" (AC26): protects=the screen at 390 px; fails_when=rows are not cards, the decision
  *   bar is off screen, or the page scrolls sideways; no_claim=other phone layouts.
  */
@@ -152,7 +157,7 @@ test("started from the UI: a run from the sheet waits at its Engineering check a
   await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
 });
 
-test("approver, lead named: the screen is view only and says who it waits for", async ({ page }) => {
+test("approver, lead named: the screen suggests as the review's can_suggest says, never decides, and says who it waits for", async ({ page }) => {
   await withScenario(page, "eng-check");
   await login(page, "approver@example.com");
   await page.goto("/runs");
@@ -160,13 +165,27 @@ test("approver, lead named: the screen is view only and says who it waits for", 
   const line = page.getByTestId("segment-eng_review").getByTestId("review-screen-line");
   await expect(line).toContainText("Waits for the engineering lead");
   await line.getByRole("link", { name: "View" }).click();
-  await expect(page.getByTestId("view-only")).toContainText("View only");
+  await expect(page.getByTestId("view-only")).toContainText("Suggestions only");
   await expect(page.getByTestId("view-only")).toContainText("Waits for the engineering lead");
+  await expect(page.getByTestId("brief-row")).toHaveCount(3);
+  await expect(inspector(page).getByRole("group", { name: "Verdict" })).toBeVisible();
+  await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
+  await expect(bar(page).getByRole("button", { name: "Send back to architect" })).toHaveCount(0);
+});
+
+test("can_suggest false: a viewer (mock role) reads the screen with no Suggest", async ({ page }) => {
+  await withScenario(page, "eng-check");
+  await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, "viewer"] as const);
+  await login(page, "approver@example.com");
+  await page.goto(`/runs/7a11c0de-0000-4000-8000-0000000000f4`);
+  const line = page.getByTestId("segment-eng_review").getByTestId("review-screen-line");
+  await line.getByRole("link", { name: "View" }).click();
+  await expect(page.getByTestId("view-only")).toContainText("View only");
+  await expect(page.getByTestId("view-only")).not.toContainText("Suggestions only");
   await expect(page.getByTestId("brief-row")).toHaveCount(3);
   await expect(inspector(page).getByRole("group", { name: "Verdict" })).toHaveCount(0);
   await expect(inspector(page).getByRole("group", { name: "Size" })).toHaveCount(0);
   await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
-  await expect(bar(page).getByRole("button", { name: "Send back to architect" })).toHaveCount(0);
 });
 
 test("phone: at 390 px the rows are cards, the decision bar stays on screen and nothing scrolls sideways", async ({ page }) => {

@@ -955,7 +955,13 @@ function SegmentItem({
               </Link>
             </p>
           )}
-          {s.items_check && <ItemsCheckLine check={s.items_check} draft={draftActs} />}
+          {s.items_check &&
+            (waitingCp && decidedOnScreen(waitingCp) ? (
+              // D1 (#542): the items are decided on the review screen; here, the counts only.
+              <ItemsCheckLine check={s.items_check} summary />
+            ) : (
+              <ItemsCheckLine check={s.items_check} draft={draftActs} />
+            ))}
           {/* G4: everything staged at the waiting checkpoint, from rows and discussions. */}
           {waitingCp && shared && <StagingBar runId={run.id} checkpointId={waitingCp.id} revision={shared.revision} />}
           {shared && deciding.length === 0 && <SharedDraftLine review={shared} />}
@@ -1366,7 +1372,8 @@ function actionLabel(a: DraftAction, reasons: ItemReason[]): string {
   return ACTION_WORDS[a.kind] ?? a.kind;
 }
 
-function ItemsCheckLine({ check, draft }: { check: ItemsCheck; draft?: DraftActs }) {
+/** `summary`: the counts without the per-item reasons (a Roadmap items stop decided on its review screen). */
+function ItemsCheckLine({ check, draft, summary = false }: { check: ItemsCheck; draft?: DraftActs; summary?: boolean }) {
   const horizons = Object.entries(check.by_horizon).map(([h, n]) => `${n} ${h}`);
   const reasons = check.reasons ?? [];
   // An item's problems read as its blocking reasons; the box keeps the file's own problems
@@ -1400,10 +1407,10 @@ function ItemsCheckLine({ check, draft }: { check: ItemsCheck; draft?: DraftActs
           {resolutionSummary(resolution)}
         </p>
       )}
-      {check.reasons_partial && (
+      {check.reasons_partial && !summary && (
         <p className="mt-1 text-sm text-text2">Only the rule problems are listed: Oracle could not load what the other reasons read.</p>
       )}
-      {reasons.length > 0 && (
+      {reasons.length > 0 && !summary && (
         <ul className="mt-1.5 space-y-2" data-testid="items-reasons">
           {byItem(reasons).map((g) => (
             <li key={g.item} data-testid="item-reasons" data-item={g.item} className="min-w-0">

@@ -125,7 +125,10 @@ export function RequestInspector({
       chips={
         <>
           <Chip kind={STATE[request.state].kind}>{STATE[request.state].label}</Chip>
-          <Chip kind="line">{CHANNEL_LABEL[request.channel]}</Chip>
+          {/* #549: on the dark head, the hero tone; the plain line chip's dark text vanished there. */}
+          <Chip hero kind="line" data-testid="request-channel">
+            {CHANNEL_LABEL[request.channel]}
+          </Chip>
         </>
       }
     >

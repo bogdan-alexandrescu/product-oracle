@@ -222,11 +222,14 @@ for (const email of ["approver@example.com", "commenter@example.com", "viewer@ex
   test(`company: ${email.split("@")[0]} sees no tabs, and ?tab=company shows Mine`, async ({ page }) => {
     // protects=the Company tab is the owners' alone
     // fails_when=a non-owner sees a tab strip or the Company counts
-    // no_claim=the API's 403 (API tests)
+    // no_claim=the API's 403 (API tests); fails_when also: it reads before the capabilities load
     await openCoverage(page, email);
+    // Train N (owner 2026-10-24): the tabs follow the capabilities; read them once loaded.
+    await expect(page.getByRole("region", { name: "Coverage" })).toHaveAttribute("aria-busy", "false");
     await expect(page.getByRole("tablist", { name: "Coverage" })).toHaveCount(0);
     await expect(page.getByTestId("coverage-tab-company")).toHaveCount(0);
     await page.goto("/sources?tab=company");
+    await expect(page.getByRole("region", { name: "Coverage" })).toHaveAttribute("aria-busy", "false");
     await expect(table(page)).toBeVisible();
     await expect(page.getByTestId("company-table")).toHaveCount(0);
   });

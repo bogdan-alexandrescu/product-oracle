@@ -47,6 +47,8 @@ test("an invited viewer reads the discussion and the row moves to Done", async (
   await row.getByRole("link", { name: "Read" }).click();
   await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\?discussion=/);
   await expect(thread(page)).toContainText(TITLE);
+  // The thread marks itself read once drawn; the rail's badge dropping is the sign it was.
+  await expect(badge(page)).toHaveText(String(before - 1));
   await page.goto("/inbox");
   await expect(badge(page)).toHaveText(String(before - 1));
   await tab(page, "Done").click();

@@ -530,7 +530,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       ...asker(asked), asker_kind: asked.requester_kind, channel_asked: asked.channel,
       asked: asked.title.length > WORDS_MAX ? `${asked.title.slice(0, WORDS_MAX - 1)}…` : asked.title,
       body: null, draft_source: null, warnings: [], status: "drafted", channel: null, sent_on: null, sent_by: null,
-      skip_reason: null, notified_at: null, job_at: now(), created_at: now(), lock_version: 1,
+      skip_reason: null, notified_at: null, opened_at: null, job_at: now(), created_at: now(), lock_version: 1,
     };
     replies.push(reply);
     return reply;
@@ -888,6 +888,16 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     const reply = replies.find((x) => x.id === p[2]);
     const root = reply && db.requests.find((r) => r.id === reply.root_request_id);
     if (!reply || !root) return fail(404, "Reply not found");
+    if (m === "POST" && p[3] === "opened") {
+      // The member who asked opened Answer to your request: its Inbox row ends; again, nothing changes.
+      if (reply.member_id !== ctx.userId) return fail(403, "Only the member who asked opens this answer");
+      if (reply.status !== "notified") return fail(409, "Only a reply told in Oracle is opened");
+      if (!reply.opened_at) {
+        reply.opened_at = now();
+        reply.lock_version += 1;
+      }
+      return json(200, replyOut(reply));
+    }
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
     if (!mayAct(root)) return fail(403, "Only the person who filed the request or an approver acts on its replies");
     const verb = p[3] ?? "";
@@ -1017,7 +1027,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
 /**
  * The Inbox's request rows (H10): Replies to send (the filer and the decider), Asked again at
  * the threshold (the decision's approver) and Answer to your request (the member who asked,
- * shown only).
+ * shown only, until they open it: POST /v1/request-replies/{id}/opened).
  */
 export function requestInboxRows(db: RequestsDb | undefined, ctx: Pick<RequestsContext, "userId" | "decisions">): Schemas["InboxRequestReply"][] {
   if (!db) return [];
@@ -1044,9 +1054,9 @@ export function requestInboxRows(db: RequestsDb | undefined, ctx: Pick<RequestsC
     const n = merged.filter((x) => x.decided_at && x.decided_at > r.asked_again_since!).length;
     if (n >= ASKED_AGAIN_THRESHOLD) rows.push({ request_id: r.id, title: r.title, reason: "asked_again", count: n, decision_number: d.number, at: r.decided_at, counts: true });
   }
-  for (const x of replies.filter((y) => y.member_id === me && y.status === "notified")) {
+  for (const x of replies.filter((y) => y.member_id === me && y.status === "notified" && !y.opened_at)) {
     const asked = db.requests.find((r) => r.id === x.request_id);
-    rows.push({ request_id: x.request_id, title: asked?.title ?? x.asked ?? "", reason: "answer", body: x.body, at: x.notified_at, counts: false });
+    rows.push({ request_id: x.request_id, title: asked?.title ?? x.asked ?? "", reason: "answer", body: x.body, reply_id: x.id, at: x.notified_at, counts: false });
   }
   return rows;
 }

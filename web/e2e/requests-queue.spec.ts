@@ -1,5 +1,6 @@
 import { expect, test, type Page, mockNow } from "./test";
 
+import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 
 /*
@@ -326,3 +327,53 @@ test("A commenter sees no decisions, links or theme controls", async ({ page }) 
   await expect(page.getByRole("button", { name: "Create theme" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Rename" })).toHaveCount(0);
 });
+
+test("#549 Queue: the filters share one wrapping row, and wrap without sideways scroll on a phone", async ({ page }) => {
+  // protects=#549 1 (Search, State, Goal and Theme sit on one row at desktop widths, the
+  // selects at their own width); fails_when=a select stretches to the filter bar's full width
+  // or drops below Search at 1280 px, or the page scrolls sideways at 390 px; no_claim=the
+  // exact widths, or browsers other than Chromium.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await login(page);
+  await openRequests(page);
+  const bar = (await page.getByTestId("request-filters").boundingBox())!;
+  const search = (await filter(page, "Search requests").boundingBox())!;
+  const state = (await filter(page, "State").boundingBox())!;
+  expect(state.width).toBeLessThan(bar.width / 2);
+  expect(Math.abs(state.y - search.y)).toBeLessThan(search.height / 2);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(filter(page, "State")).toBeVisible();
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+/** Relative luminance of a computed `rgb(...)` colour (WCAG). */
+function luminance(css: string): number {
+  const [r, g, b] = (css.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+    const c = Number(v) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`#549 the inspector's channel chip reads on the dark head in the ${theme} theme`, async ({ page }) => {
+    // protects=#549 2 (the channel chip's text shows on the inspector's dark head, like the
+    // state chip beside it); fails_when=the chip's text colour is near the head's background
+    // (contrast under 4.5:1); no_claim=the chip's exact colours.
+    await page.addInitScript(([key, t]) => localStorage.setItem(key, t), [THEME_KEY, theme] as const);
+    await login(page);
+    await openRequests(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await pick(page, "Keep the delivery address between orders");
+    const chip = inspector(page).locator("[data-kind=line]", { hasText: /^Support$/ });
+    await expect(chip).toHaveText("Support");
+    const [text, head] = await chip.evaluate((el) => {
+      let bg = el.parentElement;
+      while (bg && getComputedStyle(bg).backgroundColor.match(/rgba\(.*, 0\)|transparent/)) bg = bg.parentElement;
+      return [getComputedStyle(el).color, getComputedStyle(bg!).backgroundColor];
+    });
+    const [hi, lo] = [luminance(text), luminance(head)].sort((a, b) => b - a);
+    expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
+  });
+}

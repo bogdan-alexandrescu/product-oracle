@@ -1,12 +1,13 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, standInClaudePage } from "./helpers";
 
 // #405: the Add account panel had two look-alike "Sign in with Claude" controls (the dark
 // one only picked the method; the real one looked disabled), and nothing showed which
 // Claude account a sign-in added.
 
 async function openAdd(page: Page) {
+  await standInClaudePage(page);
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-claude-accounts").click();

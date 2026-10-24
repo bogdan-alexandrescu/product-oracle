@@ -372,3 +372,24 @@ def test_per_item_keys_are_in_alphabetical_order():
     import oracle.capabilities as caps
 
     assert list(caps.PER_ITEM) == sorted(caps.PER_ITEM)
+
+
+@pytest.mark.parametrize("role", ROLES)
+async def test_company_source_coverage_is_the_owners_alone(client, role):
+    """protects=Company coverage is owners' only (owner 2026-10-24, Train N item 1): the
+    capabilities a non-owner reads say no, as GET /v1/sources/coverage/company answers them
+    (403); fails_when=the per-item role is missing, so can() lets an approver, commenter or
+    viewer in; no_claim=the Sources page's use of it (web lane)."""
+    from oracle.authz import has_role
+    from tests.fixtures import seed_auth
+    from tests.review_v2_helpers import person
+
+    tenant_id, _ = await seed_auth()
+    headers = (await person(tenant_id, role)).headers
+    body = await _caps(client, headers)
+    op = "get_company_source_coverage"
+    assert body["per_item"].get(op, "missing") == "owner"
+    allowed = body["operations"][op] and has_role(role, body["per_item"][op])
+    assert allowed is (role == "owner"), role
+    resp = await client.get("/v1/sources/coverage/company", headers=headers)
+    assert resp.status_code == (200 if role == "owner" else 403), resp.text

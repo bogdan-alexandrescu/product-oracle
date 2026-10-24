@@ -14,6 +14,17 @@ export async function login(page: Page, email: string = ADMIN.email) {
   await expect(page).toHaveURL(/\/home$/);
 }
 
+/**
+ * Serves Claude's sign-in page (claude.com) from the test (#520): Playwright reports the
+ * popup the app opens only once its page answers, and the real site, slow under load,
+ * left "Open Claude's sign-in page" waiting past the test's timeout.
+ */
+export async function standInClaudePage(page: Page) {
+  await page.context().route("https://claude.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<title>Claude</title><h1>Sign in to Claude</h1>" }),
+  );
+}
+
 /** A section of the visible version (Next keeps recently visited routes mounted but hidden). */
 export function section(page: Page, key: string): Locator {
   return page.locator(`section[data-section-key="${key}"]`).filter({ visible: true });
@@ -105,19 +116,22 @@ export async function sectionAction(scope: Locator, heading: string, item: strin
  */
 export async function seedStuckRuns(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const key = "po-mock-db-v2";
-    const db = JSON.parse(localStorage.getItem(key)!);
-    type R = Record<string, unknown> & { id: string; document_slug: string; segments: Record<string, unknown>[] };
-    const runs: R[] = db.runs.runs;
-    const base = runs.find((r) => r.document_slug === "team-onboarding")!;
-    const clone = (id: string, at: string): R => ({
-      ...JSON.parse(JSON.stringify(base)),
-      id,
-      status: "running",
-      checkpoints: [],
-      waiting_on: null,
-      created_at: at,
-      started_at: at,
+    // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the runs.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    return write((db) => {
+      type R = Record<string, unknown> & { id: string; document_slug: string; segments: Record<string, unknown>[] };
+      const runs: R[] = db.runs.runs;
+      const base = runs.find((r) => r.document_slug === "team-onboarding")!;
+      const clone = (id: string, at: string): R => ({
+        ...JSON.parse(JSON.stringify(base)),
+        id,
+        status: "running",
+        checkpoints: [],
+        waiting_on: null,
+        created_at: at,
+        started_at: at,
     });
     const lost = clone("7a11c0de-0000-4000-8000-000000000001", "2026-10-17T06:00:00Z");
     Object.assign(lost, {
@@ -142,8 +156,8 @@ export async function seedStuckRuns(page: Page): Promise<string> {
       can_dismiss_overrun: false,
     });
     runs.push(lost, failed);
-    localStorage.setItem(key, JSON.stringify(db));
     return done.id;
+    });
   });
 }
 
@@ -160,39 +174,42 @@ export const SENT_BACK_SUMMARY =
 export async function seedSentBack(page: Page): Promise<string> {
   return page.evaluate(
     ({ id, summary }) => {
-      const key = "po-mock-db-v2";
-      const db = JSON.parse(localStorage.getItem(key)!);
-      type S = Record<string, unknown> & { seq: number; checkpoint: string };
-      const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
-      const at = "2026-10-17T09:00:00Z";
-      const wf = "mock-wf-sent-back";
-      // As the API stores the refusal: two citations of source 'jira', cited three times.
-      const problems: Record<string, unknown>[] = [
-        { code: "invalid_citation", message: "citation #1 (j1) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j1", line: null },
-        { code: "invalid_citation", message: "citation #2 (j2) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j2", line: null },
-        { code: "unknown_citation", message: "[c:j1] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j1", line: 14 },
-        { code: "unknown_citation", message: "[c:j2] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j2", line: 14 },
-        { code: "unknown_citation", message: "[c:j1] in section 'goals' is not defined in front matter 'citations'", section_key: "goals", cite_key: "j1", line: 20 },
-      ];
-      const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
-      const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
-      const segments: S[] = run.segments;
-      for (const s of segments) {
-        Object.assign(s, {
-          id: crypto.randomUUID(),
-          status: "succeeded",
-          cost_usd: 1,
-          attempts: [{ attempt: 1, workflow_id: wf, submitted_at: at, cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
-        });
-      }
-      const findings = [
-        "Oracle could not import prd.md as the document's next version, so it sent the draft back before a person reviews it.",
-        "Citations: citation #1 (j1) is invalid: source 'jira' isn't accepted; citation #2 (j2) is invalid: source 'jira' isn't accepted.",
-      ].join("\n");
-      Object.assign(segments[3], {
-        status: "running",
-        artifacts: ["prd.md"],
-        draft_import: { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems, summary, source: null, prd_links: null },
+      // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the run.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const write = (globalThis as { __poMockWrite?: (change: (db: any) => string) => Promise<string> }).__poMockWrite;
+      if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+      return write((db) => {
+        type S = Record<string, unknown> & { seq: number; checkpoint: string };
+        const base = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
+        const at = "2026-10-17T09:00:00Z";
+        const wf = "mock-wf-sent-back";
+        // As the API stores the refusal: two citations of source 'jira', cited three times.
+        const problems: Record<string, unknown>[] = [
+          { code: "invalid_citation", message: "citation #1 (j1) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j1", line: null },
+          { code: "invalid_citation", message: "citation #2 (j2) is invalid: source 'jira' isn't accepted", section_key: null, cite_key: "j2", line: null },
+          { code: "unknown_citation", message: "[c:j1] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j1", line: 14 },
+          { code: "unknown_citation", message: "[c:j2] in section 'problem' is not defined in front matter 'citations'", section_key: "problem", cite_key: "j2", line: 14 },
+          { code: "unknown_citation", message: "[c:j1] in section 'goals' is not defined in front matter 'citations'", section_key: "goals", cite_key: "j1", line: 20 },
+        ];
+        const error = `prd.md was rejected: ${problems.map((p) => `[${p.code}] ${p.message}`).join("; ")}`;
+        const run = { ...JSON.parse(JSON.stringify(base)), id, document_slug: "guest-checkout", document_id: null, created_at: at, started_at: at };
+        const segments: S[] = run.segments;
+        for (const s of segments) {
+          Object.assign(s, {
+            id: crypto.randomUUID(),
+            status: "succeeded",
+            cost_usd: 1,
+            attempts: [{ attempt: 1, workflow_id: wf, submitted_at: at, cost_usd: 1, note: null, note_by: null, state: "succeeded" }],
+          });
+        }
+        const findings = [
+          "Oracle could not import prd.md as the document's next version, so it sent the draft back before a person reviews it.",
+          "Citations: citation #1 (j1) is invalid: source 'jira' isn't accepted; citation #2 (j2) is invalid: source 'jira' isn't accepted.",
+        ].join("\n");
+        Object.assign(segments[3], {
+          status: "running",
+          artifacts: ["prd.md"],
+          draft_import: { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems, summary, source: null, prd_links: null },
       });
       (segments[3].attempts as unknown[]).push({ attempt: 2, workflow_id: wf, submitted_at: at, cost_usd: 0, note: findings, note_by: "Oracle", state: "running" });
       // Oracle answered the PRD review itself: no checkpoint stands for it.
@@ -214,8 +231,8 @@ export async function seedSentBack(page: Page): Promise<string> {
       Object.assign(run, { status: "running", waiting_on: null });
       db.runs.runs.push(run);
       db.runs.artifacts[`${id}|4|prd.md`] = "---\ntitle: Guest checkout PRD\n---\n\n# Guest checkout PRD {#title}\n";
-      localStorage.setItem(key, JSON.stringify(db));
       return id;
+      });
     },
     { id: SENT_BACK_RUN, summary: SENT_BACK_SUMMARY },
   );

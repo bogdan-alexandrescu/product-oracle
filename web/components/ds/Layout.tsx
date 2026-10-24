@@ -59,13 +59,19 @@ export function PageHeader({
   );
 }
 
-/** Master and detail: the table left, the inspector right (below on a phone). */
-export function Split({ children, inspector }: { children: ReactNode; inspector?: ReactNode }) {
+/**
+ * Master and detail: the table left, the inspector right (below on a phone). `wide`: the
+ * inspector goes below the table under about 1320 px rather than 1100 px, for a table that
+ * needs the room beside the 44 px Ask strip (Plan's Item column at 1280 px).
+ */
+export function Split({ children, inspector, wide = false }: { children: ReactNode; inspector?: ReactNode; wide?: boolean }) {
   if (!inspector) return <div className="flex min-w-0 flex-col gap-4">{children}</div>;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_380px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3">
+    <div
+      className={`grid grid-cols-[minmax(0,1fr)_380px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${wide ? "max-[1320px]:grid-cols-1" : ""}`}
+    >
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">{children}</div>
-      <div className="min-w-0 xl:sticky xl:top-4">{inspector}</div>
+      <div className={`min-w-0 ${wide ? "min-[1321px]:sticky min-[1321px]:top-4" : "xl:sticky xl:top-4"}`}>{inspector}</div>
     </div>
   );
 }
@@ -80,6 +86,7 @@ export function Panel({
   testId,
   as: As = "section",
   bodyClassName = "",
+  busy,
 }: {
   title?: ReactNode;
   count?: ReactNode;
@@ -90,11 +97,14 @@ export function Panel({
   testId?: string;
   as?: "section" | "div";
   bodyClassName?: string;
+  /** aria-busy: what the panel draws may still change (its tools wait on the capabilities). */
+  busy?: boolean;
 }) {
   return (
     <As
       data-testid={testId}
       aria-label={typeof title === "string" ? title : undefined}
+      aria-busy={busy}
       className={`min-w-0 rounded-panel border border-line bg-surface shadow-panel ${className}`}
     >
       {(title || tools) && (

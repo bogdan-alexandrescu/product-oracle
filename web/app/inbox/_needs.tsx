@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
@@ -1517,7 +1518,7 @@ export function launchNeeds(inbox: InboxOut): { counted: Need[]; shipped: Need[]
 /**
  * H10 request rows: Replies to send (the filer and the decider) and Asked again N times since
  * you said no (the decision's approver: Keep the no, Reopen) count; Answer to your request
- * (the member who asked) is shown only, carrying the reply.
+ * (the member who asked) is shown only, carrying the reply, until its Open marks it opened.
  */
 export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { counted: Need[]; shown: Need[] } {
   const rows = inbox.requests ?? [];
@@ -1550,14 +1551,39 @@ export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { 
       action: (
         <>
           {r.reason === "asked_again" && <AskedAgainActions requestId={r.request_id} title={r.title} busy={busy} act={act} />}
-          <LinkButton variant="secondary" href={href(r.request_id)}>
-            Open
-          </LinkButton>
+          {r.reason === "answer" && r.reply_id ? (
+            <OpenAnswer replyId={r.reply_id} href={href(r.request_id)} busy={busy} act={act} />
+          ) : (
+            <LinkButton variant="secondary" href={href(r.request_id)}>
+              Open
+            </LinkButton>
+          )}
         </>
       ),
     };
   };
   return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
+/**
+ * Answer to your request's Open (owner 2026-10-24): marks the answer opened, which ends the
+ * row, and opens the request.
+ */
+function OpenAnswer({ replyId, href, busy, act }: { replyId: string; href: string; busy: string | null; act: Act }) {
+  const router = useRouter();
+  return (
+    <Button
+      disabled={busy !== null}
+      onClick={() =>
+        act(`open-answer-${replyId}`, async () => {
+          await unwrap(api.POST("/v1/request-replies/{reply_id}/opened", { params: { path: { reply_id: replyId } } }));
+          router.push(href);
+        })
+      }
+    >
+      Open
+    </Button>
+  );
 }
 
 /** Asked again: Keep the no with the person's own note (a reaffirmed review), or Reopen. */

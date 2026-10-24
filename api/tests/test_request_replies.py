@@ -596,6 +596,85 @@ async def test_viewer_reads_replies_and_cannot_act(client, ctx):
         assert resp.status_code == 403, path
 
 
+# --- H10 Answer to your request ends when opened (owner 2026-10-24, Train N item 3) ---------
+
+
+async def told_in_oracle(client, ctx: Ctx) -> tuple[dict, dict]:
+    """The commenter asked in the app; an approver said no and told them in Oracle."""
+    root = await member_asks(client, ctx)
+    resp = await act(client, ctx, root["id"], "disqualify", reason="few_customers")
+    assert resp.status_code == 200, resp.text
+    [mine] = await replies(client, ctx, root["id"])
+    async with tenant_session(ctx.tenant_id) as s:
+        reply = await s.get(RequestReply, uuid.UUID(mine["id"]))
+        reply.body = "We've decided not to build dark mode: too few would use it."
+        await s.commit()
+    resp = await client.post(
+        f"/v1/request-replies/{mine['id']}/notify", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+    return root, resp.json()
+
+
+async def answers(client, ctx: Ctx, who: str = "commenter") -> list[dict]:
+    inbox = (await client.get("/v1/inbox", headers=ctx.as_(who))).json()
+    return [r for r in inbox["requests"] if r["reason"] == "answer"]
+
+
+async def test_the_answer_row_stays_until_the_asker_opens_it(client, ctx):
+    """protects=H10 Reasoned no (#515): the member who asked keeps "Answer to your request"
+    past 14 days until they open it, and opening it ends it; fails_when=the row still ends
+    by age, carries no reply id to open, or stays once opened; no_claim=the Inbox screen
+    (web lane)."""
+    root, reply = await told_in_oracle(client, ctx)
+    assert reply["opened_at"] is None
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(RequestReply, uuid.UUID(reply["id"]))
+        row.notified_at = row.notified_at - timedelta(days=30)
+        await s.commit()
+    [answer] = await answers(client, ctx)
+    assert answer["reply_id"] == reply["id"] and answer["title"] == root["title"]
+
+    resp = await client.post(
+        f"/v1/request-replies/{reply['id']}/opened", headers=ctx.as_("commenter")
+    )
+    assert resp.status_code == 200, resp.text
+    opened = resp.json()
+    assert opened["opened_at"] is not None and opened["status"] == "notified"
+    assert await answers(client, ctx) == []
+    # Idempotent: opening it again changes nothing.
+    again = await client.post(
+        f"/v1/request-replies/{reply['id']}/opened", headers=ctx.as_("commenter")
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["opened_at"] == opened["opened_at"]
+    assert await answers(client, ctx) == []
+
+
+async def test_only_the_asker_opens_their_answer(client, ctx):
+    """protects=the opened mark is the asker's alone; fails_when=an approver, an owner, a
+    viewer or a run's token ends someone else's row, or a reply nobody was told in Oracle
+    is marked opened; no_claim=who tells them (test_reply_actions_roles_and_loop_closed)."""
+    _, reply = await told_in_oracle(client, ctx)
+    url = f"/v1/request-replies/{reply['id']}/opened"
+    for who in ("viewer", "approver", "owner"):
+        assert (await client.post(url, headers=ctx.as_(who))).status_code == 403, who
+    assert len(await answers(client, ctx)) == 1
+
+    other = await add(client, ctx, channel="in_app", title="Bulk delete")
+    resp = await act(client, ctx, other["id"], "disqualify", reason="few_customers")
+    assert resp.status_code == 200, resp.text
+    [drafted] = await replies(client, ctx, other["id"])
+    resp = await client.post(
+        f"/v1/request-replies/{drafted['id']}/opened", headers=ctx.as_("commenter")
+    )
+    assert resp.status_code == 409, resp.text
+    resp = await client.post(
+        f"/v1/request-replies/{uuid.uuid4()}/opened", headers=ctx.as_("commenter")
+    )
+    assert resp.status_code == 404, resp.text
+
+
 # --- isolation and run tokens -----------------------------------------------------------------
 
 
@@ -613,6 +692,7 @@ async def test_another_companys_ids_are_404(client, ctx):
         ("post", f"/v1/request-replies/{reply['id']}/sent", {"channel": "email"}),
         ("post", f"/v1/request-replies/{reply['id']}/skip", {"reason": "x"}),
         ("post", f"/v1/request-replies/{reply['id']}/notify", None),
+        ("post", f"/v1/request-replies/{reply['id']}/opened", None),
         ("post", f"/v1/requests/{r['id']}/replies/draft", None),
         ("post", f"/v1/requests/{r['id']}/replies/reopened", None),
         ("post", f"/v1/requests/{r['id']}/keep-no", {"note": "Still no"}),
@@ -650,6 +730,7 @@ async def test_run_tokens_read_replies_under_read_sources_and_never_write(
         ("POST", "/v1/request-replies/{reply_id}/sent"),
         ("POST", "/v1/request-replies/{reply_id}/skip"),
         ("POST", "/v1/request-replies/{reply_id}/notify"),
+        ("POST", "/v1/request-replies/{reply_id}/opened"),
         ("POST", "/v1/requests/{request_id}/replies/draft"),
         ("POST", "/v1/requests/{request_id}/replies/reopened"),
         ("POST", "/v1/requests/{request_id}/keep-no"),

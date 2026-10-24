@@ -12,6 +12,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+import { draftKey, loadDraft } from "./_draft";
 import type { ReviewViewProps } from "./_shell";
 import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from "./_scope-inspector";
 import { actionsOn, changeText, decisionText, describeAction, fixesFor, pct, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
@@ -79,7 +80,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     return unwrap(api.GET("/v1/prd-scopes/{scope_id}", { params: { path: { scope_id: latest.id } } }));
   });
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
-  const reviewQ = useQuery(`draft|${run.id}|${cp.id}`, () => unwrap(api.GET("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/review", path)));
+  const reviewQ = useQuery(draftKey(run.id, cp.id), () => loadDraft(run.id, cp.id));
   const scope = scopeQ.data ?? null;
   const review = reviewQ.data ?? null;
   const [error, setError] = useState<string | null>(null);

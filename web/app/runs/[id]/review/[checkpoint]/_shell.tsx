@@ -8,6 +8,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
+import { beginDraft } from "./_draft";
 import { ItemsReview } from "./_items-review";
 import { CheckpointReviewScreen } from "./_review";
 import { ScopeReview } from "./_scope-review";
@@ -35,6 +36,8 @@ export function ReviewShell({ runId, checkpointId, item }: { runId: string; chec
   const cp = q.data?.checkpoints.find((c) => c.id === checkpointId) ?? null;
   const View = cp ? VIEWS[cp.kind] : undefined;
   const elsewhere = !!q.data && !View;
+  // The view's draft, asked for with the run rather than once the run has answered.
+  useEffect(() => beginDraft(runId, checkpointId), [runId, checkpointId]);
   useEffect(() => {
     if (elsewhere) router.replace(`/runs/${runId}#decide`);
   }, [elsewhere, router, runId]);
