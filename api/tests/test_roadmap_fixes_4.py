@@ -161,6 +161,7 @@ async def test_baseline_yaml_refuses_each_probe(client, owner, name):  # noqa: F
     assert resp.status_code == 422, resp.text
 
 
+@pytest.mark.timing
 async def test_the_draft_parse_runs_off_the_event_loop(monkeypatch):
     import asyncio
 

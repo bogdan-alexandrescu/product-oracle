@@ -148,6 +148,7 @@ async def test_a_queue_wait_does_not_count_against_the_parse_cap():
     await asyncio.gather(*busy)
 
 
+@pytest.mark.timing
 async def test_slow_posts_do_not_make_a_small_honest_import_fail(client, monkeypatch):
     monkeypatch.setattr(safe_yaml, "PARSE_SECONDS", 0.3)
     ctx = await make_ctx()

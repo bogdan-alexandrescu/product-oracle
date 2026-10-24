@@ -619,6 +619,7 @@ def test_parse_reads_the_file_once(monkeypatch):
     assert len(loads) == 1
 
 
+@pytest.mark.timing
 async def test_a_slow_brief_parse_is_refused_off_the_event_loop(monkeypatch):
     # protects=the briefs' parse and rendering run on the parse pool with a time cap
     # (oracle.safe_yaml.run_parse_within); fails_when=they run on the event loop or wait

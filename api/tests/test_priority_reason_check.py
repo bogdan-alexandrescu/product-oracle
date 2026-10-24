@@ -207,6 +207,7 @@ async def test_confirm_makes_no_second_call_and_keeps_the_check_the_person_saw(c
     assert stored.json()["reason_check"]["status"] == "skipped"
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     ("answer", "status"),
     [
