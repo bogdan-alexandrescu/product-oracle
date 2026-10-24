@@ -1,8 +1,8 @@
 """The people who asked for a launch's items, in this order:
 
 1. **Requests** (C1 Requests): requests linked to the items' features or requirements,
-   with the requester's name and how they reached the company, as given. Until C1
-   ships nothing is registered here and this source is empty (``REQUEST_SOURCES``).
+   with the requester's name and how they reached the company, as given. Registered by
+   ``oracle.requests.launch_requesters`` (H10) in ``REQUEST_SOURCES``.
 2. **Members** whose PRD comments led to the items' requirements: authors of comment
    feedback addressed on the item's PRD section, in the PRD version the item came from
    or an earlier one.

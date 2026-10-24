@@ -47,7 +47,7 @@ const MAX_REVIEW_DAYS = 365;
 const SHOWN_DAYS = 7;
 const CHECKPOINT_LOCKED = "A checkpoint record is not edited; it records the run's decision";
 const DECIDED_LOCKED = "Decided decisions are not edited. Revisit it instead.";
-const CAPTURED = ["version_approval", "assumption", "blocker", "pushback_override", "priority_override", "checkpoint"];
+const CAPTURED = ["version_approval", "assumption", "blocker", "pushback_override", "priority_override", "checkpoint", "request_decline"];
 const STOP_LABELS: Record<string, string> = {
   baseline_confirm: "Baseline confirm",
   feature_set: "Feature set",
@@ -296,6 +296,46 @@ export function syncCheckpointRecords(ctx: DecisionsContext, db: DecisionsDb) {
       }),
     );
   }
+}
+
+/**
+ * H10: what the requests mock records here. Saying no to a request captures a decided judgement
+ * call (origin request_decline, reviewed in 90 days); Reopen reverses it with a review by the
+ * person who reopened; Keep the no is a reaffirmed review.
+ */
+export function requestDecisions(ctx: DecisionsContext, db: () => DecisionsDb) {
+  const review = (id: string, verdict: "reaffirmed" | "reversed", note: string) => {
+    const d = db().decisions.find((x) => x.id === id);
+    if (!d) return;
+    if (verdict === "reversed") d.status = "reversed";
+    else d.review_at = day(REVIEW_DAYS);
+    d.updated_at = ctx.now();
+    db().reviews.push({
+      id: ctx.uuid(), decision_id: d.id, verdict, note, outcome_status: null, next_review_at: verdict === "reaffirmed" ? d.review_at : null,
+      revisit_id: null, reviewed_by: ctx.me.id, reviewed_by_email: ctx.me.email, created_at: ctx.now(),
+    });
+  };
+  return {
+    capture: (input: { title: string; question: string; rationale: string; entity_ids: string[]; request_id: string; request_title: string }) => {
+      const log = db();
+      const row = blank(ctx, log, {
+        title: input.title, question: input.question, origin: "request_decline", approver_id: ctx.me.id, status: "decided",
+        options: [option("say_no", "Say no"), option("keep_open", "Keep it open")], chosen_option: "say_no",
+        rationale: input.rationale, decided_by: ctx.me.id, decided_actor: "user", decided_at: ctx.now(), review_at: day(REVIEW_DAYS),
+        driver: `user:${ctx.me.id}`, created_by: ctx.me.id, entity_ids: input.entity_ids,
+        source: { kind: "product_request", id: input.request_id } as Row["source"],
+        subjects: [{ kind: "request", id: input.request_id, ref: input.request_title }],
+      });
+      log.decisions.push(row);
+      return { id: row.id, number: row.number };
+    },
+    get: (id: string) => {
+      const d = db().decisions.find((x) => x.id === id);
+      return d ? { number: d.number, title: d.title, status: d.status, approver_id: d.approver_id } : null;
+    },
+    reverse: (id: string, note: string) => review(id, "reversed", note),
+    reaffirm: (id: string, note: string) => review(id, "reaffirmed", note),
+  };
 }
 
 function emailOf(ctx: DecisionsContext, id: string | null | undefined): string | null {

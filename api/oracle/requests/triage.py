@@ -288,7 +288,16 @@ async def _suggest(
             if duplicate is None or duplicate not in known or duplicate == row.id:
                 drops[("duplicate", "unknown request")] += 1
                 duplicate = None
+        problem = _problem(entry.get("problem"), drops)
+        if problem and theme_id is not None:
+            theme = lookups.themes.get(theme_id)
+            if theme is not None and theme.problem_state != "confirmed":
+                # H10: Oracle's problem for the theme, until an approver confirms it.
+                theme.problem_suggestion = problem
+                theme.problem_state = "suggested"
         row.suggestion = {
+            **({"problem": problem} if problem and theme_id is None and theme_title else {}),
+            **({"decline": d} if (d := _decline(entry.get("decline"), lookups, drops)) else {}),
             "theme_id": str(theme_id) if theme_id else None,
             "theme_title": theme_title,
             "goal_ids": [str(g) for g in lookups.goal_ids(entry.get("goals"), drops)],
@@ -303,6 +312,49 @@ async def _suggest(
         written.add(row.id)
     await db.flush()
     return len(written)
+
+
+PROBLEM_MAX = {"problem": 1000, "success": 500, "constraints": 500}
+DECLINE_REASONS = ("no_goal", "out_of_scope", "strategy_stop", "already_exists", "few_customers")
+
+
+def _problem(raw: Any, drops: Counter[tuple[str, str]]) -> dict[str, str] | None:
+    """H10: the need behind a theme, as triage suggests it; None when it has no problem."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or _text(raw.get("problem"), PROBLEM_MAX["problem"]) is None:
+        drops[("problem", "not readable")] += 1
+        return None
+    return {k: v for k, limit in PROBLEM_MAX.items() if (v := _text(raw.get(k), limit)) is not None}
+
+
+def _decline(raw: Any, lookups: _Lookups, drops: Counter[tuple[str, str]]) -> dict[str, Any] | None:
+    """H10: "Oracle suggests saying no": a reason, its basis and why. Shown only; nothing
+    is disqualified until an approver submits the Disqualify form."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or raw.get("reason") not in DECLINE_REASONS:
+        drops[("decline", "not readable")] += 1
+        return None
+    basis = raw.get("basis") if isinstance(raw.get("basis"), dict) else {}
+    kind = basis.get("kind") or "none"
+    bid: uuid.UUID | None = None
+    if kind == "feature":
+        bid = lookups.features.get(str(basis.get("id"))) or _uuid(basis.get("id"))
+    elif kind == "goal":
+        bid = lookups.goals.get(str(basis.get("id"))) or _uuid(basis.get("id"))
+    elif kind == "strategy_choice":
+        bid = _uuid(basis.get("id"))
+    elif kind != "none":
+        kind = "none"
+    if kind != "none" and bid is None:
+        drops[("decline", "unknown basis")] += 1
+        kind = "none"
+    return {
+        "reason": raw["reason"],
+        "basis": {"kind": kind, "id": str(bid) if bid else None},
+        "why": _text(raw.get("why"), RATIONALE_MAX),
+    }
 
 
 async def _found(

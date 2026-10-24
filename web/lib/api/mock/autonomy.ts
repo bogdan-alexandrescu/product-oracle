@@ -179,10 +179,10 @@ const REGISTRY: RegistryRow[] = [
       "act"
     ],
     "levels": {
-      "observe": "Oracle records and indexes requests.",
-      "draft": "Oracle drafts a summary of each request for its owner to edit.",
-      "recommend": "Oracle suggests duplicates and goals for each request; a person decides.",
-      "act": "Oracle merges duplicates and links requests to goals at or above your confidence, then tells the owner."
+      "observe": "Oracle records and indexes requests. Oracle never says no on its own.",
+      "draft": "Oracle drafts a summary of each request for its owner to edit. Oracle never says no on its own.",
+      "recommend": "Oracle suggests duplicates, goals and when to say no for each request; a person decides. Oracle never says no on its own.",
+      "act": "Oracle merges duplicates and links requests to goals at or above your confidence, then tells the owner. Oracle never says no on its own."
     },
     "ceiling_reason": null,
     "limits_schema": {
@@ -610,7 +610,7 @@ const REGISTRY: RegistryRow[] = [
     ],
     "levels": {
       "observe": "Oracle notes what people outside may need to hear.",
-      "draft": "Oracle drafts release notes, customer notes, the public changelog and board and investor updates for a named person to edit and send."
+      "draft": "Oracle drafts release notes, customer notes, why-not replies to people who asked, the public changelog and board and investor updates for a named person to edit and send."
     },
     "ceiling_reason": "what is said to people outside the company",
     "limits_schema": null,

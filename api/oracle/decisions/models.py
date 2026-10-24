@@ -42,6 +42,8 @@ ORIGINS = (
     "priority_override",
     "autonomy",
     "checkpoint",
+    # H10: a request declined with a reason that answers the asker.
+    "request_decline",
 )
 # Origins Oracle records on its own: decided as they are captured.
 CAPTURED_ORIGINS = (
@@ -51,6 +53,7 @@ CAPTURED_ORIGINS = (
     "pushback_override",
     "priority_override",
     "checkpoint",
+    "request_decline",
 )
 CLASSES = ("judgement", "checkpoint")
 SUBJECT_KINDS = (
@@ -64,6 +67,8 @@ SUBJECT_KINDS = (
     "run",
     "ritual_occurrence",
     "discussion",
+    # H10: a request said no to.
+    "request",
 )
 REVIEW_VERDICTS = ("reaffirmed", "revisit", "reversed")
 # How a checkpoint record's decision arrived: Oracle's Inbox, SwarmCloud's console, or

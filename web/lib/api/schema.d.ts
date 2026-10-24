@@ -10261,7 +10261,10 @@ export interface paths {
         put?: never;
         /**
          * Disqualify Request
-         * @description Disqualify with a reason; Other needs a note.
+         * @description Disqualify with a reason; Other needs a note. A reason that answers the asker (and
+         *     Won't do with a note) is a no (H10): a decided decision in the log, reviewed in 90
+         *     days, and a reply to everyone who asked, drafted by Oracle. On the stop list needs a
+         *     stop choice and Already possible a feature as its ``basis``.
          */
         post: operations["disqualify_request"];
         delete?: never;
@@ -10281,7 +10284,8 @@ export interface paths {
         put?: never;
         /**
          * Reopen Request
-         * @description Bring a merged or disqualified request back to New.
+         * @description Bring a merged or disqualified request back to New. A logged no is reversed (a
+         *     review by you) and its Drafted replies are withdrawn.
          */
         post: operations["reopen_request"];
         delete?: never;
@@ -10324,6 +10328,215 @@ export interface paths {
          * @description Decline Oracle's suggestion; nothing else changes.
          */
         post: operations["decline_request_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Request Replies
+         * @description The replies to the people who asked for a request said no to: name as given, how
+         *     they asked, state and the draft. A run token reads them under ``read:sources``: they
+         *     quote what people asked.
+         */
+        get: operations["list_request_replies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Request Reply
+         * @description Edit a Drafted reply (at most 2,000 characters). The filer of the request, an
+         *     approver or an owner. A date or "later" carries the warning "Sounds like a promise".
+         */
+        patch: operations["update_request_reply"];
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/sent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Request Reply Sent
+         * @description Mark sent: how (Email, Slack, Call, In the app, Other) and the day (default today
+         *     in the Company time zone). Oracle sends nothing itself.
+         */
+        post: operations["mark_request_reply_sent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Skip Request Reply
+         * @description Skip a reply, with a reason (for example "Asked anonymously").
+         */
+        post: operations["skip_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-replies/{reply_id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Notify Request Reply
+         * @description Tell them in Oracle: the member who asked finds the reply in their Inbox. 409 when
+         *     the asker is not a member.
+         */
+        post: operations["notify_request_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Request Replies
+         * @description Draft again with Oracle: one ``why_not_reply`` job on Oracle's own model for the
+         *     replies still Drafted; poll ``GET /v1/llm-jobs/{job_id}``. 409 while one runs and
+         *     while Words for people outside is at Observe.
+         */
+        post: operations["draft_request_replies"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/replies/reopened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tell Reopened
+         * @description Tell the people who asked, after Reopen: a reply saying it is being looked at
+         *     again, for each asker whose no was sent or told.
+         */
+        post: operations["tell_reopened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/keep-no": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Request No
+         * @description Keep the no: the decision's approver records a reaffirmed review, and asked again
+         *     counts from now.
+         */
+        post: operations["keep_request_no"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}/problem/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Request Theme Problem
+         * @description Confirm Oracle's suggested problem: what replies and agents cite.
+         */
+        post: operations["confirm_request_theme_problem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/request-themes/{theme_id}/problem/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Request Theme Problem
+         * @description Dismiss Oracle's suggested problem.
+         */
+        post: operations["dismiss_request_theme_problem"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12332,6 +12545,32 @@ export interface components {
             items: components["schemas"]["ImpactItem"][];
             /** Documents */
             documents: components["schemas"]["ImpactDocument"][];
+        };
+        /**
+         * BasisIn
+         * @description The record a no cites (H10): required for On the stop list (a confirmed stop
+         *     choice) and Already possible (a feature).
+         */
+        BasisIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+        };
+        /** BasisOut */
+        BasisOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** BatchState */
         BatchState: {
@@ -15546,7 +15785,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline";
             /**
              * Reversibility
              * @enum {string}
@@ -15824,7 +16063,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline";
             /**
              * Reversibility
              * @enum {string}
@@ -16662,9 +16901,10 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other";
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers";
             /** Note */
             note?: string | null;
+            basis?: components["schemas"]["BasisIn"] | null;
         };
         /** DocumentBlockerStrategy */
         DocumentBlockerStrategy: {
@@ -16946,6 +17186,14 @@ export interface components {
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
+        };
+        /** DraftJobOut */
+        DraftJobOut: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
         };
         /** DraftNoteIn */
         DraftNoteIn: {
@@ -20377,6 +20625,11 @@ export interface components {
              * @default []
              */
             discussions: components["schemas"]["InboxDiscussionItem"][];
+            /**
+             * Requests
+             * @default []
+             */
+            requests: components["schemas"]["InboxRequestReply"][];
         };
         /**
          * InboxOutcome
@@ -20483,6 +20736,37 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * InboxRequestReply
+         * @description H10 rows: Replies to send (the request's filer and its decider; counted until
+         *     every reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said
+         *     no (the decision's approver; counted until Reopen or Keep the no) and Answer to your
+         *     request (the member who asked; shown only, with the reply).
+         */
+        InboxRequestReply: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "replies_to_send" | "asked_again" | "answer";
+            /** Count */
+            count?: number | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Body */
+            body?: string | null;
+            /** At */
+            at?: string | null;
+            /** Counts */
+            counts: boolean;
         };
         /**
          * InboxRevokeFailure
@@ -22051,6 +22335,14 @@ export interface components {
             /** By Name */
             by_name?: string | null;
         };
+        /**
+         * KeepNoIn
+         * @description Keep the no (H10): a reaffirmed review on the decision; asked again counts anew.
+         */
+        KeepNoIn: {
+            /** Note */
+            note: string;
+        };
         /** KindCoverage */
         KindCoverage: {
             /** Kind */
@@ -22607,7 +22899,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -22616,6 +22908,8 @@ export interface components {
             decision_id?: string | null;
             /** Scope Id */
             scope_id?: string | null;
+            /** Request Id */
+            request_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -26448,6 +26742,8 @@ export interface components {
         ReopenIn: {
             /** Lock Version */
             lock_version: number;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * ReorderChange
@@ -26464,10 +26760,111 @@ export interface components {
             /** Position */
             position: number;
         };
+        /** ReplyCounts */
+        ReplyCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Open
+             * @default 0
+             */
+            open: number;
+        };
         /** ReplyCreate */
         ReplyCreate: {
             /** Body */
             body: string;
+        };
+        /**
+         * ReplyOut
+         * @description One reply to one person who asked (H10).
+         */
+        ReplyOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Root Request Id
+             * Format: uuid
+             */
+            root_request_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "no" | "reopened";
+            /** Decision Number */
+            decision_number: number | null;
+            /** Asker */
+            asker: string;
+            /**
+             * Asker Kind
+             * @enum {string}
+             */
+            asker_kind: "customer" | "team" | "unknown";
+            /** Member Id */
+            member_id: string | null;
+            /** Channel Asked */
+            channel_asked: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
+            /** Asked */
+            asked: string | null;
+            /** Body */
+            body: string | null;
+            /** Draft Source */
+            draft_source: ("oracle" | "template" | "person") | null;
+            /** Warnings */
+            warnings: "sounds_like_a_promise"[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "sent" | "notified" | "skipped" | "withdrawn";
+            /** Channel */
+            channel: ("email" | "slack" | "call" | "in_app" | "other") | null;
+            /** Sent On */
+            sent_on: string | null;
+            /** Sent By Name */
+            sent_by_name: string | null;
+            /** Skip Reason */
+            skip_reason: string | null;
+            /** Notified At */
+            notified_at: string | null;
+            /** Drafting */
+            drafting: boolean;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** ReplyPatch */
+        ReplyPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Body */
+            body: string;
+        };
+        /** ReplySent */
+        ReplySent: {
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "email" | "slack" | "call" | "in_app" | "other";
+            /** Sent On */
+            sent_on?: string | null;
+        };
+        /** ReplySkip */
+        ReplySkip: {
+            /** Reason */
+            reason: string;
         };
         /** ReplyUsage */
         ReplyUsage: {
@@ -26784,7 +27181,7 @@ export interface components {
             /** Merged Into Id */
             merged_into_id: string | null;
             /** Disqualify Reason */
-            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers") | null;
             /** Decision Note */
             decision_note: string | null;
             theme: components["schemas"]["RequestThemeRef"] | null;
@@ -26807,6 +27204,29 @@ export interface components {
             decided_by: string | null;
             /** Decided At */
             decided_at: string | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Decision Title */
+            decision_title?: string | null;
+            /** Decision Status */
+            decision_status?: string | null;
+            basis?: components["schemas"]["BasisOut"] | null;
+            /**
+             * Asked Again
+             * @default 0
+             */
+            asked_again: number;
+            /**
+             * @default {
+             *       "total": 0,
+             *       "open": 0
+             *     }
+             */
+            replies: components["schemas"]["ReplyCounts"];
+            /** Loop Closed On */
+            loop_closed_on?: string | null;
+            /** No Reply Reason */
+            no_reply_reason?: ("no_note" | "housekeeping") | null;
             /**
              * Created At
              * Format: date-time
@@ -26821,6 +27241,18 @@ export interface components {
             lock_version: number;
             /** Merged */
             merged: components["schemas"]["RequestOut"][];
+            /**
+             * Suggested Basis
+             * @default {}
+             */
+            suggested_basis: {
+                [key: string]: components["schemas"]["BasisOut"];
+            };
+            /**
+             * Drafting
+             * @default false
+             */
+            drafting: boolean;
         };
         /**
          * RequestDocumentProgress
@@ -26907,7 +27339,7 @@ export interface components {
             /** Merged Into Id */
             merged_into_id: string | null;
             /** Disqualify Reason */
-            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other") | null;
+            disqualify_reason: ("no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers") | null;
             /** Decision Note */
             decision_note: string | null;
             theme: components["schemas"]["RequestThemeRef"] | null;
@@ -26930,6 +27362,29 @@ export interface components {
             decided_by: string | null;
             /** Decided At */
             decided_at: string | null;
+            /** Decision Number */
+            decision_number?: number | null;
+            /** Decision Title */
+            decision_title?: string | null;
+            /** Decision Status */
+            decision_status?: string | null;
+            basis?: components["schemas"]["BasisOut"] | null;
+            /**
+             * Asked Again
+             * @default 0
+             */
+            asked_again: number;
+            /**
+             * @default {
+             *       "total": 0,
+             *       "open": 0
+             *     }
+             */
+            replies: components["schemas"]["ReplyCounts"];
+            /** Loop Closed On */
+            loop_closed_on?: string | null;
+            /** No Reply Reason */
+            no_reply_reason?: ("no_note" | "housekeeping") | null;
             /**
              * Created At
              * Format: date-time
@@ -26996,6 +27451,21 @@ export interface components {
             archived_at: string | null;
             /** Request Count */
             request_count: number;
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
+            /**
+             * Problem State
+             * @default none
+             * @enum {string}
+             */
+            problem_state: "none" | "suggested" | "confirmed";
+            problem_suggestion?: components["schemas"]["SuggestedProblem"] | null;
+            /** Problem Confirmed At */
+            problem_confirmed_at?: string | null;
             /** Created By */
             created_by: string | null;
             /**
@@ -27023,6 +27493,12 @@ export interface components {
             goal_ids?: string[] | null;
             /** Archived */
             archived?: boolean | null;
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
         };
         /** RequestThemeRef */
         RequestThemeRef: {
@@ -31644,7 +32120,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion";
+            kind: "document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion" | "request";
             /**
              * Id
              * Format: uuid
@@ -31652,6 +32128,46 @@ export interface components {
             id: string;
             /** Ref */
             ref?: string | null;
+        };
+        /** SuggestedBasis */
+        SuggestedBasis: {
+            /**
+             * Kind
+             * @default none
+             * @enum {string}
+             */
+            kind: "goal" | "strategy_choice" | "feature" | "none";
+            /** Id */
+            id?: string | null;
+        };
+        /**
+         * SuggestedDecline
+         * @description "Oracle suggests saying no": shown only; nothing is disqualified until an
+         *     approver submits the Disqualify form (H10).
+         */
+        SuggestedDecline: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "no_goal" | "out_of_scope" | "duplicate" | "not_a_request" | "wont_do" | "other" | "strategy_stop" | "already_exists" | "few_customers";
+            /**
+             * @default {
+             *       "kind": "none"
+             *     }
+             */
+            basis: components["schemas"]["SuggestedBasis"];
+            /** Why */
+            why?: string | null;
+        };
+        /** SuggestedProblem */
+        SuggestedProblem: {
+            /** Problem */
+            problem?: string | null;
+            /** Success */
+            success?: string | null;
+            /** Constraints */
+            constraints?: string | null;
         };
         /**
          * Suggestion
@@ -31675,6 +32191,8 @@ export interface components {
             confidence?: number | null;
             /** Rationale */
             rationale?: string | null;
+            decline?: components["schemas"]["SuggestedDecline"] | null;
+            problem?: components["schemas"]["SuggestedProblem"] | null;
             /** Run Id */
             run_id?: string | null;
             /** At */
@@ -32519,6 +33037,11 @@ export interface components {
             view: "document" | "slides";
             /** Slide Variant */
             slide_variant?: string | null;
+        };
+        /** ThemeProblemIn */
+        ThemeProblemIn: {
+            /** Lock Version */
+            lock_version: number;
         };
         /** ThemeSpacing */
         ThemeSpacing: {
@@ -44552,12 +45075,12 @@ export interface operations {
                 /** @description me or a member id */
                 approver?: string | null;
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
                 run_id?: string | null;
-                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion") | null;
+                subject_kind?: ("document" | "document_version" | "section" | "roadmap_item" | "entity" | "blocker" | "gap" | "run" | "ritual_occurrence" | "discussion" | "request") | null;
                 subject_id?: string | null;
                 q?: string | null;
                 limit?: number;
@@ -54204,6 +54727,8 @@ export interface operations {
                 channel?: ("support" | "sales" | "team" | "interview" | "slack" | "meeting" | "doc" | "other" | "in_app") | null;
                 /** @description Title or body search */
                 q?: string | null;
+                /** @description Only declined requests with replies still to send (H10) */
+                replies_to_send?: boolean;
                 limit?: number;
                 offset?: number;
             };
@@ -54615,6 +55140,340 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_request_replies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_request_reply_sent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplySent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    skip_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplySkip"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notify_request_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_request_replies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tell_reopened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_request_no: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepNoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_request_theme_problem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeProblemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_request_theme_problem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThemeProblemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestThemeOut"];
                 };
             };
             /** @description Validation Error */

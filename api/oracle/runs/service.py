@@ -9835,6 +9835,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.discussions import inbox as discussion_inbox
 
     discussions = await discussion_inbox.rows(db, principal, seen)
+    # H10: replies to send, asked again, answers to my own requests.
+    from oracle.requests.inbox import inbox_rows as request_rows
+
+    request_inbox = await request_rows(db, principal)
+    counted += sum(1 for r in request_inbox if r.counts)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9892,6 +9897,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         needs_me=counts.new + counts.open + counted,
         last_seen_at=seen,
         discussions=discussions,
+        requests=request_inbox,
     )
 
 

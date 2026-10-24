@@ -50,6 +50,8 @@ MAX_TOKENS = {
     "interview_snapshot": 2500,
     # C7: one requirement deepened at a feature-set review.
     "scope_enhance": 2000,
+    # H10: every reply of one decline, at most 120 words each.
+    "why_not_reply": 4000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -992,6 +994,29 @@ async def scope_enhance(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any
     return scope_review.enhance_output(answer, str((job.input or {}).get("item_id")))
 
 
+# --- why-not replies (H10) ------------------------------------------------------------------
+
+
+async def why_not_reply(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Drafts every Drafted reply of one decline (oracle.requests.replies)."""
+    from oracle.requests import replies
+
+    return await replies.run_job(s, job, ask)
+
+
+async def why_not_reply_failed(s: AsyncSession, job: LlmJob) -> None:
+    """A failed job leaves each of its replies its reason's template draft."""
+    from oracle.requests import replies
+
+    await replies.job_failed(s, job)
+
+
+# Run when a job of the kind fails for good, in the transaction that records it.
+ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
+    "why_not_reply": why_not_reply_failed,
+}
+
+
 RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any]]]] = {
     "review_comments": review_comments,
     "reporting": reporting,
@@ -1003,6 +1028,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "interview_guide": interview_guide,
     "interview_snapshot": interview_snapshot,
     "scope_enhance": scope_enhance,
+    "why_not_reply": why_not_reply,
 }
 
 

@@ -1359,6 +1359,23 @@ class InboxDiscussionItem(BaseModel):
     can_write: bool = False
 
 
+class InboxRequestReply(BaseModel):
+    """H10 rows: Replies to send (the request's filer and its decider; counted until
+    every reply is Sent, Told, Skipped or Withdrawn), Asked again N times since you said
+    no (the decision's approver; counted until Reopen or Keep the no) and Answer to your
+    request (the member who asked; shown only, with the reply)."""
+
+    request_id: uuid.UUID
+    title: str
+    reason: Literal["replies_to_send", "asked_again", "answer"]
+    count: int | None = None
+    decision_number: int | None = None
+    # Answer to your request: the reply's text.
+    body: str | None = None
+    at: datetime | None = None
+    counts: bool
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -1429,6 +1446,8 @@ class InboxOut(BaseModel):
     # G6: invitations, mentions and changes proposed in discussions; new and open ones
     # count in ``total``.
     discussions: list[InboxDiscussionItem] = []
+    # H10: replies to send, asked again, answers to my requests; counted ones in ``total``.
+    requests: list[InboxRequestReply] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]
