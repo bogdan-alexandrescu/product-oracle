@@ -406,6 +406,26 @@ async def test_decide_proposes_one_decision_with_the_memos_options(client, ctx):
     assert memo["decision"]["number"] == d["number"] and memo["decision"]["status"] == "proposed"
 
 
+async def test_the_memo_list_names_the_pricing_owner_for_the_header(client, ctx):
+    """protects=GET /v1/pricing-memos tells an approver who the pricing owner is (id and
+    name), the earliest active owner by default and the setting's owner once an owner
+    changes it, so the memo header shows Decide to that owner only and "Waiting for <name>
+    to decide" to the others (the setting itself is an owner's read); fails_when=the
+    pricing owner is missing, or the list keeps naming the earlier owner after the change;
+    no_claim=the header itself (web/e2e/pricing.spec.ts)."""
+    second = await add_owner(ctx)
+    await started_memo(client, ctx)
+    approver = ctx.as_("approver")
+    (memo,) = (await client.get("/v1/pricing-memos", headers=approver)).json()
+    assert memo["pricing_owner"] == {"id": str(ctx.users["owner"].id), "name": "Owner"}
+    resp = await client.put(
+        "/v1/settings/pricing_owner", json={"value": str(second.id)}, headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    (memo,) = (await client.get("/v1/pricing-memos", headers=approver)).json()
+    assert memo["pricing_owner"]["id"] == str(second.id)
+
+
 async def test_the_pricing_owner_decides_it_irreversibly_with_a_prediction(client, ctx):
     """protects=the pricing owner decides the proposal through the decision log with the
     irreversible option, a reason, an expected outcome and a prediction on a goal: it is
