@@ -3,7 +3,7 @@ alignment (E1) and track monitoring through oracle.changes. Against Postgres wit
 FakeRuntime."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 
 from sqlalchemy import delete, select
 
@@ -13,6 +13,7 @@ from oracle.roadmap import views
 from oracle.roadmap.models import ProductTrack
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
+from tests.day_helpers import company_today
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
@@ -25,7 +26,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     seed_baseline,
 )
 
-TODAY = date.today()
+TODAY = company_today()
 
 
 async def track_of(client, auth) -> dict:

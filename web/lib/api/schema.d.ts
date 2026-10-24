@@ -39823,6 +39823,13 @@ export interface operations {
                     "application/json": components["schemas"]["InviteOut"];
                 };
             };
+            /** @description No longer an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description No such invite */
             404: {
                 headers: {
@@ -39867,6 +39874,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InviteOut"];
                 };
+            };
+            /** @description No longer an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No such invite */
             404: {

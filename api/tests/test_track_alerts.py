@@ -27,6 +27,7 @@ from oracle.roadmap.models import (
 from oracle.runs.models import Run
 from oracle.runtokens import mint_run_token
 from oracle.tenancy import tenant_session
+from tests.day_helpers import company_today
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
@@ -39,7 +40,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 )
 from tests.test_tracks import track_of
 
-TODAY = date.today()
+TODAY = company_today()
 BETA = "2026-11-30"
 SLIPPED = "2026-12-09"
 

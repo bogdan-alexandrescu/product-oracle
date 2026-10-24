@@ -131,7 +131,6 @@ async def test_launched_publishes_internal_entries_only_within_limits(client, ow
     setting; no_claim=H11's settings screen."""
     from oracle.launches.models import ChangelogEntry
     from oracle.tenancy import tenant_session
-    from oracle.tenant_settings import TenantSetting
     from tests.launch_helpers import launched_world
 
     tenant_id, auth = owner
@@ -156,9 +155,13 @@ async def test_launched_publishes_internal_entries_only_within_limits(client, ow
     statuses = {e["title"]: e["status"] for e in listed}
     assert statuses["internal payment-step"] == "draft"
 
-    async with tenant_session(tenant_id) as s:
-        s.add(TenantSetting(key="autonomy", value={"launches": "act_within_limits"}))
-        await s.commit()
+    # H11 Autonomy's shape, through its route (#519 item 1).
+    resp = await client.put(
+        "/v1/autonomy/launches",
+        json={"level": "act", "reason": "Internal entries are routine"},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
     await client.post(f"/v1/launches/{second['id']}/launched", json={}, headers=auth)
     async with tenant_session(tenant_id) as s:
         from sqlalchemy import select

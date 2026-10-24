@@ -8927,6 +8927,9 @@
               }
             }
           },
+          "403": {
+            "description": "No longer an owner"
+          },
           "404": {
             "description": "No such invite"
           },
@@ -8985,6 +8988,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "No longer an owner"
           },
           "404": {
             "description": "No such invite"

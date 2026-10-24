@@ -10,7 +10,8 @@ own ``try``), per company and per tick:
    calls) and advance ``next_due_at``;
 3. build each scheduled occurrence's pre-read in a savepoint (the ``monitor_due``
    pattern): ready, or ``attempts`` + 1 and ``failed`` after :data:`MAX_ATTEMPTS`; then,
-   with summaries on Every pre-read, start its summary run (oracle.rituals.summaries);
+   with summaries on Every pre-read, or Run rituals at "Act within limits" (H11) and
+   the run within its limit, start its summary run (oracle.rituals.summaries);
 3b. F6's catch-up: this week's alignment report occurrence, built while there was no
    track to report, is built again once there is (:func:`_alignment_catch_up`); a
    rebuild that fails leaves it ready as it was, and one that succeeds starts its

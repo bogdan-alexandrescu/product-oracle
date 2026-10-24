@@ -11,6 +11,7 @@ from sqlalchemy import select
 from oracle.baseline.models import Edge, Entity, EntityRevision
 from oracle.quality.models import OutcomeRecord
 from oracle.tenancy import tenant_session
+from tests.day_helpers import company_today
 from tests.launch_helpers import approve_roadmap, build_roadmap, trace_features
 from tests.test_roadmap import approved_prd, seed_baseline
 
@@ -92,4 +93,4 @@ async def goal_history(tenant_id: uuid.UUID, *values: tuple[str, date]) -> None:
 
 
 def days_ago(n: int) -> date:
-    return date.today() - timedelta(days=n)
+    return company_today() - timedelta(days=n)
