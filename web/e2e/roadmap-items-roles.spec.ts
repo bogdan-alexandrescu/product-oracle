@@ -9,7 +9,7 @@ import { login, openSeeded, seedRoadmapReview, signOut } from "./helpers";
 const RUN = ROADMAP_REVIEW_RUN.run.id;
 const CP = ROADMAP_REVIEW_RUN.run.checkpoints[0].id;
 const SCREEN = `/runs/${RUN}/review/${CP}`;
-const row = (page: Page, key: string) => page.locator(`[data-testid="item-row"][data-key="${key}"]`);
+const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`);
 const bar = (page: Page) => page.getByTestId("decision-bar");
 
 // Card commenter: protects = criterion 10, a commenter's fix is a suggestion ("Suggested by
@@ -45,10 +45,12 @@ test("a commenter suggests; the approver stages the suggestion", async ({ page }
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
 });
 
-// Card ask: protects = criterion 11 (the screen's half), Ask a teammate picks a member and asks;
-// the row reads "Asked {name}" and the tally waits on them; fails_when = no question is staged or
-// the row does not say who; no_claim = the member's Inbox and answering (C2's own screens).
-test("Ask a teammate: the row shows who was asked", async ({ page }) => {
+// Card ask: protects = criterion 11, Ask a teammate picks a member and asks; the row reads
+// "Asked {name}" and the tally waits on them; the asked member's Inbox has the question (C2's
+// existing row) and answering it there turns the row to "Answered" with the answer in the
+// inspector; fails_when = no question is staged, the row does not say who, the Inbox lacks it,
+// or the answer does not come back; no_claim = notifications.
+test("Ask a teammate: the row shows who was asked; the member answers from the Inbox", async ({ page }) => {
   await login(page);
   await openSeeded(page, seedRoadmapReview, SCREEN);
   await row(page, "cost-forecast").getByRole("button", { name: "More actions for Cost forecast" }).click();
@@ -59,6 +61,27 @@ test("Ask a teammate: the row shows who was asked", async ({ page }) => {
   await form.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(row(page, "cost-forecast").getByTestId("asked-chip")).toHaveText("Asked Commenter");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("1 waiting on Commenter");
+
+  // The asked member's Inbox: the existing questions row, answered in place.
+  await signOut(page);
+  await login(page, "commenter@example.com");
+  await page.goto("/inbox");
+  const asked = page.locator("tr[data-row]").filter({ hasText: "Can the forecast wait for Next?" }).filter({ visible: true });
+  await expect(asked).toHaveCount(1);
+  await expect(asked).toContainText("asks");
+  await asked.getByRole("button", { name: "Answer" }).click();
+  await page.getByRole("textbox", { name: "Your answer" }).fill("Yes, Next is fine");
+  await page.getByRole("button", { name: "Send answer" }).click();
+  await expect(page.getByTestId("question-settled")).toBeVisible();
+
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto(SCREEN);
+  await expect(row(page, "cost-forecast").getByTestId("asked-chip")).toHaveText("Answered");
+  await row(page, "cost-forecast").locator('[data-phone="title"]').click();
+  const insp = page.getByTestId("roadmap-item-inspector");
+  await insp.getByRole("group", { name: "Inspector tab" }).getByRole("button", { name: "History" }).click();
+  await expect(insp).toContainText("Answer: Yes, Next is fine");
 });
 
 // Card viewer: protects = #370, a viewer reads the screen with no buttons that change it;

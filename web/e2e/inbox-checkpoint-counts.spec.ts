@@ -109,7 +109,7 @@ test("a child with no safe fix shows only Open; +7 more links to the review", as
   await expect(more).toHaveAttribute("href", `/runs/${RUN}/review/${CP}`);
   await usage.getByRole("link", { name: "Open Usage export" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}/review/${CP}\\?item=usage-export$`));
-  await expect(page.getByTestId("item-inspector")).toContainText("Usage export");
+  await expect(page.getByTestId("roadmap-item-inspector")).toContainText("Usage export");
 });
 
 // Card suggestion: protects = a commenter's suggestion on a shown item reads "Suggested: …" with

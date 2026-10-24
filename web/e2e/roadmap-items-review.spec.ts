@@ -12,7 +12,10 @@ const RUN = ROADMAP_REVIEW_RUN.run.id;
 const CP = ROADMAP_REVIEW_RUN.run.checkpoints[0].id;
 const SCREEN = `/runs/${RUN}/review/${CP}`;
 
-const row = (page: Page, key: string) => page.locator(`[data-testid="item-row"][data-key="${key}"]`);
+// D1 draws E2's ItemsTable and ItemInspector (no second table): their rows and inspector.
+const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`);
+const pick = (page: Page, key: string) => row(page, key).locator('[data-phone="title"]').click();
+const inspector = (page: Page) => page.getByTestId("roadmap-item-inspector");
 const bar = (page: Page) => page.getByTestId("decision-bar");
 
 async function open(page: Page) {
@@ -27,6 +30,23 @@ async function open(page: Page) {
 test("the run page and the Inbox open the review screen; Back returns to the run", async ({ page }) => {
   await login(page);
   await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
+  // The run page shows a summary only: counts, Review items and the Raw file; no decision panel.
+  const summary = page.getByTestId("items-review-line");
+  await expect(summary).toContainText("10 need you · 3 blocking");
+  await expect(page.getByRole("group", { name: "Decide: Roadmap items" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
+  await expect(page.getByLabel("Note for the agents")).toHaveCount(0);
+  await summary.getByRole("button", { name: "Raw file" }).click();
+  await expect(page.getByTestId("sheet-raw-file").getByTestId("raw-file-content")).toContainText("slack-alerts");
+  await page.getByTestId("sheet-raw-file").getByRole("button", { name: "Close" }).click();
+  // The header's Decide opens the review screen.
+  await page.getByRole("main").getByRole("link", { name: "Decide", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
+  await page.goto("/runs");
+  // The runs list's Decide opens it too.
+  await page.getByTestId("run-row").filter({ hasText: /usage-alerts-roadmap(?!-)/ }).getByRole("button", { name: "Decide" }).click();
+  await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
+  await page.goto(`/runs/${RUN}`);
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
@@ -44,22 +64,23 @@ test("the run page and the Inbox open the review screen; Back returns to the run
 // fails_when = a fine item under Needs you, a missing one, or Changed shown; no_claim = reasons.
 test("Needs you lists the items with an open reason by horizon; All lists every item", async ({ page }) => {
   await open(page);
-  const keys = async () => page.getByTestId("item-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
+  const keys = async () => page.getByTestId("roadmap-item-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
   expect(await keys()).toEqual(["slack-alerts", "budget-caps", "usage-export", "webhooks", "cost-forecast", "sso-login", "anomaly-detection", "mobile-push", "invoice-pdf", "weekly-digest"]);
   await expect(page.getByTestId("group-head").first()).toHaveText("Now · 4 of 4 need you");
   await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
   await expect(page.getByRole("group", { name: "Show" }).getByRole("button", { name: /Changed/ })).toHaveCount(0);
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^All/ }).click();
-  await expect(page.getByTestId("item-row")).toHaveCount(10);
+  await expect(page.getByTestId("roadmap-item-row")).toHaveCount(10);
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^Needs you/ }).click();
   // Every chip and sentence is whole at 1366 px: nothing cut with an ellipsis.
   await page.setViewportSize({ width: 1366, height: 900 });
   const clipped = await page.getByTestId("reason-chip").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
   expect(clipped).toBe(0);
   // The table and the inspector fit the page (the app shell's own 1 px Ask Oracle strip aside).
-  const table = page.getByTestId("items-table");
+  const table = page.getByTestId("roadmap-items-table");
   expect(await table.evaluate((t) => t.scrollWidth <= t.clientWidth)).toBe(true);
-  expect(await page.getByTestId("item-inspector").evaluate((e) => e.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
+  await expect(page.getByTestId("items-table")).toHaveCount(0);
+  expect(await inspector(page).evaluate((e) => e.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
 });
 
 // Card remove-date: protects = criteria 4 and 5, one click stages Remove date (row done with
@@ -94,8 +115,8 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
   await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();
   await page.getByRole("menuitem", { name: "Waive…" }).click();
-  await page.getByTestId("items-table").getByLabel("Why waive it").fill("The export section lands in the next PRD version");
-  await page.getByTestId("items-table").getByRole("button", { name: "Waive", exact: true }).click();
+  await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill("The export section lands in the next PRD version");
+  await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
   await expect(row(page, "usage-export").getByTestId("row-done")).toHaveText(/✓ Waived/);
   await expect(approve).toHaveText("Approve with 2 edits");
   await expect(approve).toBeEnabled();
@@ -103,6 +124,10 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await expect(page.getByTestId("review-status")).toHaveText("Approved with 2 edits");
   await page.getByRole("button", { name: "Agents' file" }).click();
   await expect(page.getByTestId("raw-file-content")).toContainText("date: 2026-11-30");
+  await page.getByTestId("sheet-raw-file").getByRole("button", { name: "Close" }).click();
+  // The run continues to the roadmap draft.
+  await page.getByRole("link", { name: "Roadmap from an approved PRD from Usage alerts PRD v1" }).click();
+  await expect(page.getByTestId("segment-roadmap_draft").getByTestId("segment-state")).toHaveText("Running");
 });
 
 // Card send-back: protects = criterion 8, Send back with two staged actions lists "2 entries"
@@ -118,6 +143,21 @@ test("Send back lists its entries and shows the sent-back state", async ({ page 
   await expect(sheet).toContainText("2 entries");
   await sheet.getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Sent back · 2 entries");
+  // The run re-runs the roadmap items: attempt 2 running.
+  await page.getByRole("link", { name: "Roadmap from an approved PRD from Usage alerts PRD v1" }).click();
+  const items = page.getByTestId("segment-roadmap_items");
+  await expect(items).toContainText("attempt 2");
+  await expect(items.getByTestId("segment-state")).toHaveText("Running");
+});
+
+// Card summary-count: protects = the run page's "{n} need you" counts only the items still
+// needing a person; fails_when = a handled item still counts; no_claim = the Inbox's counts (D9).
+test("the run page's summary counts only the items still needing a person", async ({ page }) => {
+  await open(page);
+  await row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true }).click();
+  await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
+  await page.goto(`/runs/${RUN}`);
+  await expect(page.getByTestId("items-review-line")).toContainText("9 need you · 2 blocking");
 });
 
 // Card split: protects = criterion 9, a staged Split disables Approve with "Split needs the agents"
@@ -138,8 +178,8 @@ test("a staged Split disables Approve; Send back stays enabled", async ({ page }
 // link is wrong; no_claim = the PRD's text.
 test("the inspector stages horizon, outcome and dependency edits", async ({ page }) => {
   await open(page);
-  await row(page, "budget-caps").getByTestId("item-title").click();
-  const insp = page.getByTestId("item-inspector");
+  await pick(page, "budget-caps");
+  const insp = inspector(page);
   await expect(insp).toContainText("Item 3 of 9 · selected");
   await insp.getByRole("group", { name: "Horizon" }).getByRole("button", { name: "Next" }).click();
   await expect(bar(page).getByTestId("staged-chip")).toContainText(["Budget caps: moved to Next"]);
@@ -176,7 +216,7 @@ test("a file Oracle cannot read shows the error card; only Send back", async ({ 
   const card = page.getByTestId("file-problems");
   await expect(card).toContainText("Oracle can't read this file as items");
   await expect(card).toContainText("not valid YAML");
-  await expect(page.getByTestId("item-row")).toHaveCount(0);
+  await expect(page.getByTestId("roadmap-item-row")).toHaveCount(0);
   await expect(bar(page).getByRole("button", { name: /^Approve/ })).toBeDisabled();
   await expect(bar(page).getByRole("button", { name: "Send back to agents" })).toBeEnabled();
 });
@@ -189,8 +229,8 @@ test("a stale decision shows the review changed, with Reload", async ({ page }) 
   await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
   await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();
   await page.getByRole("menuitem", { name: "Waive…" }).click();
-  await page.getByTestId("items-table").getByLabel("Why waive it").fill("Lands in the next PRD version");
-  await page.getByTestId("items-table").getByRole("button", { name: "Waive", exact: true }).click();
+  await page.getByTestId("roadmap-items-table").getByLabel("Why waive it").fill("Lands in the next PRD version");
+  await page.getByTestId("roadmap-items-table").getByRole("button", { name: "Waive", exact: true }).click();
   await page.evaluate((key) => localStorage.setItem(key, "commenter@example.com"), MOCK_REVIEW_CHANGE_KEY);
   await bar(page).getByRole("button", { name: /^Approve/ }).click();
   await expect(bar(page).getByTestId("review-changed")).toContainText("The review changed since you loaded it");
@@ -203,10 +243,10 @@ test("a stale decision shows the review changed, with Reload", async ({ page }) 
 // fails_when = the keys do nothing; no_claim = contrast (the design system's tokens).
 test("arrow keys move the selection; Tab reaches the row actions", async ({ page }) => {
   await open(page);
-  await row(page, "slack-alerts").getByTestId("item-title").focus();
+  await row(page, "slack-alerts").focus();
   await page.keyboard.press("ArrowDown");
   await expect(row(page, "budget-caps")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("item-inspector")).toContainText("Budget caps");
+  await expect(inspector(page)).toContainText("Budget caps");
   await page.keyboard.press("ArrowUp");
   await expect(row(page, "slack-alerts")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Tab");

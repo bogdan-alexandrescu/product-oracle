@@ -17,13 +17,13 @@ test.use({ viewport: { width: 390, height: 844 } });
 test("phone: cards by horizon, a sheet inspector, no horizontal scroll", async ({ page }) => {
   await login(page);
   await openSeeded(page, seedRoadmapReview, `/runs/${RUN}/review/${CP}`);
-  const card = page.locator('[data-testid="item-row"][data-key="budget-caps"]');
+  const card = page.locator('[data-testid="roadmap-item-row"][data-key="budget-caps"]');
   await expect(card).toContainText("Depends on a later item");
   await expect(card.getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const clipped = await page.getByTestId("reason-chip").evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
   expect(clipped).toBe(0);
-  await card.getByTestId("item-title").click();
+  await card.locator('[data-phone="title"]').click();
   await expect(page.getByTestId("sheet-item")).toContainText("Budget caps");
   await page.getByTestId("sheet-item").getByRole("button", { name: "Close" }).click();
   await expect(page.getByTestId("decision-bar")).toHaveAttribute("data-collapsed", "true");
