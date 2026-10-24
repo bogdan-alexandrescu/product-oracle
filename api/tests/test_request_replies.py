@@ -137,8 +137,8 @@ async def replies(client, ctx: Ctx, rid: str, who: str = "viewer") -> list[dict]
 
 
 async def set_level(client, ctx: Ctx, key: str, level: str) -> None:
-    resp = await client.put(f"/v1/autonomy/{key}", json={"level": level, "reason": "Testing the levels"},
-                          headers=ctx.as_("owner"))  # fmt: skip
+    body = {"level": level, "reason": "Testing the levels"}
+    resp = await client.put(f"/v1/autonomy/{key}", json=body, headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
 
 
@@ -637,3 +637,26 @@ def test_new_reasons_are_known_everywhere():
     assert set(get_args(DisqualifyReason)) == set(DISQUALIFY_REASONS)
     assert set(replies_module.LABELS) == set(DISQUALIFY_REASONS)
     assert set(replies_module.BASIS_KINDS) == set(DISQUALIFY_REASONS)
+
+
+async def test_replies_to_send_filter_lists_declines_with_drafted_replies(client, ctx):
+    """protects=the Requests queue's Replies to send filter (disqualified requests with
+    drafted replies); fails_when=a request with every reply done, a plain decline or a New
+    one is listed; no_claim=the filter's chip (lane 2)."""
+    waiting = await add(client, ctx, title="Export boards to slides")
+    done = await add(client, ctx, title="Export boards to video")
+    plain = await add(client, ctx, title="Export boards to fax")
+    await add(client, ctx, title="Export boards to print")
+    for r in (waiting, done):
+        assert (await act(client, ctx, r["id"], "disqualify", reason="no_goal")).status_code == 200
+    assert (await act(client, ctx, plain["id"], "disqualify", reason="wont_do")).status_code == 200
+    [reply] = await replies(client, ctx, done["id"])
+    resp = await client.post(
+        f"/v1/request-replies/{reply['id']}/skip",
+        json={"reason": "Asked anonymously"}, headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    resp = await client.get("/v1/requests?replies_to_send=true", headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    assert [r["id"] for r in resp.json()["items"]] == [waiting["id"]]
+    assert resp.json()["total"] == 1
