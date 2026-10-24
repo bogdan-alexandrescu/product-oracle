@@ -377,6 +377,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=RitualsLimits,
         wired_by="H2",
         wired_by_name="H2 Cadence engine",
+        wired=True,
     ),
     Responsibility(
         key="outcomes",
