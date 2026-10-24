@@ -17,6 +17,8 @@ const ALL = [
   "nav-claude-accounts",
   "nav-sources",
   "nav-notifications",
+  // H5: Settings › Analytics (the PostHog connection), the owner's.
+  "nav-analytics",
   "nav-templates",
   "nav-themes",
   "nav-autonomy",

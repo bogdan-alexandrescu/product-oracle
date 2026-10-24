@@ -174,7 +174,12 @@ test("the card reads in the dark theme", async ({ page }) => {
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
-  await planGoal(page, "Daily alert digest email").getByTestId("code-chip").click();
+  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  // Scroll to the chip first, as a person does: a scroll closes an open card, and the event of
+  // the scroll Playwright makes inside click() arrives a frame after the card has opened.
+  await chip.scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await chip.click();
   const card = page.getByTestId("code-card");
   await expect(card).toBeVisible();
   const [fg, bg] = await card.evaluate((el) => [getComputedStyle(el).color, getComputedStyle(el).backgroundColor]);
