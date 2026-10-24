@@ -123,3 +123,31 @@ async def test_the_checkpoint_says_whether_it_waits_for_a_lead(client, owner, ru
     assert pending(seen)["lead_stop"] is True
     done = next(c for c in seen["checkpoints"] if c["kind"] == "feature_set")
     assert done["lead_stop"] is False
+
+
+# Train N item 2 (owner 2026-10-24): the review's can_suggest is the API's, by the rule the
+# items and scope reviews use (a pending stop, commenter or above), so the screen stops
+# standing in with can("start_run").
+SUGGESTS = {"viewer": False, "commenter": True, "approver": True, "owner": True}
+
+
+@pytest.mark.parametrize("lead_named", [False, True])
+@pytest.mark.parametrize("role", list(SUGGESTS))
+async def test_the_review_says_who_may_suggest_by_role(client, owner, runtime, role, lead_named):
+    # protects=the engineering review's own can_suggest for each role, with and without an
+    # engineering lead named; fails_when=a viewer is told they may suggest, or a commenter,
+    # approver or owner is not; no_claim=who stages (the tests above) and the screen (web).
+    tenant_id, auth = owner
+    run = await _at_check(client, auth)
+    if lead_named:
+        await _lead(client, tenant_id, auth)
+    headers = auth if role == "owner" else (await person(tenant_id, role)).headers
+    review = await _review(client, headers, run)
+    assert review["can_suggest"] is SUGGESTS[role], (role, lead_named)
+    if SUGGESTS[role] and not review["can_stage"]:
+        # What it says is what the API does: a suggestion, not a refusal.
+        body = {"item_key": "price-early", "kind": "edit", "field": "size", "value": "l"}
+        resp = await _act(client, headers, run, body)
+        assert resp.status_code in (200, 201), resp.text
+        action = next(a for i in resp.json()["items"] for a in i["actions"])
+        assert action["state"] == "suggested"
