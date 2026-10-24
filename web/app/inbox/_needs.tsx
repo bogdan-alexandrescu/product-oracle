@@ -5,7 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { displayZone, formatInZone } from "@/lib/dates";
+import { addDays, displayZone, formatInZone, zoneInstant } from "@/lib/dates";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
@@ -67,6 +67,8 @@ export type Need = {
   quote?: string | null;
   /** Next to the age: the wait's time left ("19 h left"). */
   left?: string | null;
+  /** The Age tooltip when `at` is a calendar day (no time): the day as written ("Oct 12"). */
+  atTip?: string;
   /** D9: rows drawn indented under this one (Inbox only, never Home); not items of their own. */
   children?: Need[];
   /** The parent's key, on a child row. */
@@ -118,7 +120,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     align: "right",
     phone: "meta",
     cell: (n) => (
-      <span className="tnum text-text2" title={n.at ? formatDateTime(n.at) : undefined}>
+      <span className="tnum text-text2" title={n.atTip ?? (n.at ? formatDateTime(n.at) : undefined)}>
         {age(n.at)}
         {n.left && (
           <span className="block text-[12px] leading-4 text-warn max-[600px]:ml-1.5 max-[600px]:inline" data-testid="need-left">
@@ -294,6 +296,7 @@ export type NeedGroup =
   | "requests"
   | "dates"
   | "rituals"
+  | "metrics"
   | "outcomes"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
@@ -1673,6 +1676,49 @@ export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): Sta
   });
 }
 
+/**
+ * H5 metric rows, all counted: Explain a variance and Find out (the metric's owner; each
+ * opens the metrics review that lists it) and Metric not read for a day (owners; opens the
+ * metric). Days are calendar days of the Company time zone. New until the visit after: a row
+ * is raised as its day begins in the Company time zone (Find out on its due day, the others
+ * once the week has ended), compared with my previous visit as instants.
+ */
+export function metricNeeds(inbox: InboxOut, seenBefore: string | null | undefined): StatedNeed[] {
+  return (inbox.metrics ?? []).map((r) => {
+    const day = r.due_on ?? r.week_start;
+    const raised = Date.parse(zoneInstant(r.due_on ?? addDays(r.week_start, 7), "00:00", displayZone()));
+    const fresh = seenBefore !== undefined && (seenBefore === null || raised > Date.parse(seenBefore));
+    const label =
+      r.reason === "explain"
+        ? `Explain a variance · ${r.metric_title} · week of ${calendarDay(r.week_start)}`
+        : r.reason === "find_out"
+          ? `Find out · ${r.metric_title} · due ${r.due_on ? calendarDay(r.due_on) : "now"}`
+          : `Metric not read for a day · ${r.metric_title}`;
+    const href = r.reason !== "pull_failed" && r.occurrence_id ? `/company/rituals/${r.occurrence_id}` : `/company/metrics?metric=${r.metric_id}`;
+    return {
+      key: `metric-${r.reason}-${r.variance_id ?? r.metric_id}`,
+      icon: "flag",
+      kind: "Metric",
+      item: (
+        <span className="truncate" title={label} data-testid="metric-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">Company › Metrics</span>,
+      at: day,
+      atTip: calendarDay(day),
+      action: (
+        <LinkButton variant="secondary" href={href} aria-label="Open">
+          Open
+        </LinkButton>
+      ),
+      state: fresh ? ("new" as const) : ("open" as const),
+      counted: r.counts,
+      group: "metrics" as const,
+    };
+  });
+}
+
 /** H3 outcome rows: Add predictions (the roadmap's approver) and Outcome check due (the
  * record's owner) count; Oracle recorded (H11 at Act within limits) is shown, with Change. */
 export function outcomeNeeds(inbox: InboxOut): { counted: Need[]; shown: Need[] } {
@@ -1744,6 +1790,7 @@ export function allNeeds(
     ...stated(launches.counted, "launches"),
     ...stated(requests.counted, "requests"),
     ...ritualNeeds(inbox, busy, act),
+    ...metricNeeds(inbox, seenBefore),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
     ...feedbackNeeds(inbox, seenBefore, onActed, compact),

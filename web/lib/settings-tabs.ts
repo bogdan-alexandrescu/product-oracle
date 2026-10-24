@@ -14,6 +14,8 @@ export const SETTINGS_TABS: { label: string; href: string; testId: string; read:
   { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts", read: "list_claude_accounts" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources", read: "list_sources" },
   { label: "Notifications", href: "/settings/notifications", testId: "nav-notifications", read: "list_company_integrations" },
+  // H5: the PostHog connection the weekly metrics are read from; owners alone (#370).
+  { label: "Analytics", href: "/settings/analytics", testId: "nav-analytics", read: "get_analytics_integration" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates", read: "list_templates" },
   { label: "Themes", href: "/settings/themes", testId: "nav-themes", read: "list_themes" },
   { label: "Autonomy", href: "/settings/autonomy", testId: "nav-autonomy", read: "get_autonomy" },

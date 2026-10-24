@@ -56,6 +56,7 @@ from oracle.discussions.replies import RepliesTick
 from oracle.interviews import service as interviews_service
 from oracle.jobs import worker as llm_jobs
 from oracle.launches import service as launches_service
+from oracle.metrics import pull as metrics_pull
 from oracle.models import Tenant
 from oracle.requests import triage as request_triage
 from oracle.rituals import service as rituals
@@ -218,6 +219,15 @@ async def _tick_company(tenant_id: uuid.UUID, out: TickerOut, failures: _Failure
             await rituals.tick_due(db)
     except Exception:
         log.exception("run ticker: rituals failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Metrics (H5): each PostHog metric's last complete week, read once (deterministic,
+        # no model call); a failed pull is retried on the next hourly attempt. It commits its
+        # claim before calling PostHog, then each metric's result.
+        async with tenant_session(tenant_id) as db:
+            await metrics_pull.pull_due(db)
+    except Exception:
+        log.exception("run ticker: metric pulls failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Strategy drift (H4): a daily deterministic check, no model call.

@@ -136,6 +136,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "launches", title: "Launches" },
   { id: "requests", title: "Requests" },
   { id: "rituals", title: "Rituals" },
+  { id: "metrics", title: "Metrics" },
   { id: "outcomes", title: "Outcomes" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },
