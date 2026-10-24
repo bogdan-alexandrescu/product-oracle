@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
@@ -38,7 +38,8 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   // 10 items: six lines (one a question) and '+4 more in Inbox'.
   await expect(rows).toHaveCount(7);
   await expect(needs.getByTestId("home-needs-more")).toHaveText("+4 more in Inbox");
-  await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Decide" })).toBeVisible();
+  // B2: a baseline checkpoint is reviewed in the Baseline, filtered to its run.
+  await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Review" })).toHaveAttribute("href", /^\/baseline\?run=/);
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
   await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Decide" })).toBeVisible();
   await expect(rows.filter({ hasText: "Oracle asks" })).toHaveCount(1);
@@ -124,7 +125,8 @@ test("Home for a new company: one line per block with what to do next", async ({
   // A1: the Set up checklist comes first, the owner's steps with what is already done.
   const setup = page.getByTestId("home-setup");
   await expect(setup.getByRole("heading", { name: "Set up" })).toBeVisible();
-  await expect(setup.getByTestId("panel-count")).toHaveText("2 of 7");
+  // H2 added the Company time zone step: eight steps.
+  await expect(setup.getByTestId("panel-count")).toHaveText("2 of 8");
   const goals = page.getByTestId("home-goals-empty");
   await expect(goals).toContainText("No goals yet");
   await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveAttribute("href", "/baseline?build=1");

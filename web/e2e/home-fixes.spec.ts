@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
@@ -33,14 +33,29 @@ async function settledCalls(page: Page, quietMs = 1500): Promise<string[]> {
 
 /** Edits the mock's saved database in place (what another member's change would do). */
 async function editDb(page: Page, edit: string, arg?: unknown) {
-  await page.evaluate(
-    ({ key, edit, arg }) => {
-      const db = JSON.parse(localStorage.getItem(key)!);
-      new Function("db", "arg", edit)(db, arg);
-      localStorage.setItem(key, JSON.stringify(db));
-    },
-    { key: DB_KEY, edit, arg },
-  );
+  // Every mock call saves the whole database when it finishes, so a call made before the edit
+  // can land over it under load: let the calls settle, then edit again until the edit (marked)
+  // is still there a moment later (flaky under load).
+  await settledCalls(page, 500);
+  for (let i = 0; i < 5; i++) {
+    const mark = `${Date.now()}-${i}`;
+    await page.evaluate(
+      ({ key, edit, arg, mark }) => {
+        const db = JSON.parse(localStorage.getItem(key)!);
+        new Function("db", "arg", edit)(db, arg);
+        db.__e2eEdit = mark;
+        localStorage.setItem(key, JSON.stringify(db));
+      },
+      { key: DB_KEY, edit, arg, mark },
+    );
+    const kept = () => page.evaluate(({ key, mark }) => JSON.parse(localStorage.getItem(key)!).__e2eEdit === mark, { key: DB_KEY, mark });
+    let still = true;
+    for (let n = 0; n < 3 && still; n++) {
+      await page.waitForTimeout(500);
+      still = await kept();
+    }
+    if (still) return;
+  }
 }
 
 /**

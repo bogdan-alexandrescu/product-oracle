@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_CONSENT, MOCK_HANDLES } from "../app/oauth/consent/mock";
 import { ADMIN, login } from "./helpers";

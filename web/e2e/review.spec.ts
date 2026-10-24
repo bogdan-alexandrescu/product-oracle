@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, sectionStrip, selectText } from "./helpers";
 
@@ -63,8 +63,14 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   await page.goto("/documents/checkout-redesign/v/2");
   const scope = await openSection(page, "scope");
 
-  await selectText(page, "scope", "the order review page");
-  await page.getByRole("button", { name: /^Comment(\s+c)?$/ }).click();
+  // Select again until the Comment button shows: under load the view can still be wiring its
+  // selection listener (or re-rendering the section) when the first selection lands.
+  const commentButton = page.getByRole("button", { name: /^Comment(\s+c)?$/ });
+  await expect(async () => {
+    await selectText(page, "scope", "the order review page");
+    await expect(commentButton).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  await commentButton.click();
   const dialog = page.getByRole("dialog", { name: "New comment" });
   await expect(dialog).toContainText("the order review page");
   await dialog.getByLabel("Comment").fill("Is the order review page a separate step or a summary panel?");

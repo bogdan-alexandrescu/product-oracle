@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { dateMarks, routeRoadmap, seedRoadmap, type RoadmapContext } from "../lib/api/mock/roadmap";
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
 
@@ -64,16 +64,19 @@ for (const width of [1366, 390]) {
       await expect(oracleWork(page).getByLabel("Write reports", { exact: true })).toBeChecked();
     });
 
-    test("an approver sees Oracle's switches disabled, and the tip says who turns them off", async ({ page }) => {
+    test("an approver sees no Oracle switches (only owners turn them off), but still runs its work", async ({ page }) => {
       await login(page, "approver@example.com");
       await page.goto("/documents/team-workspaces/v/2");
       await openHistory(page, phone);
-      const theirs = oracleWork(page).getByTestId("llm-job-settings");
-      for (const label of PLAIN) await expect(theirs.getByLabel(label, { exact: true })).toBeDisabled();
-      await theirs.getByTestId("info-tip").click();
-      await expect(page.getByRole("tooltip").filter({ visible: true })).toHaveText(
-        "Oracle reads new feedback and writes reports by itself. Owners turn each off.",
-      );
+      const fold = oracleWork(page);
+      // An approver may queue Oracle's work (create_llm_job), so the run-now buttons show...
+      await expect(jobsPanel(page).getByRole("button", { name: "Suggest changes now", exact: true })).toBeVisible();
+      await expect(jobsPanel(page).getByRole("button", { name: "Write reports now", exact: true })).toBeVisible();
+      // ...but #370: controls a role can never use are hidden, not disabled. The switches are
+      // PUT .../llm-jobs/settings (owners only), so neither they nor their tip show.
+      await expect(fold.getByTestId("llm-job-settings")).toHaveCount(0);
+      for (const label of PLAIN) await expect(fold.getByLabel(label, { exact: true })).toHaveCount(0);
+      await expect(fold.getByTestId("info-tip")).toHaveCount(0);
     });
 
     test("Suggest changes now and Write reports now queue jobs named in plain words", async ({ page }) => {

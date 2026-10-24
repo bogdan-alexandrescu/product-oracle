@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, mockNow } from "./test";
 
 import { login, signOut } from "./helpers";
 
@@ -27,7 +27,7 @@ async function editGoal(page: Page, key: string, title: string) {
 
 /** Today as the date field holds it (the browser's day). */
 function today(): string {
-  const d = new Date();
+  const d = mockNow();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -101,11 +101,11 @@ test("owner picker: pick a member, save, and the table shows their name", async 
   await expect(paid.getByTestId("not-measurable")).toHaveCount(0);
 });
 
-// protects: someone without an account is invited first; only an owner gets the link.
-// fails_when: an approver gets a link they cannot use, or the owner's link does not open the
+// protects: someone without an account is invited first; whoever may invite gets the link.
+// fails_when: an inviter (owner, or approver per A5) gets no link, or the owner's link does not open the
 // invite form with role Commenter.
 // no_claim: does not send an invite.
-test("owner picker: an owner is sent to the invite form; an approver is told an owner invites", async ({ page }) => {
+test("owner picker: an owner is sent to the invite form; an approver gets the link too (A5)", async ({ page }) => {
   await openBaseline(page);
   let form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
   await form.getByLabel("Owner", { exact: true }).fill("nobody");
@@ -122,8 +122,9 @@ test("owner picker: an owner is sent to the invite form; an approver is told an 
   await openBaseline(page, "approver@example.com");
   form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
   await form.getByLabel("Owner", { exact: true }).fill("nobody");
-  await expect(form.getByTestId("owner-invite")).toHaveText("An owner invites new members on Settings › Members.");
-  await expect(form.getByTestId("owner-invite").getByRole("link")).toHaveCount(0);
+  // A5 "Who invites": an approver invites viewers and commenters too, so they get the link.
+  await expect(form.getByTestId("owner-invite")).toHaveText("Not a member yet? Invite them first");
+  await expect(form.getByRole("link", { name: "Invite them first" })).toHaveAttribute("href", "/settings/members?invite=1");
 });
 
 // protects: Fill from text turns a goal's text into typed fields with Home's rules.

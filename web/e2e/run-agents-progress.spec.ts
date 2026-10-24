@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -64,6 +64,10 @@ test("a segment that starts during Check agents now shows what that check read",
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   await sheet.getByRole("switch", { name: "Feature set and dependencies" }).click();
   await expect(sheet.getByRole("switch", { name: "Feature set and dependencies" })).not.toBeChecked();
+  // F4 (#181): the Engineering check, on by default, would run between the feature set and the
+  // priority order; off, its segment is skipped and the priority order follows the feature set.
+  await sheet.getByRole("switch", { name: "Engineering check" }).click();
+  await expect(sheet.getByRole("switch", { name: "Engineering check" })).not.toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);

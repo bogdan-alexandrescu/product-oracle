@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
-import { login, seedSentBack, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers";
+import { login, seedSentBack as seedOnPage, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers";
 
 /**
  * A refused draft goes back to the writer before a person is asked (owner, 2026-10-20). While
@@ -12,6 +12,15 @@ import { login, seedSentBack, SENT_BACK_RUN, SENT_BACK_SUMMARY } from "./helpers
 const ID = SENT_BACK_RUN;
 const SUMMARY = SENT_BACK_SUMMARY;
 const REVISING = "Revising: sent back by Oracle";
+
+/**
+ * Seeds the sent-back run from a page that runs no app code: a mock request the app still
+ * has in flight would save the store it loaded before the seed over it (seen at 4 workers).
+ */
+async function seedSentBack(page: Page): Promise<string> {
+  await page.goto("/icon.svg");
+  return seedOnPage(page);
+}
 
 /** The run's status badge (Next keeps the list page mounted but hidden). */
 function status(page: Page) {

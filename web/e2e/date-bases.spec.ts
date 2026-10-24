@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { DATE_BASES_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
@@ -146,7 +146,9 @@ test("phone: at 390 px the Dates tab renders rows as cards and the dialog fits t
   await page.goto("/plan/dates");
   const card = row(page, "ENG-420");
   await expect(card).toBeVisible();
-  expect(await card.evaluate((el) => getComputedStyle(el).display)).toBe("block");
+  // B1 phone frames (components/ds/DataTable.tsx): a DataTable row on a phone is a stacked,
+  // wrapping flex block (title, action, meta), no longer a table row.
+  expect(await card.evaluate((el) => getComputedStyle(el).display)).toBe("flex");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole("button", { name: "Record basis" }).click();
   const box = await page.getByTestId("date-basis-dialog").boundingBox();
