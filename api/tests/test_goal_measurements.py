@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
+from oracle import company_time
 from oracle.baseline import goals
 from tests.baseline_helpers import entity, make_ctx
 
@@ -13,6 +14,12 @@ B = "/v1/baseline"
 @pytest.fixture
 async def ctx():
     return await make_ctx()
+
+
+def _today() -> date:
+    """The company's day (no time zone set: Pacific), as the API dates a measurement; the
+    process's own date is a day ahead in UTC from 5 PM Pacific."""
+    return company_time.day(datetime.now(UTC))
 
 
 async def _goal(client, ctx, **attrs) -> dict:
@@ -39,7 +46,7 @@ async def _attrs(client, ctx, goal) -> dict:
 # than the latest day; no_claim=Home's trend.
 async def test_record_updates_current_to_latest_by_date(client, ctx):
     goal = await _goal(client, ctx)
-    today = date.today()
+    today = _today()
     resp = await _record(client, ctx, goal, 38, today - timedelta(days=5), note="October export")
     assert resp.status_code == 201, resp.text
     row = resp.json()
@@ -75,7 +82,7 @@ async def test_record_updates_current_to_latest_by_date(client, ctx):
 # no_claim=notes.
 async def test_same_day_replaces(client, ctx):
     goal = await _goal(client, ctx)
-    today = date.today()
+    today = _today()
     await _record(client, ctx, goal, 38, today)
     await _record(client, ctx, goal, 39, today)
     listed = (
@@ -89,8 +96,8 @@ async def test_same_day_replaces(client, ctx):
 # deletes; no_claim=API tokens.
 async def test_roles(client, ctx):
     goal = await _goal(client, ctx)
-    assert (await _record(client, ctx, goal, 38, date.today(), who="commenter")).status_code == 403
-    row = (await _record(client, ctx, goal, 38, date.today(), who="owner")).json()
+    assert (await _record(client, ctx, goal, 38, _today(), who="commenter")).status_code == 403
+    row = (await _record(client, ctx, goal, 38, _today(), who="owner")).json()
     resp = await client.delete(f"{B}/measurements/{row['id']}", headers=ctx.as_("commenter"))
     assert resp.status_code == 403
     resp = await client.get(f"{B}/entities/{goal['id']}/measurements", headers=ctx.as_("viewer"))
@@ -100,7 +107,7 @@ async def test_roles(client, ctx):
 # protects=422 when the entity is not a goal, the goal has no unit yet, or the date is in
 # the future; fails_when=any of those records; no_claim=evidence links.
 async def test_refusals(client, ctx):
-    today = date.today()
+    today = _today()
     feat = await entity(client, ctx, type="feature", key="guided-setup")
     assert (await _record(client, ctx, feat, 1, today)).status_code == 422
     vague = await entity(client, ctx, type="goal", key="churn", attrs={"metric": "Churn"})
