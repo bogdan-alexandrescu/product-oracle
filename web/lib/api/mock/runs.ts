@@ -328,6 +328,7 @@ const KIND_NAME: Record<Kind, string> = {
   vision: "vision",
   strategy: "product strategy",
   update: "update",
+  pricing: "pricing memo",
 };
 // O4: a roadmap starts from Now / Next / Later on the roadmap board unless a run names others.
 const ROADMAP_DEFAULTS = { template: "now-next-later", theme: "roadmap-board" };
@@ -2066,6 +2067,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   request_triage: "Request triage",
   launch_review: "Launch kit review",
   update_review: "Update review",
+  pricing_review: "Pricing memo review",
 };
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {

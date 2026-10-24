@@ -77,8 +77,19 @@ class ForbiddenError(PermissionError):
 
 
 # H4: who may start a document of a kind (an owner's vision and product strategy).
-MIN_STARTER_ROLE = {"vision": "owner", "strategy": "owner", "update": "owner"}
-KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy", "update": "an update"}
+MIN_STARTER_ROLE = {
+    "vision": "owner",
+    "strategy": "owner",
+    "update": "owner",
+    # H9: approvers and owners start a pricing memo; only the pricing owner decides it.
+    "pricing": "approver",
+}
+KIND_WORDS = {
+    "vision": "a vision",
+    "strategy": "a product strategy",
+    "update": "an update",
+    "pricing": "a pricing memo",
+}
 
 
 class InvalidError(ValueError):
@@ -919,6 +930,19 @@ async def _update_front_matter(
     return lines
 
 
+def _pricing_front_matter(data: StartDraftIn, today: date) -> list[str]:
+    """H9: a pricing memo's question (as typed) and evidence window (given, else the last
+    six months through today). The options are the run's to write."""
+    if data.period is not None:
+        start, end = data.period.from_, data.period.to
+    else:
+        start, end = today - timedelta(days=182), today
+    lines = [f"evidence_window: {{from: {start.isoformat()}, to: {end.isoformat()}}}"]
+    if data.question:
+        lines.insert(0, f"question: {json.dumps(data.question.strip())}")
+    return lines
+
+
 async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal) -> StartDraftOut:
     needed = MIN_STARTER_ROLE.get(data.kind)
     if needed is not None:
@@ -977,8 +1001,9 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         template=template.key,
         template_version=str(version.version),
         theme=theme_key,
-        # H8: an update is for owners and approvers until an owner opens it.
-        visibility="approvers" if data.kind == "update" else "company",
+        # H8: an update (H9: a pricing memo) is for owners and approvers until an owner
+        # opens it.
+        visibility="approvers" if data.kind in ("update", "pricing") else "company",
     )
     db.add(document)
     try:
@@ -998,6 +1023,8 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         extra=(
             await _update_front_matter(db, template.key, data.period)
             if data.kind == "update"
+            else _pricing_front_matter(data, date.today())
+            if data.kind == "pricing"
             else None
         ),
     )

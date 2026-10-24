@@ -86,6 +86,7 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   request_triage: "Request triage",
   launch_review: "Launch kit review",
   update_review: "Update review",
+  pricing_review: "Pricing memo review",
 };
 
 /**

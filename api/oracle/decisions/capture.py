@@ -49,6 +49,7 @@ STOP_LABELS = {
     "strategy_review": "Vision or strategy review",
     "request_triage": "Request triage",
     "launch_review": "Launch kit review",
+    "pricing_review": "Pricing memo review",
 }
 CHECKPOINT_OPTIONS = (("approve", "Approve"), ("request_changes", "Send back"))
 NO_OUTCOME = "See the document's success metrics"

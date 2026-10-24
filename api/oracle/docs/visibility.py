@@ -19,14 +19,16 @@ The rule lives here only:
 
 A read that reaches a document's rows without selecting :class:`Document` (a comment by
 id, an Inbox row) checks :func:`hidden_document_ids` or joins the document. The decision
-an approval captured ("Publish <document> v<n>", H1) follows its document the same way.
+an approval captured ("Publish <document> v<n>", H1) follows its document the same way,
+as do a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``) and the
+checkpoint records of a run on such a document (its review stop's Approve or Send back).
 """
 
 import uuid
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import ColumnElement, event, or_, select, true
+from sqlalchemy import ColumnElement, and_, event, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
@@ -104,18 +106,33 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     )
 
 
+# The capture sources that name one version of a document.
+VERSION_SOURCES = ("document_version", "pricing_memo_version")
+
+
 def _decision_visible(cls: Any) -> ColumnElement[bool]:
+    from oracle.runs.models import Run
+
     # Core tables, not the mapped classes: the Document criterion above must not apply
-    # inside this subquery.
+    # inside these subqueries.
     versions = DocumentVersion.__table__
     documents = Document.__table__
+    runs = Run.__table__
     hidden = (
         select(versions.c.id)
         .join(documents, documents.c.id == versions.c.document_id)
         .where(documents.c.visibility != COMPANY)
     )
-    return or_(
-        cls.source_kind.is_(None),
-        cls.source_kind != "document_version",
-        cls.source_id.not_in(hidden),
+    hidden_runs = (
+        select(runs.c.id)
+        .join(documents, documents.c.id == runs.c.document_id)
+        .where(documents.c.visibility != COMPANY)
+    )
+    return and_(
+        or_(
+            cls.source_kind.is_(None),
+            cls.source_kind.not_in(VERSION_SOURCES),
+            cls.source_id.not_in(hidden),
+        ),
+        or_(cls.origin != "checkpoint", cls.run_id.is_(None), cls.run_id.not_in(hidden_runs)),
     )

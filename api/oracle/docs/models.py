@@ -30,7 +30,7 @@ DOCUMENT_STATUSES = ("draft", "in_review", "approved")
 # "spec": a technical brief or engineering spec built from an approved PRD (CR-09).
 # H4 (migration 0020_strategy): a product vision and a product strategy.
 # H8 (migration 0022_updates): a board update's product section or an investor update.
-DOCUMENT_KINDS = ("prd", "roadmap", "spec", "vision", "strategy", "update")
+DOCUMENT_KINDS = ("prd", "roadmap", "spec", "vision", "strategy", "update", "pricing")
 # H8: who sees a document. "company": every member (S3); "approvers": owners and approvers
 # only (oracle.docs.visibility), the default of an update.
 DOCUMENT_VISIBILITIES = ("company", "approvers")
