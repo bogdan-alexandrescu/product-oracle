@@ -35,9 +35,10 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   const rows = needs.getByTestId("home-needs-table").locator("tr[data-row]");
-  // 10 items: six lines (one a question) and '+4 more in Inbox'.
+  // 11 items (the pending access request among them, A5): six lines (one a question) and
+  // '+5 more in Inbox'.
   await expect(rows).toHaveCount(7);
-  await expect(needs.getByTestId("home-needs-more")).toHaveText("+4 more in Inbox");
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+5 more in Inbox");
   await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Decide" })).toBeVisible();
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
   await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Decide" })).toBeVisible();
@@ -46,14 +47,15 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   // Each feedback item counts, not one per document.
   await expect(needs.getByText("Reviews 5")).toBeVisible();
   await expect(needs.getByText("Questions 2")).toBeVisible();
-  await expect(page.getByText("10 waiting")).toBeVisible();
+  await expect(needs.getByText("Access 1")).toBeVisible();
+  await expect(page.getByText("11 waiting")).toBeVisible();
 
   // Approving from Home starts the run: the line leaves the list (the next item moves up).
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
   await expect(rows.filter({ hasText: "$53.00 est." })).toHaveCount(0);
-  await expect(needs.getByTestId("home-needs-more")).toHaveText("+3 more in Inbox");
+  await expect(needs.getByTestId("home-needs-more")).toHaveText("+4 more in Inbox");
   await expect(rows).toHaveCount(7);
-  await expect(page.getByText("9 waiting")).toBeVisible();
+  await expect(page.getByText("10 waiting")).toBeVisible();
 
   await needs.getByTestId("home-inbox-link").click();
   await expect(page).toHaveURL(/\/inbox$/);

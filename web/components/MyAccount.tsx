@@ -161,8 +161,15 @@ export function MyAccount() {
   );
 }
 
-/** A5: your name, shown to teammates instead of your email (PATCH /v1/me/account). */
+/** What a read-only credential is told (AC1, the API's refusal): it changes nothing. */
+const READ_ONLY = "This credential can only read (oracle:read): it cannot add, change or delete anything.";
+
+/**
+ * A5: your name, shown to teammates instead of your email (PATCH /v1/me/account). Through a
+ * read-only credential the field is disabled, with the reason.
+ */
 function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account) => void }) {
+  const locked = !!account.read_only;
   const [name, setName] = useState(account.name ?? "");
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -186,6 +193,8 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
         <input
           value={name}
           maxLength={80}
+          disabled={locked}
+          aria-describedby={locked ? "name-read-only" : undefined}
           onChange={(e) => {
             setName(e.target.value);
             setSaved(false);
@@ -193,10 +202,15 @@ function NameForm({ account, onSaved }: { account: Account; onSaved: (a: Account
           className={INPUT}
         />
       </Field>
-      <Button type="submit" disabled={pending || name.trim() === (account.name ?? "")}>
+      <Button type="submit" disabled={locked || pending || name.trim() === (account.name ?? "")}>
         {pending ? "Saving…" : saved ? "Saved" : "Save"}
       </Button>
       <span className="basis-full text-[13px] text-text2">Shown to your teammates instead of your email.</span>
+      {locked && (
+        <span id="name-read-only" data-testid="name-read-only" role="note" className="basis-full text-[13px] font-medium text-warn">
+          {READ_ONLY}
+        </span>
+      )}
       {error && (
         <span role="alert" className="basis-full text-[13px] font-medium text-crit">
           {error}

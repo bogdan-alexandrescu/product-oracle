@@ -32,6 +32,9 @@ class MyAccountOut(BaseModel):
     # How this request was made: a browser session (cookie or Google), a personal API
     # token, or an MCP client.
     signed_in_via: Literal["browser", "api_token", "mcp_client"]
+    # AC1: the credential can only read (oracle:read), so it changes nothing, your name
+    # included; the page shows those controls disabled with the reason.
+    read_only: bool = False
 
 
 class PasswordChange(BaseModel):

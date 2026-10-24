@@ -400,7 +400,9 @@ export const MOCK_ROLE_KEY = "po-mock-role";
  * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242; a plus
  * address never gets it, in any scenario: Google answers 400, #330);
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
- * tick retries it).
+ * tick retries it);
+ * "read-only-credential" where My account is read through an oracle:read personal token
+ * (AC1: it changes nothing, the name included).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -529,6 +531,8 @@ function seedEmpty(): Db {
     user_id: uuid(),
     members: [],
     invites: [],
+    // A5: nobody has asked to join a new company yet.
+    access_requests: [],
     documents: [],
     versions: [],
     comments: [],
@@ -2526,6 +2530,31 @@ function settleInviteEmails(db: Db) {
   }
 }
 
+type AccessRequestRow = Schemas["AccessRequestOut"];
+
+/** The A5 access requests, seeded once per mock db (one pending: new.person@example.com). */
+function accessRequests(db: Db): AccessRequestRow[] {
+  return (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
+}
+
+/** As oracle.members.access.preset_role: the stored default role when `roles` has it, else the least of them. */
+function presetRole(roles: readonly Role[]): Role | null {
+  if (!roles.length) return null;
+  const stored = String(mockSettingValue("iap_default_role") ?? "commenter") as Role;
+  return roles.includes(stored) ? stored : roles[0];
+}
+
+/** The Inbox's access request rows (A5): pending ones, oldest first, for those who may approve them. */
+function inboxAccessRequests(db: Db, me: MemberRow): Schemas["InboxAccessRequest"][] {
+  const roles = meOut(db, me).invite_roles;
+  const preset = presetRole(roles);
+  if (!preset) return [];
+  return accessRequests(db)
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((r) => ({ id: r.id, email: r.email, note: r.note ?? null, requested_at: r.created_at, last_seen_at: r.last_seen_at, default_role: preset, roles }));
+}
+
 /**
  * Members: owners only, as in the API. Invites and access requests (A5): approvers too, with
  * their invite_roles (viewer and commenter), and only the invites they sent.
@@ -2603,10 +2632,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
   if (p[1] === "access-requests") {
     // A5, as oracle.members.access: approve makes an open invite (14 days), decline
     // turns it down, reopen (Undo) puts it back to pending and revokes an unclaimed invite.
-    const rows = (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
+    const rows = accessRequests(db);
+    // As the API's preset_role: the stored default role when the caller may approve as it.
+    const withPreset = (r: AccessRequestRow): AccessRequestRow => ({ ...r, default_role: presetRole(inviteRoles) });
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "pending";
-      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(withPreset));
     }
     const row = rows.find((r) => r.id === p[2]);
     if (!row) return notFound("Access request");
@@ -2637,12 +2668,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       };
       db.invites.unshift(invite);
       Object.assign(row, { status: "approved", role, invite_id: invite.id, decided_by: me.id, decided_at: now() });
-      return json(200, row);
+      return json(200, withPreset(row));
     }
     if (p[3] === "decline" && m === "POST") {
       if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
       Object.assign(row, { status: "declined", decided_by: me.id, decided_at: now() });
-      return json(200, row);
+      return json(200, withPreset(row));
     }
     if (p[3] === "reopen" && m === "POST") {
       if (row.status !== "approved" && row.status !== "declined") return json(409, { detail: `This request is ${row.status}` });
@@ -2652,11 +2683,16 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         return json(403, { detail: "Another person approved this request; ask an owner to undo it" });
       if (invite) Object.assign(invite, { status: "revoked", revoked_at: now() });
       Object.assign(row, { status: "pending", role: null, invite_id: null, decided_by: null, decided_at: null });
-      return json(200, row);
+      return json(200, withPreset(row));
     }
   }
   if (p[1] === "invites") {
     settleInviteEmails(db);
+    // As invites_out: each invite with who sent it, by name (the email when they have none).
+    const withInviter = (i: InviteRow): InviteRow => {
+      const by = db.members.find((x) => x.id === i.invited_by);
+      return { ...i, invited_by_name: by ? by.name || by.email : null };
+    };
     const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "open";
@@ -2665,6 +2701,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         db.invites
           // A5: an open invite past its expiry reads expired; ?status=open lists both (each needs an action).
           .map((i) => (expired(i) ? { ...i, status: "expired" as const } : i))
+          .map(withInviter)
           .filter((i) => (status === "all" || i.status === status || (status === "open" && i.status === "expired")) && (owner || i.invited_by === me.id))
           .sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
@@ -2689,6 +2726,8 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       const invite: InviteRow = {
         id: uuid(),
         email,
+        // A5: how teammates know them; the member takes it at their first sign-in.
+        name: input.name?.trim() || null,
         role: input.role,
         engineering_lead: !!input.engineering_lead,
         status: "open",
@@ -2708,7 +2747,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         message: input.message?.trim() || null,
       };
       db.invites.push(invite);
-      return json(201, invite);
+      return json(201, withInviter(invite));
     }
     // Approvers act on their own invites only; another's is not found.
     const invite = db.invites.find((i) => i.id === p[2] && (owner || i.invited_by === me.id));
@@ -2722,7 +2761,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         resent_at: now(),
         resend_count: (invite.resend_count ?? 0) + 1,
       });
-      return json(200, invite);
+      return json(200, withInviter(invite));
     }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
       if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
@@ -2744,7 +2783,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         (db.invites_resent ??= []).push(invite.id);
         Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }
-      return json(200, invite);
+      return json(200, withInviter(invite));
     }
     if (m === "DELETE") {
       if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
@@ -3173,6 +3212,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         setSession(db, null);
         db.tab_sessions = {};
       },
+      readOnly: localStorage.getItem(MOCK_SCENARIO_KEY) === "read-only-credential",
     },
     req,
     p,
@@ -3670,8 +3710,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
     const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
     const discussing = discussions.filter((r) => r.state !== "done").length;
+    // A5: pending access requests, for owners and approvers; each counts.
+    const accessRequestRows = inboxAccessRequests(db, me);
     return json(200, {
       ...inbox,
+      access_requests: accessRequestRows,
       tracks: tracked.tracks,
       revoke_failures: failures,
       access_failures: accessFailures,
@@ -3681,7 +3724,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       oracle_actions: did,
       dates,
       discussions,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length,
     });
   }
   if (runs) return runs;

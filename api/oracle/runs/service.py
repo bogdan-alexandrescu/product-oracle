@@ -9868,7 +9868,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.open
         + len(revoke_failures)
         + len(access_failures)
-        # Access requests (A5) are not counted: no Inbox screen shows them yet.
+        # Pending access requests (A5), for those who may approve them.
+        + len(access_requests)
         + sum(1 for r in reports if not r.read)
         + len(report_failures)
         # Strategy drift: one row, however many findings.
@@ -9898,18 +9899,16 @@ async def _access_requests(db: AsyncSession, principal: Principal) -> list[Inbox
     """Pending access requests, oldest first, for callers who may approve them (A5)."""
     from oracle.members import access
     from oracle.members.models import AccessRequest
-    from oracle.members.service import iap_default_role
 
     roles = list(access.invite_roles(principal))
-    if not roles:
+    preset = await access.preset_role(db, principal)
+    if preset is None:
         return []
     rows = await db.scalars(
         select(AccessRequest)
         .where(AccessRequest.status == "pending")
         .order_by(AccessRequest.created_at, AccessRequest.id)
     )
-    default = await iap_default_role(db)
-    preset = default if default in roles else roles[0]
     return [
         InboxAccessRequest(
             id=r.id, email=r.email, note=r.note, requested_at=r.created_at,
