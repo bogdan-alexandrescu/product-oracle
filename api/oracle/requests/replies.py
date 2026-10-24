@@ -377,11 +377,13 @@ async def list_for(db: AsyncSession, request_id: uuid.UUID) -> list[RequestReply
 # --- writing -----------------------------------------------------------------------------------
 
 
-def _member_of(row: ProductRequest) -> uuid.UUID | None:
-    """The member who asked: an in-app request filed in their own name."""
-    if row.channel == "in_app" and row.filed_by is not None and row.requester_kind == "team":
-        return row.filed_by
-    return None
+def _member_of(row: ProductRequest, names: dict[uuid.UUID, str]) -> uuid.UUID | None:
+    """The member who asked: an in-app request filed in their own name (an owner may file
+    one in someone else's)."""
+    if row.channel != "in_app" or row.filed_by is None:
+        return None
+    mine = names.get(row.filed_by)
+    return row.filed_by if mine is not None and row.requester_name == mine else None
 
 
 async def create_replies(
@@ -402,6 +404,7 @@ async def create_replies(
             )
         )
     )
+    filers = await _names(db, {a.filed_by for a in askers if a.channel == "in_app" and a.filed_by})
     made = []
     for a in askers:
         if a.id in have:
@@ -413,7 +416,7 @@ async def create_replies(
             decision_id=decision.id if decision else None,
             asker=a.requester_name,
             asker_kind=a.requester_kind,
-            member_id=_member_of(a),
+            member_id=_member_of(a, filers),
             asked="\n\n".join(p for p in (a.title, a.body) if p),
         )
         db.add(reply)
