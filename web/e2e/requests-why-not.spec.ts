@@ -26,7 +26,10 @@ async function open(page: Page, email?: string) {
 }
 
 async function goRequests(page: Page) {
-  await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  // On a phone the rail is a menu: open Requests by its address there.
+  const nav = page.getByTestId("nav-requests").filter({ visible: true });
+  if (await nav.count()) await nav.first().click();
+  else await page.goto("/requests");
   await expect(page).toHaveURL(/\/requests$/);
   await expect(page.getByTestId("request-row").first()).toBeVisible();
 }
@@ -99,7 +102,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
 
   // The decider has a Replies to send row while replies are open.
   await page.goto("/inbox");
-  await expect(page.getByText(/Replies to send · 2 · Export every board at once/)).toBeVisible();
+  await expect(page.getByTestId("request-need").filter({ hasText: "Replies to send · 2 · Export every board at once" })).toBeVisible();
   await goRequests(page);
   await pick(page, ROOT);
 
@@ -114,9 +117,14 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await expect(member).toContainText("Told in Oracle");
   await expect(panel.getByTestId("loop-closed")).toHaveText("Loop closed · Oct 23");
 
+  // The row is gone from every state, not only moved off New.
   await page.goto("/inbox");
-  await expect(page.getByRole("heading", { name: "Inbox" }).first()).toBeVisible();
-  await expect(page.getByText(/Replies to send ·/)).toHaveCount(0);
+  const tabs = page.getByTestId("inbox-state-tabs");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
+  for (const tab of [/^New/, /^Open/, /^Done/]) {
+    await tabs.getByRole("tab", { name: tab }).click();
+    await expect(page.getByTestId("request-need").filter({ hasText: "Replies to send" })).toHaveCount(0);
+  }
 
   // 11d: the member who asked reads the answer in their Inbox.
   await signOut(page);
@@ -185,7 +193,7 @@ test("Won't do without a note logs nothing; with a note it is a no", async ({ pa
   await expect(panel.getByTestId("decision-chip")).toHaveText(/^D-\d+ Say no to Animated board backgrounds$/);
   await expect(reply(page, "Unnamed asker")).toContainText(/not part of the product we sell/i, { timeout: 10_000 });
 
-  await page.goto("/company/decisions");
+  await page.goto("/company/decisions?state=all");
   await expect(page.getByTestId("decision-row").filter({ hasText: "Say no to Animated board backgrounds" })).toHaveCount(1);
   await expect(page.getByTestId("decision-row").filter({ hasText: "Say no to Print a board as a poster" })).toHaveCount(0);
 });

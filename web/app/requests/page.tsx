@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 
 import { Button, Empty, Page, PageHeader, Panel, SegmentedControl, Split, ViewOnly } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -26,8 +27,19 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * archives themes.
  * Interview a customer (C3, commenters and up). #370: each control shows only to a role that
  * can use it (can()); a role that can file nothing reads the page as View only.
+ * H10: Replies to send keeps the declined requests whose replies are still to send;
+ * ?request=<id> (the Inbox's Open) lands on that request.
  */
 export default function RequestsPage() {
+  return (
+    <Suspense fallback={null}>
+      <Requests />
+    </Suspense>
+  );
+}
+
+function Requests() {
+  const wanted = useSearchParams().get("request");
   const { can, capsReady } = useMe();
   const triage = useTriage();
   const run = triage.data;
@@ -36,7 +48,9 @@ export default function RequestsPage() {
   const goalTitles = useMemo(() => new Map((goals.data ?? []).map((g) => [g.id, g.title])), [goals.data]);
   const themes = useQuery("request-themes", () => unwrap(api.GET("/v1/request-themes", { params: { query: { include_archived: true } } })));
   const [tab, setTab] = useState<"queue" | "themes">("queue");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [picked, setSelected] = useState<string | null>(null);
+  const selected = picked ?? wanted;
+  const [toSend, setToSend] = useState(false);
   const [state, setState] = useState("");
   const [goal, setGoal] = useState("");
   const [theme, setTheme] = useState("");
@@ -49,10 +63,13 @@ export default function RequestsPage() {
     setGoal("");
     setTheme("");
     setSearch("");
+    setToSend(false);
     setTab("queue");
   };
   const changed = (request: Schemas["RequestOut"]) => {
     requests.setData((list) => list && { ...list, items: list.items.map((r) => (r.id === request.id ? request : r)) });
+    // A merge into a declined request changes that one too (its replies, asked again).
+    if (request.state === "merged") requests.reload();
     // Accepting Oracle's theme may create one; a decision moves request counts.
     themes.reload();
   };
@@ -65,6 +82,7 @@ export default function RequestsPage() {
       (!state || r.state === state) &&
       (!goal || r.goal_ids.includes(goal)) &&
       (!theme || r.theme?.id === theme) &&
+      (!toSend || (r.state === "disqualified" && r.replies.open > 0)) &&
       (!text || r.title.toLowerCase().includes(text) || (r.body ?? "").toLowerCase().includes(text)),
   );
   const current = all.find((r) => r.id === selected);
@@ -115,7 +133,15 @@ export default function RequestsPage() {
           <Split
             inspector={
               current && (
-                <RequestInspector key={current.id} request={current} requests={all} themes={themes.data ?? []} goalTitles={goalTitles} onChange={changed} />
+                <RequestInspector
+                  key={current.id}
+                  request={current}
+                  requests={all}
+                  themes={themes.data ?? []}
+                  goalTitles={goalTitles}
+                  onChange={changed}
+                  onTheme={themeChanged}
+                />
               )
             }
           >
@@ -160,6 +186,10 @@ export default function RequestsPage() {
                       </option>
                     ))}
                   </select>
+                  <label className="flex items-center gap-2 py-2 text-sm font-semibold text-text2">
+                    <input type="checkbox" checked={toSend} onChange={(e) => setToSend(e.target.checked)} />
+                    Replies to send
+                  </label>
                 </div>
               )}
               {requests.data &&

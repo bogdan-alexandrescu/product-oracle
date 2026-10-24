@@ -1,15 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CHANNEL_LABEL, STATE } from "./RequestList";
+import { ProblemBlock } from "./Themes";
+import { WhyNot } from "./WhyNot";
 
 type Request = Schemas["RequestOut"];
 type Theme = Schemas["RequestThemeOut"];
@@ -28,9 +31,25 @@ export const REASON_LABEL: Record<Reason, string> = {
   few_customers: "Too few would use it",
 };
 
-// H10 reasons the form offers once it has the basis picker (#515 lane 2); shown on a request
-// already declined with one.
-const NEEDS_BASIS_PICKER: Reason[] = ["strategy_stop", "already_exists", "few_customers"];
+// The Disqualify form's order: the reasons that answer the asker, then housekeeping (H10).
+const REASONS: Reason[] = ["no_goal", "out_of_scope", "strategy_stop", "already_exists", "few_customers", "wont_do", "other", "duplicate", "not_a_request"];
+const HOUSEKEEPING: Reason[] = ["duplicate", "not_a_request"];
+// The reasons whose basis the form asks for (H10): the record the reply cites.
+const BASIS_PICKER: Partial<Record<Reason, { label: string; kind: "strategy_choice" | "feature" }>> = {
+  strategy_stop: { label: "Stop choice", kind: "strategy_choice" },
+  already_exists: { label: "Feature", kind: "feature" },
+};
+
+/** A decline that answers the asker: a decision is logged and replies are drafted (H10). */
+const isNo = (reason: Reason, note: string) => !HOUSEKEEPING.includes(reason) && (reason !== "wont_do" || !!note.trim());
+
+/** "Said no on Oct 3 · D-31 Say no to bulk export": a declined request in the merge picker. */
+function declinedLabel(r: Request): string {
+  const day = r.decided_at ? ` · Said no on ${formatDay(r.decided_at)}` : " · Said no";
+  return `${r.title}${day}${r.decision_number ? ` · D-${r.decision_number} ${r.decision_title ?? ""}`.trimEnd() : ""}`;
+}
+
+type Prefill = { reason: Reason; basisId: string | null };
 
 const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
 
@@ -50,6 +69,7 @@ export function RequestInspector({
   themes,
   goalTitles,
   onChange,
+  onTheme,
 }: {
   request: Request;
   /** The queue, for Merge into. */
@@ -57,6 +77,8 @@ export function RequestInspector({
   themes: Theme[];
   goalTitles: Map<string, string>;
   onChange: (request: Request) => void;
+  /** A theme's problem confirmed, dismissed or edited from the inspector (H10). */
+  onTheme?: (theme: Theme) => void;
 }) {
   const { me, can } = useMe();
   // #370: links and decisions are an approver's (the decision routes' role), the suggestion's buttons its routes'.
@@ -86,6 +108,11 @@ export function RequestInspector({
   const features = useQuery("request-features", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "feature" } } })));
   const featureTitle = (id: string) => (features.data ?? []).find((f) => f.id === id)?.title;
   const canEdit = request.origin !== "interview" && !!me?.user_id && request.filed_by === me.user_id;
+  // H10: Oracle's decline suggestion; Use this opens the Disqualify form prefilled.
+  const decline = request.state === "new" && s && !s.declined_at ? s.decline : null;
+  const [prefill, setPrefill] = useState<{ n: number; value: Prefill } | null>(null);
+  const theme = request.theme ? themes.find((t) => t.id === request.theme!.id) : undefined;
+  const showWhyNot = request.replies.total > 0 || (request.state === "disqualified" && request.decision_number != null);
 
   return (
     <Inspector
@@ -138,6 +165,24 @@ export function RequestInspector({
           </div>
         </InspectorSection>
       )}
+      {decline && (
+        <InspectorSection label="Oracle's suggestion">
+          <div className="flex flex-col gap-2 text-[15px]">
+            <p data-testid="decline-suggestion">
+              Oracle suggests saying no: {REASON_LABEL[decline.reason]}
+              {decline.why ? ` · ${decline.why}` : ""}
+            </p>
+            {approver && (
+              <Button
+                className="self-start"
+                onClick={() => setPrefill((p) => ({ n: (p?.n ?? 0) + 1, value: { reason: decline.reason, basisId: decline.basis?.id ?? null } }))}
+              >
+                Use this
+              </Button>
+            )}
+          </div>
+        </InspectorSection>
+      )}
       {declined && (
         <InspectorSection label="Oracle's suggestion">
           <p data-testid="request-suggestion" className="text-sm text-text2">
@@ -157,9 +202,28 @@ export function RequestInspector({
           run={run}
         />
       </InspectorSection>
+      {theme && (theme.problem_state !== "none" || theme.problem) && (
+        <InspectorSection label={`Problem · ${theme.title}`}>
+          <ProblemBlock theme={theme} canChange={can("confirm_request_theme_problem")} onChange={(t) => onTheme?.(t)} />
+        </InspectorSection>
+      )}
       <InspectorSection label="Decision">
-        <Decision request={request} requests={requests} canDecide={approver} busy={busy} run={run} />
+        <Decision
+          key={prefill?.n ?? 0}
+          request={request}
+          requests={requests}
+          features={features.data ?? []}
+          prefill={prefill?.value ?? null}
+          canDecide={approver}
+          busy={busy}
+          run={run}
+        />
       </InspectorSection>
+      {showWhyNot && (
+        <InspectorSection label="Why not">
+          <WhyNot request={request} onRequest={onChange} />
+        </InspectorSection>
+      )}
       {error && (
         <div className="px-5 pb-4">
           <ErrorNote>{error}</ErrorNote>
@@ -368,11 +432,43 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 type Action = "qualify" | "merge" | "disqualify";
 
-function Decision({ request, requests, canDecide, busy, run }: { request: Request; requests: Request[]; canDecide: boolean; busy: boolean; run: Run }) {
-  const [open, setOpen] = useState<Action | null>(null);
+function Decision({
+  request,
+  requests,
+  features,
+  prefill,
+  canDecide,
+  busy,
+  run,
+}: {
+  request: Request;
+  requests: Request[];
+  features: Schemas["EntityOut"][];
+  prefill: Prefill | null;
+  canDecide: boolean;
+  busy: boolean;
+  run: Run;
+}) {
+  const [open, setOpen] = useState<Action | null>(prefill ? "disqualify" : null);
   const [note, setNote] = useState("");
   const [into, setInto] = useState("");
-  const [reason, setReason] = useState<Reason>("no_goal");
+  const [reason, setReason] = useState<Reason>(prefill?.reason ?? "no_goal");
+  // The basis picked per reason; Oracle's preselection (the request's feature, the stop choice on it) until a person picks.
+  const [picked, setPicked] = useState<Partial<Record<Reason, string>>>(prefill?.basisId ? { [prefill.reason]: prefill.basisId } : {});
+  const detail = useQuery(open === "disqualify" ? `request-detail:${request.id}:${request.lock_version}` : "request-detail:none", () =>
+    open === "disqualify" ? unwrap(api.GET("/v1/requests/{request_id}", { params: { path: { request_id: request.id } } })) : Promise.resolve(null),
+  );
+  const stops = useQuery(open === "disqualify" ? "request-stop-choices" : "request-stop-choices:none", () =>
+    open === "disqualify"
+      ? unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "strategy_choice", status: "confirmed" } } })).then((list) =>
+          list.filter((e) => (e.attrs as Record<string, unknown> | null)?.stance === "stop"),
+        )
+      : Promise.resolve([]),
+  );
+  const picker = BASIS_PICKER[reason];
+  const basisId = picked[reason] ?? detail.data?.suggested_basis?.[reason]?.id ?? "";
+  const options = picker?.kind === "strategy_choice" ? (stops.data ?? []) : picker ? features : [];
+  const askers = request.mentions;
   const path = { params: { path: { request_id: request.id } } };
   const lock = { lock_version: request.lock_version };
   const live = request.state === "new" || request.state === "qualified";
@@ -398,8 +494,31 @@ function Decision({ request, requests, canDecide, busy, run }: { request: Reques
   return (
     <div className="flex flex-col gap-2 text-[15px]">
       {request.state === "merged" && <p>Merged into {mergedInto?.title ?? "another request"}</p>}
+      {request.decision_number != null && (
+        <Link
+          href={`/company/decisions?d=${request.decision_number}`}
+          data-testid="decision-chip"
+          title={request.decision_status === "reversed" ? "Reversed on Reopen" : undefined}
+          className="self-start rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-semibold text-accent-ink hover:underline"
+        >
+          D-{request.decision_number} {request.decision_title}
+        </Link>
+      )}
       {request.disqualify_reason && <p>{REASON_LABEL[request.disqualify_reason]}</p>}
+      {request.basis?.title && <p className="text-sm text-text2">Basis: {request.basis.title}</p>}
       {request.decision_note && <p className="whitespace-pre-wrap text-text2">{request.decision_note}</p>}
+      {request.no_reply_reason === "no_note" && (
+        <p data-testid="no-reply-reason" className="text-sm text-text2">
+          No note: no decision was logged and no replies were drafted
+        </p>
+      )}
+      {request.asked_again > 0 && (
+        <span className="self-start">
+          <Chip kind="warn" data-testid="asked-again">
+            Asked again {request.asked_again}
+          </Chip>
+        </span>
+      )}
       {!canDecide && request.state === "new" && <p className="text-sm text-text2">Waiting for an approver</p>}
       {canDecide && (
         <>
@@ -458,11 +577,12 @@ function Decision({ request, requests, canDecide, busy, run }: { request: Reques
                 Merge into
                 <select className={INPUT} value={into} onChange={(e) => setInto(e.target.value)}>
                   <option value="">Pick a request</option>
+                  {/* H10: a request said no to is listed too; joining it gives the asker the same reply. */}
                   {requests
-                    .filter((r) => r.id !== request.id && r.state !== "merged" && r.state !== "disqualified")
+                    .filter((r) => r.id !== request.id && r.state !== "merged")
                     .map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.title}
+                        {r.state === "disqualified" ? declinedLabel(r) : r.title}
                       </option>
                     ))}
                 </select>
@@ -477,26 +597,47 @@ function Decision({ request, requests, canDecide, busy, run }: { request: Reques
               className="flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
+                const basis = picker && basisId ? { kind: picker.kind, id: basisId } : null;
                 done(() =>
-                  unwrap(api.POST("/v1/requests/{request_id}/disqualify", { ...path, body: { ...lock, reason, note: note.trim() || null } })),
+                  unwrap(api.POST("/v1/requests/{request_id}/disqualify", { ...path, body: { ...lock, reason, note: note.trim() || null, basis } })),
                 );
               }}
             >
               <label className={LABEL}>
                 Reason
                 <select className={INPUT} value={reason} onChange={(e) => setReason(e.target.value as Reason)}>
-                  {(Object.keys(REASON_LABEL) as Reason[]).filter((r) => !NEEDS_BASIS_PICKER.includes(r)).map((r) => (
+                  {REASONS.map((r) => (
                     <option key={r} value={r}>
                       {REASON_LABEL[r]}
                     </option>
                   ))}
                 </select>
               </label>
+              {picker && (
+                <label className={LABEL}>
+                  {picker.label}
+                  <select className={INPUT} value={basisId} onChange={(e) => setPicked((p) => ({ ...p, [reason]: e.target.value }))}>
+                    <option value="">{picker.kind === "feature" ? "Pick the feature" : "Pick the stop choice"}</option>
+                    {options.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className={LABEL}>
                 Note
                 <textarea className={INPUT} rows={2} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
               </label>
-              <Button variant="danger" type="submit" disabled={busy || (reason === "other" && !note.trim())} className="self-end">
+              {!HOUSEKEEPING.includes(reason) && (
+                <p data-testid="disqualify-line" className="text-sm text-text2">
+                  {isNo(reason, note)
+                    ? `A decision is logged and Oracle will draft a reply to the ${askers} ${askers === 1 ? "person" : "people"} who asked`
+                    : "No note: no decision is logged and no replies are drafted"}
+                </p>
+              )}
+              <Button variant="danger" type="submit" disabled={busy || (reason === "other" && !note.trim()) || (!!picker && !basisId)} className="self-end">
                 Disqualify request
               </Button>
             </form>

@@ -20,7 +20,7 @@ import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from 
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import { decisionInbox, enlargeDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decisionInbox, enlargeDecisions, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -77,7 +77,7 @@ import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRu
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
-import { addInterviewRequest, routeRequests, seedRequests, type RequestsContext, type RequestsDb } from "./requests";
+import { addInterviewRequest, requestInboxRows, routeRequests, seedRequests, seedWhyNot, WHY_NOT_SCENARIO, type RequestsContext, type RequestsDb } from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import {
@@ -2914,10 +2914,26 @@ function ensureV2(db: Db): V2Db {
   return db.v2;
 }
 
+/** The decision log, seeded on first use (the requests mock records a no in it, H10). */
+function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
+  db.decisions ??= seeded("decisions", () => {
+    const log = seedDecisions(ctx);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
+    return log;
+  });
+  return db.decisions;
+}
+
 function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
+  const me = db.members.find((x) => x.id === userId);
+  const decisionsCtx = me ? decisionsContext(db, me) : null;
   return {
     userId,
     role,
+    entities: () => db.baseline.entities,
+    edges: () => db.baseline.edges,
+    decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
+    zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
     people: () => db.members,
@@ -2941,13 +2957,34 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
 
 /** The requests rows, seeded on first use against the baseline's confirmed goals. */
 function ensureRequests(db: Db): RequestsDb {
-  db.requests ??= seeded("requests", () =>
-    seedRequests({
+  db.requests ??= seeded("requests", () => {
+    const features = db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected");
+    const out = seedRequests({
       ownerId: db.user_id,
       goals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed"),
-      features: db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
-    }),
-  );
+      features,
+    });
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === WHY_NOT_SCENARIO) {
+      // H10: a confirmed stop choice that affects the first feature, and the why-not requests on it.
+      const feature = features[0];
+      const at = "2026-10-12T09:00:00Z";
+      const stop = {
+        id: uuid(), type: "strategy_choice" as const, key: "s.stop-custom-exports", title: "Stop custom exports",
+        body: "We stop building one-off export formats; the API covers bulk data.", attrs: { stance: "stop" }, status: "confirmed" as const,
+        origin: "agent" as const, locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
+      };
+      db.baseline.entities.push(stop as (typeof db.baseline.entities)[number]);
+      if (feature) {
+        db.baseline.edges.push({
+          id: uuid(), src_id: stop.id, dst_id: feature.id, type: "affects", attrs: {}, status: "confirmed", origin: "agent",
+          locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
+        } as (typeof db.baseline.edges)[number]);
+      }
+      const commenter = db.members.find((x) => x.email === "commenter@example.com")!;
+      seedWhyNot(out, { ownerId: db.user_id, member: { id: commenter.id, name: displayName(commenter.email) }, featureId: feature?.id ?? null });
+    }
+    return out;
+  });
   return db.requests;
 }
 
@@ -3484,7 +3521,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (interviews) return interviews;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
-  if (["requests", "request-themes", "request-candidates"].includes(p[1])) {
+  if (["requests", "request-themes", "request-candidates", "request-replies"].includes(p[1])) {
     const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
     if (requests) return requests;
   }
@@ -3601,12 +3638,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   // The decision log (H1): judgement calls, and a record of every run stop decided.
   const decisionsCtx = decisionsContext(db, me);
-  db.decisions ??= seeded("decisions", () => {
-    const log = seedDecisions(decisionsCtx);
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(decisionsCtx, log, 250);
-    return log;
-  });
-  const decided = await routeDecisions(decisionsCtx, db.decisions, req, p, q);
+  ensureDecisions(db, decisionsCtx);
+  const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
@@ -3623,7 +3656,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     tick(llm);
     const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
     // Decision rows: proposals I decide and reviews due count; informed and done do not.
-    const decisions = decisionInbox(decisionsCtx, db.decisions, seenBefore);
+    const decisions = decisionInbox(decisionsCtx, db.decisions!, seenBefore);
     const counted = decisions.filter((d) => d.counts).length;
     const inbox = { ...withStates, decisions, total: withStates.total + counted, needs_me: (withStates.needs_me ?? 0) + counted };
     // Launch rows (H6): Ready to launch, Set tier and Notes to send count; Shipped is shown only.
@@ -3640,6 +3673,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;
+    // Request rows (H10): Replies to send and Asked again count; Answer to your request is shown.
+    const requestRows = requestInboxRows(db.requests, requestsContext(db, me.id, me.role));
+    inbox.requests = requestRows;
+    inbox.total += requestRows.filter((r) => r.counts).length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + requestRows.filter((r) => r.counts).length;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")
