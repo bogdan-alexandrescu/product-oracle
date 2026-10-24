@@ -23,6 +23,7 @@ Origin = Literal[
     "priority_override",
     "autonomy",
     "checkpoint",
+    "pricing",
 ]
 SubjectKind = Literal[
     "document",

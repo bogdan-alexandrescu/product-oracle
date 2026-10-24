@@ -73,8 +73,14 @@ class ReviewError(Exception):
 
 
 # H4: the lowest role that approves a version of these kinds.
-MIN_APPROVER_ROLE = {"vision": "owner", "strategy": "owner", "update": "owner"}
-KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy", "update": "an update"}
+# H9: approving a pricing memo means "ready for the decision"; it decides nothing.
+MIN_APPROVER_ROLE = {"vision": "owner", "strategy": "owner", "update": "owner", "pricing": "owner"}
+KIND_WORDS = {
+    "vision": "a vision",
+    "strategy": "a product strategy",
+    "update": "an update",
+    "pricing": "a pricing memo",
+}
 # H8: the lowest role that sets a section verdict on these kinds (approvers comment and
 # suggest; owners set verdicts and approve).
 MIN_VERDICT_ROLE = {"update": "owner"}

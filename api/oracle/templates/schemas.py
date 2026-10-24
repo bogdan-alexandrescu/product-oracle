@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from oracle.docs.schemas import UpdatePeriod
 
-TemplateKind = Literal["prd", "roadmap", "vision", "strategy", "update"]
-ThemeKind = Literal["prd", "roadmap", "vision", "strategy", "update", "any"]
+TemplateKind = Literal["prd", "roadmap", "vision", "strategy", "update", "pricing"]
+ThemeKind = Literal["prd", "roadmap", "vision", "strategy", "update", "pricing", "any"]
 # The new-draft picker's kinds: a vision or strategy starts on Company › Strategy (H4).
 PickerKind = Literal["prd", "roadmap"]
 KEY_PATTERN = r"^[a-z0-9][a-z0-9-]{0,62}$"
@@ -305,6 +305,9 @@ class StartDraftIn(BaseModel):
     # the last approved update of the same template (else the first of this month),
     # through today.
     period: UpdatePeriod | None = None
+    # H9, a pricing memo only: its question, one sentence (``period`` is its evidence
+    # window, by default the last six months).
+    question: str | None = Field(default=None, min_length=1, max_length=300)
 
 
 class StartDraftOut(BaseModel):

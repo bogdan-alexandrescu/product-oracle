@@ -24,6 +24,7 @@ from oracle.interviews.schemas import (
     InterviewPatch,
     InterviewSummary,
     Kind,
+    Preset,
     Status,
     TeamTurnIn,
     TeamTurnOut,
@@ -43,7 +44,8 @@ def _http(exc: service.InterviewError) -> HTTPException:
 async def create_interview(
     body: InterviewCreate, db: TenantDB, principal: Commenter
 ) -> InterviewOut:
-    """Create a Draft customer interview and queue Oracle's draft of its questions."""
+    """Create a Draft customer interview and queue Oracle's draft of its questions; with
+    ``preset=pricing``, its guide is the fixed pricing questions and no job is queued."""
     try:
         row = await service.create(db, principal, body)
     except service.InterviewError as e:
@@ -61,10 +63,11 @@ async def list_interviews(
     intake_id: uuid.UUID | None = None,
     theme_id: uuid.UUID | None = None,
     kind: Kind | None = None,
+    preset: Preset | None = None,
 ) -> list[InterviewSummary]:
-    """Interviews, newest first."""
+    """Interviews, newest first; ``preset=pricing`` for pricing interviews."""
     return await service.list_interviews(
-        db, status=status, intake_id=intake_id, theme_id=theme_id, kind=kind
+        db, status=status, intake_id=intake_id, theme_id=theme_id, kind=kind, preset=preset
     )
 
 
@@ -101,7 +104,7 @@ async def patch_interview(
 async def redraft_interview_guide(
     interview_id: uuid.UUID, db: TenantDB, principal: Commenter
 ) -> InterviewOut:
-    """Ask Oracle to draft a Draft's questions again."""
+    """Ask Oracle to draft a Draft's questions again (not a pricing interview's: 409)."""
     try:
         row = await service.redraft(db, principal, interview_id)
     except service.InterviewError as e:

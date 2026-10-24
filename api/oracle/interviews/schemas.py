@@ -11,6 +11,8 @@ from oracle.intake.schemas import AnswerResult
 
 Status = Literal["draft", "invited", "in_progress", "finished", "expired", "revoked"]
 Kind = Literal["team", "customer"]
+# H9: a fixed guide; the snapshot of such an interview carries InterviewPricing.
+Preset = Literal["pricing"]
 
 NAME_MAX = 120
 TOPIC_MAX = 300
@@ -51,10 +53,12 @@ class InterviewSubject(BaseModel):
 class InterviewCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Only customer interviews are created here, so a preset on a team interview is a 422.
     kind: Literal["customer"] = "customer"
     interviewee_name: Name
     interviewee_company: Name | None = None
     subject: InterviewSubject
+    preset: Preset | None = None
 
 
 class InterviewGuideItemIn(BaseModel):
@@ -100,10 +104,45 @@ class InterviewMessageOut(BaseModel):
     created_at: datetime
 
 
+class SnapshotQuote(BaseModel):
+    text: str
+    question_id: str | None = None
+
+
+class SnapshotNeed(BaseModel):
+    title: str
+    quote: str | None = None
+    question_id: str | None = None
+
+
+class InterviewPricing(BaseModel):
+    """A pricing interview's answers, each as the customer said it or null, never
+    inferred (oracle.interviews.jobs keeps a price only when its numbers were said)."""
+
+    too_cheap: str | None = None
+    bargain: str | None = None
+    expensive: str | None = None
+    too_expensive: str | None = None
+    currency: str | None = None
+    budget_owner: str | None = None
+    replaces: str | None = None
+
+
+class InterviewSnapshot(BaseModel):
+    """What the interview_snapshot job writes; ``pricing`` only for a pricing interview."""
+
+    quick_facts: list[str]
+    quotes: list[SnapshotQuote]
+    needs: list[SnapshotNeed]
+    insights: list[str]
+    pricing: InterviewPricing | None = None
+
+
 class InterviewOut(BaseModel):
     id: uuid.UUID
     kind: Kind
     status: Status
+    preset: Preset | None = None
     title: str
     intake_id: uuid.UUID | None = None
     theme_id: uuid.UUID | None = None
@@ -121,7 +160,8 @@ class InterviewOut(BaseModel):
     finished_at: datetime | None = None
     lock_version: int
     messages: list[InterviewMessageOut]
-    # InterviewSnapshot: quick_facts, quotes, needs, insights; {} until written.
+    # InterviewSnapshot: quick_facts, quotes, needs, insights (and pricing for a pricing
+    # interview); {} until written.
     snapshot: dict[str, Any]
     snapshot_job: InterviewJobState | None = None
     # The requests its snapshot created.
@@ -134,6 +174,7 @@ class InterviewSummary(BaseModel):
     id: uuid.UUID
     kind: Kind
     status: Status
+    preset: Preset | None = None
     title: str
     interviewee_name: str | None = None
     interviewee_company: str | None = None
