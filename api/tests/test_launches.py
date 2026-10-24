@@ -631,3 +631,37 @@ async def test_a_roadmap_without_now_items_plans_nothing(client, owner, runtime)
     await trace_features(tenant_id)
     await approve_roadmap(client, auth)
     assert (await client.get("/v1/launches", headers=auth)).json() == []
+
+
+async def test_act_within_limits_publishes_and_notifies_on_launch(client, owner, runtime):  # noqa: F811
+    """protects=#519 item 1: with H11 Autonomy's launches set to "Act within limits"
+    through PUT /v1/autonomy/launches, Mark launched has Oracle notify the member requesters
+    (their note is notified, they get the "Shipped" row) and tells the launch's owner with an
+    "Oracle did" record; at the default (Draft) the note stays for a person; fails_when=the
+    level is read in a shape H11 never stores, so "act" never fires; no_claim=public entries
+    (Oracle never publishes those)."""
+    tenant_id, auth = owner
+    by_item = await launched_world(client, auth, runtime, tenant_id)
+    await member_asked(tenant_id, "Rita", "s-5-1", "Can buyers keep their card?")
+    await member_asked(tenant_id, "Sam", "s-5-2", "Shipping options earlier, please")
+    # The default: people notify.
+    url = f"/v1/launches/{by_item['shipping-step']['id']}"
+    assert (await client.post(f"{url}/launched", json={}, headers=auth)).status_code == 200
+    notes = (await client.get(f"{url}/notes", headers=auth)).json()
+    assert [n["status"] for n in notes] == ["drafted"], notes
+    resp = await client.put(
+        "/v1/autonomy/launches",
+        json={"level": "act", "reason": "Internal launch notes are routine"},
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    url = f"/v1/launches/{by_item['payment-step']['id']}"
+    assert (await client.post(f"{url}/launched", json={}, headers=auth)).status_code == 200
+    notes = (await client.get(f"{url}/notes", headers=auth)).json()
+    assert [n["status"] for n in notes] == ["notified"], notes
+    from oracle.autonomy_models import OracleAction
+
+    async with tenant_session(tenant_id) as s:
+        actions = list(await s.scalars(select(OracleAction)))
+    assert [a.responsibility for a in actions] == ["launches"]
+    assert "Payment step" in actions[0].summary

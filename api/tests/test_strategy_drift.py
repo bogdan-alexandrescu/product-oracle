@@ -6,7 +6,7 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, update
@@ -17,6 +17,7 @@ from oracle.strategy import drift
 from oracle.strategy.models import StrategyFinding
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
+from tests.day_helpers import company_today
 from tests.strategy_helpers import (
     STRATEGY,
     VISION,
@@ -101,7 +102,7 @@ async def test_focus_without_goal_and_review_due(client, ctx):
     past its review_on is due; fails_when=either is missed; no_claim=the H2 review
     ritual."""
     await add_entity(ctx.tenant_id, "goal", "a")
-    past = (date.today() - timedelta(days=1)).isoformat()
+    past = (company_today() - timedelta(days=1)).isoformat()
     await _strategy(client, ctx, [choice("one", goals=["a"]), choice("lonely")], review_on=past)
     await imported(client, ctx.as_("owner"), VISION, vision_md([belief("b1", "x")], review_on=past))
     await approved(client, ctx.as_("owner"), VISION, 1)

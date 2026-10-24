@@ -7,13 +7,12 @@ FakeRuntime. Made-up names only.
 Every test states its card: protects (the observable), fails_when (the wrong result
 it rejects), no_claim (what green does not prove)."""
 
-from datetime import date
-
 from sqlalchemy import select
 
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
+from tests.day_helpers import company_today
 from tests.launch_helpers import ticker_pass
 from tests.outcome_helpers import days_ago, goal_history, outcome_world, set_record
 from tests.roadmap_helpers import other_company
@@ -131,7 +130,7 @@ async def test_the_owner_changes_what_oracle_recorded(client, owner, runtime):  
     prediction = {**pay["prediction"], "threshold_value": 40, "by": days_ago(10).isoformat()}
     await set_record(
         tenant_id, pay["id"], status="tracking", prediction=prediction,
-        assess_due_on=date.today(), gap_categories=["success_metric"],
+        assess_due_on=company_today(), gap_categories=["success_metric"],
     )  # fmt: skip
     await goal_history(tenant_id, ("41%", days_ago(5)))
     async with tenant_session(tenant_id) as s:

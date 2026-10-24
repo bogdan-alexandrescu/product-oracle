@@ -454,7 +454,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "H2",
     "wired_by_name": "H2 Cadence engine",
     "limits_default": {

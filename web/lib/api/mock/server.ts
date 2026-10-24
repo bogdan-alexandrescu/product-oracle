@@ -1481,6 +1481,11 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
     documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
+    hiddenDocument: (key) => {
+      const versionOf = db.versions.find((v) => v.id === key)?.document_id;
+      const doc = db.documents.find((d) => d.id === key || d.slug === key || d.id === versionOf);
+      return !!doc && !canSee(me.role, doc.visibility);
+    },
     uuid,
     now,
   };

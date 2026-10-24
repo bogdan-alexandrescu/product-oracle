@@ -34,6 +34,7 @@ from oracle.roadmap.models import ProductTrack
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import DEFAULTS
 from oracle.ticker import router as ticker
+from tests.day_helpers import company_today
 from tests.roadmap_helpers import other_company
 from tests.test_mcp import mcp_client, run_token, text_of
 from tests.test_roadmap import (  # noqa: F401 - fixtures
@@ -599,7 +600,7 @@ async def test_dates_verified_and_withdrawn_in_the_week(client, owner, runtime, 
     tenant_id, auth = owner
     await a_track(client, auth, runtime)
     now = datetime.now(UTC)
-    day = (date.today() + timedelta(days=40)).isoformat()
+    day = (company_today() + timedelta(days=40)).isoformat()
     made = (await client.post(
         "/v1/schedule-bases",
         json={"kind": "estimate", "reference": "ENG-500", "supports_date": day, "prd": PRD},

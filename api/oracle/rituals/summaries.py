@@ -7,6 +7,11 @@ monthly estimate.
   occurrence ready starts it, created by the ritual's owner; an owner who can no longer
   start runs (disabled, or below approver) gets ``not_started`` and a note, never a retry
   by the ticker.
+- **Run rituals at "Act within limits"** (H11 Autonomy, ``rituals``): with On demand,
+  the tick that makes a covered occurrence ready starts it too when $3.00 is within the
+  owner's ``max_run_usd``, then tells the ritual's owner ("Oracle did", Undo cancels
+  the run). Above the limit, or below "Act within limits", nothing starts: the
+  pre-read's Inbox row reminds, and a person clicks Summarize with Oracle.
 
 At most one summary run per occurrence at a time. A run that fails leaves the pre-read
 as it is (``failed``); the run's ``summary.md`` is copied onto the occurrence when it
@@ -20,7 +25,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -146,15 +151,31 @@ async def on_demand(db: AsyncSession, principal: Principal, occ: RitualOccurrenc
     return await _start(db, principal, occ, principal.user_id)
 
 
+async def _oracle_acts(db: AsyncSession) -> bool:
+    """H11 Autonomy: Oracle starts the summary itself only at "Act within limits" and
+    when its estimate is within the ``rituals`` limit (``max_run_usd``). Below that, or
+    above the limit, the pre-read's Inbox row is the reminder and a person starts it."""
+    if not await autonomy.allows(db, "rituals", "act"):
+        return False
+    lim = await autonomy.limits(db, "rituals")
+    cap = Decimal(str(getattr(lim, "max_run_usd", 0)))
+    return per_summary_usd() <= cap
+
+
 async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID) -> None:
-    """With Every pre-read, start the summary of an occurrence that just became ready
-    (covered kinds only, once); with the ritual's owner unable to start runs, note why.
-    Never raises: the pre-read stays as it is."""
+    """Start the summary of an occurrence that just became ready (covered kinds only,
+    once) when summaries are on Every pre-read (the owner's choice), or when Run rituals
+    is at "Act within limits" and the run is within its cost limit (Oracle's choice,
+    then the ritual's owner is told). With the ritual's owner unable to start runs, note
+    why. Never raises: the pre-read stays as it is."""
     import logging
 
     try:
+        acting = False
         if await mode(db) != "always":
-            return
+            acting = await _oracle_acts(db)
+            if not acting:
+                return
         occ = await db.get(RitualOccurrence, occ_id, with_for_update=True)
         ritual = await db.get(Ritual, ritual_id)
         if occ is None or ritual is None or ritual.kind not in COVERED:
@@ -169,7 +190,26 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
             occ.summary_note = NOT_STARTED
             await db.commit()
             return
-        await _start(db, audit.ORACLE, occ, owner.id)
+        title, owner_id = ritual.title, owner.id
+        run_id = await _start(db, audit.ORACLE, occ, owner_id)
+        if acting:
+            await autonomy.acted(
+                db,
+                "rituals",
+                summary=(
+                    f"Started a summary of the pre-read for '{title}' "
+                    f"(${per_summary_usd():.2f}, within your limit)"
+                ),
+                subject={
+                    "type": "ritual_occurrence",
+                    "occurrence_id": str(occ_id),
+                    "ritual_id": str(ritual_id),
+                    "run_id": str(run_id),
+                },
+                undo={"method": "POST", "path": f"/v1/runs/{run_id}/cancel", "body": None},
+                notify=[owner_id],
+            )
+            await db.commit()
     except Exception:
         logging.getLogger(__name__).exception("rituals: the summary of %s did not start", occ_id)
         await db.rollback()
