@@ -174,12 +174,24 @@ const isNo = (reason: string | null | undefined, note: string | null | undefined
 
 const MONTH = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 // The API's promise check (replies.promise_warnings): a date, "later", "soon", "next quarter", "on the roadmap".
+// Whole words (a hyphen or slash joins a word), a day without a year is a month and a day ("24/7" is not a date),
+// and the asker's own words quoted back are theirs, not a promise.
 const PROMISES = new RegExp(
-  "\\b(?:later|soon|someday|eventually|next (?:week|month|quarter|year|release|sprint)|on (?:the|our) roadmap|in the (?:near )?future|coming (?:weeks|months)" +
-    `|q[1-4]|h[12] 20\\d\\d|20\\d\\d-\\d\\d-\\d\\d|\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?|${MONTH}\\.? \\d{1,2}(?:st|nd|rd|th)?|\\d{1,2}(?:st|nd|rd|th)? ${MONTH}|(?:by|in|until) ${MONTH})\\b`,
+  "(?<![\\w/-])(?:later|soon|someday|eventually|next (?:week|month|quarter|year|release|sprint)|on (?:the|our) roadmap|in the (?:near )?future|coming (?:weeks|months)" +
+    `|q[1-4]|h[12] 20\\d\\d|20\\d\\d-\\d\\d-\\d\\d|\\d{1,2}/\\d{1,2}/\\d{2,4}|(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\\d|3[01])|${MONTH}\\.? \\d{1,2}(?:st|nd|rd|th)?|\\d{1,2}(?:st|nd|rd|th)? ${MONTH}|(?:by|in|until) ${MONTH})(?![\\w/-])`,
   "i",
 );
-export const promiseWarnings = (body: string | null | undefined): ReplyOut["warnings"] => (body && PROMISES.test(body) ? ["sounds_like_a_promise"] : []);
+const QUOTED = /"([^"\n]{1,2000})"|\u201c([^\u201d\n]{1,2000})\u201d/g;
+const plain = (text: string) => text.split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+export const promiseWarnings = (body: string | null | undefined, asked?: string | null): ReplyOut["warnings"] => {
+  if (!body) return [];
+  const said = plain(asked ?? "");
+  const theirs = (all: string, a?: string, b?: string) => {
+    const quote = plain(a ?? b ?? "").replace(/…+$/, "").trim();
+    return said && quote && said.includes(quote) ? " " : all;
+  };
+  return PROMISES.test(body.replace(QUOTED, theirs)) ? ["sounds_like_a_promise"] : [];
+};
 
 /** Today (YYYY-MM-DD) in `zone`. */
 function todayIn(zone: string): string {
@@ -413,7 +425,9 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
     const doc = document_id ? ctx.documents().find((d) => d.id === document_id) : undefined;
     const { decision_id, basis_in, asked_again_since, ...shown } = rest;
     void asked_again_since;
-    const decision = decision_id ? ctx.decisions?.get(decision_id) : null;
+    // Only a standing no shows: a decision reversed on Reopen stays off a later decline.
+    const logged = decision_id ? ctx.decisions?.get(decision_id) : null;
+    const decision = r.state === "disqualified" && logged?.status === "decided" ? logged : null;
     const own = rootReplies(r);
     const reason = r.state === "disqualified" ? r.disqualify_reason : null;
     return {
@@ -500,7 +514,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if (!root || reply.status !== "drafted") continue;
       reply.body = draft(root, reply, "oracle");
       reply.draft_source = "oracle";
-      reply.warnings = promiseWarnings(reply.body);
+      reply.warnings = promiseWarnings(reply.body, reply.asked);
       reply.lock_version += 1;
     }
   };
@@ -533,7 +547,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       ...rest,
       decision_number: decision_id ? (ctx.decisions?.get(decision_id)?.number ?? null) : null,
       sent_by_name: nameOf(sent_by),
-      drafting: !!job_at && x.status === "drafted" && x.body === null,
+      // While the job runs, also on Draft again over words already there.
+      drafting: !!job_at && x.status === "drafted" && x.draft_source !== "person",
     };
   };
   const suggestedBasis = (r: Row): Record<string, Schemas["BasisOut"]> => {
@@ -881,7 +896,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if (input.lock_version !== reply.lock_version) return stale();
       if (reply.status !== "drafted") return fail(409, "Only a Drafted reply is edited");
       if ((input.body ?? "").length > REPLY_MAX) return fail(422, `At most ${REPLY_MAX} characters`);
-      Object.assign(reply, { body: input.body, draft_source: "person", warnings: promiseWarnings(input.body), job_at: null });
+      Object.assign(reply, { body: input.body, draft_source: "person", warnings: promiseWarnings(input.body, reply.asked), job_at: null });
     } else if (m === "POST" && verb === "sent") {
       const input = await body<Schemas["ReplySent"]>();
       if (reply.status !== "drafted") return fail(409, `This reply is already ${reply.status}`);

@@ -1165,7 +1165,7 @@ async def update_reply(
         raise _conflict("Only a Drafted reply is edited")
     reply.body = body
     reply.draft_source = "person"
-    reply.warnings = replies.promise_warnings(body)
+    reply.warnings = replies.promise_warnings(body, reply.asked)
     await _reply_done(db, principal, reply, root, "edited", {"warnings": reply.warnings})
     return reply
 

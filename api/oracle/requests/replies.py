@@ -167,22 +167,42 @@ _MONTH = (
     r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
 )
 # Linear patterns only: no nested quantifiers (oracle.jobs.prompting's rule).
+# Whole words: a hyphen or slash joins a word ("later-stage" is not a promise); a day
+# without a year is a month and a day ("24/7" is not a date).
 _PROMISES = re.compile(
-    r"\b(?:"
+    r"(?<![\w/-])(?:"
     r"later|soon|someday|eventually|next (?:week|month|quarter|year|release|sprint)"
     r"|on (?:the|our) roadmap|in the (?:near )?future|coming (?:weeks|months)"
-    r"|q[1-4]|h[12] 20\d\d|20\d\d-\d\d-\d\d|\d{1,2}/\d{1,2}(?:/\d{2,4})?"
+    r"|q[1-4]|h[12] 20\d\d|20\d\d-\d\d-\d\d|\d{1,2}/\d{1,2}/\d{2,4}"
+    r"|(?:0?[1-9]|1[0-2])/(?:0?[1-9]|[12]\d|3[01])"
     rf"|{_MONTH}\.? \d{{1,2}}(?:st|nd|rd|th)?|\d{{1,2}}(?:st|nd|rd|th)? {_MONTH}"
     rf"|(?:by|in|until) {_MONTH}"
-    r")\b",
+    r")(?![\w/-])",
     re.IGNORECASE,
 )
 
 
-def promise_warnings(body: str | None) -> list[str]:
+# A quoted span, straight or curly quotes: the asker's words when they asked them.
+_QUOTED = re.compile(r'"([^"\n]{1,2000})"|\u201c([^\u201d\n]{1,2000})\u201d')
+
+
+def _plain(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def promise_warnings(body: str | None, asked: str | None = None) -> list[str]:
     """``["sounds_like_a_promise"]`` when a reply names a date or says "later", "soon",
-    "next quarter" or "on the roadmap" (Q4 "Reply terms"); never blocks."""
-    if body and _PROMISES.search(body):
+    "next quarter" or "on the roadmap" (Q4 "Reply terms"); never blocks. Whole words only,
+    and the asker's own words quoted back (``asked``) are theirs, not a promise."""
+    if not body:
+        return []
+    said = _plain(asked or "")
+
+    def theirs(m: re.Match[str]) -> str:
+        quote = _plain(m.group(1) or m.group(2)).rstrip("…").strip()
+        return " " if said and quote and quote in said else m.group(0)
+
+    if _PROMISES.search(_QUOTED.sub(theirs, body)):
         return [PROMISE]
     return []
 
@@ -263,7 +283,8 @@ async def live_decision(db: AsyncSession, request_id: uuid.UUID) -> Decision | N
 
 
 async def decisions_for(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Decision]:
-    """Each request's newest decided ``request_decline`` decision."""
+    """Each request's standing no: its newest ``request_decline`` decision, when that one is
+    still decided. A no reversed on Reopen is not shown beside a later decline."""
     if not ids:
         return {}
     wanted = {str(i) for i in ids}
@@ -281,7 +302,7 @@ async def decisions_for(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUI
         for s in d.subjects or []:
             if s.get("kind") == "request" and s.get("id") in wanted:
                 out[uuid.UUID(s["id"])] = d
-    return out
+    return {rid: d for rid, d in out.items() if d.status == "decided"}
 
 
 async def reply_counts(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[int, int]]:
@@ -332,6 +353,20 @@ async def replies_out(db: AsyncSession, rows: list[RequestReply]) -> list[dict[s
     names = await _names(
         db, {r.sent_by for r in rows if r.sent_by} | {r.member_id for r in rows if r.member_id}
     )
+    # Drafting while the reply's job runs, also on Draft again over words already there; a
+    # person's own words the job leaves alone.
+    job_ids = {r.job_id for r in rows if r.job_id}
+    running = (
+        set(
+            await db.scalars(
+                select(LlmJob.id).where(
+                    LlmJob.id.in_(job_ids), LlmJob.status.in_(("queued", "running"))
+                )
+            )
+        )
+        if job_ids
+        else set()
+    )
     out = []
     for r in rows:
         d = decisions.get(r.decision_id) if r.decision_id else None
@@ -357,7 +392,7 @@ async def replies_out(db: AsyncSession, rows: list[RequestReply]) -> list[dict[s
                 "sent_by_name": names.get(r.sent_by) if r.sent_by else None,
                 "skip_reason": r.skip_reason,
                 "notified_at": r.notified_at,
-                "drafting": r.job_id is not None and r.status == OPEN and r.body is None,
+                "drafting": r.job_id in running and r.status == OPEN and r.draft_source != "person",
                 "lock_version": r.lock_version,
             }
         )
@@ -649,7 +684,7 @@ async def run_job(s: AsyncSession, job: LlmJob, ask: Any) -> dict[str, Any]:
                 "template",
             )
             template_n += 1
-        r.warnings = promise_warnings(r.body)
+        r.warnings = promise_warnings(r.body, r.asked)
     return {"replies": len(replies), "oracle": oracle, "template": template_n}
 
 
@@ -670,7 +705,7 @@ async def fill_templates(
     for r in empty:
         r.body = _template_for(root, r, asked.get(r.request_id), ctx)
         r.draft_source = "template"
-        r.warnings = promise_warnings(r.body)
+        r.warnings = promise_warnings(r.body, r.asked)
 
 
 async def job_failed(s: AsyncSession, job: LlmJob) -> None:

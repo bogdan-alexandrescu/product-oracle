@@ -112,7 +112,9 @@ export function RequestInspector({
   const decline = request.state === "new" && s && !s.declined_at ? s.decline : null;
   const [prefill, setPrefill] = useState<{ n: number; value: Prefill } | null>(null);
   const theme = request.theme ? themes.find((t) => t.id === request.theme!.id) : undefined;
-  const showWhyNot = request.replies.total > 0 || (request.state === "disqualified" && request.decision_number != null);
+  // A decline with no note or for housekeeping has no Why not panel, whatever an earlier no left.
+  const showWhyNot =
+    request.state === "disqualified" ? request.no_reply_reason == null && (request.replies.total > 0 || request.decision_number != null) : request.replies.total > 0;
 
   return (
     <Inspector

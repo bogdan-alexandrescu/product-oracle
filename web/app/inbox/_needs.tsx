@@ -1525,7 +1525,6 @@ export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { 
         : r.reason === "asked_again"
           ? `Asked again ${r.count ?? 0} ${r.count === 1 ? "time" : "times"} since you said no · ${r.title}`
           : `Answer to your request · ${r.title}`;
-    const path = { params: { path: { request_id: r.request_id } } };
     return {
       key: `request-${r.reason}-${r.request_id}`,
       icon: r.reason === "answer" ? "check" : "flag",
@@ -1546,33 +1545,7 @@ export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { 
       at: r.at,
       action: (
         <>
-          {r.reason === "asked_again" && (
-            <>
-              <Button
-                disabled={busy !== null}
-                onClick={() =>
-                  act(`keep-no-${r.request_id}`, () =>
-                    unwrap(api.POST("/v1/requests/{request_id}/keep-no", { ...path, body: { note: "Kept from the Inbox: the reason still holds" } })),
-                  )
-                }
-              >
-                Keep the no
-              </Button>
-              <Button
-                disabled={busy !== null}
-                onClick={() =>
-                  act(`reopen-${r.request_id}`, async () => {
-                    const request = await unwrap(api.GET("/v1/requests/{request_id}", path));
-                    return unwrap(
-                      api.POST("/v1/requests/{request_id}/reopen", { ...path, body: { lock_version: request.lock_version, reason: "Asked again since we said no" } }),
-                    );
-                  })
-                }
-              >
-                Reopen
-              </Button>
-            </>
-          )}
+          {r.reason === "asked_again" && <AskedAgainActions requestId={r.request_id} title={r.title} busy={busy} act={act} />}
           <LinkButton variant="secondary" href={href(r.request_id)}>
             Open
           </LinkButton>
@@ -1581,6 +1554,76 @@ export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { 
     };
   };
   return { counted: rows.filter((r) => r.counts).map(need), shown: rows.filter((r) => !r.counts).map(need) };
+}
+
+/** Asked again: Keep the no with the person's own note (a reaffirmed review), or Reopen. */
+function AskedAgainActions({ requestId, title, busy, act }: { requestId: string; title: string; busy: string | null; act: Act }) {
+  const [keeping, setKeeping] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const fieldId = useId();
+  const path = { params: { path: { request_id: requestId } } };
+  const run = (key: string, call: () => Promise<unknown>) => {
+    setError(null);
+    void act(key, () => call().catch((e) => setError(errorMessage(e))));
+  };
+  const errorLine = error && (
+    <span role="alert" className="basis-full text-right text-[13px] text-crit max-[600px]:text-left">
+      {error}
+    </span>
+  );
+  if (keeping) {
+    return (
+      <form
+        className="flex w-full flex-col items-stretch gap-1.5 py-1 text-left whitespace-normal"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(`keep-no-${requestId}`, () => unwrap(api.POST("/v1/requests/{request_id}/keep-no", { ...path, body: { note: note.trim() } })));
+        }}
+      >
+        <label htmlFor={fieldId} className="text-[13px] leading-4 font-semibold text-text2">
+          Why keep the no
+        </label>
+        <input
+          id={fieldId}
+          autoFocus
+          value={note}
+          maxLength={2000}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
+          className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+        />
+        {errorLine}
+        <span className="flex justify-end gap-1.5 max-[600px]:flex-col">
+          <Button type="submit" disabled={busy !== null || !note.trim()} className="max-[600px]:w-full">
+            Keep the no
+          </Button>
+          <Button variant="ghost" disabled={busy !== null} onClick={() => setKeeping(false)} className="max-[600px]:w-full">
+            Cancel
+          </Button>
+        </span>
+      </form>
+    );
+  }
+  return (
+    <>
+      <Button disabled={busy !== null} aria-label={`Keep the no on ${title}`} onClick={() => setKeeping(true)}>
+        Keep the no
+      </Button>
+      <Button
+        disabled={busy !== null}
+        onClick={() =>
+          run(`reopen-${requestId}`, async () => {
+            const request = await unwrap(api.GET("/v1/requests/{request_id}", path));
+            return unwrap(api.POST("/v1/requests/{request_id}/reopen", { ...path, body: { lock_version: request.lock_version, reason: "Asked again since we said no" } }));
+          })
+        }
+      >
+        Reopen
+      </Button>
+      {errorLine}
+    </>
+  );
 }
 
 const ritualWhen = (iso: string) => formatInZone(iso, displayZone(), { weekday: "short", hour: "numeric", minute: "2-digit" });

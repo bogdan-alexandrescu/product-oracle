@@ -94,10 +94,10 @@ export function WhyNot({ request, onRequest }: { request: Request; onRequest: (r
           <ReplyRow key={`${r.id}:${r.lock_version}`} reply={r} canAct={canAct && r.status === "drafted"} busy={busy} today={todayIn(zone)} act={act} />
         ))}
       </ul>
-      {(canDraft && live && open.length > 0 && !drafting) || (canTell && !live && told && !reopenedSent) ? (
+      {(canDraft && live && open.length > 0) || (canTell && !live && told && !reopenedSent) ? (
         <div className="flex flex-wrap gap-2">
-          {canDraft && live && open.length > 0 && !drafting && (
-            <Button disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/requests/{request_id}/replies/draft", path)))}>
+          {canDraft && live && open.length > 0 && (
+            <Button disabled={busy || drafting} onClick={() => act(() => unwrap(api.POST("/v1/requests/{request_id}/replies/draft", path)))}>
               Draft again with Oracle
             </Button>
           )}
