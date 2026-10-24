@@ -270,6 +270,7 @@ async def _build(
         period_from=occ.period_from or occ.due_at - timedelta(days=7),
         period_to=occ.period_to or occ.due_at,
         now=now,
+        occurrence_id=occ.id,
     )
     try:
         async with db.begin_nested():
@@ -442,12 +443,15 @@ async def _last_pre_read(db: AsyncSession, ritual_id: uuid.UUID) -> OccurrenceSu
 
 
 async def ritual_out(db: AsyncSession, r: Ritual) -> RitualOut:
+    from oracle.metrics.activate import replaced_by
+
     return RitualOut(
         id=r.id, kind=r.kind, title=r.title, builtin=r.builtin, schedule=r.schedule,
         duration_min=r.duration_min, prep_hours=r.prep_hours, owner_id=r.owner_id,
         attendee_ids=list(r.attendee_ids), status=r.status,  # type: ignore[arg-type]
         next_due_at=r.next_due_at, lock_version=r.lock_version,
         last_pre_read=await _last_pre_read(db, r.id),
+        replaced_by=await replaced_by(db, r),
     )  # fmt: skip
 
 

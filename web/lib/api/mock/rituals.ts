@@ -365,7 +365,7 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
 function estimate(db: RitualsDb): Schemas["Estimate"] {
   const rows = db.rituals
     .filter((r) => r.status === "active" && COVERED.has(r.kind))
-    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule) }));
+    .map((r) => ({ ritual_id: r.id, title: r.title, runs_per_month: runsPerMonth(r.schedule), per_summary_usd: PER_SUMMARY_USD }));
   const runs = Math.round(rows.reduce((n, r) => n + r.runs_per_month, 0) * 100) / 100;
   return { per_summary_usd: PER_SUMMARY_USD, runs_per_month: runs, usd_per_month: Math.round(runs * PER_SUMMARY_USD * 100) / 100, rituals: rows };
 }

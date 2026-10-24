@@ -45,6 +45,9 @@ from oracle.v2 import links
 from oracle.v2.models import DocumentSectionLink
 
 ENTITY_FIELDS = ("title", "body", "attrs", "status", "parent_id")
+# H5: the ``reading`` writer (a weekly value read from a goal's linked metric) changes
+# only these goal attrs; it applies even to a locked goal and never locks it.
+READING_ATTRS = ("current", "current_as_of")
 # attrs keys a module owns, and the routes that change them.
 MANAGED_ATTRS = {
     "blocker": "the blocker routes (/v1/blockers)",
@@ -85,7 +88,7 @@ class GoalFieldsInvalid(InvalidError):
 @dataclass(frozen=True)
 class Writer:
     principal: Principal | None
-    origin: str  # user | agent | import
+    origin: str  # user | agent | import | reading
     run_id: uuid.UUID | None = None
     reason: str | None = None
     # MANAGED_ATTRS keys this writer may change (the owning module's writes only).
@@ -106,7 +109,7 @@ class Writer:
 
     def must_propose(self, item: "Entity | Edge | None") -> bool:
         """Whether a write to ``item`` (None: a new one) becomes a proposal."""
-        if self.locks:
+        if self.locks or self.origin == "reading":
             return False
         return self.proposals_only or (item is not None and item.locked)
 
@@ -271,6 +274,18 @@ def check_managed_attrs(
             raise InvalidError(
                 f"attrs.{key} cannot be set, changed or removed here; change it through {where}"
             )
+
+
+def _check_reading(entity: Entity, changes: dict[str, Any]) -> None:
+    """A reading writes a goal's current value and its day, nothing else."""
+    attrs = changes.get("attrs")
+    if (
+        entity.type != "goal"
+        or set(changes) != {"attrs"}
+        or not isinstance(attrs, dict)
+        or set(attrs) - set(READING_ATTRS)
+    ):
+        raise InvalidError("a metric's reading changes only a goal's current value")
 
 
 def _check_fields_managed_attrs(
@@ -1075,6 +1090,8 @@ async def update_entity(
     unknown = set(changes) - set(ENTITY_FIELDS)
     if unknown:
         raise InvalidError(f"cannot change {', '.join(sorted(unknown))}")
+    if writer.origin == "reading":
+        _check_reading(entity, changes)
     _check_status(changes.get("status"))
     if "parent_id" in changes:
         changes = {**changes, "parent_id": _uuid_or_none(changes["parent_id"])}

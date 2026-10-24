@@ -52,6 +52,10 @@ READ_AREAS = {
         # H2: rituals and their pre-reads (a summary or update draft run reads them).
         "rituals",
         "ritual-occurrences",
+        # H5: the weekly metrics and their variances (reading only: an agent never
+        # writes a weekly value).
+        "metrics",
+        "metric-variances",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

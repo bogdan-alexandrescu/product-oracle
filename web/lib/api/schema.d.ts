@@ -10085,6 +10085,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/company-integrations/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Analytics Integration
+         * @description The analytics connection (PostHog): host, project and state; never the key.
+         */
+        get: operations["get_analytics_integration"];
+        /**
+         * Put Analytics Integration
+         * @description Connect PostHog, or replace its host, project or key. The key is tested with one
+         *     trivial query first: a refused key is 422 with the provider's message (no key). An
+         *     own host must be ``https`` and resolve to public addresses only.
+         */
+        put: operations["put_analytics_integration"];
+        post?: never;
+        /**
+         * Delete Analytics Integration
+         * @description Disconnect PostHog: the key is deleted and PostHog metrics are paused ("Analytics
+         *     disconnected"); their values stay.
+         */
+        delete: operations["delete_analytics_integration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/company-integrations/{integration_id}": {
         parameters: {
             query?: never;
@@ -11121,6 +11152,247 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metrics
+         * @description The company's weekly metrics: outputs, each followed by the inputs that drive it,
+         *     with last week's value, its change and the last 12 weeks.
+         */
+        get: operations["list_metrics"];
+        put?: never;
+        /**
+         * Create Metric
+         * @description Add a metric. A PostHog metric reads its last 12 complete weeks at once (409 when
+         *     PostHog is not connected).
+         */
+        post: operations["create_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Metric Query
+         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. The
+         *     provider's error, when it refuses, is in ``error``.
+         */
+        post: operations["test_metric_query"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Metric
+         * @description A metric with up to 52 weekly values, its variances and its definition history.
+         */
+        get: operations["get_metric"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Metric
+         * @description Edit a metric (``lock_version``). A query or unit change raises its definition
+         *     version: later values carry the new one.
+         */
+        patch: operations["update_metric"];
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Metric
+         * @description Archive a metric: it is no longer read or reviewed; its values stay.
+         */
+        post: operations["archive_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Metric
+         * @description Restore an archived metric.
+         */
+        post: operations["restore_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull Metric
+         * @description Pull now: read the last complete week from PostHog again and replace its value
+         *     (409 unless the metric's source is PostHog; 502 with the provider's message).
+         */
+        post: operations["pull_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metrics/{metric_id}/values/{week_start}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record Metric Value
+         * @description Record a week's value on a metric typed by hand or written by API (an approver or
+         *     the metric's owner). 409 for a PostHog metric; 422 for a week_start that is not a
+         *     Monday or a week that has not ended.
+         */
+        put: operations["record_metric_value"];
+        post?: never;
+        /**
+         * Delete Metric Value
+         * @description Delete a week's value typed by hand or written by API.
+         */
+        delete: operations["delete_metric_value"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Metric Variances
+         * @description The variances, latest week first: each with its possible causes, its explanation
+         *     state and Oracle's draft if any.
+         */
+        get: operations["list_metric_variances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explain Metric Variance
+         * @description Explain a variance (10 to 1,000 characters): the metric's owner or an approver.
+         */
+        post: operations["explain_metric_variance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/unknown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Metric Variance Unknown
+         * @description Don't know yet, with a day to find out by (1 to 28 days ahead): the metric's owner
+         *     or an approver.
+         */
+        post: operations["mark_metric_variance_unknown"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/metric-variances/{variance_id}/noise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Metric Variance Noise
+         * @description Mark a variance as noise, with a reason (approvers).
+         */
+        post: operations["mark_metric_variance_noise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/oauth-protected-resource": {
         parameters: {
             query?: never;
@@ -11688,6 +11960,48 @@ export interface components {
              * @default true
              */
             needs_attention_as_of_now: boolean;
+        };
+        /** AnalyticsIn */
+        AnalyticsIn: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "posthog";
+            /** Host */
+            host: string;
+            /** Project Id */
+            project_id: string;
+            /** Api Key */
+            api_key: string;
+        };
+        /**
+         * AnalyticsOut
+         * @description The connection, never its key.
+         */
+        AnalyticsOut: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "posthog";
+            /** Host */
+            host: string | null;
+            /** Project Id */
+            project_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "error" | "disconnected";
+            /** Last Error */
+            last_error: string | null;
+            /** Connected By Name */
+            connected_by_name: string | null;
+            /** Connected At */
+            connected_at: string | null;
+            /** Metrics */
+            metrics: number;
         };
         /** AnnotationOut */
         AnnotationOut: {
@@ -12274,6 +12588,13 @@ export interface components {
             updated_by?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** Band */
+        Band: {
+            /** Low */
+            low: number;
+            /** High */
+            high: number;
         };
         /** BaselineSegmentUsd */
         BaselineSegmentUsd: {
@@ -13456,6 +13777,15 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["ModuleVersionSummary"][];
         };
+        /** Change */
+        Change: {
+            /** Value */
+            value: number;
+            /** Pct */
+            pct: number | null;
+            /** Variance */
+            variance: ("better" | "worse") | null;
+        };
         /** ChangeActIn */
         ChangeActIn: {
             /** Lock Version */
@@ -14467,14 +14797,14 @@ export interface components {
             id: string;
             /**
              * Provider
-             * @constant
+             * @enum {string}
              */
-            provider: "slack";
+            provider: "slack" | "posthog";
             /**
              * Purpose
-             * @constant
+             * @enum {string}
              */
-            purpose: "notifications";
+            purpose: "notifications" | "metrics";
             /** Account Id */
             account_id: string;
             /** Account Label */
@@ -15904,6 +16234,20 @@ export interface components {
             op: "defer";
             /** Key */
             key: string;
+        };
+        /** Definition */
+        Definition: {
+            /** Version */
+            version: number;
+            /** Unit */
+            unit: string;
+            /** Query */
+            query: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /** DependenciesCreate */
         DependenciesCreate: {
@@ -17619,6 +17963,11 @@ export interface components {
             title: string;
             /** Runs Per Month */
             runs_per_month: number;
+            /**
+             * Per Summary Usd
+             * @default 3
+             */
+            per_summary_usd: number;
         };
         /** EvaluationFindingOut */
         EvaluationFindingOut: {
@@ -18005,6 +18354,13 @@ export interface components {
             heading: string;
             /** Html */
             html: string;
+        };
+        /** ExplainIn */
+        ExplainIn: {
+            /** Explanation */
+            explanation: string;
+            /** Lock Version */
+            lock_version?: number | null;
         };
         /** Explanation */
         Explanation: {
@@ -18600,7 +18956,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Title */
             title: string;
             /** Description */
@@ -19804,7 +20160,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -20203,6 +20559,40 @@ export interface components {
             at?: string | null;
         };
         /**
+         * InboxMetric
+         * @description A metric row of the Inbox (H5): Explain a variance and Find out (the metric's
+         *     owner; Find out from its find-out-by day), Metric not read for a day (owners).
+         *     ``counts``: in needs_me and the badge. ``occurrence_id``: the weekly review that
+         *     lists the variance, when one does.
+         */
+        InboxMetric: {
+            /** Variance Id */
+            variance_id?: string | null;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "explain" | "find_out" | "pull_failed";
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Due On */
+            due_on?: string | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Counts */
+            counts: boolean;
+        };
+        /**
          * InboxOracleAction
          * @description "Oracle did": what Oracle did on its own account (H11, ``oracle.autonomy.acted``),
          *     for one of the people it notified. Counted until that person opens it.
@@ -20363,6 +20753,11 @@ export interface components {
              * @default []
              */
             outcomes: components["schemas"]["InboxOutcome"][];
+            /**
+             * Metrics
+             * @default []
+             */
+            metrics: components["schemas"]["InboxMetric"][];
             /** Last Seen At */
             last_seen_at?: string | null;
             /**
@@ -23014,6 +23409,227 @@ export interface components {
             /** Hand Over */
             hand_over?: components["schemas"]["HandOver"][] | null;
         };
+        /** MetricCreate */
+        MetricCreate: {
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Drives Metric Id */
+            drives_metric_id?: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query?: string | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
+        };
+        /** MetricDetail */
+        MetricDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id: string | null;
+            /** Drives Metric Id */
+            drives_metric_id: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query: string | null;
+            /** Threshold Pct */
+            threshold_pct: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "archived";
+            /** Definition Version */
+            definition_version: number;
+            last_week: components["schemas"]["WeekValue"] | null;
+            change: components["schemas"]["Change"] | null;
+            /** Spark */
+            spark: (number | null)[];
+            /** Last Pulled At */
+            last_pulled_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Lock Version */
+            lock_version: number;
+            /** Values */
+            values: components["schemas"]["MetricValueOut"][];
+            /** Variances */
+            variances: components["schemas"]["VarianceOut"][];
+            /** Definitions */
+            definitions: components["schemas"]["Definition"][];
+        };
+        /** MetricOut */
+        MetricOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "output" | "input";
+            /** Unit */
+            unit: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /** Goal Id */
+            goal_id: string | null;
+            /** Drives Metric Id */
+            drives_metric_id: string | null;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /** Owner Name */
+            owner_name: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Query */
+            query: string | null;
+            /** Threshold Pct */
+            threshold_pct: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "error" | "archived";
+            /** Definition Version */
+            definition_version: number;
+            last_week: components["schemas"]["WeekValue"] | null;
+            change: components["schemas"]["Change"] | null;
+            /** Spark */
+            spark: (number | null)[];
+            /** Last Pulled At */
+            last_pulled_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /** MetricPatch */
+        MetricPatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Direction */
+            direction?: ("up" | "down") | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Drives Metric Id */
+            drives_metric_id?: string | null;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Query */
+            query?: string | null;
+            /** Threshold Pct */
+            threshold_pct?: number | null;
+        };
+        /** MetricTestOut */
+        MetricTestOut: {
+            /** Values */
+            values: components["schemas"]["WeekValue"][];
+            /** Error */
+            error: string | null;
+        };
+        /** MetricValueOut */
+        MetricValueOut: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "posthog" | "manual" | "api";
+            /** Definition Version */
+            definition_version: number;
+            /** Note */
+            note: string | null;
+            /** Recorded By */
+            recorded_by: string | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+        };
         /** MilestoneCreate */
         MilestoneCreate: {
             /** Name */
@@ -23829,6 +24445,13 @@ export interface components {
             items: number;
             /** Milestone Id */
             milestone_id?: string | null;
+        };
+        /** NoiseIn */
+        NoiseIn: {
+            /** Reason */
+            reason: string;
+            /** Lock Version */
+            lock_version?: number | null;
         };
         /**
          * NotReadCounts
@@ -24765,6 +25388,23 @@ export interface components {
             /** Until */
             until: string | null;
         };
+        /** PossibleCause */
+        PossibleCause: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "launch" | "changelog" | "roadmap_item" | "decision" | "definition";
+            /** Title */
+            title: string;
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            /** Href */
+            href: string;
+        };
         /** PrdAnchor */
         PrdAnchor: {
             document: components["schemas"]["DocumentRef"] | null;
@@ -25404,7 +26044,7 @@ export interface components {
             /** Measured At */
             measured_at?: string | null;
             /** Source */
-            source?: ("goal_history" | "measurement") | null;
+            source?: ("goal_history" | "measurement" | "metric") | null;
             /** Note */
             note?: string | null;
         };
@@ -25779,6 +26419,11 @@ export interface components {
             goal_ids?: string[] | null;
             /** Note */
             note?: string | null;
+        };
+        /** QueryIn */
+        QueryIn: {
+            /** Query */
+            query: string;
         };
         /** Question */
         Question: {
@@ -27872,6 +28517,8 @@ export interface components {
             next_due_at: string | null;
             /** Lock Version */
             lock_version: number;
+            /** Replaced By */
+            replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
         };
         /** RitualPatch */
@@ -28192,7 +28839,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Document */
             document?: string | null;
             /** Source */
@@ -28357,7 +29004,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /**
@@ -28619,7 +29266,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance";
             /** Flow Title */
             flow_title: string;
             /**
@@ -33795,6 +34442,16 @@ export interface components {
              */
             status: "unavailable" | "skipped" | "flagged" | "limited";
         };
+        /** UnknownIn */
+        UnknownIn: {
+            /**
+             * Find Out By
+             * Format: date
+             */
+            find_out_by: string;
+            /** Lock Version */
+            lock_version?: number | null;
+        };
         /**
          * UnrequestedChange
          * @description A field of an item the review left alone (``unchanged``) that changed anyway.
@@ -33932,6 +34589,73 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ValueIn */
+        ValueIn: {
+            /** Value */
+            value: number;
+            /** Note */
+            note?: string | null;
+        };
+        /** VarianceOut */
+        VarianceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Metric Id
+             * Format: uuid
+             */
+            metric_id: string;
+            /** Metric Title */
+            metric_title: string;
+            /**
+             * Owner Id
+             * Format: uuid
+             */
+            owner_id: string;
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
+            /** Previous */
+            previous: number;
+            /** Change */
+            change: number;
+            /** Change Pct */
+            change_pct: number | null;
+            band: components["schemas"]["Band"] | null;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "better" | "worse";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "explained" | "unknown" | "noise";
+            /** Explanation */
+            explanation: string | null;
+            /** Explained By Name */
+            explained_by_name: string | null;
+            /** Find Out By */
+            find_out_by: string | null;
+            /** Noise Reason */
+            noise_reason: string | null;
+            /** Oracle Draft */
+            oracle_draft: string | null;
+            /** Oracle Confidence */
+            oracle_confidence: ("high" | "medium" | "low") | null;
+            /** Possible Causes */
+            possible_causes: components["schemas"]["PossibleCause"][];
+            /** Lock Version */
+            lock_version: number;
         };
         /**
          * VersionAnchors
@@ -34249,6 +34973,16 @@ export interface components {
         WaiveIn: {
             /** Reason */
             reason: string;
+        };
+        /** WeekValue */
+        WeekValue: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Value */
+            value: number;
         };
         /** WindowOut */
         WindowOut: {
@@ -54137,6 +54871,75 @@ export interface operations {
             };
         };
     };
+    get_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+        };
+    };
+    put_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalyticsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsOut"];
+                };
+            };
+            /** @description The host or the key was refused */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_analytics_integration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     delete_company_integration: {
         parameters: {
             query?: never;
@@ -56092,6 +56895,640 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ChangelogEntryOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metrics: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_metric_query: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTestOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description PostHog refused or failed the query */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_metric_value: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValueIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricValueOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_metric_value: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                metric_id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_metric_variances: {
+        parameters: {
+            query?: {
+                status?: ("open" | "explained" | "unknown" | "noise") | null;
+                metric_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    explain_metric_variance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_metric_variance_unknown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnknownIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_metric_variance_noise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoiseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VarianceOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
