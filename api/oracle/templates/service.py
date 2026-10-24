@@ -77,8 +77,19 @@ class ForbiddenError(PermissionError):
 
 
 # H4: who may start a document of a kind (an owner's vision and product strategy).
-MIN_STARTER_ROLE = {"vision": "owner", "strategy": "owner", "update": "owner"}
-KIND_WORDS = {"vision": "a vision", "strategy": "a product strategy", "update": "an update"}
+MIN_STARTER_ROLE = {
+    "vision": "owner",
+    "strategy": "owner",
+    "update": "owner",
+    # H9: approvers and owners start a pricing memo; only the pricing owner decides it.
+    "pricing": "approver",
+}
+KIND_WORDS = {
+    "vision": "a vision",
+    "strategy": "a product strategy",
+    "update": "an update",
+    "pricing": "a pricing memo",
+}
 
 
 class InvalidError(ValueError):
@@ -890,6 +901,7 @@ async def _update_front_matter(
     """H8: an update's ``period`` (given, else the day after the period of the last
     approved update of the same template, else the first of this month, through today)
     and ``previous``, that last approved update and its version."""
+    from oracle.decisions.service import company_today
     from oracle.updates.frontmatter import parse_period
 
     rows = await db.execute(
@@ -906,7 +918,7 @@ async def _update_front_matter(
         parsed = parse_period((fm or {}).get("period"))
         if parsed is not None and (last is None or parsed[1] > last[0]):
             last = (parsed[1], slug, number)
-    today = date.today()
+    today = await company_today(db)
     if period is not None:
         start, end = period.from_, period.to
     else:
@@ -916,6 +928,29 @@ async def _update_front_matter(
     lines = [f"period: {{from: {start.isoformat()}, to: {end.isoformat()}}}"]
     if last is not None:
         lines.append(f"previous: {{document: {last[1]}, version: {last[2]}}}")
+    return lines
+
+
+def months_back(day: date, months: int) -> date:
+    """The same day ``months`` calendar months before ``day``; the month's last day when
+    that month is shorter (Aug 31 back 6 months is Feb 28)."""
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    month += 1
+    last = (date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)).day
+    return date(year, month, min(day.day, last))
+
+
+def _pricing_front_matter(data: StartDraftIn, today: date) -> list[str]:
+    """H9: a pricing memo's question (as typed) and evidence window (given, else the last
+    six calendar months through today, the Company day). The options are the run's to
+    write."""
+    if data.period is not None:
+        start, end = data.period.from_, data.period.to
+    else:
+        start, end = months_back(today, 6), today
+    lines = [f"evidence_window: {{from: {start.isoformat()}, to: {end.isoformat()}}}"]
+    if data.question:
+        lines.insert(0, f"question: {json.dumps(data.question.strip())}")
     return lines
 
 
@@ -977,8 +1012,9 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         template=template.key,
         template_version=str(version.version),
         theme=theme_key,
-        # H8: an update is for owners and approvers until an owner opens it.
-        visibility="approvers" if data.kind == "update" else "company",
+        # H8: an update (H9: a pricing memo) is for owners and approvers until an owner
+        # opens it.
+        visibility="approvers" if data.kind in ("update", "pricing") else "company",
     )
     db.add(document)
     try:
@@ -986,6 +1022,8 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
     except IntegrityError as e:
         await db.rollback()
         raise ConflictError(f"a document with slug '{slug}' was created concurrently") from e
+
+    from oracle.decisions.service import company_today
 
     markdown = draft_skeleton(
         version.body,
@@ -998,6 +1036,8 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         extra=(
             await _update_front_matter(db, template.key, data.period)
             if data.kind == "update"
+            else _pricing_front_matter(data, await company_today(db))
+            if data.kind == "pricing"
             else None
         ),
     )

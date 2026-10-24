@@ -32,6 +32,7 @@ const KIND_LABEL: Record<Theme["kind"], string> = {
   vision: "Vision",
   strategy: "Product strategy",
   update: "Update",
+  pricing: "Pricing memo",
   any: "Any document",
 };
 const GROUP_LABEL: Record<Theme["kind"], string> = {
@@ -40,6 +41,7 @@ const GROUP_LABEL: Record<Theme["kind"], string> = {
   vision: "Vision themes",
   strategy: "Product strategy themes",
   update: "Update themes",
+  pricing: "Pricing memo themes",
   any: "Any document",
 };
 const SWATCHES = ["background", "text", "heading", "muted", "accent", "rule", "surface"];

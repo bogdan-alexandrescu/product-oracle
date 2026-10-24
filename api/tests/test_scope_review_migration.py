@@ -62,7 +62,9 @@ def scratch_db():
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # 0049_pricing (H9) chains on it; one head.
+    assert script.get_heads() == ["0049_pricing"]
+    assert script.get_revision("0049_pricing").down_revision == REVISION
 
 
 def test_upgrade_and_downgrade_on_a_seeded_database(scratch_db):

@@ -10439,13 +10439,14 @@ export interface paths {
         };
         /**
          * List Interviews
-         * @description Interviews, newest first.
+         * @description Interviews, newest first; ``preset=pricing`` for pricing interviews.
          */
         get: operations["list_interviews"];
         put?: never;
         /**
          * Create Interview
-         * @description Create a Draft customer interview and queue Oracle's draft of its questions.
+         * @description Create a Draft customer interview and queue Oracle's draft of its questions; with
+         *     ``preset=pricing``, its guide is the fixed pricing questions and no job is queued.
          */
         post: operations["create_interview"];
         delete?: never;
@@ -10490,7 +10491,7 @@ export interface paths {
         put?: never;
         /**
          * Redraft Interview Guide
-         * @description Ask Oracle to draft a Draft's questions again.
+         * @description Ask Oracle to draft a Draft's questions again (not a pricing interview's: 409).
          */
         post: operations["redraft_interview_guide"];
         delete?: never;
@@ -10659,6 +10660,122 @@ export interface paths {
          * @description Send my answers: the interview finishes and the link stops working.
          */
         post: operations["public_interview_finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/deal-outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Deal Outcomes
+         * @description Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are
+         *     inclusive days.
+         */
+        get: operations["list_deal_outcomes"];
+        put?: never;
+        /**
+         * Create Deal Outcome
+         * @description Record one deal's result and its main reason.
+         */
+        post: operations["create_deal_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/deal-outcomes/{outcome_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Deal Outcome
+         * @description Delete a record.
+         */
+        delete: operations["delete_deal_outcome"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Deal Outcome
+         * @description Change a record (lock_version required; null clears an optional field).
+         */
+        patch: operations["update_deal_outcome"];
+        trace?: never;
+    };
+    "/v1/deal-outcomes/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Deal Outcomes
+         * @description Import records from CSV: a header row naming ``result, account, segment, plan,
+         *     annual_value, currency, decided_on, reason, reason_note, alternative, price_quoted``,
+         *     then at most 2,000 rows (1 MB). Bad rows are listed with their line number (the header
+         *     is line 1) and good rows still import; ``dry_run`` creates nothing and returns the
+         *     same counts. Result and reason take their keys or plain labels, in either case.
+         */
+        post: operations["import_deal_outcomes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing-memos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pricing Memos
+         * @description Pricing memos with their state (draft, in review, approved, decided) and their
+         *     decision; owners and approvers only.
+         */
+        get: operations["list_pricing_memos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pricing-memos/{doc}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Pricing Memo
+         * @description Decide: the pricing owner opens the approved memo's proposed decision in the
+         *     decision log (created on the first call, the same one on a repeat), with the memo's
+         *     options, the pricing owner as its approver and origin ``pricing``.
+         */
+        post: operations["decide_pricing_memo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13912,7 +14029,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -13995,7 +14112,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -15403,6 +15520,151 @@ export interface components {
             /** Lead Named */
             lead_named: boolean;
         };
+        /**
+         * DealOutcomeIn
+         * @description One deal's result and its main reason. ``reason: other`` needs ``reason_note``;
+         *     ``annual_value`` and ``currency`` come together; ``decided_on`` is not in the
+         *     future (the company's today).
+         */
+        DealOutcomeIn: {
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "won" | "lost" | "no_decision" | "churned";
+            /** Account */
+            account: string;
+            /** Segment */
+            segment?: string | null;
+            /** Plan */
+            plan?: string | null;
+            /** Annual Value */
+            annual_value?: number | string | null;
+            /** Currency */
+            currency?: ("USD" | "EUR" | "GBP") | null;
+            /**
+             * Decided On
+             * Format: date
+             */
+            decided_on: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other";
+            /** Reason Note */
+            reason_note?: string | null;
+            /** Competitor Id */
+            competitor_id?: string | null;
+            /** Price Quoted */
+            price_quoted?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /** DealOutcomeOut */
+        DealOutcomeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "won" | "lost" | "no_decision" | "churned";
+            /** Account */
+            account: string;
+            /** Segment */
+            segment: string | null;
+            /** Plan */
+            plan: string | null;
+            /** Annual Value */
+            annual_value: number | null;
+            /** Currency */
+            currency: ("USD" | "EUR" | "GBP") | null;
+            /**
+             * Decided On
+             * Format: date
+             */
+            decided_on: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other";
+            /** Reason Note */
+            reason_note: string | null;
+            /** Competitor Id */
+            competitor_id: string | null;
+            /** Price Quoted */
+            price_quoted: string | null;
+            /** Source Item Id */
+            source_item_id: string | null;
+            source_item: components["schemas"]["DealSourceItem"] | null;
+            /**
+             * Recorded By
+             * Format: uuid
+             */
+            recorded_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Lock Version */
+            lock_version: number;
+        };
+        /**
+         * DealOutcomePatch
+         * @description Change some fields (lock_version required); null clears an optional one.
+         */
+        DealOutcomePatch: {
+            /** Lock Version */
+            lock_version: number;
+            /** Result */
+            result?: ("won" | "lost" | "no_decision" | "churned") | null;
+            /** Account */
+            account?: string | null;
+            /** Segment */
+            segment?: string | null;
+            /** Plan */
+            plan?: string | null;
+            /** Annual Value */
+            annual_value?: number | string | null;
+            /** Currency */
+            currency?: ("USD" | "EUR" | "GBP") | null;
+            /** Decided On */
+            decided_on?: string | null;
+            /** Reason */
+            reason?: ("price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other") | null;
+            /** Reason Note */
+            reason_note?: string | null;
+            /** Competitor Id */
+            competitor_id?: string | null;
+            /** Price Quoted */
+            price_quoted?: string | null;
+            /** Source Item Id */
+            source_item_id?: string | null;
+        };
+        /**
+         * DealSourceItem
+         * @description What the record shares of its source item: title, link and a 400-character
+         *     excerpt (C1 "Found items").
+         */
+        DealSourceItem: {
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** Excerpt */
+            excerpt: string | null;
+        };
         /** DecideIn */
         DecideIn: {
             /** Option Key */
@@ -15418,6 +15680,11 @@ export interface components {
             prediction?: components["schemas"]["oracle__decisions__schemas__PredictionIn"] | null;
             /** Lock Version */
             lock_version?: number | null;
+        };
+        /** DecideMemoIn */
+        DecideMemoIn: {
+            /** Replaces */
+            replaces?: number | null;
         };
         /** DecisionCreate */
         DecisionCreate: {
@@ -15544,7 +15811,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "pricing";
             /**
              * Reversibility
              * @enum {string}
@@ -15822,7 +16089,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "pricing";
             /**
              * Reversibility
              * @enum {string}
@@ -16723,7 +16990,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -16868,7 +17135,7 @@ export interface components {
              * @default prd
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing";
             /** Template */
             template?: string | null;
             /** Template Version */
@@ -16923,7 +17190,7 @@ export interface components {
             /** Slug */
             slug?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             /** Version */
             version?: number | null;
             /** Created */
@@ -18600,7 +18867,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "pricing_memo";
             /** Title */
             title: string;
             /** Description */
@@ -18608,9 +18875,9 @@ export interface components {
             /** Requires Document */
             requires_document: boolean;
             /** Target Kind */
-            target_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            target_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             /** Source Kind */
-            source_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            source_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             /** Entry */
             entry?: string | null;
             /** Segments */
@@ -18640,7 +18907,7 @@ export interface components {
             /** Outputs */
             outputs: string[];
             /** Checkpoint */
-            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /**
              * Approver Role
              * @enum {string}
@@ -18738,7 +19005,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -19638,6 +19905,15 @@ export interface components {
             /** Where */
             where?: string | null;
         };
+        /** ImportOut */
+        ImportOut: {
+            /** Dry Run */
+            dry_run: boolean;
+            /** Created */
+            created: number;
+            /** Skipped */
+            skipped: components["schemas"]["ImportSkipped"][];
+        };
         /** ImportProblem */
         ImportProblem: {
             /** Code */
@@ -19657,6 +19933,13 @@ export interface components {
             refs: {
                 [key: string]: string | string[];
             };
+        };
+        /** ImportSkipped */
+        ImportSkipped: {
+            /** Line */
+            line: number;
+            /** Message */
+            message: string;
         };
         /**
          * InboxAccessFailure
@@ -19739,7 +20022,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -19804,7 +20087,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "pricing_memo";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -21259,6 +21542,8 @@ export interface components {
             /** Interviewee Company */
             interviewee_company?: string | null;
             subject: components["schemas"]["InterviewSubject"];
+            /** Preset */
+            preset?: "pricing" | null;
         };
         /** InterviewGuideItem */
         InterviewGuideItem: {
@@ -21354,6 +21639,8 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Preset */
+            preset?: "pricing" | null;
             /** Title */
             title: string;
             /** Intake Id */
@@ -21460,6 +21747,8 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
+            /** Preset */
+            preset?: "pricing" | null;
             /** Title */
             title: string;
             /** Interviewee Name */
@@ -23013,6 +23302,17 @@ export interface components {
             name?: string | null;
             /** Hand Over */
             hand_over?: components["schemas"]["HandOver"][] | null;
+        };
+        /** MemoDecision */
+        MemoDecision: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Chosen Label */
+            chosen_label?: string | null;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -24984,6 +25284,42 @@ export interface components {
             /** Artifacts */
             artifacts: string[];
         };
+        /** PricingMemoSummary */
+        PricingMemoSummary: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Question */
+            question: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "in_review" | "approved" | "decided";
+            decision: components["schemas"]["MemoDecision"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            pricing_owner?: components["schemas"]["PricingOwner"] | null;
+        };
+        /** PricingOwner */
+        PricingOwner: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /**
          * PriorityCheck
          * @description The check of a run's priority.yaml (C8): the file's method, the features ranked,
@@ -26186,7 +26522,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             template: components["schemas"]["TemplateOption"];
             /** Reason */
             reason: string;
@@ -28192,7 +28528,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "pricing_memo";
             /** Document */
             document?: string | null;
             /** Source */
@@ -28240,7 +28576,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /** Segment Seq */
             segment_seq?: number | null;
             /** Segment Title */
@@ -28357,7 +28693,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "pricing_memo";
             /** Flow Title */
             flow_title: string;
             /**
@@ -28370,7 +28706,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -28392,7 +28728,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Review Link */
             review_link?: string | null;
             /** Error */
@@ -28436,7 +28772,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -28536,7 +28872,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -28619,7 +28955,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "pricing_memo";
             /** Flow Title */
             flow_title: string;
             /**
@@ -28632,7 +28968,7 @@ export interface components {
             /** Document Slug */
             document_slug?: string | null;
             /** Document Kind */
-            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
             /** Template */
             template?: string | null;
@@ -28654,7 +28990,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Review Link */
             review_link?: string | null;
             /** Error */
@@ -28698,7 +29034,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -30156,7 +30492,7 @@ export interface components {
             /** Scopes */
             scopes: string[];
             /** Checkpoint */
-            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -31477,7 +31813,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Title */
             title: string;
             /** Slug */
@@ -31489,6 +31825,8 @@ export interface components {
             /** Theme */
             theme?: string | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
+            /** Question */
+            question?: string | null;
         };
         /** StartDraftOut */
         StartDraftOut: {
@@ -31505,7 +31843,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Template */
             template: string;
             /** Template Version */
@@ -32118,7 +32456,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Description */
             description?: string | null;
             /** Body */
@@ -32211,7 +32549,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -32247,7 +32585,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing";
             /** Description */
             description: string | null;
             /** Builtin */
@@ -32370,7 +32708,7 @@ export interface components {
              * @default any
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any";
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"];
@@ -32433,7 +32771,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any";
         };
         /** ThemeOut */
         ThemeOut: {
@@ -32450,7 +32788,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "any";
+            kind: "prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any";
             /** Description */
             description: string | null;
             tokens: components["schemas"]["ThemeTokens"];
@@ -32540,7 +32878,7 @@ export interface components {
             /** Name */
             name?: string | null;
             /** Kind */
-            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "any") | null;
+            kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any") | null;
             /** Description */
             description?: string | null;
             tokens?: components["schemas"]["ThemeTokens"] | null;
@@ -34105,7 +34443,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update";
+            kind: "prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing";
             /** Version */
             version: number;
             /**
@@ -35244,7 +35582,7 @@ export interface operations {
     list_documents: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update") | null;
+                kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             };
             header?: never;
             path?: never;
@@ -44531,7 +44869,7 @@ export interface operations {
                 /** @description me or a member id */
                 approver?: string | null;
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, pricing, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
@@ -45818,7 +46156,7 @@ export interface operations {
     list_templates: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -46083,7 +46421,7 @@ export interface operations {
     list_themes: {
         parameters: {
             query?: {
-                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "any") | null;
+                kind?: ("prd" | "roadmap" | "vision" | "strategy" | "update" | "pricing" | "any") | null;
                 include_archived?: boolean;
             };
             header?: never;
@@ -54810,6 +55148,7 @@ export interface operations {
                 intake_id?: string | null;
                 theme_id?: string | null;
                 kind?: ("team" | "customer") | null;
+                preset?: "pricing" | null;
             };
             header?: never;
             path?: never;
@@ -55297,6 +55636,376 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_deal_outcomes: {
+        parameters: {
+            query?: {
+                result?: ("won" | "lost" | "no_decision" | "churned") | null;
+                reason?: ("price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other") | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DealOutcomeOut"][];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_deal_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DealOutcomeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DealOutcomeOut"];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_deal_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_deal_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outcome_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DealOutcomePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DealOutcomeOut"];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_deal_outcomes: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportOut"];
+                };
+            };
+            /** @description Below approver (writes), or a run's agents */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such record in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Over 1 MB or 2,000 rows, no header row, or not UTF-8 CSV */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_pricing_memos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingMemoSummary"][];
+                };
+            };
+            /** @description Decide by anyone but the pricing owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pricing memo in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Decide before the memo's latest version is approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description replaces names no decision */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decide_pricing_memo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DecideMemoIn"] | null;
+            };
+        };
+        responses: {
+            /** @description The memo's existing proposal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Decide by anyone but the pricing owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such pricing memo in this company, or a reader below approver */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Decide before the memo's latest version is approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description replaces names no decision */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

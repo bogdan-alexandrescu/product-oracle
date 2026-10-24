@@ -8,7 +8,15 @@ READ_AREAS = {
     # Requester notes quote what people asked: source text (H6).
     # Code capability maps are drawn from a person's source (S6): a run reads shared
     # ones only (oracle.engineering.codemaps.visible).
-    "read:sources": {"sources", "search", "snapshots", "requester-notes", "code-maps"},
+    # H9: interviews hold customer words, source text.
+    "read:sources": {
+        "sources",
+        "search",
+        "snapshots",
+        "requester-notes",
+        "code-maps",
+        "interviews",
+    },
     # Intakes, the gap registry and the question ledger (oracle.intake) are baseline
     # knowledge; reading source text through an intake still needs read:sources.
     # Blockers are baseline constraints (CR-04): their strategy, options, experiments
@@ -52,6 +60,10 @@ READ_AREAS = {
         # H2: rituals and their pre-reads (a summary or update draft run reads them).
         "rituals",
         "ritual-occurrences",
+        # H9: win and loss records and the pricing memos with their decision (owners and
+        # approvers only; a run reads them when its creator may).
+        "deal-outcomes",
+        "pricing-memos",
     },
     "read:documents": {"documents", "feedback", "exports"},
 }

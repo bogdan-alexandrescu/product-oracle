@@ -9,11 +9,13 @@ import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { Icon, useDocumentDestination } from "@/components/ds";
 import type { DocumentOut } from "@/lib/api/client";
 
-/** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), Company › Updates for updates (H8), PRDs for the rest. */
+/** The list a document belongs to: Plan for roadmaps (c7), Company › Strategy for a vision or strategy (H4), Company › Updates for updates (H8), Company › Market › Pricing for pricing memos (H9), PRDs for the rest. */
 function home(doc?: DocumentOut) {
   if (doc?.kind === "roadmap") return { href: "/plan", label: "Plan" };
   if (doc?.kind === "vision" || doc?.kind === "strategy") return { href: "/company/strategy", label: "Company › Strategy" };
   if (doc?.kind === "update") return { href: "/company/updates", label: "Company › Updates" };
+  // H9: a pricing memo belongs to Company › Market › Pricing.
+  if (doc?.kind === "pricing") return { href: "/company/market?tab=pricing", label: "Company › Market › Pricing" };
   return { href: "/documents", label: "PRDs" };
 }
 

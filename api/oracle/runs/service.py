@@ -1907,6 +1907,9 @@ async def create_run(
     if flow.key == "update_draft" and not has_role(principal.role, "owner"):
         # H8: the CEO decides what is said to the board and investors.
         raise Forbidden("Only an owner can draft an update")
+    if flow.key == "pricing_memo" and await autonomy.level(db, "pricing_input") == "observe":
+        # H9 / H11: at Observe Oracle keeps the evidence and writes no memo.
+        raise RunError("Oracle writes no pricing memo at Observe")
     knobs = _resolve_knobs(flow, body.knobs)
     await _one_build_at_a_time(db, flow)
     document_id, oracle = await _resolve_inputs(

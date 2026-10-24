@@ -36,6 +36,12 @@ export interface DecisionsContext {
   members: Member[];
   runs: RunLike[];
   documentTitle: (slug: string) => string | null;
+  /**
+   * H9 (as docs/visibility._decision_visible): whether the signed-in member may see a
+   * decision; commenters and viewers never see a pricing decision, nor the record of a stop
+   * of a run on an owners-and-approvers document. Everyone sees everything without it.
+   */
+  visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
 }
@@ -55,6 +61,8 @@ const STOP_LABELS: Record<string, string> = {
   eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
+  update_review: "Update review",
+  pricing_review: "Pricing memo review",
 };
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
@@ -372,6 +380,47 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
   return m && m.status !== "disabled" && atLeast(m.role, "approver") ? m : undefined;
 }
 
+/**
+ * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
+ * pricing, the pricing owner its approver; the same one again on a repeat.
+ */
+export function proposePricing(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  memo: { versionId: string; documentId: string; version: number; slug: string; question: string; context: string; options: { id: string; title: string; summary: string; recommended: boolean; reversibility: string }[] },
+  pricingOwner: string,
+): { row: DecisionOut; created: boolean } {
+  const had = db.decisions.find((d) => d.origin === "pricing" && d.source?.id === memo.versionId);
+  if (had) return { row: outOf(ctx, db, had), created: false };
+  const recommended = memo.options.find((o) => o.recommended);
+  const row = blank(ctx, db, {
+    title: `Price: ${memo.question}`.slice(0, 200),
+    question: memo.question,
+    context: memo.context.slice(0, 4000) || null,
+    options: memo.options.map((o) => option(o.id, o.title, { summary: o.summary || null, recommended: o.recommended })),
+    approver_id: pricingOwner,
+    reversibility: recommended?.reversibility === "reversible" ? "reversible" : "irreversible",
+    informed_ids: ctx.members.filter((x) => (x.role === "owner" || x.role === "approver") && x.status !== "disabled").map((x) => x.id),
+    subjects: [
+      { kind: "document", id: memo.documentId, ref: memo.slug },
+      { kind: "document_version", id: memo.versionId, ref: `${memo.slug} v${memo.version}` },
+    ],
+    origin: "pricing",
+    source: { kind: "pricing_memo_version", id: memo.versionId },
+    driver: `user:${ctx.me.id}`,
+    created_by: ctx.me.id,
+  });
+  db.decisions.push(row);
+  return { row: outOf(ctx, db, row), created: true };
+}
+
+/** A decided pricing decision, for the pricing scenario's earlier memo. */
+export function decidePricing(ctx: DecisionsContext, db: DecisionsDb, number: number, key: string, rationale: string, expected: string, at: string) {
+  const d = db.decisions.find((x) => x.number === number);
+  if (!d) return;
+  Object.assign(d, { status: "decided", chosen_option: key, rationale, expected_outcome: expected, decided_at: at, decided_by: d.approver_id, decided_actor: "user", review_at: day(90), updated_at: at });
+}
+
 /** /v1/decisions…; null for other routes. */
 export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "decisions") return null;
@@ -380,8 +429,9 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const me = ctx.me;
 
+  const visible = (d: Row) => ctx.visible?.(d) ?? true;
   if (!p[2] && m === "GET") {
-    let rows = [...db.decisions];
+    let rows = db.decisions.filter(visible);
     const cls = q.get("class");
     if (cls === "judgement" || cls === "checkpoint") rows = rows.filter((d) => classOf(d) === cls);
     const status = q.get("status");
@@ -450,7 +500,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     );
   }
 
-  const d = p[2] ? find(db, p[2]) : undefined;
+  const found = p[2] ? find(db, p[2]) : undefined;
+  const d = found && visible(found) ? found : undefined;
   if (!d) return fail(404, `decision ${p[2]} not found`);
   const action = p[3];
   if (!action && m === "GET") return json(200, outOf(ctx, db, d));

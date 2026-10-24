@@ -59,6 +59,8 @@ from every member's Google Docs sources in the same request, with no Drive call
   company) needs before its track record sets a factor.
 - ``outcome_calibration`` (H3): ``apply`` (default) multiplies priority confidence by the
   track record; ``show`` only displays it.
+- ``pricing_owner`` (H9): the one person who decides prices, an active owner's user id;
+  null reads as the earliest active owner (:func:`oracle.pricing.decide.pricing_owner`).
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -134,6 +136,8 @@ DEFAULTS: dict[str, Any] = {
     "outcome_measure_days": 30,
     "calibration_min_outcomes": 5,
     "outcome_calibration": "apply",
+    # H9 Pricing input: the pricing owner's user id; null is the earliest active owner.
+    "pricing_owner": None,
 }
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
 # never lands while a publish renders (oracle.review.publish.gate_lock). Every other
@@ -345,6 +349,10 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         if value not in ("on_demand", "always"):
             raise InvalidSetting("ritual_summaries must be on_demand or always")
         return value
+    if key == "pricing_owner":
+        from oracle.pricing.decide import check_pricing_owner
+
+        return await check_pricing_owner(session, value)
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: change it on "

@@ -71,6 +71,7 @@ const KIND_LABEL: Record<ThemeKind, string> = {
   vision: "Vision",
   strategy: "Product strategy",
   update: "Update",
+  pricing: "Pricing memo",
   any: "Any document",
 };
 

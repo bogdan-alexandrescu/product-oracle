@@ -7,6 +7,8 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import func, select
 
@@ -22,6 +24,7 @@ from oracle.templates.validation import check_template
 from oracle.tenancy import tenant_session
 from oracle.updates import frontmatter
 from tests.baseline_helpers import make_ctx
+from tests.decision_helpers import freeze
 from tests.update_helpers import (
     BOARD_ASKS,
     INVESTOR_ASKS,
@@ -203,6 +206,17 @@ async def test_the_period_follows_the_last_approved_update_of_the_template(clien
     v1 = (await client.get(f"/v1/documents/{second}/versions/1", headers=ctx.as_("owner"))).json()
     assert v1["front_matter"]["period"]["from"] == "2026-10-01"
     assert v1["front_matter"]["previous"] == {"document": "investor-sep", "version": 1}
+
+
+async def test_the_default_period_ends_on_the_company_day(client, ctx, monkeypatch):
+    """protects=an update started without a period, with none before it, runs from the first
+    of the Company day's month through that day: at 03:00 UTC on Sep 1 it is Aug 31 in
+    America/Los_Angeles; fails_when=the period is the server's (UTC) September;
+    no_claim=a period after an earlier update (the test above)."""
+    freeze(monkeypatch, datetime(2026, 9, 1, 3, 0, tzinfo=UTC))
+    slug = await started(client, ctx)
+    v1 = (await client.get(f"/v1/documents/{slug}/versions/1", headers=ctx.as_("owner"))).json()
+    assert v1["front_matter"]["period"] == {"from": "2026-08-01", "to": "2026-08-31"}
 
 
 # --------------------------------------------------------------------------- import
