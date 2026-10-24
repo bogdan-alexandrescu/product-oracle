@@ -85,7 +85,8 @@ test("15a: an approver adds Competitor C as Direct, watches its pricing page and
   await expect(watched).toContainText("First read Oct 23");
   await expect(alternativeRow(page, "Competitor C")).toContainText("1");
   // Oracle's words: a company, never a workspace or tenant.
-  await expect(page.locator("main")).not.toContainText(/workspace|tenant/i);
+  // (Next keeps visited pages mounted but hidden, so only the Market's own panels are read.)
+  for (const part of [page.getByRole("region", { name: "Alternatives" }), panel]) await expect(part).not.toContainText(/workspace|tenant/i);
 });
 
 test("15b: the approver opens a change in Competitor A's log and sees removed and added lines in plain text, with no live links", async ({ page }) => {

@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { FindingCard } from "@/app/company/market/_components/FindingCard";
+import { MarkdownBody } from "@/components/MarkdownBody";
 import { Button, Chip, LinkButton, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { parseBlocks } from "@/lib/markdown";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from "./lib";
 
-type Row = { text?: string; href?: string | null; method?: string; label?: string };
+type Row = { text?: string; href?: string | null; method?: string; label?: string; finding_id?: string };
 type Block = { key: string; title: string; as_of?: string; rows: Row[] };
 
 const NOTES_MAX = 10_000;
@@ -92,9 +95,13 @@ export function OccurrenceDetail({ id }: { id: string }) {
           </Panel>
         ) : (
           <div className="grid grid-cols-2 gap-3 max-[900px]:grid-cols-1">
-            {blocks.map((b) => (
-              <BlockCard key={b.key} block={b} />
-            ))}
+            {blocks.map((b) =>
+              b.key === "competitor_web" ? (
+                <WebFindingsCard key={b.key} block={b} occurrenceId={occ.id} canDecide={can("promote_web_finding")} />
+              ) : (
+                <BlockCard key={b.key} block={b} />
+              ),
+            )}
           </div>
         )}
         {(occ.status === "held" || occ.status === "skipped") && <Recorded occ={occ} />}
@@ -162,10 +169,62 @@ function BlockCard({ block }: { block: Block }) {
   );
 }
 
-/** Oracle's summary: written, being written, failed or not started, or Summarize with Oracle. */
+/**
+ * H7: a competitive digest's From the web card. The findings the digest run made, live (a
+ * promoted or dismissed one shows its state; a dismissed one is gone on the next read), each
+ * Not vetted with its host and date, and Promote and Dismiss for approvers and owners. Rows
+ * without a finding ("Web search is not set up") show as text.
+ */
+function WebFindingsCard({ block, occurrenceId, canDecide }: { block: Block; occurrenceId: string; canDecide: boolean }) {
+  const q = useQuery(`occurrence-web-findings|${occurrenceId}`, async () => {
+    const [open, promoted] = await Promise.all(
+      (["open", "promoted"] as const).map((status) =>
+        unwrap(api.GET("/v1/competitor-web-findings", { params: { query: { status, occurrence_id: occurrenceId, include_older: true } } })),
+      ),
+    );
+    return [...open, ...promoted];
+  });
+  const notes = block.rows.filter((r) => !r.finding_id);
+  const findings = q.data ?? [];
+  return (
+    <section data-testid="ritual-block" data-key={block.key} className="min-w-0 rounded-panel border border-line bg-surface shadow-panel">
+      <header className="border-b border-line px-4 py-2.5">
+        <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
+        {block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
+      </header>
+      <div className="flex flex-col divide-y divide-line px-4">
+        {q.error && <ErrorNote>{q.error}</ErrorNote>}
+        {q.data && findings.length === 0 && notes.length === 0 && <p className="py-3 text-sm text-text2">Nothing this time</p>}
+        {notes.map((r, i) => (
+          <p key={i} className="py-3 text-sm text-text2">
+            {r.text}
+          </p>
+        ))}
+        {findings.map((f) => (
+          <FindingCard key={f.id} finding={f} canDecide={canDecide} onPromoted={() => void q.reload()} onDismissed={() => void q.reload()} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const NO_HIGHLIGHTS: never[] = [];
+const NO_CITATIONS = new Map();
+
+/**
+ * Oracle's summary: written, being written, failed or not started, or Summarize with Oracle.
+ * A competitive digest's is the digest (H7): Markdown the importer cleaned (no raw HTML, links
+ * only to Oracle pages and this run's recorded results), written with "Write the digest with
+ * Oracle".
+ */
 function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: boolean; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const digest = occ.kind === "competitive_digest";
+  const words = digest
+    ? { title: "Digest", ask: "Write the digest with Oracle", running: "Writing the digest…", failed: "Digest failed · Write the digest with Oracle to retry", none: "No digest" }
+    : { title: "Summary", ask: "Summarize with Oracle", running: "Writing the summary…", failed: "Summary failed · Summarize with Oracle to retry", none: "No summary" };
+  const body = useMemo(() => (digest && occ.summary ? parseBlocks(occ.summary) : null), [digest, occ.summary]);
   const ask = async () => {
     setBusy(true);
     setError(null);
@@ -180,28 +239,34 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
   };
   const button = canAsk && occ.pre_read.built_at && (
     <Button variant="solid" disabled={busy} onClick={ask}>
-      Summarize with Oracle
+      {words.ask}
     </Button>
   );
   return (
     <section data-testid="occurrence-summary" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
-      <h2 className="mb-1 font-display text-[17px] font-bold">Summary</h2>
+      <h2 className="mb-1 font-display text-[17px] font-bold">{words.title}</h2>
       {occ.summary_state === "ready" && occ.summary ? (
         <>
-          <p className="text-[15px] whitespace-pre-wrap">{occ.summary}</p>
+          {body ? (
+            <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
+              <MarkdownBody blocks={body} highlights={NO_HIGHLIGHTS} activeId={null} citations={NO_CITATIONS} onHighlightClick={() => {}} />
+            </div>
+          ) : (
+            <p className="text-[15px] whitespace-pre-wrap">{occ.summary}</p>
+          )}
           <p className="mt-1 text-[13px] text-text2">Written by Oracle</p>
         </>
       ) : occ.summary_state === "running" ? (
-        <p className="text-sm text-text2">Writing the summary…</p>
+        <p className="text-sm text-text2">{words.running}</p>
       ) : occ.summary_state === "failed" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-crit">Summary failed · Summarize with Oracle to retry</p>
+          <p className="text-sm text-crit">{words.failed}</p>
           {button}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          {occ.summary_state === "not_started" && <p className="text-sm text-text2">{occ.summary_note ?? "Summary not started"}</p>}
-          {button || (occ.summary_state === "none" && <p className="text-sm text-text2">No summary</p>)}
+          {occ.summary_state === "not_started" && <p className="text-sm text-text2">{occ.summary_note ?? `${words.title} not started`}</p>}
+          {button || (occ.summary_state === "none" && <p className="text-sm text-text2">{words.none}</p>)}
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
