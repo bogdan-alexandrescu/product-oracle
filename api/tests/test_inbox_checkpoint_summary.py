@@ -372,13 +372,11 @@ async def twenty_checkpoints(client, auth, runtime) -> None:  # noqa: F811
         await roadmap_items_check(client, auth, runtime, items)
 
 
-@pytest.mark.timing
-async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, runtime):  # noqa: F811
+async def test_the_inbox_with_20_roadmap_checkpoints_reads_in_batches(client, owner, runtime):  # noqa: F811
     """protects=the Inbox reads the company-wide inputs once per call and the traces of all
-    its checkpoints' items together, so it stays quick when every checkpoint has its own
-    items; fails_when=more than MAX_INBOX_READS reads, or p95 over 300 ms (after a warm-up,
-    over SAMPLES calls) with 20 pending Roadmap items checkpoints whose items all differ, on
-    the test database; no_claim=production data volume."""
+    its checkpoints' items together, so its reads do not grow with the checkpoints' items;
+    fails_when=more than MAX_INBOX_READS reads with 20 pending Roadmap items checkpoints
+    whose items all differ; no_claim=wall time (the timing test below)."""
     tenant_id, auth = owner
     await approved_prd(client, auth)
     await seed_baseline(tenant_id)
@@ -400,6 +398,21 @@ async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, run
     reads = [st for st in statements if "SAVEPOINT" not in st]
     assert len(reads) <= MAX_INBOX_READS, len(reads)
     assert got["total"] >= 20  # the badge: one per checkpoint, children add nothing
+
+
+@pytest.mark.timing
+async def test_the_inbox_with_20_roadmap_checkpoints_is_quick(client, owner, runtime):  # noqa: F811
+    """protects=the Inbox with 20 Roadmap items checkpoints stays quick; fails_when=p95 over
+    300 ms (after a warm-up, over SAMPLES calls) with 20 pending Roadmap items checkpoints
+    whose items all differ, on the test database, run alone (marker ``timing``: CI runs it
+    after the parallel run); no_claim=the read count (the test above), production data
+    volume."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await twenty_checkpoints(client, auth, runtime)
+    got = await inbox_of(client, auth)
+    assert sum(1 for c in got["checkpoints"] if c["summary"]) == 20
     for _ in range(WARM_UP):
         await inbox_of(client, auth)
     times = []
