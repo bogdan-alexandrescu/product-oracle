@@ -12,6 +12,7 @@ a run whose review was approved before that finished without a document, and an 
 retries its import after the run finished.
 """
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 
@@ -24,10 +25,11 @@ from oracle.docs.parser import DraftError
 from oracle.docs.schemas import ImportProblem
 from oracle.models import AuditEvent
 from oracle.runs import flows
+from oracle.runs import service as run_service
 from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
-from tests.fixtures import draft, seed_auth
+from tests.fixtures import draft, import_draft, seed_auth, seed_oracle_refs
 from tests.test_runs import BAD_PRD, as_user, decide, get, pending, started, tick
 
 # Only the PRD review stops: the draft segment (5) is the one that waits.
@@ -52,7 +54,9 @@ def runtime():
 
 @pytest.fixture
 async def owner():
-    return await seed_auth()
+    tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
+    return tenant_id, auth
 
 
 def _older_oracle(monkeypatch) -> None:
@@ -293,6 +297,61 @@ async def test_after_the_run_finished_an_owner_retries(client, owner, runtime, m
     again = await client.post(_retry_url(run), headers=auth)
     assert again.status_code == 409 and "nothing to retry" in again.json()["detail"]
     assert len(await _retried(tenant_id)) == 1
+
+
+async def test_refused_when_the_slug_now_names_another_document(
+    client, owner, runtime, monkeypatch
+):
+    """The run was to create example-prd; once it finished without it, someone else
+    created a document of that slug. The retry must not add the run's draft to it."""
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+    other = draft("prd_v1.md").replace("document: checkout-redesign", "document: example-prd")
+    created = await import_draft(client, auth, other, doc="example-prd")
+    assert created.status_code == 201, created.text
+
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 409, resp.text
+    assert "example-prd now names another document" in resp.json()["detail"]
+    async with tenant_session(tenant_id) as s:
+        assert await s.scalar(select(DocumentVersion.number)) == 1
+        stored = await s.get(Run, uuid.UUID(run["id"]))
+        assert stored.document_id is None
+    assert await _retried(tenant_id) == []
+
+
+async def test_a_burst_of_retries_imports_a_few_at_a_time(client, owner, runtime, monkeypatch):
+    """Each retry holds the run's locked row while it imports in a session of its own: a
+    burst is bounded (DRAFT_RETRY_SLOTS at a time per process), so it cannot take every
+    connection of the pool."""
+    tenant_id, auth = owner
+    runs = []
+    for slug in ("prd-a", "prd-b", "prd-c"):
+        prd = ORACLE_PRD.replace("document: example-prd", f"document: {slug}")
+        runs.append(await _rejected(client, auth, runtime, monkeypatch, prd=prd, document=slug))
+    real = docs_service.import_draft
+    active = peak = 0
+
+    async def slow(*args, **kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(0.3)
+            return await real(*args, **kwargs)
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(docs_service, "import_draft", slow)
+    answers = await asyncio.gather(*(client.post(_retry_url(r), headers=auth) for r in runs))
+    assert [a.status_code for a in answers] == [200, 200, 200], [a.text for a in answers]
+    assert peak <= 2 == run_service.DRAFT_RETRY_SLOTS
+    assert sorted(a.json()["segments"][4]["draft_import"]["slug"] for a in answers) == [
+        "prd-a",
+        "prd-b",
+        "prd-c",
+    ]
 
 
 async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monkeypatch):

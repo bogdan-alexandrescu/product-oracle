@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import func, select
 
 from oracle.auth.service import create_api_token
+from oracle.baseline.models import Entity
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.models import AuditEvent
 from oracle.review.models import FeedbackItem, SectionReview
@@ -17,6 +18,7 @@ from tests.fixtures import (
     draft,
     import_draft,
     seed_auth,
+    seed_oracle_refs,
 )
 from tests.test_parser import V1_KEYS
 
@@ -95,6 +97,7 @@ async def test_import_v1_persists_document_sections_and_citations(client):
 async def test_a_draft_citing_the_oracle_baseline_imports(client):
     # source 'oracle': the citation's ref is free text naming the baseline item, kept as is.
     tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
     resp = await import_draft(client, auth, draft("prd_oracle_citations.md"), doc="example-prd")
     assert resp.status_code == 201, resp.text
     by_key = {c["cite_key"]: c for c in resp.json()["citations"]}
@@ -107,6 +110,36 @@ async def test_a_draft_citing_the_oracle_baseline_imports(client):
     async with tenant_session(tenant_id) as s:
         stored = sorted(await s.scalars(select(Citation.source)))
     assert stored == ["oracle", "oracle", "slack"]
+
+
+async def test_an_oracle_citation_naming_no_baseline_item_is_refused(client):
+    # Every citation counts in the quality criteria: an oracle ref must name a baseline
+    # item this company has ("baseline <kind> <key>"), else the citation is invalid.
+    tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
+    text = draft("prd_oracle_citations.md").replace(
+        "baseline goal g1 (activation)", "baseline goal g9 (activation)"
+    )
+    resp = await import_draft(client, auth, text, doc="example-prd")
+    assert resp.status_code == 422, resp.text
+    (problem,) = resp.json()["errors"]
+    assert problem["code"] == "invalid_citation" and problem["cite_key"] == "o-g1"
+    assert problem["message"] == (
+        "citation #1 (o-g1) is invalid: ref names no baseline item of this company"
+    )
+    # Not a baseline ref at all, and another company's item: refused alike.
+    other = await make_tenant("Other Co")
+    async with tenant_session(other) as s:
+        s.add(Entity(type="risk", key="only-there", title="R", status="confirmed", origin="user"))
+        await s.commit()
+    for ref in ("the activation goal", "baseline goal", "baseline risk only-there"):
+        named = "baseline goal g1 (activation), locked"
+        text = draft("prd_oracle_citations.md").replace(named, ref)
+        resp = await import_draft(client, auth, text, doc="example-prd")
+        assert resp.status_code == 422, resp.text
+        assert [p["cite_key"] for p in resp.json()["errors"]] == ["o-g1"]
+    async with tenant_session(tenant_id) as s:
+        assert await s.scalar(select(func.count()).select_from(Document)) == 0
 
 
 async def test_reads_list_and_markdown(client):
