@@ -137,7 +137,8 @@ async def test_decline_suggestion_shows_and_changes_nothing_even_at_act(client, 
     }
     assert [x.state for x in await rows(ctx, ProductRequest)] == ["new"]
     await set_level(client, ctx, "requests", "observe")
-    assert (await get(client, ctx, r["id"]))["suggestion"]["decline"] is None
+    # Below Recommend no suggestion shows at all (H11 requests), its decline included.
+    assert (await get(client, ctx, r["id"]))["suggestion"] is None
 
 
 def test_prompts_say_a_no_is_not_scope():
