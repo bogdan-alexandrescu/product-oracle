@@ -8,7 +8,8 @@ early. The API reads the company's day through :func:`oracle.company_time.today`
 
 Test card (every test below): protects=the API's day logic uses the Company time zone's
 day; fails_when=a module under ``api/oracle`` calls ``date.today()``,
-``datetime.today()``, a bare ``datetime.now()`` or ``<clock>.now(...).date()`` outside
+``datetime.today()``, a bare ``datetime.now()`` or ``.date()`` of any ``now(...)`` /
+``utcnow(...)`` call (bare ``now()`` too) outside
 the helper, or a converted caller reads the UTC day after 5 PM Pacific; no_claim=machine
 timestamps (stored UTC), how days are worded (test_company_day_text).
 """
@@ -47,15 +48,19 @@ def _server_day_calls(tree: ast.AST) -> list[int]:
             node.func.attr == "today" or (name == "datetime" and bare_now)
         ):
             lines.append(node.lineno)
-        elif (
-            node.func.attr == "date"
-            and not node.args
-            and isinstance(owner, ast.Call)
-            and isinstance(owner.func, ast.Attribute)
-            and owner.func.attr in ("now", "utcnow")
-        ):
+        elif node.func.attr == "date" and not node.args and _reads_the_clock(owner):
             lines.append(node.lineno)
     return lines
+
+
+def _reads_the_clock(node: ast.AST) -> bool:
+    """A ``now(...)`` / ``utcnow(...)`` call, bare (a module's own ``now`` helper,
+    ``_now``) or on an owner (``datetime.now``, ``service.now``)."""
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+    return isinstance(name, str) and name.lstrip("_") in ("now", "utcnow")
 
 
 def test_no_api_code_dates_by_the_servers_day():
@@ -78,8 +83,15 @@ def test_the_scan_finds_each_way_of_reading_the_servers_day():
         "f = company_time.today(zone)\n"
         "g = datetime.now(UTC)\n"
         "h = created.date()\n"
+        "i = now().date()\n"
+        "j = _now().date()\n"
+        "k = datetime.now().date()\n"
+        "m = utcnow().date()\n"
+        "n = datetime.utcnow().date()\n"
+        "o = now().astimezone(zone).date()\n"
+        "p = snow().date()\n"
     )
-    assert _server_day_calls(ast.parse(src)) == [1, 2, 3, 4, 5]
+    assert sorted(_server_day_calls(ast.parse(src))) == [1, 2, 3, 4, 5, 9, 10, 11, 11, 12, 13]
 
 
 def test_the_helper_is_the_company_day(monkeypatch):
@@ -118,3 +130,16 @@ def test_a_roadmaps_year_less_dates_read_against_the_company_day(monkeypatch):
     assert doc_dates.version_day(made, zone) == date(2025, 12, 31)
     assert doc_dates.version_day(SimpleNamespace(), zone) == PACIFIC_DAY
     assert doc_dates.import_day(zone) == PACIFIC_DAY
+
+
+def test_a_goals_fallback_day_is_the_company_day(monkeypatch):
+    """Goal checks without a day of their own (``on``) read Pacific's day, not UTC's."""
+    from oracle.baseline import goals
+
+    monkeypatch.setattr(goals, "now", lambda: EVENING)
+    assert goals.today() == PACIFIC_DAY
+    # Measured on Oct 24 (UTC's day, Pacific's tomorrow): in the future.
+    found = goals.field_problems({"current": 5, "current_as_of": "2026-10-24"})
+    assert ("current_date_future", "attrs.current_as_of") in {
+        (p["code"], p["where"]) for p in found
+    }, found
