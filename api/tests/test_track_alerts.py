@@ -234,8 +234,8 @@ async def test_the_item_history_lists_its_tracker_events(client, owner, runtime)
     )
     assert resp.status_code == 200, resp.text
     events = resp.json()["tracker_events"]
-    assert [(e["external_ref"], e["field"], e["before"], e["after"]) for e in events] == [
-        ("ENG-405", "target_date", BETA, SLIPPED)
+    assert [(e["external_ref"], changed(e)) for e in events] == [
+        ("ENG-405", [("target_date", BETA, SLIPPED)])
     ]
     assert events[0]["record_id"] and events[0]["observed_at"]
     other = await client.get(
@@ -243,9 +243,67 @@ async def test_the_item_history_lists_its_tracker_events(client, owner, runtime)
         params={"roadmap": ROADMAP, "item": "shipping-step"},
         headers=auth,
     )
-    assert [(e["external_ref"], e["field"]) for e in other.json()["tracker_events"]] == [
-        ("ENG-413", "state")
+    assert [(e["external_ref"], changed(e)) for e in other.json()["tracker_events"]] == [
+        ("ENG-413", [("state", "todo", "in_progress")])
     ]
+
+
+def changed(event: dict) -> list[tuple]:
+    return [(c["field"], c["before"], c["after"]) for c in event["changes"]]
+
+
+async def item_history(client, auth, item: str = "payment-step") -> dict:
+    resp = await client.get(
+        "/v1/plan/items/history", params={"roadmap": ROADMAP, "item": item}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_the_item_history_groups_tracker_events_per_import(client, owner, runtime):  # noqa: F811
+    """protects=#577 review MAJOR 1: one entry per import of an issue, naming every field the
+    import changed, in field order; a change to the tracker's own status name alone is no
+    entry; fails_when=one import that moves the state and the date shows as two entries, or
+    a raw-status-only import shows; no_claim=the Plan's words for them (mock spec)."""
+    tenant_id, auth = owner
+    track, _ = await slipped(client, auth, runtime)
+    await importing(client, auth, record(track["id"], BETA, state="todo", raw_status="Backlog"))
+    await importing(client, auth, record(track["id"], BETA, state="todo", raw_status="Todo"))
+    await importing(client, auth, record(track["id"], SLIPPED, estimate=3))
+    events = (await item_history(client, await as_user(tenant_id, "viewer")))["tracker_events"]
+    assert [changed(e) for e in events] == [
+        [("target_date", BETA, SLIPPED)],
+        [("state", "in_progress", "todo"), ("target_date", SLIPPED, BETA)],
+        [("state", "todo", "in_progress"), ("target_date", BETA, SLIPPED), ("estimate", None, "3")],
+    ]
+    assert {e["external_ref"] for e in events} == {"ENG-405"}
+
+
+async def test_the_item_history_shows_the_newest_imports_only(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    """protects=#577 review MAJOR 1: an issue synced for months lists at most
+    TRACKER_HISTORY_LIMIT imports, the newest, oldest first, and says how many older ones
+    it leaves out; fails_when=every import is listed, the oldest are kept instead, or the
+    count is missing; no_claim=the limit's value (20, plan.service)."""
+    from oracle.plan import service as plan_service
+
+    monkeypatch.setattr(plan_service, "TRACKER_HISTORY_LIMIT", 2)
+    tenant_id, auth = owner
+    track, _ = await slipped(client, auth, runtime)
+    for day in ("2026-12-10", "2026-12-11", "2026-12-12"):
+        await importing(client, auth, record(track["id"], day))
+    body = await item_history(client, auth)
+    assert [changed(e) for e in body["tracker_events"]] == [
+        [("target_date", "2026-12-10", "2026-12-11")],
+        [("target_date", "2026-12-11", "2026-12-12")],
+    ]
+    assert body["tracker_events_older"] == 2
+    monkeypatch.undo()
+    assert (await item_history(client, auth))["tracker_events_older"] == 0
 
 
 async def test_ask_about_a_roadmap_item(client, owner, runtime):  # noqa: F811
@@ -272,11 +330,22 @@ async def test_ask_about_a_roadmap_item(client, owner, runtime):  # noqa: F811
     (row,) = [r for r in rows if r["question"]["id"] == resp.json()["id"]]
     assert row["subject"]["kind"] == "roadmap_item"
     assert row["subject"]["title"].endswith(" · Payment step")
-    assert row["subject"]["href"] == "/plan?item=payment-step"
+    # The PRD too: two PRDs may both have a "payment-step" (#577 review).
+    assert row["subject"]["href"] == f"/plan?prd={prd_id}&item=payment-step"
     missing = {**subject, "item_key": "no-such-item"}
     resp = await client.post(
         "/v1/questions",
         json={"prompt": "Who?", "asked_to": str(approver), "subject": missing},
+        headers=commenter,
+    )
+    assert resp.status_code == 422, resp.text
+    # A PRD the asker cannot see is no subject of theirs (#577 review).
+    async with tenant_session(tenant_id) as s:
+        await s.execute(update(Document).where(Document.id == prd_id).values(visibility="approvers"))
+        await s.commit()
+    resp = await client.post(
+        "/v1/questions",
+        json={"prompt": "Who?", "asked_to": str(approver), "subject": subject},
         headers=commenter,
     )
     assert resp.status_code == 422, resp.text

@@ -55,6 +55,10 @@ test("Ask on the slip card asks a teammate about the item; their Inbox row names
   await page.goto("/inbox");
   const row = page.locator("tr[data-row]").filter({ visible: true }).filter({ hasText: question });
   await expect(row).toContainText(`Usage alerts PRD · ${SLIP}`);
+  // Open names the PRD too (two PRDs may share an item key) and selects the item.
+  await row.getByRole("link", { name: `Open Usage alerts PRD · ${SLIP}` }).click();
+  await expect(page).toHaveURL(/\/plan\?prd=[0-9a-f-]+&item=alert-digest$/);
+  await expect(inspector(page)).toContainText(SLIP);
 });
 
 // protects = Discuss on the slip card starts a discussion on the item, titled after it, and a
@@ -115,7 +119,24 @@ test("the item's history lists ENG-405 moving from Nov 30 to Dec 9", async ({ pa
   await login(page);
   await openItem(page, SLIP);
   const events = inspector(page).getByTestId("plan-history").getByTestId("plan-tracker-event");
-  await expect(events).toHaveText(["ENG-405 moved from Nov 30 to Dec 9 · Oct 20"]);
+  await expect(events).toHaveText(["ENG-405: date Nov 30 → Dec 9 · Oct 20"]);
+  await expect(inspector(page).getByTestId("plan-tracker-older")).toHaveCount(0);
+});
+
+// protects = #577 review MAJOR 1: one line per import, naming every field it changed, and only
+// the newest 20 imports, with how many earlier ones are left out; fails_when = the slip import's
+// state and date are two lines, or all 23 imports are listed; no_claim = the API's grouping and
+// limit (pytest test_track_alerts.py).
+test("the item's history shows one line per import, the newest 20, and says how many are left out", async ({ page }) => {
+  await scenario(page, "track-alerts-history", "viewer");
+  await login(page);
+  await openItem(page, SLIP);
+  const history = inspector(page).getByTestId("plan-history");
+  const events = history.getByTestId("plan-tracker-event");
+  await expect(events).toHaveCount(20);
+  await expect(events.first()).toHaveText("ENG-405: estimate 4 → 5 · Oct 1");
+  await expect(events.last()).toHaveText("ENG-405: To do → In progress, date Nov 30 → Dec 9 · Oct 20");
+  await expect(history.getByTestId("plan-tracker-older")).toHaveText("3 earlier tracker updates aren't shown.");
 });
 
 // protects = H1's entry point: Record a decision on a Plan item opens Propose decision about
