@@ -618,3 +618,32 @@ async def test_b4_only_an_owner_accepts_a_blockers_risk_for_at_most_90_days(clie
     assert resp.status_code == 201, resp.text
     review_at = datetime.fromisoformat(resp.json()["decision"]["review_at"])
     assert review_at <= datetime.now(UTC) + timedelta(days=90, minutes=1)
+
+
+async def test_b4_a_critical_gaps_risk_is_reviewed_within_the_company_setting(client):
+    """protects=INT-3/B4: a critical gap's accepted risk is reviewed within the company's
+    ``blocker_risk_review_max_days``, as a blocker's is; fails_when=the gap reads a fixed
+    90 days; no_claim=who may accept it (the test above)."""
+    ctx = await company()
+    resp = await client.put(
+        "/v1/settings/blocker_risk_review_max_days", json={"value": 30}, headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    out = await create_intake(client, ctx, who="approver")
+    gap = await _critical_blocker_gap(client, ctx, out["intake"]["id"])
+    url = f"/v1/gaps/{gap['id']}/decisions"
+    later = (datetime.now(UTC) + timedelta(days=45)).isoformat()
+    resp = await client.post(
+        url, json={"decision": "accept_risk", "rationale": "Partner said yes.", "review_at": later},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "Accepting a critical gap is reviewed within 30 days"
+    resp = await client.post(
+        url, json={"decision": "accept_risk", "rationale": "Partner said yes."},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    review_at = datetime.fromisoformat(resp.json()["decision"]["review_at"])
+    assert review_at <= datetime.now(UTC) + timedelta(days=30, minutes=1)
+    assert review_at >= datetime.now(UTC) + timedelta(days=29)
