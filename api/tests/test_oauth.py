@@ -696,3 +696,24 @@ async def test_access_token_works_on_mcp_and_rest(client, scope, can_write):
     )
     resp = await client.get("/v1/me", headers={"Authorization": "Bearer poa_unknown"})
     assert resp.status_code == 401
+
+
+async def test_a_bad_run_header_reads_as_not_signed_in(client):
+    """A run header that does not verify is a 400 on the API; on the consent pages the
+    browser is simply not signed in (sign in, 401), never an error page."""
+    await sign_in(client)
+    reg = await register(client)
+    _, challenge = pkce()
+    handle = await consent_handle(client, authorize_params(reg["client_id"], challenge))
+    bad = {"x-oracle-run-id": "not-a-signed-value"}
+    resp = await client.get(
+        "/oauth/authorize", params=authorize_params(reg["client_id"], challenge), headers=bad
+    )
+    assert resp.status_code == 302, resp.text
+    assert resp.headers["location"].startswith(f"{BASE}/login?next=")
+    resp = await client.get("/oauth/authorize/request", params={"request": handle}, headers=bad)
+    assert resp.status_code == 401, resp.text
+    resp = await client.post(
+        "/oauth/authorize/decision", json={"request": handle, "approve": True}, headers=bad
+    )
+    assert resp.status_code == 401, resp.text
