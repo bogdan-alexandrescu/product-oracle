@@ -103,9 +103,7 @@ def test_upgrade_adds_the_key_and_downgrade_drops_it(scratch_db):
     with pytest.raises(IntegrityError):
         _run(DEAL, id=uuid.uuid4(), t=t, account="Account 3", c=uuid.uuid4(), u=u)
     _run("DELETE FROM competitors WHERE id = :c", c=c)
-    assert _run("SELECT competitor_id FROM deal_outcomes WHERE account = 'Account 1'") == [
-        (None,)
-    ]
+    assert _run("SELECT competitor_id FROM deal_outcomes WHERE account = 'Account 1'") == [(None,)]
     _run(
         "INSERT INTO competitors (id, tenant_id, name, kind) "
         "VALUES (:c, :t, 'Competitor A', 'direct')",

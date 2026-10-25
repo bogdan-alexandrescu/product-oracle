@@ -37873,7 +37873,7 @@
           "pricing"
         ],
         "summary": "List Deal Outcomes",
-        "description": "Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are\ninclusive days.",
+        "description": "Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are\ninclusive days; ``competitor_id`` keeps the records linked to that alternative.",
         "operationId": "list_deal_outcomes",
         "security": [
           {
@@ -37965,6 +37965,23 @@
               ],
               "title": "To"
             }
+          },
+          {
+            "name": "competitor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Competitor Id"
+            }
           }
         ],
         "responses": {
@@ -37992,7 +38009,7 @@
             "description": "Stale lock_version"
           },
           "422": {
-            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones"
           }
         },
         "x-min-role": "approver"
@@ -38043,7 +38060,7 @@
             "description": "Stale lock_version"
           },
           "422": {
-            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones"
           }
         },
         "x-min-role": "approver"
@@ -38108,7 +38125,7 @@
             "description": "Stale lock_version"
           },
           "422": {
-            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones"
           }
         },
         "x-min-role": "approver"
@@ -38154,7 +38171,7 @@
             "description": "Stale lock_version"
           },
           "422": {
-            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item"
+            "description": "A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones"
           }
         },
         "x-min-role": "approver"
@@ -55402,6 +55419,17 @@
             ],
             "title": "Competitor Id"
           },
+          "competitor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Competitor Name"
+          },
           "price_quoted": {
             "anyOf": [
               {
@@ -67505,6 +67533,14 @@
             },
             "type": "array",
             "title": "Skipped"
+          },
+          "unmatched_alternatives": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmatched Alternatives",
+            "default": []
           }
         },
         "type": "object",
