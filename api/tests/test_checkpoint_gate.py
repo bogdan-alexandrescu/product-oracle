@@ -139,6 +139,7 @@ def test_a_kind_without_blocking_reasons_has_no_gate():
     no_claim=the later specs' sources."""
     assert set(gate.BLOCKING_SOURCES) == {
         "roadmap_items", "feature_set", "priority_order", "eng_review", "baseline_confirm",
+        "eng_dates",
     }  # fmt: skip
     assert gate.approve_gate(cp([SECTION], kind="prd_review"), None, []) is None
 

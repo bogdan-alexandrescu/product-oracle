@@ -94,13 +94,13 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
   await expect(sheet(page).getByTestId("draft-template")).toContainText("One-pager");
   await expect(sheet(page).getByRole("group", { name: "Depth" }).getByRole("button", { name: "Standard" })).toHaveAttribute("aria-pressed", "true");
   const stops = sheet(page).getByRole("switch");
-  await expect(stops).toHaveCount(4);
-  for (const name of ["Feature set and dependencies", "Engineering check", "Priority order", "PRD review"]) {
+  await expect(stops).toHaveCount(5);
+  for (const name of ["Feature set and dependencies", "Engineering check", "Priority order", "PRD review", "Engineering dates"]) {
     await expect(sheet(page).getByRole("switch", { name })).toBeChecked();
   }
 
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toHaveText("Estimated $24.50");
+  await expect(estimate(page)).toHaveText("Estimated $29.50");
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
@@ -123,14 +123,14 @@ test("baseline choice: reuse is preselected; Rebuild costs the baseline segment 
   await expect(sheet(page).getByRole("switch", { name: "Confirm the baseline" })).toHaveCount(0);
 
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toHaveText("Estimated $24.50");
+  await expect(estimate(page)).toHaveText("Estimated $29.50");
   await rebuild.check();
-  await expect(estimate(page)).toHaveText("Estimated $31.50");
+  await expect(estimate(page)).toHaveText("Estimated $36.50");
   await expect(sheet(page).getByRole("switch", { name: "Confirm the baseline" })).toBeChecked();
 
   // Deep and rebuilding goes over $50: an owner approves before it starts.
   await sheet(page).getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
-  await expect(estimate(page)).toContainText("Estimated $63.00");
+  await expect(estimate(page)).toContainText("Estimated $73.00");
   await expect(estimate(page)).toContainText("Needs an owner's approval before it starts");
   await expect(sheet(page).getByRole("radio", { name: "Rebuild it ($14.00)" })).toBeChecked();
 
@@ -150,9 +150,9 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   const id = await continueToIntake(page);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toHaveText("Estimated $24.50");
+  await expect(estimate(page)).toHaveText("Estimated $29.50");
   await sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" }).check();
-  await expect(estimate(page)).toHaveText("Estimated $31.50");
+  await expect(estimate(page)).toHaveText("Estimated $36.50");
   await sheet(page).getByRole("button", { name: "Close Draft with Oracle" }).click();
   await expect(sheet(page)).toHaveCount(0);
 
@@ -170,7 +170,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   // Reopening takes up the draft run: its choices and its estimate, not a fresh sheet.
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   await expect(sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" })).toBeChecked();
-  await expect(estimate(page)).toHaveText("Estimated $31.50");
+  await expect(estimate(page)).toHaveText("Estimated $36.50");
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
@@ -197,7 +197,7 @@ test("stale baseline: only 'Oracle rebuilds the baseline first', with the reason
   await expect(sheet(page).getByRole("tooltip")).toContainText("The last baseline review was approved 41 days ago");
   await expect(sheet(page).getByRole("switch", { name: "Confirm the baseline" })).toBeChecked();
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(estimate(page)).toHaveText("Estimated $31.50");
+  await expect(estimate(page)).toHaveText("Estimated $36.50");
 });
 
 test("empty skeleton: the quiet link still creates an empty v1, and a commenter does not see it", async ({ page }) => {

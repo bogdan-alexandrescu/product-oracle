@@ -171,7 +171,7 @@ export interface RunsContext {
 export const ENGINEERING_KINDS: readonly string[] = ["eng_review", "eng_dates"];
 const LEAD_ONLY = "Only an engineering lead or an owner decides the engineering stops";
 /** F4, as flows.SegmentDef.skip_when_off: with its stop off, the whole segment is skipped. */
-const SKIP_WHEN_OFF = ["eng_review"];
+const SKIP_WHEN_OFF = ["eng_review", "eng_dates"];
 const OFF_NOTE = "Turned off when the run started.";
 const skippedOff = (s: Pick<SegmentOut, "name" | "checkpoint_on">) => SKIP_WHEN_OFF.includes(s.name) && !s.checkpoint_on;
 
@@ -220,6 +220,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
         { name: "eng_review", title: "Engineering check", roles: ["architect"], scopes: [...READ, "read:documents"], outputs: ["tech_briefs.yaml"], checkpoint: "eng_review", approver_role: "approver", decider: "engineering_lead" },
         { name: "priority", title: "Priority order", roles: ["prioritizer"], scopes: ["read:baseline", "write:proposals"], outputs: ["priority.yaml"], checkpoint: "priority_order", approver_role: "approver", decider: "role" },
         { name: "prd_draft", title: "PRD draft", roles: ["writer", "critic"], scopes: [...READ, "read:documents", "write:drafts"], outputs: ["prd.md"], checkpoint: "prd_review", approver_role: "approver", decider: "role" },
+        // F4 lane B: the Engineering dates, on by default; off, the whole segment is skipped.
+        { name: "eng_dates", title: "Engineering dates", roles: ["architect"], scopes: [...READ, "read:documents"], outputs: ["eng_dates.yaml"], checkpoint: "eng_dates", approver_role: "approver", decider: "engineering_lead" },
       ],
     },
     {
@@ -617,7 +619,8 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
  * reasons read live (Confirm the baseline's undecided goals).
  */
 function gateOf(cp: CheckpointOut, actions: DraftActionRow[], edits = true, live?: GateReason[]): Schemas["Gate"] | null {
-  const blocking = cp.status !== "pending" ? null : cp.kind === "eng_review" ? engReasons(cp, actions) : blockingOf(cp, live);
+  const blocking =
+    cp.status !== "pending" ? null : cp.kind === "eng_review" ? engReasons(cp, actions) : cp.kind === "eng_dates" ? datesReasons(cp, actions) : blockingOf(cp, live);
   if (!blocking) return null;
   const waives = (x: GateReason) =>
     waivable(cp.kind, x.code) &&
@@ -1159,6 +1162,7 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunO
 
 function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
   if (name === "tech_briefs.yaml") return briefsYaml(LOCAL_BRIEFS, attempt);
+  if (name === "eng_dates.yaml") return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
   if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
   if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
@@ -1189,6 +1193,9 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   let snapshot: SnapshotRow | null = null;
   // F4: the architect's briefs, one per feature of the run's feature set, checked as the stop reads them.
   const briefs = def.outputs.includes("tech_briefs.yaml") ? briefsCheckOf(r.id === ENG_CHECK_RUN ? SEEDED_BRIEFS : LOCAL_BRIEFS) : null;
+  // F4 lane B: the architect's dates for the draft's Now items, checked as the stop reads them.
+  const dates = def.outputs.includes("eng_dates.yaml") ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES) : null;
+  if (dates) ctx.db.artifacts[`${r.id}|${s.seq}|eng_dates.yaml`] = datesYaml(dates, attempt);
   if (def.outputs.includes("priority.yaml")) {
     s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r));
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
@@ -1209,6 +1216,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     ...(s.feature_set_check ? { feature_set_check: s.feature_set_check } : {}),
     ...(snapshot ? { priority_check: s.priority_check, priority_snapshot_id: snapshot.id } : {}),
     ...(briefs ? { briefs_check: briefs } : {}),
+    ...(dates ? { dates_check: dates } : {}),
     // As the API: the review of an imported draft names its version.
     ...(s.draft_import?.version ? { import: { document_id: s.draft_import.document_id, slug: s.draft_import.slug, kind: r.document_kind, version: s.draft_import.version } } : {}),
   };
@@ -1953,6 +1961,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
+    if (cp.kind === "eng_dates" && decision === "approved") approveEngDates(cp, staged);
     cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
@@ -2028,8 +2037,8 @@ function seedClock() {
 /** A seeded draft run, estimated, added to `db`. */
 function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"], document: string, knobs: KnobsIn, created_at: string): RunOut {
   const doc = ctx.documents.find((d) => d.slug === document);
-  // Seeded runs stand for runs started before F4: no Engineering check unless they name it.
-  const k = resolveKnobs(flow, { ...knobs, checkpoints: { eng_review: false, ...knobs.checkpoints } }) as RunOut["knobs"];
+  // Seeded runs stand for runs started before F4: no Engineering check or dates unless they name them.
+  const k = resolveKnobs(flow, { ...knobs, checkpoints: { eng_review: false, eng_dates: false, ...knobs.checkpoints } }) as RunOut["knobs"];
   const segments = segmentsFor(flow, k, ctx.uuid)
     .filter((s) => !skippedOff(s))
     .map((s, i) => ({ ...s, seq: i + 1 }));
@@ -2086,6 +2095,7 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
   priority_order: "Priority order",
   prd_review: "PRD review",
   eng_review: "Engineering review",
+  eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
   strategy_review: "Vision or strategy review",
@@ -2392,6 +2402,44 @@ export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOu
   refresh(r);
   db.runs.push(r);
   return r;
+}
+
+/** The runs the "eng-dates" scenario seeds (F4 lane B). */
+export const ENG_DATES_RUN = "7a11c0de-0000-4000-8000-0000000000d4";
+export const ENG_DATES_WAITING_RUN = "7a11c0de-0000-4000-8000-0000000000d5";
+
+/** A Baseline to PRD run with only the Engineering dates on, its PRD draft imported (v2 of `document`). */
+function seedDatesRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string) {
+  const { from, now } = seedClock();
+  const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
+  const full = { ...ctx, db: own, now };
+  const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false, eng_review: false, eng_dates: true };
+  const r = seedRun(ctx, own, "baseline_to_prd", document, { checkpoints: off }, created_at);
+  r.id = id;
+  from(r.created_at);
+  launch(full, r);
+  return { r, full };
+}
+
+/**
+ * The "eng-dates" scenario (F4 lane B): a Baseline to PRD run for the Usage alerts PRD waiting
+ * at its Engineering dates with four Now items (three with a proposed date), two Next and one
+ * Later; and one for Visit reminders whose PRD review is done, waiting for v2's roadmap items.
+ */
+export function seedEngDatesRuns(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut[] {
+  const waiting = seedDatesRun(db, ctx, ENG_DATES_RUN, "usage-alerts", "2026-10-22T08:00:00Z");
+  for (let i = 0; i < 10 && waiting.r.status !== "awaiting_checkpoint"; i++) tick(waiting.full);
+  refresh(waiting.r);
+  const later = seedDatesRun(db, ctx, ENG_DATES_WAITING_RUN, "visit-reminders", "2026-10-22T09:00:00Z");
+  const dates = () => later.r.segments.find((x) => x.name === "eng_dates")!;
+  for (let i = 0; i < 10 && dates().status !== "running"; i++) tick(later.full);
+  // As the API: the dates step waits for the draft's roadmap items before it runs.
+  Object.assign(dates(), { status: "pending", attempts: [], workflow_id: null, started_at: null, agents: [], checked_at: null });
+  const imp = later.r.segments.find((x) => x.name === "prd_draft")?.draft_import;
+  later.r.waiting_for = { kind: "draft_items", version: imp?.version ?? 1 };
+  refresh(later.r);
+  db.runs.push(waiting.r, later.r);
+  return [waiting.r, later.r];
 }
 
 /** The run the "baseline-review" scenarios seed (B2). */
@@ -3130,6 +3178,112 @@ function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged:
   cp.payload = { ...cp.payload, briefs: { verdicts, sizes } };
 }
 
+// ---------------------------------------------------------------- F4 lane B Engineering dates
+
+type DateBasis = { kind: "estimate" | "capacity" | "commitment"; reference: string; supports_date: string };
+type DateItem = {
+  key: string;
+  title: string;
+  section: string | null;
+  size: string | null;
+  proposed: DateBasis | null;
+  confidence: "low" | "medium" | "high" | null;
+  assumptions: string[];
+  no_date_reason: string | null;
+};
+type DatesSpec = { items: DateItem[]; others: { key: string; title: string; horizon: "next" | "later" }[] };
+type DatesCheck = DatesSpec & { prd: { document: string; version: number } | null; problems: { code: string; message: string }[] };
+const BASIS_KINDS = ["estimate", "capacity", "commitment"];
+
+/** The local runtime's dates: the draft's Now items (LOCAL_FEATURE_SET's), one dated. */
+const LOCAL_DATES: DatesSpec = {
+  items: [
+    { key: "price-early", title: "Show the price early", section: "features", size: "m", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-27" }, confidence: "medium", assumptions: ["The pricing call answers within 200 ms"], no_date_reason: null },
+    { key: "guest-checkout", title: "Guest checkout", section: "features", size: "l", proposed: null, confidence: null, assumptions: [], no_date_reason: "Sized once the price step ships" },
+  ],
+  others: [{ key: "saved-cards", title: "Saved cards", horizon: "next" }],
+};
+
+/** The "eng-dates" scenario's dates: four Now items (three dated), two Next, one Later. */
+const SEEDED_DATES: DatesSpec = {
+  items: [
+    { key: "shipping-step", title: "Shipping step", section: "shipping", size: "m", proposed: { kind: "estimate", reference: "est-shipping-step", supports_date: "2026-11-30" }, confidence: "medium", assumptions: ["The carrier rates API stays as it is"], no_date_reason: null },
+    { key: "price-early", title: "Show the price early", section: "pricing", size: "s", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-20" }, confidence: "high", assumptions: [], no_date_reason: null },
+    { key: "saved-addresses", title: "Saved addresses", section: "addresses", size: "l", proposed: { kind: "capacity", reference: "cap-q4-checkout", supports_date: "2026-12-11" }, confidence: "low", assumptions: ["Two engineers from Nov 16", "No change to the address lookup"], no_date_reason: null },
+    { key: "cart-review", title: "Cart review step", section: null, size: "m", proposed: null, confidence: null, assumptions: [], no_date_reason: "Waits on the provider's sandbox" },
+  ],
+  others: [
+    { key: "guest-checkout", title: "Guest checkout", horizon: "next" },
+    { key: "saved-cards", title: "Saved cards", horizon: "next" },
+    { key: "gift-wrap", title: "Gift wrap", horizon: "later" },
+  ],
+};
+
+/** The PRD version the dates are for: the one the run's PRD draft imported. */
+function datesCheckOf(r: RunOut, spec: DatesSpec): DatesCheck {
+  const imp = r.segments.find((x) => x.name === "prd_draft")?.draft_import;
+  const prd = r.document_slug && imp?.version ? { document: r.document_slug, version: imp.version } : null;
+  return { prd, items: spec.items, others: spec.others, problems: [] };
+}
+
+function datesYaml(check: DatesCheck, attempt: number): string {
+  const lines = [`# eng_dates (local agent runtime, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
+  for (const i of check.items) {
+    lines.push(`  - item: ${i.key}`);
+    if (i.proposed) lines.push(`    basis: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`, `    confidence: ${i.confidence}`);
+    else lines.push(`    no_date_reason: "${i.no_date_reason ?? ""}"`);
+    lines.push(`    assumptions: [${i.assumptions.map((a) => `"${a}"`).join(", ")}]`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+const datesOf = (cp: CheckpointOut) => ((cp.payload as { dates_check?: DatesCheck } | undefined)?.dates_check ?? null);
+/** A date choice: Accept, a changed estimate, or No date. */
+const isDateChoice = (a: Pick<DraftActionRow, "kind" | "field">) => a.kind === "accept" || (a.kind === "edit" && (a.field === "estimate" || a.field === "no_date"));
+const validDay = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v);
+
+/** As oracle.engineering.dates.reasons: each proposed date needs a staged choice, never waived. */
+function datesReasons(cp: CheckpointOut, actions: DraftActionRow[]): { reasons: GateReason[]; files: number } | null {
+  const check = datesOf(cp);
+  if (!check) return null;
+  const reasons: GateReason[] = check.items
+    .filter((i) => i.proposed && !actions.some((a) => a.state === "staged" && a.item_key === i.key && isDateChoice(a)))
+    .map((i) => ({ item: i.key, item_title: i.title, code: "date_undecided", severity: "blocking", label: "Date not decided yet" }));
+  return { reasons, files: check.problems.length };
+}
+
+/** As oracle.engineering.dates.validate: the Engineering dates' vocabulary; the refusal, or null. */
+function datesInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null {
+  const item = datesOf(cp)?.items.find((x) => x.key === a.item_key);
+  if (!item) return `${a.item_key} is not a Now item of the draft`;
+  if (a.kind === "question") return null;
+  if (a.kind === "accept") return item.proposed ? null : `${a.item_key} has no proposed date to accept`;
+  if (a.kind !== "edit") return "the Engineering dates take accept, edit (estimate, no_date) or question";
+  if (a.field === "estimate") {
+    const v = (a.value ?? {}) as Partial<DateBasis>;
+    if (!BASIS_KINDS.includes(v.kind ?? "") || !(v.reference ?? "").trim() || !v.supports_date) return "an estimate needs a kind, a reference and a date";
+    return validDay(v.supports_date) ? null : `not a date: ${v.supports_date}`;
+  }
+  if (a.field === "no_date") return ((a.value ?? {}) as { reason?: string }).reason?.trim() ? null : "No date needs a reason";
+  return "edit takes the field estimate or no_date";
+}
+
+/** As oracle.engineering.dates.on_approved: each accepted or changed date a verified schedule basis on the PRD. */
+function approveEngDates(cp: CheckpointOut, staged: DraftActionRow[]) {
+  const check = datesOf(cp);
+  if (!check) return;
+  const bases: Record<string, DateBasis> = {};
+  const noDate: Record<string, string> = {};
+  for (const i of check.items) {
+    const a = staged.filter((x) => x.item_key === i.key && isDateChoice(x)).pop();
+    if (!a) continue;
+    if (a.kind === "accept" && i.proposed) bases[i.key] = i.proposed;
+    else if (a.field === "estimate") bases[i.key] = a.value as DateBasis;
+    else if (a.field === "no_date") noDate[i.key] = (a.value as { reason: string }).reason;
+  }
+  cp.payload = { ...cp.payload, dates: { prd: check.prd, bases, no_date: noDate } };
+}
+
 /** Who stages at the checkpoint (and so decides): A3's rule at an engineering stop, else its role floor. */
 function mayStage(ctx: RunsContext, r: RunOut, cp: CheckpointOut, role: Schemas["Me"]["role"] | null): boolean {
   if (ENGINEERING_KINDS.includes(cp.kind) && ctx.mayDecide) return ctx.mayDecide(cp, r.flow);
@@ -3209,6 +3363,10 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       const invalid = engInvalid(cp, a);
       if (invalid) return fail(422, invalid);
     }
+    if (cp.kind === "eng_dates") {
+      const invalid = datesInvalid(cp, a);
+      if (invalid) return fail(422, invalid);
+    }
     // C7: the feature set's vocabulary: edit a field of a row, add a requirement, accept, waive, question.
     if (cp.kind === "feature_set") {
       if (!["edit", "add", "accept", "waive", "question"].includes(a.kind)) return fail(422, `a feature set takes edit, add, accept, waive or question, not ${a.kind}`);
@@ -3256,6 +3414,11 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
     }
     draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
+    // F4 lane B: one date choice per item: a new Accept, Change or No date replaces the item's
+    // other choice of the same state (a suggestion replaces suggestions, a staged one staged ones).
+    if (cp.kind === "eng_dates" && isDateChoice(row)) {
+      draft.actions = draft.actions.filter((x) => x === row || x.item_key !== row.item_key || x.state !== row.state || !isDateChoice(x));
+    }
     bump(draft, name);
     return out();
   }

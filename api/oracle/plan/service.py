@@ -70,6 +70,7 @@ CHECKPOINT_LABEL = {
     "priority_order": "Priority order",
     "prd_review": "PRD review",
     "eng_review": "Engineering review",
+    "eng_dates": "Engineering dates",
     "roadmap_items": "Roadmap items",
     "roadmap_review": "Roadmap review",
 }
@@ -95,8 +96,9 @@ def checkpoint_line(
     may decide it. Baseline to PRD's engineering stops (F4) name their segment ("check"
     or "dates") and wait for the engineering lead once one is named (A3), else for the
     checkpoint's role."""
-    if kind == "eng_review":
-        label = "Engineering dates" if segment and "date" in segment else "Engineering check"
+    if kind in ("eng_review", "eng_dates"):
+        dates = kind == "eng_dates" or bool(segment and "date" in segment)
+        label = "Engineering dates" if dates else "Engineering check"
         if lead_id is not None:
             mine, who = viewer_id is not None and viewer_id == lead_id, "the engineering lead"
         else:
