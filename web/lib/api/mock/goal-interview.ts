@@ -240,6 +240,12 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
   return refuse(410, `This route is gone. Use POST /v1/discussion-changes/{change_id}/${action} with the change's lock_version.`);
 }
 
+/** The discussion's subject page opened on its thread: `?discussion=<id>` before any #anchor. */
+function linkTo(d: DiscussionRow): string {
+  const [path, anchor] = (d.subject_url ?? "").split("#", 2);
+  return `${path}${path.includes("?") ? "&" : "?"}discussion=${d.id}${anchor !== undefined ? `#${anchor}` : ""}`;
+}
+
 /**
  * G3's generic Propose on a goal version (POST /v1/discussion-changes/{id}/propose), B6's one
  * path as the API's propose_version: B5's checks (422, every problem), Oracle's pushback once
@@ -300,7 +306,8 @@ export function proposeVersion(ctx: GoalInterviewContext, change: ChangeRow, d: 
     id: proposalId,
     entity_id: goal.id,
     edge_id: null,
-    payload: { op: "update", kind: "entity", fields: { attrs }, reason: `From discussion ${d.title}`, origin: "user" },
+    // G3's Propose: the reason names the discussion and links its page (as the API's with_discussion).
+    payload: { op: "update", kind: "entity", fields: { attrs }, reason: `From discussion ${d.title} (${linkTo(d)})`, origin: "user" },
     run_id: null,
     actor: `user:${ctx.me.id}`,
     status: "open",

@@ -342,6 +342,12 @@ class ChangeStageIn(ChangeActIn):
     reason: str | None = Field(default=None, max_length=1000)
 
 
+class ChangeProposeIn(ChangeActIn):
+    # The person's Edit, proposed instead of the change's payload (B6's Edit then Propose);
+    # saved only when it is used, so a refused edit changes nothing.
+    payload: dict[str, Any] | None = None
+
+
 class ChangeDismissIn(ChangeActIn):
     note: str | None = Field(default=None, max_length=1000)
 

@@ -1274,7 +1274,8 @@ export interface paths {
          *     whose reason names the discussion and links its page; approvers accept it in Baseline.
          *     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
          *     and a target the start or current value already meets gets Oracle's pushback once
-         *     (409); proposing it again keeps it and logs the override.
+         *     (409); proposing it again keeps it and logs the override. ``payload``: the person's
+         *     Edit, proposed instead and saved only when it is used.
          */
         post: operations["propose_discussion_change"];
         delete?: never;
@@ -4752,50 +4753,6 @@ export interface paths {
         get: operations["list_vague_goals"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/baseline/goal-measures/{change_id}/propose": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Propose Goal Measure
-         * @description Propose a measurable version of the goal: a baseline proposal ("From discussion
-         *     <title>") an approver accepts. ``payload``: the person's Edit (it may set owner_id and
-         *     weight). Its fields pass B5's checks first (422, nothing created). A target the start
-         *     or current value already meets gets Oracle's pushback once (409); sending it again,
-         *     or with ``keep``, proposes it and records the override in the summary.
-         */
-        post: operations["propose_goal_measure"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/baseline/goal-measures/{change_id}/dismiss": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Dismiss Goal Measure
-         * @description Dismiss one of Oracle's versions (approvers).
-         */
-        post: operations["dismiss_goal_measure"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14734,6 +14691,15 @@ export interface components {
             /** Web Finding Id */
             web_finding_id: string | null;
         };
+        /** ChangeProposeIn */
+        ChangeProposeIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /**
          * ChangeResult
          * @description Every action's answer: the change, and what acting created (a staged change, a
@@ -20593,18 +20559,6 @@ export interface components {
              * @enum {string}
              */
             matched_on: "brief" | "feature";
-        };
-        /** GoalMeasureAct */
-        GoalMeasureAct: {
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Keep
-             * @default false
-             */
-            keep: boolean;
         };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
@@ -39717,7 +39671,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ChangeActIn"];
+                "application/json": components["schemas"]["ChangeProposeIn"];
             };
         };
         responses: {
@@ -46643,102 +46597,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VagueGoalOut"][];
-                };
-            };
-        };
-    };
-    propose_goal_measure: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["GoalMeasureAct"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscussionChangeOut"];
-                };
-            };
-            /** @description Change not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Oracle's pushback (once), closed, or the version was acted on */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GoalMeasurePushback"];
-                };
-            };
-            /** @description Goal fields rejected (B5), every problem */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["YamlImportError"];
-                };
-            };
-        };
-    };
-    dismiss_goal_measure: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscussionChangeOut"];
-                };
-            };
-            /** @description Change not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not proposed */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
