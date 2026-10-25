@@ -451,7 +451,19 @@ def test_the_evidence_inspector_needs_read_sources_too_for_a_run_token():
         )
 
 
-async def test_a_run_reads_the_inspector_with_read_sources_and_its_users_items_live(client):
+@pytest.fixture
+def local_runtime():
+    """Run tokens from any address, as tests.test_mcp's own fixture."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
+async def test_a_run_reads_the_inspector_with_read_sources_and_its_users_items_live(
+    client, local_runtime
+):
     from tests.test_mcp import mcp_client, run_token, text_of
 
     ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
@@ -464,9 +476,7 @@ async def test_a_run_reads_the_inspector_with_read_sources_and_its_users_items_l
         refused = await c.call_tool("get_version_evidence", args)
         assert refused.is_error and "read:sources" in text_of(refused)
     # A run reads its own user's never-shared item live, title included (no change).
-    both = await run_token(
-        ctx.tenant_id, ["read:documents", "read:sources"], ctx.users["owner"].id
-    )
+    both = await run_token(ctx.tenant_id, ["read:documents", "read:sources"], ctx.users["owner"].id)
     async with mcp_client(both) as c:
         ok = await c.call_tool("get_version_evidence", args)
         assert not ok.is_error, text_of(ok)

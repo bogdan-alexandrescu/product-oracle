@@ -58,6 +58,10 @@ GOAL_UNDECIDED = "goal_undecided"
 GROUP = {"goal": 0, "product": 1, "feature": 2}
 # Reasons only deciding the proposal or the conflict answers (not a person's write).
 DECIDED_ELSEWHERE = frozenset({"changes_your_edit", "material_conflict"})
+ACCEPT_KEEPS_LOCKED = (
+    "The run proposes a change to an item a person edited. Accepting applies it, and the "
+    "item stays locked against Oracle's changes until a person unlocks it; or reject it."
+)
 
 LINKED = "Linked from a PRD section: edit or reject it instead"
 LOCKED = "Locked: a person edited it"
@@ -273,7 +277,7 @@ async def build(db: AsyncSession, run_id: uuid.UUID, actions: list[ReviewAction]
             if open_proposals and e.locked:
                 reasons.append(_reason(
                     e, "changes_your_edit", CONFIRM, "Changes a locked item",
-                    "The run proposes a change to an item a person edited: accept or reject it.",
+                    ACCEPT_KEEPS_LOCKED,
                 ))  # fmt: skip
             if conflicts.get(e.id):
                 reasons.append(_reason(

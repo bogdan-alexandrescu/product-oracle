@@ -340,8 +340,8 @@ export default function BaselinePage() {
       if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", { ...params, body: { skip_fields: skip } }));
       else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
       if (accept && skip.length > 0)
-        return `Proposal accepted without ${skip.map(fieldName).join(", ")}: the rest is applied and the item locked.`;
-      if (accept) return "Proposal accepted: the change is applied and the item locked.";
+        return `Proposal accepted without ${skip.map(fieldName).join(", ")}: the rest is applied and the item is locked against Oracle's changes until a person unlocks it.`;
+      if (accept) return "Proposal accepted: the change is applied and the item is locked against Oracle's changes until a person unlocks it.";
       return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
     });
 

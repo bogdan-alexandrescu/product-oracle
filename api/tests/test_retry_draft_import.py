@@ -69,13 +69,20 @@ def _retry_url(run, seq: int = 5) -> str:
 
 
 async def _rejected(
-    client, auth, runtime, monkeypatch, prd: str | None = ORACLE_PRD, document="example-prd"
+    client,
+    auth,
+    runtime,
+    monkeypatch,
+    prd: str | None = ORACLE_PRD,
+    document="example-prd",
+    by=None,
 ):
-    """A baseline_to_prd run waiting at its PRD review with its draft refused."""
+    """A baseline_to_prd run waiting at its PRD review with its draft refused; ``by``
+    starts it (the owner ``auth`` by default)."""
     _older_oracle(monkeypatch)
     files = {} if prd is None else {"prd.md": prd}
     runtime.script["prd_draft"] = [Outcome(artifacts=files)]
-    run = await started(client, auth, document=document, checkpoints=OFF)
+    run = await started(client, by or auth, document=document, checkpoints=OFF)
     for _ in range(4):
         await tick(client, auth)
     monkeypatch.undo()
@@ -397,12 +404,13 @@ async def test_a_retried_import_reads_imported_again_by_the_retrier(
     from oracle.members.names import display_name
 
     tenant_id, auth = owner
-    zone = await client.put(
-        "/v1/settings/company_timezone", json={"value": "Europe/Berlin"}, headers=auth
-    )
-    assert zone.status_code == 200, zone.text
+    from oracle.tenant_settings import TenantSetting
+
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="company_timezone", value="Europe/Berlin"))
+        await s.commit()
     approver = await as_user(tenant_id, "approver", "alex.creator@example.com")
-    run = await _rejected(client, approver, runtime, monkeypatch)
+    run = await _rejected(client, auth, runtime, monkeypatch, by=approver)
     await _approved_while_refused(tenant_id, run["id"])
     retrier = await as_user(tenant_id, "owner", "robin.retrier@example.com")
     resp = await client.post(_retry_url(run), headers=retrier)
@@ -434,9 +442,7 @@ async def test_another_segments_import_keeps_the_retry_refused_in_plain_words(
         from oracle.runs.models import RunSegment
 
         other = await s.scalar(
-            select(RunSegment).where(
-                RunSegment.run_id == uuid.UUID(run["id"]), RunSegment.seq == 3
-            )
+            select(RunSegment).where(RunSegment.run_id == uuid.UUID(run["id"]), RunSegment.seq == 3)
         )
         other.artifacts = {
             **(other.artifacts or {}),

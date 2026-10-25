@@ -1892,7 +1892,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     // A run's draft becomes the next version: a copy of the latest one (or of the first
     // fixture for a new document); a roadmap draft is built from its PRD version. So the
     // review screens have something to show.
-    importDraft: (slug, run) => {
+    importDraft: (slug, run, again) => {
       const prd = run.source ? db.versions.find((v) => v.id === run.source!.version_id) : undefined;
       const fromPrd =
         prd &&
@@ -1955,6 +1955,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
           : { ...seed, number, created_at: now() };
       const v = buildVersion(doc, base);
       v.source = run.source ?? null;
+      v.imported_again = again ?? null;
       db.versions.push(v);
       queueDraft(db, doc.id, v);
       // D12: what Build next draft sent the agents: the text changes are applied in this
@@ -2348,6 +2349,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     notes: v.notes,
     imported_by: v.imported_by,
     imported_by_name: v.imported_by_name,
+    imported_again: v.imported_again ?? null,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
     source: v.source ?? null,

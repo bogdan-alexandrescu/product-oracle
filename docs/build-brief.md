@@ -104,7 +104,9 @@ Common rules for all sources:
 - **Baseline:**
   - edits and confirmations in the app;
   - baseline YAML import (`oracle baseline push`, API);
-  - agent proposals through MCP. Locked items turn those into proposals.
+  - agent proposals through MCP. Locked items turn those into proposals. Accepting a
+    proposal applies it, and the item is then locked against Oracle's changes until a
+    person unlocks it.
 - **Drafts written outside a run:** markdown import through `oracle push`, `POST
   /v1/documents/{doc}/versions` or the MCP `import_version` tool. Citations point at
   sources; `resolutions` closes feedback.
@@ -204,7 +206,8 @@ Maturity key:
 - Typed entities (goal, product, feature, requirement, constraint, decision, person) and
   typed edges.
 - Evidence on every node and edge.
-- Locked items turn agent writes into proposals.
+- Locked items turn agent writes into proposals. Accepting a proposal applies it, and the
+  item is then locked against Oracle's changes until a person unlocks it.
 - Conflicts are resolved by precedence and confidence.
 - A traceability report flags features that serve no goal.
 - YAML import and export, also through the CLI.
