@@ -7,6 +7,8 @@ no_claim=<what green does not prove>.
 
 import uuid
 
+import pytest
+
 from oracle.runs.reasons import ItemDrift, ReasonContext, TracedFeature, reasons_for
 from tests.strategy_helpers import STRATEGY, add_entity, approved, choice, imported, strategy_md
 from tests.test_roadmap import (  # noqa: F401 - fixtures
@@ -143,3 +145,102 @@ async def test_only_an_owner_waives_a_stopped_item_approvers_waive_outside(clien
     assert resp.status_code == 200, resp.text
     resp = await client.post(base, json=waive("stopped_but_planned"), headers=auth)
     assert resp.status_code == 200, resp.text
+
+
+async def _drift_review(client, auth, tenant_id, runtime) -> tuple[str, str]:  # noqa: F811
+    """The payment step (Next) stopped and outside the strategy: the actions URL and the
+    review URL of its pending roadmap items checkpoint."""
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await _strategy(client, auth, tenant_id)
+    run, _ = await roadmap_items_check(client, auth, runtime, SECOND)
+    cp = next(c for c in run["checkpoints"] if c["status"] == "pending")
+    base = f"/v1/runs/{run['id']}/checkpoints/{cp['id']}"
+    return f"{base}/actions", f"{base}/review"
+
+
+async def _counts(client, headers, review_url: str) -> tuple[dict, dict, dict]:
+    """The payment step as the review shows it, the review's tally and the Inbox summary of
+    the checkpoint (the run page and the Inbox count from these)."""
+    rev = (await client.get(review_url, headers=headers)).json()
+    cp_id = review_url.split("/")[-2]
+    inbox = (await client.get("/v1/inbox", headers=headers)).json()
+    [row] = [c for c in inbox["checkpoints"] if c["id"] == cp_id]
+    [pay] = [i for i in rev["items"] if i["key"] == "payment-step"]
+    return pay, rev["tally"], row["summary"]
+
+
+def _waive(answers: list[str], reason: str = "Committed to the pilot customer") -> dict:
+    return {"item_key": "payment-step", "kind": "waive", "answers": answers,
+            "value": {"reason": reason}}  # fmt: skip
+
+
+@pytest.mark.parametrize("answers", [[], ["outside_strategy"]])
+async def test_an_approvers_waive_never_answers_stopped_in_the_strategy(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    answers,
+):
+    """protects=a waive answers only the reasons it names, and none it does not name is an
+    owner's (review #581, blocker 1); fails_when=an approver's waive with no codes or with
+    Outside the strategy only makes the stopped item handled, or drops it from the Inbox or
+    the review's counts; no_claim=the web (strategy-drift-items.spec.ts)."""
+    tenant_id, auth = owner
+    actions_url, review_url = await _drift_review(client, auth, tenant_id, runtime)
+    approver = await as_user(tenant_id, "approver")
+    before = await _counts(client, approver, review_url)
+    assert before[0]["state"] == "needs_you"
+    resp = await client.post(actions_url, json=_waive(answers), headers=approver)
+    assert resp.status_code == 200, resp.text
+    pay, tally, summary = await _counts(client, approver, review_url)
+    assert pay["state"] == "needs_you"
+    assert tally["need_you"] == before[1]["need_you"]
+    assert tally["handled"] == before[1]["handled"]
+    assert summary["need_you"] == before[2]["need_you"]
+    listed = [c["item"] for c in before[2]["children"]]
+    assert [c["item"] for c in summary["children"]] == listed
+
+
+async def test_an_owners_waive_closes_stopped_and_keeps_the_approvers_waive(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=an owner's waive of Stopped in the strategy answers it, and it neither
+    replaces nor is replaced by an approver's waive of Outside the strategy on the same item
+    (review #581, minor 3); fails_when=one waive replaces the other, so a reason reopens or
+    the other author's reason is lost; no_claim=the stored finding after approval."""
+    tenant_id, auth = owner
+    actions_url, review_url = await _drift_review(client, auth, tenant_id, runtime)
+    approver = await as_user(tenant_id, "approver")
+    resp = await client.post(actions_url, json=_waive(["outside_strategy"]), headers=approver)
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(
+        actions_url,
+        json=_waive(["stopped_but_planned"], "Signed before the strategy"),
+        headers=auth,
+    )
+    assert resp.status_code == 200, resp.text
+    pay, _, _ = await _counts(client, auth, review_url)
+    waives = sorted(
+        (a["answers"], a["value"]["reason"]) for a in pay["actions"] if a["kind"] == "waive"
+    )
+    assert waives == [
+        (["outside_strategy"], "Committed to the pilot customer"),
+        (["stopped_but_planned"], "Signed before the strategy"),
+    ]
+    drift = {"outside_strategy", "stopped_but_planned"}
+    assert drift <= {r["code"] for r in pay["reasons"]}
+    others = {r["code"] for r in pay["reasons"]} - drift
+    assert pay["state"] == ("handled" if not others else "needs_you"), pay["reasons"]
+    # The approver waives Outside again: the owner's waive of Stopped stays.
+    resp = await client.post(
+        actions_url, json=_waive(["outside_strategy"], "Pilot, again"), headers=approver
+    )
+    assert resp.status_code == 200, resp.text
+    pay, _, _ = await _counts(client, auth, review_url)
+    assert sorted(a["answers"] for a in pay["actions"] if a["kind"] == "waive") == [
+        ["outside_strategy"],
+        ["stopped_but_planned"],
+    ]

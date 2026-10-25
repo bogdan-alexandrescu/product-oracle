@@ -3020,8 +3020,8 @@ export const ROADMAP_DRIFT_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d8";
 
 /**
  * H4 §5: the roadmap review run's twin with drift reasons, as the API's reasons word them:
- * Single sign-on (Next) is on the strategy's stop list, Mobile push serves a goal under no
- * focus choice. Advisory: both are to confirm, acted on or waived with a reason.
+ * Single sign-on (Next) is on the strategy's stop list and its goal under no focus choice,
+ * Mobile push serves a goal under no focus choice. Advisory: both are to confirm, acted on or waived with a reason.
  */
 function roadmapDriftRun(): RunOut {
   const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d8")) as RunOut;
@@ -3046,6 +3046,12 @@ function roadmapDriftRun(): RunOut {
     "sso-login",
     drift("sso-login", "Single sign-on", "stopped_but_planned", "Stopped in the strategy", "The product strategy stops Enterprise SSO, and this item is in Next.",
       [moveTo("sso-login", "later"), drop("sso-login"), waive("sso-login")], { severity: "high", choices: ["enterprise-sso"], goals: [] }),
+  );
+  // Review #581: an item both stopped and outside the strategy (the API's payment step).
+  after(
+    "sso-login",
+    drift("sso-login", "Single sign-on", "outside_strategy", "Outside the strategy", "Enterprise readiness is under no focus choice of the product strategy.",
+      [drop("sso-login"), waive("sso-login")], { severity: "warning", choices: [], goals: ["enterprise-readiness"] }),
   );
   items.items_check = withReasons(
     { items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems: items.items_check!.problems },

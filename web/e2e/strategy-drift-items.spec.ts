@@ -47,6 +47,57 @@ test("drift: the roadmap items review shows outside and stopped, and an owner wa
   await itemInspector(page).getByLabel("Why waive it").fill("Committed to the pilot customer before the strategy");
   await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
   await expect(card(page, "Stopped in the strategy")).toContainText("✓ Waived");
+  // The waive names Stopped only: Outside the strategy on the same item stays open (review #581).
+  await expect(card(page, "Outside the strategy")).not.toContainText("✓");
+  await expect(card(page, "Outside the strategy").getByRole("button", { name: "Waive…" })).toBeVisible();
+});
+
+// protects=an approver's waive of Outside the strategy answers that reason only: on an item also
+// stopped in the strategy, Stopped stays open (no ✓, Move to Later still offered) and the item
+// still needs you (review #581, blocker 1); fails_when=a waive answers every reason of its item;
+// no_claim=the API (api/tests/test_roadmap_reasons_drift.py covers its counts and the Inbox).
+test("drift: an approver's waive of Outside leaves Stopped in the strategy open on the same item", async ({ page }) => {
+  await login(page);
+  await openSeeded(page, seedRoadmapDrift, SCREEN);
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto(SCREEN);
+  await pickItem(page, "sso-login");
+  await card(page, "New since").getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(card(page, "New since")).toContainText("✓");
+  const outside = card(page, "Outside the strategy");
+  await outside.getByRole("button", { name: "Waive…" }).click();
+  await itemInspector(page).getByLabel("Why waive it").fill("An enterprise pilot we keep this quarter");
+  await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
+  await expect(card(page, "Outside the strategy")).toContainText("✓ Waived");
+  const stopped = card(page, "Stopped in the strategy");
+  await expect(stopped).not.toContainText("✓");
+  await expect(stopped.getByRole("button", { name: "Move to Later", exact: true })).toBeVisible();
+  await expect(itemRow(page, "sso-login")).toHaveAttribute("data-state", "needs_you");
+});
+
+// protects=an owner's waive of Stopped and an approver's waive of Outside on the same item are two
+// waivers: the approver undoing theirs leaves the owner's (review #581, minor 3); fails_when=one
+// waive replaces the other, so Undo reopens the owner's reason; no_claim=the API (pytest).
+test("drift: an approver's waive on a stopped item does not replace the owner's", async ({ page }) => {
+  await login(page);
+  await openSeeded(page, seedRoadmapDrift, SCREEN);
+  await pickItem(page, "sso-login");
+  await card(page, "Stopped in the strategy").getByRole("button", { name: "Waive…" }).click();
+  await itemInspector(page).getByLabel("Why waive it").fill("Committed to the pilot customer before the strategy");
+  await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
+  await expect(card(page, "Stopped in the strategy")).toContainText("✓ Waived");
+  await signOut(page);
+  await login(page, "approver@example.com");
+  await page.goto(SCREEN);
+  await pickItem(page, "sso-login");
+  await card(page, "Outside the strategy").getByRole("button", { name: "Waive…" }).click();
+  await itemInspector(page).getByLabel("Why waive it").fill("An enterprise pilot we keep this quarter");
+  await itemInspector(page).getByRole("button", { name: "Waive", exact: true }).click();
+  await expect(card(page, "Outside the strategy")).toContainText("✓ Waived");
+  await card(page, "Outside the strategy").getByRole("button", { name: "Undo" }).click();
+  await expect(card(page, "Outside the strategy")).not.toContainText("✓");
+  await expect(card(page, "Stopped in the strategy")).toContainText("✓ Waived");
 });
 
 // protects=an approver acts on a stopped item (Move to Later) but cannot waive it, and waives an
