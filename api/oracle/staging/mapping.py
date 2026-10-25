@@ -31,6 +31,8 @@ CHECKPOINT_KIND: dict[str, str] = {
     "scope_feature": "feature_set",
     "scope_requirement": "feature_set",
 }
+# Staged at the feature-set stop whose proposed scope holds the feature (C6, C7).
+SCOPE_KINDS = ("scope_feature", "scope_requirement")
 # Edit fields that map back to one G1 kind.
 _FIELDS = {
     "horizon": "item_horizon",
