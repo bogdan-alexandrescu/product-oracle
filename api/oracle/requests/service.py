@@ -996,6 +996,9 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Reque
         if ids
         else {}
     )
+    # A triage run's problem suggestion naming a decision or document the reader may not
+    # see (one written before #541 part 4) is not shown to them, as request suggestions.
+    hidden = await visibility.hidden_for_reader(db)
     return [
         RequestThemeOut(
             id=t.id,
@@ -1011,7 +1014,9 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Reque
             constraints=t.constraints,
             problem_state=t.problem_state,  # type: ignore[arg-type]
             problem_suggestion=SuggestedProblem(**t.problem_suggestion)
-            if t.problem_state == "suggested" and t.problem_suggestion
+            if t.problem_state == "suggested"
+            and t.problem_suggestion
+            and not (hidden is not None and hidden.names(json.dumps(t.problem_suggestion)))
             else None,
             problem_confirmed_at=t.problem_confirmed_at,
             created_by=t.created_by,

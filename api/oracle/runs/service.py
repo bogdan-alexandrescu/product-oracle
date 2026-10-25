@@ -403,6 +403,46 @@ def _set_art(segment: RunSegment, data: dict[str, Any]) -> None:
     segment.artifacts = copy.deepcopy(data)
 
 
+# #541 part 5: whether a ``company_draft`` run reads as a member (its target was
+# company-wide when it started). Set by start, never by a caller (not an ORACLE_KNOB).
+MEMBER_VIEW = "member_view"
+
+
+async def target_visibility(db: AsyncSession, run: Run) -> str:
+    """The visibility of the document ``run`` writes: its document's, else (a run that
+    creates it) the one a new document of its target kind gets."""
+    if run.document_id is not None:
+        found = await db.scalar(
+            select(Document.visibility)
+            .where(Document.id == run.document_id)
+            .execution_options(oracle_all_documents=True)
+        )
+        if found is not None:
+            return found
+    return visibility.default_for(_flow(run).target_kind or "")
+
+
+async def reads_as_member(db: AsyncSession, run: Run) -> bool:
+    """Whether ``run``'s calls read as a commenter would (oracle.docs.visibility): a
+    ``member_output`` flow's always; a ``company_draft`` flow's when its target was
+    company-wide when it started (MEMBER_VIEW) or is now. A target made approvers-only
+    later leaves the run reading as a member; one opened to the company later makes it
+    read as one from then on (its draft import checks what it read before)."""
+    flow = flows.FLOWS.get(run.flow)
+    if flow is None or flow.member_output:
+        return flow is not None
+    if not flow.company_draft:
+        return False
+    if (run.knobs or {}).get(MEMBER_VIEW) is True:
+        return True
+    return await target_visibility(db, run) == visibility.COMPANY
+
+
+async def _decide_member_view(db: AsyncSession, run: Run) -> None:
+    if _flow(run).company_draft:
+        _set_knob(run, MEMBER_VIEW, await target_visibility(db, run) == visibility.COMPANY)
+
+
 def _set_knob(run: Run, key: str, value: Any) -> None:
     knobs = dict(run.knobs or {})
     if value is None:
@@ -2165,6 +2205,8 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
     run.snapshot_id = snapshot.id
     for key, value in (pinned or {}).items():
         _set_knob(run, key, value)
+    # #541 part 5: a draft run of a company-wide document reads as a member.
+    await _decide_member_view(db, run)
     if any(flows.BRIEFS_FILE in s.outputs for s in _flow(run).segments):
         # F5-2: the shared code maps the run's briefs cite, recorded now (S6: a map made
         # private later stops new uses; this run keeps what it read).
@@ -9597,6 +9639,8 @@ async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
         stop = SimpleNamespace(kind=sdef.checkpoint, approver_role=sdef.approver_role)
         if _sent_back(run, segment) and may_decide(principal, stop, run.flow, leads):
             runs.setdefault(run.id, run)
+    for run_id in await _hidden_runs(db, principal, runs.values()):
+        runs.pop(run_id)
     if not runs:
         return []
     refs = await _refs(db, list(runs.values()))
@@ -9610,6 +9654,25 @@ async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
         _summary(r, refs, None, segments[r.id]).model_copy(update={"progress": None})
         for r in runs.values()
     ]
+
+
+async def _hidden_runs(db: AsyncSession, principal: Principal, runs: Any) -> set[uuid.UUID]:
+    """#541 part 5: the runs whose Inbox rows a reader who may not see approvers-only
+    documents (oracle.docs.visibility.restricted: a commenter, a viewer, or a call made
+    through a run that reads as a member, with its starter's cookie) is not shown: a run
+    on such a document, or of a flow that writes only such documents (a pricing memo, an
+    update), whose rows name it (its slug, its id)."""
+    runs = list(runs)
+    if not runs or not visibility.restricted(principal):
+        return set()
+    hidden_docs = await visibility.hidden_document_ids(db, [r.document_id for r in runs])
+    only_hidden = {
+        k
+        for k, f in flows.FLOWS.items()
+        if f.document_kinds
+        and all(visibility.default_for(kind) == visibility.APPROVERS for kind in f.document_kinds)
+    }
+    return {r.id for r in runs if r.document_id in hidden_docs or r.flow in only_hidden}
 
 
 async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False) -> InboxOut:
@@ -9638,8 +9701,17 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     # Who decides each (A3): the engineering stops go to the leads and owners once one is
     # named; the runs' flows come from the query above, the leads in one more.
     leads = await engineering_leads(db)
-    mine = [c for c in pending if may_decide(principal, c, runs[c.run_id].flow, leads)]
-    owed = [c for c in owing if may_decide(principal, c, runs[c.run_id].flow, leads)]
+    hidden_runs = await _hidden_runs(db, principal, runs.values())
+    mine = [
+        c
+        for c in pending
+        if c.run_id not in hidden_runs and may_decide(principal, c, runs[c.run_id].flow, leads)
+    ]
+    owed = [
+        c
+        for c in owing
+        if c.run_id not in hidden_runs and may_decide(principal, c, runs[c.run_id].flow, leads)
+    ]
     names = await _decider_names(db, owed)
     staged = await _staged_actions(db, mine)
     live = await _live_reasons(db, mine)
@@ -9654,6 +9726,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 .order_by(Run.created_at)
             )
         )
+        hidden_waiting = await _hidden_runs(db, principal, waiting_runs)
+        waiting_runs = [r for r in waiting_runs if r.id not in hidden_waiting]
     shown = {c.run_id for c in [*mine, *owed]}
     refs = await _refs(db, [*(r for r in runs.values() if r.id in shown), *waiting_runs])
 

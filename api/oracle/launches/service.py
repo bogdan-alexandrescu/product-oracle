@@ -34,6 +34,7 @@ from oracle import audit, autonomy
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
 from oracle.launches import checklist, requesters, tiers
 from oracle.launches.models import ChangelogEntry, Launch, LaunchTask, RequesterNote
@@ -132,20 +133,45 @@ def effective_tier(launch: Launch) -> int:
     return launch.tier or int((launch.tier_suggestion or {}).get("tier") or 3)
 
 
-def task_out(task: LaunchTask, tier: int | None = None) -> TaskOut:
+# #541 part 5: the text a launch kit run wrote before it read as a commenter (a task's
+# body, release notes, a changelog draft, a requester note) may name a decision or a
+# document the reader may not see; it is withheld from that reader (None), as
+# oracle.docs.visibility ``hidden_for_reader`` says. ``hidden`` None: the reader sees all.
+Hidden = visibility.Hidden
+
+
+async def hidden_for(db: AsyncSession) -> Hidden | None:
+    return await visibility.hidden_for_reader(db)
+
+
+def _withheld(hidden: Hidden | None, *texts: str | None) -> bool:
+    return hidden is not None and any(hidden.names(t) for t in texts)
+
+
+def task_out(task: LaunchTask, tier: int | None = None, hidden: Hidden | None = None) -> TaskOut:
     tdef = checklist.BY_KEY.get(task.key or "")
     out = TaskOut.model_validate(task)
+    if _withheld(hidden, task.body):
+        out.body = None
     out.drafts = tdef.drafts if tdef else "no"  # type: ignore[assignment]
     out.optional = bool(tdef and tier in tdef.optional_in)
-    out.notice = checklist.EXTERNAL_NOTICE if task.audience == "external" and task.body else None
+    out.notice = checklist.EXTERNAL_NOTICE if task.audience == "external" and out.body else None
     return out
 
 
-def note_out(note: RequesterNote) -> RequesterNoteOut:
+def note_out(note: RequesterNote, hidden: Hidden | None = None) -> RequesterNoteOut:
     out = RequesterNoteOut.model_validate(note)
+    if _withheld(hidden, note.body):
+        out.body = None
     out.internal = note.requester_kind == "member"
-    out.notice = None if out.internal or not note.body else checklist.EXTERNAL_NOTICE
+    out.notice = None if out.internal or not out.body else checklist.EXTERNAL_NOTICE
     return out
+
+
+def changelog_shown(entries: list[ChangelogEntry], hidden: Hidden | None) -> list[ChangelogEntry]:
+    """The entries the reader sees: a draft or withdrawn entry naming something hidden
+    from them is left out (a published one an approver published, for everyone)."""
+    return [e for e in entries if e.status == "published" or not _withheld(hidden, e.title, e.body)]
 
 
 async def _counts(
@@ -186,6 +212,7 @@ async def _counts(
 
 async def summaries(db: AsyncSession, launches: list[Launch]) -> list[LaunchSummary]:
     task_counts, note_counts = await _counts(db, [x.id for x in launches])
+    hidden = await hidden_for(db) if any(x.kit_error for x in launches) else None
     return [
         LaunchSummary(
             id=x.id,
@@ -201,7 +228,7 @@ async def summaries(db: AsyncSession, launches: list[Launch]) -> list[LaunchSumm
             launched_at=x.launched_at,
             cancel_reason=x.cancel_reason,
             kit_run_id=x.kit_run_id,
-            kit_error=x.kit_error,
+            kit_error=None if _withheld(hidden, x.kit_error) else x.kit_error,
             task_counts=task_counts[x.id],
             notes=note_counts[x.id],
             lock_version=x.lock_version,
@@ -240,7 +267,8 @@ async def launch_out(db: AsyncSession, launch: Launch) -> LaunchOut:
             )
         )
     tier = effective_tier(launch)
-    tasks = [task_out(t, tier) for t in await checklist.tasks_of(db, launch.id)]
+    hidden = await hidden_for(db)
+    tasks = [task_out(t, tier, hidden) for t in await checklist.tasks_of(db, launch.id)]
     return LaunchOut(**summary.model_dump(), items=items, tasks=tasks)
 
 
@@ -911,12 +939,14 @@ async def inbox_rows(db: AsyncSession, principal: Principal) -> list[InboxLaunch
             .order_by(RequesterNote.notified_at.desc())
         )
     ).all()
+    hidden = await hidden_for(db) if shipped else None
     for note, launch in shipped:
         rows.append(
             InboxLaunch(
                 launch_id=launch.id, title=f"Shipped: {_item_title(launch)}",
                 item=_item_title(launch), reason="shipped_note", state=launch.state,  # type: ignore[arg-type]
-                counted=False, count=0, note=note.body, at=note.notified_at,
+                counted=False, count=0, at=note.notified_at,
+                note=None if _withheld(hidden, note.body) else note.body,
             )
         )  # fmt: skip
     return rows
