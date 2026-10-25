@@ -80,6 +80,7 @@ export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
   priority_order: "Priority order",
   prd_review: "PRD review",
   eng_review: "Engineering review",
+  eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
   strategy_review: "Vision or strategy review",
@@ -116,6 +117,36 @@ export function briefsCheck(cp: Pick<CheckpointOut, "kind" | "payload">): Briefs
   return check && Array.isArray(check.features) ? check : null;
 }
 
+/** F4 lane B: the Engineering dates stop of a Baseline to PRD run, as its checkpoint stores it (dates_check). */
+export type DatesCheck = {
+  prd: { document: string; version: number } | null;
+  /** The draft's Now items, in order: each with the date the architect proposes, if any. */
+  items: {
+    key: string;
+    title: string;
+    section: string | null;
+    size: string | null;
+    proposed: { kind: "estimate" | "capacity_plan" | "commitment"; reference: string; supports_date: string } | null;
+    confidence: "low" | "medium" | "high" | null;
+    assumptions: string[];
+    no_date_reason: string | null;
+  }[];
+  /** The Next and Later items: no dates (O4 Roadmap shape), shown read-only. */
+  others: { key: string; title: string; horizon: "next" | "later" }[];
+  problems: { code: string; message: string }[];
+};
+
+export function datesCheck(cp: Pick<CheckpointOut, "kind" | "payload">): DatesCheck | null {
+  const check = cp.kind === "eng_dates" ? (cp.payload as { dates_check?: DatesCheck } | null)?.dates_check : null;
+  return check && Array.isArray(check.items) ? check : null;
+}
+
+/** F4: an engineering stop with its own review screen (the check's briefs or the dates). */
+export const screenedStop = (cp: Pick<CheckpointOut, "kind" | "payload">) => !!(briefsCheck(cp) || datesCheck(cp));
+
+/** F4 lane B: the Now items with a proposed date nobody decided yet (the gate's date_undecided). */
+export const datesToDecide = (cp: Pick<CheckpointOut, "gate">) => (cp.gate?.left ?? []).filter((x) => x.code === "date_undecided").length;
+
 export const SEGMENT_STATUS_KIND: Record<SegmentOut["status"], ChipKind> = {
   pending: "na",
   running: "acc",
@@ -150,11 +181,11 @@ export function orderHref(cp: { kind: CheckpointKind; payload?: Record<string, u
 
 /**
  * A checkpoint kind with its own review screen opens it (/runs/<id>/review/<checkpoint id>):
- * C7's feature set, D1's roadmap items, and F4's Engineering check once its briefs check is
- * in; other kinds are decided on the run page.
+ * C7's feature set, D1's roadmap items, and F4's Engineering check and Engineering dates once
+ * their checks are in; other kinds are decided on the run page.
  */
 export function reviewHref(cp: { id: string; run_id: string; kind: CheckpointKind; payload?: CheckpointOut["payload"] }): string | null {
-  return cp.kind === "feature_set" || cp.kind === "roadmap_items" || briefsCheck({ kind: cp.kind, payload: cp.payload ?? {} }) ? `/runs/${cp.run_id}/review/${cp.id}` : null;
+  return cp.kind === "feature_set" || cp.kind === "roadmap_items" || screenedStop({ kind: cp.kind, payload: cp.payload ?? {} }) ? `/runs/${cp.run_id}/review/${cp.id}` : null;
 }
 
 export const FINAL_STATUSES: RunStatus[] = ["succeeded", "failed", "cancelled"];
