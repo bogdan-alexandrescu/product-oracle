@@ -72,7 +72,7 @@ from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
-from oracle.tenancy import TenantSession
+from oracle.tenancy import TenantSession, current_tenant
 
 COMPANY = "company"
 APPROVERS = "approvers"
@@ -168,9 +168,14 @@ async def hidden_decision_ids(
     from oracle.decisions.models import Decision
 
     decisions = Decision.__table__
+    # A Core select: the tenant scope (oracle.tenancy) does not apply, so name it here.
     stmt = (
         select(decisions.c.id)
-        .where(decisions.c.id.in_(wanted), not_(_decision_visible(decisions.c)))
+        .where(
+            decisions.c.tenant_id == current_tenant(session),
+            decisions.c.id.in_(wanted),
+            not_(_decision_visible(decisions.c)),
+        )
         .execution_options(oracle_all_documents=True)
     )
     return set(await session.scalars(stmt))
@@ -233,17 +238,20 @@ async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -
 
     decisions = Decision.__table__
     documents = Document.__table__
+    # Core selects: the tenant scope (oracle.tenancy) does not apply, so name it here, or
+    # every company's hidden titles and numbers would hide (and reveal) text in this one.
+    tenant = current_tenant(session)
     d_rows = (
         await session.execute(
             select(decisions.c.id, decisions.c.number, decisions.c.title, decisions.c.entity_id)
-            .where(not_(_decision_visible(decisions.c)))
+            .where(decisions.c.tenant_id == tenant, not_(_decision_visible(decisions.c)))
             .execution_options(oracle_all_documents=True)
         )
     ).all()
     doc_rows = (
         await session.execute(
             select(documents.c.id, documents.c.slug, documents.c.title)
-            .where(documents.c.visibility != COMPANY)
+            .where(documents.c.tenant_id == tenant, documents.c.visibility != COMPANY)
             .execution_options(oracle_all_documents=True)
         )
     ).all()
