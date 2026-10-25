@@ -236,20 +236,20 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
     return json(200, { discussions: goals.map((g) => ({ entity_id: g.id, ...start(g, false) })) });
   }
 
-  // Propose / Dismiss a goal_measure version.
+  // #187 b6-goal-only-slice: B6's own Propose and Dismiss are retired for one release (as the API).
+  return refuse(410, `This route is gone. Use POST /v1/discussion-changes/{change_id}/${action} with the change's lock_version.`);
+}
+
+/**
+ * G3's generic Propose on a goal version (POST /v1/discussion-changes/{id}/propose), B6's one
+ * path as the API's propose_version: B5's checks (422, every problem), Oracle's pushback once
+ * when the start or current value already meets the target (409), else a baseline proposal
+ * "From discussion <title>" and the change done. `payload`: the person's Edit, kept only when
+ * the proposal is made or pushed back on. Null when proposed; the caller bumps lock_version.
+ */
+export function proposeVersion(ctx: GoalInterviewContext, change: ChangeRow, d: DiscussionRow, payload: Attrs | null): Response | null {
+  const s = ctx.baseline;
   const db = ctx.discussions();
-  const change = (db.changes ?? []).find((c) => c.id === id);
-  const d = change && db.discussions.find((x) => x.id === change.discussion_id);
-  if (!change || !d) return refuse(404, "Change not found");
-  if (d.visibility === "private" && !db.participants.some((x) => x.discussion_id === d.id && x.user_id === ctx.me.id && !x.left_at))
-    return refuse(403, "This discussion is private");
-  if (d.status === "closed") return refuse(409, "This discussion is closed");
-  if (change.status !== "proposed") return refuse(409, `This version is already ${change.status}`);
-  const out = (c: ChangeRow) => {
-    const rest: Partial<ChangeRow> = { ...c };
-    delete rest.discussion_id;
-    return rest;
-  };
   const oracleSays = (text: string, pushback: { reason: string } | null = null) => {
     const now = ctx.now();
     db.messages.push({
@@ -271,26 +271,21 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
     d.last_message_at = now;
   };
 
-  if (action === "dismiss") {
-    if (!at("approver")) return refuse(403, "Requires the approver role");
-    Object.assign(change, { status: "dismissed", lock_version: change.lock_version + 1 });
-    return json(200, out(change));
-  }
-
-  const input = (await body<{ payload?: Attrs | null; keep?: boolean }>()) ?? {};
   const goal = s.entities.find((e) => e.id === change.target.entity_id);
-  if (!goal) return refuse(404, "Entity not found");
-  const payload: Attrs = { ...(input.payload ?? change.edited_payload ?? change.payload), entity_id: goal.id };
-  const attrs = attrsOf(payload);
+  if (!goal) return refuse(404, "Goal not found");
+  const version: Attrs = { ...(payload ?? change.edited_payload ?? change.payload), entity_id: goal.id };
+  const attrs = attrsOf(version);
   const merged = { ...goal.attrs, ...attrs };
   const errors = refusedProblems(merged, goal.attrs, ctx.isMember);
   if (errors.length) return json(422, { detail: `goal fields rejected: ${errors.length} problem(s)`, errors });
+  if (payload) change.edited_payload = version;
 
   // Pushback once: a target the start or current value already meets.
   const met = isNum(merged.target) && ["start", "current"].find((k) => isNum(merged[k]) && meets(merged[k] as number, String(merged.comparison), merged.target as number));
-  if (met && !input.keep && !change.pushback) {
+  if (met && !change.pushback) {
     const sentence = `The ${met} value ${merged[met]} already meets the target ${merged.target}; a target that is already met does not measure progress.`;
     change.pushback = { reason: sentence };
+    change.lock_version += 1;
     oracleSays(`Pushback: ${sentence}`, { reason: sentence });
     return json(409, { detail: sentence, pushback: true });
   }
@@ -313,14 +308,8 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
     decided_at: null,
     created_at: ctx.now(),
   });
-  Object.assign(change, {
-    status: "done",
-    result_ref: { proposal_id: proposalId },
-    edited_payload: input.payload ? payload : change.edited_payload,
-    suggested_by: ctx.me.id,
-    lock_version: change.lock_version + 1,
-  });
-  return json(200, out(change));
+  Object.assign(change, { status: "done", result_ref: { proposal_id: proposalId }, suggested_by: ctx.me.id });
+  return null;
 }
 
 /**

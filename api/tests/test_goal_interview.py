@@ -169,12 +169,23 @@ async def opened(client, ctx, goal_id, who="commenter") -> tuple[str, list[tuple
     return d_id, events_of(resp.text)
 
 
-async def propose(client, ctx, change_id, who="commenter", expect=200, **body):
+async def lock_of(ctx, change_id) -> int:
+    async with tenant_session(ctx.tenant_id) as s:
+        return (await s.get(DiscussionChange, uuid.UUID(change_id))).lock_version
+
+
+async def act(client, ctx, change_id, verb, who="commenter", expect=200, **body) -> dict:
+    """G3's generic change action (B6's own routes are gone): the change, or the error."""
+    body = {"lock_version": await lock_of(ctx, change_id), **body}
     resp = await client.post(
-        f"{B}/goal-measures/{change_id}/propose", json=body, headers=ctx.as_(who)
+        f"/v1/discussion-changes/{change_id}/{verb}", json=body, headers=ctx.as_(who)
     )
     assert resp.status_code == expect, resp.text
-    return resp.json()
+    return resp.json()["change"] if resp.status_code == 200 else resp.json()
+
+
+async def propose(client, ctx, change_id, who="commenter", expect=200, **body):
+    return await act(client, ctx, change_id, "propose", who, expect, **body)
 
 
 async def proposals(client, ctx) -> list[dict]:
@@ -258,8 +269,6 @@ def test_run_tokens_reach_no_interview_route():
         ("POST", "/v1/baseline/entities/{goal_id}/interview"),
         ("POST", "/v1/baseline/goals/interview"),
         ("GET", "/v1/baseline/goals/vague"),
-        ("POST", "/v1/baseline/goal-measures/{change_id}/propose"),
-        ("POST", "/v1/baseline/goal-measures/{change_id}/dismiss"),
     ):
         assert scopes.required_scope(method, path) is None, path
 
@@ -570,15 +579,9 @@ async def test_roles_and_a_private_interview(client, fake):
     await start(client, ctx, goal["id"], "viewer", expect=403)
     first, second = await changes(client, ctx, d_id, "viewer")
     await propose(client, ctx, first["id"], "viewer", expect=403)
-    resp = await client.post(
-        f"{B}/goal-measures/{first['id']}/dismiss", headers=ctx.as_("commenter")
-    )
-    assert resp.status_code == 403
-    resp = await client.post(
-        f"{B}/goal-measures/{first['id']}/dismiss", headers=ctx.as_("approver")
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["status"] == "dismissed"
+    await act(client, ctx, first["id"], "dismiss", "commenter", expect=403)
+    dismissed = await act(client, ctx, first["id"], "dismiss", "approver")
+    assert dismissed["status"] == "dismissed"
     await propose(client, ctx, first["id"], expect=409)
     assert second["status"] == "proposed"
 
@@ -593,6 +596,50 @@ async def test_roles_and_a_private_interview(client, fake):
     assert shown.status_code == 200 and shown.json()["visibility"] == "private"
     rows = {g["entity"]["id"]: g["discussion_id"] for g in await vague(client, ctx, "commenter")}
     assert rows[other["id"]] is None  # the commenter cannot read it
+
+
+# protects=b6-goal-only-slice: B6's own Propose and Dismiss routes are retired for one
+# release; they answer 410 with a pointer to G3's generic actions and change nothing, and
+# they are no longer operations (no MCP tool, no OpenAPI path); fails_when=either route
+# still acts, answers without the pointer, or is still listed; no_claim=the web's calls
+# (the mock specs).
+async def test_b6_routes_are_gone_with_a_pointer(client, fake):
+    from oracle.main import app
+
+    fake.text = reply_with([change(version())])
+    ctx = await company()
+    goal = await vague_goal(client, ctx)
+    d_id, _evs = await opened(client, ctx, goal["id"])
+    [c] = await changes(client, ctx, d_id)
+    for verb, who in (("propose", "commenter"), ("dismiss", "approver")):
+        resp = await client.post(f"{B}/goal-measures/{c['id']}/{verb}", headers=ctx.as_(who))
+        assert resp.status_code == 410, resp.text
+        assert resp.json()["detail"] == (
+            f"This route is gone. Use POST /v1/discussion-changes/{{change_id}}/{verb} "
+            "with the change's lock_version."
+        )
+    [still] = await changes(client, ctx, d_id)
+    assert still["status"] == "proposed"
+    assert await proposals(client, ctx) == []
+    paths = app.openapi()["paths"]
+    assert not [p for p in paths if "goal-measures" in p]
+
+
+# protects=a person's Edit goes with Propose on G3's generic route as it did on B6's: the
+# edited version is proposed, the change keeps the edit, and a commenter's edit does not
+# first turn it into their suggestion; fails_when=the edit is lost or the route refuses a
+# payload; no_claim=entity_edit's own fields.
+async def test_generic_propose_takes_the_persons_edit(client, fake):
+    fake.text = reply_with([change(version())])
+    ctx = await company()
+    goal = await vague_goal(client, ctx)
+    d_id, _evs = await opened(client, ctx, goal["id"])
+    [c] = await changes(client, ctx, d_id)
+    edit = {"entity_id": goal["id"], **version(target=6)}
+    out = await propose(client, ctx, c["id"], payload=edit)
+    assert out["status"] == "done" and out["edited_payload"]["target"] == 6
+    [p] = await proposals(client, ctx)
+    assert p["payload"]["fields"]["attrs"]["target"] == 6
 
 
 # protects=Interview vague goals (3.1 (2)): omitted ids start one interview per vague goal

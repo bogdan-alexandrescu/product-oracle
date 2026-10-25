@@ -165,6 +165,22 @@ test("proposing a target of 12 gets Oracle's pushback once; Propose anyway goes 
   await expect(thread(page).getByTestId("discussion-summary")).toContainText("Kept target 12 although the start value 11 already meets it.");
 });
 
+// protects=b6-goal-only-slice (#187): Dismiss on a version goes through G3's generic action
+// (B6's own route is gone and answers 410): the card says Dismissed, loses its buttons, and the
+// other version stays open; fails_when=Dismiss errors or the card stays proposed;
+// no_claim=who may dismiss (pytest: approvers only).
+test("an approver dismisses a version: the card says Dismissed and the other stays open", async ({ page }) => {
+  await openBaseline(page, APPROVER);
+  await makeChurnMeasurable(page);
+  const [first, second] = [cards(page).first(), cards(page).nth(1)];
+  await first.getByRole("button", { name: "Dismiss" }).click();
+  await expect(first).toHaveAttribute("data-status", "dismissed");
+  await expect(first).toContainText("Dismissed");
+  await expect(first.getByTestId("version-actions")).toHaveCount(0);
+  await expect(second).toHaveAttribute("data-status", "proposed");
+  await expect(second.getByRole("button", { name: "Propose", exact: true })).toBeVisible();
+});
+
 // protects=criterion 10.5 and B6 "Interviews": Interview vague goals (2) steps through the vague
 // goals one at a time, each discussion created only when reached; fails_when=both are created
 // at once, the count or position is wrong, or Next does not move on; no_claim=Skip's skipped
