@@ -109,10 +109,10 @@ async def _decide_all(client, headers, run, size="m"):
 def test_the_flow_has_the_check_after_the_feature_set_and_it_skips_when_off():
     # protects=AC1/AC2 segment order, skip_when_off and the estimate; fails_when=the
     # check sits elsewhere, runs with its stop off or costs other than one architect;
-    # no_claim=the dates stop (lane B).
+    # no_claim=the dates stop (lane B: test_eng_dates_stop.py).
     flow = flows.FLOWS["baseline_to_prd"]
     assert [s.name for s in flow.segments] == [
-        "baseline", "feature_set", "eng_review", "priority", "prd_draft",
+        "baseline", "feature_set", "eng_review", "priority", "prd_draft", "eng_dates",
     ]  # fmt: skip
     sdef = flow.segment("eng_review")
     assert sdef.title == "Engineering check" and sdef.skip_when_off
@@ -121,7 +121,9 @@ def test_the_flow_has_the_check_after_the_feature_set_and_it_skips_when_off():
     knobs = flows.resolve_knobs(flow, {})
     assert knobs.checkpoints["eng_review"] is True
     assert flows.segment_estimate(sdef, knobs) == flows.Decimal("5.00")
-    assert not any(s.skip_when_off for s in flow.segments if s.name != "eng_review")
+    assert not any(
+        s.skip_when_off for s in flow.segments if s.name not in ("eng_review", "eng_dates")
+    )
 
 
 # --------------------------------------------------------------------------- API
@@ -130,9 +132,9 @@ def test_the_flow_has_the_check_after_the_feature_set_and_it_skips_when_off():
 async def test_a_new_run_has_the_check_on_and_its_estimate_includes_it(client, owner, runtime):
     # protects=AC1 knobs and estimate, GET /v1/flows decider; fails_when=the check is off
     # by default, missing from the estimate or the flow says it is decided by role;
-    # no_claim=eng_dates (lane B: $36.50 with both).
+    # no_claim=eng_dates (lane B: $36.50 with both, test_eng_dates_stop.py).
     _, auth = owner
-    run = await create(client, auth)
+    run = await create(client, auth, checkpoints={"eng_dates": False})
     assert run["knobs"]["checkpoints"]["eng_review"] is True
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=auth)).json()
     assert est["total_usd"] == pytest.approx(31.5)
@@ -152,7 +154,7 @@ async def test_with_the_check_off_no_step_runs_and_nothing_is_spent(client, owne
     # submitted for it or the run stalls between the feature set and priority;
     # no_claim=workflow mode (covered by the plan's segment filter, not driven here).
     _, auth = owner
-    run = await create(client, auth, checkpoints={"eng_review": False})
+    run = await create(client, auth, checkpoints={"eng_review": False, "eng_dates": False})
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=auth)).json()
     assert est["total_usd"] == pytest.approx(26.5)
     off = next(s for s in est["segments"] if s["name"] == "eng_review")

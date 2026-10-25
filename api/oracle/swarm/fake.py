@@ -38,6 +38,7 @@ SEGMENT_FILES: dict[str, tuple[str, ...]] = {
     "baseline": ("baseline.yaml", "summary.md"),
     "feature_set": ("feature_set.yaml", "design.md"),
     "eng_review": ("tech_briefs.yaml",),
+    "eng_dates": ("eng_dates.yaml",),
     "priority": ("priority.yaml",),
     "prd_draft": ("prd.md",),
     "next_draft": ("prd.md", "resolutions.yaml"),
@@ -290,6 +291,17 @@ def _default_content(
             "## Later {#later}\n\n"
             "## Sources and data points {#sources}\n\n"
             "- None yet.\n"
+        )
+    if name == "eng_dates.yaml":
+        # F4 lane B: a date for the default draft items' one Now item.
+        return (
+            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            "version: 1\n" + (f"prd: {{document: {document}}}\n" if document else "") + "items:\n"
+            "  - item: price-early\n"
+            "    estimate: {kind: estimate, reference: est-price-early, "
+            "supports_date: 2026-11-30}\n"
+            "    confidence: medium\n"
+            "    assumptions: [Local agent runtime]\n"
         )
     if name == "roadmap_items.yaml":
         return (
