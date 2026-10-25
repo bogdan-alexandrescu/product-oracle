@@ -295,6 +295,8 @@ class DraftImport(BaseModel):
     # A refused draft (owner, 2026-10-20): the parser's problems, and one plain line
     # grouped by cause (oracle.runs.rejection), the same on the run page, Inbox and MCP.
     problems: list[ImportProblem] = []
+    # How many problems there were when only the first are kept (rejection.MAX_PROBLEMS).
+    problems_total: int | None = None
     summary: str | None = None
     # Provenance recorded on the version (a roadmap's PRD version).
     source: VersionSource | None = None

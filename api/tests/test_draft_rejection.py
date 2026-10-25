@@ -142,7 +142,7 @@ def test_a_second_invalid_citation_with_the_same_id_does_not_replace_the_first()
                 "  - {id: d, source: x, ref: 'https://example.com'}",
                 "  - {id: d, source: web, ref: 'https://example.com', confidence: 5}",
             ],
-            "[c:d] and again [c:d]",
+            "[c:d]\n\n## Two {#two}\n\nAgain [c:d].",
         )
     )
     assert [p.cite_key for p in problems if p.code == "invalid_citation"] == ["d", "d"]
