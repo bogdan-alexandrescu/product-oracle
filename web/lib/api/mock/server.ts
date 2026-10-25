@@ -2758,22 +2758,17 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   };
 }
 
-/** As oracle.setup.WELCOME_DAYS: how long after joining by invite Home still welcomes a member. */
-const WELCOME_DAYS = 14;
-
-/** A1 welcome: the member joined through an invite accepted in the last WELCOME_DAYS days and has not dismissed it. */
+/** A1 welcome: the member joined through an invite (however long ago) and has not dismissed it. */
 function welcomed(db: Db, me: MemberRow): boolean {
   if (db.preferences?.[me.email]?.welcome_dismissed === true) return false;
-  const joined = db.invites
-    .filter((i) => i.email === me.email && i.accepted_at)
-    .map((i) => Date.parse(i.accepted_at!))
-    .sort((a, b) => b - a)[0];
-  return joined != null && joined >= Date.now() - WELCOME_DAYS * 86_400_000;
+  return db.invites.some((i) => i.email === me.email && i.accepted_at);
 }
 
 /**
- * A first sign-in with an open, unexpired invite's email takes it, as the API's sign-in
- * does (oracle.members.service.claim_open_invite): a member with the invite's role, the
+ * A first sign-in with an open, unexpired invite's email takes it, as the API's Google (IAP)
+ * sign-in does (oracle.auth.iap, oracle.members.service.claim_open_invite). The mock has no
+ * Google sign-in, so its sign-in form stands in for it; the API's password sign-in never
+ * takes an invite: a member with the invite's role, the
  * invite accepted. Null when there is no such invite.
  */
 function claimInvite(db: Db, email: string): MemberRow | null {

@@ -84,14 +84,14 @@ export function GithubPicker({ connectionId, config, onChange }: PickerProps) {
   return (
     <>
       <BrowseList
-      label="GitHub repositories"
-      searchLabel="Search repositories"
-      pasteLabel="Repositories"
-      pasteExample="example-org/example-app"
-      connectionId={connectionId}
-      picked={listOf(config, "repos")}
-      onPicked={(repos) => onChange({ ...config, repos })}
-      load={load}
+        label="GitHub repositories"
+        searchLabel="Search repositories"
+        pasteLabel="Repositories"
+        pasteExample="example-org/example-app"
+        connectionId={connectionId}
+        picked={listOf(config, "repos")}
+        onPicked={(repos) => onChange({ ...config, repos })}
+        load={load}
       />
       <fieldset aria-label="What to read" className="flex min-w-0 flex-col gap-1.5">
         <legend className="mb-1.5 text-sm font-semibold text-text2">What to read</legend>

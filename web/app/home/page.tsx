@@ -66,7 +66,7 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  * Oracle's AI is off (#403).
  */
 export default function HomePage() {
-  const { can, role } = useMe();
+  const { can, capsReady } = useMe();
   // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
   const canWrite = can("start_draft", true);
   const canBuild = can("confirm_entity");
@@ -213,7 +213,7 @@ export default function HomePage() {
       >
         {owner && poolQ.data && <ClaudeOffNotice page={poolQ.data} />}
         {setupError && <Notice tone="error">{setupError}</Notice>}
-        {setupQ.data?.welcome && role && <WelcomePanel role={role} onDismiss={dismissWelcome} busy={setupBusy} />}
+        {setupQ.data?.welcome && capsReady && <WelcomePanel onDismiss={dismissWelcome} busy={setupBusy} />}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 
         <GoalsPanel

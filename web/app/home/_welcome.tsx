@@ -3,15 +3,15 @@
 import Link from "next/link";
 
 import { Button, Panel } from "@/components/ds";
-import type { Role } from "@/lib/me";
+import { useMe, type Role } from "@/lib/me";
 
 type Copy = { role: string; steps: { label: string; href: string }[] };
 
 /**
  * The welcome's words (A1 welcome, #140), by role: what Oracle is for this person and the
  * first three things to do. The exact wording is the owner's call (questions.json); this is
- * the recommended one. The role only picks the words; what each page lets them do is still
- * decided there.
+ * the recommended one. What the person may do (can()) only picks the words; what each page
+ * lets them do is still decided there.
  */
 const COPY: Record<Role, Copy> = {
   owner: {
@@ -53,8 +53,18 @@ const COPY: Record<Role, Copy> = {
  * /v1/setup says so, until they dismiss it (their welcome_dismissed preference). Never an
  * email.
  */
-export function WelcomePanel({ role, onDismiss, busy }: { role: Role; onDismiss: () => void; busy: boolean }) {
-  const copy = COPY[role];
+export function WelcomePanel({ onDismiss, busy }: { onDismiss: () => void; busy: boolean }) {
+  const { can } = useMe();
+  // The words of the most a person may do: change the company's settings (an owner), approve
+  // a PRD (an approver), comment (a commenter), else read (a viewer).
+  const words: Role = can("put_setting")
+    ? "owner"
+    : can("approve_version", true)
+      ? "approver"
+      : can("create_comment")
+        ? "commenter"
+        : "viewer";
+  const copy = COPY[words];
   return (
     <Panel
       title="Welcome to Oracle"
