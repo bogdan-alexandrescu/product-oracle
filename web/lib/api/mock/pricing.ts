@@ -31,6 +31,9 @@ export interface PricingDb {
   deals: DealOut[];
 }
 
+/** What the win and loss records read of H7's alternatives (the market mock's competitors). */
+export type DealAlternative = { id: string; name: string; aliases: string[]; status: "active" | "archived" };
+
 export interface PricingContext {
   me: { id: string; role: Role };
   uuid: () => string;
@@ -173,7 +176,7 @@ export function seedDeals(ctx: PricingContext, recorder: string): DealOut[] {
   const rows: [Result, string, string, string, number | null, string, Reason, string | null, string | null][] = [
     ["won", "Account 3", "Teams 10-50", "Team", 4800, "2026-09-12", "value", null, "$20 per seat a month"],
     ["lost", "Account 7", "Teams 10-50", "Team", 6000, "2026-09-20", "price", "Asked for a flat team price", "$20 per seat a month"],
-    ["lost", "Account 9", "Teams 50+", "Business", null, "2026-09-28", "alternative", "Alternative: Example Rival", null],
+    ["lost", "Account 9", "Teams 50+", "Business", null, "2026-09-28", "alternative", null, null],
     ["won", "Account 11", "Teams under 10", "Starter", 960, "2026-10-02", "timing", null, null],
     ["no_decision", "Account 12", "Teams 10-50", "Team", null, "2026-10-06", "no_budget", null, null],
     ["churned", "Account 14", "Teams 10-50", "Team", 3600, "2026-10-09", "price", "Seat count grew faster than budget", "$20 per seat a month"],
@@ -190,6 +193,7 @@ export function seedDeals(ctx: PricingContext, recorder: string): DealOut[] {
     reason,
     reason_note: note,
     competitor_id: null,
+    competitor_name: null,
     price_quoted: price,
     source_item_id: null,
     source_item: null,
@@ -215,8 +219,23 @@ const lookup = <K extends string>(labels: Record<K, string>) =>
 const RESULTS = lookup(RESULT_LABELS);
 const REASONS = lookup(REASON_LABELS);
 
+/** An alternative's name or alias as the import compares them (as _name): any case and spacing. */
+const altKey = (text: string) => text.toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+
+/** The active alternatives by name and alias (as _alternatives): a name wins over another's alias; an alias two share matches neither. */
+function alternativeKeys(all: DealAlternative[]): Map<string, string> {
+  const active = all.filter((a) => a.status === "active");
+  const names = new Map(active.map((a) => [altKey(a.name), a.id]));
+  const aliases = new Map<string, string | null>();
+  for (const a of active) for (const alias of a.aliases) aliases.set(altKey(alias), (aliases.get(altKey(alias)) ?? a.id) === a.id ? a.id : null);
+  const out = new Map<string, string>();
+  for (const [k, v] of aliases) if (v && !names.has(k)) out.set(k, v);
+  for (const [k, v] of names) out.set(k, v);
+  return out;
+}
+
 /** One CSV row as a record's fields, or the first problem in plain words (as _row). */
-function rowOf(values: Record<string, string>, today: string): [Omit<DealIn, "competitor_id" | "source_item_id"> | null, string | null] {
+function rowOf(values: Record<string, string>, today: string, alternatives: Map<string, string>): [Omit<DealIn, "source_item_id"> | null, string | null] {
   const result = RESULTS[key(values.result ?? "")];
   if (!result) return [null, `result must be one of: ${Object.values(RESULT_LABELS).join(", ")}`];
   const account = (values.account ?? "").trim();
@@ -248,8 +267,9 @@ function rowOf(values: Record<string, string>, today: string): [Omit<DealIn, "co
   if (!reason) return [null, `reason must be one of: ${Object.values(REASON_LABELS).join(", ")}`];
   const alternative = (values.alternative ?? "").trim();
   let note = texts.reason_note;
-  if (alternative) {
-    // H7's alternatives are not here yet: kept as text.
+  const competitor_id = alternative ? (alternatives.get(altKey(alternative)) ?? null) : null;
+  if (alternative && !competitor_id) {
+    // Not one of the company's alternatives: kept as text.
     note = note ? `${note}\nAlternative: ${alternative}` : `Alternative: ${alternative}`;
     if (note.length > NOTE_MAX) return [null, `reason_note and alternative are longer than ${NOTE_MAX} characters`];
   }
@@ -263,6 +283,7 @@ function rowOf(values: Record<string, string>, today: string): [Omit<DealIn, "co
     decided_on,
     reason,
     reason_note: note,
+    competitor_id,
     price_quoted: texts.price_quoted,
   };
   const problem = ruleProblem({ ...fields, currency: fields.currency ?? null }, today);
@@ -331,12 +352,22 @@ function checked(b: Partial<DealIn>, today: string): string | null {
   return ruleProblem({ reason: b.reason, reason_note: b.reason_note?.trim() || null, annual_value: value, currency: b.currency ?? null, decided_on: b.decided_on }, today);
 }
 
+/** A link to an alternative as the API checks it (as _active_competitor); null when it holds. */
+function linkProblem(id: string | null | undefined, alternatives: DealAlternative[]): string | null {
+  if (!id) return null;
+  const a = alternatives.find((x) => x.id === id);
+  if (!a) return "competitor_id is not one of the company's alternatives";
+  return a.status === "active" ? null : "competitor_id is an archived alternative";
+}
+
 /** /v1/deal-outcomes…; null for other routes. Owners and approvers only (403 for a write, an empty read is never shown below). */
-export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Request, p: string[], q: URLSearchParams, alternatives: DealAlternative[]): Promise<Response | null> {
   if (p[1] !== "deal-outcomes") return null;
   const m = req.method;
   if (!atLeast(ctx.me.role, "approver")) return fail(403, "Requires the approver role");
   const today = ctx.today();
+  // The linked alternative's name, archived or not, as read now (as out).
+  const named = (d: DealOut): DealOut => ({ ...d, competitor_name: alternatives.find((a) => a.id === d.competitor_id)?.name ?? null });
 
   if (p.length === 2 && m === "GET") {
     const rows = db.deals
@@ -344,12 +375,13 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       .filter((d) => !q.get("reason") || d.reason === q.get("reason"))
       .filter((d) => !q.get("from") || d.decided_on >= q.get("from")!)
       .filter((d) => !q.get("to") || d.decided_on <= q.get("to")!)
+      .filter((d) => !q.get("competitor_id") || d.competitor_id === q.get("competitor_id"))
       .sort((a, b) => b.decided_on.localeCompare(a.decided_on) || b.created_at.localeCompare(a.created_at));
-    return json(200, rows);
+    return json(200, rows.map(named));
   }
   if (p.length === 2 && m === "POST") {
     const b = JSON.parse((await req.text()) || "{}") as Partial<DealIn>;
-    const problem = checked(b, today);
+    const problem = checked(b, today) ?? linkProblem(b.competitor_id, alternatives);
     if (problem) return fail(422, problem);
     const at = ctx.now();
     const value = b.annual_value == null || b.annual_value === "" ? null : Number(b.annual_value);
@@ -364,7 +396,8 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       decided_on: b.decided_on!,
       reason: b.reason!,
       reason_note: b.reason_note?.trim() || null,
-      competitor_id: null,
+      competitor_id: b.competitor_id ?? null,
+      competitor_name: null,
       price_quoted: b.price_quoted?.trim() || null,
       source_item_id: null,
       source_item: null,
@@ -374,7 +407,7 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
       lock_version: 1,
     };
     db.deals.push(row);
-    return json(201, row);
+    return json(201, named(row));
   }
   if (p.length === 3 && p[2] === "import" && m === "POST") {
     const text = await req.text();
@@ -383,14 +416,18 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
     if (typeof parsed === "string") return fail(422, parsed);
     const dry = q.get("dry_run") === "true";
     const skipped: Schemas["ImportSkipped"][] = [];
+    const keys = alternativeKeys(alternatives);
+    const unmatched = new Map<string, string>();
     let created = 0;
     for (const [line, cells] of parsed.rows) {
       const values = Object.fromEntries(parsed.header.map((h, i) => [h, cells[i] ?? ""]));
-      const [fields, problem] = rowOf(values, today);
+      const [fields, problem] = rowOf(values, today, keys);
       if (problem || !fields) {
         skipped.push({ line, message: problem! });
         continue;
       }
+      const alternative = (values.alternative ?? "").trim();
+      if (alternative && !fields.competitor_id && !unmatched.has(altKey(alternative))) unmatched.set(altKey(alternative), alternative);
       created += 1;
       if (!dry) {
         const at = ctx.now();
@@ -403,7 +440,8 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
           currency: fields.currency ?? null,
           reason_note: fields.reason_note ?? null,
           price_quoted: fields.price_quoted ?? null,
-          competitor_id: null,
+          competitor_id: fields.competitor_id ?? null,
+          competitor_name: null,
           source_item_id: null,
           source_item: null,
           recorded_by: ctx.me.id,
@@ -413,7 +451,8 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
         });
       }
     }
-    return json(200, { dry_run: dry, created, skipped } satisfies Schemas["ImportOut"]);
+    const unmatched_alternatives = [...unmatched.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, name]) => name);
+    return json(200, { dry_run: dry, created, skipped, unmatched_alternatives } satisfies Schemas["ImportOut"]);
   }
   const row = db.deals.find((d) => d.id === p[2]);
   if (!row || p.length !== 3) return fail(404, "No such win or loss record");
@@ -421,11 +460,12 @@ export async function routeDeals(ctx: PricingContext, db: PricingDb, req: Reques
     const b = JSON.parse((await req.text()) || "{}") as Schemas["DealOutcomePatch"];
     if (b.lock_version !== row.lock_version) return fail(409, "Someone else changed this since you loaded it; reload and try again");
     const next = { ...row, ...Object.fromEntries(Object.entries(b).filter(([k, v]) => k !== "lock_version" && v !== undefined)) } as DealOut;
-    const problem = checked(next as unknown as DealIn, today);
+    const relinked = b.competitor_id !== undefined && b.competitor_id !== row.competitor_id;
+    const problem = checked(next as unknown as DealIn, today) ?? (relinked ? linkProblem(b.competitor_id, alternatives) : null);
     if (problem) return fail(422, problem);
     next.annual_value = next.annual_value == null ? null : Number(next.annual_value);
     Object.assign(row, next, { lock_version: row.lock_version + 1, updated_at: ctx.now() });
-    return json(200, row);
+    return json(200, named(row));
   }
   if (m === "DELETE") {
     db.deals.splice(db.deals.indexOf(row), 1);

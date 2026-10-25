@@ -13,7 +13,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { RowMenu, RowMenuItem } from "../../updates/_components/RowMenu";
 import { DealDialog } from "./DealDialog";
 import { ImportDialog } from "./ImportDialog";
-import { alternativeOf, REASONS, RESULTS, type Deal, type Reason, type Result } from "./lib";
+import { alternativeLabel, alternativeOf, REASONS, RESULTS, type Deal, type Reason, type Result } from "./lib";
 
 type Period = "all" | "90" | "180" | "365";
 const PERIODS: { value: Period; label: string }[] = [
@@ -39,9 +39,15 @@ export function WinLoss() {
   const [result, setResult] = useState<Result | "">("");
   const [reason, setReason] = useState<Reason | "">("");
   const [period, setPeriod] = useState<Period>("all");
+  const [alternative, setAlternative] = useState("");
+  // H7's alternatives, archived ones too: an old record keeps its link and stays findable.
+  const mayListAlternatives = can("list_competitors");
+  const alternatives = useQuery(`competitors|all|${mayListAlternatives}`, () =>
+    mayListAlternatives ? unwrap(api.GET("/v1/competitors", { params: { query: { include_archived: true } } })) : Promise.resolve([]),
+  );
   const from = period === "all" ? undefined : addDays(todayIn(zone), -Number(period));
-  const query = { result: result || undefined, reason: reason || undefined, from };
-  const q = useQuery(`deal-outcomes|${result}|${reason}|${from ?? ""}`, () => unwrap(api.GET("/v1/deal-outcomes", { params: { query } })), { keepPrevious: true });
+  const query = { result: result || undefined, reason: reason || undefined, from, competitor_id: alternative || undefined };
+  const q = useQuery(`deal-outcomes|${result}|${reason}|${from ?? ""}|${alternative}`, () => unwrap(api.GET("/v1/deal-outcomes", { params: { query } })), { keepPrevious: true });
   const [editing, setEditing] = useState<Deal | "new" | null>(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +73,7 @@ export function WinLoss() {
     { key: "account", header: "Account", phone: "hide", cell: (d) => <span className="truncate text-sm" data-testid="deal-account">{d.account}</span> },
     { key: "plan", header: "Plan", width: "120px", phone: "hide", cell: (d) => <span className="text-sm">{d.plan ?? "—"}</span> },
     { key: "reason", header: "Reason", width: "180px", phone: "meta", cell: (d) => <span className="text-sm" data-testid="deal-reason">{REASONS[d.reason]}</span> },
-    { key: "alternative", header: "Alternative", width: "160px", phone: "hide", cell: (d) => <span className="text-sm text-text2">{alternativeOf(d) ?? "—"}</span> },
+    { key: "alternative", header: "Alternative", width: "160px", phone: "hide", cell: (d) => <span className="text-sm text-text2" data-testid="deal-alternative">{alternativeOf(d) ?? "—"}</span> },
   ];
   if (mayEdit || mayDelete) {
     columns.push({
@@ -160,9 +166,22 @@ export function WinLoss() {
               ))}
             </select>
           </label>
+          {alternatives.data && alternatives.data.length > 0 && (
+            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+              Alternative
+              <select className={`${INPUT} w-48`} value={alternative} onChange={(e) => setAlternative(e.target.value)}>
+                <option value="">Any alternative</option>
+                {alternatives.data.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {alternativeLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         {q.data && q.data.length === 0 ? (
-          <Empty testId="deals-empty">No win or loss records{result || reason || period !== "all" ? " match" : " yet"}</Empty>
+          <Empty testId="deals-empty">No win or loss records{result || reason || alternative || period !== "all" ? " match" : " yet"}</Empty>
         ) : (
           <DataTable
             label="Win and loss"
@@ -178,6 +197,7 @@ export function WinLoss() {
       {editing && (
         <DealDialog
           deal={editing === "new" ? null : editing}
+          alternatives={alternatives.data ?? []}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);

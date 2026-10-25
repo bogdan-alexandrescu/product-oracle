@@ -19,6 +19,7 @@ test.beforeEach(async ({ page }) => {
 /** Company › Market › Win and loss from the rail, as a person gets there. */
 async function openWinLoss(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
+  await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-market").click();
   await expect(page).toHaveURL(/\/company\/market$/);
   await page.getByTestId("market-tab-win-loss").click();
@@ -45,20 +46,20 @@ test("an approver links a record to an alternative and filters Win and loss by i
   await row(page, "Account 7").getByRole("button", { name: "Actions for Account 7" }).click();
   await page.getByRole("menuitem", { name: "Edit" }).click();
   const edit = page.getByRole("dialog", { name: "Edit win or loss" });
-  await expect(edit.getByLabel("Alternative")).toHaveValue("");
-  await edit.getByLabel("Alternative").selectOption({ label: "Spreadsheets" });
+  await expect(edit.getByLabel(/^Alternative/)).toHaveValue("");
+  await edit.getByLabel(/^Alternative/).selectOption({ label: "Spreadsheets" });
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(edit).toBeHidden();
   await expect(row(page, "Account 7").getByTestId("deal-alternative")).toHaveText("Spreadsheets");
 
-  await page.getByLabel("Alternative").selectOption({ label: "Competitor A" });
+  await page.getByLabel(/^Alternative/).selectOption({ label: "Competitor A" });
   await expect(accounts(page)).toHaveText(["Account 9"]);
-  await page.getByLabel("Alternative").selectOption({ label: "Spreadsheets" });
+  await page.getByLabel(/^Alternative/).selectOption({ label: "Spreadsheets" });
   await expect(accounts(page)).toHaveText(["Account 7"]);
   await page.getByLabel("Result").selectOption({ label: "Won" });
   await expect(page.getByTestId("deals-empty")).toHaveText("No win or loss records match");
   await page.getByLabel("Result").selectOption({ label: "Any result" });
-  await page.getByLabel("Alternative").selectOption({ label: "Any alternative" });
+  await page.getByLabel(/^Alternative/).selectOption({ label: "Any alternative" });
   await expect(accounts(page)).toHaveCount(6);
 });
 
@@ -72,22 +73,22 @@ test("Add offers only active alternatives, and None leaves a record unlinked", a
   await openWinLoss(page);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const add = page.getByRole("dialog", { name: "Add win or loss" });
-  await expect(add.getByLabel("Alternative").getByRole("option")).toHaveText(["None", "Competitor A", "Spreadsheets"]);
+  await expect(add.getByLabel(/^Alternative/).getByRole("option")).toHaveText(["None", "Competitor A", "Spreadsheets"]);
   await add.getByLabel("Decided on").fill("2026-10-01");
   await add.getByLabel("Account").fill("Account 31");
   await add.getByLabel("Main reason").selectOption({ label: "Chose an alternative" });
-  await add.getByLabel("Alternative").selectOption({ label: "Competitor A" });
+  await add.getByLabel(/^Alternative/).selectOption({ label: "Competitor A" });
   await add.getByRole("button", { name: "Add", exact: true }).click();
   await expect(add).toBeHidden();
   await expect(row(page, "Account 31").getByTestId("deal-alternative")).toHaveText("Competitor A");
-  await page.getByLabel("Alternative").selectOption({ label: "Competitor A" });
+  await page.getByLabel(/^Alternative/).selectOption({ label: "Competitor A" });
   await expect(accounts(page)).toHaveText(["Account 31", "Account 9"]);
 
   await row(page, "Account 31").getByRole("button", { name: "Actions for Account 31" }).click();
   await page.getByRole("menuitem", { name: "Edit" }).click();
   const edit = page.getByRole("dialog", { name: "Edit win or loss" });
-  await expect(edit.getByLabel("Alternative")).toHaveValue(/.+/);
-  await edit.getByLabel("Alternative").selectOption({ label: "None" });
+  await expect(edit.getByLabel(/^Alternative/)).toHaveValue(/.+/);
+  await edit.getByLabel(/^Alternative/).selectOption({ label: "None" });
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(edit).toBeHidden();
   await expect(accounts(page)).toHaveText(["Account 9"]);
@@ -118,6 +119,6 @@ test("Import CSV links an alternative by name or alias and keeps an unknown one 
   await expect(sheet).toBeHidden();
   await expect(row(page, "Account 41").getByTestId("deal-alternative")).toHaveText("Competitor A");
   await expect(row(page, "Account 42").getByTestId("deal-alternative")).toHaveText("Example Rival");
-  await page.getByLabel("Alternative").selectOption({ label: "Competitor A" });
+  await page.getByLabel(/^Alternative/).selectOption({ label: "Competitor A" });
   await expect(accounts(page)).toHaveText(["Account 9", "Account 41"]);
 });
