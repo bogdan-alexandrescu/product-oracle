@@ -76,6 +76,12 @@ export interface IntakeContext {
   /** The approved (locked) section keys of a document's latest version, by its id or slug; a
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
+  /** C5 late answers: raises a whole-draft feedback item on the document's latest version
+   * (by its id or slug); null when it has none yet. */
+  raiseFeedback?: (
+    document: string,
+    item: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string },
+  ) => { slug: string; version: number } | null;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -311,12 +317,48 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
 }
 
 /** The intake's draft run, and the answers given after it (C5). */
-function drafting(db: V2Db, intake: Intake): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run"> {
+function drafting(
+  db: V2Db,
+  intake: Intake,
+): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run" | "late_answers_as_feedback" | "draft_document" | "draft_version"> {
   const run = db.intake_runs?.[intake.id];
-  if (!run) return { draft_run_id: null, answers_since_run: 0 };
+  if (!run) return { draft_run_id: null, answers_since_run: 0, late_answers_as_feedback: 0, draft_document: null, draft_version: null };
   const mine = new Set(db.questions.filter((q) => q.intake_id === intake.id).map((q) => q.id));
   const since = db.answers.filter((a) => mine.has(a.question_id) && !run.answer_ids.includes(a.id)).length;
-  return { draft_run_id: run.run_id, answers_since_run: intake.status === "converted" ? since : 0 };
+  const raised = Object.values(db.late_answer_feedback ?? {}).filter((r) => r.intake_id === intake.id);
+  const last = raised.at(-1);
+  return {
+    draft_run_id: run.run_id,
+    answers_since_run: intake.status === "converted" ? since : 0,
+    late_answers_as_feedback: raised.length,
+    draft_document: last?.slug ?? run.document ?? null,
+    draft_version: last?.version ?? null,
+  };
+}
+
+/** The prefix of a late answer's feedback item, as late_answers.LEAD. */
+export const LATE_ANSWER_LEAD = "Answered after drafting started";
+
+/**
+ * C5 late answers, as late_answers.on_answer: an answer with a body given after the intake's
+ * draft run started becomes one whole-draft feedback item on its PRD, linked to its question.
+ */
+function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answer: Schemas["StakeholderAnswerOut"]) {
+  const intake = question.intake_id ? db.intakes.find((i) => i.id === question.intake_id) : undefined;
+  const run = intake ? db.intake_runs?.[intake.id] : undefined;
+  if (!intake || !run || intake.status !== "converted" || run.answer_ids.includes(answer.id)) return;
+  if (answer.kind !== "answer" || !answer.body || !ctx.raiseFeedback) return;
+  const gap = db.gaps.find((g) => g.id === question.gap_id);
+  if (gap && privateGap(db, gap)) return;
+  const document = intake.document_id ?? run.document;
+  if (!document) return;
+  const at = ctx.raiseFeedback(document, {
+    summary: `${LATE_ANSWER_LEAD}: ${question.prompt} ${answer.body}`.slice(0, 4000),
+    author_id: answer.answered_by ?? null,
+    intake_question_id: question.id,
+    intake_answer_id: answer.id,
+  });
+  if (at) db.late_answer_feedback = { ...db.late_answer_feedback, [answer.id]: { intake_id: intake.id, ...at } };
 }
 
 /** The draft gate (C5): the critical blockers neither answered nor decided. */
@@ -634,7 +676,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (resp.ok) {
         // The brief stays open until its run starts (startedIntakeRun converts it, C4).
         const run = (await resp.clone().json()) as { id: string };
-        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [] } };
+        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [], document: document ?? undefined } };
       }
       return resp;
     }
@@ -829,6 +871,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       knowledge_state: input.kind === "answer" ? input.knowledge_state ?? "user_decision" : "unknown", created_at: now(),
     };
     db.answers.push(answer);
+    raiseLateAnswer(db, ctx, question, answer);
     const effects: Record<Schemas["AnswerIn"]["kind"], [Question["status"], Gap["status"] | null]> = {
       answer: ["answered", "answered"], dont_know: ["answered", "unknown"], defer: ["deferred", "deferred"],
       delegate: ["delegated", null], research: ["researching", "under_investigation"],

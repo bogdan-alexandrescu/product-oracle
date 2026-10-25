@@ -74,7 +74,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0054_reply_opened"]
+    assert script.get_heads() == ["0055_late_answers"]
 
 
 def test_the_report_zone_becomes_the_company_time_zone(scratch_db):

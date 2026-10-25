@@ -39,7 +39,10 @@ export interface V2Db {
   intake_findings?: Record<string, Schemas["FindingOut"][]>;
   /** Each intake's draft run (C5): its id and the answers that existed when it was made
    * (the mock's stand-in for the run's start); absent before any. */
-  intake_runs?: Record<string, { run_id: string; answer_ids: string[] }>;
+  intake_runs?: Record<string, { run_id: string; answer_ids: string[]; document?: string }>;
+  /** C5 late answers: the answers given after drafting started that became feedback items
+   * on the PRD (answer id -> where), as late_answers.on_answer makes them. */
+  late_answer_feedback?: Record<string, { intake_id: string; slug: string; version: number }>;
 }
 
 /** URL segment after /v1 -> the table it lists. */

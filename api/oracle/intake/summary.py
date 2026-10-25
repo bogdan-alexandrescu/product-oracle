@@ -671,7 +671,18 @@ async def _drafting(db: AsyncSession, intake: ProductIntake, view: "View") -> di
             )
         )
         since = sum(str(a) not in kept for a in ids)
-    return {"draft_run_id": run.id, "answers_since_run": since}
+    from oracle.docs.models import Document
+    from oracle.intake import late_answers
+
+    document_id = intake.document_id or run.document_id
+    document = await db.get(Document, document_id) if document_id else None
+    return {
+        "draft_run_id": run.id,
+        "answers_since_run": since,
+        "late_answers_as_feedback": await late_answers.counted(db, intake),
+        "draft_document": document.slug if document else None,
+        "draft_version": await late_answers.latest(db, document.id) if document else None,
+    }
 
 
 async def _cards(
