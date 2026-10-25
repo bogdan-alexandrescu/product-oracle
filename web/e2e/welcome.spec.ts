@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./test";
+import { expect, mockNow, test, type Page } from "./test";
 
 import { login, signOut } from "./helpers";
 
@@ -7,8 +7,9 @@ import { login, signOut } from "./helpers";
 // they dismiss it. Not an email: it is drawn in the app only.
 //
 // no_claim for every test here: the in-browser mock's /v1/setup stands in for the API's
-// (api/tests/test_setup.py covers who is welcomed and the dismiss preference); in the mock
-// a first sign-in with an open invite's email takes the invite, as the API's sign-in does.
+// (api/tests/test_setup.py covers who is welcomed and the dismiss preference); the mock has
+// no Google sign-in, so its sign-in form stands in for it: a first sign-in with an open
+// invite's email takes the invite, as the API's Google (IAP) sign-in does.
 
 const welcome = (page: Page) => page.getByTestId("home-welcome").filter({ visible: true });
 
@@ -59,9 +60,24 @@ test("dismissing the welcome keeps it away", async ({ page }) => {
   await expect(welcome(page)).toHaveCount(0);
 });
 
+// Card welcome-long-ago: protects = a member who joined through an invite long ago still sees
+// the welcome until they dismiss it (BGD 2026-10-25: no time window); fails_when = the welcome
+// is gone a month after they joined; no_claim = members who joined without an invite (below).
+test("a member who joined through an invite long ago is still welcomed", async ({ page }) => {
+  await invite(page, "kim.example@example.com", "commenter");
+  await login(page, "kim.example@example.com");
+  await expect(welcome(page).getByTestId("welcome-role")).toContainText("You are a commenter");
+  await signOut(page);
+  await page.clock.setSystemTime(mockNow().getTime() + 60 * 86_400_000);
+  await login(page, "kim.example@example.com");
+  await expect(welcome(page).getByTestId("welcome-role")).toContainText("You are a commenter");
+  await welcome(page).getByRole("button", { name: "Dismiss" }).click();
+  await expect(welcome(page)).toHaveCount(0);
+});
+
 // Card welcome-not-for-everyone: protects = the company's own members, who joined without an
 // invite, see no welcome; fails_when = the owner or a seeded member is welcomed; no_claim =
-// members who joined long ago (the API's 14-day rule, pytest).
+// how long ago anyone joined (no window, above).
 test("members who were not invited see no welcome", async ({ page }) => {
   await login(page);
   await expect(page.getByRole("heading", { name: "Home" }).first()).toBeVisible();

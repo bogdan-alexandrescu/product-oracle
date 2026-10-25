@@ -382,34 +382,35 @@ async def _invited(tenant_id, email: str, role: str, accepted_at: datetime):
 
 
 async def test_a_member_who_joined_by_invite_is_welcomed(client, tenant_id, owner):
-    # protects=the welcome is for invited members, shown from their first sign-in (#140
-    # A1 welcome); fails_when=the company's own owner, a member added without an invite or
-    # a member who joined long ago is welcomed; no_claim=the wording (the web's copy).
+    # protects=the welcome is for every member who joined through an invite, however long
+    # ago, until they dismiss it (#140 A1 welcome, BGD 2026-10-25: no time window);
+    # fails_when=the company's own owner or a member added without an invite is welcomed,
+    # or one who joined by invite long ago is not; no_claim=the wording (the web's copy).
     now = datetime.now(UTC)
     invited = await _invited(tenant_id, "invited@example.com", "commenter", now)
     viewer = await _invited(tenant_id, "reader@example.com", "viewer", now)
-    old = await _invited(
-        tenant_id, "longago@example.com", "approver", now - timedelta(days=setup.WELCOME_DAYS + 1)
-    )
+    old = await _invited(tenant_id, "longago@example.com", "approver", now - timedelta(days=400))
     seeded = await make_person(tenant_id, "seeded@example.com", "commenter")
     assert (await _setup(client, invited))["welcome"] is True
     assert (await _setup(client, viewer))["welcome"] is True
-    assert (await _setup(client, old))["welcome"] is False
+    assert (await _setup(client, old))["welcome"] is True
     assert (await _setup(client, seeded))["welcome"] is False
     assert (await _setup(client, owner))["welcome"] is False
 
 
 async def test_dismissing_the_welcome_is_each_persons_own(client, tenant_id, owner):
-    # protects=Dismiss keeps the welcome away for that person only, any role; fails_when=it
-    # comes back, a viewer is refused, or one person's dismissal hides another's; no_claim=
-    # the web's dismiss button.
+    # protects=Dismiss keeps the welcome away for that person only, any role, however long
+    # ago they joined; fails_when=it comes back, a viewer is refused, or one person's
+    # dismissal hides another's; no_claim=the web's dismiss button.
     now = datetime.now(UTC)
     first = await _invited(tenant_id, "first@example.com", "viewer", now)
     second = await _invited(tenant_id, "second@example.com", "commenter", now)
-    resp = await client.patch(
-        "/v1/me/preferences", json={"welcome_dismissed": True}, headers=first.headers
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["welcome_dismissed"] is True
-    assert (await _setup(client, first))["welcome"] is False
+    old = await _invited(tenant_id, "third@example.com", "approver", now - timedelta(days=400))
+    for person in (first, old):
+        resp = await client.patch(
+            "/v1/me/preferences", json={"welcome_dismissed": True}, headers=person.headers
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["welcome_dismissed"] is True
+        assert (await _setup(client, person))["welcome"] is False
     assert (await _setup(client, second))["welcome"] is True
