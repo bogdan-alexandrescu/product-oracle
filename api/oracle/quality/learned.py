@@ -6,8 +6,8 @@ and the reason a person reads ("Recommended because ..."). Retired learnings nev
 
 The effect is capped: each point of net signal moves a score by ``LEARNING_STEP``, never
 more than ``LEARNING_CAP`` either way. The cap sits below one importance step (high is
-3/4 of critical, medium 2/3 of high), so learnings reorder questions of like importance but
-one signal never outweighs a gap's importance; in a module composition a learning never
+3/4 of critical, medium 2/3 of high), so among gaps of like impact learnings reorder
+questions of the same importance but one signal never outweighs a gap's importance; in a module composition a learning never
 overrides company policy, a condition or a person's decision.
 """
 

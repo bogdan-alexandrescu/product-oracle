@@ -20,6 +20,7 @@
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { applyNudge, nudgeReason, type Nudges } from "./learned";
 import { displayName } from "@/lib/names";
 import { baselineReviewStatus } from "./baseline";
 import type { V2Db } from "./v2";
@@ -76,6 +77,8 @@ export interface IntakeContext {
   /** The approved (locked) section keys of a document's latest version, by its id or slug; a
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
+  /** Kept learnings about question categories: they tune the drafted questions' order. */
+  learned?: () => Nudges;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -128,8 +131,16 @@ const forbidden = (min: Role) => fail(403, `Requires the ${min} role`);
 const score = (g: Gap) =>
   IMPORTANCE_WEIGHT[g.importance] * g.impact.reduce((s, a) => s + IMPACT_WEIGHT[a], 0) * (1 - KNOWN[g.knowledge_state]);
 const group = (g: Gap) => (OPEN.has(g.status) ? 0 : g.status === "deferred" ? 1 : 2);
+/** Kept learnings about question categories, read as each request starts (./learned.ts). */
+let learned: Nudges = {};
+const tunedScore = (g: Gap) => applyNudge(score(g), learned[g.category]);
 function ranked(gaps: Gap[]): Gap[] {
-  return [...gaps].sort((a, b) => group(a) - group(b) || score(b) - score(a));
+  return [...gaps].sort((a, b) => group(a) - group(b) || tunedScore(b) - tunedScore(a));
+}
+/** A drafted question's why, and the learning that moved it ("Recommended because ..."). */
+function rationaleOf(g: Gap): string {
+  const n = learned[g.category];
+  return `${LABEL[g.category]} gap, ${g.importance}.${n ? ` ${nudgeReason(n)}` : ""}`;
 }
 
 function rankedOut(gaps: Gap[]): Schemas["RankedGap"][] {
@@ -370,12 +381,12 @@ function syncQuestions(db: V2Db, intake: Intake, at = now()) {
       mine.filter((q) => q.status === "draft").forEach((q) => (q.status = "withdrawn"));
       return;
     }
-    mine.filter((q) => q.status === "draft").forEach((q) => (q.priority = (i + 1) * 10));
+    mine.filter((q) => q.status === "draft").forEach((q) => Object.assign(q, { priority: (i + 1) * 10, rationale: rationaleOf(g) }));
     if (mine.length || g.status !== "unknown") return;
     const prompt = CATEGORIES.find((c) => c[0] === g.category)?.[4] ?? g.statement;
     db.questions.push({
       id: uuid(), gap_id: g.id, intake_id: intake.id, document_id: intake.document_id, category: g.category,
-      prompt, rationale: `${LABEL[g.category]} gap, ${g.importance}.`, priority: (i + 1) * 10, batch: null,
+      prompt, rationale: rationaleOf(g), priority: (i + 1) * 10, batch: null,
       asked_to: g.owner_id, asked_by: null, module_key: g.related_modules[0] ?? null, section_key: g.section_keys[0] ?? null,
       status: "draft", created_at: at, updated_at: at,
     });
@@ -483,6 +494,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const findIntake = (id: string) => db.intakes.find((i) => i.id === id);
+  learned = ctx.learned?.() ?? {};
 
   if (p[1] === "intakes" && p.length === 2 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");

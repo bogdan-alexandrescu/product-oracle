@@ -9,6 +9,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { factor, nudgeReason, type Nudge, type Nudges } from "./learned";
+
 type Role = Schemas["Me"]["role"];
 type Catalog = Schemas["CatalogModuleDetail"];
 type Composed = Schemas["ComposedModule"];
@@ -29,6 +31,8 @@ export interface ModulesContext {
   document: (ref: string) => { id: string; slug: string; template: string | null } | null;
   /** The approved version's id for a document version number, else null. */
   approvedVersion: (documentId: string, n: number) => string | null;
+  /** Kept learnings about modules: a module they recommend that nothing else brings in is suggested. */
+  learned?: () => Nudges;
 }
 
 const AT = "2026-10-19T09:00:00Z";
@@ -161,6 +165,18 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
   };
 }
 
+/** As oracle.modules.composer._apply_learned: explained, the score moved by at most the cap,
+ * and suggested only when nothing else brings it in; never dropped. */
+function tuned(m: Composed, n: Nudge | undefined, order: number): Composed {
+  if (!n) return m;
+  const out = { ...m, explanation: [...m.explanation, nudgeReason(n)] };
+  if (out.score != null) out.score = Math.round(Math.min(1, Math.max(0, out.score + factor(n))) * 1000) / 1000;
+  if (n.net > 0 && out.selection === "optional" && !out.included) {
+    Object.assign(out, { selection: "suggested", included: true, decided_by: "learning", reason: nudgeReason(n), order });
+  }
+  return out;
+}
+
 function summary(modules: Composed[]): Schemas["CompositionSummary"] {
   return {
     mandatory: modules.filter((m) => m.selection === "mandatory").length,
@@ -193,7 +209,7 @@ function inputs(pack: string, extra: Record<string, unknown>, template: string |
 
 /** A canned recommendation: required modules mandatory, Pack B's conditional ones
  * suggested when scope.capabilities names them. */
-function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, template: string | null): Schemas["RecommendationOut"] {
+function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, template: string | null, learned: Nudges = {}): Schemas["RecommendationOut"] {
   const caps = ((extra.scope as { capabilities?: string[] } | undefined)?.capabilities ?? []) as string[];
   const hints: Record<string, string> = { "platform.tenant-isolation": "multi_tenant", "agents.tool-policies": "tool_use", "economics.value": "usage_billing" };
   const modules = db.catalog
@@ -207,7 +223,8 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
       return held
         ? composed(c, true, "suggested", `Suggested: scope.capabilities contains '${hints[c.key]}'`, (i + 1) * 10)
         : composed(c, false, "optional", "Not suggested: its condition did not hold.", 0);
-    });
+    })
+    .map((m, i) => tuned(m, learned[m.key], (i + 1) * 10));
   return {
     document_id: null,
     intake_id: null,
@@ -279,7 +296,7 @@ function inForce(revisions: Revision[]): Revision | null {
   return [...revisions].reverse().find((r) => r.status === "confirmed" || r.status === "published") ?? null;
 }
 
-function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }): Schemas["InspectorOut"] {
+function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }, learned?: Nudges): Schemas["InspectorOut"] {
   const revisions = db.revisions[doc.id] ?? [];
   const head = revisions[revisions.length - 1] ?? null;
   const current = inForce(revisions);
@@ -292,7 +309,7 @@ function inspector(db: ModulesDb, doc: { id: string; slug: string; template: str
     head_revision: head?.number ?? null,
     current,
     working: head?.status === "working" ? head : null,
-    recommendation: current ? null : { ...recommend(db, PACK_A, {}, doc.template), document_id: doc.id },
+    recommendation: current ? null : { ...recommend(db, PACK_A, {}, doc.template, learned), document_id: doc.id },
     revisions: [...revisions].reverse().map(summaryOf),
     sections: { version: null, unmapped: [] },
     problems: [],
@@ -426,7 +443,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const doc = data.document ? ctx.document(data.document) : null;
     if (data.document && !doc) return json(404, { detail: `document '${data.document}' not found` });
     const pack = data.packs?.[0] ?? (data.inputs?.category === "ai_agent_platform" ? PACK_B : PACK_A);
-    return json(200, { ...recommend(db, pack, data.inputs ?? {}, data.template ?? doc?.template ?? "oracle-default"), document_id: doc?.id ?? null });
+    return json(200, { ...recommend(db, pack, data.inputs ?? {}, data.template ?? doc?.template ?? "oracle-default", ctx.learned?.()), document_id: doc?.id ?? null });
   }
 
   if (p[1] === "documents" && p[2] && p[3] === "composition") {
@@ -435,7 +452,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const revisions = (db.revisions[doc.id] ??= []);
     const head = revisions[revisions.length - 1] ?? null;
     const current = inForce(revisions);
-    if (m === "GET" && !p[4]) return json(200, inspector(db, doc));
+    if (m === "GET" && !p[4]) return json(200, inspector(db, doc, ctx.learned?.()));
     if (m === "POST" && p[4] === "revisions") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       const data = await body<Schemas["RevisionIn"]>();
@@ -447,7 +464,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       const category = data.inputs?.category ?? head?.inputs.category;
       const pack = data.packs?.[0] ?? carried ?? db.policy.default_packs[0] ?? (category === "ai_agent_platform" ? PACK_B : PACK_A);
       const packsSource = data.packs?.length || carried ? "chosen" : db.policy.default_packs.length ? "default" : "category";
-      const rec = recommend(db, pack, data.inputs ?? {}, data.template ?? doc.template ?? "oracle-default");
+      const rec = recommend(db, pack, data.inputs ?? {}, data.template ?? doc.template ?? "oracle-default", ctx.learned?.());
       rec.inputs.policy = { ...rec.inputs.policy, packs_source: packsSource };
       // A person's earlier decisions carry into the next revision.
       for (const earlier of head?.modules ?? []) {
@@ -478,7 +495,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         for (const r of revisions) if (r.status === "confirmed" || r.status === "working") r.status = "superseded";
       }
       revisions.push(revisionOf(rec, revisions.length + 1, status === "confirmed" ? current : head, ctx.userId, data.reason, db, status));
-      return json(201, inspector(db, doc));
+      return json(201, inspector(db, doc, ctx.learned?.()));
     }
     if (m === "POST" && p[4] === "publish") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
