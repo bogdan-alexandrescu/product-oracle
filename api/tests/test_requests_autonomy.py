@@ -208,3 +208,40 @@ async def test_act_never_says_no(client, ctx):
     assert got["suggestion"]["decline"]["reason"] == "out_of_scope"
     assert await audits(ctx, "request.disqualified") == []
     assert await actions(ctx) == []
+
+
+async def test_undo_of_linked_goals_survives_the_next_triage(client, ctx):
+    """protects=#586 review MAJOR 2: Oracle links a goal at Act, the next triage run (Classify
+    now or the daily run) rewrites the still-New request's suggestion, and Undo still
+    restores the request's own goals; fails_when=Undo answers 409 because the triage bumped
+    the request's lock_version after the Undo was recorded; no_claim=a person's own edit in
+    between (it still makes Undo answer 409, as any stale edit)."""
+    await set_level(client, ctx, "act")
+    await goal(client, ctx)
+    retention = await goal(client, ctx, key="retention")
+    a = await add(client, ctx, title="Bulk edit prices", goal_ids=[retention["id"]])
+    entry = {"id": a["id"], "goals": ["activation"], "confidence": 0.95}
+    await apply(ctx, await triage_run(ctx, "approver"), triage_file([entry]))
+    linked = await get(client, ctx, a["id"])
+    # The next day's run classifies every New request again, this one included.
+    await apply(ctx, await triage_run(ctx, "approver"), triage_file([entry]))
+    assert (await get(client, ctx, a["id"]))["lock_version"] > linked["lock_version"]
+
+    (action,) = await actions(ctx)
+    resp = await undo(client, ctx, action)
+    assert resp.status_code == 200, resp.text
+    assert (await get(client, ctx, a["id"]))["goal_ids"] == [retention["id"]]
+
+
+async def test_oracle_did_goes_to_an_approver(client, ctx):
+    """protects=#586 review minor: the "Oracle did" row (and its Undo) reaches someone who
+    can undo it: a run started by a person who is not an approver now (here a commenter)
+    tells the longest-standing owner instead; fails_when=the commenter is told, and their
+    Undo answers 403; no_claim=the Inbox screen."""
+    await set_level(client, ctx, "act")
+    a = await add(client, ctx, title="Remember my address")
+    b = await add(client, ctx, title="Keep the delivery address")
+    entry = {"id": a["id"], "duplicate_of": b["id"], "confidence": 0.95}
+    await apply(ctx, await triage_run(ctx, "commenter"), triage_file([entry]))
+    (action,) = await actions(ctx)
+    assert action.notify_ids == [ctx.users["owner"].id]

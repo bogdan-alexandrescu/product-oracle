@@ -32,6 +32,8 @@ async function setShapeGoals(page: Page, level: "Observe" | "Draft", why: string
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   await expect(step(page, "goals", level)).toHaveAttribute("aria-pressed", "true");
+  // #586 review MAJOR 3: Oracle follows Shape goals now, at every level.
+  await expect(row(page, "goals").getByTestId("autonomy-pending")).toHaveCount(0);
 }
 
 async function openBaseline(page: Page) {

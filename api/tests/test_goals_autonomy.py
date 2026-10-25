@@ -15,6 +15,7 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
+import pytest
 from sqlalchemy import func, select
 
 from oracle.baseline import goal_interview
@@ -119,3 +120,23 @@ async def test_recommend_keeps_up_to_three_versions(client, fake):
     d_id, _evs = await opened(client, ctx, goal["id"])
     stored = await changes(client, ctx, d_id)
     assert [c["payload"]["target"] for c in stored] == [8, 6, 9]
+
+
+# protects=#586 review minor: at Draft the goal prompt asks Oracle for one version for a
+# person to edit (not 1 to 3 and which fits best), as the mock's scripted opening says;
+# at Recommend it asks for up to three; fails_when=the request still asks for 1 to 3 at
+# Draft; no_claim=what a real model writes.
+@pytest.mark.parametrize(("level", "asked"), [("draft", "one"), ("recommend", "up to 3")])
+async def test_the_prompt_asks_for_as_many_versions_as_are_kept(client, fake, level, asked):
+    fake.text = reply_with(VERSIONS)
+    ctx = await company()
+    goal = await vague_goal(client, ctx)
+    await set_level(client, ctx, level)
+    await opened(client, ctx, goal["id"])
+    request = fake.requests[0]
+    assert "Offer 1 to 3" not in request.system
+    content = request.messages[0]["content"]
+    if asked == "one":
+        assert "Offer one measurable version" in content
+    else:
+        assert "Offer up to 3 measurable versions" in content

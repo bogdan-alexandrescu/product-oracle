@@ -55,3 +55,52 @@ test("autonomy: an Oracle did row of a merged request opens the request", async 
   await expect(inspector).toContainText("Remember my address");
   await expect(inspector).toContainText("Merged into Keep the delivery address between orders");
 });
+
+async function setRequests(page: Page, label: "Observe" | "Draft" | "Recommend", why: string) {
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await step(page, "requests", label).click();
+  const sheet = page.getByRole("dialog", { name: "Change Triage requests" });
+  await sheet.getByLabel("Why").fill(why);
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(step(page, "requests", label)).toHaveAttribute("aria-pressed", "true");
+}
+
+async function openSaveMyCard(page: Page) {
+  await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/requests$/);
+  const title = "Save my card for the next order";
+  await page.getByTestId("request-row").filter({ hasText: title }).getByRole("button", { name: title }).click();
+  const inspector = page.getByTestId("request-inspector").filter({ visible: true });
+  await expect(inspector.getByRole("heading", { name: title })).toBeVisible();
+  return inspector;
+}
+
+// protects=#586 review MAJOR 1 and 3: Triage requests at Draft promises a summary of each
+// request for its owner to edit, which is not built, so its row says "Takes effect when C1
+// Requests API and screen ships" at Draft (and not at Observe or Recommend); at Observe and
+// Draft the Requests inspector shows none of Oracle's suggestion for a request triage
+// suggested on, and at Recommend it shows it with Accept suggestion; fails_when=Draft reads
+// as in effect, a suggestion shows below Recommend, or none shows at Recommend;
+// no_claim=the triage run (pytest tests/test_requests_autonomy.py).
+test("autonomy: Triage requests below Recommend hides Oracle's suggestions, and Draft says it takes effect later", async ({ page }) => {
+  await login(page);
+  await setRequests(page, "Draft", "Let us see what Oracle drafts");
+  await expect(row(page, "requests").getByTestId("autonomy-pending")).toHaveText("Takes effect when C1 Requests API and screen ships");
+  let inspector = await openSaveMyCard(page);
+  await expect(inspector.getByTestId("request-suggestion")).toHaveCount(0);
+
+  await setRequests(page, "Observe", "We triage by hand this month");
+  await expect(row(page, "requests").getByTestId("autonomy-pending")).toHaveCount(0);
+  inspector = await openSaveMyCard(page);
+  await expect(inspector.getByTestId("request-suggestion")).toHaveCount(0);
+
+  await setRequests(page, "Recommend", "Suggestions help again");
+  await expect(row(page, "requests").getByTestId("autonomy-pending")).toHaveCount(0);
+  inspector = await openSaveMyCard(page);
+  const suggestion = inspector.getByTestId("request-suggestion");
+  await expect(suggestion).toContainText("Same need as saved addresses");
+  await expect(suggestion.getByRole("button", { name: "Accept suggestion" })).toBeVisible();
+});

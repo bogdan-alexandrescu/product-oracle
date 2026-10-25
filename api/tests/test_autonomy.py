@@ -505,3 +505,18 @@ def test_next_drafts_requests_questions_and_goals_are_wired():
     test_requests_autonomy.py, test_questions_autonomy.py, test_goals_autonomy.py)."""
     for key in ("next_drafts", "requests", "questions", "goals"):
         assert autonomy.REGISTRY[key].wired is True, key
+
+
+async def test_requests_at_draft_still_says_it_takes_effect_later(client, owner):
+    """protects=#586 review MAJOR 1: Triage requests at Draft promises a summary of each
+    request for its owner to edit, which is not built, so at Draft the row reads
+    wired=False ("Takes effect when C1 ships") while Observe, Recommend and Act read
+    wired=True; fails_when=Draft reads as in effect though it does what Observe does;
+    no_claim=the chip itself (autonomy-requests.spec.ts)."""
+    for level, wired in (("draft", False), ("observe", True), ("recommend", True)):
+        r = await put(client, owner, "requests", level=level, reason="Trying levels")
+        assert r.status_code == 200, r.text
+        assert r.json()["wired"] is wired, level
+        got = (await client.get("/v1/autonomy", headers=owner.headers)).json()
+        (row,) = [i for i in got["items"] if i["key"] == "requests"]
+        assert row["wired"] is wired, level

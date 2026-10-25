@@ -39,6 +39,8 @@ test("autonomy: at Observe the brief's Next questions says Oracle asks no one", 
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   await expect(step(page, "questions", "Observe")).toHaveAttribute("aria-pressed", "true");
+  // #586 review MAJOR 3: Oracle follows Ask people questions now: no "Takes effect" chip.
+  await expect(row(page, "questions").getByTestId("autonomy-pending")).toHaveCount(0);
 
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
