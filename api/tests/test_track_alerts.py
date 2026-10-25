@@ -31,6 +31,7 @@ from tests.day_helpers import company_today
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
+    ROADMAP,
     approved_prd,
     as_user,
     built_roadmap,
@@ -121,7 +122,7 @@ async def test_a_slip_opens_one_alert_and_resolves_when_the_date_comes_back(
     assert slip["item_key"] == "payment-step" and slip["item_title"] == "Payment step"
     assert slip["prd"]["slug"] == PRD and slip["state"] == "open"
     assert slip["data"]["slip_days"] == 9 and slip["data"]["previous_tracker_date"] == BETA
-    assert set(slip["actions"]) == {"accept_date", "replan", "keep"}
+    assert set(slip["actions"]) == {"accept_date", "replan", "ask", "discuss", "keep"}
     got = (await client.get(events, headers=auth)).json()
     assert sorted((e["field"], e["before"], e["after"]) for e in got) == [
         ("raw_status", None, "In Progress"),
@@ -151,7 +152,7 @@ async def test_a_kept_alert_waits_until_the_facts_change(client, owner, runtime)
     assert resp.status_code == 200, resp.text
     kept = resp.json()
     assert kept["state"] == "kept" and kept["note"] == "Lead says one week"
-    assert kept["kept_by_name"] and kept["actions"] == ["replan", "reopen"]
+    assert kept["kept_by_name"] and kept["actions"] == ["replan", "ask", "discuss", "reopen"]
     assert (await client.post(f"{url}/keep", json={}, headers=auth)).status_code == 409
     assert slip["id"] not in [a["id"] for a in await alerts_of(client, auth)]
     # Monitoring again with the same facts: still kept.
@@ -181,6 +182,106 @@ async def test_reopen_puts_a_kept_alert_back(client, owner, runtime):  # noqa: F
     resp = await client.post(f"{url}/reopen", headers=auth)
     assert resp.status_code == 200 and resp.json()["state"] == "open"
     assert slip["id"] in [a["id"] for a in await alerts_of(client, auth)]
+
+
+async def test_ask_and_discuss_reach_commenters_on_the_kinds_they_fit(client, owner, runtime):  # noqa: F811
+    """protects=F2 §3's Ask (date_slip, overdue, ahead) and Discuss (every kind) for
+    commenters and above; fails_when=a commenter gets neither, a viewer gets either, or Ask
+    is offered on a kind it does not fit; no_claim=the Plan card's buttons."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-777", "title": "Refactor cart", "state": "todo",
+         "track_id": track["id"]},
+    )  # fmt: skip
+    by = {a["kind"]: a for a in await alerts_of(client, auth)}
+    assert by["date_slip"]["actions"] == ["accept_date", "replan", "ask", "discuss", "keep"]
+    assert "ask" not in by["unplanned"]["actions"]
+    assert "discuss" in by["unplanned"]["actions"]
+    commenter = await as_user(tenant_id, "commenter")
+    by = {a["kind"]: a for a in await alerts_of(client, commenter)}
+    assert by["date_slip"]["actions"] == ["ask", "discuss"]
+    assert by["unplanned"]["actions"] == ["discuss"]
+    viewer = await as_user(tenant_id, "viewer")
+    assert all(a["actions"] == [] for a in await alerts_of(client, viewer))
+    # A resolved alert offers neither.
+    await importing(client, auth, record(track["id"], BETA))
+    (gone,) = [a for a in await alerts_of(client, auth, "resolved") if a["id"] == slip["id"]]
+    assert gone["actions"] == []
+
+
+async def test_the_item_history_lists_its_tracker_events(client, owner, runtime):  # noqa: F811
+    """protects=F1 §8 and F2 §2: the Plan item's history carries the tracker history of its
+    issues, oldest first, with the issue's key; fails_when=tracker_events stays empty, or
+    another item's issue shows; no_claim=the Plan's words for them."""
+    tenant_id, auth = owner
+    track, _ = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-413", "state": "todo", "track_id": track["id"],
+         "item_key": "shipping-step", "target_date": BETA},
+    )  # fmt: skip
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-413", "state": "in_progress", "track_id": track["id"],
+         "item_key": "shipping-step", "target_date": BETA},
+    )  # fmt: skip
+    resp = await client.get(
+        "/v1/plan/items/history",
+        params={"roadmap": ROADMAP, "item": "payment-step"},
+        headers=await as_user(tenant_id, "viewer"),
+    )
+    assert resp.status_code == 200, resp.text
+    events = resp.json()["tracker_events"]
+    assert [(e["external_ref"], e["field"], e["before"], e["after"]) for e in events] == [
+        ("ENG-405", "target_date", BETA, SLIPPED)
+    ]
+    assert events[0]["record_id"] and events[0]["observed_at"]
+    other = await client.get(
+        "/v1/plan/items/history",
+        params={"roadmap": ROADMAP, "item": "shipping-step"},
+        headers=auth,
+    )
+    assert [(e["external_ref"], e["field"]) for e in other.json()["tracker_events"]] == [
+        ("ENG-413", "state")
+    ]
+
+
+async def test_ask_about_a_roadmap_item(client, owner, runtime):  # noqa: F811
+    """protects=C2 Ask from a Plan item (F2 §3 Ask): a commenter asks a named person about a
+    roadmap item, and the Inbox row opens the Plan on it; fails_when=the subject is refused,
+    or names another page; no_claim=who the Plan suggests asking."""
+    tenant_id, auth = owner
+    await slipped(client, auth, runtime)
+    approver_auth = await as_user(tenant_id, "approver")
+    async with tenant_session(tenant_id) as s:
+        prd_id = await s.scalar(select(Document.id).where(Document.slug == PRD))
+        approver = await s.scalar(select(User.id).where(User.role == "approver"))
+    commenter = await as_user(tenant_id, "commenter")
+    subject = {"kind": "roadmap_item", "document_id": str(prd_id), "item_key": "payment-step"}
+    resp = await client.post(
+        "/v1/questions",
+        json={"prompt": "Can ENG-405 still make Beta?", "asked_to": str(approver),
+              "subject": subject},
+        headers=commenter,
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["item_ref"] == "payment-step"
+    rows = (
+        await client.get("/v1/inbox/questions", headers=approver_auth)
+    ).json()
+    (row,) = [r for r in rows if r["question"]["id"] == resp.json()["id"]]
+    assert row["subject"]["kind"] == "roadmap_item"
+    assert row["subject"]["title"].endswith(" · Payment step")
+    assert row["subject"]["href"] == "/plan?item=payment-step"
+    missing = {**subject, "item_key": "no-such-item"}
+    resp = await client.post(
+        "/v1/questions",
+        json={"prompt": "Who?", "asked_to": str(approver), "subject": missing},
+        headers=commenter,
+    )
+    assert resp.status_code == 422, resp.text
 
 
 # --- each kind (§1) ---------------------------------------------------------------------------
