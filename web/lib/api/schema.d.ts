@@ -22576,6 +22576,11 @@ export interface components {
             /** Theme */
             theme?: string | null;
             prd_answers?: components["schemas"]["PrdAnswers"] | null;
+            /**
+             * Request Ids
+             * @default []
+             */
+            request_ids: string[];
         };
         /** IntakeOut */
         IntakeOut: {
@@ -28927,6 +28932,7 @@ export interface components {
             document: components["schemas"]["RequestDocumentProgress"] | null;
             /** Intake Id */
             intake_id: string | null;
+            intake?: components["schemas"]["RequestIntakeRef"] | null;
             /** Interview Id */
             interview_id: string | null;
             source: components["schemas"]["SourceCopy"] | null;
@@ -29022,6 +29028,19 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * RequestIntakeRef
+         * @description The brief a request is behind (C1 lane 2, Start a PRD): its people read it there.
+         */
+        RequestIntakeRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** RequestList */
         RequestList: {
             /** Items */
@@ -29085,6 +29104,7 @@ export interface components {
             document: components["schemas"]["RequestDocumentRef"] | null;
             /** Intake Id */
             intake_id: string | null;
+            intake?: components["schemas"]["RequestIntakeRef"] | null;
             /** Interview Id */
             interview_id: string | null;
             source: components["schemas"]["SourceCopy"] | null;
@@ -56767,6 +56787,8 @@ export interface operations {
                 q?: string | null;
                 /** @description Only declined requests with replies still to send (H10) */
                 replies_to_send?: boolean;
+                /** @description Only the requests behind this brief (C1) */
+                intake_id?: string | null;
                 limit?: number;
                 offset?: number;
             };

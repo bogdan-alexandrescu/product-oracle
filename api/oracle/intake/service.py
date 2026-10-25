@@ -33,6 +33,7 @@ from oracle.intake import engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.schemas import AnswerIn, IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
+from oracle.requests import service as requests_service
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunCreate, RunPatch
 from oracle.sources.models import Snapshot, Source
@@ -201,6 +202,10 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     )
     db.add(intake)
     await db.flush()
+    try:
+        linked = await requests_service.put_behind_brief(db, principal, intake.id, body.request_ids)
+    except requests_service.RequestError as e:
+        raise IntakeError(e.status, str(e)) from e
     await engine.analyze(db, intake)
     # Before the first batch: the brief's goals and out-of-scope lines answer their
     # questions, so neither is asked.
@@ -215,6 +220,7 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
             "snapshot_id": str(snapshot.id),
             "source_ids": [str(i) for i in source_ids],
             "document_id": str(document_id) if document_id else None,
+            "request_ids": [str(i) for i in linked],
         },
     )
     await ask(db, principal, intake, body.batch_size)

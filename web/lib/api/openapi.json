@@ -35294,6 +35294,25 @@
             "description": "Only declined requests with replies still to send (H10)"
           },
           {
+            "name": "intake_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the requests behind this brief (C1)",
+              "title": "Intake Id"
+            },
+            "description": "Only the requests behind this brief (C1)"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -70923,6 +70942,16 @@
                 "type": "null"
               }
             ]
+          },
+          "request_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Request Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -88891,6 +88920,16 @@
             ],
             "title": "Intake Id"
           },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestIntakeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "interview_id": {
             "anyOf": [
               {
@@ -89184,6 +89223,26 @@
         ],
         "title": "RequestDocumentRef"
       },
+      "RequestIntakeRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RequestIntakeRef",
+        "description": "The brief a request is behind (C1 lane 2, Start a PRD): its people read it there."
+      },
       "RequestList": {
         "properties": {
           "items": {
@@ -89398,6 +89457,16 @@
               }
             ],
             "title": "Intake Id"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestIntakeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "interview_id": {
             "anyOf": [

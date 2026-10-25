@@ -69,7 +69,7 @@ async def test_brief_links_the_requests_behind_it(client, ctx):
         [event] = list(
             await s.scalars(select(AuditEvent).where(AuditEvent.action == "intake.created"))
         )
-    assert sorted(event.payload["request_ids"]) == sorted([a["id"], b["id"]])
+    assert sorted(event.data["request_ids"]) == sorted([a["id"], b["id"]])
 
 
 async def test_brief_takes_qualified_requests_only(client, ctx):

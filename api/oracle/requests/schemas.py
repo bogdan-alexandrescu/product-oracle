@@ -183,6 +183,13 @@ class RequestDocumentRef(BaseModel):
     title: str
 
 
+class RequestIntakeRef(BaseModel):
+    """The brief a request is behind (C1 lane 2, Start a PRD): its people read it there."""
+
+    id: uuid.UUID
+    title: str
+
+
 class RequestDocumentProgress(RequestDocumentRef):
     """The linked PRD on the inspector: its latest version and review progress."""
 
@@ -280,6 +287,8 @@ class RequestOut(BaseModel):
     feature_id: uuid.UUID | None
     document: RequestDocumentRef | None
     intake_id: uuid.UUID | None
+    # The brief behind it, when one is (C1 lane 2); None when the brief is gone.
+    intake: RequestIntakeRef | None = None
     interview_id: uuid.UUID | None
     source: SourceCopy | None
     # 1 plus every request merged into it, through chains of merges.
