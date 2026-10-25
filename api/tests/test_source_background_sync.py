@@ -10,7 +10,7 @@ time; a sync that completes clears both."""
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import update
 
 from oracle.connections.models import Connection
 from oracle.sources import background, base, service
@@ -42,10 +42,20 @@ async def _source(a, tenant_id, name="Team chat", conn=None, kind="slack"):
         body = {"kind": "upload", "name": name, "config": {}}
     else:
         conn = conn or await make_connection(tenant_id, a.user, kind)
-        body = {"kind": kind, "name": name, "connection_id": str(conn), "config": {"channels": ["C1"]}}
+        body = {
+            "kind": kind,
+            "name": name,
+            "connection_id": str(conn),
+            "config": {"channels": ["C1"]},
+        }
     resp = await a.post("/v1/sources", json=body)
     assert resp.status_code == 201, resp.text
     return resp.json()["id"]
+
+
+def _syncs(fake) -> int:
+    """The connector's sync calls (creating a source also validates it)."""
+    return sum(1 for c in fake.calls if "validate" not in c)
 
 
 async def _get(tenant_id, source_id) -> Source:
@@ -77,9 +87,9 @@ async def test_the_ticker_syncs_a_source_never_synced(a, tenant_id, slack):
 async def test_a_source_synced_within_the_hour_waits(a, tenant_id, slack):
     sid = await _source(a, tenant_id)
     assert (await _due(tenant_id)).synced == 1
-    calls = len(slack.calls)
+    calls = _syncs(slack)
     assert (await _due(tenant_id)).synced == 0
-    assert len(slack.calls) == calls
+    assert _syncs(slack) == calls
     # An hour on, it is due again.
     await _set(tenant_id, sid, last_synced_at=datetime.now(UTC) - timedelta(minutes=61))
     assert (await _due(tenant_id)).synced == 1
@@ -103,7 +113,7 @@ async def test_paused_uploads_and_disconnected_sources_are_left_alone(a, tenant_
     result = await _due(tenant_id)
 
     assert result.synced == 0 and result.failed == 0
-    assert slack.calls == []
+    assert _syncs(slack) == 0
     for sid in (paused, revoked, gone):
         assert (await _get(tenant_id, sid)).last_synced_at is None
 
@@ -125,9 +135,7 @@ async def test_a_tick_is_bounded_stalest_first_and_one_per_connection(a, tenant_
     result = await _due(tenant_id, now)
 
     assert result.synced == background.SOURCES_PER_TICK
-    synced = [
-        sid for sid in [one, two, *ids] if (await _get(tenant_id, sid)).last_synced_at > now
-    ]
+    synced = [sid for sid in [one, two, *ids] if (await _get(tenant_id, sid)).last_synced_at > now]
     # One of the two on the shared connection (the stalest), then the stalest others.
     assert synced == [one, *ids[: background.SOURCES_PER_TICK - 1]]
 
@@ -143,9 +151,9 @@ async def test_a_failed_sync_backs_off_then_recovers(a, tenant_id, slack):
     assert src.next_sync_at == now + timedelta(hours=2)
 
     # Not retried before the backoff ends, even though it never synced.
-    calls = len(slack.calls)
+    calls = _syncs(slack)
     assert (await _due(tenant_id, now + timedelta(hours=1))).failed == 0
-    assert len(slack.calls) == calls
+    assert _syncs(slack) == calls
 
     # The second failure waits twice as long.
     assert (await _due(tenant_id, now + timedelta(hours=2))).failed == 1
@@ -201,5 +209,4 @@ async def test_the_deadline_stops_new_syncs(a, tenant_id, slack):
     await _source(a, tenant_id)
     async with tenant_session(tenant_id) as s:
         result = await background.sync_due(s, now=datetime.now(UTC), deadline=0.0)
-    assert result.synced == 0 and slack.calls == []
-
+    assert result.synced == 0 and _syncs(slack) == 0

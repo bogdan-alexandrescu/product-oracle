@@ -464,6 +464,9 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             unavailable_items=list(stats.unavailable),
             last_synced_at=func.now(),
             partly_synced_at=None,
+            # A completed sync ends any background backoff (oracle.sources.background).
+            sync_failures=0,
+            next_sync_at=None,
         )
     except _Superseded as e:
         return await _superseded(db, stats, start, e.company_narrowed)

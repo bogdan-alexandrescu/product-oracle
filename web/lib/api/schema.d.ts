@@ -532,6 +532,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/new-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Draft New Items
+         * @description S4: how many items of the draft's author's own sources are new, changed or deleted
+         *     since the sources the draft was written from ("N new items since draft k, refresh?").
+         *     Only the author sees the number (``oracle.docs.fresh``).
+         */
+        get: operations["get_draft_new_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions/{n}/markdown": {
         parameters: {
             query?: never;
@@ -18388,6 +18410,26 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
+        };
+        /**
+         * DraftNewItems
+         * @description S4: "N new items since draft k, refresh?". What changed in the draft's author's own
+         *     sources since the sources the draft was written from (its run's pin, or the moment it
+         *     was imported when no run made it). Sources are private (S5): anyone but the author gets
+         *     ``visible: false`` with neither ``as_of`` nor ``count``.
+         */
+        DraftNewItems: {
+            /** Version */
+            version: number;
+            /** As Of */
+            as_of?: string | null;
+            /** Count */
+            count?: number | null;
+            /**
+             * Visible
+             * @default false
+             */
+            visible: boolean;
         };
         /** DraftNoteIn */
         DraftNoteIn: {
@@ -37963,6 +38005,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_new_items: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftNewItems"];
                 };
             };
             /** @description Validation Error */
