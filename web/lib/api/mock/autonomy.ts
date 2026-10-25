@@ -668,10 +668,16 @@ export function levelFor(db: AutonomyDb, key: string): Level {
   return levelOf(r, db.stored[key]);
 }
 
+/** Levels not built yet though the others are (the API's Responsibility.unwired_levels): Triage
+ * requests at Draft (the summary for each request's owner) still takes effect when C1 ships. */
+const UNWIRED_LEVELS: Record<string, Level[]> = { requests: ["draft"] };
+
 function itemOut(r: RegistryRow, s: Stored | undefined): Item {
   const { limits_default, ...rest } = r;
   const limits = limits_default ? { ...limits_default, ...Object.fromEntries(Object.entries(s?.limits ?? {}).filter(([k]) => !r.fixed_limits.includes(k))) } : null;
-  return { ...rest, level: levelOf(r, s), limits, limits_summary: limits ? SUMMARIES[r.key](limits) : null };
+  const level = levelOf(r, s);
+  const wired = r.wired && !(UNWIRED_LEVELS[r.key] ?? []).includes(level);
+  return { ...rest, level, wired, limits, limits_summary: limits ? SUMMARIES[r.key](limits) : null };
 }
 
 type Prop = { title?: string; type?: string; minimum?: number; maximum?: number; minItems?: number; items?: { enum?: string[] } };

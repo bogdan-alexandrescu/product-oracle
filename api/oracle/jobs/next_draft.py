@@ -768,7 +768,10 @@ async def oracle_builds_due(db: AsyncSession) -> int:
             subject={
                 "kind": "document",
                 "key": document.slug,
-                "href": f"/documents/{document.slug}/v/{staged.latest_version}?build=1",
+                # A document with no version yet opens on its own page (#586 review).
+                "href": f"/documents/{document.slug}/v/{staged.latest_version}?build=1"
+                if staged.latest_version is not None
+                else f"/documents/{document.slug}",
             },
             undo={
                 "method": "POST",

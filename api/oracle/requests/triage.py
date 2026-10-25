@@ -41,6 +41,7 @@ from oracle import audit, autonomy, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.autonomy_models import OracleAction
 from oracle.baseline.models import Entity
 from oracle.company_time import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.members.names import display_name
@@ -268,6 +269,8 @@ async def _suggest(
     )
     at = _now().isoformat()
     written: dict[uuid.UUID, ProductRequest] = {}
+    # The lock_version of each request whose goals Oracle linked, before this rewrite.
+    linked: dict[uuid.UUID, int] = {}
     for entry in entries:
         if not isinstance(entry, dict):
             drops[("entry", "not readable")] += 1
@@ -305,6 +308,8 @@ async def _suggest(
         # What Oracle did on its own before (H11 requests at Act) and a person undid: kept,
         # so Oracle does not do it again (:func:`_act`).
         did = (row.suggestion or {}).get("oracle_did") or []
+        if "goals" in did:
+            linked[row.id] = row.lock_version
         row.suggestion = {
             **({"oracle_did": did} if did else {}),
             **({"problem": problem} if problem and theme_id is None and theme_title else {}),
@@ -322,7 +327,34 @@ async def _suggest(
         }
         written[row.id] = row
     await db.flush()
+    await _undo_kept_current(db, written, linked)
     return list(written.values())
+
+
+async def _undo_kept_current(
+    db: AsyncSession, rows: dict[uuid.UUID, ProductRequest], linked: dict[uuid.UUID, int]
+) -> None:
+    """Rewriting a suggestion bumps the request's lock_version, which would make a pending
+    "Linked goals" Undo (a PATCH carrying the version Oracle left) answer 409 for good.
+    Its version moves with the rewrite, as the rewrite leaves the goals alone; an Undo
+    already stale from a person's own edit stays stale (#586 review)."""
+    if not linked:
+        return
+    pending = await db.scalars(
+        select(OracleAction).where(
+            OracleAction.responsibility == "requests",
+            OracleAction.undone_at.is_(None),
+            OracleAction.subject["key"].astext.in_([str(i) for i in linked]),
+        )
+    )
+    for action in pending:
+        undo, rid = action.undo or {}, _uuid(action.subject.get("key"))
+        body = undo.get("body") or {}
+        if rid in linked and undo.get("method") == "PATCH" and "goal_ids" in body:
+            if body.get("lock_version") == linked[rid]:
+                version = rows[rid].lock_version
+                action.undo = {**undo, "body": {**body, "lock_version": version}}
+    await db.flush()
 
 
 # --- H11 requests at Act ---------------------------------------------------------------
@@ -430,10 +462,11 @@ async def _act_goals(
 
 
 async def _told(db: AsyncSession, run: Run) -> list[uuid.UUID]:
-    """Who hears what Oracle did: the run's starter (the member the daily run acts as),
-    else the longest-standing active owner."""
+    """Who hears what Oracle did: the run's starter (the member the daily run acts as)
+    while still an approver, else the longest-standing active owner."""
     starter = await db.get(User, run.created_by) if run.created_by else None
-    if starter is not None and starter.disabled_at is None:
+    # Only someone who may still undo it (an approver or owner) hears it (#586 review).
+    if starter is not None and starter.disabled_at is None and has_role(starter.role, "approver"):
         return [starter.id]
     owner = await db.scalar(
         select(User.id)

@@ -168,8 +168,15 @@ class Responsibility:
     wired_by_name: str
     # Whether the behaviour the levels steer is built.
     wired: bool = False
+    # Levels whose sentence is not built yet though the others are: at these the row still
+    # reads as taking effect when ``wired_by`` ships (:meth:`wired_at`).
+    unwired_levels: tuple[Level, ...] = ()
     # Why the levels above the ceiling stay with people (the locked steps' tooltip).
     ceiling_reason: str | None = None
+
+    def wired_at(self, level: Level) -> bool:
+        """Whether Oracle follows ``level`` today."""
+        return self.wired and level not in self.unwired_levels
 
     def summary(self, limits: BaseModel | None) -> str | None:
         """The limits in a few words ("within one goal, up to 3 places")."""
@@ -274,6 +281,9 @@ _ALL: tuple[Responsibility, ...] = (
         wired_by="C1",
         wired_by_name="C1 Requests API and screen",
         wired=True,
+        # The summary of each request for its owner to edit is not built: at Draft Oracle
+        # does what it does at Observe, so the row says it takes effect later (#586 review).
+        unwired_levels=("draft",),
     ),
     Responsibility(
         key="questions",

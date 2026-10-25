@@ -69,6 +69,18 @@ MAX_VERSIONS = 3
 # The versions Oracle keeps per reply at each Shape goals level (H11): none at Observe, one
 # for a named person to edit and own at Draft, up to three with a default at Recommend.
 VERSIONS_AT = {"observe": 0, "draft": 1, "recommend": MAX_VERSIONS}
+
+
+def offer_line(level: str) -> str:
+    """The goal prompt's count of versions to offer at a Shape goals level."""
+    most = VERSIONS_AT.get(level, MAX_VERSIONS)
+    if most == 0:
+        return "Offer no measurable version."
+    if most == 1:
+        return "Offer one measurable version, for a named person to edit and own."
+    return f"Offer up to {most} measurable versions."
+
+
 MARK, END = "<<<CHANGES>>>", "<<<END>>>"
 
 
