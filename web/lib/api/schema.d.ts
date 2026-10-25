@@ -26414,6 +26414,40 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * PlanDrift
+         * @description The item's drift against the approved product strategy (H4 §5), for owners and
+         *     approvers. An approved item's is its stored finding (``finding_id``: waived there,
+         *     POST /v1/strategy/findings/{id}/waive); a draft item's is measured as the Plan is
+         *     read and has none.
+         */
+        PlanDrift: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "outside_strategy" | "stopped_but_planned";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "high";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "waived";
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Waive Reason */
+            waive_reason?: string | null;
+            /** Waived At */
+            waived_at?: string | null;
+        };
         /** PlanEngineering */
         PlanEngineering: {
             /** Records */
@@ -26471,6 +26505,11 @@ export interface components {
             state: "proposed" | "done" | "slipped" | "at_risk" | "on_track" | "planned";
             /** Reasons */
             reasons: components["schemas"]["PlanReason"][];
+            /**
+             * Drift
+             * @default []
+             */
+            drift: components["schemas"]["PlanDrift"][];
             engineering: components["schemas"]["PlanEngineering"];
             next: components["schemas"]["PlanNext"];
         };

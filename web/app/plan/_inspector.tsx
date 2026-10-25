@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
@@ -9,10 +10,13 @@ import { peopleByIds } from "@/components/PersonPicker";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { acceptTrackAlertDate, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { WaiveForm } from "../company/strategy/_components/DriftList";
+import { shortDate } from "../company/strategy/_components/lib";
 import { assess, type GoalView, type Point } from "../home/_goals";
-import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanDrift, type PlanItem } from "./_lib";
 
 function History({ item }: { item: PlanItem }) {
   const q = useQuery(`plan|history|${item.roadmap.slug}|${item.key}`, () =>
@@ -306,6 +310,68 @@ function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; o
   );
 }
 
+/**
+ * H4 §5: the item's drift against the approved product strategy, one card per finding. An open
+ * finding of an approved item is waived here with a reason (owners; approvers for Outside the
+ * strategy); a draft item's is measured on the draft and is waived once the roadmap is approved.
+ */
+function DriftCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Promise<void> | void }) {
+  const drift = item.drift ?? [];
+  if (drift.length === 0) return null;
+  return (
+    <InspectorSection label="Strategy" testId="plan-drift">
+      <div className="flex flex-col gap-2">
+        {drift.map((d) => (
+          <DriftCard key={`${d.kind}-${d.status}`} d={d} onChanged={onChanged} />
+        ))}
+        <p className="text-sm text-text2">
+          Drift is advisory: nothing waits on it.{" "}
+          <Link href="/company/strategy" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+            Open the strategy
+          </Link>
+        </p>
+      </div>
+    </InspectorSection>
+  );
+}
+
+function DriftCard({ d, onChanged }: { d: PlanDrift; onChanged?: () => Promise<void> | void }) {
+  const { can } = useMe();
+  const [waiving, setWaiving] = useState(false);
+  const may = d.status === "open" && d.finding_id != null && can("waive_strategy_finding", d.kind === "outside_strategy");
+  return (
+    <div data-testid="plan-drift-card" data-kind={d.kind} data-state={d.status} className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]">
+      <span>
+        <Chip kind={d.status === "waived" ? "na" : d.severity === "high" ? "crit" : "warn"} wrap>
+          {d.status === "waived" ? `Waived · ${d.label}` : d.label}
+        </Chip>
+      </span>
+      <span>{d.text}</span>
+      {d.status === "waived" && d.waive_reason && (
+        <span data-testid="plan-drift-waived" className="text-text2">
+          Waived {shortDate(d.waived_at)}: {d.waive_reason}
+        </span>
+      )}
+      {d.status === "open" && d.finding_id == null && <span className="text-sm text-text2">Measured on the draft roadmap. It can be waived once the roadmap is approved.</span>}
+      {may && !waiving && (
+        <span>
+          <Button onClick={() => setWaiving(true)}>Waive…</Button>
+        </span>
+      )}
+      {waiving && d.finding_id && (
+        <WaiveForm
+          finding={{ id: d.finding_id }}
+          onCancel={() => setWaiving(false)}
+          onWaived={async () => {
+            setWaiving(false);
+            await onChanged?.();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 /** The selected item (F1 §8): why it needs someone, its history, its goals, and where to open it. */
 export function PlanInspector({
   item,
@@ -363,6 +429,7 @@ export function PlanInspector({
           )}
         </div>
       </InspectorSection>
+      <DriftCards item={item} onChanged={onChanged} />
       <InspectorSection label="Engineering" testId="plan-item-engineering">
         <Engineering item={item} links={links} />
       </InspectorSection>

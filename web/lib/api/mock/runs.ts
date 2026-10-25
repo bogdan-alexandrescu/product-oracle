@@ -3015,6 +3015,55 @@ export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
 };
 
 
+/** The roadmap review run measured against an approved product strategy (seedRoadmapDrift in e2e/helpers.ts, H4 §5). */
+export const ROADMAP_DRIFT_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d8";
+
+/**
+ * H4 §5: the roadmap review run's twin with drift reasons, as the API's reasons word them:
+ * Single sign-on (Next) is on the strategy's stop list, Mobile push serves a goal under no
+ * focus choice. Advisory: both are to confirm, acted on or waived with a reason.
+ */
+function roadmapDriftRun(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d8")) as RunOut;
+  run.id = ROADMAP_DRIFT_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-5";
+  const [items] = run.segments;
+  const reasons = [...(items.items_check?.reasons ?? [])];
+  const waive = (item: string): ReasonFix => fix("Waive…", "waive", item);
+  const drift = (item: string, item_title: string, code: string, label: string, text: string, fixes: ReasonFix[], data: Record<string, unknown>): ItemReason =>
+    ({ item, item_title, code, severity: "confirm", label, text, data, fixes });
+  const after = (key: string, extra: ItemReason) => {
+    let at = reasons.findLastIndex((x) => x.item === key);
+    if (at < 0) at = reasons.length - 1;
+    reasons.splice(at + 1, 0, extra);
+  };
+  after(
+    "mobile-push",
+    drift("mobile-push", "Mobile push", "outside_strategy", "Outside the strategy", "Retention is under no focus choice of the product strategy.",
+      [drop("mobile-push"), waive("mobile-push")], { severity: "warning", choices: [], goals: ["retention"] }),
+  );
+  after(
+    "sso-login",
+    drift("sso-login", "Single sign-on", "stopped_but_planned", "Stopped in the strategy", "The product strategy stops Enterprise SSO, and this item is in Next.",
+      [moveTo("sso-login", "later"), drop("sso-login"), waive("sso-login")], { severity: "high", choices: ["enterprise-sso"], goals: [] }),
+  );
+  items.items_check = withReasons(
+    { items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems: items.items_check!.problems },
+    reasons,
+    items.items_check!.base,
+  );
+  const [cp] = run.checkpoints;
+  cp.run_id = run.id;
+  cp.payload = { ...cp.payload, items_check: items.items_check };
+  refresh(run);
+  return run;
+}
+
+export const ROADMAP_DRIFT_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapDriftRun(),
+  artifacts: { [`${ROADMAP_DRIFT_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
+};
+
 /** The roadmap review run whose file cannot be read as items (seedRoadmapFileProblem in e2e/helpers.ts, D1). */
 export const ROADMAP_FILE_PROBLEM_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d7";
 
@@ -3220,6 +3269,10 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
       if ((a.answers ?? []).some((code) => !waivable(cp.kind, code))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
       if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
+      // H4 §5, as the API: only an owner waives a planned item the product strategy stops.
+      if (cp.kind === "roadmap_items" && (a.answers ?? []).includes("stopped_but_planned") && !atLeast(role, "owner")) {
+        return fail(403, "Only an owner waives an item the product strategy stops");
+      }
       // B2: Leave proposed is for a goal from this run nobody decided, with a reason.
       if (cp.kind === "baseline_confirm") {
         if (!liveOf(ctx, cp, draft.actions)?.some((x) => x.item === a.item_key)) return fail(422, "only an undecided goal from this run is waived (Leave proposed)");

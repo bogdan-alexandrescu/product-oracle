@@ -4,12 +4,23 @@ import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds"
 import { namedText } from "@/lib/codes";
 
 import type { GoalView } from "../home/_goals";
-import { engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { driftMarker, engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, stateChip, whoLabel, type PlanItem } from "./_lib";
 
 export type GroupBy = "horizon" | "goal" | "prd";
 const NO_GOAL = "No goal";
 
 /** The state chip; a draft's item has a dashed outline. */
+/** H4 §5: "Stopped in the strategy" or "Outside the strategy" on the row, while a finding is open. */
+function DriftMarker({ item }: { item: PlanItem }) {
+  const m = driftMarker(item);
+  if (!m) return null;
+  return (
+    <Chip kind={m.kind} data-testid="plan-drift-marker">
+      {m.label}
+    </Chip>
+  );
+}
+
 export function StateChip({ item, hero = false }: { item: PlanItem; hero?: boolean }) {
   const s = stateChip(item);
   return (
@@ -154,6 +165,7 @@ export function PlanTable({
         <span className="inline-flex flex-wrap items-center gap-1.5">
           <StateChip item={i} />
           {i.change?.kind === "dropped" && <Chip kind="warn">Dropped in draft {i.change.draft_version}</Chip>}
+          <DriftMarker item={i} />
         </span>
       ),
     },

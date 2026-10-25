@@ -11,8 +11,8 @@ import { errorMessage } from "@/lib/use-query";
 
 import { FINDING_LABEL, FINDING_STATES, canWaive, shortDate, subjectHref, subjectName, type Finding, type FindingState, type Stack } from "./lib";
 
-/** Waive a finding with a reason (the reason is required, as the API). */
-export function WaiveForm({ finding, onWaived, onCancel }: { finding: Finding; onWaived: (f: Finding) => void; onCancel: () => void }) {
+/** Waive a finding with a reason (the reason is required, as the API); Plan items use it too. */
+export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Finding, "id">; onWaived: (f: Finding) => void; onCancel: () => void }) {
   const id = useId();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);

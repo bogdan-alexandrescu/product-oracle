@@ -11,7 +11,7 @@ type Finding = Schemas["StrategyFindingOut"];
 type Stack = Schemas["StrategyStackOut"];
 type Role = Schemas["Me"]["role"];
 
-export type StrategyDb = { findings: Finding[]; stack: Stack };
+export type StrategyDb = { findings: Finding[]; stack: Stack; plan_drafts?: Record<string, Schemas["PlanDrift"][]> };
 
 const APPROVED = "2026-10-01T09:00:00Z";
 const SEEN = "2026-10-20T07:00:00Z";
@@ -255,4 +255,65 @@ export async function routeStrategy(db: StrategyDb | undefined, req: Request, p:
     return json(200, { opened: 0, resolved: 0 });
   }
   return json(404, { detail: "Route not found" });
+}
+
+type PlanDrift = Schemas["PlanDrift"];
+const ITEM_LABEL: Record<PlanDrift["kind"], string> = {
+  outside_strategy: "Outside the strategy",
+  stopped_but_planned: "Stopped in the strategy",
+};
+
+/**
+ * The "strategy-plan" scenario: findings on the mock Plan's own items (H4 §5 on Plan), on
+ * top of the strategy scenario's. Approved items carry stored findings (`detail.plan_key`
+ * names the item; `detail.text` holds the sentence the API words as the Plan is read); the
+ * roadmap draft's items are measured live (`plan_drafts`), with no finding to waive.
+ */
+export function seedPlanDrift(db: StrategyDb, uuid: () => string, entities: GoalRow[] = []): StrategyDb {
+  const churn = entities.find((e) => e.type === "goal" && e.key === "g.early-churn")?.title ?? "Cut early churn";
+  db.findings.push(
+    finding(uuid(), {
+      kind: "stopped_but_planned",
+      severity: "high",
+      subject_kind: "roadmap_item",
+      subject_id: uuid(),
+      subject_ref: "slack-alerts",
+      detail: { plan_key: "slack-alerts", horizon: "now", title: "Alerts in the team chat", draft: false,
+        text: "The product strategy stops Custom report builder, and this item is in Now." },
+    }),
+    finding(uuid(), {
+      kind: "outside_strategy",
+      subject_kind: "roadmap_item",
+      subject_id: uuid(),
+      subject_ref: "team-budgets",
+      detail: { plan_key: "team-budgets", horizon: "later", title: "Budgets per team", draft: false,
+        text: `${churn} is under no focus choice of the product strategy.` },
+    }),
+  );
+  db.plan_drafts = {
+    "spend-forecast": [
+      { kind: "outside_strategy", severity: "warning", label: ITEM_LABEL.outside_strategy, status: "open", finding_id: null,
+        waive_reason: null, waived_at: null, text: "It serves no goal, so the product strategy does not cover it." },
+    ],
+  };
+  return db;
+}
+
+/** A Plan item's drift, as GET /v1/plan gives it: owners and approvers only. */
+export function planDrift(db: StrategyDb | undefined, role: Role, key: string, origin: "approved" | "draft"): PlanDrift[] {
+  if (!db || (role !== "owner" && role !== "approver")) return [];
+  if (origin === "draft") return db.plan_drafts?.[key] ?? [];
+  return db.findings
+    .filter((f) => f.subject_kind === "roadmap_item" && f.detail?.plan_key === key && (f.status === "open" || f.status === "waived"))
+    .filter((f): f is Finding & { kind: PlanDrift["kind"] } => f.kind === "outside_strategy" || f.kind === "stopped_but_planned")
+    .map((f) => ({
+      kind: f.kind,
+      severity: f.severity === "high" ? "high" : "warning",
+      label: ITEM_LABEL[f.kind],
+      text: String(f.detail?.text ?? ""),
+      status: f.status === "waived" ? "waived" : "open",
+      finding_id: f.id,
+      waive_reason: f.waive_reason,
+      waived_at: f.waived_at,
+    }));
 }
