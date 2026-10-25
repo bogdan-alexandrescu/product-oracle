@@ -154,6 +154,12 @@ export type DiscussionsContext = {
   dateRights?: () => "verify" | "propose" | null;
   /** F3's schedule-basis route (./roadmap.ts POST /v1/schedule-bases): Record writes through it. */
   recordBasis?: (body: Schemas["ScheduleBasisCreate"]) => Promise<Response>;
+  /** A baseline entity's title (a feature, a requirement) for a change's sentence; null when unknown. */
+  entityTitle?: (id: string) => string | null;
+  /** G3 Ask: the question asked of a member (the questions mock); its id. */
+  askQuestion?: (q: { asked_to: string; prompt: string; rationale: string | null; category: string; discussion: DiscussionRow }) => string;
+  /** G3 Propose of a decision: the decision log's POST /v1/decisions (./decisions.ts), as the caller. */
+  proposeDecision?: (body: Schemas["DecisionCreate"]) => Promise<Response>;
 };
 
 /** A section of the document a discussion is on, as Oracle reads it (markers stripped). */
@@ -212,6 +218,9 @@ const KIND_VERB: Record<string, ChangeVerb> = {
   priority_move: "Apply",
   priority_pin: "Apply",
   ask_person: "Ask",
+  scope_feature: "Stage",
+  scope_requirement: "Stage",
+  decision: "Propose",
 };
 const VERB_OF_ROUTE: Record<string, ChangeVerb> = {
   stage: "Stage",
@@ -231,16 +240,25 @@ const VERB_PAST: Record<ChangeVerb, string> = {
   Apply: "applied",
   Ask: "asked",
 };
-/** The kinds each subject offers in the mock, as the API's kinds.available_for does (G1 §3.3). */
+/**
+ * The kinds each subject offers in the mock, as the API's kinds.available_for does (G1 §3.3):
+ * ask_person on intake, gap, section, checkpoint_item and entity; scope_* on intake, document,
+ * checkpoint_item and entity; priority_* on priorities and checkpoint_item; decision on every subject.
+ */
 const SUBJECT_KINDS: Record<string, string[]> = {
-  document: ["section_edit", "answer"],
-  section: ["section_edit", "answer"],
-  roadmap_item: ["item_horizon", "item_outcome", "basis_record"],
-  checkpoint: ["item_horizon", "item_outcome", "conflict_pick"],
-  checkpoint_item: ["item_horizon", "item_outcome", "basis_record"],
-  entity: ["goal_measure", "entity_edit"],
-  conflict: ["conflict_pick"],
-  question: ["answer"],
+  document: ["section_edit", "answer", "scope_feature", "scope_requirement", "decision"],
+  section: ["section_edit", "answer", "ask_person", "decision"],
+  roadmap_item: ["item_horizon", "item_outcome", "basis_record", "decision"],
+  checkpoint: ["item_horizon", "item_outcome", "conflict_pick", "decision"],
+  checkpoint_item: ["item_horizon", "item_outcome", "basis_record", "ask_person", "scope_feature", "scope_requirement", "priority_move", "priority_pin", "decision"],
+  entity: ["goal_measure", "entity_edit", "ask_person", "scope_feature", "scope_requirement", "decision"],
+  conflict: ["conflict_pick", "decision"],
+  question: ["answer", "decision"],
+  intake: ["ask_person", "scope_feature", "scope_requirement", "decision"],
+  gap: ["ask_person", "decision"],
+  priorities: ["priority_move", "priority_pin", "decision"],
+  track: ["decision"],
+  screen: ["decision"],
 };
 const TEXT = { type: "string", minLength: 1 };
 const KIND_SCHEMA: Record<string, Record<string, unknown>> = {
@@ -256,9 +274,49 @@ const KIND_SCHEMA: Record<string, Record<string, unknown>> = {
     required: ["prd_document_id", "kind", "reference", "supports_date"],
     properties: { prd_document_id: TEXT, kind: { enum: ["estimate", "capacity", "commitment"] }, reference: TEXT, supports_date: { type: "string", format: "date" }, item_key: { type: "string" } },
   },
+  ask_person: {
+    type: "object",
+    required: ["asked_to", "prompt"],
+    properties: { asked_to: { type: "string", format: "uuid" }, prompt: { type: "string", minLength: 1, maxLength: 2000 }, rationale: { type: "string" }, category: { type: "string", default: "general" } },
+  },
+  scope_feature: {
+    type: "object",
+    required: ["feature_id", "decision", "reason"],
+    properties: { feature_id: { type: "string", format: "uuid" }, decision: { enum: ["include", "exclude", "defer"] }, reason: TEXT },
+  },
+  scope_requirement: {
+    type: "object",
+    required: ["op"],
+    properties: { op: { enum: ["add", "enhance", "cut"] }, requirement_id: { type: "string", format: "uuid" }, feature_id: { type: "string", format: "uuid" }, text: { type: "string" }, goal_id: { type: "string", format: "uuid" } },
+  },
+  priority_move: {
+    type: "object",
+    required: ["feature_id", "above_feature_id", "reason"],
+    properties: { feature_id: { type: "string", format: "uuid" }, above_feature_id: { type: "string", format: "uuid" }, reason: TEXT },
+  },
+  priority_pin: {
+    type: "object",
+    required: ["feature_id", "position", "reason"],
+    properties: { feature_id: { type: "string", format: "uuid" }, position: { type: "integer", minimum: 1 }, reason: TEXT },
+  },
+  decision: {
+    type: "object",
+    required: ["title"],
+    properties: {
+      title: { type: "string", minLength: 1, maxLength: 200 },
+      question: { type: "string", maxLength: 1000 },
+      options: { type: "array", maxItems: 6, items: { type: "object", required: ["key", "label"], properties: { key: TEXT, label: TEXT, summary: { type: "string" } } } },
+      approver_id: { type: "string", format: "uuid" },
+      reversibility: { enum: ["reversible", "irreversible"] },
+    },
+  },
 };
 export const STAGE_WHY_NOT = "Approvers stage changes. You can suggest it.";
 const APPROVERS_ACT = "Approvers take this action. You can suggest it.";
+/** Apply (priority_move, priority_pin): the API's words below approver. */
+export const APPLY_WHY_NOT = "Approvers apply this change.";
+/** Propose of a decision with no one named to decide it, by someone below approver. */
+const CHOOSE_DECIDER = "Choose who decides it";
 /** F3: who has no date rights (oracle.discussions.changes.RECORDERS). */
 export const RECORDERS = "Engineering leads and approvers record date bases";
 const VIEWERS_READ = "Viewers can read discussions but not write in them";
@@ -267,8 +325,12 @@ const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later:
 const isOpenStatus = (s: ChangeStatus) => s === "proposed" || s === "suggested";
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
+/** How a change's sentence names what its payload points at: a baseline entity's title, a member's name. */
+export type LabelNames = { entity?: (id: string) => string | null; member?: (id: string) => string | null };
+const SCOPE_WORD: Record<string, string> = { include: "Include", exclude: "Exclude", defer: "Defer" };
+
 /** A change's plain sentence from its kind and payload. */
-export function changeLabel(kind: string, p: Record<string, unknown>): string {
+export function changeLabel(kind: string, p: Record<string, unknown>, names: LabelNames = {}): string {
   const clip = (t: string) => (t.length > 100 ? `${t.slice(0, 99)}…` : t);
   const lower = (t: string) => t.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase());
   if (kind === "item_horizon") return `Move ${str(p.item_key)} to ${HORIZON_LABEL[str(p.horizon)] ?? str(p.horizon)}`;
@@ -278,13 +340,55 @@ export function changeLabel(kind: string, p: Record<string, unknown>): string {
   if (kind === "conflict_pick") return `Settle the conflict with claim ${Number(p.claim_index)}`;
   if (kind === "answer") return clip(`Answer: ${str(p.body)}`);
   if (kind === "basis_record") return clip(`Record a date basis: ${str(p.reference)} supports ${str(p.supports_date)}`);
+  const entity = (v: unknown) => names.entity?.(str(v)) ?? str(v);
+  if (kind === "ask_person") return clip(`Ask ${names.member?.(str(p.asked_to)) ?? "someone"}: ${str(p.prompt)}`);
+  if (kind === "scope_feature") return clip(`${SCOPE_WORD[str(p.decision)] ?? str(p.decision)} ${entity(p.feature_id)}: ${str(p.reason)}`);
+  if (kind === "scope_requirement") {
+    if (str(p.op) === "cut") return clip(`Cut requirement: ${entity(p.requirement_id)}`);
+    return clip(`${str(p.op) === "add" ? "Add" : "Enhance"} requirement: ${str(p.text)}`);
+  }
+  if (kind === "priority_move") return clip(`Move ${entity(p.feature_id)} above ${entity(p.above_feature_id)}: ${str(p.reason)}`);
+  if (kind === "priority_pin") return clip(`Pin ${entity(p.feature_id)} at #${Number(p.position)}: ${str(p.reason)}`);
+  if (kind === "decision") return clip(`Decide: ${str(p.title)}`);
   return kind.replace(/_/g, " ");
 }
 
 /** What a payload lacks for its kind, or null. */
 function incomplete(kind: string, p: Record<string, unknown>): string | null {
+  const INCOMPLETE = "The change is incomplete";
   const required = (KIND_SCHEMA[kind]?.required as string[] | undefined) ?? [];
-  return required.some((k) => (kind === "conflict_pick" ? !Number.isInteger(p[k]) : !str(p[k]))) ? "The change is incomplete" : null;
+  const integer = (k: string) => kind === "conflict_pick" || (kind === "priority_pin" && k === "position");
+  if (required.some((k) => (integer(k) ? !Number.isInteger(p[k]) : !str(p[k])))) return INCOMPLETE;
+  if (kind === "priority_pin" && (p.position as number) < 1) return INCOMPLETE;
+  if (kind === "priority_move" && p.feature_id === p.above_feature_id) return INCOMPLETE;
+  if (kind === "ask_person" && str(p.prompt).length > 2000) return INCOMPLETE;
+  if (kind === "scope_feature" && !SCOPE_WORD[str(p.decision)]) return INCOMPLETE;
+  if (kind === "scope_requirement") {
+    const op = str(p.op);
+    if (op === "add") return str(p.feature_id) && str(p.text) ? null : INCOMPLETE;
+    if (op === "enhance") return str(p.requirement_id) && str(p.text) ? null : INCOMPLETE;
+    if (op === "cut") return str(p.requirement_id) ? null : INCOMPLETE;
+    return INCOMPLETE;
+  }
+  if (kind === "decision") {
+    if (str(p.title).length > 200 || str(p.question).length > 1000) return INCOMPLETE;
+    const options = p.options ?? [];
+    if (!Array.isArray(options) || options.length > 6) return INCOMPLETE;
+    const keys = options.map((o) => (o && typeof o === "object" ? str((o as Record<string, unknown>).key) : ""));
+    if (keys.some((k) => !k) || new Set(keys).size !== keys.length) return INCOMPLETE;
+    if (p.reversibility != null && p.reversibility !== "reversible" && p.reversibility !== "irreversible") return INCOMPLETE;
+  }
+  return null;
+}
+
+/**
+ * G3 Apply in the mock: Oracle's reason check stands in for C9's rules and the model. Without
+ * `confirm`, a reason under 20 characters or of fewer than 4 words gets pushback (409, nothing
+ * stored); the seed's "gut feeling" gets it, a sentence that says what changed does not.
+ */
+function applyPushback(reason: string): { code: string; message: string }[] {
+  const thin = reason.length < 20 || reason.split(/\s+/).filter((w) => /[a-z]/i.test(w)).length < 4;
+  return thin ? [{ code: "reason_thin", message: "The reason does not say what changed. Name the evidence or the goal it serves." }] : [];
 }
 
 /**
@@ -636,6 +740,14 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     return { messages: rows.length, people: new Set(rows.filter((x) => x.author_kind === "person").map((x) => x.author_id)).size };
   };
   const ref = (id: string) => ({ user_id: id, name: displayName(member(id)?.email ?? "someone") });
+  // A change's sentence names features, requirements and people, as the API's does.
+  const names: LabelNames = {
+    entity: (id) => ctx.entityTitle?.(id) ?? null,
+    member: (id) => {
+      const x = member(id);
+      return x ? displayName(x.email) : null;
+    },
+  };
   const writes = (x?: Member) => !!x && x.status !== "disabled" && atLeast(x.role, "commenter");
   const touch = (d: DiscussionRow) => {
     d.lock_version += 1;
@@ -653,7 +765,17 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const records = verb === "Record" ? !!ctx.dateRights?.() : null;
     const allowed = writer && open && (records ?? (anyWriter || atLeast(me.role, "approver")));
     const whyNot =
-      allowed || !open ? null : d.status !== "open" ? "This discussion is closed" : verb === "Record" ? RECORDERS : verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT;
+      allowed || !open
+        ? null
+        : d.status !== "open"
+          ? "This discussion is closed"
+          : verb === "Record"
+            ? RECORDERS
+            : verb === "Stage"
+              ? STAGE_WHY_NOT
+              : verb === "Apply"
+                ? APPLY_WHY_NOT
+                : APPROVERS_ACT;
     return {
       id: c.id,
       discussion_id: c.discussion_id,
@@ -951,7 +1073,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       if (KIND_VERB[c.kind] !== verb) return refuse(422, "This change does not take this action");
       if (verb === "Record") {
         if (!ctx.dateRights?.()) return refuse(403, RECORDERS);
-      } else if (verb !== "Propose" && verb !== "Ask" && !atLeast(me.role, "approver")) return refuse(403, verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT);
+      } else if (verb !== "Propose" && verb !== "Ask" && !atLeast(me.role, "approver"))
+        return refuse(403, verb === "Stage" ? STAGE_WHY_NOT : verb === "Apply" ? APPLY_WHY_NOT : APPROVERS_ACT);
     } else if (step === "dismiss" && !atLeast(me.role, "approver")) return refuse(403, "Approvers dismiss changes");
     else if (!["edit", "suggest", "withdraw", "dismiss"].includes(step)) return null;
     if (d.status === "closed") return refuse(409, "This discussion is closed");
@@ -968,7 +1091,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       const gap = incomplete(c.kind, payload as Record<string, unknown>);
       if (gap) return refuse(422, gap);
       c.edited_payload = payload as Record<string, unknown>;
-      c.label = changeLabel(c.kind, c.edited_payload);
+      c.label = changeLabel(c.kind, c.edited_payload, names);
       if (typeof input.rationale === "string") c.rationale = input.rationale.trim() || null;
       // A commenter's edit becomes their suggestion; an approver's keeps the status.
       if (!atLeast(me.role, "approver")) Object.assign(c, { status: "suggested", suggested_by: me.id });
@@ -1001,6 +1124,59 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
       return json(200, { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } });
+    } else if (verb === "Ask") {
+      // A question asked of that person (their Inbox), from this discussion.
+      const p = c.edited_payload ?? c.payload;
+      const question_id =
+        ctx.askQuestion?.({ asked_to: str(p.asked_to), prompt: str(p.prompt), rationale: str(p.rationale) || null, category: str(p.category) || "general", discussion: d }) ?? ctx.uuid();
+      Object.assign(c, { status: "done", result_ref: { question_id } });
+      line(`${name} asked: ${c.label}`);
+      c.lock_version += 1;
+      return json(200, { change: changeOut(c, d), result: { question_id } });
+    } else if (verb === "Apply") {
+      const p = c.edited_payload ?? c.payload;
+      const reason = str(input.reason) || str(p.reason);
+      if (reason.length > 500) return refuse(422, "Keep the reason under 500 characters");
+      if (input.confirm === true) {
+        if (!str(input.reason)) return refuse(422, "Say why you apply it anyway");
+      } else {
+        const pushback = applyPushback(reason);
+        if (pushback.length)
+          return json(409, {
+            detail: "Oracle pushed back on this. Give a reason to apply it anyway.",
+            pushback,
+            reason_check: { ok: false, reason },
+            preview_rank: null,
+            held_below: null,
+          });
+      }
+      const override_id = ctx.uuid();
+      Object.assign(c, { status: "done", override_reason: input.confirm === true ? reason : null, result_ref: { override_id } });
+      line(`${name} applied: ${c.label}`);
+      c.lock_version += 1;
+      return json(200, { change: changeOut(c, d), result: { override_id } });
+    } else if (verb === "Propose" && c.kind === "decision") {
+      // A proposed decision in the decision log, about this discussion.
+      const p = c.edited_payload ?? c.payload;
+      const approver_id = str(p.approver_id) || (atLeast(me.role, "approver") ? me.id : "");
+      if (!approver_id) return refuse(422, CHOOSE_DECIDER);
+      if (!ctx.proposeDecision) return refuse(422, "A decision change is not used this way");
+      const options = (Array.isArray(p.options) ? p.options : []) as { key: string; label: string; summary?: string | null }[];
+      const res = await ctx.proposeDecision({
+        title: str(p.title),
+        question: str(p.question) || null,
+        options: options.map((o) => ({ key: o.key, label: o.label, summary: o.summary ?? null })),
+        approver_id,
+        reversibility: p.reversibility === "irreversible" ? "irreversible" : "reversible",
+        subjects: [{ kind: "discussion", id: d.id, ref: d.title }],
+      } as unknown as Schemas["DecisionCreate"]);
+      if (res.status !== 201) return res;
+      const made = (await res.json()) as { id: string; number: number };
+      const result = { decision_id: made.id, number: `D-${made.number}` };
+      Object.assign(c, { status: "done", result_ref: result });
+      line(`${name} proposed: ${c.label}`);
+      c.lock_version += 1;
+      return json(200, { change: changeOut(c, d), result });
     } else if (verb) {
       Object.assign(c, { status: "done", result_ref: { id: ctx.uuid() } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
@@ -1246,7 +1422,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       id: ctx.uuid(),
       discussion_id: d.id,
       kind,
-      label: changeLabel(kind, payload),
+      label: changeLabel(kind, payload, names),
       target: input.target ?? { ...d.subject },
       payload,
       edited_payload: null,
@@ -1445,5 +1621,105 @@ export function seedDiscussionRecord(ctx: Omit<DiscussionsContext, "me" | "db">,
     edited_payload: null, rationale: "The team estimated the item for mid-December.", proposed_by_kind: "oracle", proposed_by: null,
     suggested_by: null, status: "proposed", from_message_id: reply, lock_version: 1, created_at: at,
   });
+  return db;
+}
+
+/** G3 "discussion-change-kinds": the open discussion on the feature-set stop's saved-carts item. */
+export const DISCUSSION_CHANGE_KINDS = "d15c0000-0000-4000-8000-0000000000c1";
+
+/**
+ * The "discussion-change-kinds" scenario (G3's ask_person, priority_move and decision): on the
+ * feature-set run's waiting checkpoint, the approver's open discussion on saved-carts, Oracle's
+ * reply, and the 3 changes it proposed: move Saved carts above Guided setup on a thin reason
+ * ("Gut feeling", which Apply pushes back on), ask the approver how long a cart lasts, and a
+ * decision on keeping carts for guests.
+ */
+export function seedDiscussionChangeKinds(
+  ctx: Omit<DiscussionsContext, "me" | "db">,
+  run: { id: string; label: string; checkpoint_id: string; checkpoint_kind: string },
+  features: { moved: { id: string; title: string }; above: { id: string; title: string } },
+): DiscussionsDb {
+  const db = emptyDiscussions();
+  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
+  const at = "2026-10-22T11:00:00Z";
+  const item = "saved-carts";
+  const id = DISCUSSION_CHANGE_KINDS;
+  db.discussions.push({
+    id,
+    subject_kind: "checkpoint_item",
+    subject: { run_id: run.id, checkpoint_id: run.checkpoint_id, checkpoint_kind: run.checkpoint_kind, item_key: item },
+    subject_key: `run_item:${run.id}:${run.checkpoint_kind}:${item}`,
+    subject_label: `${run.label} · ${item}`,
+    subject_url: `/runs/${run.id}`,
+    document_id: null,
+    run_id: run.id,
+    title: "Saved carts: ahead of guided setup?",
+    visibility: "open",
+    author_only: false,
+    status: "open",
+    origin: "discuss",
+    started_by: approver,
+    summary: null,
+    summary_status: "none",
+    summary_shared: true,
+    last_message_at: at,
+    lock_version: 1,
+    created_at: at,
+    updated_at: at,
+  });
+  db.participants.push({ discussion_id: id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  const asked = ctx.uuid();
+  const reply = ctx.uuid();
+  const msg = { discussion_id: id, mentions: [], created_at: at, edited_at: null, deleted_at: null };
+  db.messages.push(
+    { ...msg, id: asked, author_kind: "person", author_id: approver, body: "@Oracle should saved carts go before guided setup?", mentions_oracle: true, reply_to: null },
+    {
+      ...msg,
+      id: reply,
+      author_kind: "oracle",
+      author_id: null,
+      body: "Moving saved carts up is possible; ask who owns cart expiry, and decide whether guests keep carts.",
+      mentions_oracle: false,
+      reply_to: asked,
+      status: "complete",
+    },
+  );
+  const titles: Record<string, string> = { [features.moved.id]: features.moved.title, [features.above.id]: features.above.title };
+  const names: LabelNames = { entity: (x) => titles[x] ?? null, member: (x) => (x === approver ? "Approver" : null) };
+  const row = (kind: string, payload: Record<string, unknown>, rationale: string): ChangeRow => ({
+    id: ctx.uuid(),
+    discussion_id: id,
+    kind,
+    label: changeLabel(kind, payload, names),
+    target: { run_id: run.id, checkpoint_id: run.checkpoint_id, item_key: item },
+    payload,
+    edited_payload: null,
+    rationale,
+    proposed_by_kind: "oracle",
+    proposed_by: null,
+    suggested_by: null,
+    status: "proposed",
+    from_message_id: reply,
+    lock_version: 1,
+    created_at: at,
+  });
+  db.changes!.push(
+    row("priority_move", { feature_id: features.moved.id, above_feature_id: features.above.id, reason: "Gut feeling" }, "The approver asked whether saved carts should go first."),
+    row("ask_person", { asked_to: approver, prompt: "How long should a saved cart last?", category: "general" }, "Nobody has said how long a cart is kept."),
+    row(
+      "decision",
+      {
+        title: "Keep saved carts for guests?",
+        question: "Do guests keep a cart without an account?",
+        options: [
+          { key: "o1", label: "Keep for 30 days" },
+          { key: "o2", label: "Members only" },
+        ],
+        approver_id: approver,
+        reversibility: "reversible",
+      },
+      "Guest carts change what saved carts costs to build.",
+    ),
+  );
   return db;
 }

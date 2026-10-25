@@ -163,6 +163,46 @@ async def _pending(db: AsyncSession, d: Discussion, kind: str) -> Checkpoint:
     return cp
 
 
+async def _scope_action(
+    db: AsyncSession, d: Discussion, kind: str, payload: dict[str, Any]
+) -> tuple[Checkpoint, uuid.UUID, Any]:
+    """A scope change's waiting feature-set stop and its D8 action (C6, C7), wherever the
+    discussion is: the proposed scope holding the named feature or requirement (by the
+    row's id or its baseline entity's), its row key in place of the id. A new requirement
+    goes under ``feature_id``, or the subject's item at a feature-set stop."""
+    from sqlalchemy import or_
+
+    from oracle.runs.scope_models import PrdScope, PrdScopeItem
+
+    s = d.subject or {}
+    named = payload.get("feature_id") or payload.get("requirement_id")
+    rows = select(PrdScopeItem, PrdScope).join(PrdScope, PrdScope.id == PrdScopeItem.scope_id)
+    rows = rows.join(Checkpoint, Checkpoint.id == PrdScope.checkpoint_id).where(
+        PrdScope.status == "proposed", Checkpoint.status == "pending"
+    )
+    if named is not None:
+        wanted = uuid.UUID(str(named))
+        rows = rows.where(or_(PrdScopeItem.id == wanted, PrdScopeItem.entity_id == wanted))
+    elif d.subject_kind == "checkpoint_item" and s.get("checkpoint_id") and s.get("item_key"):
+        rows = rows.where(
+            PrdScope.checkpoint_id == uuid.UUID(str(s["checkpoint_id"])),
+            PrdScopeItem.kind == "feature",
+            PrdScopeItem.key == s["item_key"],
+        )
+    else:
+        raise StagingError(422, "Name the feature the requirement belongs to")
+    found = (await db.execute(rows.order_by(PrdScope.created_at.desc()).limit(1))).first()
+    if found is None:
+        raise StagingError(409, "No feature set waiting for approval has this feature")
+    item, scope = found
+    cp = await db.get(Checkpoint, scope.checkpoint_id)
+    body = mapping.to_action(kind, payload, item.key)
+    body.item_key = item.key
+    if body.kind == "add":  # under the feature
+        body.value = {**(body.value or {}), "parent": item.key}
+    return cp, scope.run_id, body
+
+
 async def _to_checkpoint(
     db: AsyncSession,
     principal: "Principal",
@@ -174,17 +214,21 @@ async def _to_checkpoint(
     from oracle.runs.service import RunError
 
     d = await db.get(Discussion, change.discussion_id)
-    cp = await _pending(db, d, change.kind)
+    payload = change.edited_payload or change.payload
+    item_key = (d.subject or {}).get("item_key")
+    if change.kind in mapping.SCOPE_KINDS:
+        cp, run_id, body = await _scope_action(db, d, change.kind, payload)
+    else:
+        cp, run_id = await _pending(db, d, change.kind), d.run_id
+        body = mapping.to_action(change.kind, payload, item_key)
     if stage and not has_role(principal.role, cp.approver_role):  # type: ignore[arg-type]
         raise StagingError(403, f"Requires the {cp.approver_role} role")
-    item_key = (d.subject or {}).get("item_key")
-    body = mapping.to_action(change.kind, change.edited_payload or change.payload, item_key)
     if reason is not None and reason.strip():
         body.note = reason.strip()
     source = actions.ActionSource(d.id, change.id, d.visibility == "private")
     try:
         return await actions.put_action(
-            db, principal, d.run_id, cp.id, body, source=source, suggest_only=not stage
+            db, principal, run_id, cp.id, body, source=source, suggest_only=not stage
         )
     except RunError as e:
         raise StagingError(getattr(e, "status", 409), str(e)) from None
