@@ -25,6 +25,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -272,6 +273,7 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
   const q = useQuery(`launch|${id}`, () => unwrap(api.GET("/v1/launches/{launch_id}", path)));
   const notesQ = useQuery(`launch-notes|${id}`, () => unwrap(api.GET("/v1/launches/{launch_id}/notes", path)));
   const { me, can } = useMe();
+  const externalObserved = useAutonomyLevel("external_messages") === "observe";
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tier, setTier] = useState<"1" | "2" | "3" | null>(null);
@@ -421,6 +423,13 @@ function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promi
           >
             Draft with Oracle
           </Button>
+        )}
+        {externalObserved && can("draft_launch_kit") && l.state !== "cancelled" && (
+          // H11: at Observe for words for people outside, the kit drafts internal texts only.
+          <AutonomyNote testId="launch-observing">
+            Oracle is set to observe words for people outside, so it drafts internal texts only. Release notes, help docs, the in-app message, the
+            customer email and notes to people outside stay with you. Change this in
+          </AutonomyNote>
         )}
         <ul className="flex flex-col divide-y divide-line" data-testid="launch-tasks">
           {l.tasks.map((t) => (

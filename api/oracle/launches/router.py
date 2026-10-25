@@ -19,7 +19,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
-from oracle import audit, changes
+from oracle import audit, autonomy_drafts, changes
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.launches import changelog, service
@@ -46,10 +46,14 @@ from oracle.launches.schemas import (
     TaskPatch,
 )
 from oracle.roadmap import router as _roadmap_router  # noqa: F401 - roadmap.items runs first
+from oracle.runs import extensions
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 
 router = APIRouter(prefix="/v1", tags=["launches"])
+
+# H11 external_messages: at Observe the kit run is told to keep to internal words.
+extensions.register_prompt_lines("launch_kit", autonomy_drafts.kit_lines)
 
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]

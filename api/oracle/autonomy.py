@@ -439,6 +439,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=None,
         wired_by="H4",
         wired_by_name="H4 Strategy and vision",
+        wired=True,
         ceiling_reason="strategy is a person's call",
     ),
     Responsibility(
@@ -454,6 +455,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=None,
         wired_by="H4",
         wired_by_name="H4 Strategy and vision",
+        wired=True,
         ceiling_reason="the vision itself",
     ),
     Responsibility(
@@ -493,6 +495,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=None,
         wired_by="H6",
         wired_by_name="H6 Launches and changelog",
+        wired=True,
         ceiling_reason="what is said to people outside the company",
     ),
     Responsibility(

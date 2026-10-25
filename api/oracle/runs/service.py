@@ -1917,6 +1917,13 @@ async def create_run(
         flow,
         _Inputs(body.document, body.source, body.source_version, body.template, body.theme),
     )
+    if document_id is not None:
+        # H11: at Observe Oracle drafts no strategy, vision, nor update for people outside.
+        from oracle import autonomy_drafts
+
+        kind = await db.scalar(select(Document.kind).where(Document.id == document_id))
+        if refusal := await autonomy_drafts.run_refusal(db, flow.key, kind):
+            raise RunError(refusal)
     if flow.key == "update_draft" and "depth" not in body.knobs.model_fields_set:
         # H8: an investor update is quick by default ($4.50); a board update standard.
         template = (

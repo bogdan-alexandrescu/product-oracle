@@ -28,6 +28,8 @@ export interface LaunchesContext {
   trackId: string | null;
   /** The track's latest approved roadmap items; null for an unknown track. */
   roadmapItems?: (trackId: string) => Schemas["LaunchItem"][] | null;
+  /** H11 external_messages: whether the kit drafts words for people outside (Draft); false at Observe. */
+  externalWords?: () => boolean;
 }
 
 const AT = "2026-10-19T09:00:00Z";
@@ -521,9 +523,13 @@ export async function routeLaunches(ctx: LaunchesContext, db: LaunchesDb, req: R
     return json(200, out(db, launch));
   }
   if (p[3] === "draft" && m === "POST") {
-    // The mock's kit run finishes at once: Oracle's drafts land on the tasks still to do.
+    // The mock's kit run finishes at once: Oracle's drafts land on the tasks still to do (at
+    // Observe for words for people outside, the internal ones only).
+    const external = ctx.externalWords?.() ?? true;
     for (const t of db.tasks) {
-      if (t.launch_id === launch.id && t.status === "todo" && t.key && DRAFTS[t.key] && t.drafts !== "no") Object.assign(t, { body: DRAFTS[t.key], status: "drafted" });
+      if (t.launch_id !== launch.id || t.status !== "todo" || !t.key || !DRAFTS[t.key] || t.drafts === "no") continue;
+      if (!external && t.audience === "external") continue;
+      Object.assign(t, { body: DRAFTS[t.key], status: "drafted" });
     }
     Object.assign(launch, { kit_run_id: mockUuid(), kit_error: null });
     return json(201, { id: launch.kit_run_id, flow: "launch_kit", status: "succeeded" });
