@@ -18,6 +18,11 @@ import { login, signOut } from "./helpers";
  *   starting one PRD from all of them; fails_when=New requests can be selected, the button
  *   counts wrong, or a selected request is not ticked in the brief; no_claim=a theme's
  *   Start a PRD.
+ * - "already behind a brief or a PRD" (#569 review MAJOR 1): protects=a request already
+ *   behind a brief, or linked to a PRD, is not offered again (no box in the queue, no Start a
+ *   PRD in the inspector, not listed under "Requests behind it"), and the inspector shows the
+ *   PRD once; fails_when=such a request can be ticked or started from, or a second brief
+ *   could take it over; no_claim=the API's 409 (api/tests/test_requests_brief.py).
  * - "viewers": protects=Start a PRD only for those who can write a brief; fails_when=a viewer
  *   sees the button or the selection boxes; no_claim=the API's role check.
  */
@@ -93,6 +98,63 @@ test("Start a PRD from the queue: selected qualified requests are ticked in the 
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
+});
+
+test("already behind a brief or a PRD: such requests are not offered in the queue, the inspector or the brief", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await openRequests(page);
+  // Brief A takes "Invite a whole team at once".
+  await row(page, "Invite a whole team at once").getByRole("checkbox", { name: "Select Invite a whole team at once" }).check();
+  await page.getByRole("button", { name: "Start a PRD from 1 request" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Team invites");
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
+
+  // "Share a board read-only" is linked to a PRD by an approver.
+  await openRequests(page);
+  await pick(page, "Share a board read-only");
+  await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
+  await inspector(page).getByRole("button", { name: "Save links" }).click();
+  const prd = inspector(page).getByTestId("request-prd-link");
+  await expect(prd).toBeVisible();
+
+  // Neither can be ticked or started from again.
+  await page.reload();
+  await expect(page.getByTestId("request-row").first()).toBeVisible();
+  await expect(row(page, "Invite a whole team at once").getByRole("checkbox")).toHaveCount(0);
+  await expect(row(page, "Share a board read-only").getByRole("checkbox")).toHaveCount(0);
+  await expect(row(page, "Weekly summary email").getByRole("checkbox")).toHaveCount(1);
+  await pick(page, "Invite a whole team at once");
+  await expect(inspector(page).getByRole("link", { name: "Team invites" })).toBeVisible();
+  await expect(inspector(page).getByRole("button", { name: "Start a PRD" })).toHaveCount(0);
+  await pick(page, "Share a board read-only");
+  await expect(inspector(page).getByRole("button", { name: "Start a PRD" })).toHaveCount(0);
+
+  // The brief offers only the requests still free: not those two.
+  await pick(page, "Weekly summary email");
+  await inspector(page).getByRole("button", { name: "Start a PRD" }).click();
+  await expect(behind(page).getByRole("checkbox", { name: "Weekly summary email" })).toBeChecked();
+  await expect(behind(page).getByRole("checkbox", { name: "Invite a whole team at once" })).toHaveCount(0);
+  await expect(behind(page).getByRole("checkbox", { name: "Share a board read-only" })).toHaveCount(0);
+  await expect(behind(page).getByRole("checkbox")).toHaveCount(2);
+});
+
+test("the inspector shows a request's PRD once", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await openRequests(page);
+  await pick(page, "Weekly summary email");
+  await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
+  await inspector(page).getByRole("button", { name: "Save links" }).click();
+  await expect(inspector(page).getByTestId("request-prd-link")).toBeVisible();
+  await signOut(page);
+  await login(page, "viewer@example.com");
+  await openRequests(page);
+  await pick(page, "Weekly summary email");
+  // The PRD shows once, as a link, not again as a "PRD" row under Links.
+  await expect(inspector(page).getByTestId("request-prd-link")).toHaveCount(1);
+  await expect(inspector(page).locator("dt", { hasText: /^PRD$/ })).toHaveCount(1);
 });
 
 test("viewers: no Start a PRD and nothing to select", async ({ page }) => {
