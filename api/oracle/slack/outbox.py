@@ -9,7 +9,9 @@ message Slack gave up on fails its mirror and everything queued for it, with Sla
 on the discussion. Text over 3,000 characters goes as several posts.
 
 A ``ping`` (oracle.slack.pings) is one message to one member, in no thread: it retries
-like the rest, never waits for another item, and is dropped when it has nowhere to go.
+like the rest, never waits for another item, and is dropped when it has nowhere to go. A
+ping is never sent more than 24 h after it was queued: one never tried (Slack was
+disconnected) is dropped as ``expired``, one that kept failing is ``failed``.
 """
 
 import logging
@@ -104,6 +106,12 @@ async def deliver_one(
     link = await db.get(DiscussionSlackLink, item.link_id) if item.link_id else None
     if link is None and item.op != "ping":
         item.status = "dropped"
+        return False
+    if item.op == "ping" and now - item.created_at >= GIVE_UP_AFTER:
+        if item.attempts:
+            item.status = "failed"
+        else:
+            item.status, item.error = "dropped", "expired"
         return False
     try:
         if item.op == "ping":

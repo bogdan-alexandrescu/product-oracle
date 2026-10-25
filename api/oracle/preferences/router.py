@@ -14,10 +14,10 @@ DocumentView = Literal["brief", "full"]
 
 
 class SlackPings(BaseModel):
-    """Which Slack pings the member gets (oracle.slack.pings): every one off by default
-    except ``review_requested``."""
+    """Which Slack pings the member gets (oracle.slack.pings): ``review_requested`` and
+    ``draft_ready`` on by default, the rest off."""
 
-    draft_ready: bool = False
+    draft_ready: bool = True
     review_requested: bool = True
     comments: bool = False
     feedback_wanted: bool = False

@@ -371,7 +371,7 @@ function ensureLaunches(db: Db): LaunchesDb {
 const STORAGE_KEY = "po-mock-db-v2";
 /** Slack pings a member gets until they choose (api oracle.slack.pings.DEFAULTS). */
 const SLACK_PINGS: Schemas["SlackPings"] = {
-  draft_ready: false,
+  draft_ready: true,
   review_requested: true,
   comments: false,
   feedback_wanted: false,

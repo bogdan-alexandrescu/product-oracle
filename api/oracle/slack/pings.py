@@ -11,9 +11,12 @@ delivered by the minute tick with the outbox's retries. The events, and who gets
 - ``comments``, ``feedback_wanted``, ``published``: the member's own notifications
   (comments and replies on what they review, a call for feedback, a publication).
 
-Each member chooses (My account, their ``slack_pings`` preference): every ping is off by
-default except ``review_requested`` (:data:`DEFAULTS`; the owner's call, questions.json).
-Nothing is queued while the company's Slack (Settings › Notifications) is not connected.
+Each member chooses (My account, their ``slack_pings`` preference): ``review_requested``
+and ``draft_ready`` are on by default, the rest off (:data:`DEFAULTS`; the owner's call).
+The choice is read when a ping is queued and again when it goes, so a ping turned off
+meanwhile is dropped (``turned_off``). Nothing is queued while the company's Slack
+(Settings › Notifications) is not connected, and a ping not sent within a day (Slack
+disconnected, then reconnected) is never sent late (oracle.slack.outbox, ``expired``).
 
 Where it goes: a DM when Slack knows the member's e-mail (``users.lookupByEmail``, the
 install's ``users:read.email``); otherwise the Notifications channel (the alignment
@@ -43,7 +46,7 @@ from oracle.slack.models import SlackOutbox
 PREFERENCE = "slack_pings"
 EVENTS = ("draft_ready", "review_requested", "comments", "feedback_wanted", "published")
 DEFAULTS: dict[str, bool] = {
-    "draft_ready": False,
+    "draft_ready": True,
     "review_requested": True,
     "comments": False,
     "feedback_wanted": False,
@@ -68,6 +71,7 @@ UNTITLED = {
     "published": "a document you follow was published",
 }
 NOT_IN_SLACK = "users_not_found"
+TURNED_OFF = "turned_off"
 
 
 class Undeliverable(Exception):
@@ -240,11 +244,17 @@ async def send(db: AsyncSession, http: httpx.AsyncClient, token: str, item: Slac
     user = await db.get(User, item.recipient_id) if item.recipient_id else None
     if user is None or user.disabled_at is not None:
         raise Undeliverable("member_removed")
+    event = str(item.payload.get("event") or "")
+    if event in DEFAULTS and not (await _chosen(db, [user.id]))[user.id][event]:
+        raise Undeliverable(TURNED_OFF)
     try:
         found = await slack_api.call(
             http, "users.lookupByEmail", token=token, data={"email": user.email}
         )
-        channel, text = str((found.get("user") or {})["id"]), str(item.payload["text"])
+        slack_id = (found.get("user") or {}).get("id")
+        if not slack_id:
+            raise slack_api.SlackError(NOT_IN_SLACK)
+        channel, text = str(slack_id), str(item.payload["text"])
     except slack_api.SlackError as e:
         if e.code != NOT_IN_SLACK:
             raise

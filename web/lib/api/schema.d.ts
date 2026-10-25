@@ -26956,7 +26956,7 @@ export interface components {
             setup_hidden: boolean;
             /**
              * @default {
-             *       "draft_ready": false,
+             *       "draft_ready": true,
              *       "review_requested": true,
              *       "comments": false,
              *       "feedback_wanted": false,
@@ -32635,13 +32635,13 @@ export interface components {
         };
         /**
          * SlackPings
-         * @description Which Slack pings the member gets (oracle.slack.pings): every one off by default
-         *     except ``review_requested``.
+         * @description Which Slack pings the member gets (oracle.slack.pings): ``review_requested`` and
+         *     ``draft_ready`` on by default, the rest off.
          */
         SlackPings: {
             /**
              * Draft Ready
-             * @default false
+             * @default true
              */
             draft_ready: boolean;
             /**

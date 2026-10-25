@@ -9,7 +9,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 type Pings = Schemas["SlackPings"];
 type Ping = keyof Pings;
 
-/** The pings a member chooses (oracle.slack.pings): all off by default but review requested. */
+/** The pings a member chooses (oracle.slack.pings): review requested and draft ready on by default, the rest off. */
 export const PINGS: { key: Ping; label: string; detail: string }[] = [
   {
     key: "review_requested",
