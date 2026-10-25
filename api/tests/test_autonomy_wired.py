@@ -135,6 +135,52 @@ async def test_oracle_recording_a_verdict_tells_the_owner(client, owner, runtime
     assert row["responsibility"] == "outcomes" and row["counts"] is True
 
 
+async def test_with_no_owner_oracle_tells_the_owners(client, owner, runtime):  # noqa: F811
+    """protects=an outcome with no owner still gets someone told: the company's owners;
+    fails_when=Oracle records the verdict and tells no one; no_claim=who owns it later."""
+    tenant_id, auth = owner
+    pay = (await outcome_world(client, auth, runtime, tenant_id))["payment-step"]
+    prediction = {**pay["prediction"], "threshold_value": 40, "by": days_ago(10).isoformat()}
+    await set_record(
+        tenant_id, pay["id"], status="tracking", prediction=prediction,
+        assess_due_on=company_today(), owner_id=None,
+    )  # fmt: skip
+    await goal_history(tenant_id, ("41%", days_ago(5)))
+    await set_level(tenant_id, "outcomes", "act")
+    await ticker_pass(tenant_id)
+    (did,) = await actions_of(tenant_id, "outcomes")
+    assert len(did.notify_ids) >= 1
+    inbox = (await client.get("/v1/inbox", headers=auth)).json()
+    assert [r["responsibility"] for r in inbox["oracle_actions"]] == ["outcomes"]
+
+
+@pytest.mark.parametrize("level", ["observe", "draft"])
+async def test_below_recommend_oracle_reads_the_actual_but_proposes_no_verdict(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    level,
+):
+    """protects=at Observe and Draft Oracle records the predicted and actual results only:
+    the record shows the goal's reading with no proposed verdict; fails_when=a verdict is
+    proposed below Recommend; no_claim=the screen (Playwright)."""
+    tenant_id, auth = owner
+    pay = (await outcome_world(client, auth, runtime, tenant_id))["payment-step"]
+    prediction = {**pay["prediction"], "threshold_value": 40, "by": days_ago(10).isoformat()}
+    await set_record(
+        tenant_id, pay["id"], status="tracking", prediction=prediction,
+        assess_due_on=company_today(),
+    )  # fmt: skip
+    await goal_history(tenant_id, ("41%", days_ago(5)))
+    await set_level(tenant_id, "outcomes", level)
+    await ticker_pass(tenant_id)
+    got = (await client.get(f"/v1/outcomes/{pay['id']}", headers=auth)).json()
+    assert got["status"] == "tracking"
+    assert got["proposed_assessment"]["verdict"] is None
+    assert got["proposed_assessment"]["observed"] == "41%"
+    assert await actions_of(tenant_id, "outcomes") == []
+
+
 async def test_oracle_records_no_verdict_below_act(client, owner, runtime):  # noqa: F811
     """protects=at Recommend the verdict waits for a person and nobody is told Oracle
     did anything; fails_when=an "Oracle did" row appears; no_claim=the proposal itself."""
@@ -211,12 +257,98 @@ async def test_oracle_decides_a_reversible_call_after_preparing_options(client, 
     assert did.undo == {
         "method": "POST",
         "path": f"/v1/decisions/{d['id']}/reviews",
-        "body": {"verdict": "reversed", "note": "Reversed Oracle's decision from the Inbox"},
+        "body": {"verdict": "revisit", "note": "Handed Oracle's decision back from the Inbox"},
     }
+
+
+async def test_undo_hands_oracles_decision_back_to_the_approver(client, ctx):
+    """protects=Undo on Oracle's decision hands the question back: a new proposal that
+    supersedes it, with its options and evidence and no recommendation, which the approver
+    decides on another option and Oracle does not decide again; fails_when=Undo reverses
+    the decision (the approver can neither decide nor withdraw it), or Oracle re-decides
+    the revisit; no_claim=the Inbox screen (Playwright)."""
+    await set_level(ctx.tenant_id, "decisions", "act")
+    d = await propose(client, ctx, options=recommended())
+    out = await oracle_decides(ctx.tenant_id, d["number"])
+    assert out.status == "decided"
+    (did,) = await actions_of(ctx.tenant_id, "decisions")
     resp = await client.post(f"/v1/oracle-actions/{did.id}/undo", headers=ctx.as_("approver"))
     assert resp.status_code == 200, resp.text
     got = (await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))).json()
-    assert got["status"] == "reversed"
+    assert got["status"] == "decided" and got["revisit_id"] is not None
+    async with tenant_session(ctx.tenant_id) as s:
+        new = await s.get(Decision, uuid.UUID(got["revisit_id"]))
+        assert new.status == "proposed" and new.supersedes_id == out.id
+        assert [o["key"] for o in new.options] == ["caps-first", "together"]
+        assert not any(o["recommended"] for o in new.options)
+        # Even with a recommendation added back, Oracle leaves a revisit to the approver.
+        new.options = recommended()
+        assert await decisions.decide_within_limits(s, new) is False
+        await s.commit()
+        number = new.number
+    again = await client.post(
+        f"/v1/decisions/{number}/decide",
+        json={
+            "option_key": "together",
+            "rationale": "Wait for detection after all",
+            "reversibility": "reversible",
+            "expected_outcome": "One launch, no noisy alerts",
+        },
+        headers=ctx.as_("approver"),
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["chosen_option"] == "together"
+    assert len(await actions_of(ctx.tenant_id, "decisions")) == 1
+
+
+async def test_oracle_never_decides_a_call_about_an_approvers_only_document(client, ctx):
+    """protects=pricing stays with people: a reversible call whose subject is an
+    approvers-only document (a pricing memo) waits for its approver even at Act;
+    fails_when=Oracle decides it; no_claim=the pricing flow itself (test_pricing*)."""
+    from oracle.docs.models import Document
+
+    await set_level(ctx.tenant_id, "decisions", "act")
+    async with tenant_session(ctx.tenant_id) as s:
+        memo = Document(slug="memo", title="Price memo", kind="pricing", visibility="approvers")
+        s.add(memo)
+        await s.commit()
+        memo_id = str(memo.id)
+    d = await propose(
+        client,
+        ctx,
+        who="approver",
+        options=recommended(),
+        subjects=[{"kind": "document", "id": memo_id}],
+    )
+    out = await oracle_decides(ctx.tenant_id, d["number"])
+    assert out.status == "proposed"
+    assert await actions_of(ctx.tenant_id, "decisions") == []
+
+
+@pytest.mark.parametrize("level, recommends", [("observe", False), ("draft", False),
+                                               ("recommend", True)])  # fmt: skip
+async def test_asked_options_follow_the_level(client, ctx, level, recommends):
+    """protects=below Recommend, Ask Oracle for options gives options with evidence but no
+    default; fails_when=Observe or Draft still marks one recommended; no_claim=the model."""
+    await set_level(ctx.tenant_id, "decisions", level)
+    d = await propose(client, ctx, options=[], expected_outcome=None)
+    resp = await client.post(
+        f"/v1/decisions/{d['number']}/options-job", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 201, resp.text
+    fake = FakeClaude()
+    from oracle.llm import gateway
+
+    previous = gateway.set_transports(gateway.Transports(plan=fake, api_key=fake))
+    try:
+        await add_account(ctx.tenant_id, "personal", windows={"five_hour": window(0.2)})
+        fake.script["decision_options"].append({"options": recommended()})
+        await worker.run_pending(ctx.tenant_id)
+    finally:
+        gateway.set_transports(previous)
+    got = (await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))).json()
+    assert len(got["options"]) == 2
+    assert any(o["recommended"] for o in got["options"]) is recommends
 
 
 @pytest.mark.parametrize(
