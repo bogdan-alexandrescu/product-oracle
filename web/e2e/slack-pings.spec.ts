@@ -17,9 +17,10 @@ const panel = (page: Page) => page.getByTestId("slack-pings");
 const ping = (page: Page, key: string) => panel(page).getByTestId(`ping-${key}`);
 const withScenario = (page: Page) => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, SLACK_SCENARIO]);
 
-// protects=the defaults and a member's own choice: every ping off but "a review or decision
-// is asked of me", and a choice made on My account is kept after a reload; fails_when=another
-// default shows, or the choice is lost; no_claim=what Slack shows.
+// protects=the defaults and a member's own choice: "a review or decision is asked of me" and
+// "a draft is ready for my review" on, the rest off, and a choice made on My account is kept
+// after a reload; fails_when=another default shows, or the choice is lost; no_claim=what
+// Slack shows.
 test("a member chooses their Slack pings on My account", async ({ page }) => {
   await withScenario(page);
   await login(page);
@@ -27,17 +28,20 @@ test("a member chooses their Slack pings on My account", async ({ page }) => {
   await expect(panel(page)).toBeVisible();
   await expect(panel(page)).toContainText("direct message");
   await expect(panel(page).getByTestId("slack-pings-off")).toHaveCount(0);
-  await expect(ping(page, "review_requested")).toBeChecked();
-  for (const key of ["draft_ready", "comments", "feedback_wanted", "published"]) await expect(ping(page, key)).not.toBeChecked();
+  for (const key of ["review_requested", "draft_ready"]) await expect(ping(page, key)).toBeChecked();
+  for (const key of ["comments", "feedback_wanted", "published"]) await expect(ping(page, key)).not.toBeChecked();
 
   await panel(page).getByText("A draft is ready for my review").click();
-  await expect(ping(page, "draft_ready")).toBeChecked();
+  await expect(ping(page, "draft_ready")).not.toBeChecked();
+  await panel(page).getByText("Comments and replies").click();
+  await expect(ping(page, "comments")).toBeChecked();
   await ping(page, "review_requested").uncheck();
   await expect(ping(page, "review_requested")).not.toBeChecked();
   await expect(ping(page, "review_requested")).toBeEnabled();
 
   await page.reload();
-  await expect(ping(page, "draft_ready")).toBeChecked();
+  await expect(ping(page, "draft_ready")).not.toBeChecked();
+  await expect(ping(page, "comments")).toBeChecked();
   await expect(ping(page, "review_requested")).not.toBeChecked();
 });
 

@@ -11,6 +11,7 @@ no_claim=<what green does not prove>. Synthetic placeholders only.
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -27,7 +28,7 @@ from tests.test_slack_bridge import FakeSlack, install
 from tests.test_slack_bridge import slack as bridge_slack  # noqa: F401
 
 DEFAULTS = {
-    "draft_ready": False,
+    "draft_ready": True,
     "review_requested": True,
     "comments": False,
     "feedback_wanted": False,
@@ -44,7 +45,9 @@ class PingSlack(FakeSlack):
         self.people = dict(SLACK_USERS)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/users.lookupByEmail"):
+        if request.url.path.endswith("/users.lookupByEmail") and not self.answers.get(
+            "users.lookupByEmail"
+        ):
             super().handler(request)  # records the call
             email = self.calls[-1][1].get("email", "")
             if email in self.people:
@@ -96,18 +99,18 @@ def posts(slack) -> list[dict]:
     return slack.of("chat.postMessage")
 
 
-# protects=the defaults and the choice (My account): every ping is off but review
-# requested, a member changes only their own; fails_when=another default, an unknown
+# protects=the defaults and the choice (My account): review requested and draft ready are
+# on, the rest off, a member changes only their own; fails_when=another default, an unknown
 # ping accepted, or one member's choice changes another's; no_claim=the web page.
 async def test_each_member_chooses_their_pings(client):
     ctx, _ = await company(client)
     got = await client.get("/v1/me/preferences", headers=ctx.as_("commenter"))
     assert got.json()["slack_pings"] == DEFAULTS
-    assert await choose(client, ctx, "commenter", draft_ready=True, review_requested=False) == {
-        **DEFAULTS, "draft_ready": True, "review_requested": False,
+    assert await choose(client, ctx, "commenter", draft_ready=False, review_requested=False) == {
+        **DEFAULTS, "draft_ready": False, "review_requested": False,
     }  # fmt: skip
     # A later change keeps the earlier one.
-    assert (await choose(client, ctx, "commenter", comments=True))["draft_ready"] is True
+    assert (await choose(client, ctx, "commenter", comments=True))["draft_ready"] is False
     other = await client.get("/v1/me/preferences", headers=ctx.as_("approver"))
     assert other.json()["slack_pings"] == DEFAULTS
     bad = await client.patch(
@@ -152,14 +155,15 @@ async def test_no_ping_when_turned_off_or_not_connected(client, slack):
     assert await pings_of(ctx) == []
 
 
-# protects=draft ready goes to the document's reviewers who opted in, never to the person
-# who imported it; fails_when=a reviewer who did not opt in is pinged, or a non-reviewer;
-# no_claim=which sections changed.
-async def test_a_new_draft_pings_the_reviewers_who_opted_in(client, slack):
+# protects=draft ready (on by default) goes to the document's reviewers who kept it on,
+# never to the person who imported it; fails_when=a reviewer who turned it off is pinged,
+# a reviewer who kept the default is not, or a non-reviewer is; no_claim=which sections
+# changed.
+async def test_a_new_draft_pings_the_reviewers_who_kept_it_on(client, slack):
     ctx, doc = await company(client)
     await install(client, ctx)
-    await choose(client, ctx, "commenter", draft_ready=True, review_requested=False)
-    await choose(client, ctx, "viewer", draft_ready=True)
+    await choose(client, ctx, "commenter", review_requested=False)
+    await choose(client, ctx, "approver", draft_ready=False)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter"), uid(ctx, "approver")])
     before = {p.id for p in await pings_of(ctx)}
     v2 = draft("prd_v1.md").replace("Too many shoppers", "Many shoppers")
@@ -259,6 +263,71 @@ async def test_comment_pings_are_opt_in(client, slack):
     await comment("Or two?")
     events = [p.payload["event"] for p in await pings_of(ctx)][before:]
     assert events == ["comments"]
+
+
+# protects=a ping turned off after it was queued is not sent (the choice is read again when
+# it goes); fails_when=the queued ping still reaches the member; no_claim=the Inbox row.
+async def test_a_ping_turned_off_before_it_goes_is_dropped(client, slack):
+    ctx, doc = await company(client)
+    await install(client, ctx)
+    await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
+    (item,) = await pings_of(ctx)
+    assert item.status == "queued"
+    await choose(client, ctx, "commenter", review_requested=False)
+    await outbox.tick(ctx.tenant_id)
+    assert posts(slack) == []
+    (item,) = await pings_of(ctx)
+    assert (item.status, item.error) == ("dropped", "turned_off")
+
+
+# protects=a ping that could not go within a day (Slack disconnected, then reconnected) is
+# never sent late; fails_when=the stale ping is posted on the next tick; no_claim=the
+# disconnect flow itself.
+async def test_a_ping_older_than_a_day_is_not_sent(client, slack):
+    ctx, doc = await company(client)
+    await install(client, ctx)
+    await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
+    await outbox.tick(ctx.tenant_id, now=datetime.now(UTC) + timedelta(hours=24, minutes=1))
+    assert posts(slack) == []
+    (item,) = await pings_of(ctx)
+    assert (item.status, item.error) == ("dropped", "expired")
+
+
+# protects=a lookup answered without a user id falls back like an unknown member, without
+# aborting the tick; fails_when=a KeyError escapes deliver; no_claim=Slack's real answers.
+async def test_a_lookup_without_a_user_id_is_not_found(client, slack):
+    ctx, doc = await company(client)
+    await install(client, ctx)
+    slack.answers["users.lookupByEmail"] = [httpx.Response(200, json={"ok": True, "user": {}})]
+    await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
+    await outbox.tick(ctx.tenant_id)
+    assert posts(slack) == []
+    (item,) = await pings_of(ctx)
+    assert (item.status, item.error) == ("dropped", "users_not_found")
+
+
+# protects=a ping Slack keeps refusing is retried with back-off, then failed after 24 h
+# with Slack's reason; fails_when=it is dropped at once, retried forever, or sent after
+# the day; no_claim=the exact back-off (test_slack_bridge).
+async def test_a_ping_retries_then_fails(client, slack):
+    ctx, doc = await company(client)
+    await install(client, ctx)
+    await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter")])
+    refused = {"ok": False, "error": "channel_not_found"}
+    slack.answers["chat.postMessage"] = [httpx.Response(200, json=refused) for _ in range(3)]
+    now = datetime.now(UTC)
+    tick = await outbox.tick(ctx.tenant_id, now=now)
+    assert tick.retried == 1
+    (item,) = await pings_of(ctx)
+    assert (item.status, item.attempts, item.error) == ("queued", 1, "channel_not_found")
+    await outbox.tick(ctx.tenant_id, now=now + timedelta(minutes=2))
+    (item,) = await pings_of(ctx)
+    assert (item.status, item.attempts) == ("queued", 2)
+    tick = await outbox.tick(ctx.tenant_id, now=now + timedelta(hours=24, minutes=1))
+    assert tick.failed == 1
+    (item,) = await pings_of(ctx)
+    assert (item.status, item.error) == ("failed", "channel_not_found")
+    assert len(posts(slack)) == 2
 
 
 def test_the_event_list():
