@@ -147,7 +147,9 @@ CITATION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$"
 # control characters it drops ("java\tscript:") removed first.
 _REF_SCHEME_RE = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*):")
 _URL_IGNORED_RE = re.compile(r"[\x00-\x20\x7f]")
-LINK_SCHEMES = ("http", "https")
+# The schemes a non-oracle ref may have: a link, or an id that is never one ("urn:uuid:<id>"
+# of a source item, matched by the publish checks; shown as text).
+REF_SCHEMES = ("http", "https", "urn")
 
 
 def ref_scheme(ref: str) -> str | None:
@@ -183,15 +185,15 @@ class CitationIn(BaseModel):
     @field_validator("ref")
     @classmethod
     def _ref_is_a_link(cls, value: str, info: ValidationInfo) -> str:
-        # The web opens a ref but an oracle one as a link (web/lib/format.ts): a URL other
-        # than http(s) (javascript:, data:, ...) never gets in; a ref with no scheme (an
+        # The web opens an http(s) ref as a link (web/lib/format.ts): a ref of another
+        # scheme (javascript:, data:, ...) never gets in; a urn or a ref with no scheme (an
         # upload's name, an item's id) does, and shows as text. An oracle ref names a
         # baseline item (checked at import, oracle.docs.service). Not checked when the
         # source itself is refused.
         source = info.data.get("source")
         scheme = ref_scheme(value) if source not in (None, "oracle") else None
-        if scheme is not None and scheme not in LINK_SCHEMES:
-            raise ValueError(f"ref's scheme '{scheme}:' isn't accepted (only http or https)")
+        if scheme is not None and scheme not in REF_SCHEMES:
+            raise ValueError(f"ref's scheme '{scheme}:' isn't accepted (http, https or urn)")
         return value
 
 

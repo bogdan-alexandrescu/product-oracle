@@ -35,9 +35,9 @@ def citation_contract() -> str:
         "null when there is no score, with confidence_note saying why) and low_confidence "
         "(true when the confidence is under the company's low threshold). Every [c:id] chip "
         "in the body must match a citation's id. Oracle refuses a draft with any other "
-        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, a ref that is "
-        "a URL other than http or https (for oracle, one that names no baseline item of the "
-        "company), or a chip that matches no id."
+        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, a ref with "
+        "a scheme other than http, https or urn (for oracle, one that names no baseline "
+        "item of the company), or a chip that matches no id."
     )
 
 
