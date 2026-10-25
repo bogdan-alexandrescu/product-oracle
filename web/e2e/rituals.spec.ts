@@ -140,7 +140,7 @@ test("12d: an approver sees the table and the Summaries choice without edit cont
   await withRituals(page);
   await login(page, APPROVER);
   await openRituals(page);
-  await expect(page.getByTestId("ritual-row")).toHaveCount(4);
+  await expect(page.getByTestId("ritual-row")).toHaveCount(5);
   await expect(ritualRow(page, "Investor update")).toContainText("Paused");
   await expect(summaries(page)).toContainText("Summaries: On demand");
   await expect(summaries(page).getByRole("group", { name: "Summaries" })).toHaveCount(0);

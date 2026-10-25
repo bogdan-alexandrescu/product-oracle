@@ -34,6 +34,7 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.rituals import rebuild
 from oracle.rituals.models import Ritual, RitualOccurrence
 from oracle.rituals.schedule import runs_per_month
 from oracle.rituals.schemas import Estimate, EstimateRitual, SummarySettingsOut
@@ -133,10 +134,16 @@ async def set_mode(db: AsyncSession, principal: Principal, value: str) -> Summar
 
 
 async def sync_state(db: AsyncSession, occ: RitualOccurrence) -> None:
-    """A running summary whose run ended without a summary is failed."""
+    """A running summary whose run ended without a summary is failed (a Baseline
+    rebuild's build: ready once it succeeded)."""
     if occ.summary_state != "running" or occ.summary_run_id is None:
         return
-    status = await db.scalar(select(Run.status).where(Run.id == occ.summary_run_id))
+    flow, status = (
+        await db.execute(select(Run.flow, Run.status).where(Run.id == occ.summary_run_id))
+    ).one_or_none() or (None, None)
+    if flow == rebuild.FLOW:
+        await rebuild.sync_state(db, occ, status)
+        return
     if status in ("failed", "cancelled") or (status == "succeeded" and not occ.summary):
         occ.summary_state = "failed"
         occ.summary_note = FAILED
@@ -214,6 +221,8 @@ async def on_demand(db: AsyncSession, principal: Principal, occ: RitualOccurrenc
             raise RitualError(409, "Oracle is already writing this summary")
     ritual = await db.get(Ritual, occ.ritual_id)
     kind = ritual.kind if ritual is not None else "custom"
+    if kind == rebuild.KIND:
+        raise RitualError(409, rebuild.ON_DEMAND)
     if not await offered(db, kind):
         from oracle.market.digest import OBSERVE
 
@@ -226,7 +235,10 @@ async def on_demand(db: AsyncSession, principal: Principal, occ: RitualOccurrenc
 
 async def offered(db: AsyncSession, kind: str | None) -> bool:
     """Whether Oracle writes a ``kind`` occurrence's summary now: a competitive digest's
-    not at H11 ``market`` Observe (its route answers 409 there)."""
+    not at H11 ``market`` Observe (its route answers 409 there); a Baseline rebuild's
+    never (its occurrence starts B1's build instead)."""
+    if kind == rebuild.KIND:
+        return False
     return kind not in MARKET_KINDS or await _market_writes(db)
 
 
@@ -264,6 +276,10 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID)
 
     try:
         ritual = await db.get(Ritual, ritual_id)
+        if ritual is not None and ritual.kind == rebuild.KIND:
+            # Its own rule: H11 "Keep the baseline current" (oracle.rituals.rebuild).
+            await rebuild.after_ready(db, occ_id, ritual)
+            return
         if ritual is None or not eligible(ritual.kind) or not await offered(db, ritual.kind):
             return
         flow = flow_of(ritual.kind)

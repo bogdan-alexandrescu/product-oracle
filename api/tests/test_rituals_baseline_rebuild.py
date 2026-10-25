@@ -170,7 +170,7 @@ async def test_the_builds_proposals_wait_for_a_person(client, ctx, at, runtime):
         cps = list(await db.scalars(select(Checkpoint).where(Checkpoint.run_id == run.id)))
         goals = list(await db.scalars(select(Entity).where(Entity.type == "goal")))
     assert status == "awaiting_checkpoint"
-    assert [(c.name, c.status) for c in cps] == [("baseline_confirm", "pending")]
+    assert [(c.kind, c.status) for c in cps] == [("baseline_confirm", "pending")]
     assert all(g.status != "confirmed" for g in goals)
 
 
@@ -295,6 +295,10 @@ async def test_an_owner_who_cannot_start_runs_gets_a_note(client, ctx, at, runti
     async with tenant_session(ctx.tenant_id) as db:
         from oracle.rituals.models import RitualOccurrence
 
-        (occ,) = list(await db.scalars(select(RitualOccurrence)))
+        (occ,) = list(
+            await db.scalars(
+                select(RitualOccurrence).where(RitualOccurrence.ritual_id == ritual.id)
+            )
+        )
     assert occ.summary_state == "not_started"
     assert occ.summary_note == "Not started: the ritual's owner can no longer start runs"

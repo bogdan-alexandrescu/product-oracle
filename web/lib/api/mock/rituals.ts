@@ -47,6 +47,18 @@ export interface RitualsContext {
   openVariances?: (occurrenceId: string) => number;
   /** H11 "Watch the market" above Observe: Oracle writes the competitive digest. */
   marketWrites: () => boolean;
+  /** The Baseline rebuild (rebuild.py): H11 "Keep the baseline current" is at Draft or above. */
+  baselineStarts?: () => boolean;
+  /** H11 Run rituals' cost limit a run (max_run_usd). */
+  ritualRunCap?: () => number;
+  /** B1's Build the baseline, started as the API's create, estimate and start: the run's id, or the refusal. */
+  startBaselineBuild?: () => Promise<{ id: string } | { error: string }>;
+  /** A run's status in the runs mock, or null. */
+  runStatus?: (id: string) => string | null;
+  /** When the last Build the baseline run finished, or null. */
+  lastBaselineBuild?: () => string | null;
+  /** Record what Oracle did on its own ("Oracle did" Inbox row, ./autonomy.ts). */
+  oracleDid?: (row: { responsibility: string; responsibility_title: string; summary: string; subject: Record<string, string>; undo: Schemas["InboxOracleAction"]["undo"]; notify_ids: string[] }) => void;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -177,6 +189,8 @@ const BUILTINS = [
   { kind: "roadmap_refresh", title: "Monthly roadmap refresh", schedule: sched("monthly", { week_of_month: 1, weekday: 1, time: "10:00" }), duration_min: 60, prep_hours: 24, on: true },
   { kind: "goals_review", title: "Quarterly goals review", schedule: sched("quarterly", { month: 1, week_of_month: 1, weekday: 2, time: "10:00" }), duration_min: 90, prep_hours: 48, on: true },
   { kind: "investor_update", title: "Investor update", schedule: sched("monthly", { week_of_month: 1, weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 72, on: false },
+  // B1's Build the baseline on the ritual clock, seeded paused (rebuild.py).
+  { kind: "baseline_rebuild", title: "Baseline rebuild", schedule: sched("monthly", { week_of_month: 1, weekday: 0, time: "09:00" }), duration_min: 30, prep_hours: 0, on: false },
 ];
 
 const BLOCK_TITLES: Record<string, string> = {
@@ -190,6 +204,7 @@ const BLOCK_TITLES: Record<string, string> = {
   done_items: "Done in the window",
   priority_changes: "Priority changes",
   suggested_next: "Suggested next",
+  baseline_rebuild: "Baseline rebuild",
 };
 
 type Row = { text: string; href?: string | null; method?: string; label?: string };
@@ -232,7 +247,69 @@ function goalsBlocks(asOf: string) {
   ];
 }
 
-function blocksFor(kind: string, asOf: string, trackId: string) {
+// --- the Baseline rebuild (rebuild.py) -------------------------------------------------------
+
+const REBUILD = "baseline_rebuild";
+/** B1's build at the ritual's knobs: standard depth, default roles. */
+const REBUILD_USD = 7;
+const BUILD_HERE = "Build it from the Baseline page.";
+const REBUILD_FAILED = "The baseline build did not finish · Build it from the Baseline page";
+const UNDER_WAY = ["draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+const usd2 = (n: number) => `$${n.toFixed(2)}`;
+/** As Python's `:g`: $10, $7.5. */
+const usdG = (n: number) => `$${n}`;
+
+/** Why Oracle starts no build now (rebuild.blocked), or null. */
+function rebuildBlocked(ctx: RitualsContext): string | null {
+  if (!(ctx.baselineStarts?.() ?? true)) return `Not started: Oracle is set to observe the baseline. ${BUILD_HERE}`;
+  const cap = ctx.ritualRunCap?.() ?? 10;
+  if (REBUILD_USD > cap) return `Not started: the estimate ${usd2(REBUILD_USD)} is above your ${usdG(cap)} limit a run. ${BUILD_HERE}`;
+  return null;
+}
+
+function rebuildBlocks(ctx: RitualsContext, asOf: string) {
+  const last = ctx.lastBaselineBuild?.() ?? null;
+  const rows: Row[] = [
+    last ? { text: `Last built ${last.slice(0, 16).replace("T", " ")} UTC`, href: "/runs" } : { text: "No baseline build yet", href: null },
+    { text: `Estimate ${usd2(REBUILD_USD)} at standard depth`, href: null },
+  ];
+  const why = rebuildBlocked(ctx);
+  if (why) rows.push({ text: why, href: null }, { text: "Build the baseline", label: "Build the baseline", href: "/baseline?build=1" });
+  else rows.push({ text: "Oracle starts the build; its proposals wait for review", href: "/baseline" });
+  return [block(REBUILD, asOf, rows)];
+}
+
+/** An occurrence that just became ready starts B1's build (rebuild.after_ready). */
+async function rebuildAfterReady(ctx: RitualsContext, r: Ritual, o: Occurrence) {
+  if (o.summary_state !== "none" || o.summary_run_id) return;
+  const why = rebuildBlocked(ctx);
+  const owner = ctx.members.find((m) => m.id === r.owner_id);
+  const note = (summary_note: string) => Object.assign(o, { summary_state: "not_started", summary_note });
+  if (why) return note(why);
+  if (!owner || owner.status === "disabled" || !atLeast(owner.role, "approver")) return note("Not started: the ritual's owner can no longer start runs");
+  const started = (await ctx.startBaselineBuild?.()) ?? { error: "The mock cannot start runs" };
+  if ("error" in started) return note(`Not started: ${started.error.charAt(0).toLowerCase()}${started.error.slice(1)}`);
+  Object.assign(o, { summary_state: "running", summary_run_id: started.id, summary_note: null, summary: null });
+  ctx.oracleDid?.({
+    responsibility: "baseline",
+    responsibility_title: "Keep the baseline current",
+    summary: `Started the baseline rebuild · Estimate ${usd2(REBUILD_USD)}, within your ${usdG(ctx.ritualRunCap?.() ?? 10)} limit`,
+    subject: { kind: "ritual", key: r.id, href: `/company/rituals/${o.id}` },
+    undo: { method: "POST", path: `/v1/runs/${started.id}/cancel`, body: null },
+    notify_ids: [r.owner_id],
+  });
+}
+
+/** A build that ended: ready once it succeeded, else failed (summaries.sync_state). */
+function syncRebuild(ctx: RitualsContext, o: Occurrence) {
+  if (o.summary_state !== "running" || !o.summary_run_id) return;
+  const status = ctx.runStatus?.(o.summary_run_id) ?? "running";
+  if (status === "succeeded") Object.assign(o, { summary_state: "ready", summary_note: null });
+  else if (!UNDER_WAY.includes(status)) Object.assign(o, { summary_state: "failed", summary_note: REBUILD_FAILED });
+}
+
+function blocksFor(kind: string, asOf: string, trackId: string, ctx?: RitualsContext) {
+  if (kind === REBUILD && ctx) return rebuildBlocks(ctx, asOf);
   if (kind === "roadmap_refresh") return roadmapBlocks(asOf, trackId);
   if (kind === "goals_checkin" || kind === "goals_review") return goalsBlocks(asOf);
   return [block("since_last", asOf, [{ text: "Runs finished: 3", href: "/runs" }]), block("needs_decision", asOf, [])];
@@ -404,7 +481,7 @@ function occurrenceOut(ctx: RitualsContext, r: Ritual, o: Occurrence): Occurrenc
     attendee_ids: r.attendee_ids,
     timezone: r.schedule.timezone,
     read_by_me: o.read_by.includes(ctx.me.id),
-    summary_offered: r.kind !== DIGEST.kind || ctx.marketWrites(),
+    summary_offered: r.kind !== REBUILD && (r.kind !== DIGEST.kind || ctx.marketWrites()),
     decisions: decisionsOf(ctx, o).map((d) => ({ id: d.id, number: d.number, title: d.title, href: `/company/decisions?d=${d.number}` })),
   };
 }
@@ -620,8 +697,9 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
         o = occurrence(ctx, r, due, {});
         db.occurrences.push(o);
       }
-      Object.assign(o, { status: "ready", error: null, pre_read: { built_at: asOf, blocks: blocksFor(r.kind, asOf, TRACK_ID) } });
+      Object.assign(o, { status: "ready", error: null, pre_read: { built_at: asOf, blocks: blocksFor(r.kind, asOf, TRACK_ID, ctx) } });
       if (!failed) r.next_due_at = nextOccurrence(r.schedule, due).toISOString();
+      if (r.kind === REBUILD) await rebuildAfterReady(ctx, r, o);
       return json(200, occurrenceOut(ctx, r, o));
     }
     if (p.length === 4 && m === "GET" && p[3] === "occurrences") {
@@ -642,6 +720,10 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   if (!o) return fail(404, "Occurrence not found");
   const r = db.rituals.find((x) => x.id === o.ritual_id)!;
   if (p.length === 3 && m === "GET") {
+    if (r.kind === REBUILD) {
+      syncRebuild(ctx, o);
+      return json(200, occurrenceOut(ctx, r, o));
+    }
     // The mock summary run finishes on the second read after it starts.
     if (o.summary_state === "running" && (o.summary_reads = (o.summary_reads ?? 0) + 1) >= 2) {
       Object.assign(o, { summary_state: "ready", summary: r.kind === "metrics_review" ? METRICS_SUMMARY_TEXT : r.kind === DIGEST.kind ? DIGEST_TEXT : SUMMARY_TEXT, summary_note: null });
@@ -678,6 +760,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   }
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+    if (r.kind === REBUILD) return fail(409, "Start the baseline rebuild from the Baseline page");
     if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
     if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
     const special = FLOW_FOR_KIND[r.kind];

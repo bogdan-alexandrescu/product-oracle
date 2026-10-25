@@ -1696,6 +1696,29 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     decisions: () => db.decisions?.decisions ?? [],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
+    baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
+    ritualRunCap: () => Number((db.autonomy ??= emptyAutonomy()).stored.rituals?.limits?.max_run_usd ?? 10),
+    // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
+    startBaselineBuild: async () => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const call = async (path: string[], body?: unknown) => {
+        const req = new Request(new URL(`/${path.join("/")}`, "http://mock.local"), { method: "POST", body: body === undefined ? undefined : JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+        const res = (await routeRuns({ ...runsContext(db), db: db.runs! }, req, path))!;
+        const out = (await res.json()) as { id?: string; detail?: string };
+        return res.ok ? out : { error: String(out.detail ?? "Oracle could not start the build") };
+      };
+      const created = await call(["v1", "runs"], { flow: "baseline", knobs: { depth: "standard", checkpoints: { baseline_confirm: true } } });
+      if ("error" in created || !created.id) return { error: "error" in created ? String(created.error) : "Oracle could not start the build" };
+      for (const step of ["estimate", "start"]) {
+        const done = await call(["v1", "runs", created.id, step]);
+        if ("error" in done) return { error: String(done.error) };
+      }
+      return { id: created.id };
+    },
+    runStatus: (id) => db.runs?.runs.find((r) => r.id === id)?.status ?? null,
+    lastBaselineBuild: () => lastBaselineBuild(db.runs),
+    oracleDid: (row) =>
+      (db.autonomy ??= emptyAutonomy()).actions.push({ ...row, id: uuid(), created_at: new Date().toISOString(), undone_at: null, opened_by: [], undone_by: null }),
   };
 }
 
