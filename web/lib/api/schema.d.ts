@@ -15923,7 +15923,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            decided_by: "policy" | "template" | "condition" | "learning" | "dependency" | "user" | "conflict" | "none";
             /**
              * Policy Source
              * @default catalog
@@ -22348,7 +22348,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            decided_by: "policy" | "template" | "condition" | "learning" | "dependency" | "user" | "conflict" | "none";
             /**
              * Policy Source
              * @default catalog

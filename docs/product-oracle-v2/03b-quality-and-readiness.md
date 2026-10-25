@@ -150,6 +150,21 @@ learnings per target (+weight, -weight, 0 for notes): the input future module an
 recommendations read. Nothing here writes to documents, versions, sections or
 compositions; `test_tracking_never_changes_a_published_document` pins it.
 
+Later recommendations read the active learnings (`oracle/quality/learned.py`; retired ones
+never count). Each point of net signal moves a score by 10%, capped at 20% either way, so
+one signal never outweighs a gap's importance:
+
+- **Module recommendations** (the composer): every module a learning names says so in its
+  explanation ("Recommended because of a learning from past outcomes: ..."), and its
+  advisory score moves by at most the cap. A recommend_more learning suggests an optional
+  module nothing else brings in (`decided_by: learning`); learnings never drop a module
+  and never override company policy, a condition that held, the template or a person's
+  decision. Recomputed each revision, like a condition.
+- **Intake questions**: a question category's learnings move its rank score (the order of
+  questions not asked yet, at the next sync) and its rationale says why. Asked questions
+  are never re-ranked; the gap list's own expected-effect ranking is unchanged.
+  `tests/test_learnings_tune.py` pins both.
+
 ## 6. Routes (all `/v1`, all MCP tools by operation id)
 
 | Route | Role | Audit | What |
