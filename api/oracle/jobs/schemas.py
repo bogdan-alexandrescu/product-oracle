@@ -307,6 +307,10 @@ class StagedChanges(BaseModel):
     # G4: section changes staged from discussions, oldest first (gone ones only with
     # include_gone).
     next_draft_changes: list[StagedDiscussionChange] = []
+    # H11 Recommend (``next_drafts``): a plain sentence saying the staged changes are worth
+    # a draft, once as many wait as the owner's limit asks for and no build is pending;
+    # None at every other level.
+    worth_a_draft: str | None = None
 
 
 class NextDraftIn(BaseModel):

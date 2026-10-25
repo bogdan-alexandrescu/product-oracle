@@ -90,7 +90,14 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   }
   return (
     <>
-      <Button variant="secondary" icon="doc" onClick={() => setOpen(true)} data-testid="build-draft" aria-haspopup="dialog">
+      <Button
+        variant="secondary"
+        icon="doc"
+        onClick={() => setOpen(true)}
+        data-testid="build-draft"
+        aria-haspopup="dialog"
+        title={data.worth_a_draft ?? undefined}
+      >
         {label}
         {count > 0 && (
           <span className="tnum font-semibold opacity-85" data-testid="build-draft-count">
@@ -513,6 +520,11 @@ function PickStep({
         </>
       }
     >
+      {staged.worth_a_draft && (
+        <Notice tone="info" testId="worth-a-draft">
+          {staged.worth_a_draft}
+        </Notice>
+      )}
       {items.length > 0 && (
         <Group label="Text changes" testId="staged-list">
           {items.map((i) => {
@@ -611,7 +623,11 @@ function PickStep({
           })}
         </Group>
       )}
-      {plan?.refused && <Notice tone="error">{plan.refused}</Notice>}
+      {plan?.refused && (
+        <Notice tone="error" testId="next-draft-refused">
+          {plan.refused}
+        </Notice>
+      )}
       {live.error && <Notice tone="error">{live.error}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
     </Sheet>

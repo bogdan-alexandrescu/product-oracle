@@ -56,6 +56,8 @@ from oracle.intake.schemas import (
     QuestionBatchAsk,
     QuestionCreate,
     QuestionPatch,
+    QuestionsWithdraw,
+    QuestionsWithdrawn,
     SharingBulkIn,
     SharingIn,
 )
@@ -301,7 +303,9 @@ async def get_next_question_batch(
     approver, as asking it): the same questions in the same order as
     ``POST .../question-batches`` with the same ``size`` asks next, each with the person
     it would be asked of (the gap's owner, else the author), and how many are not asked
-    yet. ``assign`` on the ask changes only who is asked."""
+    yet. ``assign`` on the ask changes only who is asked. At H11 ``questions`` Observe
+    nothing is proposed and ``held`` says why; at Draft each question keeps its own
+    named person."""
     intake = await _intake(db, intake_id)
     if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
         raise HTTPException(
@@ -325,7 +329,8 @@ async def ask_next_question_batch(
     or an approver). Each is asked of the person ``assign`` names for it, else its gap's
     owner, else the intake's author (C2); a person who cannot answer is 422 and a
     private finding's question asked of anyone but the author 409, and then nothing is
-    asked. ``size``: in the body or, as before, the query."""
+    asked; 409 too while Ask people questions is at Observe (H11, Oracle asks no one).
+    ``size``: in the body or, as before, the query."""
     intake = await _intake(db, intake_id)
     if body is not None and "size" in body.model_fields_set:
         size = body.size
@@ -337,6 +342,22 @@ async def ask_next_question_batch(
         raise HTTPException(status.HTTP_409_CONFLICT, "No questions left to ask")
     await db.commit()
     return await summary.question_batch(db, intake, principal, asked[0].batch)
+
+
+@router.post("/intakes/{intake_id}/questions/withdraw", response_model=QuestionsWithdrawn)
+async def withdraw_intake_questions(
+    intake_id: uuid.UUID, body: QuestionsWithdraw, principal: Commenter, db: TenantDB
+) -> QuestionsWithdrawn:
+    """Withdraw these questions of the intake that are still waiting on an answer (the
+    author or an approver): the Undo of a batch Oracle asked on its own (H11
+    ``questions``). Answered or otherwise settled ones stay as they are."""
+    intake = await _intake(db, intake_id)
+    try:
+        done = await service.withdraw_asked(db, principal, intake, body.question_ids)
+    except service.IntakeError as e:
+        raise _http(e) from e
+    await db.commit()
+    return QuestionsWithdrawn(question_ids=[q.id for q in done])
 
 
 @router.get("/intakes/{intake_id}/composition-inputs", response_model=CompositionInputs)

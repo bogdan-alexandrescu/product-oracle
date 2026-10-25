@@ -158,7 +158,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "D12",
     "wired_by_name": "D12 One Build next draft",
     "limits_default": {
@@ -200,7 +200,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "C1",
     "wired_by_name": "C1 Requests API and screen",
     "limits_default": {
@@ -242,7 +242,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "C2",
     "wired_by_name": "C2 Questions to people",
     "limits_default": {
@@ -269,7 +269,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "the company's goals are set by people",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "B6",
     "wired_by_name": "B6 Goals interview",
     "limits_default": null
@@ -767,6 +767,30 @@ export function seedRitualDid(ownerId: string, id: string, ritual: { id: string;
     subject: { kind: "ritual", key: ritual.id, href: `/company/rituals/${occurrenceId}` },
     undo: null,
     created_at: new Date(Date.now() - 25 * 60_000).toISOString(),
+    undone_at: null,
+    notify_ids: [ownerId],
+    opened_by: [],
+    undone_by: null,
+  };
+}
+
+/** The "oracle-did-request" scenario: at Act within limits, Oracle merged a request into the
+ * one it repeats and told the triage run's starter (as the API's requests.triage does), with
+ * Undo reopening it. */
+export function seedRequestDid(
+  ownerId: string,
+  id: string,
+  request: { id: string; title: string; lock_version: number },
+  into: { title: string },
+): OracleActionRow {
+  return {
+    id,
+    responsibility: "requests",
+    responsibility_title: "Triage requests",
+    summary: `Merged “${request.title}” into “${into.title}” (95% sure)`,
+    subject: { kind: "request", key: request.id, href: `/requests?request=${request.id}` },
+    undo: { method: "POST", path: `/v1/requests/${request.id}/reopen`, body: { lock_version: request.lock_version } },
+    created_at: new Date(Date.now() - 15 * 60_000).toISOString(),
     undone_at: null,
     notify_ids: [ownerId],
     opened_by: [],

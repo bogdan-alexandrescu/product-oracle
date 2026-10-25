@@ -53,6 +53,18 @@ type BatchOutput = {
 };
 
 export const KIND = "refinement_batch" as const;
+/** H11 `next_drafts` at Observe: the plan's refusal, and the 409 of Build and the agents' run. */
+export const OBSERVING =
+  "Oracle is set to observe next drafts: it counts staged changes and builds nothing. An owner can change this in Settings › Autonomy.";
+
+const observing = (ctx: LlmContext) => ctx.nextDrafts?.().level === "observe";
+
+/** H11 Recommend: the sentence saying the staged changes are worth a draft (the API's _worth_a_draft). */
+function worthADraft(ctx: LlmContext, waiting: number, next: number, job: Job | null): string | null {
+  const nd = ctx.nextDrafts?.();
+  if (!nd || nd.level !== "recommend" || job || waiting < nd.min_staged) return null;
+  return `${waiting} changes wait: worth building draft ${next}.`;
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -251,17 +263,21 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
   }
   const job = currentJob(ctx, doc.id);
   const sections = new Set([...items, ...changes].filter((i) => !i.section_gone).map((i) => i.section_key));
+  const agents = agentItems(ctx, doc.id);
+  const waiting = [...items, ...changes].filter((i) => !i.section_gone).length + agents.length;
+  const next = (latest?.number ?? 0) + 1;
   return {
     document_id: doc.id,
     slug: doc.slug,
     latest_version: latest?.number ?? null,
-    next_version: (latest?.number ?? 0) + 1,
+    next_version: next,
     items,
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
     draft_job: job,
-    agent_items: agentItems(ctx, doc.id),
+    agent_items: agents,
     next_draft_changes: changes,
+    worth_a_draft: worthADraft(ctx, waiting, next, job),
   };
 }
 
@@ -451,8 +467,9 @@ export async function nextDraftRoute(
     const latest = latestOf(ctx, doc.id);
     const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
     const hit = [...c.texts, ...c.rows].filter((t) => locked.has(t.section_key));
-    const refused =
-      engine === "agents"
+    const refused = observing(ctx)
+      ? OBSERVING
+      : engine === "agents"
         ? null
         : !enabled(doc)
           ? "Refinement is turned off for this document"
@@ -473,6 +490,7 @@ export async function nextDraftRoute(
   }
 
   if (p[4] === "run" && m === "POST") {
+    if (observing(ctx)) return fail(409, OBSERVING);
     const input = (await body<Schemas["NextDraftRunIn"]>()) ?? {};
     const c = chosen(ctx, doc, input);
     if (c instanceof Response) return c;
@@ -488,6 +506,7 @@ export async function nextDraftRoute(
   }
 
   if (!p[4] && m === "POST") {
+    if (observing(ctx)) return fail(409, OBSERVING);
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
     if (!enabled(doc)) return fail(409, turnedOff("refinement"));
