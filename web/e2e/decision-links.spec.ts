@@ -39,24 +39,24 @@ test("a proposal names the baseline items, evidence and document it is about; th
   await dialog.getByLabel("Decision", { exact: true }).fill("Point new accounts to payment setup first");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Checklist first");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Sample data first");
-  await dialog.getByLabel("Approver").selectOption({ label: APPROVER });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: APPROVER });
 
   const evidence = dialog.getByRole("group", { name: "Evidence" });
   await expect(evidence).toContainText("Link a baseline item to pick from its evidence");
   const linked = dialog.getByRole("group", { name: "Linked items" });
-  await linked.getByLabel("Find a baseline item").fill("guided");
-  await linked.getByRole("button", { name: /^Add Guided setup/ }).click();
+  await linked.getByLabel("Find an item to link").fill("guided");
+  await linked.getByRole("button", { name: /^Guided setup · Feature/ }).click();
   await expect(linked.getByRole("button", { name: "Remove Guided setup" })).toBeVisible();
-  await linked.getByLabel("Find a baseline item").fill("churn");
-  await linked.getByRole("button", { name: /^Add Cut early churn/ }).click();
+  await linked.getByLabel("Find an item to link").fill("churn");
+  await linked.getByRole("button", { name: /^Cut early churn · Goal/ }).click();
   await evidence.getByRole("checkbox", { name: new RegExp(STALL) }).check();
   // Removing an item drops it and leaves the others.
   await linked.getByRole("button", { name: "Remove Cut early churn" }).click();
   await expect(linked.getByRole("button", { name: "Remove Cut early churn" })).toHaveCount(0);
 
   const about = dialog.getByRole("group", { name: "About" });
-  await about.getByLabel("Kind").selectOption({ label: "Document" });
-  await about.getByLabel("Item").selectOption({ label: "Checkout redesign PRD" });
+  await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Document" });
+  await about.getByLabel("Item", { exact: true }).selectOption({ label: "Checkout redesign PRD" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
   await expect(about.getByRole("button", { name: "Remove Document checkout-redesign" })).toBeVisible();
   await dialog.getByRole("button", { name: "Propose" }).click();
@@ -84,12 +84,12 @@ test("editing a proposal changes its linked items, evidence and subjects", async
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const form = inspector(page).getByRole("form", { name: "Edit decision" });
   const linked = form.getByRole("group", { name: "Linked items" });
-  await linked.getByLabel("Find a baseline item").fill("guided");
-  await linked.getByRole("button", { name: /^Add Guided setup/ }).click();
+  await linked.getByLabel("Find an item to link").fill("guided");
+  await linked.getByRole("button", { name: /^Guided setup · Feature/ }).click();
   await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
   const about = form.getByRole("group", { name: "About" });
-  await about.getByLabel("Kind").selectOption({ label: "Baseline item" });
-  await about.getByLabel("Item").selectOption({ label: "Guided setup" });
+  await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Baseline item" });
+  await about.getByLabel("Item", { exact: true }).selectOption({ label: "Guided setup" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
   await form.getByRole("button", { name: "Save changes" }).click();
   await expect(form).toHaveCount(0);

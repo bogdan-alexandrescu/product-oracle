@@ -23,7 +23,7 @@ type RunLike = {
 };
 
 /** A stored decision: the API's record without what is derived on the way out. */
-type Row = Omit<DecisionOut, "state" | "ref" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
+type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
 type ReviewRow = Schemas["DecisionReviewOut"] & { decision_id: string };
 
 export interface DecisionsDb {
@@ -46,6 +46,14 @@ export interface DecisionsContext {
   visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
+  /** A baseline item, for entity_ids (absent: unknown). */
+  entity?: (id: string) => Schemas["DecisionEntityRef"] | null;
+  /** A baseline evidence row, for evidence_ids (absent: unknown). */
+  evidence?: (id: string) => Schemas["DecisionEvidenceRef"] | null;
+  /** H3: an outcome record's status now. */
+  outcomeStatus?: (id: string) => Schemas["DecisionOut"]["outcome_status"];
+  /** H3: deciding with a prediction creates its outcome record (tracking); returns its id. */
+  addOutcome?: (d: { title: string; goal_id: string; prediction: Record<string, unknown>; evidence_ids: string[]; owner_id: string }) => string;
 }
 
 const REVIEW_DAYS = 90;
@@ -384,6 +392,9 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
     ...d,
     ...summaryOf(ctx, d),
     decided_by_email: emailOf(ctx, d.decided_by),
+    outcome_status: d.outcome_id ? (ctx.outcomeStatus?.(d.outcome_id) ?? null) : null,
+    entities: d.entity_ids.flatMap((id) => ctx.entity?.(id) ?? []),
+    evidence: d.evidence_ids.flatMap((id) => ctx.evidence?.(id) ?? []),
     withdrawn_by_email: emailOf(ctx, d.withdrawn_by),
     revisit_id: revisit && d.status === "decided" ? revisit.id : null,
     superseded_by_id: revisit && d.status === "superseded" ? revisit.id : null,
@@ -437,6 +448,16 @@ function checkReviewAt(value: string): string | null {
   if (value > day(MAX_REVIEW_DAYS)) return `The review date is at most ${MAX_REVIEW_DAYS} days out`;
   return null;
 }
+
+/** As the API's _check_ids: every id names a row (422 otherwise); duplicates dropped. */
+function unknownIds(ctx: DecisionsContext, b: { evidence_ids?: string[] | null; entity_ids?: string[] | null }): string | null {
+  const ev = (b.evidence_ids ?? []).filter((id) => !ctx.evidence?.(id));
+  if (ev.length) return `unknown evidence_ids: ${ev.join(", ")}`;
+  const en = (b.entity_ids ?? []).filter((id) => !ctx.entity?.(id));
+  if (en.length) return `unknown entity_ids: ${en.join(", ")}`;
+  return null;
+}
+const unique = (ids: string[] | null | undefined) => [...new Set(ids ?? [])];
 
 function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
   const m = ctx.members.find((x) => x.id === id);
@@ -535,6 +556,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (options.length > 6) return fail(422, "options: List should have at most 6 items");
     if (new Set(options.map((o) => o.key)).size !== options.length) return fail(422, "option keys must be unique");
     if (!activeApprover(ctx, b.approver_id)) return fail(422, "The approver must be an active member with the approver role or above");
+    const unknown = unknownIds(ctx, b);
+    if (unknown) return fail(422, unknown);
     const row = blank(ctx, db, {
       title: b.title.trim(),
       question: b.question?.trim() || null,
@@ -544,8 +567,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       reversibility: b.reversibility ?? "reversible",
       contributor_ids: b.contributor_ids ?? [],
       informed_ids: b.informed_ids ?? [],
-      evidence_ids: b.evidence_ids ?? [],
-      entity_ids: b.entity_ids ?? [],
+      evidence_ids: unique(b.evidence_ids),
+      entity_ids: unique(b.entity_ids),
       subjects: b.subjects ?? [],
       origin: "manual",
       driver: `user:${me.id}`,
@@ -582,9 +605,13 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       const bad = checkReviewAt(b.review_at);
       if (bad) return fail(422, bad);
     }
+    const unknown = unknownIds(ctx, b);
+    if (unknown) return fail(422, unknown);
     for (const k of ["title", "question", "context", "options", "reversibility", "contributor_ids", "informed_ids", "subjects"] as const) {
       if (b[k] !== undefined && b[k] !== null) Object.assign(d, { [k]: b[k] });
     }
+    if (b.evidence_ids) d.evidence_ids = unique(b.evidence_ids);
+    if (b.entity_ids) d.entity_ids = unique(b.entity_ids);
     // Clearable: null empties them. The prediction waits for the decision to make its outcome record.
     if (b.expected_outcome !== undefined) d.expected_outcome = b.expected_outcome?.trim() || null;
     if (b.review_at !== undefined) d.review_at = b.review_at ?? null;
@@ -611,6 +638,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     const review = b.review_at ?? kept ?? day(REVIEW_DAYS);
     const bad = checkReviewAt(review);
     if (bad) return fail(422, bad);
+    const prediction = b.prediction ?? d.prediction ?? null;
+    const goal = prediction ? String(prediction.goal_id ?? "") : "";
     Object.assign(d, {
       status: "decided",
       chosen_option: b.option_key,
@@ -618,8 +647,17 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       expected_outcome: b.expected_outcome.trim(),
       reversibility,
       review_at: review,
-      prediction: b.prediction ?? d.prediction ?? null,
-      outcome_id: (b.prediction ?? d.prediction) ? ctx.uuid() : null,
+      prediction,
+      // As the API's _set_prediction: the outcome record (H3) is made on decide, tracking.
+      outcome_id: prediction
+        ? (ctx.addOutcome?.({
+            title: d.title,
+            goal_id: goal,
+            prediction: Object.fromEntries(Object.entries(prediction).filter(([k]) => k !== "goal_id")),
+            evidence_ids: d.evidence_ids,
+            owner_id: d.approver_id,
+          }) ?? ctx.uuid())
+        : null,
       decided_by: me.id,
       decided_actor: "user",
       decided_at: ctx.now(),

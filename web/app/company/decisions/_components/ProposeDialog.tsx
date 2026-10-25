@@ -8,7 +8,8 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
-import { optionKey, SUBJECT_LABEL, type Decision, type DecisionOption, type Person } from "./lib";
+import { optionKey, type Decision, type DecisionOption, type Person } from "./lib";
+import { LinksPicker, type Links } from "./LinksPicker";
 
 /** An option as typed; `key` keeps an existing option's key (and so its evidence and recommendation). */
 export type Draft = { key?: string; label: string; summary: string; pros: string; cons: string; cost: string };
@@ -21,8 +22,9 @@ export const lines = (text: string) =>
 
 /**
  * Propose decision (commenter and above): the call in one sentence, the question, two to six
- * options, the one approver (approver and above), reversibility, contributors and informed.
- * `subject`: what the decision is about, when the page was opened for one (?subject=kind:id).
+ * options, the one approver (approver and above), reversibility, contributors and informed,
+ * the baseline items and evidence it rests on and what it is about. `subject`: what it is
+ * about to begin with, when the page was opened for one (?subject=kind:id).
  */
 export function ProposeDialog({
   people,
@@ -45,6 +47,7 @@ export function ProposeDialog({
   const [reversibility, setReversibility] = useState<"reversible" | "irreversible">("reversible");
   const [contributors, setContributors] = useState<string[]>([]);
   const [informed, setInformed] = useState<string[]>([]);
+  const [links, setLinks] = useState<Links>({ entity_ids: [], evidence_ids: [], subjects: subject ? [subject] : [] });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,9 +69,9 @@ export function ProposeDialog({
       reversibility,
       contributor_ids: contributors,
       informed_ids: informed,
-      evidence_ids: [],
-      entity_ids: [],
-      subjects: subject ? [subject] : [],
+      evidence_ids: links.evidence_ids,
+      entity_ids: links.entity_ids,
+      subjects: links.subjects,
     };
     try {
       onProposed(await unwrap(api.POST("/v1/decisions", { body })));
@@ -103,11 +106,6 @@ export function ProposeDialog({
             Question
             <input className={INPUT} value={question} maxLength={1000} onChange={(e) => setQuestion(e.target.value)} placeholder="What is being decided" />
           </label>
-          {subject && (
-            <p className="text-sm text-text2">
-              About: {SUBJECT_LABEL[subject.kind] ?? subject.kind} {subject.ref ?? ""}
-            </p>
-          )}
           <OptionsEditor options={options} setOptions={setOptions} />
           <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
@@ -131,6 +129,7 @@ export function ProposeDialog({
           </div>
           <People label="Contributors" people={people} chosen={contributors} onToggle={(id) => setContributors((c) => toggle(c, id))} />
           <People label="Informed" people={people} chosen={informed} onToggle={(id) => setInformed((c) => toggle(c, id))} />
+          <LinksPicker value={links} onChange={setLinks} />
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex justify-end gap-2 border-t border-line pt-3">
             <Button variant="ghost" onClick={onClose}>

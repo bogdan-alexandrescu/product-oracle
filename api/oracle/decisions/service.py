@@ -29,6 +29,8 @@ from oracle.decisions.models import CAPTURED_ORIGINS, Decision, DecisionReview
 from oracle.decisions.schemas import (
     DecideIn,
     DecisionCreate,
+    DecisionEntityRef,
+    DecisionEvidenceRef,
     DecisionOut,
     DecisionPatch,
     DecisionReviewOut,
@@ -215,6 +217,8 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         expected_outcome=d.expected_outcome,
         prediction=d.prediction,
         outcome_id=d.outcome_id,
+        outcome_status=await _outcome_status(db, d),
+        **await _linked(db, d),
         supersedes_id=d.supersedes_id,
         revisit_id=revisit.id if revisit and d.status == "decided" else None,
         superseded_by_id=revisit.id if revisit and d.status == "superseded" else None,
@@ -235,6 +239,35 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         ],
         **can,
     )
+
+
+async def _linked(db: AsyncSession, d: Decision) -> dict[str, Any]:
+    """entity_ids and evidence_ids as a person reads them, in the order picked; a row gone
+    since is left out (its id stays in the *_ids list)."""
+    entities: list[DecisionEntityRef] = []
+    evidence: list[DecisionEvidenceRef] = []
+    if d.entity_ids:
+        found = {
+            e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(d.entity_ids)))
+        }
+        entities = [
+            DecisionEntityRef(id=e.id, type=e.type, key=e.key, title=e.title, status=e.status)
+            for e in (found.get(i) for i in d.entity_ids)
+            if e is not None
+        ]
+    if d.evidence_ids:
+        rows = {
+            e.id: e
+            for e in await db.scalars(select(Evidence).where(Evidence.id.in_(d.evidence_ids)))
+        }
+        evidence = [
+            DecisionEvidenceRef(
+                id=e.id, entity_id=e.entity_id, excerpt=e.excerpt, url=e.url, ref=e.ref
+            )
+            for e in (rows.get(i) for i in d.evidence_ids)
+            if e is not None
+        ]
+    return {"entities": entities, "evidence": evidence}
 
 
 async def _withdrawn(db: AsyncSession, d: Decision) -> dict[str, Any]:

@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from oracle.quality.schemas import Prediction
+from oracle.quality.schemas import OutcomeStatus, Prediction
 
 Reversibility = Literal["reversible", "irreversible"]
 DecisionStatus = Literal["proposed", "decided", "superseded", "reversed", "withdrawn"]
@@ -212,6 +212,26 @@ class DecisionSummary(BaseModel):
     source: DecisionSource | None = None
 
 
+class DecisionEntityRef(BaseModel):
+    """A linked baseline item, as a person reads it."""
+
+    id: uuid.UUID
+    type: str
+    key: str
+    title: str
+    status: str
+
+
+class DecisionEvidenceRef(BaseModel):
+    """Evidence it rests on: the excerpt and link anyone who reads the baseline sees."""
+
+    id: uuid.UUID
+    entity_id: uuid.UUID | None = None
+    excerpt: str | None = None
+    url: str | None = None
+    ref: str | None = None
+
+
 class DecisionOut(DecisionSummary):
     question: str | None = None
     context: str | None = None
@@ -226,6 +246,11 @@ class DecisionOut(DecisionSummary):
     expected_outcome: str | None = None
     prediction: dict[str, Any] | None = None
     outcome_id: uuid.UUID | None = None
+    # The outcome record's status now (H3), for the inspector's Expected.
+    outcome_status: OutcomeStatus | None = None
+    # entity_ids and evidence_ids, in their order, with what a person reads.
+    entities: list[DecisionEntityRef] = []
+    evidence: list[DecisionEvidenceRef] = []
     supersedes_id: uuid.UUID | None = None
     # The proposed decision a "revisit" review opened, while it is open or once decided.
     revisit_id: uuid.UUID | None = None

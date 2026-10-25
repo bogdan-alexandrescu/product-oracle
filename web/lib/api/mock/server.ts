@@ -92,6 +92,7 @@ import {
   seedOracleRecorded,
   seedOutcomes,
   seedQuality,
+  addDecisionOutcome,
   type QualityContext,
   type QualityDb,
 } from "./quality";
@@ -1532,6 +1533,16 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     },
     uuid,
     now,
+    entity: (id) => {
+      const e = db.baseline.entities.find((x) => x.id === id);
+      return e ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null;
+    },
+    evidence: (id) => {
+      const e = db.baseline.evidence.find((x) => x.id === id);
+      return e ? { id: e.id, entity_id: e.entity_id ?? null, excerpt: e.excerpt ?? null, url: e.url ?? null, ref: e.ref ?? null } : null;
+    },
+    outcomeStatus: (id) => db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
+    addOutcome: (d) => addDecisionOutcome((db.quality ??= seedQuality()), d, me.id),
   };
 }
 
