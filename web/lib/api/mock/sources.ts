@@ -390,6 +390,15 @@ export function sourceItem(id: string): CitedItem | null {
   return { id: i.id, source_id, source_kind, kind, title: title ?? null, url: url ?? null, content, fetched_at: fetched_at ?? now() };
 }
 
+/** S4: the mock scenario where a sync brings in a new item after a PRD draft (e2e/draft-new-items.spec.ts). */
+export const DRAFT_NEW_ITEMS_SCENARIO = "draft-new-items";
+
+/** S4: how many of the signed-in person's items were fetched or deleted after ``since`` (new, changed or deleted since a draft). */
+export function itemsChangedSince(since: string): number {
+  const at = Date.parse(since);
+  return load().items.filter((i) => (i.fetched_at && Date.parse(i.fetched_at) > at) || (i.deleted_at && Date.parse(i.deleted_at) > at)).length;
+}
+
 /** How many sources there are (A1's Pick sources step). */
 export function sourceCount(): number {
   return load().sources.length;
@@ -674,6 +683,28 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     // A sync also deletes what left the picks (sources narrowed before narrowing took
     // effect on save).
     const deleted = s.kind === "google_docs" ? hideOutsidePicks(db, s) : 0;
+    // S4 "draft-new-items" scenario: Product chat's sync brings in one new message.
+    if (ctx.scenario === DRAFT_NEW_ITEMS_SCENARIO && s.id === PRODUCT_CHAT_ID && !db.items.some((i) => i.external_id === "m-new")) {
+      db.items.push({
+        id: uuid(),
+        source_id: s.id,
+        source_kind: s.kind,
+        source_name: s.name,
+        external_id: "m-new",
+        kind: "message",
+        title: "Alert thresholds",
+        url: "https://example.com/m-new",
+        author: "someone",
+        acl: {},
+        occurred_at: now(),
+        source_updated_at: null,
+        deleted_at: null,
+        version_id: uuid(),
+        fetched_at: now(),
+        confidence: confidence(s.kind, 1),
+        content: "Teams want to set their own alert thresholds.",
+      });
+    }
     return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
   }
   if (sub === "coverage" && m === "GET") {

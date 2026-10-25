@@ -87,6 +87,13 @@ class Source(TenantScoped, Base):
     unavailable_items: Mapped[list[dict[str, str]]] = mapped_column(
         JSONB, nullable=False, server_default="[]", default=list
     )
+    # S4: background syncs (oracle.sources.background) that failed in a row, and the
+    # earliest the ticker tries the source again (a failure's backoff or a rate limit's
+    # retry time). A sync that completes, in the background or on Sync now, clears both.
+    sync_failures: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
