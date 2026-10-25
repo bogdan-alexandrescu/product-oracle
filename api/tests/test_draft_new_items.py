@@ -16,6 +16,7 @@ from oracle.runs.models import Checkpoint, Run
 from oracle.sources import base, service
 from oracle.sources.models import Snapshot
 from oracle.tenancy import tenant_session
+from oracle.v2.models import ProductIntake
 from tests.fixtures import MARKDOWN, draft
 from tests.sources_helpers import FakeConnector, client_for, make_connection, make_user, message
 
@@ -132,6 +133,49 @@ async def test_a_run_draft_counts_from_the_runs_pin(tenant_id, slack):
                 )
             )
             await s.commit()
+        assert (await _new(a))["count"] == 1
+
+
+async def test_a_run_from_an_intake_counts_only_the_sources_it_read(tenant_id, slack):
+    alice = await make_user(tenant_id, "alice@example.com")
+    async with client_for(alice) as a:
+        read = await _source(a, tenant_id, alice, "Read chat")
+        other = await _source(a, tenant_id, alice, "Other chat")
+        async with tenant_session(tenant_id) as s:
+            snap = Snapshot(label="Run pin", created_by=alice.id)
+            intake = ProductIntake(
+                title="Saved addresses",
+                brief="Returning buyers retype their address.",
+                author_id=alice.id,
+                analysis={"source_ids": [read]},
+            )
+            s.add_all([snap, intake])
+            await s.commit()
+            snap_id, intake_id = snap.id, intake.id
+        await _import(a)
+        async with tenant_session(tenant_id) as s:
+            doc = await s.scalar(select(Document).where(Document.slug == DOC))
+            run = Run(
+                flow="baseline_to_prd",
+                status="awaiting_checkpoint",
+                snapshot_id=snap_id,
+                created_by=alice.id,
+                document_id=doc.id,
+                knobs={"intake_id": str(intake_id)},
+            )
+            s.add(run)
+            await s.flush()
+            s.add(
+                Checkpoint(
+                    run_id=run.id,
+                    kind="prd_review",
+                    payload={"import": {"document_id": str(doc.id), "version": 1, "slug": DOC}},
+                )
+            )
+            await s.commit()
+        # Both sources bring in an item after the pin; the draft read only one of them.
+        await _sync(a, read)
+        await _sync(a, other)
         assert (await _new(a))["count"] == 1
 
 

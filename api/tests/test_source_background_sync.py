@@ -210,3 +210,89 @@ async def test_the_deadline_stops_new_syncs(a, tenant_id, slack):
     async with tenant_session(tenant_id) as s:
         result = await background.sync_due(s, now=datetime.now(UTC), deadline=0.0)
     assert result.synced == 0 and _syncs(slack) == 0
+
+
+class _BadChannel(FakeConnector):
+    """Fails the sync of the source that reads channel ``BAD`` only (after its first item)."""
+
+    error: Exception | None = None
+
+    async def sync(self, config, credential, cursor):
+        bad = config.get("channels") == ["BAD"]
+        async for event in super().sync(config, credential, cursor):
+            yield event
+            if bad and self.error is not None:
+                raise self.error
+
+
+@pytest.mark.parametrize(
+    "error, outcome",
+    [
+        (ConnectorRateLimited(retry_after=7200), "rate_limited"),
+        (ConnectorError("upstream down"), "failed"),
+        (RuntimeError("boom"), "failed"),
+    ],
+    ids=["rate-limited", "connector-error", "unexpected"],
+)
+async def test_one_failing_source_does_not_stop_the_others(
+    a, tenant_id, monkeypatch, error, outcome
+):
+    service.load_connectors()
+    fake = _BadChannel(kind="slack", pages=[[message("m1", "one")]])
+    fake.error = error
+    monkeypatch.setitem(base._registry, "slack", fake)
+    now = datetime.now(UTC)
+    bad = await _source(a, tenant_id, "Bad chat")
+    await _set(tenant_id, bad, config={"channels": ["BAD"]}, last_synced_at=now - timedelta(days=3))
+    good = []
+    for i in range(2):
+        sid = await _source(a, tenant_id, f"Chat {i}")
+        await _set(tenant_id, sid, last_synced_at=now - timedelta(days=2 - i))
+        good.append(sid)
+
+    out = ticker.TickerOut()
+    await ticker._tick_company(tenant_id, out, ticker._Failures(out))
+
+    # The bad source went first; the other two still synced and the company did not fail.
+    assert out.companies.failed == 0
+    assert out.sources.synced == 2
+    assert getattr(out.sources, outcome) == 1
+    for sid in good:
+        src = await _get(tenant_id, sid)
+        assert src.last_synced_at > now and src.status == "active"
+    src = await _get(tenant_id, bad)
+    assert src.last_synced_at < now
+    assert src.next_sync_at is not None and src.next_sync_at > now
+    assert src.last_error
+    assert src.sync_failures == (0 if outcome == "rate_limited" else 1)
+
+
+async def test_a_sync_that_cannot_start_backs_off_and_says_why(a, tenant_id, slack, monkeypatch):
+    sid = await _source(a, tenant_id)
+    # The connector went away after the source was picked.
+    monkeypatch.setattr(service, "connector_for", lambda kind: None)
+    now = datetime.now(UTC)
+
+    assert (await _due(tenant_id, now)).failed == 1
+
+    src = await _get(tenant_id, sid)
+    assert src.sync_failures == 1 and src.next_sync_at == now + timedelta(hours=2)
+    assert src.last_error == service.CONNECTOR_UNAVAILABLE
+
+
+async def test_a_source_paused_after_it_was_picked_is_skipped(a, tenant_id, slack, monkeypatch):
+    sid = await _source(a, tenant_id)
+    picked = background.due
+
+    async def due_then_pause(db, now):
+        chosen = await picked(db, now)
+        await _set(tenant_id, sid, status="paused")
+        return chosen
+
+    monkeypatch.setattr(background, "due", due_then_pause)
+
+    result = await _due(tenant_id)
+
+    assert (result.synced, result.failed) == (0, 0)
+    src = await _get(tenant_id, sid)
+    assert src.sync_failures == 0 and src.next_sync_at is None and src.status == "paused"
