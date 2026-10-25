@@ -189,7 +189,7 @@ async def add_launch_task(
         raise _fail(e) from e
     await db.commit()
     await db.refresh(task)
-    return service.task_out(task, service.effective_tier(launch))
+    return service.task_out(task, service.effective_tier(launch), await service.hidden_for(db))
 
 
 @router.patch("/launch-tasks/{task_id}", response_model=TaskOut)
@@ -212,7 +212,8 @@ async def update_launch_task(
     await db.commit()
     await db.refresh(task)
     launch = await db.get(Launch, task.launch_id)
-    return service.task_out(task, service.effective_tier(launch) if launch else None)
+    tier = service.effective_tier(launch) if launch else None
+    return service.task_out(task, tier, await service.hidden_for(db))
 
 
 # --- requester notes ----------------------------------------------------------------------------
@@ -231,7 +232,8 @@ async def list_requester_notes(
         .where(RequesterNote.launch_id == launch_id)
         .order_by(RequesterNote.created_at, RequesterNote.id)
     )
-    return [service.note_out(n) for n in rows]
+    hidden = await service.hidden_for(db)
+    return [service.note_out(n, hidden) for n in rows]
 
 
 @router.post("/launches/{launch_id}/notes", response_model=RequesterNoteOut, status_code=201)
@@ -245,7 +247,7 @@ async def add_requester(
     )
     await db.commit()
     await db.refresh(note)
-    return service.note_out(note)
+    return service.note_out(note, await service.hidden_for(db))
 
 
 @router.patch("/requester-notes/{note_id}", response_model=RequesterNoteOut)
@@ -272,7 +274,7 @@ async def update_requester_note(
         raise _fail(e) from e
     await db.commit()
     await db.refresh(note)
-    return service.note_out(note)
+    return service.note_out(note, await service.hidden_for(db))
 
 
 @router.post("/launches/{launch_id}/notify-members", response_model=NotifiedOut)
@@ -309,7 +311,9 @@ async def list_changelog(
         query = query.where(ChangelogEntry.status == status_)
     if since is not None:
         query = query.where(ChangelogEntry.released_on >= since)
-    return list(await db.scalars(query.limit(limit)))
+    rows = list(await db.scalars(query.limit(limit)))
+    # #541 part 5: a draft naming what the reader may not see is left out for them.
+    return service.changelog_shown(rows, await service.hidden_for(db))
 
 
 @router.get(

@@ -23,6 +23,13 @@ launch that is still ``todo`` or ``drafted`` to ``drafted`` with its text, repla
 launch's earlier Oracle draft changelog entries with the ones given (``draft``, never
 published here), and drafts the notes it names. An invalid one changes nothing but
 ``kit_error`` on the launch.
+
+#541 part 5: what the kit writes is read by every member (and some of it goes outside), so
+the run reads as a commenter (oracle.runs.flows ``member_output``) and the import checks
+its text the same way, whoever started it: a file whose text names a decision or a
+document a commenter may not see (oracle.docs.visibility ``Hidden.names``) is refused as
+an invalid one is. Its refs need no such check: a requester_ref names one of this
+launch's own notes, or nothing is drafted for it.
 """
 
 import re
@@ -34,6 +41,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
+from oracle.docs import visibility
 from oracle.launches.checklist import tasks_of
 from oracle.launches.models import (
     CHANGELOG_AUDIENCES,
@@ -169,6 +177,27 @@ def _note_for(notes: list[RequesterNote], ref: str) -> RequesterNote | None:
     return None
 
 
+def _texts(data: dict[str, Any]) -> list[tuple[str, str]]:
+    """(where, text) of every text the file would store."""
+    out: list[tuple[str, str]] = []
+    for i, e in enumerate(data.get("changelog") or []):
+        out.append((f"changelog[{i}].title", e["title"]))
+        out.append((f"changelog[{i}].body", e.get("body") or ""))
+    for key, value in (data.get("tasks") or {}).items():
+        out.append((f"tasks.{key}", pre_mortem_markdown(value) if key == "pre_mortem" else value))
+    for i, n in enumerate(data.get("notes") or []):
+        out.append((f"notes[{i}].body", n["body"]))
+    return out
+
+
+async def names_hidden(db: AsyncSession, data: dict[str, Any]) -> list[str]:
+    """Where the file's text names something a commenter may not see."""
+    hidden = await visibility.hidden_for_reader(db, as_member=True)
+    if hidden is None:
+        return []
+    return [where for where, text in _texts(data) if hidden.names(text)]
+
+
 async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict[str, Any]:
     """Import a launch.yaml into its launch (the caller commits). Returns what changed,
     or ``{"error": ...}`` (recorded as ``kit_error``)."""
@@ -177,6 +206,15 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
         return {"error": launch.kit_error}
     data, problems = validate(text, launch.id)
     if data is None:
+        launch.kit_error = f"{FILE} was refused: " + "; ".join(problems[:5])
+        return {"error": launch.kit_error, "problems": problems}
+    named = await names_hidden(db, data)
+    if named:
+        problems = [
+            f"{where} names a decision or a document only owners and approvers may see: leave "
+            "it out (every member reads the kit)"
+            for where in named
+        ]
         launch.kit_error = f"{FILE} was refused: " + "; ".join(problems[:5])
         return {"error": launch.kit_error, "problems": problems}
     tasks = {t.key: t for t in await tasks_of(db, launch.id) if t.key}

@@ -78,10 +78,17 @@ async def user_with_role(tenant_id: uuid.UUID, role: str, email: str = "pm@examp
 
 
 async def run_token(
-    tenant_id: uuid.UUID, scopes: list[str], created_by: uuid.UUID | None, ttl: int = 600
+    tenant_id: uuid.UUID,
+    scopes: list[str],
+    created_by: uuid.UUID | None,
+    ttl: int = 600,
+    flow: str = "baseline_to_prd",
 ) -> str:
+    """A run token of a new run of ``flow``. A Baseline to PRD run without a target writes
+    a new company-wide PRD, so it reads as a member (#541 part 5); a pricing_memo run
+    reads with its creator's role."""
     async with tenant_session(tenant_id) as s:
-        run = Run(flow="baseline_to_prd", created_by=created_by)
+        run = Run(flow=flow, created_by=created_by)
         s.add(run)
         await s.flush()
         raw = await mint_run_token(s, run.id, scopes, ttl_seconds=ttl)
