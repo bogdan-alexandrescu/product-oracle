@@ -485,13 +485,18 @@ async def start_run(
     suggestion_ids: list[uuid.UUID] | None,
     feedback_ids: list[uuid.UUID] | None,
     depth: str = "standard",
+    next_draft_change_ids: list[uuid.UUID] | None = None,
 ) -> uuid.UUID:
     """Start the agents' feedback-loop run with exactly the chosen items: created,
-    estimated and started (or left awaiting an owner's approval over the threshold)."""
+    estimated and started (or left awaiting an owner's approval over the threshold).
+    G4: the discussions' chosen section changes go with them, for the agents to make."""
     from oracle.runs import service as runs
     from oracle.runs.schemas import KnobsIn, RunCreate
 
-    staged, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
+    staged, changes, items = await _chosen(
+        db, doc, suggestion_ids, feedback_ids, next_draft_change_ids
+    )
+    rows = _chosen_rows(staged, next_draft_change_ids)
     document = await get_document(db, doc)
     if choose_engine(changes, items, document).engine == "oracle":
         raise JobError(409, "these changes need no agents; build them with Oracle")
@@ -502,6 +507,7 @@ async def start_run(
         oracle_knobs={
             "feedback_ids": [str(i.feedback_id) for i in items],
             "suggestion_ids": [str(c.suggestion_id) for c in changes],
+            "next_draft_change_ids": [str(r.id) for r in rows],
         },
     )
     await runs.estimate(db, principal, run_id)

@@ -97,6 +97,18 @@ def _link(run_id: uuid.UUID, discussion_id: uuid.UUID) -> str:
     return app_url(f"/runs/{run_id}?discussion={discussion_id}")
 
 
+def _next_draft_rows(run: Run) -> Any:
+    """For a feedback loop, which staged next-draft rows are its agents': every staged row
+    on its document, or, for a run Build next draft started (D12 knobs), only the ones it
+    was sent (none when its knobs name none)."""
+    knobs = run.knobs or {}
+    rows = NextDraftChange.status == "staged"
+    if any(k in knobs for k in ("feedback_ids", "suggestion_ids", "next_draft_change_ids")):
+        sent = [uuid.UUID(str(i)) for i in knobs.get("next_draft_change_ids") or []]
+        rows = and_(rows, NextDraftChange.id.in_(sent))
+    return and_(NextDraftChange.document_id == run.document_id, rows)
+
+
 async def _discussions(db: AsyncSession, run: Run) -> list[Discussion]:
     about = [Discussion.run_id == run.id]
     intake_id = (run.knobs or {}).get("intake_id")
@@ -109,9 +121,7 @@ async def _discussions(db: AsyncSession, run: Run) -> list[Discussion]:
         )
     if run.flow == "feedback_loop" and run.document_id is not None:
         staged = select(NextDraftChange.discussion_id).where(
-            NextDraftChange.document_id == run.document_id,
-            NextDraftChange.status == "staged",
-            NextDraftChange.discussion_id.is_not(None),
+            _next_draft_rows(run), NextDraftChange.discussion_id.is_not(None)
         )
         about.append(
             and_(
@@ -172,11 +182,7 @@ async def _staged(
     if run.flow == "feedback_loop" and run.document_id is not None:
         drafts = await db.scalars(
             select(NextDraftChange)
-            .where(
-                NextDraftChange.document_id == run.document_id,
-                NextDraftChange.discussion_id.in_(ids),
-                NextDraftChange.status == "staged",
-            )
+            .where(_next_draft_rows(run), NextDraftChange.discussion_id.in_(ids))
             .order_by(NextDraftChange.created_at, NextDraftChange.id)
         )
         for r in drafts:

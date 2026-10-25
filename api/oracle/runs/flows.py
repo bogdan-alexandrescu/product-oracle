@@ -1379,6 +1379,9 @@ class PromptContext:
     feedback: list[dict[str, Any]] = field(default_factory=list)
     # True: ``feedback`` holds only what an approver staged for this draft (D12).
     staged: bool = False
+    # G4: the section changes staged from discussions for this draft: id, section_key,
+    # instruction, reason (and, for a proposed section body, its text).
+    section_changes: list[dict[str, Any]] = field(default_factory=list)
     locked_sections: list[str] = field(default_factory=list)
     attempt: int = 1
     change_request: str | None = None
@@ -1606,6 +1609,22 @@ def step_prompt(
             if f.get("accepted_text"):
                 text = f["accepted_text"].strip().replace("\n", "\n  ")
                 lines.append(f"  Accepted change for this section: {text}")
+    if ctx.section_changes:
+        lines += [
+            "",
+            "Section changes staged from discussions for this draft:",
+        ]
+        for c in ctx.section_changes:
+            lines.append(f"- {c['id']} [{c['section_key']}]: {c['instruction']}")
+            if c.get("reason"):
+                lines.append(f"  Reason: {c['reason']}")
+            if c.get("text"):
+                text = c["text"].strip().replace("\n", "\n  ")
+                lines.append(f"  Proposed text for this section: {text}")
+        lines.append(
+            "Make each of these changes in its section, or say in your notes why not. They "
+            "are not feedback items: list no resolution for them."
+        )
     if ctx.locked_sections:
         lines += ["", "Locked (approved) sections: " + ", ".join(ctx.locked_sections)]
     if ctx.source is not None:
