@@ -7937,6 +7937,59 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/suggestions/{suggestion_id}/undo-accept": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Undo Accept Suggestion",
+        "description": "Undo Accept: the suggestion is open again and its item as before Accept. 409 with\nthe reason when it cannot be: an answer already posted, a change a draft applied or a\nbuild is using, an item changed since.",
+        "operationId": "undo_accept_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/suggestions/{suggestion_id}/dismiss": {
       "post": {
         "tags": [
@@ -64103,6 +64156,42 @@
             "type": "boolean",
             "title": "Staged For Agents",
             "default": false
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "intake_question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Question Id"
+          },
+          "intake_answer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Answer Id"
           }
         },
         "type": "object",
@@ -71578,6 +71667,33 @@
             "type": "integer",
             "title": "Answers Since Run",
             "default": 0
+          },
+          "late_answers_as_feedback": {
+            "type": "integer",
+            "title": "Late Answers As Feedback",
+            "default": 0
+          },
+          "draft_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Document"
+          },
+          "draft_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Version"
           }
         },
         "type": "object",

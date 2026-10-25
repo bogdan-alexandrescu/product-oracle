@@ -92,7 +92,7 @@ async def test_a_late_answer_becomes_feedback_on_the_draft(client, runtime):  # 
     s = await read_summary(client, ctx, intake_id)
     assert s["answers_since_run"] == 3
     assert s["late_answers_as_feedback"] == 2
-    assert s["draft_document"] == SLUG
+    assert (s["draft_document"], s["draft_version"]) == (SLUG, 1)
 
 
 async def test_answers_before_drafting_make_no_feedback(client, runtime):  # noqa: F811

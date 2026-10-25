@@ -665,6 +665,30 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       }
       return json(200, s);
     }
+    // D14: Undo Accept, as jobs.service.undo_accept: back to open, or refused with the reason.
+    if (p[3] === "undo-accept" && m === "POST") {
+      if (s.status === "applied") return fail(409, `draft ${s.applied_in_version} already applied it; it stays`);
+      if (s.status !== "accepted") return fail(409, `an ${s.status} suggestion has no accept to undo`);
+      if (s.kind === "answer") return fail(409, "the answer is posted on the comment thread: reply there to correct it");
+      if (s.kind === "section_text") {
+        const building = db.jobs.some(
+          (j) =>
+            j.document_id === s.document_id &&
+            (j.kind === "refinement" || j.kind === "refinement_batch") &&
+            ["queued", "running", "succeeded"].includes(j.status) &&
+            !(j.output as { applied_version?: number; discarded_at?: string } | null)?.applied_version &&
+            !(j.output as { discarded_at?: string } | null)?.discarded_at &&
+            ((j.input as { suggestion_ids?: string[] } | null)?.suggestion_ids ?? []).includes(s.id),
+        );
+        if (building) return fail(409, "the next draft being built uses it: discard that build first");
+      } else if (item) {
+        const closed = s.kind === "none" ? "addressed" : "superseded";
+        if (item.status !== closed) return fail(409, `the item is ${item.status} since; open it to change it`);
+        Object.assign(item, { status: "open", resolution_note: null, addressed_in_version: null, updated_at: ctx.now() });
+      }
+      Object.assign(s, { status: "open", decided_by: null, decided_at: null, override_reason: null, updated_at: ctx.now() });
+      return json(200, s);
+    }
     if (p[3] === "dismiss" && m === "POST") {
       if (!["open", "accepted"].includes(s.status)) return fail(409, `an ${s.status} suggestion cannot be dismissed`);
       const input = (await body<Schemas["SuggestionDismiss"]>()) ?? {};

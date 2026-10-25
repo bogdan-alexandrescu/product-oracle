@@ -74,7 +74,7 @@ import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -419,6 +419,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * with three rows that need a person, attempt 2, and a held console approval);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
+ * given now becomes a feedback item on the PRD (C5 late answers);
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
@@ -649,6 +651,25 @@ function seedBeforeDraftingScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
+  return db;
+}
+
+/**
+ * C5 late answers: the "before-drafting" brief, drafting since 22 Oct into the Checkout
+ * redesign PRD; the answers given by then are the draft run's, the questions still asked
+ * (Pain evidence of the approver, Success metric and Goal alignment of the owner) are not.
+ */
+function seedLateAnswersScenario(): Db {
+  const db = seedBeforeDraftingScenario();
+  const v2 = ensureV2(db);
+  const intake = v2.intakes.find((i) => i.id === BEFORE_DRAFTING.intakeId)!;
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  Object.assign(intake, { status: "converted", document_id: prd.id });
+  const mine = new Set(v2.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
+  v2.intake_runs = {
+    ...v2.intake_runs,
+    [intake.id]: { run_id: "c5000000-0000-4000-8000-0000000000d1", answer_ids: v2.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id), document: prd.slug },
+  };
   return db;
 }
 
@@ -2022,6 +2043,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "late-answers"
+            ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
             ? seedBriefGoalRejectedScenario
           : scenario === "questions"
@@ -3859,7 +3882,30 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    // C5 late answers: a whole-draft item on the PRD's latest version, as late_answers._raise.
+    const raiseFeedback = (ref: string, input: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string }) => {
+      const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
+      const latest = doc ? docVersions(db, doc).pop() : undefined;
+      if (!doc || !latest) return null;
+      const at = now();
+      db.feedback.push({
+        id: uuid(), document_id: doc.id, raised_on_version: latest.number, kind: "general", comment_id: null, section_review_id: null,
+        section_key: null, summary: input.summary, author_id: input.author_id, anchor: null, verdict: null, status: "open",
+        addressed_in_version: null, resolution_note: null, severity: null, created_at: at, updated_at: at,
+        intake_id: v2db.questions.find((x) => x.id === input.intake_question_id)?.intake_id ?? null,
+        intake_question_id: input.intake_question_id, intake_answer_id: input.intake_answer_id,
+      });
+      touch(db, doc.id);
+      onFeedback(llm, doc.id, latest.number);
+      return { slug: doc.slug, version: latest.number };
+    };
+    const intake = await routeIntake(
+      v2db,
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, raiseFeedback },
+      req,
+      p,
+      q,
+    );
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.

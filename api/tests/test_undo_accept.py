@@ -17,7 +17,13 @@ Test cards (protects / fails_when / no_claim):
 Synthetic placeholders only.
 """
 
+import pytest
+
+from oracle.llm import gateway
+from oracle.seed import seed
+from tests.claude_account_helpers import add_account, window
 from tests.test_llm_jobs import (
+    FakeClaude,
     actions,
     comment,
     feedback,
@@ -26,15 +32,26 @@ from tests.test_llm_jobs import (
     tick,
 )
 from tests.test_members import token_with_role
-from tests.test_next_draft import (  # noqa: F401 (fixtures)
-    DOC,
-    build,
-    ctx,
-    fake,
-    pool,
-    staged,
-    staged_setup,
-)
+from tests.test_next_draft import DOC, build, staged, staged_setup
+
+
+@pytest.fixture
+def fake():
+    claude = FakeClaude()
+    previous = gateway.set_transports(gateway.Transports(plan=claude, api_key=claude))
+    yield claude
+    gateway.set_transports(previous)
+
+
+@pytest.fixture
+async def ctx():
+    r = await seed(token_name="test")
+    return {"tenant_id": r.tenant_id, "headers": {"Authorization": f"Bearer {r.token}"}}
+
+
+@pytest.fixture
+async def pool(ctx):
+    return await add_account(ctx["tenant_id"], "personal", windows={"five_hour": window(0.2)})
 
 
 async def undo(client, ctx, sid: str, headers=None):

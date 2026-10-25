@@ -496,6 +496,71 @@ async def accept_suggestion(
     return row
 
 
+async def _in_use(db: AsyncSession, row: LlmSuggestion) -> str | None:
+    """Why an accepted change cannot go back to open: a draft is being built from it (the
+    next-draft build or a section refinement not applied or set aside, or the agents' run
+    sent it), or None."""
+    sid = str(row.id)
+    jobs = await db.scalars(
+        select(LlmJob).where(
+            LlmJob.document_id == row.document_id,
+            LlmJob.kind.in_(("refinement", "refinement_batch")),
+            LlmJob.status.in_(("queued", "running", "succeeded")),
+        )
+    )
+    for job in jobs:
+        out = job.output or {}
+        if out.get("applied_version") or out.get("discarded_at"):
+            continue
+        if sid in [str(i) for i in (job.input or {}).get("suggestion_ids") or []]:
+            return "the next draft being built uses it: discard that build first"
+    from oracle.runs.models import Run
+
+    runs = await db.scalars(
+        select(Run).where(
+            Run.document_id == row.document_id,
+            Run.status.not_in(("succeeded", "failed", "cancelled")),
+        )
+    )
+    for run in runs:
+        if sid in [str(i) for i in (run.knobs or {}).get("suggestion_ids") or []]:
+            return "the agents' next draft uses it: cancel that run first"
+    return None
+
+
+async def undo_accept(
+    db: AsyncSession, principal: "Principal", suggestion_id: uuid.UUID
+) -> LlmSuggestion:
+    """Undo Accept (D14): the suggestion is open again and its item as it was before.
+    Refused, with the reason, when Accept cannot be reverted: the answer is posted on the
+    thread, a draft applied the change or is being built from it, or the item changed since.
+    The decision log keeps an override of Oracle's pushback (the audit records the undo)."""
+    row = await _suggestion(db, suggestion_id)
+    if row.status == "applied":
+        raise JobError(409, f"draft {row.applied_in_version} already applied it; it stays")
+    if row.status != "accepted":
+        raise JobError(409, f"an {row.status} suggestion has no accept to undo")
+    item = await db.get(FeedbackItem, row.feedback_item_id)
+    if row.kind == "answer":
+        raise JobError(409, "the answer is posted on the comment thread: reply there to correct it")
+    if row.kind == "section_text":
+        if why := await _in_use(db, row):
+            raise JobError(409, why)
+    else:
+        closed = {"none": "addressed", "duplicate": "superseded"}[row.kind]
+        if item is not None and item.status != closed:
+            raise JobError(409, f"the item is {item.status} since; open it to change it")
+        if item is not None:
+            item.status, item.resolution_note, item.addressed_in_version = "open", None, None
+    row.status = "open"
+    row.decided_by = row.decided_at = row.override_reason = None
+    await db.flush()
+    await audit.record(
+        db, principal, "suggestion.undo_accept", "llm_suggestion", row.id, {"kind": row.kind}
+    )
+    return row
+
+
 async def dismiss_suggestion(
     db: AsyncSession,
     principal: "Principal",

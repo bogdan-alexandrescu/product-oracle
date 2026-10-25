@@ -206,6 +206,16 @@ async def feedback_out(
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
     latest = await latest_numbers(session, {i.document_id for i in items})
+    intakes: dict[uuid.UUID, uuid.UUID | None] = {}
+    if question_ids := {i.intake_question_id for i in items if i.intake_question_id}:
+        from oracle.v2.models import StakeholderQuestion
+
+        rows = await session.execute(
+            select(StakeholderQuestion.id, StakeholderQuestion.intake_id).where(
+                StakeholderQuestion.id.in_(question_ids)
+            )
+        )
+        intakes = {k: v for k, v in rows}
     out = []
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
@@ -236,6 +246,9 @@ async def feedback_out(
                 if state == "staged"
                 else None,
                 staged_for_agents=staged_for_agents(item),
+                intake_id=intakes.get(item.intake_question_id) if item.intake_question_id else None,
+                intake_question_id=item.intake_question_id,
+                intake_answer_id=item.intake_answer_id,
             )
         )
     return out
