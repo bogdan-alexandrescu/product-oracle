@@ -176,6 +176,7 @@ async def strategies(
         opts = options.get(entity.id, [])
         recommended = service.recommended_option(opts)
         evidence = await baseline_evidence.present(db, principal, evidence_rows.get(entity.id, []))
+        why_not = await service.status_refusal(db, principal, entity, spec)
         out.append(
             BlockerStrategy(
                 blocker=_blocker_out(
@@ -215,6 +216,8 @@ async def strategies(
                 ],
                 risk_acceptance=acceptance,
                 documents=documents.get(entity.id, []),
+                can_set_status=why_not is None,
+                set_status_why_not=why_not,
             )
         )
     out.sort(key=lambda s: _order(s))

@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy
+from oracle import audit, autonomy, company_time
 from oracle.baseline.models import EntityRevision, GoalMeasurement
 from oracle.quality import outcomes
 from oracle.quality.capture import figure_text, number
@@ -217,12 +217,13 @@ async def tick_due(db: AsyncSession) -> tuple[int, int]:
     """The ticker step: ship what shipped, then propose what is due. Flushes; the caller
     commits. Returns (shipped, proposed)."""
     shipped = await detect_shipped(db)
+    today = await company_time.company_today(db)
     due = list(
         await db.scalars(
             select(OutcomeRecord)
             .where(
                 OutcomeRecord.status == "tracking",
-                OutcomeRecord.assess_due_on <= date.today(),
+                OutcomeRecord.assess_due_on <= today,
                 OutcomeRecord.proposed_assessment.is_(None),
             )
             .order_by(OutcomeRecord.assess_due_on, OutcomeRecord.id)

@@ -40,10 +40,14 @@ test("asking while another tab's digest is being written says so, even at Observ
   await b.goto(a.url());
   const summaryB = b.getByTestId("occurrence-summary");
   await expect(summaryB.getByRole("button", { name: ASK })).toBeVisible();
-  // Paused, tab B's look-again timer never fires: the run stays under way.
+  // Tab B's clock is paused and moved on 100 ms at a time (the mock answers after 60 ms)
+  // only until the run shows: its look-again timer (every second) never fires, so the
+  // run stays under way.
   await b.clock.pauseAt(new Date((await b.evaluate(() => Date.now())) + 1_000));
   await summaryB.getByRole("button", { name: ASK }).click();
-  await expect(summaryB).toContainText("Writing the digest…");
+  const writing = summaryB.getByText("Writing the digest…");
+  for (let i = 0; i < 9 && !(await writing.isVisible()); i++) await b.clock.runFor(100);
+  await expect(writing).toBeVisible();
   await b.close();
   await context.clock.resume();
 

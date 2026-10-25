@@ -14034,6 +14034,13 @@ export interface components {
             risk_acceptance?: components["schemas"]["AssumptionDecisionOut"] | null;
             /** Documents */
             documents: components["schemas"]["BlockerDocumentRef"][];
+            /**
+             * Can Set Status
+             * @default true
+             */
+            can_set_status: boolean;
+            /** Set Status Why Not */
+            set_status_why_not?: string | null;
         };
         /**
          * BlockerSummary
