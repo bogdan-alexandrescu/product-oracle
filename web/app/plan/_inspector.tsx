@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { AskTeammate } from "@/components/AskTeammate";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
@@ -397,9 +398,16 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
         <AskTeammate subject={{ kind: "roadmap_item", document_id: prdId, item_key: item.key }} context={item.title} onClose={() => setAsking(false)} />
       )}
       {error && <Notice tone="error">{error}</Notice>}
-      <Sheet open={discussing} title={discussion.title} onClose={() => setDiscussing(false)} testId="plan-discuss-sheet">
-        <div className="px-4 py-3">{discussing && <DiscussSubject subject={discussion.subject} subjectKey={discussion.key} />}</div>
-      </Sheet>
+      {/* Over the whole page, not inside the inspector's column (the rail would cover it). */}
+      {discussing &&
+        createPortal(
+          <Sheet open title={discussion.title} onClose={() => setDiscussing(false)} testId="plan-discuss-sheet">
+            <div className="px-4 py-3">
+              <DiscussSubject subject={discussion.subject} subjectKey={discussion.key} />
+            </div>
+          </Sheet>,
+          document.body,
+        )}
     </div>
   );
 }
