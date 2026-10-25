@@ -486,7 +486,19 @@ async def create(
         d.id,
         {"number": d.number, "approver_id": str(d.approver_id), "origin": d.origin},
     )
+    await _ping_approver(db, principal, d)
     return d
+
+
+async def _ping_approver(db: AsyncSession, principal: Principal, d: Decision) -> None:
+    """Slack pings: a decision is requested of its approver (oracle.slack.pings)."""
+    from oracle.slack import pings
+
+    await pings.queue(
+        db, "review_requested", [d.approver_id],
+        title=f"Your decision is requested: {d.title}", path="/inbox",
+        actor_id=principal.user_id,
+    )  # fmt: skip
 
 
 def _editor(principal: Principal, d: Decision) -> bool:
@@ -704,6 +716,8 @@ async def reassign(
         d.id,
         {"from": str(before), "to": str(body.approver_id), "reason": body.reason},
     )
+    if body.approver_id != before:
+        await _ping_approver(db, principal, d)
     return d
 
 

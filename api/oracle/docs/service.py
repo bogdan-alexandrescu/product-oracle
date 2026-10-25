@@ -1262,6 +1262,13 @@ async def import_draft(
             **({"held_sections": sorted(held)} if held else {}),
         },
     )
+    if not template_only:
+        # Slack pings: the reviewers who chose "draft ready" (oracle.slack.pings).
+        from oracle.slack import pings
+
+        await pings.draft_ready(
+            db, document, version.number, principal.user_id if principal else None
+        )
     await (db.commit() if commit else db.flush())
     if dates is not None:
         # The version's text is the draft's: reading it parses nothing again.

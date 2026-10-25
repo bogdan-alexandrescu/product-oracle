@@ -152,7 +152,21 @@ async def create(
         db, principal, "question.asked", "stakeholder_question", question.id,
         {"subject": body.subject.kind, "asked_to": str(body.asked_to)},
     )  # fmt: skip
+    await ping_asked(db, principal, question)
     return question
+
+
+async def ping_asked(
+    db: AsyncSession, principal: Principal | None, question: StakeholderQuestion
+) -> None:
+    """Slack pings: a question asked of a person (oracle.slack.pings)."""
+    from oracle.slack import pings
+
+    await pings.queue(
+        db, "review_requested", [question.asked_to],
+        title=f"A question for you: {question.prompt}", path="/inbox",
+        actor_id=principal.user_id if principal else None,
+    )  # fmt: skip
 
 
 # --- reassign or withdraw -------------------------------------------------------------
@@ -199,6 +213,8 @@ async def patch(
         db, principal, "question.reassigned", "stakeholder_question", question.id,
         {"from": str(before) if before else None, "to": str(body.asked_to)},
     )  # fmt: skip
+    if body.asked_to != before:
+        await ping_asked(db, principal, question)
     return question
 
 

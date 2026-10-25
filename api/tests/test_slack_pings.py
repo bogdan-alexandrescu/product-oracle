@@ -79,7 +79,7 @@ async def assign(client, ctx, doc: str, key: str = "problem", reviewers=()) -> N
     resp = await client.put(
         f"/v1/documents/{doc}/sections/{key}/assignment",
         json={"owner_id": None, "reviewer_ids": list(reviewers), "lock_version": lock},
-        headers=ctx.as_("approver"),
+        headers=ctx.as_("owner"),
     )
     assert resp.status_code == 200, resp.text
 
@@ -162,7 +162,8 @@ async def test_a_new_draft_pings_the_reviewers_who_opted_in(client, slack):
     await choose(client, ctx, "viewer", draft_ready=True)
     await assign(client, ctx, doc, reviewers=[uid(ctx, "commenter"), uid(ctx, "approver")])
     before = {p.id for p in await pings_of(ctx)}
-    resp = await import_draft(client, ctx.as_("token"), draft("prd_v2.md"))
+    v2 = draft("prd_v1.md").replace("Too many shoppers", "Many shoppers")
+    resp = await import_draft(client, ctx.as_("token"), v2)
     assert resp.status_code == 201, resp.text
     new = [p for p in await pings_of(ctx) if p.id not in before]
     assert [(p.recipient_id, p.payload["event"]) for p in new] == [

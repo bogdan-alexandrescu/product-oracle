@@ -1,5 +1,6 @@
-"""G8 Slack bridge (migration 0042_slack_bridge): a discussion's link to its Slack thread,
-the outbox the tick delivers, and the Slack events already processed."""
+"""G8 Slack bridge (migration 0047_slack_bridge): a discussion's link to its Slack thread,
+the outbox the tick delivers, and the Slack events already processed. The outbox also
+carries Slack pings to one member (migration 0055_slack_pings, oracle.slack.pings)."""
 
 import uuid
 from datetime import datetime
@@ -22,7 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
 
-OUTBOX_OPS = ("root", "post", "update", "delete", "close")
+OUTBOX_OPS = ("root", "post", "update", "delete", "close", "ping")
 OUTBOX_STATUSES = ("queued", "sent", "failed", "dropped")
 
 
@@ -66,17 +67,26 @@ class SlackOutbox(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("op", OUTBOX_OPS), name="op"),
         CheckConstraint(_in("status", OUTBOX_STATUSES), name="status"),
+        # A ping is for one member and has no thread; every other op is a thread's.
+        CheckConstraint(
+            "(op = 'ping') = (link_id IS NULL AND recipient_id IS NOT NULL)", name="target"
+        ),
         Index("ix_slack_outbox_due", "status", "next_try_at"),
     )
 
-    link_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("discussion_slack_links.id", ondelete="CASCADE"), nullable=False
+    link_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussion_slack_links.id", ondelete="CASCADE")
+    )
+    # A ping's member (oracle.slack.pings).
+    recipient_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE")
     )
     message_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("discussion_messages.id", ondelete="SET NULL")
     )
     op: Mapped[str] = mapped_column(Text, nullable=False)
-    # {"text"} for root, post and close; {"ts", "text"} for update; {"ts"} for delete.
+    # {"text"} for root, post and close; {"ts", "text"} for update; {"ts"} for delete;
+    # {"event", "text", "channel_text"} for a ping.
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(
         Text, nullable=False, default="queued", server_default="queued"
