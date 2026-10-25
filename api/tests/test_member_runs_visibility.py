@@ -153,8 +153,10 @@ async def test_a_member_flow_run_reads_as_a_commenter(client, ctx, flow, starter
     raw = await _member_run(ctx, flow, w["occ_id"], starter)
     reads = await _reads(raw, w)
     offered = {n for n, _ in reads}
-    assert "search" in offered, reads
-    if "read:baseline" in {x for seg in flows.FLOWS[flow].segments for x in seg.scopes}:
+    scopes = {x for seg in flows.FLOWS[flow].segments for x in seg.scopes}
+    # Discussion research reads no one's own sources (AUD-9): its answer is the thread's.
+    assert ("search" in offered) == ("read:sources" in scopes), reads
+    if "read:baseline" in scopes:
         assert {"list_decisions", "get_decision", "get_baseline"} <= offered, offered
         assert any(CONTROL in t for n, t in reads if n == "list_decisions"), "control missing"
     for name, text in reads:

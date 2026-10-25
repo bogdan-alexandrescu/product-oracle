@@ -124,7 +124,8 @@ async def test_a_commenter_starts_an_open_discussion_and_a_viewer_only_reads(cli
     # The first message and Oracle's reply to it, unread yet (#402).
     assert d["message_count"] == 2 and d["summary_status"] == "none"
     assert d["changes"] == {"proposed": 0, "suggested": 0, "staged": 0}
-    assert d["me"] == {"participant": True, "can_write": True, "can_manage": True, "unread": 1}
+    assert d["me"] == {"participant": True, "can_write": True, "can_manage": True, "unread": 1,
+                       "can_research": False, "research_usd": None}  # fmt: skip
 
     seen = await get(client, ctx, d["id"], "viewer")
     assert seen["title"] == "Problem: measure from plan thresholds?"

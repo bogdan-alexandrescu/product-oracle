@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
-from oracle.discussions import access, inbox, replies
+from oracle.discussions import access, inbox, replies, research
 from oracle.discussions.models import (
     MAX_BODY,
     MAX_SUMMARY,
@@ -47,6 +47,7 @@ from oracle.discussions.schemas import (
     DiscussionStarter,
     DiscussionSummary,
     HiddenDiscussion,
+    MessageResearch,
     PrivateFindings,
     ReplyUsage,
 )
@@ -671,6 +672,9 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
         messages, people = await exposure(db, d)
         out.exposure = DiscussionExposure(messages=messages, people=people)
     out.me.private_findings = await private_findings(db, principal, d)
+    if research.can_research(d, seat) and principal.user_id is not None:
+        out.me.can_research = True
+        out.me.research_usd = float(research.estimate_usd())
     from oracle.slack import bridge  # G8; it builds on this module
 
     out.slack = await bridge.slack_out(db, await bridge.live_link(db, d.id))
@@ -782,7 +786,10 @@ async def list_discussions(
 
 
 def message_out(
-    m: DiscussionMessage, users: dict[uuid.UUID, User], role: str | None = None
+    m: DiscussionMessage,
+    users: dict[uuid.UUID, User],
+    role: str | None = None,
+    research: dict[uuid.UUID, str] | None = None,
 ) -> DiscussionMessageOut:
     def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
@@ -802,7 +809,8 @@ def message_out(
         mentions_oracle=m.mentions_oracle,
         reply_to=m.reply_to,
         status=m.status,  # type: ignore[arg-type]
-        citations=m.citations,
+        # A research line keeps its run's context entries; only Oracle's answer cites.
+        citations=[] if m.author_kind == "system" else m.citations,
         created_at=m.created_at,
         edited_at=m.edited_at,
         deleted=deleted,
@@ -820,6 +828,9 @@ def message_out(
         )
         if m.author_kind == "oracle" and role == "owner"
         else None,
+        research=MessageResearch(run_id=m.run_id, status=research.get(m.run_id, "running"))  # type: ignore[arg-type]
+        if m.run_id is not None and research is not None
+        else None,
     )
 
 
@@ -829,7 +840,8 @@ async def messages_out(
     ids = {m.author_id for m in rows if m.author_id} | {u for m in rows for u in m.mentions}
     users = await users_by_id(db, ids)
     role = principal.role if principal is not None else None
-    return [message_out(m, users, role) for m in rows]
+    states = await research.statuses(db, rows)
+    return [message_out(m, users, role, states) for m in rows]
 
 
 async def list_messages(

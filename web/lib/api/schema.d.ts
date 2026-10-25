@@ -953,6 +953,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discussions/{discussion_id}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Research Discussion Message
+         * @description Research this (G2 §4): an approver or owner who can write in an open discussion
+         *     starts one ``discussion_research`` run on a person's message (its cost is
+         *     ``me.research_usd`` on the discussion). The run reads the discussion's context as
+         *     Oracle's replies do, and its answer comes back into the thread as Oracle's message,
+         *     citing its sources. Answers the line that says so (``research``: the run and its
+         *     state); 409 while that message's research runs.
+         */
+        post: operations["research_discussion_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
         parameters: {
             query?: never;
@@ -17632,6 +17657,13 @@ export interface components {
             /** Can Manage */
             can_manage: boolean;
             private_findings?: components["schemas"]["PrivateFindings"] | null;
+            /**
+             * Can Research
+             * @default false
+             */
+            can_research: boolean;
+            /** Research Usd */
+            research_usd?: number | null;
         };
         /** DiscussionMeSummary */
         DiscussionMeSummary: {
@@ -17719,6 +17751,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             usage?: components["schemas"]["ReplyUsage"] | null;
+            research?: components["schemas"]["MessageResearch"] | null;
         };
         /** DiscussionMessagePage */
         DiscussionMessagePage: {
@@ -20061,7 +20094,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Title */
             title: string;
             /** Description */
@@ -21281,7 +21314,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -24608,6 +24641,19 @@ export interface components {
             status: string;
             /** Chosen Label */
             chosen_label?: string | null;
+        };
+        /** MessageResearch */
+        MessageResearch: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "done" | "failed";
         };
         /** MetricCreate */
         MetricCreate: {
@@ -29366,6 +29412,17 @@ export interface components {
             edges: number;
         };
         /**
+         * ResearchIn
+         * @description Research this: the person's message to research.
+         */
+        ResearchIn: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+        };
+        /**
          * Resolution
          * @description One entry of a draft's front-matter ``resolutions`` list.
          */
@@ -30412,7 +30469,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Document */
             document?: string | null;
             /** Source */
@@ -30577,7 +30634,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Flow Title */
             flow_title: string;
             /**
@@ -30839,7 +30896,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Flow Title */
             flow_title: string;
             /**
@@ -38904,6 +38961,60 @@ export interface operations {
             };
             /** @description Oracle has answered a lot here; the message is still stored */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    research_discussion_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description Approvers and owners start research; or private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Closed, or Oracle is already researching this message */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only a person's message can be researched */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -113,6 +113,7 @@ async def test_research_starts_one_run_and_says_so(client):
                                   headers=ctx.as_("approver"))  # fmt: skip
         assert again.status_code == 409, again.text
         assert again.json()["detail"] == research.ALREADY
+        await _tick(client, ctx, 1)  # the tick submits it
         async with tenant_session(ctx.tenant_id) as s:
             tokens = list(await s.scalars(select(RunToken).where(RunToken.run_id == run.id)))
             started = list(await s.scalars(select(AuditEvent).where(
