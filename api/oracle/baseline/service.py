@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, changes
@@ -424,6 +424,41 @@ async def propose(
     db.add(proposal)
     await db.flush()
     return proposal
+
+
+SUPERSEDED_NOTE = "Superseded: the same run later applied this change directly"
+
+
+async def supersede_run_proposals(db: AsyncSession, writer: Writer, entity: Entity) -> None:
+    """A run's file applied to ``entity`` directly (a retried import, at Act): the same
+    run's open proposals to create or change it are closed, as superseded by that change."""
+    if writer.run_id is None:
+        return
+    fields = Proposal.payload["fields"]
+    stmt = select(Proposal).where(
+        Proposal.status == "open",
+        Proposal.run_id == writer.run_id,
+        Proposal.payload["kind"].astext == "entity",
+        or_(
+            and_(Proposal.entity_id == entity.id, Proposal.payload["op"].astext == "update"),
+            and_(
+                Proposal.entity_id.is_(None),
+                Proposal.payload["op"].astext == "create",
+                fields["type"].astext == entity.type,
+                fields["key"].astext == entity.key,
+            ),
+        ),
+    )
+    for p in (await db.scalars(stmt)).all():
+        p.status = "rejected"
+        p.decided_by = writer.principal.id if writer.principal else None
+        p.decided_at = _now()
+        p.payload = {**p.payload, "note": SUPERSEDED_NOTE}
+        await audit.record(
+            db, writer.principal, "baseline.proposal.rejected", "proposal", p.id,
+            {"note": SUPERSEDED_NOTE},
+        )  # fmt: skip
+    await db.flush()
 
 
 def _question_only_shape(payload: dict[str, Any]) -> bool:
