@@ -58,6 +58,8 @@ COVERED = frozenset(
 NOT_STARTED = "Summary not started: the ritual's owner can no longer start runs"
 NOTHING_TO_EXPLAIN = "This review has no open variance to explain"
 FAILED = "Summary failed · Summarize with Oracle to retry"
+# A summary run's knob: its prompt carried the pre-read as a member sees it (#541).
+VIEW, MEMBER = "pre_read_view", "member"
 ACTIVE = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 
 
@@ -151,7 +153,8 @@ async def _start(
     depth = flows.FLOWS[flow].default_depth
     body = RunCreate(flow=flow, knobs=KnobsIn(depth=depth))  # type: ignore[arg-type]
     run_id = await runs_service.create_run(
-        db, actor, body, entry_knobs={"ritual_occurrence_id": str(occ.id)}, commit=False,
+        db, actor, body, entry_knobs={"ritual_occurrence_id": str(occ.id), VIEW: MEMBER},
+        commit=False,
         created_by=created_by,
     )  # fmt: skip
     occ.summary_run_id = run_id
@@ -164,6 +167,28 @@ async def _start(
     await runs_service.estimate(db, actor, run_id)
     await runs_service.start(db, actor, run_id)
     return run_id
+
+
+async def member_view(db: AsyncSession, run_id: uuid.UUID | None) -> bool:
+    """Whether the summary run ``run_id`` was given the pre-read as a member sees it
+    (every run started since #541 part 3): its summary names no row a member may not
+    see."""
+    if run_id is None:
+        return False
+    knobs = await db.scalar(select(Run.knobs).where(Run.id == run_id))
+    return (knobs or {}).get(VIEW) == MEMBER
+
+
+async def pre_read_copy(db: AsyncSession, occ: RitualOccurrence | None) -> str:
+    """The pre-read markdown a run's prompt carries: as a commenter sees it, whoever
+    started the run (what the run writes is shown to every member)."""
+    from oracle.rituals.service import pre_read_view
+
+    ritual = await db.get(Ritual, occ.ritual_id) if occ is not None else None
+    if occ is None or ritual is None:
+        return ""
+    _blocks, md, _dropped = await pre_read_view(db, occ, ritual, as_member=True)
+    return md or ""
 
 
 async def _nothing_to_explain(db: AsyncSession, flow: str, occ: RitualOccurrence) -> bool:
@@ -313,7 +338,7 @@ async def prompt_lines(db: AsyncSession, run: Any) -> list[str]:
     if occ_id is None:
         return []
     occ = await db.get(RitualOccurrence, occ_id)
-    md = (occ.pre_read or {}).get("markdown", "") if occ is not None else ""
+    md = await pre_read_copy(db, occ)
     lines = []
     if getattr(run, "flow", FLOW) == "metrics_variance" and occ is not None:
         from oracle.metrics import explain

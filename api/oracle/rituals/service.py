@@ -38,6 +38,7 @@ from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.docs import visibility
 from oracle.rituals import blocks, clock
 from oracle.rituals.kinds import KINDS, available, builtins
 from oracle.rituals.models import Ritual, RitualOccurrence, RitualRead
@@ -648,6 +649,13 @@ async def occurrence_out(
             RitualRead.occurrence_id == occ.id, RitualRead.user_id == principal.id
         )
     )
+    as_member = _as_member(principal)
+    shown, _md, dropped = await pre_read_view(db, occ, ritual, as_member=as_member)
+    hidden = await visibility.hidden_decision_ids(db, occ.decision_ids, as_member=as_member)
+    summary, state, note = occ.summary, occ.summary_state, occ.summary_note
+    if dropped and summary and not await summaries.member_view(db, occ.summary_run_id):
+        # Written before runs read the member view: its text may name a dropped row.
+        summary, state, note = None, "none", None
     pre = occ.pre_read or {}
     return OccurrenceOut(
         id=occ.id, ritual_id=ritual.id, kind=ritual.kind, title=ritual.title, due_at=occ.due_at,
@@ -656,11 +664,12 @@ async def occurrence_out(
         timezone=ritual.schedule.get("timezone", DEFAULT_ZONE),
         status=occ.status,  # type: ignore[arg-type]
         period=Period(from_=occ.period_from, to=occ.period_to),
-        pre_read=PreRead(built_at=pre.get("built_at"), blocks=pre.get("blocks") or []),
+        pre_read=PreRead(built_at=pre.get("built_at"), blocks=shown),
         attempts=occ.attempts, error=occ.error, notes=occ.notes, skip_reason=occ.skip_reason,
-        decision_ids=list(occ.decision_ids), summary_run_id=occ.summary_run_id,
-        summary=occ.summary, summary_state=occ.summary_state,  # type: ignore[arg-type]
-        summary_note=occ.summary_note, read_by_me=read is not None,
+        decision_ids=[i for i in occ.decision_ids if i not in hidden],
+        summary_run_id=occ.summary_run_id, summary=summary,
+        summary_state=state,  # type: ignore[arg-type]
+        summary_note=note, read_by_me=read is not None,
         summary_offered=await summaries.offered(db, ritual.kind),
         decisions=[
             OccurrenceDecision(id=d.id, number=d.number, title=d.title,
@@ -681,10 +690,34 @@ async def _decisions_of(db: AsyncSession, occ: RitualOccurrence, extra=()) -> li
     return list(await db.scalars(select(Decision).where(where).order_by(Decision.number)))
 
 
-def pre_read_markdown(occ: RitualOccurrence, ritual: Ritual) -> str:
-    md = (occ.pre_read or {}).get("markdown")
+def _as_member(principal: Principal) -> bool:
+    """A run reads a pre-read as a commenter would, whoever started it: what it writes
+    from one (a summary, a digest) is shown to every member."""
+    return principal.is_run
+
+
+async def pre_read_view(
+    db: AsyncSession, occ: RitualOccurrence, ritual: Ritual, *, as_member: bool = False
+) -> tuple[list[dict[str, Any]], str | None, bool]:
+    """The stored pre-read as the session's principal (``as_member``: a commenter) may
+    see it: (its blocks, its markdown, whether rows were dropped). The markdown is the
+    stored one unless a row was dropped; then it is rendered again from what is left."""
+    pre = occ.pre_read or {}
+    built = pre.get("blocks") or []
+    kept = await blocks.for_reader(db, built, as_member=as_member)
+    if kept is None:
+        md = pre.get("markdown")
+        return built, str(md) if md else None, False
+    zone = await company_time.company_time_zone(db)
+    return kept, blocks.markdown(ritual.title, occ.due_at, kept, zone), True
+
+
+async def pre_read_markdown(
+    db: AsyncSession, principal: Principal, occ: RitualOccurrence, ritual: Ritual
+) -> str:
+    _blocks, md, _dropped = await pre_read_view(db, occ, ritual, as_member=_as_member(principal))
     if md:
-        return str(md)
+        return md
     return f"# {ritual.title}\n\nThe pre-read is not ready yet.\n"
 
 

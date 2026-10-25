@@ -279,8 +279,8 @@ async def needs_decision(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
         .where(Decision.status == "proposed", Decision.approver_id == ctx.ritual_owner_id)
         .order_by(Decision.number)
     ):
-        rows.append({"kind": "decision", "id": str(d.id), "title": d.title,
-                     "href": f"/company/decisions?d={d.number}",
+        rows.append({"kind": "decision", "id": str(d.id), "decision_id": str(d.id),
+                     "title": d.title, "href": f"/company/decisions?d={d.number}",
                      "text": f"D-{d.number} {d.title}"})  # fmt: skip
     for r in await db.scalars(
         select(Run).where(Run.status == "awaiting_approval").order_by(Run.created_at)
@@ -689,6 +689,45 @@ async def build(db: AsyncSession, keys: tuple[str, ...], ctx: BlockCtx) -> list[
         out.append({"key": key, "title": TITLES.get(key, key), "as_of": ctx.now.isoformat(),
                     "rows": rows})  # fmt: skip
     return out
+
+
+# --- what a reader sees ---------------------------------------------------------------------
+
+
+def _ref(row: dict[str, Any], key: str) -> uuid.UUID | None:
+    raw = row.get(key)
+    if raw is None and key == "decision_id" and row.get("kind") == "decision":
+        raw = row.get("id")  # a needs_decision row stored before it carried decision_id
+    try:
+        return uuid.UUID(str(raw)) if raw else None
+    except ValueError:
+        return None
+
+
+async def for_reader(
+    db: AsyncSession, built: list[dict[str, Any]], *, as_member: bool = False
+) -> list[dict[str, Any]] | None:
+    """``built`` (stored blocks) without the rows about a decision or a document the
+    session's principal may not see (``as_member``: a commenter), by the rule of
+    oracle.docs.visibility; None when every row stays. A pre-read is built with Oracle's
+    view (the ticker, an owner's Prepare) and stored once, so this runs on every read.
+    Anything counted over rows is counted by the reader over what is left."""
+    from oracle.docs import visibility
+
+    rows = [r for b in built for r in b.get("rows") or []]
+    decisions = await visibility.hidden_decision_ids(
+        db, (_ref(r, "decision_id") for r in rows), as_member=as_member
+    )
+    documents = await visibility.hidden_document_ids(
+        db, [_ref(r, "document_id") for r in rows], as_member=as_member
+    )
+
+    def hidden(r: dict[str, Any]) -> bool:
+        return _ref(r, "decision_id") in decisions or _ref(r, "document_id") in documents
+
+    if not any(hidden(r) for r in rows):
+        return None
+    return [{**b, "rows": [r for r in b.get("rows") or [] if not hidden(r)]} for b in built]
 
 
 def markdown(

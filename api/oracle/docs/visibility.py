@@ -28,6 +28,11 @@ names it (its ``affects`` edge, a batch, a trace that reached it), whatever read
 (the web, MCP, a run). A change event of a hidden document (``document_id``) is hidden
 with it.
 
+A ritual pre-read is built with Oracle's view and stored once; each read drops the rows
+of hidden decisions and documents (:func:`hidden_decision_ids`, :func:`hidden_document_ids`,
+oracle.rituals.blocks.for_reader), and a run reads it as a commenter would, since what it
+writes from it is shown to every member.
+
 A new document's visibility comes from its kind (:func:`default_for`), on every path
 that creates one (a template start, an import).
 """
@@ -51,7 +56,7 @@ from sqlalchemy import (
     select,
     true,
 )
-from sqlalchemy.dialects.postgresql import JSONB, JSONPATH
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
@@ -101,11 +106,15 @@ def principal_of(session: AsyncSession | Session) -> Any:
 
 
 async def hidden_document_ids(
-    session: AsyncSession, ids: Iterable[uuid.UUID | None] | None = None
+    session: AsyncSession,
+    ids: Iterable[uuid.UUID | None] | None = None,
+    *,
+    as_member: bool = False,
 ) -> set[uuid.UUID]:
     """The documents (of ``ids``, or all) the session's principal may not see: empty for
-    owners, approvers and Oracle's own sessions."""
-    if not restricted(principal_of(session)):
+    owners, approvers and Oracle's own sessions. ``as_member``: those a commenter may not
+    see, whoever reads (what Oracle builds for every member)."""
+    if not as_member and not restricted(principal_of(session)):
         return set()
     wanted = {i for i in ids if i is not None} if ids is not None else None
     if wanted is not None and not wanted:
@@ -117,6 +126,28 @@ async def hidden_document_ids(
     )
     if wanted is not None:
         stmt = stmt.where(Document.id.in_(wanted))
+    return set(await session.scalars(stmt))
+
+
+async def hidden_decision_ids(
+    session: AsyncSession, ids: Iterable[uuid.UUID | None], *, as_member: bool = False
+) -> set[uuid.UUID]:
+    """The decisions of ``ids`` the session's principal may not see (the rule below,
+    :func:`_decision_visible`): empty for owners, approvers and Oracle's own sessions.
+    ``as_member``: those a commenter may not see, whoever reads."""
+    if not as_member and not restricted(principal_of(session)):
+        return set()
+    wanted = {i for i in ids if i is not None}
+    if not wanted:
+        return set()
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    stmt = (
+        select(decisions.c.id)
+        .where(decisions.c.id.in_(wanted), not_(_decision_visible(decisions.c)))
+        .execution_options(oracle_all_documents=True)
+    )
     return set(await session.scalars(stmt))
 
 
@@ -240,27 +271,34 @@ def _attached_visible(cls: Any) -> ColumnElement[bool]:
 
 
 def _change_visible(cls: Any) -> ColumnElement[bool]:
-    """A change event whose subject is a hidden decision entity or document, or whose
-    record (``data``: the entity, an edge's ends, a batch's ids, the trace) holds a hidden
-    decision entity's id anywhere."""
+    """A change event whose subject is a hidden decision entity or document, whose record
+    (``data``: the entity, an edge's ends, a batch's ids, the trace) holds a hidden
+    decision entity's id anywhere, whole or inside a string (``entity:<id>``), or whose
+    record's entity is a hidden decision's (``decision`` ``d-<n>``: an ``entity_deleted``
+    event, once the entity and the decision's link to it are gone)."""
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
     hidden = _hidden_entities()
     documents = Document.__table__
-    # Every string in the record, however deep (a literal here: the criterion is a
-    # lambda to SQLAlchemy, which would make a module constant a bound parameter).
-    strings = (
-        func.jsonb_path_query(
-            cls.data, cast(literal('strict $.** ? (@.type() == "string")'), JSONPATH)
-        )
-        .table_valued(column("value", JSONB))
-        .render_derived(name="named")
-    )
     names_hidden = (
         select(literal(1))
-        .select_from(strings)
+        .select_from(decisions)
         .where(
-            strings.c.value.in_(
-                hidden.with_only_columns(func.to_jsonb(cast(hidden.selected_columns[0], Text)))
-            )
+            decisions.c.entity_id.is_not(None),
+            not_(_decision_visible(decisions.c)),
+            cast(cls.data, Text).icontains(cast(decisions.c.entity_id, Text)),
+        )
+        .exists()
+    )
+    was_hidden = (
+        select(literal(1))
+        .select_from(decisions)
+        .where(
+            decisions.c.tenant_id == cls.tenant_id,
+            cls.data["entity"]["type"].astext == "decision",
+            cls.data["entity"]["key"].astext == func.concat("d-", decisions.c.number),
+            not_(_decision_visible(decisions.c)),
         )
         .exists()
     )
@@ -271,4 +309,5 @@ def _change_visible(cls: Any) -> ColumnElement[bool]:
             cls.document_id.not_in(select(documents.c.id).where(documents.c.visibility != COMPANY)),
         ),
         not_(names_hidden),
+        not_(was_hidden),
     )
