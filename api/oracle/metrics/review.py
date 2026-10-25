@@ -149,7 +149,8 @@ async def variances(
         for r in rows:
             r.occurrence_id = occurrence_id
         await db.flush()
-    outs = await service.variance_outs(db, rows)
+    # Built once and read by every member: Oracle's drafts as a commenter sees them.
+    outs = await service.variance_outs(db, rows, as_member=True)
     owners = await service.names(db, {o.owner_id for o in outs})
     out = []
     for o in outs:
