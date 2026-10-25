@@ -1701,19 +1701,20 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
     startBaselineBuild: async () => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-      const call = async (path: string[], body?: unknown) => {
+      const call = async (path: string[], body?: unknown): Promise<{ ok: true; id?: string } | { ok: false; error: string }> => {
         const req = new Request(new URL(`/${path.join("/")}`, "http://mock.local"), { method: "POST", body: body === undefined ? undefined : JSON.stringify(body), headers: { "Content-Type": "application/json" } });
         const res = (await routeRuns({ ...runsContext(db), db: db.runs! }, req, path))!;
         const out = (await res.json()) as { id?: string; detail?: string };
-        return res.ok ? out : { error: String(out.detail ?? "Oracle could not start the build") };
+        return res.ok ? { ok: true, id: out.id } : { ok: false, error: String(out.detail ?? "Oracle could not start the build") };
       };
       const created = await call(["v1", "runs"], { flow: "baseline", knobs: { depth: "standard", checkpoints: { baseline_confirm: true } } });
-      if ("error" in created || !created.id) return { error: "error" in created ? String(created.error) : "Oracle could not start the build" };
+      if (!created.ok) return { error: created.error };
+      const id = created.id!;
       for (const step of ["estimate", "start"]) {
-        const done = await call(["v1", "runs", created.id, step]);
-        if ("error" in done) return { error: String(done.error) };
+        const done = await call(["v1", "runs", id, step]);
+        if (!done.ok) return { error: done.error };
       }
-      return { id: created.id };
+      return { id };
     },
     runStatus: (id) => db.runs?.runs.find((r) => r.id === id)?.status ?? null,
     lastBaselineBuild: () => lastBaselineBuild(db.runs),

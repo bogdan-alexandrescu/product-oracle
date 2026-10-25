@@ -15,6 +15,7 @@ const inspector = (page: Page) => page.getByTestId("ritual-inspector").filter({ 
 
 async function openRituals(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
+  await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByTestId("company-tab-rituals").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/company\/rituals$/);
 }
@@ -44,7 +45,7 @@ test("baseline rebuild: an owner turns it on and Oracle starts the build with it
   await expect(page.getByTestId("occurrence-summary")).toHaveCount(0);
   await card.getByRole("link", { name: "Open run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
-  await expect(page.getByText("Build the baseline").first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Build the baseline" })).toBeVisible();
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
   const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
   await expect(did).toContainText("Started the baseline rebuild · Estimate $7.00, within your $10 limit");
