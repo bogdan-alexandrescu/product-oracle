@@ -124,7 +124,7 @@ async def test_commenters_get_their_own_steps_and_viewers_none(client, tenant_id
     assert [s["key"] for s in body["steps"]] == ["connect", "sources"]
     assert body["total"] == 2 and body["done"] == 0
     body = await _setup(client, viewer)
-    assert body == {"steps": [], "done": 0, "total": 0, "hidden": False}
+    assert body == {"steps": [], "done": 0, "total": 0, "hidden": False, "welcome": False}
 
 
 async def test_only_a_signed_in_person_may_ask(client, tenant_id, owner):

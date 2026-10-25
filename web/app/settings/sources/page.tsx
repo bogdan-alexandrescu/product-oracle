@@ -29,7 +29,7 @@ import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
 import { labelsOf, type PickerProps } from "./_browse-list";
 import { CodeMaps } from "./_code-maps";
-import { GithubPicker } from "./_github-picker";
+import { GithubPicker, githubReads } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
 import { CompanyDriveSettings } from "./CompanyDrive";
 import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
@@ -502,6 +502,8 @@ function SourceRow({
     : allowlist
       ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
       : [];
+  // GitHub's include: what the source reads, when it reads only some kinds.
+  const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";
   // A sync that stopped part way (a rate limit) kept what it stored: say so, never "never synced".
   const synced = source.partly_synced_at
@@ -606,6 +608,14 @@ function SourceRow({
             <Label className="flex-none">{allowlist.label}</Label>
             <span className="min-w-0 truncate text-text" title={items.join(", ")} data-testid="source-picks">
               {items.length ? items.join(", ") : "none yet"}
+            </span>
+          </span>
+        )}
+        {reads && (
+          <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="github-include">
+            <Label className="flex-none">Reads</Label>
+            <span className="min-w-0 truncate text-text" title={reads}>
+              {reads}
             </span>
           </span>
         )}

@@ -34,7 +34,8 @@ test("adding a GitHub source that reads only some kinds of content", async ({ pa
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Docs only" });
   await expect(row.getByTestId("github-include")).toHaveText("ReadsREADME, Docs, Releases, Milestones");
-  expect((await savedConfig(page, "Docs only"))?.include).toEqual(["readme", "docs", "releases", "milestones"]);
+  // Stored sorted, as the connector's normalize_config stores it.
+  expect((await savedConfig(page, "Docs only"))?.include).toEqual(["docs", "milestones", "readme", "releases"]);
 });
 
 // Card github-include-edit: protects = editing a source changes what it reads, reading less

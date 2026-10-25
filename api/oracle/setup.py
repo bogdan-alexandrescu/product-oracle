@@ -3,7 +3,11 @@
 Home's Set up checklist reads it. Every step is worked out live from tables that already
 record it (connections, sources, users, invites, tenant_settings); nothing is stored
 besides the person's ``setup_hidden`` preference. The cost is fixed whatever the
-company's size: one statement per step, plus the preference.
+company's size: one statement per step, plus one for the preferences and the welcome.
+
+It also says whether Home welcomes the caller (A1 welcome, #140): a member who joined
+through an invite accepted in the last :data:`WELCOME_DAYS` days, until they dismiss it
+(their ``welcome_dismissed`` preference). The welcome's words are the web's copy.
 
 Steps live in one ordered registry, :data:`STEPS`. Another pick adds a step by adding an
 entry here and a label in the web, without touching the others; the API returns keys
@@ -12,6 +16,7 @@ only, the labels are the web's copy.
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -33,6 +38,9 @@ from oracle.tenant_settings import TenantSetting
 # viewers cannot add sources, so they have no steps.
 PERSONAL = ("commenter", "approver", "owner")
 OWNERS = ("owner",)
+# A1 welcome: how long after joining by invite Home still welcomes a member who has not
+# dismissed it (members who joined long before it shipped are not welcomed).
+WELCOME_DAYS = 14
 
 
 def known_step(key: str) -> str:
@@ -64,6 +72,9 @@ class SetupOut(BaseModel):
     total: int
     # The caller's setup_hidden preference.
     hidden: bool
+    # A1 welcome: Home welcomes the caller (joined by invite in the last WELCOME_DAYS days,
+    # not dismissed).
+    welcome: bool = False
 
 
 Compute = Callable[[AsyncSession, Principal], Awaitable[SetupStep]]
@@ -175,16 +186,31 @@ STEPS: list[Step] = [
 async def compute(db: AsyncSession, principal: Principal) -> SetupOut:
     """The caller's steps, in order, and their hide preference."""
     steps = [await s.compute(db, principal) for s in STEPS if principal.role in s.roles]
-    hidden = await db.scalar(
-        select(UserPreference.value).where(
-            UserPreference.principal_id == principal.id, UserPreference.key == "setup_hidden"
+
+    def pref(key: str):
+        return (
+            select(UserPreference.value)
+            .where(UserPreference.principal_id == principal.id, UserPreference.key == key)
+            .scalar_subquery()
         )
+
+    # When the caller's invite was accepted (their latest, if invited more than once).
+    joined = (
+        select(func.max(Invite.accepted_at))
+        .join(User, User.email == Invite.email)
+        .where(User.id == principal.user_id)
+        .scalar_subquery()
     )
+    hidden, dismissed, invited_at = (
+        await db.execute(select(pref("setup_hidden"), pref("welcome_dismissed"), joined))
+    ).one()
+    recent = datetime.now(UTC) - timedelta(days=WELCOME_DAYS)
     return SetupOut(
         steps=steps,
         done=sum(s.done for s in steps),
         total=len(steps),
         hidden=hidden is True,
+        welcome=invited_at is not None and invited_at >= recent and dismissed is not True,
     )
 
 

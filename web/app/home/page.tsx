@@ -17,6 +17,7 @@ import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
 import { SetupChip, SetupPanel, setupOpen } from "./_setup";
+import { WelcomePanel } from "./_welcome";
 import { useGoals } from "./_use-goals";
 
 /** Runs that are still going: under way, or waiting on a person. */
@@ -65,7 +66,7 @@ function pickNeeds(rows: StatedNeed[], max: number): Need[] {
  * Oracle's AI is off (#403).
  */
 export default function HomePage() {
-  const { can } = useMe();
+  const { can, role } = useMe();
   // #370: New PRD starts a draft (a PRD, any approver's); Build the baseline opens where the baseline's writers build it.
   const canWrite = can("start_draft", true);
   const canBuild = can("confirm_entity");
@@ -97,6 +98,21 @@ export default function HomePage() {
     }
   }
   const setup = setupOpen(setupQ.data) ? setupQ.data : undefined;
+  // A1 welcome: an invited member's first Home, until they dismiss it (a preference).
+  async function dismissWelcome() {
+    setSetupBusy(true);
+    setSetupError(null);
+    const before = setupQ.data;
+    setupQ.setData((s) => (s ? { ...s, welcome: false } : s));
+    try {
+      await unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
+    } catch (e) {
+      setupQ.setData(() => before);
+      setSetupError(errorMessage(e));
+    } finally {
+      setSetupBusy(false);
+    }
+  }
 
   const { goals, history, historyPending, error: goalsError, loading: goalsLoading } = useGoals("home");
   const goalIndex: GoalIndex = useMemo(
@@ -197,6 +213,7 @@ export default function HomePage() {
       >
         {owner && poolQ.data && <ClaudeOffNotice page={poolQ.data} />}
         {setupError && <Notice tone="error">{setupError}</Notice>}
+        {setupQ.data?.welcome && role && <WelcomePanel role={role} onDismiss={dismissWelcome} busy={setupBusy} />}
         {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
 
         <GoalsPanel

@@ -47,7 +47,7 @@ test("dismissing the welcome keeps it away", async ({ page }) => {
   await invite(page, "sam.example@example.com", "viewer");
   await login(page, "sam.example@example.com");
   await expect(welcome(page).getByTestId("welcome-role")).toContainText("You are a viewer");
-  await expect(welcome(page).getByTestId("welcome-step")).toHaveText([/Read the goals/, /Open a PRD/, /Open the roadmap/]);
+  await expect(welcome(page).getByTestId("welcome-step")).toHaveText([/Read the goals/, /Open a PRD/, /Open the plan/]);
   await welcome(page).getByRole("button", { name: "Dismiss" }).click();
   await expect(welcome(page)).toHaveCount(0);
   await page.reload();
