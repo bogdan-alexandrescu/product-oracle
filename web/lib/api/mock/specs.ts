@@ -89,6 +89,8 @@ export interface SpecsContext {
   now: () => string;
   /** F5 lane 3: what a request needs, as the API reads it (the server wires these). */
   documents?: { id: string; slug: string; kind?: string | null }[];
+  /** The documents' versions: a spec is built from an approved PRD version. */
+  versions?: { document_id: string; number: number; approved_at?: string | null }[];
   /** A baseline entity's title by id (the request's feature). */
   entityTitle?: (id: string) => string | null;
   /** The engineering leads who may approve (approvers and owners), A3. */
@@ -303,6 +305,21 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       const base = ctx.db.specs[0];
       const prd = ctx.documents?.find((d) => d.slug === data.prd || d.id === data.prd);
       if (ctx.documents && !prd) return fail(422, `document '${data.prd}' not found`);
+      // As the API's _approved_prd: the version named, approved, or the latest approved one.
+      let sourceVersion: number | null = null;
+      if (prd && ctx.versions) {
+        const own = ctx.versions.filter((v) => v.document_id === prd.id);
+        if (data.prd_version != null) {
+          const v = own.find((x) => x.number === data.prd_version);
+          if (!v) return fail(422, `version ${data.prd_version} of '${prd.slug}' not found`);
+          if (!v.approved_at) return fail(422, `version ${data.prd_version} of '${prd.slug}' is not approved: a spec is built from an approved PRD version`);
+          sourceVersion = v.number;
+        } else {
+          const approved = own.filter((v) => v.approved_at).sort((a, b) => b.number - a.number)[0];
+          if (!approved) return fail(422, `'${prd.slug}' has no approved version: approve the PRD first`);
+          sourceVersion = approved.number;
+        }
+      }
       // F5 lane 3, as the API: an approved tech brief of this PRD from an Engineering check.
       if (data.tech_brief_version_id) {
         const brief = ctx.techBrief?.(data.tech_brief_version_id);
@@ -318,7 +335,7 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       const id = ctx.uuid();
       let runId = ctx.uuid();
       if (ctx.draftRun && prd) {
-        const run = await ctx.draftRun({ flow: "prd_to_spec", document: slug, source: prd.slug, knobs: data.knobs } as Schemas["RunCreate"]);
+        const run = await ctx.draftRun({ flow: "prd_to_spec", document: slug, source: prd.slug, source_version: sourceVersion, knobs: data.knobs } as Schemas["RunCreate"]);
         if (run instanceof Response) return run;
         runId = run;
       }

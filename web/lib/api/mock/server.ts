@@ -3768,6 +3768,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         // F5 lane 3: a request names its PRD, feature and brief, defaults its approvers to
         // the engineering leads who may approve, and drafts its prd_to_spec run.
         documents: db.documents,
+        versions: db.versions,
         entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? planEntityTitle(id),
         leadApprovers: () => engineeringLeads(db).filter((id) => atLeast(db.members.find((x) => x.id === id)!.role, "approver")),
         techBrief: techBriefOf,

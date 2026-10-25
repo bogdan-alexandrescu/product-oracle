@@ -29,6 +29,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Edge, Entity
 from oracle.docs import service as docs_service
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import SLUG_RE as PARSER_SLUG_RE
 from oracle.docs.parser import DraftError, ParsedDraft, is_uuid
@@ -428,9 +429,18 @@ async def _family(db: AsyncSession, request: ArtifactRequest) -> list[ArtifactRe
     return [request, *children]
 
 
+def _documents_of(request: ArtifactRequest) -> list[uuid.UUID | None]:
+    """The PRD a request builds from and the spec document it wrote, if any."""
+    doc_id = (request.params or {}).get("document_id")
+    return [request.source_document_id, uuid.UUID(doc_id) if doc_id and is_uuid(doc_id) else None]
+
+
 async def _spec_request(db: AsyncSession, request_id: uuid.UUID) -> ArtifactRequest:
     request = await db.get(ArtifactRequest, request_id)
     if request is None or request.kind not in lineage.SPEC_KINDS or _check_brief(request):
+        raise NotFound("spec request not found")
+    # H8: a request on a document the reader may not see is absent, as the document is.
+    if await visibility.hidden_document_ids(db, _documents_of(request)):
         raise NotFound("spec request not found")
     return request
 
@@ -1093,9 +1103,15 @@ async def list_requests(db: AsyncSession, prd: str | None = None) -> list[SpecSu
         if document is None:
             return []
         stmt = stmt.where(ArtifactRequest.source_document_id == document.id)
-    rows = await db.scalars(stmt.order_by(ArtifactRequest.created_at.desc()))
-    # The Engineering check's tech briefs share the tech_brief kind: they are no spec.
-    return [await _summary(db, r) for r in rows if not _check_brief(r)]
+    rows = [
+        r
+        for r in await db.scalars(stmt.order_by(ArtifactRequest.created_at.desc()))
+        # The Engineering check's tech briefs share the tech_brief kind: they are no spec.
+        if not _check_brief(r)
+    ]
+    # H8: a request on a document the reader may not see is left out, slug and all.
+    hidden = await visibility.hidden_document_ids(db, [i for r in rows for i in _documents_of(r)])
+    return [await _summary(db, r) for r in rows if not hidden.intersection(_documents_of(r))]
 
 
 def _content_url(av_id: uuid.UUID, name: str) -> str:

@@ -31084,8 +31084,7 @@
             }
           }
         },
-        "x-min-role": "approver",
-        "x-per-item": "owner"
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
