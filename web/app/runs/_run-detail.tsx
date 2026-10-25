@@ -36,6 +36,8 @@ import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
+
+import { NewRunDialog, type RunStart } from "./_new-run-dialog";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -996,6 +998,8 @@ function SegmentItem({
               sentBack={s.sent_back}
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
               onSendBack={sendBack}
+              retryRefused={s.draft_retry_refused}
+              newRun={can("create_run", true) && run.document_slug ? { flow: run.flow, document: run.document_slug, title: "Start a new run" } : undefined}
             />
           )}
           {(s.artifacts.length > 0 || s.previous_attempt) && (
@@ -1146,8 +1150,14 @@ function DraftImportLine({
   sentBack = false,
   onRetry,
   onSendBack,
+  retryRefused,
+  newRun,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
+  /** A finished run imported a version already: why this draft stays refused (owner, 2026-10-25). */
+  retryRefused?: string | null;
+  /** Where Start a new run opens the New run dialog, for those who may start one. */
+  newRun?: RunStart;
   busy: boolean;
   /** The import was refused and Oracle sent the draft back to the writer itself: revising. */
   sentBack?: boolean;
@@ -1156,7 +1166,8 @@ function DraftImportLine({
   /** The import was refused and this member decides its review: Send back to writer. */
   onSendBack?: () => void;
 }) {
-  if (imp.error) return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} />;
+  if (imp.error)
+    return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} retryRefused={retryRefused} newRun={newRun} />;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -1194,14 +1205,19 @@ function DraftRejected({
   sentBack = false,
   onRetry,
   onSendBack,
+  retryRefused,
+  newRun,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
   busy: boolean;
   sentBack?: boolean;
   onRetry?: () => void;
   onSendBack?: () => void;
+  retryRefused?: string | null;
+  newRun?: RunStart;
 }) {
   const [open, setOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
   // Imports refused before the problems were kept carry the error alone.
   const problems = imp.problems ?? [];
   const n = problems.length;
@@ -1245,6 +1261,17 @@ function DraftRejected({
           )}
         </>
       )}
+      {retryRefused && (
+        <p className="text-text2" data-testid="draft-retry-refused">
+          {retryRefused}
+        </p>
+      )}
+      {retryRefused && newRun && (
+        <Button disabled={busy} icon="plus" onClick={() => setStarting(true)}>
+          Start a new run
+        </Button>
+      )}
+      {starting && newRun && <NewRunDialog onClose={() => setStarting(false)} start={newRun} />}
       {(onRetry || onSendBack) && (
         <div className="flex flex-wrap gap-2">
           {onSendBack && (
