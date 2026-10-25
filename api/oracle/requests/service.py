@@ -10,6 +10,7 @@ source item carries a copy of its title, link, kind and a 400-character excerpt
 (decided 2026-10-21, C1 "Found items"), audited as shared in full.
 """
 
+import json
 import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
@@ -26,6 +27,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
 from oracle.baseline.models import Entity
 from oracle.decisions import capture
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.members.names import display_name
 from oracle.requests import replies
@@ -312,6 +314,9 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
     basis_titles = await _basis_titles(db, rows)
     # H11 requests: Oracle's decline suggestions show at Recommend and above.
     show_decline = await autonomy.allows(db, "requests", "recommend")
+    # A triage run's suggestion naming a decision or document the reader may not see (one
+    # written before #541 part 4, when the run read as its creator) is not shown to them.
+    hidden = await visibility.hidden_for_reader(db)
     out = []
     for r in rows:
         theme = themes.get(r.theme_id) if r.theme_id else None
@@ -370,7 +375,9 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 interview_id=r.interview_id,
                 source=source,
                 mentions=1 + len(descendants(r.id, children)),
-                suggestion=_without_decline(_suggestion(r.suggestion), show_decline),
+                suggestion=None
+                if hidden is not None and hidden.names(json.dumps(r.suggestion or {}))
+                else _without_decline(_suggestion(r.suggestion), show_decline),
                 filed_by=r.filed_by,
                 decided_by=r.decided_by,
                 decided_at=r.decided_at,
