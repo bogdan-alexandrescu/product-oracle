@@ -23,6 +23,7 @@ from oracle.llm import gateway
 from oracle.seed import seed
 from tests.claude_account_helpers import add_account, window
 from tests.test_llm_jobs import (
+    DRAFT_V1,
     FakeClaude,
     actions,
     comment,
@@ -172,3 +173,72 @@ async def test_undo_takes_an_approver(client, ctx, pool, fake):
         assert (await undo(client, ctx, ids["goal_s"], headers)).status_code == 403
     headers = await token_with_role(ctx["tenant_id"], "approver")
     assert (await undo(client, ctx, ids["goal_s"], headers)).status_code == 200
+
+
+async def refine(client, ctx, fake, key: str, body: dict) -> None:
+    resp = await client.post(f"{DOC}/versions/1/sections/{key}/refine", json=body,
+                             headers=ctx["headers"])  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    fake.script["refinement"].append({"heading": "Goal trace", "body_md": "Serves activation."})
+    await tick(client, ctx)
+
+
+async def test_an_unapplied_refinement_holds_undo_only_while_it_can_be_applied(
+    client, ctx, pool, fake
+):
+    """#587 review MAJOR 1: a single-section refinement has no discard; its preview holds
+    Undo only while it is the section's latest and on the latest version."""
+    ids = await staged_setup(client, ctx, fake)
+    await refine(client, ctx, fake, "goal-trace", {})
+    resp = await undo(client, ctx, ids["goal_s"])
+    assert resp.status_code == 409, resp.text
+    assert "refine" in resp.json()["detail"] and "discard" not in resp.json()["detail"]
+    # A newer refinement of the section, without it, replaces that preview.
+    await refine(client, ctx, fake, "goal-trace", {"suggestion_ids": [], "instruction": "Short."})
+    resp = await undo(client, ctx, ids["goal_s"])
+    assert resp.status_code == 200, resp.text
+
+
+async def test_a_refinement_of_an_older_version_never_holds_undo(client, ctx, pool, fake):
+    ids = await staged_setup(client, ctx, fake)
+    await refine(client, ctx, fake, "goal-trace", {})
+    assert (await undo(client, ctx, ids["goal_s"])).status_code == 409
+    # A newer version landed: that preview can no longer be applied.
+    await import_draft(client, ctx, DRAFT_V1.replace("A guided checklist", "A short checklist"))
+    resp = await undo(client, ctx, ids["goal_s"])
+    assert resp.status_code == 200, resp.text
+
+
+async def test_undo_drops_the_text_accept_edited(client, ctx, pool, fake):
+    ids = await staged_setup(client, ctx, fake)
+    sid = ids["still_s"]
+    resp = await client.post(f"/v1/suggestions/{sid}/accept", json={"text": "Half (2026)."},
+                             headers=ctx["headers"])  # fmt: skip
+    assert resp.status_code == 200 and resp.json()["edited_text"] == "Half (2026)."
+    resp = await undo(client, ctx, sid)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["edited_text"] is None
+
+
+async def test_undo_leaves_an_item_closed_before_accept(client, ctx, pool, fake):
+    await import_draft(client, ctx)
+    ok = await comment(client, ctx, "problem", "Looks right to me.")
+    fake.script["review_comments"].append(
+        review_answer(
+            [{"feedback_id": ok, "classification": "approval", "suggestion": {"kind": "none"}}]
+        )
+    )
+    await tick(client, ctx)
+    resp = await client.patch(
+        f"/v1/feedback/{ok}",
+        json={"status": "addressed", "resolution_note": "Checked by hand."},
+        headers=ctx["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    sid = (await feedback(client, ctx))[ok]["suggestion"]["id"]
+    await accept(client, ctx, sid)
+    resp = await undo(client, ctx, sid)
+    assert resp.status_code == 200, resp.text
+    item = (await feedback(client, ctx))[ok]
+    assert (item["status"], item["resolution_note"]) == ("addressed", "Checked by hand.")
+    assert item["suggestion"]["status"] == "open"

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { feedbackState, login, openTab } from "./helpers";
+import { feedbackState, login, openTab, showAll } from "./helpers";
 
 /*
  * C5 late answers: an answer given after drafting started becomes a feedback item on the
@@ -68,4 +68,53 @@ test("a late answer becomes feedback on the PRD and links back to its question",
   const id = new URL(page.url()).hash.slice(1);
   await expect(page.locator(`[id="${id}"]`)).toContainText(ANSWER_ME);
   await expect(page.locator(`[id="${id}"]`)).toBeInViewport();
+});
+
+/*
+ * #587 review MAJOR 2: the item quotes the answer only while its finding is shared from summary
+ * up. Set back to private (or counts), the item leaves the PRD's feedback; shared in full again,
+ * it comes back, once. The success-metric gap is the owner's finding shared in full.
+ *
+ * Test card: protects=an answer to a finding its author takes back is no longer quoted to PRD
+ * readers; fails_when=the item stays listed after the finding goes private, or does not come
+ * back when shared again; no_claim=what the draft already took (api
+ * tests/test_late_answers_feedback.py covers counts and an answer given while private).
+ */
+test("a late answer leaves the PRD's feedback when its finding goes back to private", async ({ page }) => {
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  const mine = bubble(page, ANSWER_ME);
+  await mine.getByRole("button", { name: "Answer", exact: true }).click();
+  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
+  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
+  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+
+  const level = async (name: "Private" | "Full") => {
+    await page.getByRole("tab", { name: /^Findings/ }).click();
+    const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
+    await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name }).click();
+    await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+  };
+  const listed = async () => {
+    await page.goto("/documents/checkout-redesign");
+    await openTab(page, "Feedback");
+    await feedbackState(page, "Open");
+    await showAll(page);
+    // Loaded: the open comment on the address cards is listed whatever the late answer does.
+    await expect(page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "most recently used address" })).toHaveCount(1);
+    return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
+  };
+  await expect(await listed()).toHaveCount(1);
+
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await level("Private");
+  await page.reload();
+  await expect(drafting(page).getByTestId("late-answers-feedback")).toHaveCount(0);
+  await expect(await listed()).toHaveCount(0);
+
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await level("Full");
+  await page.reload();
+  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+  await expect(await listed()).toHaveCount(1);
 });

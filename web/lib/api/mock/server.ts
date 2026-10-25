@@ -420,7 +420,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
- * given now becomes a feedback item on the PRD (C5 late answers);
+ * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
+ * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
@@ -669,6 +670,20 @@ function seedLateAnswersScenario(): Db {
   v2.intake_runs = {
     ...v2.intake_runs,
     [intake.id]: { run_id: "c5000000-0000-4000-8000-0000000000d1", answer_ids: v2.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id), document: prd.slug },
+  };
+  // The owner's success-metric gap is also a finding from their own sources, shared in full:
+  // an answer to it is quoted in feedback only while it stays shared from summary up (S6).
+  const metric = v2.gaps.find((g) => g.intake_id === intake.id && g.category === "success_metric")!;
+  v2.intake_findings = {
+    ...v2.intake_findings,
+    [intake.id]: [
+      ...(v2.intake_findings?.[intake.id] ?? []),
+      {
+        id: "c5000000-0000-4000-8000-0000000000f1", kind: "gap", origin: "rules", category: "success_metric", sharing: "full",
+        summary: "A gap about success metric", summary_confirmed: false, draft_summary: "The checkout timing export sits in a private dashboard.",
+        gap_id: metric.id, source_item_ids: ["c5000000-0000-4000-8000-0000000000f2"], unshared_item_ids: [],
+      },
+    ],
   };
   return db;
 }
