@@ -119,7 +119,7 @@ BAD = {
     "entity_edit": {"entity_id": str(uuid.uuid4()), "field": "title"},
     "conflict_pick": {"conflict_id": str(uuid.uuid4()), "claim_index": -1, "reason": "x"},
     "answer": {"question_id": str(uuid.uuid4()), "body": ""},
-    "ask_person": {"asked_to": str(uuid.uuid4()), "prompt": "Who?"},
+    "ask_person": {"asked_to": "someone", "prompt": "Who?"},
     "basis_record": {"prd_document_id": str(uuid.uuid4()), "kind": "estimate"},
     "item_horizon": {"item_key": "R-1", "horizon": "someday"},
     "item_outcome": {"item_key": "R-1"},

@@ -21,8 +21,8 @@ from tests.baseline_helpers import entity, make_ctx
 from tests.test_checkpoint_review import Review, review  # noqa: F401 - fixtures
 from tests.test_discussion_changes import _tenant, act, add_change, item_discussion, listed
 from tests.test_discussions import company, section, start, uid
-from tests.test_priority_overrides import _baseline
 from tests.test_prd_scope import at_feature_set
+from tests.test_priority_overrides import _baseline
 from tests.test_runs import as_user, owner, pending, runtime  # noqa: F401 - fixtures
 
 
@@ -60,7 +60,7 @@ async def test_ask_a_person_creates_their_question(client):
                             "prompt": "Who owns the activation goal?"})  # fmt: skip
     [row] = await listed(client, ctx.as_("commenter"), d["id"])
     assert row["action"] == {"verb": "Ask", "allowed": True, "why_not": None}
-    assert row["label"].startswith("Ask approver")
+    assert row["label"] == "Ask Approver: Who owns the activation goal?"
     await act(client, ctx.as_("viewer"), cid, "ask", expect=403)
     out = await act(client, ctx.as_("commenter"), cid, "ask")
     assert out["change"]["status"] == "done"
@@ -214,7 +214,11 @@ async def test_decision_is_offered_and_written_by_hand(client):
     assert offered["decision"] == "Propose" and offered["ask_person"] == "Ask"
     resp = await client.post(
         f"/v1/discussions/{d['id']}/changes",
-        json={"kind": "decision", "payload": {"title": "Ship caps first"}, "rationale": "We agreed"},
+        json={
+            "kind": "decision",
+            "payload": {"title": "Ship caps first"},
+            "rationale": "We agreed",
+        },  # fmt: skip
         headers=ctx.as_("commenter"),
     )
     assert resp.status_code == 201, resp.text
