@@ -73,6 +73,30 @@ function seedBriefs(): TechBrief[] {
       created_at: "2026-10-20T18:00:00Z",
     },
     {
+      // F5 lane 3: the approved brief of an approved Plan item's feature (Usage alerts).
+      id: stableUuid("tech-brief/threshold-alerts"),
+      request_id: stableUuid("tech-brief-request/threshold-alerts"),
+      feature: { key: "threshold-alerts", title: "Threshold alerts", entity_id: stableUuid("feature/threshold-alerts") },
+      prd: { slug: "usage-alerts", version: 1 },
+      run_id: RUN,
+      status: "approved",
+      code_map: { used: false, repos: [] },
+      approach: "Check each account's spend against its thresholds when usage is recorded, and send one alert per crossing.",
+      touches: [{ area: "usage recording", kind: "module", change: "change", ref: null }],
+      reuse: [],
+      risks: [{ risk: "Usage arrives late for some accounts", level: "medium", mitigation: "Check again at the hourly roll-up" }],
+      questions: [{ id: "q1", question: "Is one alert per crossing enough?", why: "Sets how alerts repeat", blocking: false }],
+      answers: [{ question_id: "q1", answer: "Yes, with a daily reminder", by: LEAD }],
+      size: "s",
+      size_why: "One check where usage is recorded",
+      depends_on: [],
+      assumptions: ["Usage is recorded within an hour"],
+      verdict: { value: "feasible", note: "Check at the roll-up too", by: LEAD, at: "2026-10-20T18:00:00Z" },
+      freshness: "fresh",
+      stale_reasons: [],
+      created_at: "2026-10-20T18:00:00Z",
+    },
+    {
       id: stableUuid("tech-brief/keep-form-state"),
       request_id: stableUuid("tech-brief-request/keep-form-state"),
       feature: { key: "keep-form-state", title: "Keep form state on back navigation", entity_id: stableUuid("feature/keep-form-state") },
@@ -212,6 +236,12 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
     return json(200, mapOut(row, ctx.me, false));
   }
   return json(405, { detail: "Method not allowed" });
+}
+
+/** F5 lane 3: a tech brief's PRD and status by its version id (the specs mock checks a request's brief). */
+export function techBriefOf(id: string): { prd: string; status: string } | null {
+  const b = seedBriefs().find((x) => x.id === id);
+  return b ? { prd: b.prd.slug, status: b.status } : null;
 }
 
 /** The tech brief and code map routes, or null for any other path. */

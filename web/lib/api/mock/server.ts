@@ -40,7 +40,7 @@ import {
   type DocumentSection,
   type SubjectInfo,
 } from "./discussions";
-import { routeEngineering, type CodeMapRow } from "./engineering";
+import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -98,7 +98,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -3758,7 +3758,30 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
   if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
     db.specs ??= seedSpecs();
-    const specs = await routeSpecs({ db: db.specs, userId: me.id, role: me.role, uuid, now }, req, p, q);
+    const specs = await routeSpecs(
+      {
+        db: db.specs,
+        userId: me.id,
+        role: me.role,
+        uuid,
+        now,
+        // F5 lane 3: a request names its PRD, feature and brief, defaults its approvers to
+        // the engineering leads who may approve, and drafts its prd_to_spec run.
+        documents: db.documents,
+        entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? planEntityTitle(id),
+        leadApprovers: () => engineeringLeads(db).filter((id) => atLeast(db.members.find((x) => x.id === id)!.role, "approver")),
+        techBrief: techBriefOf,
+        draftRun: async (input) => {
+          db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+          const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+          const out = (await routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"])) ?? notFound("Route");
+          return out.status === 201 ? ((await out.json()) as { id: string }).id : out;
+        },
+      },
+      req,
+      p,
+      q,
+    );
     if (specs) return specs;
   }
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).

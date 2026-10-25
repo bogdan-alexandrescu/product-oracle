@@ -739,6 +739,9 @@ FLOWS: dict[str, FlowDef] = {
             target_kind="spec",
             source_kind="prd",
             entry="POST /v1/spec-requests",
+            # F5 lane 3: requested from an approved item in the Plan's inspector, or from a
+            # PRD's overview (Engineering specs).
+            starts_from=("Request spec · Plan, an approved item, or a PRD's overview", "/plan"),
             source_prompt=False,
             segments=(
                 SegmentDef(

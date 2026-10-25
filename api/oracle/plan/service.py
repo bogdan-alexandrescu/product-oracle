@@ -721,6 +721,14 @@ def _item(
         ),
         track_id=row.track_id,
         goal_ids=goals.get(row.feature_id, []) if row.feature_id else [],
+        feature=views.entity_ref(ctx.entities[row.feature_id])
+        if row.feature_id in ctx.entities
+        else None,
+        requirements=[
+            views.entity_ref(ctx.entities[r])
+            for r in row.requirement_ids or []
+            if r in ctx.entities
+        ],
         state=item_state(origin, risk, records, row.horizon),  # type: ignore[arg-type]
         reasons=[PlanReason(**r) for r in risk.reasons],
         engineering=engineering,

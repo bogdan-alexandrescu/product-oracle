@@ -1,19 +1,16 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
  * F5 lane 3: engineering specs requested from the Plan, on the mock layer
- * (NEXT_PUBLIC_API_MOCKS=1). The "spec-leads" scenario names approver@example.com engineering
- * lead (A3). "Threshold alerts on spend" is an approved item of the Usage alerts PRD whose
- * feature has an approved tech brief (F5-1). No run executes in the mock: a request answers
+ * (NEXT_PUBLIC_API_MOCKS=1). "Threshold alerts on spend" is an approved item of the Usage
+ * alerts PRD whose feature has an approved tech brief (F5-1). No run executes in the mock: a request answers
  * with a draft prd_to_spec run, opened for its estimate. The API's rules (the brief fed to the
  * agents, the default approvers, the states) are proven by api/tests/test_spec_from_plan.py.
  */
 
-const withScenario = (page: Page, scenario: string) =>
-  page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario] as const);
 const asRole = (page: Page, role: "viewer" | "commenter" | "approver") =>
   page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
 
@@ -34,7 +31,6 @@ async function openItem(page: Page, title: string) {
 // fails_when = a default is not the spec's, or the request is not sent as chosen.
 // no_claim = what the agents write (no run executes in the mock).
 test("Request spec from an approved Plan item drafts the spec run with the dialog's defaults", async ({ page }) => {
-  await withScenario(page, "spec-leads");
   await login(page);
   await openItem(page, "Threshold alerts on spend");
   const line = inspector(page).getByTestId("plan-spec");
@@ -46,7 +42,8 @@ test("Request spec from an approved Plan item drafts the spec run with the dialo
   await expect(d.getByRole("button", { name: "Tech brief", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(d.getByRole("checkbox", { name: "Alert when spend crosses a threshold" })).toBeChecked();
   await expect(d.getByRole("checkbox", { name: "Alerts reach the team by email" })).toBeChecked();
-  await expect(d.getByRole("checkbox", { name: /^Approver/ })).toBeChecked();
+  // A3: the engineering leads approve by default (the API names them).
+  await expect(d.getByRole("radio", { name: "The engineering leads" })).toBeChecked();
   await expect(d.getByRole("checkbox", { name: "User flows and wireframes" })).toBeChecked();
   const brief = d.getByRole("checkbox", { name: /Use the approved tech brief/ });
   await expect(brief).toBeChecked();
@@ -55,18 +52,21 @@ test("Request spec from an approved Plan item drafts the spec run with the dialo
   // A person chooses the full spec and leaves one requirement out.
   await d.getByRole("button", { name: "Full engineering spec" }).click();
   await d.getByRole("checkbox", { name: "Alerts reach the team by email" }).uncheck();
-  const sent = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/v1/spec-requests"));
   await d.getByRole("button", { name: "Request spec" }).click();
-  const body = (await sent).postDataJSON();
-  expect(body.depth).toBe("full");
-  expect(body.requirement_ids).toHaveLength(1);
-  expect(body.engineering_approver_ids).toHaveLength(1);
-  expect(body.design).toBe(true);
-  expect(body.tech_brief_version_id).toBeTruthy();
 
   // The draft run opens for its estimate.
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByText("Engineering spec from an approved PRD").first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Engineering spec from an approved PRD" })).toBeVisible();
+  // What the request asked for, as the mock API stored it (read only).
+  const params = await page.evaluate(() => {
+    const spec = JSON.parse(localStorage.getItem("po-mock-db-v2")!).specs.specs[0];
+    return { kind: spec.request.kind, requirements: spec.request.requirement_ids.length, ...spec.request.params };
+  });
+  expect(params.kind).toBe("engineering_spec");
+  expect(params.requirements).toBe(1);
+  expect(params.design).toBe(true);
+  expect(params.engineering_approver_ids).toEqual([]);
+  expect(params.tech_brief_version_id).toBeTruthy();
 
   // Back on the Plan, the item's spec is Requested, with Open.
   await openItem(page, "Threshold alerts on spend");

@@ -2,9 +2,9 @@
 
 - A Plan item carries its feature and requirements (its trace), so the Plan inspector's
   Request spec dialog pre-ticks them.
-- ``GET /v1/people?engineering_lead=true`` lists the engineering leads (A3), so the dialog
-  names them as the default engineering approvers; a request that names no approvers gets
-  the leads who may approve (the spec's default), an empty list still means any approver.
+- A request that names no engineering approvers gets the engineering leads (A3) who may
+  approve (the spec's default, the dialog's "The engineering leads"); an empty list still
+  means any approver.
 - ``tech_brief_version_id`` feeds the feature's approved tech brief (F5-1) to the spec: the
   approach, the lead's verdict, the answers and the size are given to the agents as decided
   at the engineering review.
@@ -77,18 +77,6 @@ async def make_lead(ctx, email: str, role: str = "approver") -> User:
         await s.commit()
         ctx.users[email] = user
         return user
-
-
-async def test_people_lists_the_engineering_leads(client):
-    ctx = await make_ctx()
-    lead = await make_lead(ctx, "lead@example.com")
-    resp = await client.get(
-        "/v1/people", params={"engineering_lead": "true"}, headers=ctx.as_("viewer")
-    )
-    assert resp.status_code == 200, resp.text
-    assert [(p["user_id"], p["engineering_lead"]) for p in resp.json()] == [(str(lead.id), True)]
-    everyone = (await client.get("/v1/people", headers=ctx.as_("viewer"))).json()
-    assert {p["email"]: p["engineering_lead"] for p in everyone}["approver@example.com"] is False
 
 
 async def test_a_request_naming_no_approvers_gets_the_engineering_leads(client, runtime):

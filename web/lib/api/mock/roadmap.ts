@@ -982,7 +982,15 @@ type PlanSeedItem = {
   reasons?: { kind: string; detail: string }[];
   next?: { action: NonNullable<Schemas["PlanNext"]["action"]>; who: Who["role"] };
   section: string;
+  /** F5 lane 3: the item's trace (its baseline feature and requirements), by key and title. */
+  feature?: [string, string];
+  requirements?: [string, string][];
 };
+
+/** A baseline entity of the mock plan's traces, with a stable id (the mock tech briefs name it). */
+const entityRef = (type: "feature" | "requirement", [key, title]: [string, string]): Schemas["EntityRef"] => ({
+  id: stableUuid(`${type}/${key}`), type, key, title, status: "confirmed",
+});
 
 export const ALERTS_ROADMAP_SLUG = "usage-alerts-roadmap";
 const CHECKOUT_ROADMAP_SLUG = "checkout-redesign-roadmap";
@@ -999,6 +1007,8 @@ const NEXT_LABEL: Record<NonNullable<Schemas["PlanNext"]["action"]>, string> = {
 /** The tracked PRD's approved roadmap (usage-alerts-roadmap v1, from Usage alerts PRD v1). */
 const ALERTS_APPROVED: PlanSeedItem[] = [
   { key: "threshold-alerts", title: "Threshold alerts on spend", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",
+    feature: ["threshold-alerts", "Threshold alerts"],
+    requirements: [["req-alert-threshold", "Alert when spend crosses a threshold"], ["req-alert-email", "Alerts reach the team by email"]],
     records: [{ ref: "ENG-402", state: "in_progress" }], date: "2026-11-20", dateStatus: "verified", dateSource: "ENG-402" },
   { key: "alert-digest", title: "Daily alert digest email", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
     records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", dateSource: "ENG-412", slipDays: 9,
@@ -1018,6 +1028,15 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     next: { action: "link_issue", who: "approver" } },
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
+/** F5 lane 3: the title of a feature or requirement the mock plan's items trace, by its id. */
+export function planEntityTitle(id: string): string | null {
+  for (const i of ALERTS_APPROVED) {
+    if (i.feature && entityRef("feature", i.feature).id === id) return i.feature[1];
+    for (const r of i.requirements ?? []) if (entityRef("requirement", r).id === id) return r[1];
+  }
+  return null;
+}
+
 /** The seeded approved plan's items (usage-alerts-roadmap v1), for a change set's base (#346). */
 export function seededPlanItems(slug: string, version: number): PlanEditItem[] | null {
   if (slug !== ALERTS_ROADMAP_SLUG || version !== 1) return null;
@@ -1185,6 +1204,8 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       roadmap: { slug: roadmap.slug, version: roadmap.version, anchor: `${horizon}-${s.key}` },
       track_id: prd.slug === "usage-alerts" ? (track?.id ?? null) : null,
       goal_ids: goalIds(s.goals),
+      feature: s.feature ? entityRef("feature", s.feature) : null,
+      requirements: (s.requirements ?? []).map((r) => entityRef("requirement", r)),
       state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
       reasons: origin === "draft" ? [] : (s.reasons ?? []),
       engineering: { records, date: s.date ?? null, ...dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },

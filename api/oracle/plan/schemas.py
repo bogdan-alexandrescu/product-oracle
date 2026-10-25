@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from oracle.roadmap.schemas import Horizon, TrackerRecordRef, TrackHealth, TrackStatus
+from oracle.roadmap.schemas import EntityRef, Horizon, TrackerRecordRef, TrackHealth, TrackStatus
 
 PlanScope = Literal["all", "approved"]
 Stage = Literal[
@@ -154,6 +154,10 @@ class PlanItem(BaseModel):
     roadmap: PlanItemRoadmap
     track_id: uuid.UUID | None
     goal_ids: list[uuid.UUID]
+    # The item's trace (F5 lane 3: Request spec pre-ticks its requirements): its baseline
+    # feature and requirements.
+    feature: EntityRef | None = None
+    requirements: list[EntityRef] = []
     state: ItemState
     reasons: list[PlanReason]
     engineering: PlanEngineering

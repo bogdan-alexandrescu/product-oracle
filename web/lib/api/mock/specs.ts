@@ -87,6 +87,16 @@ export interface SpecsContext {
   role: Role;
   uuid: () => string;
   now: () => string;
+  /** F5 lane 3: what a request needs, as the API reads it (the server wires these). */
+  documents?: { id: string; slug: string; kind?: string | null }[];
+  /** A baseline entity's title by id (the request's feature). */
+  entityTitle?: (id: string) => string | null;
+  /** The engineering leads who may approve (approvers and owners), A3. */
+  leadApprovers?: () => string[];
+  /** A tech brief (F5-1) by its version id: its PRD's slug and status. */
+  techBrief?: (id: string) => { prd: string; status: string } | null;
+  /** Drafts the prd_to_spec run (POST /v1/runs): its id, or the refusal. */
+  draftRun?: (input: Schemas["RunCreate"]) => Promise<string | Response>;
 }
 
 function json(status: number, body: unknown): Response {
@@ -226,6 +236,9 @@ export function seedSpecs(): SpecsDb {
     run_id: I.run,
     run_status: "succeeded",
     regeneration_run_id: null,
+    state: "stale",
+    feature_id: null,
+    tech_brief_version_id: null,
   };
   return {
     specs: [spec],
@@ -237,10 +250,30 @@ export function seedSpecs(): SpecsDb {
   };
 }
 
+const RUN_ENDED = ["succeeded", "failed", "cancelled"];
+
+/** F5 lane 3, as the API's specs.service._state: Requested, Drafting, In review, Approved, Stale or Run failed. */
+function stateOf(s: Spec): Schemas["SpecSummary"]["state"] {
+  const latest = s.versions.at(-1);
+  if (latest) {
+    if (latest.artifact_version.freshness === "potentially_stale") return "stale";
+    return latest.approach_status === "approved" ? "approved" : "in_review";
+  }
+  const status = s.run_status ?? "draft";
+  if (status === "draft" || status === "awaiting_approval") return "requested";
+  return RUN_ENDED.includes(status) ? "failed" : "drafting";
+}
+
 function summary(s: Spec): Schemas["SpecSummary"] {
   const { request, document_slug, document_id, prd, depth, latest_version, approach_status, freshness } = s;
-  return { request, document_slug, document_id, prd, depth, latest_version, approach_status, freshness };
+  const params = request.params as { feature_id?: string | null; tech_brief_version_id?: string | null };
+  return {
+    request, document_slug, document_id, prd, depth, latest_version, approach_status, freshness,
+    state: stateOf(s), feature_id: params.feature_id ?? null, tech_brief_version_id: params.tech_brief_version_id ?? null,
+  };
 }
+
+const slugify = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 function findDesign(db: SpecsDb, versionId: string): Design | null {
   for (const s of db.specs) for (const d of s.design ?? []) if (d.version.id === versionId) return d;
@@ -256,7 +289,11 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
   if (p[1] === "spec-requests") {
     if (!p[2] && m === "GET") {
       const prd = q.get("prd");
-      return json(200, ctx.db.specs.filter((s) => !prd || s.request.source_document_id === prd || s.document_slug?.startsWith(prd)).map(summary));
+      const doc = prd ? ctx.documents?.find((d) => d.slug === prd || d.id === prd) : undefined;
+      return json(
+        200,
+        ctx.db.specs.filter((s) => !prd || s.request.source_document_id === (doc?.id ?? prd) || s.document_slug?.startsWith(`${prd}-`)).map((s) => ({ ...summary(s), state: stateOf(s) })),
+      );
     }
     if (!p[2] && m === "POST") {
       const denied = need("approver");
@@ -264,19 +301,49 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       const data = await body<Schemas["SpecRequestCreate"]>();
       if (!data?.requirement_ids?.length) return fail(422, "requirement_ids: at least one requirement");
       const base = ctx.db.specs[0];
+      const prd = ctx.documents?.find((d) => d.slug === data.prd || d.id === data.prd);
+      if (ctx.documents && !prd) return fail(422, `document '${data.prd}' not found`);
+      // F5 lane 3, as the API: an approved tech brief of this PRD from an Engineering check.
+      if (data.tech_brief_version_id) {
+        const brief = ctx.techBrief?.(data.tech_brief_version_id);
+        if (!brief) return fail(422, "tech_brief_version_id is not a tech brief from an Engineering check");
+        if (prd && brief.prd !== prd.slug) return fail(422, `that tech brief is of another PRD, not ${prd.slug}`);
+        if (brief.status !== "approved") return fail(422, "that tech brief is not approved: only an approved brief feeds a spec");
+      }
+      const subject = (data.feature_id && ctx.entityTitle?.(data.feature_id)) || base.requirements[0]?.title || "Spec";
+      const noun = data.depth === "full" ? "engineering spec" : "technical brief";
+      const slug = data.document ?? `${prd?.slug ?? data.prd}-${slugify(subject)}-spec`;
+      // A3: no approvers named, the engineering leads who may approve (an empty list: any approver).
+      const approvers = data.engineering_approver_ids ?? ctx.leadApprovers?.() ?? [];
       const id = ctx.uuid();
+      let runId = ctx.uuid();
+      if (ctx.draftRun && prd) {
+        const run = await ctx.draftRun({ flow: "prd_to_spec", document: slug, source: prd.slug, knobs: data.knobs } as Schemas["RunCreate"]);
+        if (run instanceof Response) return run;
+        runId = run;
+      }
       const spec: Spec = {
         ...base,
-        request: { ...base.request, id, kind: data.depth === "full" ? "engineering_spec" : "tech_brief", requirement_ids: data.requirement_ids, status: "queued", created_at: ctx.now(), updated_at: ctx.now() },
+        request: {
+          ...base.request, id, kind: data.depth === "full" ? "engineering_spec" : "tech_brief", title: data.title ?? `${subject}: ${noun}`,
+          source_document_id: prd?.id ?? base.request.source_document_id, requirement_ids: data.requirement_ids, status: "queued", run_id: runId,
+          params: {
+            document_slug: slug, depth: data.depth ?? "brief", design: data.design ?? true, screens: data.screens ?? 3,
+            feature_id: data.feature_id ?? null, engineering_approver_ids: approvers, tech_brief_version_id: data.tech_brief_version_id ?? null,
+          },
+          created_at: ctx.now(), updated_at: ctx.now(),
+        },
+        document_slug: slug, document_id: null, depth: data.depth ?? "brief", engineering_approver_ids: approvers,
         latest_version: null, approach_status: null, freshness: null, versions: [], sections: [], design: [], stale: [],
-        run_id: ctx.uuid(), run_status: "draft", regeneration_run_id: null,
+        run_id: runId, run_status: "draft", regeneration_run_id: null, state: "requested",
+        feature_id: data.feature_id ?? null, tech_brief_version_id: data.tech_brief_version_id ?? null,
       };
       ctx.db.specs.unshift(spec);
       return json(201, { spec, run_id: spec.run_id });
     }
     const spec = ctx.db.specs.find((s) => s.request.id === p[2]);
     if (!spec) return fail(404, "spec request not found");
-    if (!p[3] && m === "GET") return json(200, spec);
+    if (!p[3] && m === "GET") return json(200, { ...spec, ...summary(spec) });
     if (p[3] === "regenerate" && m === "POST") {
       const denied = need("approver");
       if (denied) return denied;

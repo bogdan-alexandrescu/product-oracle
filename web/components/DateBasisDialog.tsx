@@ -31,7 +31,7 @@ export function useDateRights() {
 }
 
 /** The dialog frame: a centred card over the page, full width on a phone. */
-function Frame({
+export function Frame({
   title,
   onClose,
   children,
@@ -81,7 +81,7 @@ function Frame({
   );
 }
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+export function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
