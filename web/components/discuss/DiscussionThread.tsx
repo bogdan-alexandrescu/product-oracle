@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { findPeople, PersonPicker, type Person } from "@/components/PersonPicker";
-import { Button, Chip, confirmInPage, Icon, InfoTip, Notice, useFocusTrap } from "@/components/ds";
+import { Button, Chip, confirmInPage, CostFigure, Icon, InfoTip, Notice, useFocusTrap } from "@/components/ds";
 import { InlineError, Menu, TEXTAREA } from "@/components/review/parts";
 import { INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
@@ -649,6 +649,13 @@ export function DiscussionThread({
       live = false;
     };
   }, [id, refreshKey]);
+  // G2 §4: while a research run is under way, look again now and then for its answer.
+  const researching = state?.kind === "ok" && state.messages.some((x) => x.research?.status === "running");
+  useEffect(() => {
+    if (!researching) return;
+    const timer = setInterval(() => void load(id).then(setState), RESEARCH_POLL_MS);
+    return () => clearInterval(timer);
+  }, [researching, id]);
   // Reading the thread marks it read to its last message: the Inbox's invitation and
   // mentions read past are done (G6), and the rail's count reads again.
   const lastId = state?.kind === "ok" ? state.messages.at(-1)?.id : undefined;
@@ -1001,7 +1008,9 @@ export function DiscussionThread({
       <ol className="flex min-w-0 flex-col gap-3" aria-label="Messages">
         {messages.length === 0 && <li className="text-sm text-text2">No messages yet</li>}
         {messages.map((m) =>
-          m.author_kind === "system" ? (
+          m.author_kind === "system" && m.research ? (
+            <ResearchLine key={m.id} m={m} />
+          ) : m.author_kind === "system" ? (
             <li key={m.id} data-testid="discussion-system-line" className="text-center text-[13px] text-text2">
               {m.body}
             </li>
@@ -1014,6 +1023,11 @@ export function DiscussionThread({
                 {m.via === "slack" && (
                   <span data-testid="via-slack" className="text-[12px]">
                     via Slack
+                  </span>
+                )}
+                {m.author_kind === "oracle" && m.research && (
+                  <span data-testid="research-answer">
+                    <Chip>From research</Chip>
                   </span>
                 )}
               </p>
@@ -1032,6 +1046,13 @@ export function DiscussionThread({
               {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
                 <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
               )}
+              {!m.deleted &&
+                open &&
+                m.author_kind === "person" &&
+                can("research_discussion_message", d.me.can_research) &&
+                !messages.some((x) => x.reply_to === m.id && x.research?.status === "running") && (
+                  <ResearchThis m={m} d={d} onStarted={() => void reload().then(() => onChanged?.())} />
+                )}
               {renderAfter?.(m, { d, messages })}
             </li>
           ),
@@ -1094,6 +1115,72 @@ export function DiscussionThread({
         />
       )}
     </div>
+  );
+}
+
+/** How often the thread looks for a research run's answer while it runs. */
+const RESEARCH_POLL_MS = 10_000;
+
+/**
+ * Research this (G2 §4) under a person's message, for an approver or owner who can write in
+ * the discussion: the run's estimated cost first, then Start research. Oracle's answer comes
+ * back into the thread when the run ends.
+ */
+function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarted: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const begin = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(api.POST("/v1/discussions/{discussion_id}/research", { params: { path: { discussion_id: d.id } }, body: { message_id: m.id } }));
+      setAsking(false);
+      onStarted();
+    } catch (e) {
+      setError(detail(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!asking)
+    return (
+      <span className="mt-1 flex gap-1">
+        <Button variant="ghost" onClick={() => setAsking(true)}>
+          Research this
+        </Button>
+      </span>
+    );
+  return (
+    <div className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface p-3" role="group" aria-label="Research this" data-testid="research-confirm">
+      <p className="text-sm text-text">
+        One research run · <CostFigure usd={d.me.research_usd} est />
+      </p>
+      <p className="text-sm text-text2">Oracle posts what it finds here, with its sources.</p>
+      {error && <InlineError>{error}</InlineError>}
+      <span className="flex gap-2">
+        <Button variant="solid" disabled={busy} onClick={() => void begin()}>
+          Start research
+        </Button>
+        <Button variant="ghost" onClick={() => setAsking(false)}>
+          Cancel
+        </Button>
+      </span>
+    </div>
+  );
+}
+
+/** The line a research run leaves in the thread: who asked, where it stands, and its run. */
+function ResearchLine({ m }: { m: Message }) {
+  const r = m.research!;
+  const where = r.status === "running" ? "Oracle is researching…" : r.status === "done" ? "Research done" : "Research didn't finish. Research this to try again.";
+  return (
+    <li data-testid="research-line" data-status={r.status} className="text-center text-[13px] text-text2">
+      {m.body} · {where} ·{" "}
+      <a className="font-semibold text-accent-ink hover:underline" href={`/runs/${r.run_id}`}>
+        See the run
+      </a>
+    </li>
   );
 }
 

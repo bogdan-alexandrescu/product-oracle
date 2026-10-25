@@ -48,7 +48,7 @@ test("an approver researches a question and Oracle's answer comes back into the 
   await openDiscussion(page, APPROVER);
   await question(page).getByRole("button", { name: "Research this" }).click();
   const confirm = thread(page).getByTestId("research-confirm");
-  await expect(confirm).toContainText("One research run, $2.00 estimated.");
+  await expect(confirm).toContainText("One research run · $2.00 est.");
   await expect(confirm).toContainText("Oracle posts what it finds here, with its sources.");
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(confirm).toBeHidden();
