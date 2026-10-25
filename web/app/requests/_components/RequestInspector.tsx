@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
-import { startPrdHref } from "@/components/RequestsBehind";
+import { free, startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDay } from "@/lib/format";
@@ -209,9 +209,9 @@ export function RequestInspector({
           run={run}
         />
       </InspectorSection>
-      {(request.intake || request.document || (request.state === "qualified" && can("create_intake", true))) && (
+      {(request.intake || request.document || (free(request) && can("create_intake", true))) && (
         <InspectorSection label="PRD">
-          <PrdLink request={request} canStart={request.state === "qualified" && !request.document && can("create_intake", true)} />
+          <PrdLink request={request} canStart={free(request) && can("create_intake", true)} />
         </InspectorSection>
       )}
       {theme && (theme.problem_state !== "none" || theme.problem) && (
@@ -278,7 +278,7 @@ function PrdLink({ request, canStart }: { request: Request; canStart: boolean })
           )}
           {request.document && (
             <Row label="PRD">
-              <Link href={`/documents/${request.document.slug}`} className={link}>
+              <Link href={`/documents/${request.document.slug}`} className={link} data-testid="request-prd-link">
                 {request.document.title}
               </Link>
             </Row>
@@ -390,7 +390,6 @@ function Links({
         <Row label="Goals">{request.goal_ids.map((id) => goalTitles.get(id) ?? "A goal").join(", ") || "None"}</Row>
         <Row label="Theme">{request.theme?.title ?? "None"}</Row>
         <Row label="Feature">{featureTitle ?? (request.feature_id ? "A feature" : "None")}</Row>
-        <Row label="PRD">{request.document?.title ?? "None"}</Row>
       </dl>
     );
   }

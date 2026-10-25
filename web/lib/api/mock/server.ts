@@ -1810,7 +1810,7 @@ function importSections(
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   const session = sessionOf(db);
   const member = db.members.find((m) => m.email === session) ?? db.members.find((m) => m.id === db.user_id);
-  return {
+  const ctx: Omit<RunsContext, "db"> & { db?: RunsDb } = {
     db: db.runs,
     userId: db.user_id,
     userName: session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
@@ -1992,6 +1992,16 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     uuid,
     now,
   };
+  // C1 lane 2: the PRD a brief's run imports links the requests behind the brief (the API's
+  // runs._link_requests, at segment end and on retry-draft-import).
+  const importDraft = ctx.importDraft;
+  ctx.importDraft = (slug, run) => {
+    const imp = importDraft(slug, run);
+    const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === run.id) ?? [];
+    if (intakeId && imp.document_id && db.requests) linkIntakeDocument(db.requests, intakeId, imp.document_id);
+    return imp;
+  };
+  return ctx;
 }
 
 function load(): Db {
@@ -3874,7 +3884,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     // C1 lane 2: the brief's "Requests behind it".
     const requests = {
-      refusal: (ids: string[]) => behindBriefRefusal(ensureRequests(db), ids),
+      refusal: (ids: string[]) =>
+        behindBriefRefusal(ensureRequests(db), ids, {
+          intake: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+          document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
+        }),
       link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
     };
     const intake = await routeIntake(

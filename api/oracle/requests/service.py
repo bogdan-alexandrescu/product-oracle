@@ -694,7 +694,12 @@ async def _apply_patch(
         if "feature_id" in fields:
             row.feature_id = await _feature(db, body.feature_id) if body.feature_id else None
         if "document_id" in fields:
+            had = row.document_id
             row.document_id = await _document(db, body.document_id) if body.document_id else None
+            if had is not None and row.document_id is None:
+                # C1: unlinking its PRD takes the request off its brief too, so the brief's
+                # run cannot link the PRD back, and another brief may take it.
+                row.intake_id = None
 
 
 def _decided(row: ProductRequest, principal: Principal) -> None:
@@ -1432,8 +1437,8 @@ NOT_QUALIFIED = "Only qualified requests can be behind a PRD"
 async def put_behind_brief(
     db: AsyncSession, principal: Principal, intake_id: uuid.UUID, request_ids: list[uuid.UUID]
 ) -> list[uuid.UUID]:
-    """The brief's "Requests behind it": each one, qualified (else 422), gets the intake
-    (the latest brief wins). Returns the ids linked."""
+    """The brief's "Requests behind it": each one, qualified (else 422) and not already
+    behind a brief or linked to a PRD (else 409), gets the intake. Returns the ids linked."""
     if not request_ids:
         return []
     rows = list(
@@ -1446,6 +1451,7 @@ async def put_behind_brief(
     )
     if len(rows) != len(set(request_ids)) or any(r.state != "qualified" for r in rows):
         raise RequestError(422, NOT_QUALIFIED)
+    await _not_taken(db, rows)
     for row in rows:
         row.intake_id = intake_id
         row.updated_at = _now()
@@ -1455,6 +1461,24 @@ async def put_behind_brief(
             db, principal, "request.updated", "request", row.id, {"intake_id": str(intake_id)}
         )
     return [r.id for r in rows]
+
+
+async def _not_taken(db: AsyncSession, rows: list[ProductRequest]) -> None:
+    """Rules 2 and 7: a request already behind a brief, or linked to a PRD, stays there; a
+    new brief cannot take it over (409, naming the brief or the PRD)."""
+    for row in rows:
+        if row.intake_id is not None:
+            title = await db.scalar(
+                select(ProductIntake.title).where(ProductIntake.id == row.intake_id)
+            )
+            raise _conflict(
+                f'"{row.title}" is already behind the brief "{title or "another brief"}"'
+            )
+        if row.document_id is not None:
+            title = await db.scalar(select(Document.title).where(Document.id == row.document_id))
+            raise _conflict(
+                f'"{row.title}" is already linked to the PRD "{title or "another PRD"}"'
+            )
 
 
 async def link_intake_document(

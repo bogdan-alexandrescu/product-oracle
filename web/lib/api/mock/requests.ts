@@ -739,7 +739,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if ("goal_ids" in patch) row.goal_ids = [...new Set(patch.goal_ids ?? [])];
       if ("theme_id" in patch) row.theme_id = patch.theme_id ?? null;
       if ("feature_id" in patch) row.feature_id = patch.feature_id ?? null;
-      if ("document_id" in patch) row.document_id = patch.document_id ?? null;
+      if ("document_id" in patch) {
+        const had = row.document_id;
+        row.document_id = patch.document_id ?? null;
+        // C1: unlinking its PRD takes the request off its brief too (the API's _apply_patch).
+        if (had && !row.document_id) row.intake_id = null;
+      }
       if (fields.length) bump(row);
       return json(200, out(row));
     }
@@ -1068,14 +1073,23 @@ export function requestInboxRows(db: RequestsDb | undefined, ctx: Pick<RequestsC
 
 // --- Start a PRD (C1 lane 2, api/oracle/requests/service.py) ---------------------------------
 
-/** Why the brief cannot take these requests (only qualified ones), or null when it can. */
-export function behindBriefRefusal(db: RequestsDb, ids: string[]): string | null {
-  if (ids.length > 50) return "At most 50 requests behind a brief";
+/** Why the brief cannot take these requests, or null when it can: only qualified ones (422),
+ * none already behind a brief or linked to a PRD (409, naming it), as put_behind_brief. */
+export function behindBriefRefusal(
+  db: RequestsDb,
+  ids: string[],
+  titles: { intake: (id: string) => string | null; document: (id: string) => string | null },
+): { status: number; detail: string } | null {
   const rows = ids.map((id) => db.requests.find((r) => r.id === id));
-  return rows.every((r) => r?.state === "qualified") ? null : "Only qualified requests can be behind a PRD";
+  if (!rows.every((r) => r?.state === "qualified")) return { status: 422, detail: "Only qualified requests can be behind a PRD" };
+  for (const r of rows as Row[]) {
+    if (r.intake_id) return { status: 409, detail: `"${r.title}" is already behind the brief "${titles.intake(r.intake_id) ?? "another brief"}"` };
+    if (r.document_id) return { status: 409, detail: `"${r.title}" is already linked to the PRD "${titles.document(r.document_id) ?? "another PRD"}"` };
+  }
+  return null;
 }
 
-/** The brief's "Requests behind it": each one gets the intake (the latest brief wins). */
+/** The brief's "Requests behind it": each one gets the intake. */
 export function putBehindBrief(db: RequestsDb, intakeId: string, ids: string[]) {
   for (const r of db.requests.filter((x) => ids.includes(x.id))) {
     r.intake_id = intakeId;

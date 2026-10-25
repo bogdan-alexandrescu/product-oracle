@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { Chip, type ChipKind } from "@/components/ds";
+import { free } from "@/components/RequestsBehind";
 import type { Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 
@@ -35,7 +36,8 @@ export function age(iso: string): string {
 /**
  * The request queue, newest first (#329, #348): each request's title, goal chips, state,
  * theme, requester, channel and age; the selected one is marked. `empty` shows when there
- * are none. With `chosen`, qualified requests get a box to tick for Start a PRD (C1 lane 2).
+ * are none. With `chosen`, qualified requests behind no brief or PRD yet get a box to tick for
+ * Start a PRD (C1 lane 2).
  */
 export function RequestList({
   requests,
@@ -67,7 +69,7 @@ export function RequestList({
             aria-current={on ? "true" : undefined}
             className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 ${on ? "bg-accent-soft" : "hover:bg-surface2"}`}
           >
-            {chosen && onChoose && r.state === "qualified" && (
+            {chosen && onChoose && free(r) && (
               <input
                 type="checkbox"
                 className="size-4 flex-none accent-[var(--accent)]"

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
@@ -9,6 +11,12 @@ type Request = Schemas["RequestOut"];
 /** The New PRD address of Start a PRD (C1 lane 2): the brief with these requests ticked. */
 export function startPrdHref(ids: string[]): string {
   return `/documents/new?kind=prd&requests=${ids.join(",")}`;
+}
+
+/** Start a PRD offers a request only while it is qualified and behind no brief or PRD yet
+ * (rules 2 and 7: the API refuses one already taken with 409). */
+export function free(r: Request): boolean {
+  return r.state === "qualified" && !r.intake_id && !r.document;
 }
 
 /** The theme groups of the qualified requests, by theme title; "No theme" last. */
@@ -22,15 +30,22 @@ function byTheme(requests: Request[]): [string, Request[]][] {
 }
 
 /**
- * The brief's "Requests behind it" (C1 lane 2): every qualified request, grouped by theme,
- * to tick. Continue links the ticked ones to the brief, and the PRD its run makes to them.
- * Hidden when the company has no qualified request.
+ * The brief's "Requests behind it" (C1 lane 2): every qualified request not yet behind a brief
+ * or a PRD, grouped by theme, to tick. Continue links the ticked ones to the brief, and the PRD
+ * its run makes to them. Ticked ones that are taken drop out. Hidden when none is free.
  */
 export function RequestsBehind({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
   const requests = useQuery("brief-requests", () =>
     unwrap(api.GET("/v1/requests", { params: { query: { state: "qualified", limit: 200 } } })),
   );
-  const items = requests.data?.items ?? [];
+  const items = (requests.data?.items ?? []).filter(free);
+  const loaded = requests.data !== null && requests.data !== undefined;
+  const offered = items.map((r) => r.id).join(",");
+  useEffect(() => {
+    if (!loaded) return;
+    const kept = value.filter((id) => offered.split(",").includes(id));
+    if (kept.length !== value.length) onChange(kept);
+  }, [loaded, offered, value, onChange]);
   if (requests.data && items.length === 0) return null;
   return (
     <fieldset className="min-w-0">
