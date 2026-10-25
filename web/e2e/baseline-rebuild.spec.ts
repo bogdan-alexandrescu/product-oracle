@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 /*
  * The scheduled Baseline rebuild (oracle.rituals.rebuild): a built-in ritual, off by default,
@@ -12,6 +13,12 @@ import { login } from "./helpers";
 
 const ritualRow = (page: Page, title: string) => page.getByTestId("ritual-row").filter({ hasText: title });
 const inspector = (page: Page) => page.getByTestId("ritual-inspector").filter({ visible: true });
+
+/** A company whose Build the baseline is priced at `usd` (the mock's "rebuild-costly" or
+ * "rebuild-over-approval"), with one finished build on 20 October. */
+async function withScenario(page: Page, scenario: "rebuild-costly" | "rebuild-over-approval") {
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario]);
+}
 
 async function openRituals(page: Page) {
   await page.getByTestId("app-nav").getByTestId("nav-company").click();
@@ -48,7 +55,8 @@ test("baseline rebuild: an owner turns it on and Oracle starts the build with it
   await expect(page.getByRole("heading", { level: 1, name: "Build the baseline" })).toBeVisible();
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
   const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
-  await expect(did).toContainText("Started the baseline rebuild · Estimate $7.00, within your $10 limit");
+  await expect(did).toContainText("Started the baseline rebuild · Estimate $7.00");
+  await expect(did).not.toContainText("limit");
   await expect(did).toContainText("Keep the baseline current");
 });
 
@@ -75,19 +83,46 @@ test("baseline rebuild: at Observe the occurrence only reminds and links the Bui
   await expect(build).toContainText("Estimate $7.00");
 });
 
-// protects=above Run rituals' cost limit nothing starts and the card names both figures;
-// fails_when=a build starts over the limit; no_claim=P3's over-$50 approval.
-test("baseline rebuild: above the $5 cost limit Oracle starts nothing and says why", async ({ page }) => {
+// protects=the rebuild has no ritual cost cap: a build priced $14.00 (above Run rituals' default
+// $10 a run, under $50) starts and the owner's Oracle did row names only the estimate; the
+// pre-read's Last built row opens that run and reads in the Company time zone;
+// fails_when=the old $10 limit holds it back, or Last built links the run list or shows UTC;
+// no_claim=P3's over-$50 approval (next test).
+test("baseline rebuild: a $14 build starts with no ritual cost cap", async ({ page }) => {
+  await withScenario(page, "rebuild-costly");
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await page.getByTestId("autonomy-row-rituals").getByRole("group").getByRole("button", { name: "Act", exact: true }).click();
-  const sheet = page.getByRole("dialog", { name: "Change Run rituals" });
-  await sheet.getByLabel("Highest cost a run (USD)").fill("5");
-  await sheet.getByLabel("Why").fill("Keep ritual runs small");
-  await sheet.getByRole("button", { name: "Save" }).click();
-  await expect(sheet).toBeHidden();
   await resumeAndPrepare(page);
-  await expect(page.getByTestId("occurrence-rebuild")).toContainText("Not started: the estimate $7.00 is above your $5 limit a run.");
-  await expect(page.getByTestId("occurrence-rebuild").getByRole("link", { name: "Build the baseline" })).toBeVisible();
+  const card = page.getByTestId("occurrence-rebuild");
+  await expect(card).toContainText("Oracle started the baseline build · Estimate $14.00 at standard depth. Its proposals wait for your review.");
+  const last = page.getByTestId("ritual-block").getByRole("link", { name: /^Last built / });
+  await expect(last).toHaveText("Last built 2026-10-20 09:00 PDT");
+  await last.click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Build the baseline" })).toBeVisible();
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
+  await expect(did).toContainText("Started the baseline rebuild · Estimate $14.00");
+  await expect(did).not.toContainText("limit");
+});
+
+// protects=P3: a build over $50 waits for an owner's approval; the card and the Oracle did row say
+// so, and once the owner approves on the run the card no longer says it waits;
+// fails_when=it is not started, runs unapproved, or the card never says why it waits;
+// no_claim=the runtime's segment work (pytest).
+test("baseline rebuild: a $70 build waits for the owner's approval", async ({ page }) => {
+  await withScenario(page, "rebuild-over-approval");
+  await login(page);
+  await resumeAndPrepare(page);
+  const card = page.getByTestId("occurrence-rebuild");
+  await expect(card).toContainText("Waiting for an owner's approval: the estimate $70.00 is over $50");
+  const occurrence = page.url();
+  await card.getByRole("link", { name: "Open run" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Approve $70.00 and start" }).click();
+  await expect(page.getByRole("button", { name: "Approve $70.00 and start" })).toHaveCount(0);
+  await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
+  await expect(did).toContainText("Started the baseline rebuild · Estimate $70.00 · Waits for an owner's approval");
+  await page.goto(occurrence);
+  await expect(page.getByTestId("occurrence-rebuild")).toContainText("Oracle started the baseline build · Estimate $70.00 at standard depth. Its proposals wait for your review.");
 });

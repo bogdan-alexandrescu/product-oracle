@@ -8,10 +8,11 @@ responsibility.
 - at Observe Oracle only reminds: no run; the pre-read's Inbox row is the reminder and
   its block links B1's Build the baseline sheet;
 - at Draft or above Oracle starts one ``baseline`` run (standard depth, Confirm the
-  baseline on) when its estimate is within Run rituals' ``max_run_usd``, created by the
-  ritual's owner, then tells them ("Oracle did", with the estimate; Undo cancels it);
-- above the limit, with a build already under way, or with an owner who can no longer
-  start runs, nothing starts and the occurrence says why;
+  baseline on), created by the ritual's owner, then tells them ("Oracle did", with the
+  estimate; Undo cancels it). No ritual cost cap (Run rituals' ``max_run_usd`` does not
+  apply): only P3's over-$50 owner approval, where the run waits;
+- with a build already under way, or with an owner who can no longer start runs, nothing
+  starts and the occurrence says why;
 - the run's proposals land for review as B1's do (its checkpoint waits for a person).
 
 Oracle's ritual clock is set by the tests; the fake runtime stands in for SwarmCloud, so
@@ -28,6 +29,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle.autonomy_models import OracleAction
+from oracle.runs import flows
 from oracle.rituals.kinds import KINDS
 from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, set_runtime
@@ -148,7 +150,7 @@ async def test_from_draft_up_the_occurrence_starts_one_build(client, ctx, at, ru
     assert action.undo == {"method": "POST", "path": f"/v1/runs/{run.id}/cancel", "body": None}
     inbox = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()
     (row,) = [r for r in inbox["oracle_actions"] if r["responsibility"] == "baseline"]
-    assert row["summary"] == "Started the baseline rebuild · Estimate $7.00, within your $10 limit"
+    assert row["summary"] == "Started the baseline rebuild · Estimate $7.00"
     assert row["counts"] is True
 
 
@@ -201,21 +203,90 @@ async def test_at_observe_oracle_only_reminds(client, ctx, at, runtime):
     ]
 
 
-async def test_above_the_cost_limit_nothing_starts(client, ctx, at, runtime):
-    """protects=the cost limit: with Run rituals' limit at $5 a $7.00 build is not
-    started and the occurrence names both figures; fails_when=a run starts over the
-    limit or Oracle reports acting; no_claim=P3's over-$50 approval (B1's runs never
-    reach it at default roles)."""
+async def test_run_rituals_cost_limit_does_not_apply(client, ctx, at, runtime):
+    """protects=the rebuild has no ritual cost cap: with Run rituals' limit at $5 the
+    $7.00 build still starts, and the pre-read does not mention a limit;
+    fails_when=Run rituals' max_run_usd blocks it; no_claim=P3's over-$50 approval
+    (next tests)."""
     await resumed(client, ctx)
     await set_level(client, ctx, "rituals", "act", max_run_usd=5)
     occ = await ready_occurrence(client, ctx, at, KIND)
-    assert await baseline_runs(ctx.tenant_id) == []
-    assert await baseline_actions(ctx.tenant_id) == []
-    assert occ["summary_state"] == "not_started"
-    assert occ["summary_note"] == (
-        "Not started: the estimate $7.00 is above your $5 limit a run. "
-        "Build it from the Baseline page."
+    (run,) = await baseline_runs(ctx.tenant_id)
+    assert run.status == "running"
+    assert occ["summary_state"] == "running" and occ["summary_note"] is None
+    texts = [r["text"] for b in occ["pre_read"]["blocks"] for r in b["rows"]]
+    assert not any("limit" in t for t in texts), texts
+    (action,) = await baseline_actions(ctx.tenant_id)
+    assert action.summary == "Started the baseline rebuild · Estimate $7.00"
+
+
+async def test_an_estimate_above_10_dollars_starts(client, ctx, at, runtime, monkeypatch):
+    """protects=a build priced above Run rituals' default $10 (and under $50) starts;
+    fails_when=it is held at the old ritual limit; no_claim=prices of real roles (the
+    depth is repriced here)."""
+    monkeypatch.setitem(flows.DEPTHS, "standard", flows.DEPTHS["standard"] * 2)
+    await resumed(client, ctx)
+    occ = await ready_occurrence(client, ctx, at, KIND)
+    (run,) = await baseline_runs(ctx.tenant_id)
+    assert float(run.estimate_usd) == 14.0
+    assert run.status == "running"
+    assert occ["summary_state"] == "running"
+    (action,) = await baseline_actions(ctx.tenant_id)
+    assert action.summary == "Started the baseline rebuild · Estimate $14.00"
+
+
+async def test_over_50_dollars_it_waits_for_an_owners_approval(
+    client, ctx, at, runtime, monkeypatch
+):
+    """protects=P3: a build over $50 waits for an owner's approval, the occurrence and
+    the pre-read say so, the owner's "Oracle did" row says so, and once an owner approves
+    the build runs and the note goes; fails_when=it runs unapproved, nothing starts, or
+    the occurrence never says why it waits; no_claim=the Approve button (Playwright)."""
+    monkeypatch.setitem(flows.DEPTHS, "standard", flows.DEPTHS["standard"] * 10)
+    await resumed(client, ctx)
+    occ = await ready_occurrence(client, ctx, at, KIND)
+    (run,) = await baseline_runs(ctx.tenant_id)
+    assert float(run.estimate_usd) == 70.0
+    assert run.status == "awaiting_approval"
+    assert occ["summary_state"] == "running"
+    assert occ["summary_run_id"] == str(run.id)
+    assert occ["summary_note"] == "Waiting for an owner's approval: the estimate $70.00 is over $50"
+    texts = [r["text"] for b in occ["pre_read"]["blocks"] for r in b["rows"]]
+    assert "Oracle starts the build; over $50 it waits for an owner's approval" in texts
+    (action,) = await baseline_actions(ctx.tenant_id)
+    assert action.summary == (
+        "Started the baseline rebuild · Estimate $70.00 · Waits for an owner's approval"
     )
+    resp = await client.post(f"/v1/runs/{run.id}/approve", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    got = (await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=ctx.as_("owner"))).json()
+    assert got["summary_state"] == "running" and got["summary_note"] is None
+
+
+async def test_a_start_that_fails_after_the_commit_is_not_left_running(
+    client, ctx, at, runtime, monkeypatch
+):
+    """protects=when starting the created run fails, the occurrence says it did not
+    start (it is not left "running" on a draft run) and Oracle reports nothing it did;
+    fails_when=the occurrence stays running forever; no_claim=SwarmCloud's own
+    errors (the fake runtime)."""
+    from oracle.runs import service as runs_service
+
+    async def refuse(db, principal, run_id):
+        raise runs_service.RunError("The runtime did not answer")
+
+    monkeypatch.setattr(runs_service, "start", refuse)
+    await resumed(client, ctx)
+    occ = await ready_occurrence(client, ctx, at, KIND)
+    (run,) = await baseline_runs(ctx.tenant_id)
+    assert run.status == "draft"
+    assert occ["summary_state"] == "not_started"
+    assert occ["summary_note"] == "Not started: the runtime did not answer"
+    assert await baseline_actions(ctx.tenant_id) == []
+    for _ in range(3):
+        await tick(ctx.tenant_id)
+    got = (await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=ctx.as_("owner"))).json()
+    assert got["summary_state"] == "not_started"
 
 
 async def test_a_build_under_way_is_not_doubled(client, ctx, at, runtime):
