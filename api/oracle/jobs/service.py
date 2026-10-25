@@ -361,6 +361,26 @@ async def latest_suggestions(
     return {r.feedback_item_id: r for r in rows}
 
 
+async def staged_suggestions(
+    db: AsyncSession, feedback_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, LlmSuggestion]:
+    """Each item's accepted section-text change no draft has applied yet (C1e Staged):
+    the item's state, though a newer suggestion is its latest."""
+    if not feedback_ids:
+        return {}
+    rows = await db.scalars(
+        select(LlmSuggestion)
+        .where(
+            LlmSuggestion.feedback_item_id.in_(feedback_ids),
+            LlmSuggestion.kind == "section_text",
+            LlmSuggestion.status == "accepted",
+            LlmSuggestion.applied_in_version.is_(None),
+        )
+        .order_by(LlmSuggestion.created_at)
+    )
+    return {r.feedback_item_id: r for r in rows}
+
+
 async def list_suggestions(
     db: AsyncSession, doc: str, status: str | None = None, section_key: str | None = None
 ) -> list[SuggestionOut]:
