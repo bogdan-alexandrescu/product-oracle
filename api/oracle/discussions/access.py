@@ -18,6 +18,7 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.authz import has_role
@@ -99,9 +100,12 @@ async def hidden_finding(db: AsyncSession, gap_id: uuid.UUID) -> tuple[ProductIn
 
 
 async def can_read_subject(db: AsyncSession, principal: "Principal", d: "Discussion") -> bool:
-    """Whether the caller can see the discussion's subject: every active member today
-    (every document is readable by viewers and up), except a gap, which reads as
-    ``sharing.gap_view`` allows. A subject restricted later restricts its discussions here."""
+    """Whether the caller can see the discussion's subject: every active member, except on
+    an approvers-only document or a run on one (H8: owners and approvers only), and a gap,
+    which reads as ``sharing.gap_view`` allows. A subject restricted later restricts its
+    discussions here."""
+    if await _on_hidden_document(db, principal, d):
+        return False
     if d.subject_kind != "gap":
         return True
     gap = await db.get(KnowledgeGap, uuid.UUID(d.subject["gap_id"]))
@@ -114,6 +118,26 @@ async def can_read_subject(db: AsyncSession, principal: "Principal", d: "Discuss
         return False
     view = sharing.gap_view(gap, sharing.registry(intake), sharing.viewer(principal, intake))
     return view is not None
+
+
+async def _on_hidden_document(db: AsyncSession, principal: "Principal", d: "Discussion") -> bool:
+    from oracle.docs import visibility
+    from oracle.docs.models import Document
+    from oracle.runs.models import Run
+
+    if not visibility.restricted(principal) or (d.document_id is None and d.run_id is None):
+        return False
+    doc_id = d.document_id
+    if doc_id is None:
+        doc_id = await db.scalar(select(Run.document_id).where(Run.id == d.run_id))
+    if doc_id is None:
+        return False
+    shown = await db.scalar(
+        select(Document.visibility)
+        .where(Document.id == doc_id)
+        .execution_options(oracle_all_documents=True)
+    )
+    return shown is not None and shown != visibility.COMPANY
 
 
 async def author_only_now(db: AsyncSession, d: "Discussion") -> bool:

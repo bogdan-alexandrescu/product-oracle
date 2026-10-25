@@ -298,7 +298,9 @@ VERSION_SOURCES = ("document_version", "pricing_memo_version")
 def _decision_visible(cls: Any) -> ColumnElement[bool]:
     """A decision about an approvers-only document is hidden with it, whatever recorded it:
     the approval of one of its versions, a stop of a run on it (a checkpoint record), or
-    any decision naming it, or one of its versions, as a subject."""
+    any decision naming it, one of its versions, or a discussion on it or on its run's
+    stops, as a subject (a decision proposed from a discussion before it named the
+    document too)."""
     # Core tables, not the mapped classes: the Document criterion above must not apply
     # inside these subqueries.
     from oracle.runs.models import Run
@@ -309,6 +311,13 @@ def _decision_visible(cls: Any) -> ColumnElement[bool]:
     hidden_docs = select(documents.c.id).where(documents.c.visibility != COMPANY)
     hidden_versions = select(versions.c.id).where(versions.c.document_id.in_(hidden_docs))
     hidden_runs = select(runs.c.id).where(runs.c.document_id.in_(hidden_docs))
+    # A discussion on such a document, or on a stop of a run on one (#585 review).
+    from oracle.discussions.models import Discussion
+
+    discussions = Discussion.__table__
+    hidden_discussions = select(cast(discussions.c.id, Text)).where(
+        or_(discussions.c.document_id.in_(hidden_docs), discussions.c.run_id.in_(hidden_runs))
+    )
     subject = (
         func.jsonb_array_elements(cls.subjects)
         .table_valued(column("value", JSONB))
@@ -324,6 +333,10 @@ def _decision_visible(cls: Any) -> ColumnElement[bool]:
                     subject.c.value["id"].astext.in_(
                         select(cast(documents.c.id, Text)).where(documents.c.visibility != COMPANY)
                     ),
+                ),
+                and_(
+                    subject.c.value["kind"].astext == "discussion",
+                    subject.c.value["id"].astext.in_(hidden_discussions),
                 ),
                 and_(
                     subject.c.value["kind"].astext == "document_version",

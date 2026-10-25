@@ -903,7 +903,8 @@ async def _propose_decision(
             options=[DecisionOption(**o) for o in p.get("options") or []],
             approver_id=uuid.UUID(str(approver)),
             reversibility=p.get("reversibility") or "reversible",
-            subjects=[Subject(kind="discussion", id=d.id, ref=d.title[:300])],
+            subjects=[Subject(kind="discussion", id=d.id, ref=d.title[:300]),
+                      *await _document_subjects(db, d)],
         )  # fmt: skip
         decision = await decisions.create(db, principal, body)
     except ValidationError as e:
@@ -913,6 +914,19 @@ async def _propose_decision(
     ref = {"decision_id": str(decision.id), "number": decisions.ref(decision.number)}
     await _done(db, principal, d, c, ref, "proposed")
     return c, ref
+
+
+async def _document_subjects(db: AsyncSession, d: Discussion) -> list[Any]:
+    """The discussion's document (its own, or its run's) as a decision subject, so the
+    decision keeps that document's visibility (oracle.docs.visibility)."""
+    from oracle.decisions.schemas import Subject
+    from oracle.runs.models import Run
+
+    doc_id = d.document_id
+    if doc_id is None and d.run_id is not None:
+        run = await db.get(Run, d.run_id)
+        doc_id = run.document_id if run is not None else None
+    return [] if doc_id is None else [Subject(kind="document", id=doc_id)]
 
 
 async def ask(
