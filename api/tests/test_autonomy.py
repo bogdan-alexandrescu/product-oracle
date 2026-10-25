@@ -496,3 +496,12 @@ async def test_a_refused_undo_is_not_recorded(client, tenant_id, owner):
     assert r.status_code == 403
     async with tenant_session(tenant_id) as s:
         assert (await s.get(OracleAction, action_id)).undone_by is None
+
+
+def test_next_drafts_requests_questions_and_goals_are_wired():
+    """protects=Settings › Autonomy no longer says these four take effect when their pick
+    ships, as Oracle follows their levels now; fails_when=any of them reads wired=False;
+    no_claim=what each level does (tests/test_next_drafts_autonomy.py,
+    test_requests_autonomy.py, test_questions_autonomy.py, test_goals_autonomy.py)."""
+    for key in ("next_drafts", "requests", "questions", "goals"):
+        assert autonomy.REGISTRY[key].wired is True, key

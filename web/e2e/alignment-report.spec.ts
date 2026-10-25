@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY } from "../lib/api/mock/server";
 
 import { login } from "./helpers";
 
@@ -100,6 +100,18 @@ test("the Plan header's Alignment report opens the latest report", async ({ page
   // protects=AC14; fails_when=the header button is missing or opens another report;
   // no_claim=F1's Plan screen (the button sits on the Roadmap page, Plan's home until F1).
   await withReports(page);
+  await login(page);
+  await page.goto("/roadmap");
+  await page.getByRole("link", { name: "Alignment report" }).click();
+  await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
+});
+
+test("the Plan header's Alignment report opens the latest report when clicked before the reports load", async ({ page }) => {
+  // protects=AC14 on a slow load; fails_when=a click before the latest report has loaded opens
+  // the list (the button pointed at /plan/reports until it knew the id); no_claim=the list.
+  await withReports(page);
+  await page.addInitScript(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/alignment-reports"]);
   await login(page);
   await page.goto("/roadmap");
   await page.getByRole("link", { name: "Alignment report" }).click();

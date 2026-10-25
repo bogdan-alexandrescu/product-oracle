@@ -42,6 +42,8 @@ type Props = {
   /** B6: the vague goals and the header's Interview vague goals (commenters and up). */
   vague?: number;
   onInterviewVague?: () => void;
+  /** H11: Shape goals is at Observe: this sentence stands where Make measurable would. */
+  goalsNote?: string | null;
   /** #345: add a subgoal under a goal (approvers); resolves true once it is saved. */
   onAddSubgoal?: (parent: EntityOut, title: string) => Promise<boolean>;
 };
@@ -131,7 +133,7 @@ function TitleButton({
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, onAddSubgoal }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -482,6 +484,11 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               }
             }}
           />
+        )}
+        {goalsNote && vague > 0 && (
+          <p className="border-b border-line px-4 py-3 text-sm text-text2 max-[600px]:px-3" data-testid="goals-observe">
+            {goalsNote}
+          </p>
         )}
         <DataTable
           label="Goals"

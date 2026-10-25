@@ -3,9 +3,12 @@ the requests it finds in the starter's own sources.
 
 The run (oracle.runs.flows, background work in SwarmCloud, decision V2c) classifies every
 New request and writes ``requests_triage.yaml``; :func:`apply` reads it at segment end
-(oracle.runs.service._advance). Oracle suggests and never decides: each entry becomes the
-request's ``suggestion`` only, and only while it is New. Unknown ids and keys are dropped
-and counted in the segment's notes.
+(oracle.runs.service._advance). Each entry becomes the request's ``suggestion``, and only
+while it is New. Unknown ids and keys are dropped and counted in the segment's notes.
+Below H11 requests "Act within limits" Oracle suggests only (shown at Recommend and above);
+at Act it merges a duplicate, or links confirmed goals, when the suggestion is at or above
+the limit's confidence, and tells the run's starter with Undo (:func:`_act`). Oracle never
+says no on its own.
 
 ``found`` items become ``request_candidates`` of the run's starter, kept only when the
 item belongs to one of their own sources (decision S6): nobody else sees them until they
@@ -34,7 +37,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, safe_yaml
+from oracle import audit, autonomy, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
@@ -42,6 +45,7 @@ from oracle.baseline.models import Entity
 from oracle.company_time import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
+from oracle.requests import service
 from oracle.requests.models import (
     CHANNELS,
     ProductRequest,
@@ -233,15 +237,18 @@ async def apply(db: AsyncSession, run: Run, text: str | None) -> dict[str, Any]:
         return {**empty, "error": UNREADABLE}
     drops: Counter[tuple[str, str]] = Counter()
     lookups = await _Lookups.load(db)
-    suggestions = await _suggest(db, run, data["requests"], lookups, drops)
+    written = await _suggest(db, run, data["requests"], lookups, drops)
+    acted = await _act(db, run, written)
     found = await _found(db, run, data["found"], lookups, drops)
-    return {"suggestions": suggestions, "found": found, "notes": _notes(drops)}
+    result = {"suggestions": len(written), "found": found, "notes": _notes(drops)}
+    return {**result, "acted": acted} if acted else result
 
 
 async def _suggest(
     db: AsyncSession, run: Run, entries: list[Any], lookups: _Lookups,
     drops: Counter[tuple[str, str]],
-) -> int:  # fmt: skip
+) -> list[ProductRequest]:  # fmt: skip
+    """Writes each entry as its request's suggestion; returns the requests written."""
     ids = {i for e in entries if isinstance(e, dict) and (i := _uuid(e.get("id")))}
     dup_ids = {i for e in entries if isinstance(e, dict) and (i := _uuid(e.get("duplicate_of")))}
     known = (
@@ -260,7 +267,7 @@ async def _suggest(
         else {}
     )
     at = _now().isoformat()
-    written: set[uuid.UUID] = set()
+    written: dict[uuid.UUID, ProductRequest] = {}
     for entry in entries:
         if not isinstance(entry, dict):
             drops[("entry", "not readable")] += 1
@@ -295,7 +302,11 @@ async def _suggest(
                 # H10: Oracle's problem for the theme, until an approver confirms it.
                 theme.problem_suggestion = problem
                 theme.problem_state = "suggested"
+        # What Oracle did on its own before (H11 requests at Act) and a person undid: kept,
+        # so Oracle does not do it again (:func:`_act`).
+        did = (row.suggestion or {}).get("oracle_did") or []
         row.suggestion = {
+            **({"oracle_did": did} if did else {}),
             **({"problem": problem} if problem and theme_id is None and theme_title else {}),
             **({"decline": d} if (d := _decline(entry.get("decline"), lookups, drops)) else {}),
             "theme_id": str(theme_id) if theme_id else None,
@@ -309,9 +320,128 @@ async def _suggest(
             "at": at,
             "accepted": [],
         }
-        written.add(row.id)
+        written[row.id] = row
     await db.flush()
-    return len(written)
+    return list(written.values())
+
+
+# --- H11 requests at Act ---------------------------------------------------------------
+
+
+async def _act(db: AsyncSession, run: Run, rows: list[ProductRequest]) -> int:
+    """H11 requests at "Act within limits": a suggestion at or above ``min_confidence``
+    merges its duplicate, else links its confirmed goals, then tells the run's starter
+    ("Oracle did", with Undo). Themes and features stay suggestions; Oracle never says
+    no on its own. A part Oracle did before and a person undid is not done again.
+    Returns how many requests Oracle changed."""
+    if not rows or not await autonomy.allows(db, "requests", "act"):
+        return 0
+    lim = await autonomy.limits(db, "requests")
+    floor = float(getattr(lim, "min_confidence", 1.0))
+    notify: list[uuid.UUID] | None = None
+    done = 0
+    for row in rows:
+        s = row.suggestion or {}
+        confidence = s.get("confidence")
+        if confidence is None or confidence < floor or s.get("declined_at"):
+            continue
+        did = set(s.get("oracle_did") or [])
+        if s.get("duplicate_of") and "duplicate" not in did:
+            what = await _act_merge(db, row, uuid.UUID(s["duplicate_of"]), confidence)
+        elif s.get("goal_ids") and "goals" not in did:
+            what = await _act_goals(db, row, [uuid.UUID(g) for g in s["goal_ids"]], confidence)
+        else:
+            continue
+        if what is None:
+            continue
+        summary, part, undo_body, undo_route = what
+        row.suggestion = {
+            **row.suggestion,
+            "accepted": sorted(set(s.get("accepted") or []) | {part}),
+            "oracle_did": sorted(did | {part}),
+        }
+        await db.flush()
+        if notify is None:
+            notify = await _told(db, run)
+        method, path = undo_route
+        await autonomy.acted(
+            db,
+            "requests",
+            summary=summary,
+            subject={"kind": "request", "key": str(row.id), "href": f"/requests?request={row.id}"},
+            undo={
+                "method": method,
+                "path": path,
+                "body": {"lock_version": row.lock_version, **undo_body},
+            },
+            notify=notify,
+        )
+        done += 1
+    return done
+
+
+def _sure(confidence: float) -> str:
+    return f"{round(confidence * 100)}% sure"
+
+
+async def _act_merge(
+    db: AsyncSession, row: ProductRequest, into_id: uuid.UUID, confidence: float
+) -> tuple[str, str, dict[str, Any], tuple[str, str]] | None:
+    try:
+        with db.no_autoflush:
+            root = await service._merge_into(db, None, row, into_id)
+    except service.RequestError:
+        return None  # e.g. it would form a loop: it stays a suggestion
+    await db.flush()
+    data: dict[str, Any] = {"into_id": str(root), "asked_into_id": str(into_id),
+                            "confidence": confidence}  # fmt: skip
+    # H10 Asked again, as when a person accepts the duplicate.
+    data |= await service._asked_again(db, None, row, root)
+    await audit.record(db, audit.ORACLE, "request.merged", "product_request", row.id, data)
+    target = await db.get(ProductRequest, root)
+    title = target.title if target is not None else "another request"
+    summary = f"Merged “{row.title}” into “{title}” ({_sure(confidence)})"
+    return summary, "duplicate", {}, ("POST", f"/v1/requests/{row.id}/reopen")
+
+
+async def _act_goals(
+    db: AsyncSession, row: ProductRequest, goal_ids: list[uuid.UUID], confidence: float
+) -> tuple[str, str, dict[str, Any], tuple[str, str]] | None:
+    confirmed = await service.confirmed_goals(db, goal_ids)
+    before = list(row.goal_ids)
+    adding = [g for g in goal_ids if g in confirmed and g not in before]
+    if not adding:
+        return None
+    row.goal_ids = before + adding
+    await db.flush()
+    await audit.record(
+        db, audit.ORACLE, "request.updated", "product_request", row.id,
+        {"fields": ["goal_ids"], "goal_ids": [str(g) for g in adding], "confidence": confidence},
+    )  # fmt: skip
+    titles = dict(
+        (await db.execute(select(Entity.id, Entity.title).where(Entity.id.in_(adding)))).all()
+    )
+    named = [f"“{titles.get(g, 'a goal')}”" for g in adding]
+    goals = named[0] if len(named) == 1 else f"{', '.join(named[:-1])} and {named[-1]}"
+    word = "goal" if len(named) == 1 else "goals"
+    summary = f"Linked “{row.title}” to {word} {goals} ({_sure(confidence)})"
+    undo_body = {"goal_ids": [str(g) for g in before]}
+    return summary, "goals", undo_body, ("PATCH", f"/v1/requests/{row.id}")
+
+
+async def _told(db: AsyncSession, run: Run) -> list[uuid.UUID]:
+    """Who hears what Oracle did: the run's starter (the member the daily run acts as),
+    else the longest-standing active owner."""
+    starter = await db.get(User, run.created_by) if run.created_by else None
+    if starter is not None and starter.disabled_at is None:
+        return [starter.id]
+    owner = await db.scalar(
+        select(User.id)
+        .where(User.role == "owner", User.disabled_at.is_(None))
+        .order_by(User.created_at, User.id)
+        .limit(1)
+    )
+    return [owner] if owner else []
 
 
 PROBLEM_MAX = {"problem": 1000, "success": 500, "constraints": 500}

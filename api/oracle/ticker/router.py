@@ -187,8 +187,9 @@ async def _tick_company(
 ) -> None:
     """One company's runs and account sweep (``oracle.ticker.body``), its product
     tracks' monitoring, its rituals (oracle.rituals, the weekly alignment report among
-    them), its watched pages, its launches' Ready detection, its interview links' expiry
-    and its daily request triage, each on its own. ``started`` is the tick's start (now
+    them), its watched pages, its launches' Ready detection, its interview links' expiry,
+    its daily request triage, and the next drafts and questions Oracle starts itself at
+    Act (H11), each on its own. ``started`` is the tick's start (now
     when not given): the watched pages' reads keep inside its ``BUDGET_SECONDS``."""
     deadline = (time.monotonic() if started is None else started) + BUDGET_SECONDS
     async with tenant_session(tenant_id) as db:
@@ -289,6 +290,29 @@ async def _tick_company(
             await request_triage.daily(db)
     except Exception:
         log.exception("run ticker: the daily request triage failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Next drafts (H11 ``next_drafts`` at Act): Oracle builds a document's next draft
+        # itself once enough changes wait (Oracle's own refinement, never agents' runs);
+        # a person still applies it.
+        from oracle.jobs import next_draft
+
+        async with tenant_session(tenant_id) as db:
+            if await next_draft.oracle_builds_due(db):
+                await db.commit()
+    except Exception:
+        log.exception("run ticker: Oracle's next drafts failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Questions (H11 ``questions`` at Act): Oracle asks a brief's next batch to named
+        # people itself, within the weekly cap a person.
+        from oracle.intake import autoask
+
+        async with tenant_session(tenant_id) as db:
+            if await autoask.tick_due(db):
+                await db.commit()
+    except Exception:
+        log.exception("run ticker: Oracle's questions failed for company %s", tenant_id)
         failures.add(tenant_id)
 
 

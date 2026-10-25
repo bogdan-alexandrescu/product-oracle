@@ -247,6 +247,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=NextDraftsLimits,
         wired_by="D12",
         wired_by_name="D12 One Build next draft",
+        wired=True,
     ),
     Responsibility(
         key="requests",
@@ -272,6 +273,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=RequestsLimits,
         wired_by="C1",
         wired_by_name="C1 Requests API and screen",
+        wired=True,
     ),
     Responsibility(
         key="questions",
@@ -290,6 +292,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=QuestionsLimits,
         wired_by="C2",
         wired_by_name="C2 Questions to people",
+        wired=True,
     ),
     Responsibility(
         key="goals",
@@ -307,6 +310,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=None,
         wired_by="B6",
         wired_by_name="B6 Goals interview",
+        wired=True,
         ceiling_reason="the company's goals are set by people",
     ),
     Responsibility(
