@@ -80,7 +80,7 @@ from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import Any, Literal, Protocol
 
 from fastapi import HTTPException, status
@@ -89,7 +89,7 @@ from markdown_it.token import Token
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import safe_yaml, wording
+from oracle import company_time, safe_yaml, wording
 from oracle.docs import layers
 from oracle.docs.parser import DATE_MARK_COMMENT_RE
 from oracle.roadmap import schedule
@@ -339,10 +339,12 @@ def _hits(text: str, ref: date) -> list[Hit]:
 
 
 def dates_in(text: str, ref: date | None = None) -> list[tuple[str, date, int]]:
-    """Every day-precision date in plain ``text``: (as written, first day, start)."""
+    """Every day-precision date in plain ``text``: (as written, first day, start).
+    ``ref``: the day year-less dates read against (the company's day by default)."""
     rendered = _Rendered()
     rendered.add_plain(text, 0)
-    return [(rendered.text[s:e], h.days[0], s) for h, s, e in rendered.find(ref or date.today())]
+    found = rendered.find(ref or company_time.today())
+    return [(rendered.text[s:e], h.days[0], s) for h, s, e in found]
 
 
 # --------------------------------------------------------------------------- rendering
@@ -785,8 +787,9 @@ def find(
     sections: Sequence[_SectionLike], *, title: str | None = None, ref: date | None = None
 ) -> list[Found]:
     """Every date a reader sees in the roadmap (title, headings, bodies), in document
-    order. ``ref``: the version's date, for year-less dates."""
-    ref = ref or date.today()
+    order. ``ref``: the version's day (:func:`version_day`), for year-less dates; the
+    company's day by default."""
+    ref = ref or company_time.today()
     out: list[Found] = []
     if title:
         out += _found_in(
@@ -840,14 +843,14 @@ def _in_scope(b: schedule.Basis, found: Found) -> bool:
     return True
 
 
-def template_dates(body: str) -> set[tuple[str, str]]:
+def template_dates(body: str, ref: date | None = None) -> set[tuple[str, str]]:
     """(section key, date as written) for each date a company template writes literally:
     exempt in drafts of that template (the company's text, not a schedule claim)."""
     from oracle.docs.parser import _parse_sections, split_front_matter
 
     _, rest, offset = split_front_matter(body.replace("\r\n", "\n"))
     sections = _parse_sections(rest, offset, [])
-    return {(f.section_key, f.text) for f in find(sections) if f.where != "title"}
+    return {(f.section_key, f.text) for f in find(sections, ref=ref) if f.where != "title"}
 
 
 # --------------------------------------------------------------------------- off the event loop
@@ -937,8 +940,8 @@ def _find_all(parts: tuple[_Part, ...], title: str | None, ref: date) -> tuple[F
     return tuple(find(parts, title=title, ref=ref))
 
 
-def _template_dates(body: str) -> frozenset[tuple[str, str]]:
-    return frozenset(template_dates(body))
+def _template_dates(body: str, ref: date) -> frozenset[tuple[str, str]]:
+    return frozenset(template_dates(body, ref))
 
 
 # Per date, in _Packed.ints: section key, end of its text, end of its days, line, where,
@@ -1252,10 +1255,13 @@ async def _kept(
         raise DatesUnavailable(pending=True) from None
 
 
-async def found_for_version(version: Any, sections: Sequence[_SectionLike]) -> tuple[Found, ...]:
-    """:func:`find` of a stored version (its title, its day): found once, then kept. Its
-    company's jobs are counted (``DATE_JOBS_PER_COMPANY``)."""
-    ref = version_day(version)
+async def found_for_version(
+    version: Any, sections: Sequence[_SectionLike], zone: str = company_time.DEFAULT_ZONE
+) -> tuple[Found, ...]:
+    """:func:`find` of a stored version (its title, its day in the Company time zone
+    ``zone``): found once, then kept. Its company's jobs are counted
+    (``DATE_JOBS_PER_COMPANY``)."""
+    ref = version_day(version, zone)
     key = ("version", version.id, ref, RENDERER)
     return await _kept(
         key,
@@ -1279,22 +1285,23 @@ async def found_for_draft(
 
 def keep_for_version(version_id: uuid.UUID, ref: date, found: Sequence[Found]) -> None:
     """What an import found, kept (packed) for the version it stored. Served when ``ref``
-    is the version's day (:func:`import_day`; not when the import crossed midnight UTC)."""
+    is the version's day (:func:`import_day`; not when the import crossed the company's
+    midnight)."""
     _KEPT.put(("version", version_id, ref, RENDERER), _pack(found))
 
 
-def import_day() -> date:
-    """The day of a version imported now: its ``created_at`` (the database's clock) read
-    in UTC, as :func:`version_day` reads it."""
-    return datetime.now(UTC).date()
+def import_day(zone: str) -> date:
+    """The day of a version imported now: the company's day in ``zone``, as
+    :func:`version_day` reads its ``created_at``."""
+    return company_time.today(zone)
 
 
-async def template_dates_async(body: str) -> frozenset[tuple[str, str]]:
-    """:func:`template_dates` of a template body: found once (a day: year-less dates read
-    against today), then kept. Not counted per company: a template body's key is shared by
-    every company that uses it (a built-in template)."""
+async def template_dates_async(body: str, ref: date) -> frozenset[tuple[str, str]]:
+    """:func:`template_dates` of a template body: found once per day ``ref`` (year-less
+    dates read against it: the version's day), then kept. Not counted per company: a
+    template body's key is shared by every company that uses it (a built-in template)."""
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    return await _kept(("template", digest, date.today(), RENDERER), _template_dates, body)
+    return await _kept(("template", digest, ref, RENDERER), _template_dates, body, ref)
 
 
 async def prefetch(db: AsyncSession, version: Any) -> None:
@@ -1309,8 +1316,9 @@ async def prefetch(db: AsyncSession, version: Any) -> None:
             select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
         )
     )
-    await found_for_version(version, sections)
-    await version_template_dates(db, version)
+    zone = await company_time.company_time_zone(db)
+    await found_for_version(version, sections, zone)
+    await version_template_dates(db, version, version_day(version, zone))
 
 
 # --------------------------------------------------------------------------- checking
@@ -1584,9 +1592,15 @@ def per_section(marks: list[Mark]) -> list[Mark]:
     return list(best.values())
 
 
-def version_day(version: Any) -> date:
+def version_day(version: Any, zone: str = company_time.DEFAULT_ZONE) -> date:
+    """A version's day in the Company time zone ``zone`` (year-less dates read against it):
+    the company's day it was created, or today for one not stored yet."""
     created = getattr(version, "created_at", None)
-    return created.date() if isinstance(created, datetime) else date.today()
+    return (
+        company_time.day(created, zone)
+        if isinstance(created, datetime)
+        else company_time.today(zone)
+    )
 
 
 def version_title(version: Any) -> str | None:
@@ -1600,7 +1614,8 @@ async def occurrences_for_version(
     """Every date occurrence of a stored roadmap version, re-checked now. The text is read
     once per version, off the event loop (:func:`found_for_version`; raises
     :class:`DatesUnavailable` when that takes too long)."""
-    found = await found_for_version(version, sections)
+    zone = await company_time.company_time_zone(db)
+    found = await found_for_version(version, sections, zone)
     prds: list[uuid.UUID] = (
         [prd]
         if prd is not None
@@ -1608,12 +1623,15 @@ async def occurrences_for_version(
             db, version.document_id, version.source_version_id, version.front_matter
         )
     )
-    return await check(db, found, prds, exempt=await version_template_dates(db, version))
+    exempt = await version_template_dates(db, version, version_day(version, zone))
+    return await check(db, found, prds, exempt=exempt)
 
 
-async def version_template_dates(db: AsyncSession, version: Any) -> frozenset[tuple[str, str]]:
+async def version_template_dates(
+    db: AsyncSession, version: Any, ref: date
+) -> frozenset[tuple[str, str]]:
     """The literal dates of the template a stored version names (its front matter's
-    template, else its document's)."""
+    template, else its document's), year-less ones read against ``ref``."""
     from oracle.docs.models import Document
     from oracle.docs.service import template_body
 
@@ -1629,7 +1647,7 @@ async def version_template_dates(db: AsyncSession, version: Any) -> frozenset[tu
         ).first()
         named = (row[0], row[1]) if row else (None, None)
     body = await template_body(db, named[0], str(named[1]) if named[1] is not None else None)
-    return await template_dates_async(body) if body else frozenset()
+    return await template_dates_async(body, ref) if body else frozenset()
 
 
 async def marks_for_version(db: AsyncSession, version: Any, sections: Sequence[Any]) -> list[Mark]:

@@ -443,11 +443,26 @@ export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxR
 
 // --- routes -------------------------------------------------------------------------------
 
-const SUMMARY_TEXT =
-  "One track is at risk: Usage alerts PRD, whose Threshold alerts beta slipped two weeks to Nov 24. Digest emails may be stale. Usage alerts rose from #5 to #2 in the priorities; a roadmap run from that track is the suggested next step.";
+const SUMMARY_TEXT = [
+  "# Monthly roadmap refresh — summary",
+  "",
+  "## What to discuss first",
+  "",
+  "One track is at risk: **Usage alerts PRD**, whose Threshold alerts beta slipped two weeks to Nov 24.",
+  "",
+  "- Digest emails may be stale.",
+  "- Usage alerts rose from fifth to second in the priorities; a [roadmap run](/runs) from that track is the suggested next step.",
+  "- Links a run must not draw: [another site](/\\evil.example/a) and [a script](javascript:alert).",
+].join("\n");
 
-const METRICS_SUMMARY_TEXT =
-  "Weekly active teams rose 37 to 412, above its normal range: the Team invites launch on Oct 14 is the likely cause. Invites sent per team fell to 3.9; nothing Oracle can read explains it yet.";
+const METRICS_SUMMARY_TEXT = [
+  "## Weekly metrics review",
+  "",
+  "**Weekly active teams** rose 37 to 412, above its normal range: the Team invites launch on Oct 14 is the likely cause.",
+  "",
+  "- Invites sent per team fell to 3.9; nothing Oracle can read explains it yet.",
+  "- Links a run must not draw: [another site](/\\evil.example/b) and [a script](javascript:alert).",
+].join("\n");
 
 /**
  * H5: the "metrics" scenario's Weekly metrics review, as metrics.activate_review leaves it:
@@ -663,8 +678,10 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   }
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+    // The API's order (oracle.rituals.summaries.on_demand): readiness, a run under way, then Observe.
+    if (!["ready", "held", "missed", "skipped"].includes(o.status) || !o.pre_read?.built_at) return fail(409, "The pre-read is not ready yet");
+    if (o.summary_state === "running") return fail(409, "Oracle is already writing this summary");
     if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
-    if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
     const special = FLOW_FOR_KIND[r.kind];
     if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "No open variance to explain");
     const id = ctx.uuid();
