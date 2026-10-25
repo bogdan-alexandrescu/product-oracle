@@ -43,8 +43,8 @@ async def test_approved_items_carry_their_stored_findings(client, ctx):
     assert outside["kind"] == "outside_strategy" and outside["label"] == "Outside the strategy"
     assert outside["text"] == "C is under no focus choice of the product strategy."
 
-    resp = await client.post(f"/v1/strategy/findings/{outside['finding_id']}/waive",
-                             json={"reason": "A bet we keep"}, headers=ctx.as_("approver"))  # fmt: skip
+    url = f"/v1/strategy/findings/{outside['finding_id']}/waive"
+    resp = await client.post(url, json={"reason": "A bet we keep"}, headers=ctx.as_("approver"))
     assert resp.status_code == 200, resp.text
     (waived,) = (await _plan(client, ctx, "approver"))["item-h"]["drift"]
     assert (waived["status"], waived["waive_reason"]) == ("waived", "A bet we keep")

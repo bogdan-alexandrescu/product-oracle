@@ -652,6 +652,13 @@ async def put_action(
     stages = may_stage and not suggest_only
     if body.kind == "waive":
         _waivable(cp, body, found, stages)
+        if cp.kind == "roadmap_items" and OWNER_WAIVES & set(body.answers):
+            # H4 §5: only an owner waives a planned item the strategy stops.
+            if not has_role(principal.role, "owner"):
+                raise service.Forbidden(OWNER_WAIVES_TEXT)
+            refusal = await caller_refusal(db, principal, "owner")
+            if refusal is not None:
+                raise service.Forbidden(refusal)
     if stages:
         # A staged action counts: the approver role (or the flag), re-read under the gate.
         refusal = (
@@ -739,6 +746,11 @@ async def _apply_now(
     await _bump(db, principal, run, cp, STAGED, body.item_key, _snapshot(action))
     await db.commit()
     return action
+
+
+# Drift reasons of the roadmap items review only an owner waives (H4 §5 Waive).
+OWNER_WAIVES = frozenset({"stopped_but_planned"})
+OWNER_WAIVES_TEXT = "Only an owner waives an item the product strategy stops"
 
 
 def _waivable(cp: Checkpoint, body: ActionIn, found: _File | None, stages: bool) -> None:
