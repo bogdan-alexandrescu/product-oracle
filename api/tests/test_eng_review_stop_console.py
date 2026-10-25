@@ -172,9 +172,11 @@ async def test_workflow_mode_runs_the_check_and_a_prd_review_send_back_revises_t
 ):
     # protects=Done-when 16 for lane A: in workflow mode the check's step runs in the
     # run's one workflow after the feature set, and a PRD review send-back still revises
-    # prd_draft (the importing segment), then the run ends; fails_when=the check is
-    # missing from the workflow, its stop is not answered there, or the send-back has no
-    # revise step; no_claim=the dates stop (lane B).
+    # prd_draft (the importing segment), then the run goes on to the dates stop (lane B,
+    # AC16: it waits for the draft's items, outside the workflow); fails_when=the check is
+    # missing from the workflow, its stop is not answered there, the send-back has no
+    # revise step, or the dates step is planned inside the workflow; no_claim=the dates
+    # stop's own path (test_eng_dates_stop.py).
     _, auth = owner
     swarm = _swarm()
     try:
@@ -193,10 +195,12 @@ async def test_workflow_mode_runs_the_check_and_a_prd_review_send_back_revises_t
         run = await get(client, auth, run["id"])
         assert run["waiting_on"] == "prd_review", run
         run = await decide(client, auth, run)
-        assert run["status"] == "succeeded", run
+        assert run["status"] == "running", run
+        assert run["waiting_for"] == {"kind": "draft_items", "version": 2}, run
         assert len(swarm.submissions()) == 1
         steps = [s["step_id"] for s in swarm.submissions()[0]["steps"]]
         assert "eng_review-review1" in steps and "prd_draft-revise1" in steps
+        assert not any(s.startswith("eng_dates") for s in steps)
         assert [a["step_id"] for a in swarm.answers][:3] == [
             "baseline-review1", "feature_set-review1", "eng_review-review1",
         ]  # fmt: skip

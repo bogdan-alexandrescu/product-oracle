@@ -487,7 +487,7 @@ async def test_multi_segment_run_is_one_workflow(client, owner):
     _, auth = owner
     swarm = on()
     use(swarm)
-    run = await started(client, auth)
+    run = await started(client, auth, checkpoints={"eng_dates": False})
     expected = ["baseline_confirm", "feature_set", "eng_review", "priority_order", "prd_review"]
     for i, kind in enumerate(expected):
         await tick(client, auth)
@@ -921,7 +921,7 @@ async def test_a_lost_submit_is_found_by_its_key(client, owner):
     swarm = on()
     use(swarm)
     swarm.lose_next_submit = True
-    run = await started(client, auth)
+    run = await started(client, auth, checkpoints={"eng_dates": False})
     # Created in SwarmCloud, answer lost: found by its key, not submitted twice.
     assert len(swarm.workflows) == 1 and len(swarm.submissions()) == 1
     assert run["segments"][0]["workflow_id"] == "wf_1" and run["status"] == "running"
@@ -1403,6 +1403,7 @@ async def test_checkpoint_off_segments_stop_spending_when_paused(client, owner):
         "feature_set": False,
         "eng_review": False,
         "priority_order": False,
+        "eng_dates": False,
     }
     run = await started(client, auth, checkpoints=off)
     [body] = swarm.submissions()
@@ -1585,7 +1586,12 @@ async def test_a_failed_cancel_on_overrun_keeps_the_workflow_attached(client, ow
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
-    off = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
+    off = {
+        "baseline_confirm": False,
+        "feature_set": False,
+        "priority_order": False,
+        "eng_dates": False,
+    }
     run = await started(client, auth, checkpoints=off)
     await _ceiling(tenant_id, run["id"], "0.5")
     swarm.steps_per_poll = 1
@@ -1716,6 +1722,7 @@ async def test_a_console_merge_with_later_checkpoints_off_completes_from_the_har
         "eng_review": False,
         "priority_order": False,
         "prd_review": False,
+        "eng_dates": False,
     }
     run = await started(client, auth, checkpoints=off)
     await tick(client, auth)
@@ -1728,8 +1735,9 @@ async def test_a_console_merge_with_later_checkpoints_off_completes_from_the_har
     run = await get(client, auth, run["id"])
     assert run["status"] == "succeeded", run
     assert len(swarm.submissions()) == 1 and swarm.answers == []
-    # The Engineering check, off, ran no step: skipped, every other segment from wf_1.
-    ran = [s for s in run["segments"] if s["name"] != "eng_review"]
+    # The Engineering check and dates, off, ran no step: skipped, every other segment
+    # from wf_1.
+    ran = [s for s in run["segments"] if s["name"] not in ("eng_review", "eng_dates")]
     assert all(s["status"] == "succeeded" and s["workflow_id"] == "wf_1" for s in ran)
     assert run["segments"][2]["status"] == "skipped"
     assert run["segments"][4]["draft_import"]["version"] == 1
@@ -2079,7 +2087,12 @@ async def test_a_cancel_confirmed_as_the_cost_crosses_the_ceiling_submits_nothin
     tenant_id, auth = owner
     swarm = on()
     use(swarm)
-    off = {"baseline_confirm": False, "feature_set": False, "priority_order": False}
+    off = {
+        "baseline_confirm": False,
+        "feature_set": False,
+        "priority_order": False,
+        "eng_dates": False,
+    }
     run = await started(client, auth, checkpoints=off)
     await _ceiling(tenant_id, run["id"], "0.5")
     swarm.steps_per_poll = 1
@@ -2279,6 +2292,7 @@ async def test_a_refused_wait_read_on_an_answered_step_is_not_unanswered(client,
         "eng_review": False,
         "priority_order": False,
         "prd_review": False,
+        "eng_dates": False,
     }
     run = await _at_baseline(client, auth, swarm, checkpoints=off)
     cp = pending(run)
