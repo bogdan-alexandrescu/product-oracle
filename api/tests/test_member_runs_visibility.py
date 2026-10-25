@@ -40,7 +40,7 @@ from tests.test_pricing_ritual_visibility import CONTROL, RATIONALE, _prepared
 from tests.update_helpers import import_md
 
 MEMBER_FLOWS = ("ritual_summary", "metrics_variance", "competitive_digest", "request_triage",
-                "code_map")  # fmt: skip
+                "code_map", "discussion_research")  # fmt: skip
 IMPORTED = "team-plan-pricing-import"
 WORD = "per-seat"  # in the pricing memos only
 ROLES = [("owner", True), ("approver", True), ("commenter", False), ("viewer", False)]
