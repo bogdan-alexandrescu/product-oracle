@@ -108,7 +108,7 @@ export default function PlanPage() {
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
-  const [linking, setLinking] = useState<PlanItem | null>(null);
+  const [linking, setLinking] = useState<{ item: PlanItem; term?: string } | null>(null);
   const tracks = useTracks();
   // The tracks sit above the Roadmap: drawn before they answer, its rows would move down
   // under the pointer when they arrive.
@@ -132,9 +132,9 @@ export default function PlanPage() {
   const roadmaps = approvedRoadmaps(data?.items);
   const reload = q.reload;
   const onLink = useCallback(
-    (i: PlanItem) => {
+    (i: PlanItem, term?: string) => {
       setSheet(false);
-      setLinking(i);
+      setLinking({ item: i, term });
     },
     [],
   );
@@ -281,7 +281,7 @@ export default function PlanPage() {
           {inspector}
         </Sheet>
       )}
-      {linking && <LinkIssueDialog item={linking} items={data?.items ?? []} onClose={() => setLinking(null)} onLinked={reload} />}
+      {linking && <LinkIssueDialog item={linking.item} term={linking.term} items={data?.items ?? []} onClose={() => setLinking(null)} onLinked={reload} />}
     </div>
   );
 }

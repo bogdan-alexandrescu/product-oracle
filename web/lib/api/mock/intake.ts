@@ -59,6 +59,8 @@ export interface SubjectLookup {
   document: (id: string) => { slug: string; title: string; latest: number; heading: (key: string) => string | null } | null;
   entity: (id: string) => string | null;
   checkpoint: (id: string) => { run_id: string; kind: string } | null;
+  /** A Plan item's title, by its PRD and key (F2 Ask from the Plan). */
+  roadmapItem?: (documentId: string, key: string) => string | null;
 }
 
 export interface IntakeContext {
@@ -891,6 +893,9 @@ function subjectColumns(db: V2Db, ctx: IntakeContext, subject: Schemas["Question
   if (subject.kind === "checkpoint_item") {
     return ctx.subjects?.checkpoint(subject.checkpoint_id) ? { checkpoint_id: subject.checkpoint_id, item_ref: subject.item_ref } : null;
   }
+  if (subject.kind === "roadmap_item") {
+    return ctx.subjects?.roadmapItem?.(subject.document_id, subject.item_key) != null ? { document_id: subject.document_id, item_ref: subject.item_key } : null;
+  }
   return ctx.subjects?.entity(subject.entity_id) != null ? { entity_id: subject.entity_id } : null;
 }
 
@@ -901,6 +906,10 @@ function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSub
   }
   if (q.entity_id) return { kind: "entity", title: `Baseline · ${ctx.subjects?.entity(q.entity_id) ?? "an entity"}`, href: `/baseline?entity=${q.entity_id}` };
   const doc = q.document_id ? ctx.subjects?.document(q.document_id) : null;
+  if (q.item_ref && doc) {
+    const title = ctx.subjects?.roadmapItem?.(q.document_id!, q.item_ref) ?? q.item_ref;
+    return { kind: "roadmap_item", title: `${doc.title} · ${title}`, href: `/plan?item=${encodeURIComponent(q.item_ref)}` };
+  }
   const intake = q.intake_id ? db.intakes.find((i) => i.id === q.intake_id) : undefined;
   if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: `/intakes/${intake.id}` };
   if (!doc) return { kind: "document_section", title: "A document", href: null };

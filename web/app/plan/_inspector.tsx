@@ -1,14 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
+import { AskTeammate } from "@/components/AskTeammate";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
-import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
+import { DiscussSubject, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
+import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, Sheet, ToGo } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
-import { acceptTrackAlertDate, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
+import { useMe } from "@/lib/me";
+import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { assess, type GoalView, type Point } from "../home/_goals";
@@ -20,17 +24,50 @@ function History({ item }: { item: PlanItem }) {
   );
   if (q.error) return <span className="text-text2">{q.error}</span>;
   if (!q.data) return <span className="text-text2">…</span>;
-  if (q.data.versions.length === 0) return <span className="text-text2">—</span>;
+  // The tracker's own status name is said again by the state line, in Oracle's words.
+  const events = q.data.tracker_events.filter((e) => e.field !== "raw_status");
+  if (q.data.versions.length === 0 && events.length === 0) return <span className="text-text2">—</span>;
   return (
-    <ol className="flex flex-col gap-1 text-[15px]">
-      {q.data.versions.map((v) => (
-        <li key={v.version} className="tnum">
-          PRD v{v.prd_version ?? "?"} {HORIZON_LABEL[v.horizon]}
-          {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : ""}
-        </li>
-      ))}
-    </ol>
+    <div className="flex flex-col gap-2">
+      {q.data.versions.length > 0 && (
+        <ol className="flex flex-col gap-1 text-[15px]">
+          {q.data.versions.map((v) => (
+            <li key={v.version} className="tnum">
+              PRD v{v.prd_version ?? "?"} {HORIZON_LABEL[v.horizon]}
+              {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : ""}
+            </li>
+          ))}
+        </ol>
+      )}
+      {events.length > 0 && (
+        <ol aria-label="Tracker history" className="flex flex-col gap-1 text-[15px]">
+          {events.map((e, n) => (
+            <li key={n} data-testid="plan-tracker-event" className="tnum">
+              {trackerEventLine(e)}
+              <span className="text-text2"> · {formatDay(e.observed_at)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
+}
+
+/** F2 §2: one change an import read from the tracker, in plain words ("ENG-405 moved from Nov 30 to Dec 9"). */
+function trackerEventLine(e: Schemas["ItemTrackerEvent"]): string {
+  const ref = e.external_ref;
+  if (e.field === "target_date") {
+    const from = alertDay(e.before);
+    const to = alertDay(e.after);
+    if (from && to) return `${ref} moved from ${from} to ${to}`;
+    if (to) return `${ref} got the date ${to}`;
+    return from ? `${ref} lost its date (was ${from})` : `${ref} has no date`;
+  }
+  if (e.field === "state") {
+    const word = (v: string | null) => (v && v in RECORD_STATE ? RECORD_STATE[v as keyof typeof RECORD_STATE] : (v ?? "none"));
+    return `${ref}: ${word(e.before)} → ${word(e.after)}`;
+  }
+  return `${ref} estimate: ${e.before ?? "none"} → ${e.after ?? "none"}`;
 }
 
 /**
@@ -108,7 +145,11 @@ const RECORD_STATE: Record<PlanItem["engineering"]["records"][number]["state"], 
 };
 
 /** F7 What the actions need: set only for approvers, owners and engineering leads. */
-export type PlanLinks = { onLink: (item: PlanItem) => void; onChanged: () => Promise<void> | void };
+export type PlanLinks = {
+  /** Opens Link issue for the item; `term` pre-fills its search (an alert's issue, F2 Link to item). */
+  onLink: (item: PlanItem, term?: string) => void;
+  onChanged: () => Promise<void> | void;
+};
 
 /** The item's tracker issues, one per line; Link issue and Unlink for those who may (F7). */
 function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
@@ -170,34 +211,67 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
  * actions the caller may take now (a viewer gets none, so the card has no buttons). Kept
  * alerts say who kept them and why, with Reopen.
  */
-function AlertCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Promise<void> | void }) {
+function AlertCards({
+  item,
+  onChanged,
+  links,
+  track = false,
+}: {
+  item: PlanItem;
+  onChanged?: () => Promise<void> | void;
+  links?: PlanLinks;
+  /** The track's own alerts (no item: an issue no item names, a newer PRD) instead of the item's. */
+  track?: boolean;
+}) {
   const trackId = item.track_id;
   const q = useQuery(`plan|alerts|${trackId ?? "none"}`, () => (trackId ? listTrackAlerts({ state: "all", track_id: trackId }) : Promise.resolve([])));
-  const shown = (q.data ?? []).filter((a) => a.item_key === item.key && (a.state === "open" || a.state === "kept"));
+  const shown = (q.data ?? []).filter((a) => (track ? !a.item_key : a.item_key === item.key) && (a.state === "open" || a.state === "kept"));
   if (!trackId || shown.length === 0) return null;
+  const cards = shown.map((a) => (
+    <AlertCard
+      key={`${a.id}-${a.state}`}
+      a={a}
+      item={item}
+      links={links}
+      onChanged={async () => {
+        await Promise.all([q.reload(), onChanged?.()]);
+      }}
+    />
+  ));
+  if (!track) return <>{cards}</>;
   return (
-    <>
-      {shown.map((a) => (
-        <AlertCard
-          key={`${a.id}-${a.state}`}
-          a={a}
-          item={item}
-          onChanged={async () => {
-            await Promise.all([q.reload(), onChanged?.()]);
-          }}
-        />
-      ))}
-    </>
+    <InspectorSection label="On this track" testId="plan-track-alerts">
+      <div className="flex flex-col gap-2">{cards}</div>
+    </InspectorSection>
   );
 }
 
-function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; onChanged: () => Promise<void> }) {
+/** G1: what Discuss is about: the item (by its PRD version), else the alert's track. */
+function discussionOf(a: TrackAlertOut, item: PlanItem): { subject: DiscussionSubject; key: string; title: string } {
+  const prd = item.prd;
+  if (a.item_key && prd?.id && prd.version != null) {
+    return {
+      subject: { kind: "roadmap_item", subject: { document_id: prd.id, version: prd.version, item_key: item.key }, label: `${prd.title} · ${item.title}` },
+      key: `roadmap_item:${prd.id}:${item.key}`,
+      title: `Discuss ${item.title}`,
+    };
+  }
+  return { subject: { kind: "track", subject: { track_id: a.track_id }, label: a.prd.title }, key: `track:${a.track_id}`, title: `Discuss ${a.prd.title}` };
+}
+
+function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: PlanItem; links?: PlanLinks; onChanged: () => Promise<void> }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keeping, setKeeping] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [discussing, setDiscussing] = useState(false);
   const [note, setNote] = useState("");
   const fieldId = useId();
+  const blocker = typeof a.data.blocker_id === "string" ? a.data.blocker_id : null;
+  const ref = typeof a.data.tracker_ref === "string" ? a.data.tracker_ref : undefined;
+  const prdId = item.prd?.id;
+  const discussion = discussionOf(a, item);
   async function run(call: () => Promise<unknown>, after?: (out: unknown) => void) {
     setBusy(true);
     setError(null);
@@ -288,6 +362,24 @@ function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; o
                 Review
               </Button>
             )}
+            {has("open_blocker") && blocker && (
+              <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(blocker)}`}>Open blocker</LinkButton>
+            )}
+            {has("link") && links && item.prd && (
+              <Button disabled={busy} onClick={() => links.onLink(item, ref)}>
+                Link to item
+              </Button>
+            )}
+            {has("ask") && a.item_key && prdId && (
+              <Button disabled={busy} aria-expanded={asking} onClick={() => setAsking((on) => !on)}>
+                Ask
+              </Button>
+            )}
+            {has("discuss") && (
+              <Button disabled={busy} onClick={() => setDiscussing(true)}>
+                Discuss
+              </Button>
+            )}
             {has("keep") && (
               <Button variant="ghost" disabled={busy} onClick={() => setKeeping(true)}>
                 Keep watching
@@ -301,8 +393,33 @@ function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; o
           </span>
         )
       )}
+      {asking && a.item_key && prdId && (
+        <AskTeammate subject={{ kind: "roadmap_item", document_id: prdId, item_key: item.key }} context={item.title} onClose={() => setAsking(false)} />
+      )}
       {error && <Notice tone="error">{error}</Notice>}
+      <Sheet open={discussing} title={discussion.title} onClose={() => setDiscussing(false)} testId="plan-discuss-sheet">
+        <div className="px-4 py-3">{discussing && <DiscussSubject subject={discussion.subject} subjectKey={discussion.key} />}</div>
+      </Sheet>
     </div>
+  );
+}
+
+/** H1 entry point: who may record a decision records one about this Plan item. */
+function RecordDecision({ item }: { item: PlanItem }) {
+  const { can } = useMe();
+  if (!can("create_decision")) return null;
+  const subject = encodeURIComponent(`roadmap_item:${item.id}`);
+  return (
+    <InspectorSection label="Decisions" testId="plan-decisions">
+      <p className="flex flex-wrap gap-3 text-[15px]">
+        <Link href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`} className="font-medium text-accent-ink hover:underline">
+          Record a decision
+        </Link>
+        <Link href={`/company/decisions?subject=${subject}&class=all`} className="font-medium text-accent-ink hover:underline">
+          Decisions about this item
+        </Link>
+      </p>
+    </InspectorSection>
   );
 }
 
@@ -347,7 +464,7 @@ export function PlanInspector({
     >
       <InspectorSection label="Why it needs you" testId="plan-why">
         <div className="flex flex-col gap-2">
-          <AlertCards item={item} onChanged={onChanged} />
+          <AlertCards item={item} onChanged={onChanged} links={links} />
           {item.reasons.map((r, n) => (
             <div key={n} className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]">
               {r.detail}
@@ -363,6 +480,7 @@ export function PlanInspector({
           )}
         </div>
       </InspectorSection>
+      <AlertCards item={item} onChanged={onChanged} links={links} track />
       <InspectorSection label="Engineering" testId="plan-item-engineering">
         <Engineering item={item} links={links} />
       </InspectorSection>
@@ -389,6 +507,7 @@ export function PlanInspector({
           </ul>
         )}
       </InspectorSection>
+      <RecordDecision item={item} />
       <InspectorSection>
         <div className="flex flex-wrap gap-2">
           {item.prd?.link && <LinkButton href={item.prd.link}>Open in PRD</LinkButton>}

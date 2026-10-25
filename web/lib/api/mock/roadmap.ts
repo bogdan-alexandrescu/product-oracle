@@ -236,7 +236,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
-    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO) seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO);
+    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO)
+      seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO);
     return db;
   });
 }
@@ -1059,7 +1060,7 @@ const CHECKOUT_DRAFT: PlanSeedItem[] = [
  */
 export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: string[], q: URLSearchParams): Response | null {
   if (p[1] !== "plan" || req.method !== "GET") return null;
-  if (p[2] === "items" && p[3] === "history") return planHistory(q);
+  if (p[2] === "items" && p[3] === "history") return planHistory(db, q);
   if (p[2]) return null;
   const scope = q.get("scope") ?? "all";
   if (scope !== "all" && scope !== "approved") return json(422, { detail: "scope: all or approved" });
@@ -1114,10 +1115,18 @@ function dateStatus(
   return { date_status: "unverified", basis_ids: [] };
 }
 
-function planHistory(q: URLSearchParams): Response {
+function planHistory(db: RoadmapDb, q: URLSearchParams): Response {
   const roadmap = q.get("roadmap");
   const key = q.get("item") ?? "";
-  const out = (versions: Schemas["ItemVersion"][]): Response => json(200, { roadmap, item: key, versions, tracker_events: [] });
+  // F2 §2: the tracker history of the item's issues (the Plan's seeded records), oldest first.
+  const refs = new Map(
+    (roadmap === ALERTS_ROADMAP_SLUG ? (ALERTS_APPROVED.find((i) => i.key === key)?.records ?? []) : []).map((r) => [stableUuid(`plan:record:${r.ref}#0`), r.ref]),
+  );
+  const tracker_events: Schemas["ItemTrackerEvent"][] = (db.recordEvents ?? [])
+    .filter((e) => refs.has(e.record_id))
+    .map((e) => ({ record_id: e.record_id, tracker: "linear", external_ref: refs.get(e.record_id)!, observed_at: e.observed_at, field: e.field, before: e.before ?? null, after: e.after ?? null }))
+    .sort((a, b) => a.observed_at.localeCompare(b.observed_at));
+  const out = (versions: Schemas["ItemVersion"][]): Response => json(200, { roadmap, item: key, versions, tracker_events });
   if (roadmap === ALERTS_ROADMAP_SLUG) {
     const a = ALERTS_APPROVED.find((i) => i.key === key);
     if (!a) return out([]);
@@ -1308,6 +1317,9 @@ function planItem(prdSlug: string, key: string): PlanSeedItem | undefined {
   return undefined;
 }
 
+/** The Plan item's title, by its PRD's slug and key (a question about it, C2). */
+export const planItemTitle = (prdSlug: string, key: string): string | null => planItem(prdSlug, key)?.title ?? null;
+
 function issueRecord(i: SyncedIssue, prdId: string, itemKey: string, by: string, at = AT): LinkedRecord {
   return {
     id: mockUuid(), tracker: "github", external_ref: issueRef(i), title: i.title, url: issueUrl(i), track_id: null, item_key: itemKey,
@@ -1396,6 +1408,12 @@ function trackerLinks(
 export const TRACK_ALERTS_SCENARIO = "track-alerts";
 /** "track-alerts" plus two tracker issues not on the roadmap: one track row, three open alerts (#514). */
 export const TRACK_ALERTS_MANY_SCENARIO = "track-alerts-many";
+/**
+ * "track-alerts" plus an open blocker on "Alerts in the team chat" and a synced GitHub issue on
+ * the track that no item names (acme/app#425): Open blocker and Link to item.
+ */
+export const TRACK_ALERTS_ACTIONS_SCENARIO = "track-alerts-actions";
+const ACTIONS_BLOCKER_ID = stableUuid("track-alert/slack-alerts/blocker");
 type StoredAlert = Omit<TrackAlertOut, "prd" | "actions" | "inbox_state">;
 /** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
 const SLIP_RECORD_ID = stableUuid("plan:record:ENG-405#0");
@@ -1405,7 +1423,7 @@ const DONE_DAYS = 30;
  * One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests
  * on Nov 30. `many` adds two open "not on the roadmap" alerts on the same track.
  */
-function seedAlerts(db: RoadmapDb, trackId: string, many = false) {
+function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = false) {
   db.alerts = [
     {
       id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Daily alert digest email",
@@ -1426,14 +1444,34 @@ function seedAlerts(db: RoadmapDb, trackId: string, many = false) {
       });
     }
   }
+  if (actions) {
+    const open = { state: "open" as const, opened_at: "2026-10-20T15:05:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null };
+    db.alerts.push(
+      {
+        id: stableUuid("track-alert/slack-alerts/blocked"), track_id: trackId, item_key: "slack-alerts", item_title: "Alerts in the team chat",
+        kind: "blocked", detail: "Chat app review takes two weeks (open)", data: { blocker_id: ACTIONS_BLOCKER_ID, blocker_status: "open" }, ...open,
+      },
+      {
+        id: stableUuid("track-alert/acme/app#425/unplanned"), track_id: trackId, item_key: null, item_title: null,
+        kind: "unplanned", detail: "acme/app#425 (Usage dashboard charts) is not on the roadmap", data: { tracker_ref: "acme/app#425" }, ...open,
+      },
+    );
+  }
   db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
 }
 
-/** What the caller may do on the alert now: approvers and owners act; viewers and commenters only read. */
+/** Ask fits a slip, an overdue item and work started early (F2 §3); Discuss fits every kind. */
+const ASK_KINDS: StoredAlert["kind"][] = ["date_slip", "overdue", "ahead"];
+
+/**
+ * What the caller may do on the alert now: approvers and owners act; commenters ask and
+ * discuss; everyone may open a blocker.
+ */
 function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
-  if (RANK[ctx.role] < RANK.approver) return [];
-  if (a.state === "kept") return ["reopen"];
-  if (a.state !== "open") return [];
+  if (a.state === "resolved") return [];
+  const talk: TrackAlertAction[] = RANK[ctx.role] >= RANK.commenter ? [...(ASK_KINDS.includes(a.kind) ? (["ask"] as const) : []), "discuss"] : [];
+  if (RANK[ctx.role] < RANK.approver) return [...(a.kind === "blocked" ? (["open_blocker"] as const) : []), ...talk];
+  if (a.state === "kept") return [...talk, "reopen"];
   const first: Record<StoredAlert["kind"], TrackAlertAction[]> = {
     date_slip: ["accept_date", "replan"],
     overdue: ["replan"],
@@ -1444,7 +1482,7 @@ function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
     stale: ["review"],
     prd_moved: ["replan"],
   };
-  return [...first[a.kind], "keep"];
+  return [...first[a.kind], ...talk, "keep"];
 }
 
 function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: string | null): TrackAlertOut {
