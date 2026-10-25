@@ -653,8 +653,13 @@ async def occurrence_out(
     shown, _md, dropped = await pre_read_view(db, occ, ritual, as_member=as_member)
     hidden = await visibility.hidden_decision_ids(db, occ.decision_ids, as_member=as_member)
     summary, state, note = occ.summary, occ.summary_state, occ.summary_note
-    if dropped and summary and not await summaries.member_view(db, occ.summary_run_id):
-        # Written before runs read the member view: its text may name a dropped row.
+    if summary and (
+        (dropped and not await summaries.member_view(db, occ.summary_run_id))
+        or await _names_hidden(db, summary)
+    ):
+        # Written before runs read the member view (its text may name a dropped row), or
+        # naming a decision or a document the reader may not see: one a run read with its
+        # creator's role before #541 part 4, or one made approvers-only since.
         summary, state, note = None, "none", None
     pre = occ.pre_read or {}
     return OccurrenceOut(
@@ -688,6 +693,11 @@ async def _decisions_of(db: AsyncSession, occ: RitualOccurrence, extra=()) -> li
     named = [*occ.decision_ids, *extra]
     where = or_(subject, Decision.id.in_(named)) if named else subject
     return list(await db.scalars(select(Decision).where(where).order_by(Decision.number)))
+
+
+async def _names_hidden(db: AsyncSession, text: str) -> bool:
+    hidden = await visibility.hidden_for_reader(db)
+    return hidden is not None and hidden.names(text)
 
 
 def _as_member(principal: Principal) -> bool:

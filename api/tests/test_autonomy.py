@@ -64,7 +64,7 @@ DEFAULTS = {
     "questions": "recommend",
     "goals": "recommend",
     "priorities": "recommend",
-    "roadmap_watch": "observe",
+    "roadmap_watch": "recommend",
     "decisions": "recommend",
     "rituals": "draft",
     "outcomes": "recommend",
@@ -245,7 +245,7 @@ async def test_get_returns_every_default_and_a_viewer_can_read_it(client, tenant
     assert by["priorities"]["fixed_limits"] == ["within_goal"]
     assert by["priorities"]["limits_summary"] == "within one goal, up to 3 places"
     assert "max_rank_move" in by["priorities"]["limits_schema"]["properties"]
-    assert by["priorities"]["wired"] is False and by["priorities"]["wired_by"] == "C9"
+    assert by["priorities"]["wired"] is True and by["priorities"]["wired_by"] == "C9"
     assert by["priorities"]["wired_by_name"] == "C9 Priorities move and pin"
     assert by["baseline"]["wired"] is True and by["feedback_triage"]["wired"] is True
     assert by["vision"]["limits"] is None and by["vision"]["limits_schema"] is None

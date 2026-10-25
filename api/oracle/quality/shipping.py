@@ -187,8 +187,25 @@ async def propose(db: AsyncSession, row: OutcomeRecord) -> None:
     await db.flush()
     await audit.record(db, audit.ORACLE, "outcome.proposed", "outcome_record", row.id,
                        {"verdict": v})  # fmt: skip
-    if v != "inconclusive" and await autonomy.allows(db, "outcomes", "act"):
+    # H11 ``outcomes`` at Act: only an actual read from data (its fixed limit).
+    if v != "inconclusive" and value is not None and await autonomy.allows(db, "outcomes", "act"):
         await record_verdict(db, row, actor="oracle")
+        if row.owner_id is not None:
+            await autonomy.acted(
+                db,
+                "outcomes",
+                summary=(
+                    f"Recorded {outcomes.VERDICT_WORDS[v]} for {row.title}: the goal read "
+                    f"{row.proposed_assessment['observed']}"
+                ),
+                subject={
+                    "kind": "outcome",
+                    "key": str(row.id),
+                    "href": f"/plan/outcomes?outcome={row.id}",
+                },
+                undo=None,
+                notify=[row.owner_id],
+            )
 
 
 async def record_verdict(db: AsyncSession, row: OutcomeRecord, *, actor: str) -> None:

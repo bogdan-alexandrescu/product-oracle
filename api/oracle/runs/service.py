@@ -4607,7 +4607,14 @@ async def _advance(
     ):
         return True
     checkpoint_id = uuid.uuid4()
-    if knobs.checkpoints.get(sdef.checkpoint, True):
+    # H11 ``priorities`` at Act: Oracle saves an order inside the limits itself.
+    oracle_orders = (
+        order_check is not None
+        and snapshot_id is not None
+        and knobs.checkpoints.get(sdef.checkpoint, True)
+        and await _oracle_saves_order(db, order_check, snapshot_id)
+    )
+    if knobs.checkpoints.get(sdef.checkpoint, True) and not oracle_orders:
         db.add(
             Checkpoint(
                 id=checkpoint_id,
@@ -4629,7 +4636,7 @@ async def _advance(
             kind=checkpoint_kind,
             status="skipped",
             approver_role=sdef.approver_role,
-            note="Turned off when the run started.",
+            note=ORDER_SAVED_BY_ORACLE if oracle_orders else "Turned off when the run started.",
             payload=payload,
             decided_at=_now(),
         )
@@ -4684,8 +4691,14 @@ async def _advance(
                 "priority_snapshot.approved",
                 "priority_snapshot",
                 snapshot.id,
-                {"by": "oracle", "reason": "stop off", "run_id": str(run.id)},
+                {
+                    "by": "oracle",
+                    "reason": "autonomy" if oracle_orders else "stop off",
+                    "run_id": str(run.id),
+                },
             )
+            if oracle_orders:
+                await _tell_order_saved(db, run)
     await _next(db, run, segment, segments)
     return True
 
@@ -4724,6 +4737,41 @@ async def _check_feature_set(
         db, run, segment_seq=segment.seq, attempt=attempt, check=check, known=known
     )
     return check.as_json(), scope.id
+
+
+# The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act).
+ORDER_SAVED_BY_ORACLE = "Oracle saved this order: Order priorities is set to Act within limits."
+
+
+async def _oracle_saves_order(
+    db: AsyncSession, check: dict[str, Any], snapshot_id: uuid.UUID
+) -> bool:
+    """Whether Oracle saves the run's order with no stop: ``priorities`` at Act, nothing
+    blocking, and every move within one goal and the most places an owner allows."""
+    if not await autonomy.allows(db, "priorities", "act"):
+        return False
+    if any(p.get("blocking", True) for p in check.get("problems") or []):
+        return False
+    snapshot = await db.get(PrioritySnapshot, snapshot_id)
+    limits = await autonomy.limits(db, "priorities")
+    if snapshot is None or limits is None:
+        return False
+    most = int(getattr(limits, "max_rank_move", 0))
+    return run_order.outside_limits(list(snapshot.ranking or []), max_rank_move=most) is None
+
+
+async def _tell_order_saved(db: AsyncSession, run: Run) -> None:
+    """The run's starter hears that Oracle saved the order (an "Oracle did" row)."""
+    document = await db.get(Document, run.document_id) if run.document_id else None
+    name = document.title if document else (run.knobs or {}).get("document_slug") or "this run"
+    await autonomy.acted(
+        db,
+        "priorities",
+        summary=f"Saved the priority order of {name}, within one goal and your limit",
+        subject={"kind": "run", "key": str(run.id), "href": f"/runs/{run.id}"},
+        undo=None,
+        notify=[run.created_by] if run.created_by else [],
+    )
 
 
 async def _check_priority_order(
