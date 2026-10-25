@@ -83,7 +83,11 @@ class Readers:
             self.priorities[intake.id] = (
                 None
                 if v.is_author
-                else engine.priorities(intake, await engine.intake_gaps(self.db, intake.id))
+                else engine.priorities(
+                    intake,
+                    await engine.intake_gaps(self.db, intake.id),
+                    await engine.learned(self.db),
+                )
             )
         return self.priorities[intake.id]
 

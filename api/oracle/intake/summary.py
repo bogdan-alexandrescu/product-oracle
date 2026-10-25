@@ -495,7 +495,11 @@ class View:
         self.views = sharing.gap_views(raw, self.reg, self.v)
         self.gaps = [self.views[g.id] for g in raw if g.id in self.views]
         # Anyone but the author reads each question's place among what everyone sees.
-        priorities = None if self.v.is_author else engine.priorities(self.intake, raw)
+        priorities = (
+            None
+            if self.v.is_author
+            else engine.priorities(self.intake, raw, await engine.learned(db))
+        )
         self.questions = [
             q
             for q in (
