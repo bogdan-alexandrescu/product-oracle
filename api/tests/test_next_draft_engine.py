@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import select
 
 from oracle.auth.deps import Principal
@@ -662,3 +663,100 @@ async def test_a_failed_or_cancelled_run_leaves_the_section_changes_staged(clien
     assert (row.status, row.applied_in_version, change.status) == ("staged", None, "staged")
     staged_now = (await client.get(f"{DOC}/staged-changes", headers=auth)).json()
     assert [r["id"] for r in staged_now["next_draft_changes"]] == [staged_row["id"]]
+
+
+# --- #574 review: a change sent to a running agents run is not built twice --------------
+
+
+async def start_r1(client, ids: dict) -> tuple[str, dict]:
+    """R1: the agents' run is sent the whole-draft remark, both accepted text changes and a
+    section change staged from a discussion, and is still Running."""
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    row = await stage_section_change(client, ids)
+    resp = await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["status"] == "running"
+    return resp.json()["id"], row
+
+
+@pytest.mark.parametrize("sent", ["section_change", "feedback", "suggestion"])
+async def test_what_a_running_run_was_sent_is_not_built_again(client, runtime, sent):  # noqa: F811
+    """protects=the R1/R2 scenario of #574's review: while R1 is Running nothing it was
+    sent is offered or counted as staged, and neither a second agents run nor Oracle's
+    own build of the document starts (409 naming R1, with its link); fails_when=a change
+    sent to R1 can be sent to R2 or applied by an Oracle build (made twice);
+    no_claim=what the agents write."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    r1, row = await start_r1(client, ids)
+    named = {
+        "section_change": {"next_draft_change_ids": [row["id"]], "feedback_ids": []},
+        "feedback": {"feedback_ids": [ids["general"]], "suggestion_ids": []},
+        "suggestion": {"suggestion_ids": [ids["goal-trace_s"]], "feedback_ids": []},
+    }[sent]
+
+    # A reload reads the same: what R1 was sent is in R1, not staged.
+    staged = (await client.get(f"{DOC}/staged-changes?include_gone=true", headers=auth)).json()
+    assert (staged["items"], staged["agent_items"], staged["next_draft_changes"]) == ([], [], [])
+    in_run = staged["agents_run"]
+    assert (in_run["id"], in_run["status"]) == (r1, "running")
+    assert in_run["flow_title"] == "Feedback loop"
+    assert sorted(c["suggestion_id"] for c in in_run["items"]) == sorted(
+        [ids["goal-trace_s"], ids["problem_s"]]
+    )
+    assert [a["feedback_id"] for a in in_run["agent_items"]] == [ids["general"]]
+    assert [r["id"] for r in in_run["next_draft_changes"]] == [row["id"]]
+
+    for path in ("next-draft/run", "next-draft"):
+        resp = await client.post(f"{DOC}/{path}", json=named, headers=auth)
+        assert resp.status_code == 409, (path, resp.text)
+        assert r1 in resp.json()["detail"] and f"/runs/{r1}" in resp.json()["detail"]
+    assert len(runtime.submitted) == 1, "R2 never reaches the agents"
+    async with tenant_session(ids["tenant_id"]) as s:
+        assert await s.scalar(select(LlmJob).where(LlmJob.kind == "refinement_batch")) is None
+
+
+async def test_a_run_that_ends_without_a_draft_gives_back_what_it_was_sent(client, runtime):  # noqa: F811
+    """protects=once R1 is cancelled, what it was sent is staged again and a new build may
+    take it; fails_when=the items stay held by an ended run, or the next build is refused;
+    no_claim=a failed run (it ends the same way: FINAL)."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    r1, row = await start_r1(client, ids)
+    cancelled = await client.post(f"/v1/runs/{r1}/cancel", headers=auth)
+    assert cancelled.json()["status"] == "cancelled"
+
+    staged = (await client.get(f"{DOC}/staged-changes", headers=auth)).json()
+    assert staged["agents_run"] is None
+    assert [r["id"] for r in staged["next_draft_changes"]] == [row["id"]]
+    assert [a["feedback_id"] for a in staged["agent_items"]] == [ids["general"]]
+    assert len(staged["items"]) == 2
+    resp = await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)
+    assert resp.status_code == 201, resp.text
+
+
+async def test_a_later_step_is_sent_only_the_section_changes_still_meant_for_it(client, runtime):  # noqa: F811
+    """protects=_loop_section_changes re-sends a row applied in this run's own draft (a
+    later attempt keeps it) but never one another build applied; fails_when=a row applied
+    in another version is sent to this run's later steps; no_claim=the prompt's wording."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    row = await stage_section_change(client, ids)
+    markdown = draft("prd_v1.md").replace(
+        "| Checkout completion | 52% | 60% |", "| Checkout completion | 52% | 60% by March |"
+    )
+    runtime.script["next_draft"] = [Outcome(artifacts={"prd.md": markdown})]
+    run_id = (await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)).json()["id"]
+    await tick(client, auth)
+    assert (await get(client, auth, run_id))["segments"][0]["draft_import"]["version"] == 2
+
+    async with tenant_session(ids["tenant_id"]) as s:
+        run = await s.get(Run, uuid.UUID(run_id))
+        mine = await runs_service._loop_section_changes(s, run)
+        assert [c["id"] for c in mine] == [row["id"]], "applied in this run's draft: kept"
+        r = await s.get(NextDraftChange, uuid.UUID(row["id"]))
+        r.applied_in_version = 7  # as if another build had applied it
+        await s.commit()
+        assert await runs_service._loop_section_changes(s, run) == []
