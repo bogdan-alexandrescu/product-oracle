@@ -958,11 +958,16 @@ async def decision_options(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
     options = options[: max(0, 6 - len(kept))]
     decision.options = kept + options
     await s.flush()
+    # H11: at "Act within limits" Oracle decides on the option it just recommended.
+    from oracle.decisions.service import decide_within_limits
+
+    decided = await decide_within_limits(s, decision)
     return {
         "decision_id": str(decision.id),
         "options": [o["key"] for o in options],
         "recommended": next((o["key"] for o in options if o["recommended"]), None),
         "evidence_given": len(given),
+        "decided_by_oracle": decided,
     }
 
 

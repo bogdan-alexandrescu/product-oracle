@@ -57,9 +57,7 @@ async def set_level(tenant_id: uuid.UUID, key: str, level: str, **limits) -> Non
 
 async def actions_of(tenant_id: uuid.UUID, key: str) -> list[OracleAction]:
     async with tenant_session(tenant_id) as s:
-        return list(
-            await s.scalars(select(OracleAction).where(OracleAction.responsibility == key))
-        )
+        return list(await s.scalars(select(OracleAction).where(OracleAction.responsibility == key)))
 
 
 # --- the registry --------------------------------------------------------------------------
@@ -204,9 +202,7 @@ async def test_oracle_decides_a_reversible_call_after_preparing_options(client, 
     got = (await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))).json()
     assert got["status"] == "decided" and got["chosen_option"] == "caps-first"
     assert got["decided_actor"] == "oracle" and got["decided_by"] is None
-    assert got["rationale"].startswith(
-        "Decided by Oracle within limits set by owner@example.com."
-    )
+    assert got["rationale"].startswith("Decided by Oracle within limits set by owner@example.com.")
     assert got["expected_outcome"] == "Caps read plan thresholds only"
     (did,) = await actions_of(ctx.tenant_id, "decisions")
     assert did.summary == f"Decided D-{d['number']}: Caps first"
@@ -214,12 +210,10 @@ async def test_oracle_decides_a_reversible_call_after_preparing_options(client, 
     assert did.subject["href"] == f"/company/decisions?d={d['number']}"
     assert did.undo == {
         "method": "POST",
-        "path": f"/v1/decisions/{d['id']}/review",
+        "path": f"/v1/decisions/{d['id']}/reviews",
         "body": {"verdict": "reversed", "note": "Reversed Oracle's decision from the Inbox"},
     }
-    resp = await client.post(
-        f"/v1/oracle-actions/{did.id}/undo", headers=ctx.as_("approver")
-    )
+    resp = await client.post(f"/v1/oracle-actions/{did.id}/undo", headers=ctx.as_("approver"))
     assert resp.status_code == 200, resp.text
     got = (await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))).json()
     assert got["status"] == "reversed"
@@ -234,7 +228,7 @@ async def test_oracle_decides_a_reversible_call_after_preparing_options(client, 
         ("act", {}, {"options": two_options()}, False),
         ("act", {"origins": ["oracle"]}, {"options": recommended()}, False),
         ("act", {}, {"options": recommended("About $120 of contractor time")}, False),
-        ("act", {"max_cost_usd": 200}, {"options": recommended("About $120 of time")}, True),
+        ("act", {"max_cost_usd": 50}, {"options": recommended("About $40 of time")}, True),
     ],
     ids=["act", "recommend", "hard-to-reverse", "none-recommended", "origin", "cost", "in-cost"],
 )

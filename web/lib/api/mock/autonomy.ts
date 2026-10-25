@@ -318,7 +318,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "within_goal"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "C9",
     "wired_by_name": "C9 Priorities move and pin",
     "limits_default": {
@@ -331,7 +331,7 @@ const REGISTRY: RegistryRow[] = [
     "title": "Watch the roadmap",
     "group": "planning",
     "group_title": "Planning",
-    "default": "observe",
+    "default": "recommend",
     "ceiling": "recommend",
     "allowed": [
       "observe",
@@ -346,7 +346,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "date commitments",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "F2",
     "wired_by_name": "F2 Track health, drift and date slips",
     "limits_default": null
@@ -407,7 +407,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "reversible_only"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H1",
     "wired_by_name": "H1 Decision log",
     "limits_default": {
@@ -498,7 +498,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "only_parsed_actuals"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H3",
     "wired_by_name": "H3 Predicted versus actual",
     "limits_default": {

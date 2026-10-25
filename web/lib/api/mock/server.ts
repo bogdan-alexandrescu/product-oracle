@@ -2200,6 +2200,7 @@ function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): 
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
     drafts: () => draftDb(db).rows,
+    roadmapWatch: () => levelFor((db.autonomy ??= emptyAutonomy()), "roadmap_watch"),
   };
 }
 
