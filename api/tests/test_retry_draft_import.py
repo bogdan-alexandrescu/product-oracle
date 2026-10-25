@@ -461,3 +461,95 @@ async def test_another_segments_import_keeps_the_retry_refused_in_plain_words(
     assert "nothing to retry" in detail and "Start a new run" in detail
     # The segment that imported reads no refusal.
     assert seen["segments"][2]["draft_retry_refused"] is None
+
+
+# --- #583 review: the No document row clears itself, and old runs do not flood the Inbox --
+
+
+async def _finished_without_document(client, auth, tenant_id, runtime, monkeypatch, at=None):
+    """A run approved past its refused draft, finished ``at`` (now by default)."""
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+    if at is not None:
+        async with tenant_session(tenant_id) as s:
+            (await s.get(Run, uuid.UUID(run["id"]))).finished_at = at
+            await s.commit()
+    return run
+
+
+def _rows(inbox: dict, run) -> list[dict]:
+    return [r for r in inbox["no_documents"] if r["id"] == run["id"]]
+
+
+async def test_the_no_document_row_clears_when_a_later_run_imports_the_document(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    base = (await _inbox(client, auth))["total"]
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    inbox = await _inbox(client, auth)
+    assert len(_rows(inbox, run)) == 1 and inbox["total"] == base + 1
+
+    # The owner follows the advice: a new run of the same document imports v1.
+    runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": ORACLE_PRD})]
+    later = await started(client, auth, document="example-prd", checkpoints=OFF)
+    for _ in range(4):
+        await tick(client, auth)
+    later = await get(client, auth, later["id"])
+    assert later["segments"][4]["draft_import"]["version"] == 1
+
+    inbox = await _inbox(client, auth)
+    assert _rows(inbox, run) == []
+    # The later run waits at its own review: that is the one item left.
+    assert inbox["total"] == base + 1
+    assert [c["run_id"] for c in inbox["checkpoints"]] == [later["id"]]
+
+
+async def test_the_no_document_row_clears_on_a_successful_retry(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    base = (await _inbox(client, auth))["total"]
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    inbox = await _inbox(client, auth)
+    assert len(_rows(inbox, run)) == 1
+    assert inbox["total"] == base + len(inbox["no_documents"]) == base + 1
+
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 200, resp.text
+    inbox = await _inbox(client, auth)
+    assert inbox["no_documents"] == [] and inbox["total"] == base
+
+
+async def test_a_run_that_finished_before_the_row_shipped_gets_none(
+    client, owner, runtime, monkeypatch
+):
+    from oracle.runs.service import NO_DOCUMENT_SINCE
+
+    tenant_id, auth = owner
+    base = (await _inbox(client, auth))["total"]
+    old = await _finished_without_document(
+        client, auth, tenant_id, runtime, monkeypatch, at=datetime(2026, 10, 1, tzinfo=UTC)
+    )
+    assert datetime(2026, 10, 1, tzinfo=UTC) < NO_DOCUMENT_SINCE
+    inbox = await _inbox(client, auth)
+    assert _rows(inbox, old) == [] and inbox["total"] == base
+    # Its run page still offers Retry import: only the Inbox leaves it out.
+    assert (await get(client, auth, old["id"]))["segments"][4]["can_retry_draft_import"] is True
+
+
+async def test_a_retry_by_oracle_or_the_system_reads_so(client, owner, runtime, monkeypatch):
+    """Not "a former member": Oracle's or the system's retry names them."""
+    tenant_id, auth = owner
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 200, resp.text
+    for actor, who in (("oracle", "Oracle"), ("system", "the system")):
+        async with tenant_session(tenant_id) as s:
+            (event,) = await s.scalars(
+                select(AuditEvent).where(AuditEvent.action == "run.draft_import_retried")
+            )
+            event.actor = actor
+            await s.commit()
+        (v1,) = (await client.get("/v1/documents/example-prd/versions", headers=auth)).json()
+        assert v1["imported_again"].startswith(f"imported again by {who} on ")
