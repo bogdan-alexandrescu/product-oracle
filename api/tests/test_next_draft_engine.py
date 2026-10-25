@@ -16,6 +16,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
+from oracle.auth.deps import Principal
+from oracle.discussions import agent_view
+from oracle.discussions.models import DiscussionChange
 from oracle.docs import parser
 from oracle.docs.models import Document
 from oracle.jobs.models import LlmJob, LlmSuggestion
@@ -24,9 +27,13 @@ from oracle.jobs.schemas import AgentItem, StagedChange
 from oracle.review.models import FeedbackItem
 from oracle.runs import flows
 from oracle.runs import service as runs_service
+from oracle.runs.models import Run
+from oracle.staging import service as staging
+from oracle.staging.models import NextDraftChange
 from oracle.swarm.fake import Outcome
 from oracle.tenancy import tenant_session
 from tests.fixtures import draft, import_draft, seed_auth
+from tests.review_v2_helpers import person
 from tests.test_runs import as_user, get, runtime, tick  # noqa: F401
 
 SLUG = "checkout-redesign"
@@ -498,3 +505,160 @@ async def test_the_new_run_dialog_offers_only_its_flows_and_points_at_the_others
     assert (await client.post(f"/v1/runs/{run_id}/start", headers=auth)).status_code == 200
     prompt = runtime.submitted[0].steps[-1].prompt
     assert "Add a fraud risk." in prompt and REMARK in prompt
+
+
+# --- G4 section changes staged from discussions go to the agents too ----------------------
+
+METRIC_RULE = "Name the metric's target for the first quarter."
+METRIC_REASON = "The review asked how success is measured."
+
+
+async def stage_section_change(client, ids: dict, instruction: str = METRIC_RULE) -> dict:
+    """A discussion on the metrics section and its section_edit, staged by an approver in
+    it for the next draft (as G3's Stage does). Returns the row's id and its change's."""
+    approver = await person(ids["tenant_id"], "approver", "abe")
+    async with tenant_session(ids["tenant_id"]) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == SLUG))
+    resp = await client.post(
+        "/v1/discussions",
+        json={"subject_kind": "section", "title": "Metric targets",
+              "subject": {"document_id": str(doc.id), "version": 1, "section_key": "metrics"}},
+        headers=approver.headers,
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    who = Principal(
+        tenant_id=ids["tenant_id"], kind="user", role="approver", user_id=approver.user_id
+    )
+    async with tenant_session(ids["tenant_id"]) as s:
+        change = DiscussionChange(
+            discussion_id=uuid.UUID(resp.json()["id"]),
+            kind="section_edit",
+            target={"document_id": str(doc.id), "section_key": "metrics"},
+            payload={"section_key": "metrics", "instruction": instruction},
+            proposed_by_kind="oracle",
+        )
+        s.add(change)
+        await s.commit()
+        change_id = change.id
+        ref = await staging.stage_discussion_change(s, who, change, METRIC_REASON, None)
+    assert ref["kind"] == "next_draft_change"
+    return {"id": ref["id"], "change_id": change_id}
+
+
+async def row_and_change(tenant_id, staged_row: dict) -> tuple[NextDraftChange, DiscussionChange]:
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(NextDraftChange, uuid.UUID(staged_row["id"]))
+        change = await s.get(DiscussionChange, staged_row["change_id"])
+        return row, change
+
+
+async def test_the_agents_run_is_sent_the_staged_section_changes(client, runtime):  # noqa: F811
+    """protects=a discussion's staged section change reaches the agents' run with its
+    instruction and reason when Build next draft picks the agents (G4 rows join Text
+    changes, D12); fails_when=the run's knobs or its prompt leave the row out, or an
+    unticked row reaches the agents (in the prompt or the run's discussions view);
+    no_claim=what the agents write (SwarmCloud is not run)."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    ticked = await stage_section_change(client, ids)
+    unticked = await stage_section_change(client, ids, "Drop the second metric.")
+
+    p = await plan(client, auth, next_draft_change_ids=[ticked["id"]])
+    assert (p["engine"], p["text_changes"], p["agent_items"]) == ("agents", 3, 1)
+
+    resp = await client.post(
+        f"{DOC}/next-draft/run", json={"next_draft_change_ids": [ticked["id"]]}, headers=auth
+    )
+
+    assert resp.status_code == 201, resp.text
+    run_id = resp.json()["id"]
+    async with tenant_session(ids["tenant_id"]) as s:
+        run = await s.get(Run, uuid.UUID(run_id))
+        assert run.knobs["next_draft_change_ids"] == [ticked["id"]]
+        view = await agent_view.build(s, run, None)
+    prompt = runtime.submitted[0].steps[-1].prompt
+    assert "Section changes staged from discussions for this draft:" in prompt
+    assert (f"- {ticked['id']} [metrics]: {METRIC_RULE}\n  Reason: {METRIC_REASON}") in prompt
+    assert "Drop the second metric." not in prompt
+    sent = [c["id"] for d in view for c in d["staged_changes"]]
+    assert sent == [ticked["id"]], "only the ticked row is the agents' to apply"
+    row, change = await row_and_change(ids["tenant_id"], unticked)
+    assert (row.status, change.status) == ("staged", "staged")
+
+
+async def test_by_default_the_run_takes_every_staged_section_change(client, runtime):  # noqa: F811
+    """protects=Build next draft's default (every staged row whose section exists) reaches
+    the agents as it reaches Oracle's build; fails_when=a default run leaves the rows out;
+    no_claim=the sheet's ticks (the web spec drives them)."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    staged_row = await stage_section_change(client, ids)
+
+    resp = await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)
+
+    assert resp.status_code == 201, resp.text
+    async with tenant_session(ids["tenant_id"]) as s:
+        run = await s.get(Run, uuid.UUID(resp.json()["id"]))
+        assert run.knobs["next_draft_change_ids"] == [staged_row["id"]]
+    assert f"- {staged_row['id']} [metrics]: {METRIC_RULE}" in runtime.submitted[0].steps[-1].prompt
+
+
+async def test_the_runs_draft_applies_the_section_changes_it_was_sent(client, runtime):  # noqa: F811
+    """protects=on a feedback loop's import the staged section changes it was sent are
+    applied in that version and their discussion changes done, as Oracle's own apply
+    records them (G5 §4 left this to D12); fails_when=the rows stay staged (the next
+    draft would build them again) or a row the run was not sent is applied;
+    no_claim=whether the agents made the change well."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    sent = await stage_section_change(client, ids)
+    kept = await stage_section_change(client, ids, "Drop the second metric.")
+    markdown = draft("prd_v1.md").replace(
+        "| Checkout completion | 52% | 60% |", "| Checkout completion | 52% | 60% by March |"
+    )
+    runtime.script["next_draft"] = [Outcome(artifacts={"prd.md": markdown})]
+
+    run = (
+        await client.post(
+            f"{DOC}/next-draft/run", json={"next_draft_change_ids": [sent["id"]]}, headers=auth
+        )
+    ).json()
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+
+    assert run["segments"][0]["draft_import"]["version"] == 2
+    row, change = await row_and_change(ids["tenant_id"], sent)
+    assert (row.status, row.applied_in_version) == ("applied", 2)
+    assert (change.status, change.decision_note) == ("done", "Applied in draft 2")
+    row, change = await row_and_change(ids["tenant_id"], kept)
+    assert (row.status, row.applied_in_version, change.status) == ("staged", None, "staged")
+    staged_now = (await client.get(f"{DOC}/staged-changes", headers=auth)).json()
+    assert [r["id"] for r in staged_now["next_draft_changes"]] == [kept["id"]]
+
+
+async def test_a_failed_or_cancelled_run_leaves_the_section_changes_staged(client, runtime):  # noqa: F811
+    """protects=a run that writes no draft gives its section changes back to the next
+    draft; fails_when=a failed or cancelled run marks them applied or drops them;
+    no_claim=retrying the run."""
+    ids = await setup(client)
+    auth = ids["auth"]
+    assert (await stage(client, auth, ids["general"])).status_code == 200
+    staged_row = await stage_section_change(client, ids)
+    runtime.script["next_draft"] = [Outcome(state="failed", error="agent crashed")]
+
+    failed = (await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)).json()
+    await tick(client, auth)
+    assert (await get(client, auth, failed["id"]))["status"] == "failed"
+    row, change = await row_and_change(ids["tenant_id"], staged_row)
+    assert (row.status, row.applied_in_version, change.status) == ("staged", None, "staged")
+
+    cancelled = (await client.post(f"{DOC}/next-draft/run", json={}, headers=auth)).json()
+    resp = await client.post(f"/v1/runs/{cancelled['id']}/cancel", headers=auth)
+    assert resp.json()["status"] == "cancelled"
+    row, change = await row_and_change(ids["tenant_id"], staged_row)
+    assert (row.status, row.applied_in_version, change.status) == ("staged", None, "staged")
+    staged_now = (await client.get(f"{DOC}/staged-changes", headers=auth)).json()
+    assert [r["id"] for r in staged_now["next_draft_changes"]] == [staged_row["id"]]
