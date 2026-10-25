@@ -175,3 +175,52 @@ async def test_a_hidden_memo_s_change_events_follow_the_memo(client, ctx, who, s
     if not sees:
         for resp in (listed, by_doc):
             assert str(doc_id) not in resp.text and slug not in resp.text
+
+
+@pytest.mark.parametrize(("who", "sees"), ROLES)
+async def test_an_id_inside_a_string_hides_the_event(client, ctx, who, sees):
+    """protects=a change event whose record names the hidden decision entity inside a
+    longer string ("entity:<id>", as a trace step does) is absent for a commenter and a
+    viewer like one holding the bare id; fails_when=only a whole-string match hides it;
+    no_claim=which writers record such strings."""
+    entity_id = await _decided(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        event = ChangeEvent(
+            subject_kind="entity", subject_id=None, cause="entity_updated", actor="system",
+            data={"trace": [f"entity:{entity_id}", "goal:team-plan-revenue"]}, handled_by=[],
+        )  # fmt: skip
+        s.add(event)
+        await s.commit()
+        event_id = str(event.id)
+    me = ctx.as_(who)
+    listed = await client.get("/v1/change-events", headers=me)
+    one = await client.get(f"/v1/change-events/{event_id}", headers=me)
+    assert (event_id in listed.text) is sees
+    assert one.status_code == (200 if sees else 404)
+    if not sees:
+        assert entity_id not in listed.text
+
+
+@pytest.mark.parametrize(("who", "sees"), ROLES)
+async def test_a_deleted_decision_entity_s_event_stays_hidden(client, ctx, who, sees):
+    """protects=after an owner deletes a hidden pricing decision's baseline entity (the
+    decision's entity_id goes null), its entity_deleted event, whose record carries the
+    entity's key and "Price: ..." title, is still absent for a commenter and a viewer;
+    fails_when=the event shows once the link is gone; no_claim=other causes."""
+    entity_id = await _decided(client, ctx)
+    resp = await client.delete(f"/v1/baseline/entities/{entity_id}", headers=ctx.as_("owner"))
+    assert resp.status_code == 204, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        (event_id,) = [
+            str(i)
+            for i in await s.scalars(
+                select(ChangeEvent.id).where(ChangeEvent.cause == "entity_deleted")
+            )
+        ]
+    me = ctx.as_(who)
+    listed = await client.get("/v1/change-events", headers=me)
+    one = await client.get(f"/v1/change-events/{event_id}", headers=me)
+    assert (event_id in listed.text) is sees
+    assert one.status_code == (200 if sees else 404)
+    if not sees:
+        assert not _leaks(listed.text, entity_id) and "Price:" not in listed.text
