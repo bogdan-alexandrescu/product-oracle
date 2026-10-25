@@ -3180,7 +3180,7 @@ function approveEngCheck(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged:
 
 // ---------------------------------------------------------------- F4 lane B Engineering dates
 
-type DateBasis = { kind: "estimate" | "capacity_plan" | "commitment"; reference: string; supports_date: string };
+type DateBasis = { kind: "estimate" | "capacity" | "commitment"; reference: string; supports_date: string };
 type DateItem = {
   key: string;
   title: string;
@@ -3193,7 +3193,7 @@ type DateItem = {
 };
 type DatesSpec = { items: DateItem[]; others: { key: string; title: string; horizon: "next" | "later" }[] };
 type DatesCheck = DatesSpec & { prd: { document: string; version: number } | null; problems: { code: string; message: string }[] };
-const BASIS_KINDS = ["estimate", "capacity_plan", "commitment"];
+const BASIS_KINDS = ["estimate", "capacity", "commitment"];
 
 /** The local runtime's dates: the draft's Now items (LOCAL_FEATURE_SET's), one dated. */
 const LOCAL_DATES: DatesSpec = {
@@ -3209,7 +3209,7 @@ const SEEDED_DATES: DatesSpec = {
   items: [
     { key: "shipping-step", title: "Shipping step", section: "shipping", size: "m", proposed: { kind: "estimate", reference: "est-shipping-step", supports_date: "2026-11-30" }, confidence: "medium", assumptions: ["The carrier rates API stays as it is"], no_date_reason: null },
     { key: "price-early", title: "Show the price early", section: "pricing", size: "s", proposed: { kind: "estimate", reference: "est-price-early", supports_date: "2026-11-20" }, confidence: "high", assumptions: [], no_date_reason: null },
-    { key: "saved-addresses", title: "Saved addresses", section: "addresses", size: "l", proposed: { kind: "capacity_plan", reference: "cap-q4-checkout", supports_date: "2026-12-11" }, confidence: "low", assumptions: ["Two engineers from Nov 16", "No change to the address lookup"], no_date_reason: null },
+    { key: "saved-addresses", title: "Saved addresses", section: "addresses", size: "l", proposed: { kind: "capacity", reference: "cap-q4-checkout", supports_date: "2026-12-11" }, confidence: "low", assumptions: ["Two engineers from Nov 16", "No change to the address lookup"], no_date_reason: null },
     { key: "cart-review", title: "Cart review step", section: null, size: "m", proposed: null, confidence: null, assumptions: [], no_date_reason: "Waits on the provider's sandbox" },
   ],
   others: [

@@ -21,7 +21,7 @@ type Decision = { word: "Accepted" | "Changed" | "No date"; basis: Basis | null;
 
 const BASIS_KINDS: { value: Basis["kind"]; label: string }[] = [
   { value: "estimate", label: "Estimate" },
-  { value: "capacity_plan", label: "Capacity plan" },
+  { value: "capacity", label: "Capacity plan" },
   { value: "commitment", label: "Commitment" },
 ];
 const CONFIDENCE_WORDS = { low: "Low", medium: "Medium", high: "High" } as const;

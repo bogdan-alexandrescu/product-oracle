@@ -30661,6 +30661,7 @@ export interface components {
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
+            waiting_for?: components["schemas"]["WaitingFor"] | null;
             /** Snapshot Id */
             snapshot_id?: string | null;
             /** Snapshot As Of */
@@ -30696,12 +30697,6 @@ export interface components {
              * @default 0
              */
             open_proposals: number;
-            /** @description F4 lane B: what the run waits for before its next segment (the PRD version's draft roadmap items), or null. */
-            waiting_for?: {
-                /** @enum {string} */
-                kind: "draft_items";
-                version: number;
-            } | null;
         };
         /**
          * RunPatch
@@ -36598,6 +36593,20 @@ export interface components {
             ends_at?: string | null;
             /** Seconds Left */
             seconds_left?: number | null;
+        };
+        /**
+         * WaitingFor
+         * @description F4 lane B: what the run waits for between two segments, outside any checkpoint (the
+         *     approved PRD version's draft roadmap items, before the Engineering dates).
+         */
+        WaitingFor: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "draft_items";
+            /** Version */
+            version: number;
         };
         /** WaitingOn */
         WaitingOn: {
