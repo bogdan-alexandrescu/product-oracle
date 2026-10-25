@@ -340,7 +340,8 @@ def _hits(text: str, ref: date) -> list[Hit]:
 
 def dates_in(text: str, ref: date | None = None) -> list[tuple[str, date, int]]:
     """Every day-precision date in plain ``text``: (as written, first day, start).
-    ``ref``: the day year-less dates read against (the company's day by default)."""
+    ``ref``: the day year-less dates read against; Pacific's day (the default Company
+    time zone) when none is given, so callers with a company pass its day."""
     rendered = _Rendered()
     rendered.add_plain(text, 0)
     found = rendered.find(ref or company_time.today())
@@ -787,8 +788,8 @@ def find(
     sections: Sequence[_SectionLike], *, title: str | None = None, ref: date | None = None
 ) -> list[Found]:
     """Every date a reader sees in the roadmap (title, headings, bodies), in document
-    order. ``ref``: the version's day (:func:`version_day`), for year-less dates; the
-    company's day by default."""
+    order. ``ref``: the version's day (:func:`version_day`), for year-less dates;
+    Pacific's day (the default Company time zone) when none is given."""
     ref = ref or company_time.today()
     out: list[Found] = []
     if title:
