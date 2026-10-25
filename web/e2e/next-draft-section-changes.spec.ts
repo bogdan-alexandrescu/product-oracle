@@ -145,7 +145,7 @@ test("cancelling the agents' run leaves the section change staged for the next d
   await buildWithAgents(page);
 
   await page.getByTestId("run-cancel").filter({ visible: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Cancel run" }).click();
+  await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Cancelled");
 
   await page.goto(DOC);

@@ -296,7 +296,7 @@ export function runEstimate(ctx: LlmContext, depth: string): number {
 
 export type StartRun = (
   doc: Doc,
-  input: { feedback_ids: string[]; suggestion_ids: string[]; depth: string; estimate_usd: number },
+  input: { feedback_ids: string[]; suggestion_ids: string[]; next_draft_change_ids: string[]; depth: string; estimate_usd: number },
 ) => Promise<Response>;
 
 /** POST /v1/feedback/{id}/stage-for-agents (and DELETE): D12 staging for the agents; null for other paths. */
@@ -482,6 +482,8 @@ export async function nextDraftRoute(
     return hooks.startRun(doc, {
       feedback_ids: c.agents.map((a) => a.feedback_id),
       suggestion_ids: c.texts.map((t) => t.suggestion_id),
+      // G4: the discussions' section changes go with them, for the agents to make.
+      next_draft_change_ids: c.rows.map((r) => r.id),
       depth,
       estimate_usd: runEstimate(ctx, depth),
     });

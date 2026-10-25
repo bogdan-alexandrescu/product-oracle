@@ -1468,7 +1468,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       const run = db.runs.runs.find((r) => r.id === id)! as SentRun;
       run.estimate_usd = input.estimate_usd;
       run.segments[0].estimate_usd = input.estimate_usd;
-      run.sent = { feedback_ids: input.feedback_ids, suggestion_ids: input.suggestion_ids };
+      run.sent = { feedback_ids: input.feedback_ids, suggestion_ids: input.suggestion_ids, next_draft_change_ids: input.next_draft_change_ids };
       const started = (await call(`/v1/runs/${id}/start`))!;
       return new Response(started.body, { status: started.ok ? 201 : started.status, headers: started.headers });
     },
@@ -1476,7 +1476,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
 }
 
 /** D12: a feedback-loop run started from Build next draft, with the items it was sent. */
-type SentRun = Schemas["RunOut"] & { sent?: { feedback_ids: string[]; suggestion_ids: string[] } };
+type SentRun = Schemas["RunOut"] & { sent?: { feedback_ids: string[]; suggestion_ids: string[]; next_draft_change_ids?: string[] } };
 
 /**
  * C1e: the Inbox's feedback by state for approvers (new since my last visit, open, staged,
@@ -1966,6 +1966,10 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       }
       for (const f of db.feedback) {
         if (sent?.feedback_ids.includes(f.id)) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
+      }
+      // G4: the discussions' section changes it was sent are applied in this version too.
+      for (const r of db.llm?.next_draft_changes ?? []) {
+        if (sent?.next_draft_change_ids?.includes(r.id) && r.status === "staged") Object.assign(r, { status: "applied", applied_in_version: v.number });
       }
       touch(db, doc.id);
       return {
