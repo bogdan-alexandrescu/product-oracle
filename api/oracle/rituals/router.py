@@ -176,7 +176,8 @@ async def get_ritual_occurrence_pre_read(
     except service.RitualError as e:
         raise _call(e) from e
     return PlainTextResponse(
-        service.pre_read_markdown(occ, ritual), media_type="text/markdown; charset=utf-8"
+        await service.pre_read_markdown(db, principal, occ, ritual),
+        media_type="text/markdown; charset=utf-8",
     )
 
 

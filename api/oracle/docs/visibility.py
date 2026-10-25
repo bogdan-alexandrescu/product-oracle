@@ -20,7 +20,21 @@ The rule lives here only:
 A read that reaches a document's rows without selecting :class:`Document` (a comment by
 id, an Inbox row) checks :func:`hidden_document_ids` or joins the document. The decision
 an approval captured ("Publish <document> v<n>", H1) follows its document the same way,
-as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``).
+as does a pricing memo's decision (H9, ``source_kind = 'pricing_memo_version'``), and so
+does a decided decision's baseline ``decision`` entity (``Decision.entity_id``): absent
+from the entity list, the graph, an entity read, its revisions, evidence, proposals and
+conflicts, every edge to or from it, and every change event about it or whose record
+names it (its ``affects`` edge, a batch, a trace that reached it), whatever reads them
+(the web, MCP, a run). A change event of a hidden document (``document_id``) is hidden
+with it.
+
+A ritual pre-read is built with Oracle's view and stored once; each read drops the rows
+of hidden decisions and documents (:func:`hidden_decision_ids`, :func:`hidden_document_ids`,
+oracle.rituals.blocks.for_reader), and a run reads it as a commenter would, since what it
+writes from it is shown to every member.
+
+A new document's visibility comes from its kind (:func:`default_for`), on every path
+that creates one (a template start, an import).
 """
 
 import uuid
@@ -29,6 +43,7 @@ from typing import Any
 
 from sqlalchemy import (
     ColumnElement,
+    Select,
     Text,
     and_,
     cast,
@@ -55,6 +70,13 @@ APPROVERS = "approvers"
 MIN_ROLE = "approver"
 PRINCIPAL_KEY = "principal"
 WORDS = {COMPANY: "Company", APPROVERS: "Owners and approvers"}
+# H8: an update (H9: a pricing memo) is for owners and approvers until an owner opens it.
+APPROVERS_KINDS = ("update", "pricing")
+
+
+def default_for(kind: str) -> str:
+    """A new document's visibility, from its kind."""
+    return APPROVERS if kind in APPROVERS_KINDS else COMPANY
 
 
 def restricted(principal: Any) -> bool:
@@ -84,11 +106,15 @@ def principal_of(session: AsyncSession | Session) -> Any:
 
 
 async def hidden_document_ids(
-    session: AsyncSession, ids: Iterable[uuid.UUID | None] | None = None
+    session: AsyncSession,
+    ids: Iterable[uuid.UUID | None] | None = None,
+    *,
+    as_member: bool = False,
 ) -> set[uuid.UUID]:
     """The documents (of ``ids``, or all) the session's principal may not see: empty for
-    owners, approvers and Oracle's own sessions."""
-    if not restricted(principal_of(session)):
+    owners, approvers and Oracle's own sessions. ``as_member``: those a commenter may not
+    see, whoever reads (what Oracle builds for every member)."""
+    if not as_member and not restricted(principal_of(session)):
         return set()
     wanted = {i for i in ids if i is not None} if ids is not None else None
     if wanted is not None and not wanted:
@@ -103,6 +129,28 @@ async def hidden_document_ids(
     return set(await session.scalars(stmt))
 
 
+async def hidden_decision_ids(
+    session: AsyncSession, ids: Iterable[uuid.UUID | None], *, as_member: bool = False
+) -> set[uuid.UUID]:
+    """The decisions of ``ids`` the session's principal may not see (the rule below,
+    :func:`_decision_visible`): empty for owners, approvers and Oracle's own sessions.
+    ``as_member``: those a commenter may not see, whoever reads."""
+    if not as_member and not restricted(principal_of(session)):
+        return set()
+    wanted = {i for i in ids if i is not None}
+    if not wanted:
+        return set()
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    stmt = (
+        select(decisions.c.id)
+        .where(decisions.c.id.in_(wanted), not_(_decision_visible(decisions.c)))
+        .execution_options(oracle_all_documents=True)
+    )
+    return set(await session.scalars(stmt))
+
+
 @event.listens_for(TenantSession, "do_orm_execute")
 def _add_visibility_criteria(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get("oracle_all_documents"):
@@ -110,12 +158,23 @@ def _add_visibility_criteria(state: ORMExecuteState) -> None:
     principal = state.session.info.get(PRINCIPAL_KEY)
     if not restricted(principal):
         return
+    from oracle.baseline.models import Conflict, Edge, Entity, EntityRevision, Evidence, Proposal
     from oracle.decisions.models import Decision
+    from oracle.v2.models import ChangeEvent
 
     state.statement = state.statement.options(
         with_loader_criteria(Document, lambda cls: cls.visibility == COMPANY, include_aliases=True),
         # The decision an approval of such a document captured (H1) names it: absent too.
         with_loader_criteria(Decision, _decision_visible, include_aliases=True),
+        # As is the baseline entity of such a decision, and what hangs off it.
+        with_loader_criteria(Entity, _entity_visible, include_aliases=True),
+        with_loader_criteria(Edge, _edge_visible, include_aliases=True),
+        *(
+            with_loader_criteria(model, _attached_visible, include_aliases=True)
+            for model in (EntityRevision, Evidence, Proposal, Conflict)
+        ),
+        # And a change event about such an entity or document, or whose record names one.
+        with_loader_criteria(ChangeEvent, _change_visible, include_aliases=True),
     )
 
 
@@ -173,4 +232,82 @@ def _decision_visible(cls: Any) -> ColumnElement[bool]:
         ),
         or_(cls.run_id.is_(None), cls.run_id.not_in(hidden_runs)),
         not_(names_hidden),
+    )
+
+
+def _hidden_entities() -> Select[Any]:
+    """The baseline entities of the decisions :func:`_decision_visible` hides."""
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    return select(decisions.c.entity_id).where(
+        decisions.c.entity_id.is_not(None), not_(_decision_visible(decisions.c))
+    )
+
+
+def _hidden_edges() -> Select[Any]:
+    from oracle.baseline.models import Edge
+
+    edges = Edge.__table__
+    hidden = _hidden_entities()
+    return select(edges.c.id).where(or_(edges.c.src_id.in_(hidden), edges.c.dst_id.in_(hidden)))
+
+
+def _entity_visible(cls: Any) -> ColumnElement[bool]:
+    return or_(cls.type != "decision", cls.id.not_in(_hidden_entities()))
+
+
+def _edge_visible(cls: Any) -> ColumnElement[bool]:
+    hidden = _hidden_entities()
+    return and_(cls.src_id.not_in(hidden), cls.dst_id.not_in(hidden))
+
+
+def _attached_visible(cls: Any) -> ColumnElement[bool]:
+    """A revision, evidence row, proposal or conflict on a hidden entity or edge."""
+    return and_(
+        or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
+        or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
+    )
+
+
+def _change_visible(cls: Any) -> ColumnElement[bool]:
+    """A change event whose subject is a hidden decision entity or document, whose record
+    (``data``: the entity, an edge's ends, a batch's ids, the trace) holds a hidden
+    decision entity's id anywhere, whole or inside a string (``entity:<id>``), or whose
+    record's entity is a hidden decision's (``decision`` ``d-<n>``: an ``entity_deleted``
+    event, once the entity and the decision's link to it are gone)."""
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    hidden = _hidden_entities()
+    documents = Document.__table__
+    names_hidden = (
+        select(literal(1))
+        .select_from(decisions)
+        .where(
+            decisions.c.entity_id.is_not(None),
+            not_(_decision_visible(decisions.c)),
+            cast(cls.data, Text).icontains(cast(decisions.c.entity_id, Text)),
+        )
+        .exists()
+    )
+    was_hidden = (
+        select(literal(1))
+        .select_from(decisions)
+        .where(
+            decisions.c.tenant_id == cls.tenant_id,
+            cls.data["entity"]["type"].astext == "decision",
+            cls.data["entity"]["key"].astext == func.concat("d-", decisions.c.number),
+            not_(_decision_visible(decisions.c)),
+        )
+        .exists()
+    )
+    return and_(
+        or_(cls.subject_id.is_(None), cls.subject_id.not_in(hidden)),
+        or_(
+            cls.document_id.is_(None),
+            cls.document_id.not_in(select(documents.c.id).where(documents.c.visibility != COMPANY)),
+        ),
+        not_(names_hidden),
+        not_(was_hidden),
     )

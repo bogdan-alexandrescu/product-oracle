@@ -5,7 +5,8 @@ through the same fetcher (oracle.baseline.public_links.LinkFetcher: https, publi
 addresses, size and time caps) and keeps it :data:`TTL`. The group for
 ``ProductOracleBot`` applies when the file has one, otherwise the ``*`` group; the longest
 matching ``Allow`` or ``Disallow`` wins (``Allow`` on a tie), with ``*`` and ``$`` as in
-RFC 9309. A missing file (404) or one that cannot be read allows everything, except a
+RFC 9309 (oracle.robots_match, in linear time; a rule too long or too wild counts as
+Disallow). A missing file (404) or one that cannot be read allows everything, except a
 file that answers 5xx: the site is unreachable, so nothing is allowed (RFC 9309 2.3.1.4).
 An empty ``User-agent:`` line names no crawler.
 """
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
+from oracle import robots_match
 from oracle.baseline.public_links import LinkError, LinkFetcher
 
 AGENT = "productoraclebot"
@@ -32,22 +34,8 @@ class Rules:
     def allows(self, path: str) -> bool:
         if self.disallow_all:
             return False
-        best: tuple[int, bool] | None = None
-        for allow, pattern in self.rules:
-            if not pattern:
-                continue
-            if _match(pattern, path):
-                key = (len(pattern), allow)
-                if best is None or key > best:
-                    best = key
-        return True if best is None else best[1]
-
-
-def _match(pattern: str, path: str) -> bool:
-    regex = re.escape(pattern).replace(r"\*", ".*")
-    if regex.endswith(r"\$"):
-        regex = regex[:-2] + "$"
-    return re.match(regex, path) is not None
+        rules = [(allow, robots_match.compile_rule(p)) for allow, p in self.rules if p]
+        return robots_match.allows(rules, path)
 
 
 def parse(text: str) -> Rules:

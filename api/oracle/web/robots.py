@@ -4,7 +4,8 @@ A scheduled or agent-driven reader is a crawler, unlike a link a person pastes o
 before it reads a page Oracle fetches ``https://<host>/robots.txt`` through the same
 ``LinkFetcher`` (https, public addresses only) and obeys the group for
 ``ProductOracleBot``, else the ``*`` group. The longest matching rule wins; on a tie,
-Allow. ``*`` matches any run of characters and a trailing ``$`` anchors the end.
+Allow. ``*`` matches any run of characters and a trailing ``$`` anchors the end
+(oracle.robots_match, in linear time; a rule too long or too wild counts as Disallow).
 
 - No robots.txt (404, 410), an empty one, or one behind a sign-in: everything is allowed
   (RFC 9309 2.3.1.3).
@@ -13,11 +14,11 @@ Allow. ``*`` matches any run of characters and a trailing ``$`` anchors the end.
   request leaves.
 """
 
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
+from oracle import robots_match
 from oracle.baseline.public_links import LinkError, LinkFetcher
 
 AGENT = "productoraclebot"
@@ -28,17 +29,10 @@ _ALLOW_ALL = {"not_found", "empty", "not_public", "unsupported_content"}
 _RAISE = {"blocked_address", "invalid_url", "not_https"}
 
 
-def _pattern(path: str) -> re.Pattern[str]:
-    anchored = path.endswith("$")
-    body = path[:-1] if anchored else path
-    regex = ".*".join(re.escape(part) for part in body.split("*"))
-    return re.compile(regex + ("$" if anchored else ""))
-
-
 @dataclass
 class Rules:
-    # (pattern length, allow, compiled pattern), for the group that applies to Oracle.
-    rules: list[tuple[int, bool, re.Pattern[str]]] = field(default_factory=list)
+    # (allow, rule), for the group that applies to Oracle.
+    rules: list[tuple[bool, robots_match.Rule]] = field(default_factory=list)
     disallow_all: bool = False
 
     @classmethod
@@ -71,19 +65,15 @@ class Rules:
             ours = [rs for a, rs in groups if "*" in a]
         mine = [r for rs in ours for r in rs]
         return cls(
-            rules=[(len(p), allow, _pattern(p)) for allow, p in mine if p.startswith(("/", "*"))]
+            rules=[
+                (allow, robots_match.compile_rule(p))
+                for allow, p in mine
+                if p.startswith(("/", "*"))
+            ]
         )
 
     def allows(self, path: str) -> bool:
-        if self.disallow_all:
-            return False
-        best: tuple[int, bool] | None = None
-        for length, allow, pattern in self.rules:
-            if pattern.match(path) and (
-                best is None or length > best[0] or (length == best[0] and allow)
-            ):
-                best = (length, allow)
-        return True if best is None else best[1]
+        return not self.disallow_all and robots_match.allows(self.rules, path)
 
 
 _cache: dict[str, tuple[datetime, Rules]] = {}

@@ -49,6 +49,15 @@ test("a link renders only for http, https, mailto and relative or anchor hrefs",
   }
 });
 
+test("a link a browser reads as another host (/\\host, //host) does not render", () => {
+  for (const bad of ["/\\evil.example", "//evil.example", "\\\\evil.example", "\\/evil.example", "/\t/evil.example", " //evil.example"]) {
+    expect(isSafeHref(bad), bad).toBe(false);
+  }
+  for (const ok of ["/documents/x", "/", "/a//b"]) {
+    expect(isSafeHref(ok), ok).toBe(true);
+  }
+});
+
 test("many unclosed image and link openers parse in linear time", () => {
   for (const unit of ["![", "[", "![a](", "[a]("]) {
     const started = Date.now();

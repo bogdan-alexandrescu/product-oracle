@@ -57,10 +57,13 @@ export function storedImageSrc(src: string): string | null {
 /**
  * Whether a link destination may render as a link: http, https, mailto, or relative or an
  * anchor (no scheme). Any other scheme (javascript:, vbscript:, data:, ...) is plain text.
- * Control characters and spaces inside the scheme are ignored, as a browser does.
+ * Control characters and spaces inside the scheme are ignored, as a browser does. A
+ * destination starting with two of / and \ (//host, /\host) is another site: plain text.
  */
 export function isSafeHref(href: string): boolean {
   const head = href.replace(/[\u0000-\u0020\u007f-\u009f]/g, "");
+  // A browser reads a backslash as "/": two slashes or backslashes in front open another host.
+  if (/^[/\\]{2}/.test(head)) return false;
   const m = /^([a-z][a-z0-9+.-]*):/i.exec(head);
   return !m || ["http", "https", "mailto"].includes(m[1].toLowerCase());
 }
