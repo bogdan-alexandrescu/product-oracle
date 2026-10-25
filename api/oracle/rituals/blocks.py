@@ -20,6 +20,7 @@ from oracle import company_time
 from oracle.baseline import figures
 from oracle.baseline.figures import Figure
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
 from oracle.market import blocks as market_blocks
 from oracle.priorities.models import PrioritySnapshot
@@ -217,10 +218,16 @@ async def since_last(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
     runs = await count(
         select(func.count()).select_from(Run).where(Run.finished_at.between(*window))
     )
+    # Built once and read by every member: a proposal on a decision a commenter may not
+    # see (oracle.docs.visibility) is not counted.
     proposals = await count(
         select(func.count())
         .select_from(Proposal)
-        .where(Proposal.status == "accepted", Proposal.decided_at.between(*window))
+        .where(
+            Proposal.status == "accepted",
+            Proposal.decided_at.between(*window),
+            visibility.member_attached_visible(Proposal),
+        )
     )
     # Blockers (CR-04): constraint entities carrying a blocker strategy, opened in the
     # window, and those whose status turned resolved in it.
@@ -712,8 +719,6 @@ async def for_reader(
     oracle.docs.visibility; None when every row stays. A pre-read is built with Oracle's
     view (the ticker, an owner's Prepare) and stored once, so this runs on every read.
     Anything counted over rows is counted by the reader over what is left."""
-    from oracle.docs import visibility
-
     rows = [r for b in built for r in b.get("rows") or []]
     decisions = await visibility.hidden_decision_ids(
         db, (_ref(r, "decision_id") for r in rows), as_member=as_member

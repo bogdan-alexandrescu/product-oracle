@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
-from oracle.docs.schemas import citation_contract
+from oracle.docs.schemas import CITATION_CONTRACT_MARK, with_citation_contract
 from oracle.engineering import briefs, codemap
 from oracle.priorities.run_order import FORMAT as PRIORITY_FORMAT
 from oracle.runs.feature_set import FORMAT as FEATURE_SET_FORMAT
@@ -244,7 +244,8 @@ class SegmentDef:
         return self.checkpoint
 
     def task_for(self, kind: str) -> str:
-        return self.task.replace("{draft}", draft_file(kind)).replace("{doc}", KIND_NAMES[kind])
+        task = self.task.replace("{draft}", draft_file(kind)).replace("{doc}", KIND_NAMES[kind])
+        return with_citation_contract(task)
 
 
 # Document kinds a run writes, and how prompts name them.
@@ -303,6 +304,11 @@ class FlowDef:
     # E1: the run's roadmap_items.yaml is stored as its source version's draft items
     # (oracle.roadmap.draft_items), and no roadmap document is written.
     stores_draft_items: bool = False
+    # #541 part 4: what the run writes is shown to every member, whoever started it (a
+    # ritual summary, variance drafts, the digest, request suggestions, a shared code
+    # map): its run token reads every tool as a commenter would (oracle.auth.deps,
+    # oracle.docs.visibility), and its importer checks refs the same way.
+    member_output: bool = False
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -322,8 +328,9 @@ DECLINED_LINE = (
     "A request the company said no to (state disqualified) is not scope unless a person "
     "reopens it; cite its decision when it comes up."
 )
-# Stated in every task that writes a draft (owner, 2026-10-20).
-CITATION_CONTRACT = citation_contract()
+# Stated in every task that writes a draft (owner, 2026-10-20), when the task is read
+# (:meth:`SegmentDef.task_for`).
+CITATION_CONTRACT = CITATION_CONTRACT_MARK
 
 # H7: the strategy draft may cite the market, carefully.
 STRATEGY_MARKET = (
@@ -817,6 +824,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="request_triage",
+            member_output=True,
             title="Request triage",
             description="Oracle suggests a theme, goals, a duplicate and a baseline feature "
             "for every New request, and lists possible requests it finds in the starter's own "
@@ -1052,6 +1060,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="code_map",
+            member_output=True,
             title="Code map",
             description="One repository's code capability map: its modules, APIs, data "
             "models, flags and jobs, for tech briefs and engineering specs.",
@@ -1077,6 +1086,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="ritual_summary",
+            member_output=True,
             title="Ritual summary",
             description="Oracle writes a short summary of a ritual's pre-read (H2).",
             target_kind=None,
@@ -1108,6 +1118,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="metrics_variance",
+            member_output=True,
             title="Variance explanations",
             description="Oracle drafts an explanation of each open variance of a weekly "
             "metrics review from what it can read, and says so when nothing explains it "
@@ -1157,6 +1168,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="competitive_digest",
+            member_output=True,
             title="Competitive digest",
             description="Oracle writes the monthly competitive digest: what the alternatives "
             "changed, what the web found (not vetted), what people heard, battlecard inputs "
@@ -1197,6 +1209,12 @@ FLOWS: dict[str, FlowDef] = {
         ),
     )
 }
+
+
+def reads_as_member(flow: str | None) -> bool:
+    """Whether a run of ``flow`` reads as a commenter would (``FlowDef.member_output``)."""
+    f = FLOWS.get(flow or "")
+    return f is not None and f.member_output
 
 
 class KnobError(ValueError):

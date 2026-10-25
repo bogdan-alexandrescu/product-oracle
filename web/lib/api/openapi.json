@@ -60079,6 +60079,17 @@
             "title": "Problems",
             "default": []
           },
+          "problems_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problems Total"
+          },
           "summary": {
             "anyOf": [
               {

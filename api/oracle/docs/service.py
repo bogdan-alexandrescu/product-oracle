@@ -5,12 +5,13 @@ content hash -> write version, sections, citations -> locked-section warning ->
 apply resolutions -> audit -> commit.
 """
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -705,6 +706,43 @@ async def _check_document_dates(
     ], dates
 
 
+# An oracle citation's ref names a baseline item: "baseline <kind> <key>", then free text
+# ("baseline goal g1 (activation), locked").
+ORACLE_REF_RE = re.compile(r"^\s*baseline\s+(?P<type>[a-z_]+)\s+(?P<key>[^\s,;()]+)")
+
+
+async def _oracle_ref_problems(db: AsyncSession, draft: ParsedDraft) -> list[ImportProblem]:
+    """An ``invalid_citation`` problem per oracle citation whose ref names no baseline item
+    of this company (the session is tenant-scoped): every citation counts in the quality
+    criteria (oracle.quality.criteria), so a made-up one is refused, not kept."""
+    from oracle.baseline.models import Entity
+
+    named: dict[int, tuple[str, str] | None] = {}
+    for i, c in enumerate(draft.citations):
+        if c.source == "oracle":
+            m = ORACLE_REF_RE.match(c.ref)
+            named[i] = (m["type"], m["key"].rstrip(".:")) if m else None
+    wanted = {pair for pair in named.values() if pair is not None}
+    found: set[tuple[str, str]] = set()
+    if wanted:
+        rows = await db.execute(
+            select(Entity.type, Entity.key).where(
+                tuple_(Entity.type, Entity.key).in_(sorted(wanted))
+            )
+        )
+        found = {(t, k) for t, k in rows}
+    return [
+        ImportProblem(
+            code="invalid_citation",
+            message=f"citation #{i + 1} ({draft.citations[i].id}) is invalid: ref names no "
+            "baseline item of this company",
+            cite_key=draft.citations[i].id,
+        )
+        for i, pair in named.items()
+        if pair not in found
+    ]
+
+
 async def _citation_items(
     db: AsyncSession, draft: ParsedDraft
 ) -> tuple[dict[str, uuid.UUID], list[VersionWarning]]:
@@ -907,6 +945,8 @@ async def import_draft(
             raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
     draft = await parse_draft_async(markdown)
+    if refused := await _oracle_ref_problems(db, draft):
+        raise DraftError(refused)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
     held: dict[str, HeldSection] = {}
