@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import changes
 from oracle.baseline.models import Entity
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import items as items_mod
 from oracle.roadmap import staleness, tracker
@@ -165,10 +166,13 @@ class ItemContext:
         self.prd_records: dict[tuple[uuid.UUID | None, str], list[TrackerRecord]] = {}
         # Each item's milestone with its date re-checked now (items.live_milestones).
         self.milestones: dict[uuid.UUID, Any] = {}
+        # What the reader may not see (visibility.hidden_for_reader); None: everything.
+        self.hidden: visibility.Hidden | None = None
 
     @classmethod
     async def load(cls, db: AsyncSession, rows: list[RoadmapItem]) -> "ItemContext":
         ctx = cls()
+        ctx.hidden = await visibility.hidden_for_reader(db)
         ids: set[uuid.UUID] = set()
         for i in rows:
             ids.update(i.requirement_ids or [])
@@ -246,7 +250,7 @@ def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> Roadmap
         horizon=item.horizon,  # type: ignore[arg-type]
         milestone=ctx.milestone_of(item),
         freshness=item.freshness,  # type: ignore[arg-type]
-        stale_reasons=list(item.stale_reasons or []),
+        stale_reasons=staleness.for_reader(item.stale_reasons, ctx.hidden),
         stale_since=item.stale_since,
         caused_by_change_id=item.caused_by_change_id,
         prd=PrdAnchor(
@@ -628,7 +632,9 @@ def item_risk(
             if b.critical and item.horizon == "now":
                 risk.off = True
     if item.freshness in ("potentially_stale", "under_review"):
-        why = staleness.stale_why(item.stale_reasons, "its PRD trace changed")
+        why = staleness.stale_why(
+            staleness.for_reader(item.stale_reasons, ctx.hidden), "its PRD trace changed"
+        )
         reasons.append({"kind": "stale", "detail": why})
     when = tracker.milestone_date(item, dated, ctx.milestone_of(item))
     risk.drift = tracker.drift_of(item, records, when, now)

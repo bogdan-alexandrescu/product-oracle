@@ -19,7 +19,13 @@ from tests.decision_helpers import clock, today  # noqa: F401
 from tests.pricing_helpers import drafted_by_run, memo_md
 from tests.roadmap_helpers import seed_trace
 from tests.test_pricing_baseline_visibility import _decided
-from tests.test_roadmap import ROADMAP, approved_prd, built_roadmap, runtime, seed_baseline
+from tests.test_roadmap import (
+    ROADMAP,
+    approved_prd,
+    built_roadmap,
+    runtime,  # noqa: F401
+    seed_baseline,
+)
 from tests.test_track_alerts import alerts_of
 from tests.test_tracks import track_of
 from tests.update_helpers import import_md
