@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 
 import { Button, Chip, Icon, StatusMark, type ChipKind, type MarkState } from "@/components/ds";
 import type { FeedbackStatus, LlmJob, Verdict } from "@/lib/api/client";
-import { JOB_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
+import { formatDateTime, JOB_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
 
 /*
  * Small parts of the version / review view built on the ds kit. Candidates for the kit:
@@ -63,10 +63,13 @@ const JOB_KIND: Record<LlmJob["status"], ChipKind> = {
   cancelled: "na",
 };
 
-export function JobStatusChip({ status }: { status: LlmJob["status"] }) {
+/** `at`: when a failed job failed, so its refusal reads as then, not now (#556). */
+export function JobStatusChip({ status, at }: { status: LlmJob["status"]; at?: string | null }) {
+  const failedAt = status === "failed" && at ? at : null;
   return (
-    <Chip kind={JOB_KIND[status]} dot>
+    <Chip kind={JOB_KIND[status]} dot data-testid={failedAt ? "job-failed" : undefined}>
       {JOB_STATUS_LABEL[status]}
+      {failedAt && ` ${formatDateTime(failedAt)}`}
     </Chip>
   );
 }

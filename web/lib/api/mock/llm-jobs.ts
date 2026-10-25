@@ -6,9 +6,10 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { wordDiff } from "@/lib/diff";
-import { turnedOff } from "@/lib/format";
+import { inWords, turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
+import { mockSettingValue } from "./connections";
 import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type NextDraftChangeRow, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
@@ -341,6 +342,23 @@ export function tick(ctx: LlmContext) {
   }
 }
 
+// ------------------------------------------------------------------ stored refusals
+
+const REFUSAL = "No Claude account can take this call";
+const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?/g;
+const companyZone = () => (mockSettingValue("alignment_report") as { timezone?: string } | undefined)?.timezone ?? "America/Los_Angeles";
+
+/** The API's read-time rewrite (oracle.claude_accounts.pool.readable_refusal, #556): each ISO moment in words in the Company time zone, and a refusal ends its sentence. */
+export function readableRefusal(text: string | null): string | null {
+  if (!text) return text;
+  let out = text.replace(ISO, (m) => inWords(m, companyZone()));
+  if (out.startsWith(REFUSAL) && !/[.!?]\s*$/.test(out)) out = `${out.trimEnd()}.`;
+  return out;
+}
+
+/** A job as the API returns it: its stored error read through readableRefusal. */
+export const jobOut = (job: Job): Job => (job.error ? { ...job, error: readableRefusal(job.error) } : job);
+
 // ------------------------------------------------------------------ seed
 
 /** Team workspaces v2: three comments, one review job that ran, one reporting job that could not. */
@@ -432,7 +450,29 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
     }),
   );
   seedOutreach(c);
+  seedStoredRefusal(c);
   return db;
+}
+
+/** #556 item 2: Saved carts v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
+function seedStoredRefusal(c: LlmContext) {
+  const doc = c.documents.find((d) => d.slug === "saved-carts");
+  const v = doc && versionsOf(c, doc).find((x) => x.number === 2);
+  if (!doc || !v) return;
+  c.db.jobs.push(
+    makeJob(c, doc, "reporting", v, {
+      status: "failed",
+      attempts: 1,
+      requested_by: null,
+      created_at: "2026-10-18T23:11:58Z",
+      started_at: "2026-10-18T23:12:00Z",
+      finished_at: "2026-10-18T23:12:00Z",
+      error:
+        "No Claude account can take this call: every Claude account is spent; the earliest window clears 2026-10-25T22:00:00.475990+00:00",
+      error_reason: "no_account_available",
+      next_reset_at: "2026-10-25T22:00:00.475990Z",
+    }),
+  );
 }
 
 /**
@@ -581,7 +621,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   if (jobRoute) {
     const job = db.jobs.find((j) => j.id === p[2]);
     if (!job) return fail(404, "Job not found");
-    if (!p[3] && m === "GET") return json(200, job);
+    if (!p[3] && m === "GET") return json(200, jobOut(job));
     if (p[3] === "cancel" && m === "POST") {
       if (!["queued", "running"].includes(job.status)) return fail(409, `a ${job.status} job cannot be cancelled`);
       Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
@@ -705,7 +745,10 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     }
     return json(
       200,
-      db.jobs.filter((j) => j.document_id === doc.id).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      db.jobs
+        .filter((j) => j.document_id === doc.id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map(jobOut),
     );
   }
   if (p[3] === "suggestions") {
@@ -732,7 +775,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       generated_at: done?.finished_at ?? null,
       resolution: done?.output?.resolution ?? null,
       changes: done?.output?.changes ?? null,
-      latest_job: jobs[0] ?? null,
+      latest_job: jobs[0] ? jobOut(jobs[0]) : null,
     });
   }
   // .../sections/{key}/refine

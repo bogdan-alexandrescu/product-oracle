@@ -16,6 +16,7 @@ fallback credential when one is set (``fallback.covers``); every other reason is
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -68,6 +69,23 @@ class NoAccount:
                 "no Claude account has a recent usage reading; the next sweep reads them"
             ),
         }[self.reason] + when
+
+
+REFUSAL = "No Claude account can take this call"
+# A moment stored as ISO (a refusal before #403 named its reset that way).
+_ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?")
+
+
+def readable_refusal(text: str | None, zone: str = DEFAULT_ZONE) -> str | None:
+    """Stored error text as #403 writes a refusal today, rewritten when it is read: each
+    ISO moment in words in ``zone`` (the company's), and a refusal ends its sentence so
+    whatever follows it reads apart (#556)."""
+    if not text:
+        return text
+    out = _ISO.sub(lambda m: in_words(datetime.fromisoformat(m[0]), zone), text)
+    if out.startswith(REFUSAL) and not out.rstrip().endswith((".", "!", "?")):
+        out = out.rstrip() + "."
+    return out
 
 
 async def _candidates(tenant_id: uuid.UUID) -> list[Account]:

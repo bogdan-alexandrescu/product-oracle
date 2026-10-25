@@ -20,10 +20,11 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, safe_yaml
+from oracle import audit, company_time, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
+from oracle.claude_accounts.pool import readable_refusal
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import items as items_mod
 from oracle.roadmap import views
@@ -389,7 +390,9 @@ async def view(
         run_id=row.run_id if row is not None else None,
         requested_at=(row.updated_at or row.created_at) if row is not None else None,
         ready_at=row.ready_at if row is not None else None,
-        error=row.error if row is not None else None,
+        error=readable_refusal(row.error, await company_time.company_time_zone(db))
+        if row is not None and row.error
+        else None,
         check=row.items_check if row is not None and rows else None,
         previous=prev_out,
         auto=document.draft_roadmap_auto,

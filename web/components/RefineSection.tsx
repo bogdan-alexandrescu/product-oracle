@@ -7,7 +7,7 @@ import { usePolling } from "@/components/JobsPanel";
 import { Button, Chip, InfoTip } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type LlmJob, type RefinementPreview } from "@/lib/api/client";
-import { JOB_STATUS_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
+import { JOB_STATUS_LABEL, jobFailure } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -163,7 +163,7 @@ export function RefineSection({
           {running && <span className="text-text2">Oracle is revising the section.</span>}
           {job.status === "failed" && (
             <p className="basis-full font-medium text-crit">
-              {job.error} {job.error_reason && NO_ACCOUNT_REASON[job.error_reason]}
+              {jobFailure(job)}
             </p>
           )}
         </div>

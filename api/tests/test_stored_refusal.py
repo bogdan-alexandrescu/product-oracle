@@ -10,7 +10,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import DEFAULTS
-from tests.test_llm_jobs import SLUG, V, import_draft, jobs
+from tests.test_llm_jobs import SLUG, V, ctx, import_draft, jobs  # noqa: F401
 
 # What a reporting job stored before #403: the earliest reset as raw UTC ISO.
 OLD = (
