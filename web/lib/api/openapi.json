@@ -38410,7 +38410,7 @@
           "plan"
         ],
         "summary": "Get Plan Item History",
-        "description": "A roadmap item across its roadmap's versions, in version order: its horizon in\neach version that has it, the PRD version it came from, and when that roadmap\nversion was approved. ``tracker_events`` stays empty until F2 Track health.",
+        "description": "A roadmap item across its roadmap's versions, in version order: its horizon in\neach version that has it, the PRD version it came from, and when that roadmap\nversion was approved; ``tracker_events``: what each import changed on the item's\ntracker issues (F2 Track health), oldest first.",
         "operationId": "get_plan_item_history",
         "security": [
           {
@@ -70096,7 +70096,8 @@
               "intake",
               "document_section",
               "checkpoint_item",
-              "entity"
+              "entity",
+              "roadmap_item"
             ],
             "title": "Kind"
           },
@@ -73017,8 +73018,7 @@
           },
           "tracker_events": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ItemTrackerEvent"
             },
             "type": "array",
             "title": "Tracker Events",
@@ -73379,6 +73379,72 @@
           "items"
         ],
         "title": "ItemStalenessOut"
+      },
+      "ItemTrackerEvent": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Record Id"
+          },
+          "tracker": {
+            "type": "string",
+            "title": "Tracker"
+          },
+          "external_ref": {
+            "type": "string",
+            "title": "External Ref"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "state",
+              "target_date",
+              "estimate",
+              "raw_status"
+            ],
+            "title": "Field"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_id",
+          "tracker",
+          "external_ref",
+          "observed_at",
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "ItemTrackerEvent",
+        "description": "One field of one of the item's tracker issues changed by an import (F2 \u00a72)."
       },
       "ItemVersion": {
         "properties": {
@@ -85766,6 +85832,9 @@
               },
               {
                 "$ref": "#/components/schemas/EntitySubject"
+              },
+              {
+                "$ref": "#/components/schemas/RoadmapItemSubject"
               }
             ],
             "title": "Subject",
@@ -85775,7 +85844,8 @@
                 "checkpoint_item": "#/components/schemas/CheckpointItemSubject",
                 "document_section": "#/components/schemas/DocumentSectionSubject",
                 "entity": "#/components/schemas/EntitySubject",
-                "intake": "#/components/schemas/IntakeSubject"
+                "intake": "#/components/schemas/IntakeSubject",
+                "roadmap_item": "#/components/schemas/RoadmapItemSubject"
               }
             }
           }
@@ -92992,6 +93062,34 @@
           "track_id"
         ],
         "title": "RoadmapItemOut"
+      },
+      "RoadmapItemSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "roadmap_item",
+            "title": "Kind"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "item_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "document_id",
+          "item_key"
+        ],
+        "title": "RoadmapItemSubject",
+        "description": "A Plan item: its PRD and its item key (F2 Ask, from the Plan)."
       },
       "RoadmapItemsOut": {
         "properties": {
@@ -107649,6 +107747,8 @@
                 "reconcile",
                 "open_blocker",
                 "link",
+                "ask",
+                "discuss",
                 "keep",
                 "reopen"
               ]

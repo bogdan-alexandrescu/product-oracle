@@ -44,7 +44,8 @@ async def get_plan_item_history(
 ) -> ItemHistoryOut:
     """A roadmap item across its roadmap's versions, in version order: its horizon in
     each version that has it, the PRD version it came from, and when that roadmap
-    version was approved. ``tracker_events`` stays empty until F2 Track health."""
+    version was approved; ``tracker_events``: what each import changed on the item's
+    tracker issues (F2 Track health), oldest first."""
     try:
         document = await docs_service.get_document_or_404(db, roadmap)
     except docs_service.NotFoundError as e:

@@ -57,6 +57,8 @@ if TYPE_CHECKING:
 # Kinds that also reach the engineering leads (A3), and the kinds a re-plan answers.
 LEAD_KINDS = ("date_slip", "overdue")
 REPLAN_KINDS = ("date_slip", "overdue", "cancelled", "ahead", "prd_moved")
+# Ask the engineering lead (C2 Questions to named people); Discuss fits every kind (G1).
+ASK_KINDS = ("date_slip", "overdue", "ahead")
 # Kept and resolved alerts stay in the Inbox's Done tab this long.
 DONE_DAYS = 30
 INBOX_CHILDREN = 3
@@ -328,6 +330,11 @@ def actions(
         out.append("open_blocker")
     if live and a.kind == "unplanned" and date_rights(principal, leads) is not None:
         out.append("link")
+    person = principal.run_id is None and principal.run_token_id is None
+    if live and person and has_role(principal.role, "commenter"):
+        if a.kind in ASK_KINDS:
+            out.append("ask")
+        out.append("discuss")
     if in_audience(principal, track, a.kind, leads):
         if a.state == "open":
             out.append("keep")

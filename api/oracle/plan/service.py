@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
@@ -31,6 +31,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.plan.schemas import (
     ItemChange,
     ItemHistoryOut,
+    ItemTrackerEvent,
     ItemVersion,
     PlanCounts,
     PlanDocument,
@@ -53,6 +54,7 @@ from oracle.roadmap.models import (
     RoadmapItem,
     ScheduleBasis,
     TrackerRecord,
+    TrackerRecordEvent,
     TrackMilestone,
 )
 from oracle.runs import flows
@@ -739,6 +741,8 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
                 DocumentVersion.approved_at,
                 RoadmapItem.horizon,
                 RoadmapItem.prd_version_id,
+                RoadmapItem.track_id,
+                RoadmapItem.prd_document_id,
             )
             .join(RoadmapItem, RoadmapItem.roadmap_version_id == DocumentVersion.id)
             .where(DocumentVersion.document_id == roadmap.id, RoadmapItem.item_key == key)
@@ -769,4 +773,37 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
             )
             for r in rows
         ],
+        tracker_events=await _tracker_events(db, rows, key),
     )
+
+
+async def _tracker_events(db: AsyncSession, rows: list[Any], key: str) -> list[ItemTrackerEvent]:
+    """The tracker history of the item's issues (F2 §2), oldest first: the records matched
+    to the key on the item's track, or by its PRD (F7), as the Plan matches them."""
+    tracks = {r.track_id for r in rows if r.track_id}
+    prds = {r.prd_document_id for r in rows if r.prd_document_id}
+    if not tracks and not prds:
+        return []
+    matched = []
+    if tracks:
+        matched.append(TrackerRecord.track_id.in_(tracks))
+    if prds:
+        matched.append(TrackerRecord.prd_document_id.in_(prds))
+    found = await db.execute(
+        select(TrackerRecordEvent, TrackerRecord.tracker, TrackerRecord.external_ref)
+        .join(TrackerRecord, TrackerRecord.id == TrackerRecordEvent.record_id)
+        .where(TrackerRecord.item_key == key, or_(*matched))
+        .order_by(TrackerRecordEvent.observed_at, TrackerRecordEvent.created_at)
+    )
+    return [
+        ItemTrackerEvent(
+            record_id=e.record_id,
+            tracker=tracker_name,
+            external_ref=ref,
+            observed_at=e.observed_at,
+            field=e.field,  # type: ignore[arg-type]
+            before=e.before,
+            after=e.after,
+        )
+        for e, tracker_name, ref in found.all()
+    ]

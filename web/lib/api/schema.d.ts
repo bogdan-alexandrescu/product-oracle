@@ -11081,7 +11081,8 @@ export interface paths {
          * Get Plan Item History
          * @description A roadmap item across its roadmap's versions, in version order: its horizon in
          *     each version that has it, the PRD version it came from, and when that roadmap
-         *     version was approved. ``tracker_events`` stays empty until F2 Track health.
+         *     version was approved; ``tracker_events``: what each import changed on the item's
+         *     tracker issues (F2 Track health), oldest first.
          */
         get: operations["get_plan_item_history"];
         put?: never;
@@ -22188,7 +22189,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "intake" | "document_section" | "checkpoint_item" | "entity";
+            kind: "intake" | "document_section" | "checkpoint_item" | "entity" | "roadmap_item";
             /** Title */
             title: string;
             /** Href */
@@ -23263,9 +23264,7 @@ export interface components {
              * Tracker Events
              * @default []
              */
-            tracker_events: {
-                [key: string]: unknown;
-            }[];
+            tracker_events: components["schemas"]["ItemTrackerEvent"][];
         };
         /** ItemIn */
         ItemIn: {
@@ -23382,6 +23381,35 @@ export interface components {
             }[];
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /**
+         * ItemTrackerEvent
+         * @description One field of one of the item's tracker issues changed by an import (F2 §2).
+         */
+        ItemTrackerEvent: {
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Tracker */
+            tracker: string;
+            /** External Ref */
+            external_ref: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "state" | "target_date" | "estimate" | "raw_status";
+            /** Before */
+            before: string | null;
+            /** After */
+            after: string | null;
         };
         /** ItemVersion */
         ItemVersion: {
@@ -27887,7 +27915,7 @@ export interface components {
             /** Rationale */
             rationale?: string | null;
             /** Subject */
-            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"];
+            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"] | components["schemas"]["RoadmapItemSubject"];
         };
         /**
          * QuestionPatch
@@ -30325,6 +30353,24 @@ export interface components {
             engineering: components["schemas"]["TrackerRecordRef"][];
             /** Note */
             note?: string | null;
+        };
+        /**
+         * RoadmapItemSubject
+         * @description A Plan item: its PRD and its item key (F2 Ask, from the Plan).
+         */
+        RoadmapItemSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "roadmap_item";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Item Key */
+            item_key: string;
         };
         /** RoadmapItemsOut */
         RoadmapItemsOut: {
@@ -35482,7 +35528,7 @@ export interface components {
             /** Resolved At */
             resolved_at: string | null;
             /** Actions */
-            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "keep" | "reopen")[];
+            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "ask" | "discuss" | "keep" | "reopen")[];
         };
         /** TrackAlertPrd */
         TrackAlertPrd: {

@@ -268,9 +268,7 @@ async def test_ask_about_a_roadmap_item(client, owner, runtime):  # noqa: F811
     )  # fmt: skip
     assert resp.status_code == 201, resp.text
     assert resp.json()["item_ref"] == "payment-step"
-    rows = (
-        await client.get("/v1/inbox/questions", headers=approver_auth)
-    ).json()
+    rows = (await client.get("/v1/inbox/questions", headers=approver_auth)).json()
     (row,) = [r for r in rows if r["question"]["id"] == resp.json()["id"]]
     assert row["subject"]["kind"] == "roadmap_item"
     assert row["subject"]["title"].endswith(" · Payment step")

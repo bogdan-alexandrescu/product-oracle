@@ -175,9 +175,21 @@ class ItemVersion(BaseModel):
     approved_at: datetime | None
 
 
+class ItemTrackerEvent(BaseModel):
+    """One field of one of the item's tracker issues changed by an import (F2 §2)."""
+
+    record_id: uuid.UUID
+    tracker: str
+    external_ref: str
+    observed_at: datetime
+    field: Literal["state", "target_date", "estimate", "raw_status"]
+    before: str | None
+    after: str | None
+
+
 class ItemHistoryOut(BaseModel):
     roadmap: str
     item: str
     versions: list[ItemVersion]
-    # Tracker events for the item (F2 Track health stores them); empty until then.
-    tracker_events: list[dict] = []
+    # The tracker history of the item's issues, oldest first (F2 Track health).
+    tracker_events: list[ItemTrackerEvent] = []

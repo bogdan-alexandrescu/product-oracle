@@ -533,7 +533,7 @@ class EvidenceSearch(BaseModel):
 
 # --- questions to people (C2) ------------------------------------------------------------
 
-SubjectKind = Literal["intake", "document_section", "checkpoint_item", "entity"]
+SubjectKind = Literal["intake", "document_section", "checkpoint_item", "entity", "roadmap_item"]
 
 
 class IntakeSubject(BaseModel):
@@ -559,8 +559,20 @@ class EntitySubject(BaseModel):
     entity_id: uuid.UUID
 
 
+class RoadmapItemSubject(BaseModel):
+    """A Plan item: its PRD and its item key (F2 Ask, from the Plan)."""
+
+    kind: Literal["roadmap_item"]
+    document_id: uuid.UUID
+    item_key: str = Field(min_length=1, max_length=200)
+
+
 QuestionSubject = Annotated[
-    IntakeSubject | DocumentSectionSubject | CheckpointItemSubject | EntitySubject,
+    IntakeSubject
+    | DocumentSectionSubject
+    | CheckpointItemSubject
+    | EntitySubject
+    | RoadmapItemSubject,
     Field(discriminator="kind"),
 ]
 

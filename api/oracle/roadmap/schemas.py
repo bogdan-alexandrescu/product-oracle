@@ -846,7 +846,16 @@ AlertKind = Literal[
 ]
 AlertState = Literal["open", "kept", "resolved"]
 AlertAction = Literal[
-    "accept_date", "replan", "review", "reconcile", "open_blocker", "link", "keep", "reopen"
+    "accept_date",
+    "replan",
+    "review",
+    "reconcile",
+    "open_blocker",
+    "link",
+    "ask",
+    "discuss",
+    "keep",
+    "reopen",
 ]
 
 

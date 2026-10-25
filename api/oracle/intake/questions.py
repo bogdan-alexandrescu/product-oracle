@@ -7,7 +7,7 @@ from the Inbox.
   but the intake's author is asked of, reassigned or delegated to the author only;
   anyone else is 409 "Share this finding first to ask someone else".
 - **Ask a teammate** (:func:`create`): a commenter or above asks a named person about an
-  intake, a document section, a run checkpoint item or a baseline entity. These are
+  intake, a document section, a run checkpoint item, a baseline entity or a Plan item. These are
   ``general`` questions with no gap ("<name> asks"); the engine's are "Oracle asks". A
   company API token asks as no person: "<token name> asks", read from the audit trail.
 - **Reassign or withdraw** (:func:`patch`): the asker, the intake's author (an intake's
@@ -22,6 +22,7 @@ Nothing here commits.
 """
 
 import uuid
+from urllib.parse import quote
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,11 +46,13 @@ from oracle.intake.schemas import (
     PersonAsker,
     QuestionCreate,
     QuestionPatch,
+    RoadmapItemSubject,
     TokenAsker,
 )
 from oracle.intake.service import IntakeError
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
+from oracle.roadmap.models import RoadmapItem
 from oracle.runs.models import Checkpoint
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 from oracle.v2.schemas import KnowledgeGapOut, StakeholderQuestionOut
@@ -122,6 +125,11 @@ async def _subject_columns(db: AsyncSession, subject) -> dict:
         if await db.get(Checkpoint, subject.checkpoint_id) is None:
             raise IntakeError(422, "No such checkpoint")
         return {"checkpoint_id": subject.checkpoint_id, "item_ref": subject.item_ref}
+    if isinstance(subject, RoadmapItemSubject):
+        if await _item_title(db, subject.document_id, subject.item_key) is None:
+            raise IntakeError(422, "No such roadmap item for the PRD")
+        # A Plan item: its PRD and its key (no checkpoint, so never a checkpoint item).
+        return {"document_id": subject.document_id, "item_ref": subject.item_key}
     assert isinstance(subject, EntitySubject)
     if await db.get(Entity, subject.entity_id) is None:
         raise IntakeError(422, "No such baseline entity")
@@ -220,6 +228,16 @@ async def _section(db: AsyncSession, version: DocumentVersion, key: str) -> Sect
     )
 
 
+async def _item_title(db: AsyncSession, document_id: uuid.UUID, key: str) -> str | None:
+    """The newest title of the PRD's roadmap item ``key``; None when it has none."""
+    return await db.scalar(
+        select(RoadmapItem.title)
+        .where(RoadmapItem.prd_document_id == document_id, RoadmapItem.item_key == key)
+        .order_by(RoadmapItem.created_at.desc())
+        .limit(1)
+    )
+
+
 async def subject_of(
     db: AsyncSession, q: StakeholderQuestion, readers: views.Readers
 ) -> InboxSubject:
@@ -239,6 +257,13 @@ async def subject_of(
             href=f"/baseline?entity={q.entity_id}",
         )  # fmt: skip
     doc = await db.get(Document, q.document_id) if q.document_id else None
+    if q.item_ref and doc is not None:
+        # A Plan item (F2 Ask): Open selects it on the Plan.
+        title = await _item_title(db, doc.id, q.item_ref) or q.item_ref
+        return InboxSubject(
+            kind="roadmap_item", title=f"{doc.title} · {title}",
+            href=f"/plan?item={quote(q.item_ref, safe='')}",
+        )  # fmt: skip
     intake = await readers.intake(q.intake_id)
     if intake is not None:
         # Its Before drafting page (C5), with or without a PRD.
