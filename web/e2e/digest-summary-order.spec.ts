@@ -11,9 +11,10 @@ import { login } from "./helpers";
  * refusal instead of "Oracle is already writing this summary"; no_claim=the API's own
  * order (test_market_digest.py, test_ritual_summaries.py).
  *
- * Three tabs of one browser context, signed in once as the owner: tab A keeps the occurrence open with its
- * button; tab B starts the digest (its clock paused, so it never reads again and the run
- * stays under way); tab C sets Watch the market to Observe; then tab A asks.
+ * Three tabs of one browser context, signed in once (tab A) as the owner: tab A keeps the
+ * occurrence open with its button; tab B starts the digest (its clock paused, so it never
+ * reads again and the run stays under way); tab C sets Watch the market to Observe; then
+ * tab A asks.
  */
 
 test.use({ timezoneId: "America/New_York", locale: "en-US" });
