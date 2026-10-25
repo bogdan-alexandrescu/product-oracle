@@ -12,6 +12,9 @@
   briefs, which share the ``tech_brief`` kind), each with its state for the Plan and the
   PRD overview: Requested, Drafting, In review, Approved or Stale.
 - prd_to_spec says where it starts: the Plan and a PRD's overview.
+- Request spec is an approver's (#580 review): the capabilities an approver reads say so
+  for every item, as POST /v1/spec-requests answers them.
+- A spec request on a PRD the reader may not see is absent from the list and its read.
 
 Synthetic placeholders only.
 """
@@ -96,6 +99,18 @@ async def test_without_leads_a_request_naming_no_approvers_is_any_approver(clien
     world = await make_world(client)
     created = await request_spec(client, world)
     assert created["spec"]["engineering_approver_ids"] == []
+
+
+async def test_an_approver_is_told_they_may_request_a_spec(client, runtime):
+    """protects=Request spec on the Plan and the PRD overview for an approver who is no owner
+    (#580 review); fails_when=create_spec_request is per-item at owner, so can() hides it."""
+    world = await make_world(client)
+    resp = await client.get("/v1/me/capabilities", headers=world.ctx.as_("approver"))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["operations"]["create_spec_request"] is True
+    assert "create_spec_request" not in body["per_item"]
+    await request_spec(client, world, who="approver")
 
 
 # --------------------------------------------------------------------------- the brief
@@ -216,6 +231,32 @@ async def test_the_list_leaves_out_engineering_check_briefs(client, runtime):
     ).json()
     assert [s["request"]["id"] for s in listed] == [created["spec"]["request"]["id"]]
     assert listed[0]["feature_id"] == str(world.feature)
+
+
+async def test_a_spec_on_a_prd_the_reader_may_not_see_is_absent(client, runtime):
+    """protects=an approvers-only PRD's spec requests stay hidden from a commenter (#580
+    review); fails_when=the list without ``prd`` or the read by id skips the PRD's
+    visibility, or the slug falls back to the stored one."""
+    world = await make_world(client)
+    created = await request_spec(client, world)
+    request_id = created["spec"]["request"]["id"]
+    async with tenant_session(world.ctx.tenant_id) as s:
+        await s.execute(update(Document).where(Document.slug == PRD).values(visibility="approvers"))
+        await s.commit()
+    commenter = world.ctx.as_("commenter")
+    listed = (await client.get("/v1/spec-requests", headers=commenter)).json()
+    assert request_id not in [s["request"]["id"] for s in listed]
+    assert created["spec"]["document_slug"] not in json.dumps(listed)
+    listed = (await client.get("/v1/spec-requests", params={"prd": PRD}, headers=commenter)).json()
+    assert listed == []
+    resp = await client.get(f"/v1/spec-requests/{request_id}", headers=commenter)
+    assert resp.status_code == 404, resp.text
+    # An approver still sees it.
+    approver = world.ctx.as_("approver")
+    listed = (await client.get("/v1/spec-requests", headers=approver)).json()
+    assert request_id in [s["request"]["id"] for s in listed]
+    resp = await client.get(f"/v1/spec-requests/{request_id}", headers=approver)
+    assert resp.status_code == 200, resp.text
 
 
 async def listed_state(client, world, request_id: str) -> str:
