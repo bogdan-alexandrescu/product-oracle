@@ -69,7 +69,9 @@ class SlackOutbox(TenantScoped, Base):
         CheckConstraint(_in("status", OUTBOX_STATUSES), name="status"),
         # A ping is for one member and has no thread; every other op is a thread's.
         CheckConstraint(
-            "(op = 'ping') = (link_id IS NULL AND recipient_id IS NOT NULL)", name="target"
+            "(op = 'ping' AND link_id IS NULL AND recipient_id IS NOT NULL)"
+            " OR (op <> 'ping' AND link_id IS NOT NULL AND recipient_id IS NULL)",
+            name="target",
         ),
         Index("ix_slack_outbox_due", "status", "next_try_at"),
     )

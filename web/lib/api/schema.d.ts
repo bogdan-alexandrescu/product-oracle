@@ -26939,7 +26939,8 @@ export interface components {
          * Preferences
          * @description What the signed-in user (or API token) chose. ``document_view``: the layer
          *     documents open on; brief unless they switched to the full document. ``setup_hidden``:
-         *     they hid Home's Set up checklist (A1); a header chip shows it again.
+         *     they hid Home's Set up checklist (A1); a header chip shows it again. ``slack_pings``:
+         *     the Slack pings they get (My account).
          */
         Preferences: {
             /**
@@ -26953,6 +26954,16 @@ export interface components {
              * @default false
              */
             setup_hidden: boolean;
+            /**
+             * @default {
+             *       "draft_ready": false,
+             *       "review_requested": true,
+             *       "comments": false,
+             *       "feedback_wanted": false,
+             *       "published": false
+             *     }
+             */
+            slack_pings: components["schemas"]["SlackPings"];
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -26960,6 +26971,7 @@ export interface components {
             document_view?: ("brief" | "full") | null;
             /** Setup Hidden */
             setup_hidden?: boolean | null;
+            slack_pings?: components["schemas"]["SlackPingsUpdate"] | null;
         };
         /**
          * PreviousAttempt
@@ -32620,6 +32632,54 @@ export interface components {
             channels: components["schemas"]["SlackChannelOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * SlackPings
+         * @description Which Slack pings the member gets (oracle.slack.pings): every one off by default
+         *     except ``review_requested``.
+         */
+        SlackPings: {
+            /**
+             * Draft Ready
+             * @default false
+             */
+            draft_ready: boolean;
+            /**
+             * Review Requested
+             * @default true
+             */
+            review_requested: boolean;
+            /**
+             * Comments
+             * @default false
+             */
+            comments: boolean;
+            /**
+             * Feedback Wanted
+             * @default false
+             */
+            feedback_wanted: boolean;
+            /**
+             * Published
+             * @default false
+             */
+            published: boolean;
+        };
+        /**
+         * SlackPingsUpdate
+         * @description Only the pings sent change; the others keep the member's choice.
+         */
+        SlackPingsUpdate: {
+            /** Draft Ready */
+            draft_ready?: boolean | null;
+            /** Review Requested */
+            review_requested?: boolean | null;
+            /** Comments */
+            comments?: boolean | null;
+            /** Feedback Wanted */
+            feedback_wanted?: boolean | null;
+            /** Published */
+            published?: boolean | null;
         };
         /**
          * SlackStatusOut

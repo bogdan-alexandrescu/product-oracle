@@ -27,7 +27,10 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'"
-TARGET = "(op = 'ping') = (link_id IS NULL AND recipient_id IS NOT NULL)"
+TARGET = (
+    "(op = 'ping' AND link_id IS NULL AND recipient_id IS NOT NULL)"
+    " OR (op <> 'ping' AND link_id IS NOT NULL AND recipient_id IS NULL)"
+)
 
 
 def upgrade() -> None:

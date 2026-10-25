@@ -83275,11 +83275,21 @@
             "type": "boolean",
             "title": "Setup Hidden",
             "default": false
+          },
+          "slack_pings": {
+            "$ref": "#/components/schemas/SlackPings",
+            "default": {
+              "draft_ready": false,
+              "review_requested": true,
+              "comments": false,
+              "feedback_wanted": false,
+              "published": false
+            }
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again. ``slack_pings``:\nthe Slack pings they get (My account)."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -83308,6 +83318,16 @@
               }
             ],
             "title": "Setup Hidden"
+          },
+          "slack_pings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlackPingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -99442,6 +99462,101 @@
           "next_cursor"
         ],
         "title": "SlackChannelPage"
+      },
+      "SlackPings": {
+        "properties": {
+          "draft_ready": {
+            "type": "boolean",
+            "title": "Draft Ready",
+            "default": false
+          },
+          "review_requested": {
+            "type": "boolean",
+            "title": "Review Requested",
+            "default": true
+          },
+          "comments": {
+            "type": "boolean",
+            "title": "Comments",
+            "default": false
+          },
+          "feedback_wanted": {
+            "type": "boolean",
+            "title": "Feedback Wanted",
+            "default": false
+          },
+          "published": {
+            "type": "boolean",
+            "title": "Published",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SlackPings",
+        "description": "Which Slack pings the member gets (oracle.slack.pings): every one off by default\nexcept ``review_requested``."
+      },
+      "SlackPingsUpdate": {
+        "properties": {
+          "draft_ready": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Ready"
+          },
+          "review_requested": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Requested"
+          },
+          "comments": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comments"
+          },
+          "feedback_wanted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Wanted"
+          },
+          "published": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SlackPingsUpdate",
+        "description": "Only the pings sent change; the others keep the member's choice."
       },
       "SlackStatusOut": {
         "properties": {
