@@ -190,3 +190,84 @@ async def test_one_signal_never_outweighs_importance(client):
             assert tuned.index(other) < tuned.index(up), other
         if score * spread < scores[down]:
             assert tuned.index(down) < tuned.index(other), other
+
+
+READERS = ("author", "viewer", "commenter", "run")
+
+
+async def _read_order(client, ctx, intake_id: str, who: str) -> tuple[list, list]:
+    """(asked questions' categories, drafts' categories) in the order ``who`` reads them,
+    from the question list and the latest batch alike."""
+    from tests.test_intake_sharing_writes import headers
+
+    resp = await client.get(
+        "/v1/questions", params={"intake_id": intake_id, "limit": 500}, headers=headers(ctx, who)
+    )
+    assert resp.status_code == 200, resp.text
+    listed = sorted(resp.json(), key=lambda q: (q["priority"], q["created_at"]))
+    out = (
+        [q["category"] for q in listed if q["status"] not in ("draft", "withdrawn")],
+        [q["category"] for q in listed if q["status"] == "draft"],
+    )
+    resp = await client.get(f"/v1/intakes/{intake_id}/question-batch", headers=headers(ctx, who))
+    assert resp.status_code == 200, resp.text
+    asked = [c["question"]["category"] for c in resp.json()["questions"]]
+    assert asked == [c for c in out[0] if c in asked], (who, asked, out[0])
+    return out
+
+
+async def _stored_asked(ctx, intake_id: str) -> list[str]:
+    return [
+        q.category for q in await _drafts(ctx, intake_id) if q.status not in ("draft", "withdrawn")
+    ]
+
+
+async def test_asked_questions_keep_one_order_for_every_reader(client):
+    """protects=03b §5 "asked questions are never re-ranked": after an approver adds and
+    then retires learnings, the asked questions read in the same order by the author, a
+    viewer, a commenter and a run token, the stored order; a draft moves only at the
+    next sync; fails_when=reads by anyone but the author re-rank asked questions from
+    the learnings in force now; no_claim=which drafts are asked next."""
+    from tests.test_intake_sharing import add_author
+
+    ctx = await seeded_ctx()
+    await add_author(ctx)
+    intake = await create_intake(client, ctx, "author", ai_extraction=False)
+    iid = intake["intake"]["id"]
+    resp = await client.post(
+        f"/v1/intakes/{iid}/question-batches", json={"size": 5}, headers=ctx.as_("author")
+    )
+    assert resp.status_code == 200, resp.text
+    stored = await _stored_asked(ctx, iid)
+    assert len(stored) >= 3
+    drafts_before = (await _read_order(client, ctx, iid, "author"))[1]
+    assert len(drafts_before) >= 2
+    for who in READERS:
+        assert (await _read_order(client, ctx, iid, who))[0] == stored, who
+
+    # Learnings that, applied to asked questions, would turn their order around; and one
+    # that lifts the last draft.
+    ids = [
+        await _learn(client, ctx, "question_category", stored[-1], "recommend_more", 3),
+        await _learn(client, ctx, "question_category", stored[0], "recommend_less", 3),
+        await _learn(client, ctx, "question_category", drafts_before[-1], "recommend_more", 3),
+    ]
+    for who in READERS:
+        asked, drafts = await _read_order(client, ctx, iid, who)
+        assert asked == stored, (who, asked)
+        assert drafts == drafts_before, (who, drafts)
+
+    for lid in ids[:2]:
+        await _retire(client, ctx, lid)
+    for who in READERS:
+        assert (await _read_order(client, ctx, iid, who))[0] == stored, who
+
+    # The next sync moves the draft; the asked questions keep their order for everyone.
+    resp = await client.post(f"/v1/intakes/{iid}/analyze", headers=ctx.as_("author"))
+    assert resp.status_code == 200, resp.text
+    assert await _stored_asked(ctx, iid) == stored
+    orders = {who: await _read_order(client, ctx, iid, who) for who in READERS}
+    for who, (asked, drafts) in orders.items():
+        assert asked == stored, (who, asked)
+        assert drafts == orders["author"][1], (who, drafts)
+    assert orders["author"][1].index(drafts_before[-1]) < len(drafts_before) - 1
