@@ -393,10 +393,12 @@ export function sourceItem(id: string): CitedItem | null {
 /** S4: the mock scenario where a sync brings in a new item after a PRD draft (e2e/draft-new-items.spec.ts). */
 export const DRAFT_NEW_ITEMS_SCENARIO = "draft-new-items";
 
-/** S4: how many of the signed-in person's items were fetched or deleted after ``since`` (new, changed or deleted since a draft). */
-export function itemsChangedSince(since: string): number {
+/** S4: how many of ``owner``'s items were fetched or deleted after ``since`` (new, changed or deleted since a draft); ``me``: who is signed in, whose items the store holds. */
+export function itemsChangedSince(since: string, owner: string, me: string): number {
   const at = Date.parse(since);
-  return load().items.filter((i) => (i.fetched_at && Date.parse(i.fetched_at) > at) || (i.deleted_at && Date.parse(i.deleted_at) > at)).length;
+  const db = load();
+  const items = owner === me ? db.items : (db.team?.[owner]?.items ?? []);
+  return items.filter((i) => (i.fetched_at && Date.parse(i.fetched_at) > at) || (i.deleted_at && Date.parse(i.deleted_at) > at)).length;
 }
 
 /** How many sources there are (A1's Pick sources step). */

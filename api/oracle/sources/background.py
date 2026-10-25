@@ -27,6 +27,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.connections.models import Connection
+from oracle.sources import service
 from oracle.sources import sync as sync_engine
 from oracle.sources.models import Source
 
@@ -85,18 +86,31 @@ async def sync_due(db: AsyncSession, now: datetime, deadline: float | None = Non
     """Sync the company's due sources (``deadline``: ``time.monotonic()`` after which no new
     sync starts). Each sync commits on its own; one that raises is counted as failed."""
     out = Synced()
-    for source in await due(db, now):
+    # A sync that fails rolls the session back, which expires every source loaded in it:
+    # each is read again by its id just before its own sync.
+    for source_id in [source.id for source in await due(db, now)]:
         if deadline is not None and time.monotonic() >= deadline:
             break
-        source_id, before = source.id, source.last_synced_at
-        failures = source.sync_failures
+        source = await db.get(Source, source_id, populate_existing=True)
+        if source is None or source.status == "paused":
+            continue  # removed or paused since it was picked
+        before, failures = source.last_synced_at, source.sync_failures
+        error = None
         try:
             stats = await sync_engine.sync_source(db, source)
             outcome, retry_after = stats.outcome, stats.retry_after
             finished = source.last_synced_at is not None and source.last_synced_at != before
+        except sync_engine.SyncRefused:
+            await db.rollback()  # paused (or made unsyncable) since it was picked
+            continue
         except Exception as e:  # noqa: BLE001 - one source must not stop the others
             await db.rollback()
             log.error("background sync of a source failed: %s", type(e).__name__)
+            # Raised before the sync started, so the engine wrote no error on the source.
+            if isinstance(e, service.InvalidError | service.NotFoundError):
+                error = str(e)
+            else:
+                error = f"Sync failed unexpectedly ({type(e).__name__})"
             outcome, retry_after, finished = "error", None, False
         values: dict = {}
         if outcome == "rate_limited":
@@ -105,6 +119,8 @@ async def sync_due(db: AsyncSession, now: datetime, deadline: float | None = Non
             out.rate_limited += 1
         elif outcome in ("error", "needs_attention") and not finished:
             values = {"sync_failures": failures + 1, "next_sync_at": now + backoff(failures + 1)}
+            if error is not None:
+                values |= {"status": sync_engine._status("error"), "last_error": error}
             out.failed += 1
         elif outcome != "superseded":
             out.synced += 1
