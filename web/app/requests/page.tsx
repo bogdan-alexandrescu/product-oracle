@@ -1,9 +1,10 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { Button, Empty, Page, PageHeader, Panel, SegmentedControl, Split, ViewOnly } from "@/components/ds";
+import { startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT_INLINE } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -24,7 +25,8 @@ import { ClassifyNow, DailyTriageSwitch, TriageStatusLine, useTriage } from "./_
  * (#329) files one in the app; it lands in the queue below, selected, with its goal chips.
  * The queue (#348) filters by state, goal and theme and searches titles and words; the
  * selected request opens in the inspector. The Themes tab lists, creates, renames and
- * archives themes.
+ * archives themes. Ticking qualified requests and Start a PRD opens New PRD with them behind
+ * the brief (C1 lane 2), for those who can write a brief.
  * Interview a customer (C3, commenters and up). #370: each control shows only to a role that
  * can use it (can()); a role that can file nothing reads the page as View only.
  * H10: Replies to send keeps the declined requests whose replies are still to send;
@@ -55,6 +57,10 @@ function Requests() {
   const [goal, setGoal] = useState("");
   const [theme, setTheme] = useState("");
   const [search, setSearch] = useState("");
+  const router = useRouter();
+  // C1 lane 2: the qualified requests ticked for Start a PRD.
+  const [chosen, setChosen] = useState<string[]>([]);
+  const canStart = can("create_intake", true);
   const filed = (request: Schemas["RequestOut"]) => {
     requests.setData((list) => list && { ...list, items: [request, ...list.items], total: list.total + 1 });
     setSelected(request.id);
@@ -192,6 +198,16 @@ function Requests() {
                   </label>
                 </div>
               )}
+              {chosen.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+                  <Button variant="primary" onClick={() => router.push(startPrdHref(chosen))}>
+                    {`Start a PRD from ${chosen.length} ${chosen.length === 1 ? "request" : "requests"}`}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setChosen([])}>
+                    Clear
+                  </Button>
+                </div>
+              )}
               {requests.data &&
                 (all.length > 0 && shown.length === 0 ? (
                   <Empty>No requests match</Empty>
@@ -201,6 +217,8 @@ function Requests() {
                     goalTitles={goalTitles}
                     selected={selected}
                     onSelect={setSelected}
+                    chosen={canStart ? chosen : undefined}
+                    onChoose={setChosen}
                     empty={
                       <div data-testid="requests-empty" className="flex flex-col items-center pb-10">
                         <Empty icon="requests">Nothing yet</Empty>
