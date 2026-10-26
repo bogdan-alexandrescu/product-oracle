@@ -49,6 +49,7 @@ async function connectFireflies(page: Page) {
 
 /** Opens Ask with ⌘J / Ctrl+J and starts a private chat with `question`. */
 async function ask(page: Page, question: string) {
+  await expect(page.getByTestId("hop-strip")).toBeVisible();
   await page.keyboard.press("ControlOrMeta+j");
   await expect(panel(page)).toBeVisible();
   await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill(question);
