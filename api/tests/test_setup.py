@@ -142,7 +142,7 @@ async def test_only_a_signed_in_person_may_ask(client, tenant_id, owner):
     assert resp.json()["detail"] == "Setup is for people signed in"
     resp = await client.get("/v1/setup", headers={**owner.headers, RUN_TOKEN_HEADER: run_token})
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "Setup is for people signed in"
+    assert resp.json()["detail"] == "A run token acts only through Oracle's MCP server"
     assert (await client.get("/v1/setup")).status_code == 401
 
 

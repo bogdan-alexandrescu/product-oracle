@@ -228,12 +228,21 @@ async def get_principal(
 ) -> Principal:
     principal = await _authenticate(request, bearer, cookie)
     # Oracle's MCP server marks a run token's in-process REST call twice: with the run
-    # token (re-read under the review gate) and with a server-signed run binding. Either
-    # one alone marks the call as the run's; both must name the same run.
+    # token (re-read under the review gate) and with a server-signed run binding. The
+    # binding alone marks the call as the run's; the token counts only with a binding,
+    # and both must name the same run.
     run_token = request.headers.get(RUN_TOKEN_HEADER)
-    if run_token is not None:
-        principal = await _for_run(principal, run_token)
     run_id = _run_of(request, principal)
+    if run_token is not None:
+        if run_id is None:
+            # Only that call carries the binding: a run token sent straight to REST would
+            # skip /mcp's egress allowlist and act with the creator's whole role, not the
+            # token's scopes (security report c5b8604f, minor 1).
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "A run token acts only through Oracle's MCP server",
+            )
+        principal = await _for_run(principal, run_token)
     if run_id is not None and principal.run_id is not None and principal.run_id != run_id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

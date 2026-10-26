@@ -155,6 +155,13 @@ async def oauth_register(body: ClientRegistrationIn):
     if tenant_id is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Oracle is not set up yet")
     async with tenant_session(tenant_id) as s:
+        wait = await service.register_wait(s)
+        if wait is not None:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                f"Too many client registrations: try again in {wait} seconds",
+                headers={"Retry-After": str(wait)},
+            )
         client = await service.register_client(s, name, list(dict.fromkeys(uris)))
         await record(s, None, "register", "oauth_client", client.id, {"name": name})
         await s.commit()

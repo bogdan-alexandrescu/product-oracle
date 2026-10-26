@@ -7,6 +7,8 @@ run act as that run. Synthetic placeholders only."""
 
 import uuid
 
+import pytest
+from fastapi import HTTPException
 from starlette.requests import Request
 
 from oracle.auth import deps
@@ -56,9 +58,11 @@ async def test_both_markers_naming_the_same_run_act_as_that_run(client):
     assert (await _read(client, both)).status_code == 200
     principal = await _principal(both)
     assert principal.run_id == run_id and principal.run_token_id is not None
-    # Each alone marks the call as the run's too.
-    alone = await _principal({**pm.headers, RUN_TOKEN_HEADER: raw})
-    assert alone.run_id == run_id
+    # The binding alone marks the call as the run's too; the token alone is refused
+    # (only Oracle's in-process MCP call carries a binding).
+    with pytest.raises(HTTPException) as refused:
+        await _principal({**pm.headers, RUN_TOKEN_HEADER: raw})
+    assert refused.value.status_code == 403
     bound = await _principal({**pm.headers, RUN_HEADER: sign_run_binding(pm.user_id, run_id)})
     assert bound.run_id == run_id and bound.run_token_id is None
 
@@ -99,16 +103,14 @@ async def test_a_revoked_run_token_is_refused_with_or_without_a_binding(client):
     pm = await person(ctx.tenant_id, "approver", "pm")
     run_id, raw = await _run(ctx.tenant_id, pm.user_id)
     binding = sign_run_binding(pm.user_id, run_id)
-    assert (await _read(client, {**pm.headers, RUN_TOKEN_HEADER: raw})).status_code == 200
+    both = {**pm.headers, RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
+    assert (await _read(client, both)).status_code == 200
     async with tenant_session(ctx.tenant_id) as s:
         assert await revoke_run_tokens(s, run_id) == 1
         await s.commit()
-    for headers in (
-        {**pm.headers, RUN_TOKEN_HEADER: raw},
-        {**pm.headers, RUN_TOKEN_HEADER: raw, RUN_HEADER: binding},
-    ):
-        resp = await _read(client, headers)
-        assert resp.status_code == 401, (headers.keys(), resp.text)
+    assert (await _read(client, both)).status_code == 401
+    # Without a binding the token is refused before it is read.
+    assert (await _read(client, {**pm.headers, RUN_TOKEN_HEADER: raw})).status_code == 403
     # A made-up run token is refused the same way.
     resp = await _read(client, {**pm.headers, RUN_TOKEN_HEADER: "ort_forged", RUN_HEADER: binding})
     assert resp.status_code == 401, resp.text

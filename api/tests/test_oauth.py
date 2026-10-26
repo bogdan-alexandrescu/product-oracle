@@ -214,6 +214,26 @@ async def test_register_lands_in_the_default_tenant(client):
     assert row.tenant_id == first.tenant_id
 
 
+async def test_register_is_rate_limited(client, monkeypatch):
+    """Registration needs no sign-in and adds a client row and an audit record to the
+    default company: past the hourly cap it is refused (429) and adds nothing."""
+    await seed()
+    monkeypatch.setattr(service, "REGISTER_LIMIT", 3)
+    for _ in range(3):
+        await register(client)
+    resp = await client.post("/oauth/register", json={"redirect_uris": [REDIRECT]})
+    assert resp.status_code == 429, resp.text
+    assert resp.headers.get("retry-after")
+    async with unscoped_session() as s:
+        assert await s.scalar(select(func.count()).select_from(OAuthClient)) == 3
+        # Registrations older than the window no longer count.
+        await s.execute(
+            update(OAuthClient).values(created_at=datetime.now(UTC) - timedelta(hours=2))
+        )
+        await s.commit()
+    await register(client)
+
+
 async def test_register_before_setup_is_unavailable(client):
     resp = await client.post("/oauth/register", json={"redirect_uris": [REDIRECT]})
     assert resp.status_code == 503
