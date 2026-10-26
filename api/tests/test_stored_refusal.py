@@ -1,5 +1,6 @@
 """#556 item 2: a refusal stored before #403's wording reads the way #403 writes one now."""
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -7,6 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle.claude_accounts.pool import readable_refusal
+from oracle.discussions.models import DiscussionMessage
 from oracle.docs.models import Document, DocumentVersion
 from oracle.engineering.models import CodeMap
 from oracle.jobs.models import LlmJob
@@ -18,12 +20,15 @@ from tests.baseline_helpers import make_ctx
 from tests.conftest import make_tenant
 from tests.connection_helpers import make_person
 from tests.test_code_maps import github_source, request_map
+from tests.test_discussion_replies import ASK, read_stream, say
+from tests.test_discussions import company, section, start
 from tests.test_draft_roadmaps import new_version, person
 from tests.test_draft_roadmaps import read as read_items
 from tests.test_draft_roadmaps import rows as draft_rows
 from tests.test_interviews import create as create_interview
 from tests.test_interviews import get as get_interview
 from tests.test_llm_jobs import SLUG, V, ctx, import_draft, jobs  # noqa: F401
+from tests.test_mcp import mcp_client, text_of, user_token
 from tests.test_runs import create, owner, runtime  # noqa: F401
 
 # What a reporting job stored before #403: the earliest reset as raw UTC ISO.
@@ -40,7 +45,16 @@ PAST = (
     "No Claude account could take this call: every Claude account was spent; "
     "the earliest window was due to clear Sun Oct 25, 3:00 PM PDT."
 )
+# The same, for a company whose own zone is Berlin (#644 re-review): its tenant's zone is read.
+PAST_IN_BERLIN = PAST.replace("3:00 PM PDT", "11:00 PM CET")
 FAILED_AT = datetime(2026, 10, 18, 23, 12, tzinfo=UTC)
+
+
+async def company_in_berlin(client, headers) -> None:
+    resp = await client.put(
+        "/v1/settings/company_timezone", json={"value": "Europe/Berlin"}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
 
 
 @pytest.fixture(autouse=True)
@@ -288,3 +302,77 @@ async def test_a_failed_code_map_says_when_it_failed_the_refusal_in_the_past(cli
     assert datetime.fromisoformat(got["failed_at"]) == FAILED_AT
     listed = (await client.get("/v1/code-maps", headers=dev.headers)).json()
     assert [(m["error"], m["failed_at"] is not None) for m in listed] == [(got["error"], True)]
+
+
+async def test_a_failed_triage_reads_in_the_tenants_own_zone(client, members):
+    await company_in_berlin(client, members.as_("owner"))
+    async with tenant_session(members.tenant_id) as s:
+        s.add(Run(flow="request_triage", status="failed", error=OLD, finished_at=FAILED_AT))
+        await s.commit()
+    body = (await client.get("/v1/requests/triage", headers=members.as_("viewer"))).json()
+    assert body["error"] == PAST_IN_BERLIN
+
+
+async def test_failed_code_maps_read_in_the_tenants_own_zone(client):
+    tenant_id = await make_tenant()
+    dev = await make_person(tenant_id, "dev@example.com", "owner")
+    await company_in_berlin(client, dev.headers)
+    source_id = await github_source(tenant_id, dev)
+    out = (await request_map(client, dev, source_id)).json()
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(CodeMap, uuid.UUID(out["id"]))
+        row.status, row.error = "failed", OLD
+        await s.commit()
+    got = (await client.get(f"/v1/code-maps/{out['id']}", headers=dev.headers)).json()
+    assert got["error"] == PAST_IN_BERLIN
+    listed = (await client.get("/v1/code-maps", headers=dev.headers)).json()
+    assert [m["error"] for m in listed] == [PAST_IN_BERLIN]
+
+
+async def failed_reply(client, stored: str):
+    """A discussion and its reply, failed on no Claude account, its refusal ``stored``."""
+    talk, doc = await company(client)
+    d = await start(client, talk, subject=section(doc))
+    reply = (await say(client, talk, d["id"], "commenter", ASK))["reply"]
+    assert (await read_stream(client, talk, d["id"], reply["id"]))[-1][0] == "error"
+    async with tenant_session(talk.tenant_id) as s:
+        row = await s.get(DiscussionMessage, uuid.UUID(reply["id"]))
+        assert row.status == "failed" and row.error_reason == "no_account"
+        row.error = stored
+        await s.commit()
+    return talk, d["id"], reply["id"]
+
+
+async def approvers_reads(client, talk, d_id, reply_id) -> tuple[str, str, str]:
+    """A failed reply's copy for an approver: in the thread, its stream's end and MCP."""
+    resp = await client.get(f"/v1/discussions/{d_id}/messages", headers=talk.as_("approver"))
+    [listed] = [m["error"] for m in resp.json()["items"] if m["id"] == reply_id]
+    streamed = (await read_stream(client, talk, d_id, reply_id, who="approver"))[-1]
+    assert streamed[0] == "error"
+    token = await user_token(talk.tenant_id, talk.users["approver"])
+    async with mcp_client(token) as c:
+        out = await c.call_tool("list_discussion_messages", {"discussion_id": d_id})
+    assert not out.is_error, text_of(out)
+    [via_mcp] = [m["error"] for m in json.loads(text_of(out))["items"] if m["id"] == reply_id]
+    return listed, streamed[1]["message"], via_mcp
+
+
+async def test_a_failed_discussion_reply_reads_its_refusal_in_the_past(client):
+    # replies.produce stores str(e) of the gateway's NoClaudeAccount (#644 re-review).
+    talk, d_id, reply_id = await failed_reply(client, OLD)
+    assert await approvers_reads(client, talk, d_id, reply_id) == (PAST, PAST, PAST)
+    # Others still read the plain copy; the row stays as stored.
+    resp = await client.get(f"/v1/discussions/{d_id}/messages", headers=talk.as_("commenter"))
+    assert [m["error"] for m in resp.json()["items"] if m["id"] == reply_id] == [
+        "Oracle can't reply right now."
+    ]
+    async with tenant_session(talk.tenant_id) as s:
+        assert (await s.get(DiscussionMessage, uuid.UUID(reply_id))).error == OLD
+
+
+async def test_a_failed_discussion_reply_reads_in_the_tenants_own_zone(client):
+    talk, d_id, reply_id = await failed_reply(client, OLD)
+    await company_in_berlin(client, talk.as_("owner"))
+    assert await approvers_reads(client, talk, d_id, reply_id) == (
+        PAST_IN_BERLIN, PAST_IN_BERLIN, PAST_IN_BERLIN
+    )  # fmt: skip
