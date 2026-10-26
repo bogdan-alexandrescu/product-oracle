@@ -111,4 +111,6 @@ def test_the_redirect_is_in_neither_openapi_nor_mcp():
     assert not [p for p in schema["paths"] if p == "/s" or p.startswith("/s/")]
     ops = tools.operations_from_openapi(schema)
     assert not [t for t in ops if t.path.startswith("/s/")]
-    assert any(r.path == "/s/{token}" for r in app.routes if hasattr(r, "path"))
+    # Mounted (the other tests reach it), but left out of the schema on purpose.
+    assert [r.path for r in share_public.short_router.routes] == ["/s/{token}"]
+    assert share_public.short_router.include_in_schema is False
