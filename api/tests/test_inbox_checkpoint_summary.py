@@ -43,15 +43,16 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 
 # The reads of one ``GET /v1/inbox`` with 20 Roadmap items checkpoints of 3 distinct items
-# each: 70 when batched (most of them the Inbox's other rows, a fixed few per section:
+# each: 71 when batched (most of them the Inbox's other rows, a fixed few per section:
 # discussions, access requests and member follow-ups added theirs in train I; the metrics
 # review's variances, the answers to requests and the market and pricing settings theirs in
 # train L; the owners' No document rows theirs in #583, the searching runs folded into the
-# stuck runs' read for it), about 170 when each item's trace is read on its own; plus the
-# approved product strategy once for every checkpoint's drift reasons (H4 §5); Simple's
-# proposals and decisions on them one (#723 S3a); the versions from Simple drafts waiting
-# for a required reviewer one (#723 S3b).
-MAX_INBOX_READS = 73
+# stuck runs' read for it; the owners' revoked share links theirs in train O5, O5-Q10),
+# about 170 when each item's trace is read on its own; plus the approved product strategy
+# once for every checkpoint's drift reasons (H4 §5); Simple's proposals and decisions on
+# them one (#723 S3a); the versions from Simple drafts waiting for a required reviewer one
+# (#723 S3b).
+MAX_INBOX_READS = 74
 # The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
 WARM_UP = 3
 SAMPLES = 40

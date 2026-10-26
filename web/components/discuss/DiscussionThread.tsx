@@ -53,6 +53,26 @@ async function load(id: string): Promise<Loaded> {
   }
 }
 
+/** #710: as the API's replies.OFF_HERE; the reply's prompt says the same. */
+export const LIVE_OFF = "Live reads are off: others can read this discussion.";
+
+/**
+ * Under the composer (#710): what Oracle may read live of the reader's own sources when
+ * they ask here, which is only in a private chat that only they are in; with others in it,
+ * that live reads are off. Nothing for a reader with no live source (or live reads turned off).
+ */
+function LiveReadsNotice({ alone }: { alone: boolean }) {
+  const sources = useQuery("live-sources", () => unwrap(api.GET("/v1/live/sources")));
+  const labels = (sources.data ?? []).map((s) => s.label);
+  if (labels.length === 0) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-[13px] text-text2" data-testid="live-reads-notice">
+      <Icon name={alone ? "sources" : "lock"} size={16} />
+      {alone ? `Oracle may read live: ${labels.join(", ")}` : LIVE_OFF}
+    </p>
+  );
+}
+
 /** "Make this discussion open? …": the counts the API gave, redrawn when they move (409). */
 export function makeOpenWarning(subject: string, c: Counts): string {
   return `Make this discussion open? Everyone who can see ${subject} will read its ${plural(c.messages, "message", "messages")} from ${plural(
@@ -561,6 +581,7 @@ function Composer({
           {solo || askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
         </span>
       </div>
+      <LiveReadsNotice alone={solo && d.visibility === "private"} />
     </form>
   );
 }
@@ -623,6 +644,8 @@ export function DiscussionThread({
   const [editing, setEditing] = useState<"title" | "summary" | null>(null);
   const [draft, setDraft] = useState("");
   const [warning, setWarning] = useState<Counts | null>(null);
+  // The People list's own refusal (#710's 409 live_reads_in_chat), shown where the person was picked.
+  const [peopleError, setPeopleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // G3: bumped when a reply ends, so the changes card reloads.
@@ -800,6 +823,7 @@ export function DiscussionThread({
 
   const people = async (op: "add" | "remove", userId: string) => {
     setError(null);
+    setPeopleError(null);
     try {
       if (op === "add")
         await unwrap(
@@ -811,7 +835,7 @@ export function DiscussionThread({
         );
       await reload();
     } catch (e) {
-      setError(detail(e));
+      setPeopleError(detail(e));
     }
   };
 
@@ -1000,6 +1024,7 @@ export function DiscussionThread({
           {starter && priv && open && !d.author_only && (
             <PersonPicker writersOnly={false} exclude={d.participants.map((p) => p.user_id)} onPick={(p) => void people("add", p.user_id)} />
           )}
+          {peopleError && <InlineError>{peopleError}</InlineError>}
         </div>
       )}
 

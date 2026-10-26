@@ -130,6 +130,11 @@ function latest(ctx: RoadmapContext, docId: string, approved = false): Version |
     .sort((a, b) => b.number - a.number)[0];
 }
 
+/** O5 "sharing": a version's items, one per level-3 section under Now, Next and Later, on no track. */
+export function sectionItems(ctx: Pick<RoadmapContext, "documents" | "versions">, v: Version): Item[] {
+  return itemsFor(ctx as RoadmapContext, v, null);
+}
+
 /** One item per level-3 section under Now, Next and Later, traced to the PRD section it links. */
 function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null): Item[] {
   const prd = roadmap.source ? ctx.versions.find((v) => v.id === roadmap.source!.version_id) : undefined;

@@ -67,6 +67,7 @@ export default function RunsPage() {
       header: "Run",
       width: "68px",
       phone: "hide",
+      narrow: "hide",
       cell: (r) => <span className="tnum font-mono text-sm text-accent-ink">{shortId(r.id)}</span>,
     },
     {
@@ -79,7 +80,7 @@ export default function RunsPage() {
         </Link>
       ),
     },
-    { key: "flow", header: "Flow", width: "150px", phone: "meta", cell: (r) => r.flow_title },
+    { key: "flow", header: "Flow", width: "150px", phone: "meta", narrow: "hide", cell: (r) => r.flow_title },
     {
       key: "state",
       header: "State",
@@ -152,7 +153,10 @@ export default function RunsPage() {
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      <Split inspector={selected && <RunInspector run={selected} />}>
+      {/* byRoom: the inspector goes below when the Split is too narrow for it and the table,
+          as with the Ask panel docked, so the table keeps its button column (its narrow columns
+          go first, by the table's width); with the panel closed it sits beside over 1100 px. */}
+      <Split byRoom inspector={selected && <RunInspector run={selected} />}>
         <Panel
           title="Runs"
           count={q.data ? runs.length : undefined}

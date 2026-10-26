@@ -260,6 +260,11 @@ export function mockConnectionEndpoint(id: string): string | null {
   return row ? (row.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null;
 }
 
+/** #710: the active Fireflies connections, read live (./live.ts); the mock's store is everyone's. */
+export function liveConnections(): ConnectionRow[] {
+  return load().connections.filter((c) => c.provider === "fireflies" && c.status === "active");
+}
+
 function load(): ConnDb {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

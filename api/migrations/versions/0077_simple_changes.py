@@ -10,8 +10,8 @@ Live-safe: two new tables and a column with a constant default (no rewrite).
 
 The downgrade drops the tables and the column (changes and Simple cuts are lost).
 
-Revision ID: 0072_simple_changes
-Revises: 0071_simple_roadmap_dates
+Revision ID: 0077_simple_changes
+Revises: 0076_simple_roadmap_dates
 """
 
 from collections.abc import Sequence
@@ -20,8 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0072_simple_changes"
-down_revision: str | None = "0071_simple_roadmap_dates"
+revision: str = "0077_simple_changes"
+down_revision: str | None = "0076_simple_roadmap_dates"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

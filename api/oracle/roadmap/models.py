@@ -445,3 +445,72 @@ class TrackerRecordEvent(TenantScoped, Base):
     field: Mapped[str] = mapped_column(Text, nullable=False)
     before: Mapped[str | None] = mapped_column(Text)
     after: Mapped[str | None] = mapped_column(Text)
+
+
+# --- O5 lane 2: the public-safe variant (migration 0072_public_texts) -----------------
+
+PUBLIC_STAGES = ("exploring", "planned", "in_progress", "shipped")
+PUBLIC_TEXT_STATES = ("draft", "approved", "excluded")
+
+
+class RoadmapPublicText(TenantScoped, Base):
+    """One roadmap item's public text (spec-O5 §2): per (document, item key), so it
+    carries over between versions while the item exists. Oracle drafts it (``public_text``
+    job), a person approves or excludes it. ``source_hash`` is the item's title and
+    outcome when the text was written: once it differs, the text is no longer approved."""
+
+    __tablename__ = "roadmap_public_texts"
+    __table_args__ = (
+        UniqueConstraint("document_id", "item_key"),
+        CheckConstraint("char_length(title) BETWEEN 1 AND 80", name="title"),
+        CheckConstraint("char_length(description) <= 280", name="description"),
+        CheckConstraint(_in("stage", PUBLIC_STAGES), name="stage"),
+        CheckConstraint("announced_quarter ~ '^[0-9]{4}-Q[1-4]$'", name="announced_quarter"),
+        CheckConstraint(_in("state", PUBLIC_TEXT_STATES), name="state"),
+        CheckConstraint("state <> 'approved' OR approved_at IS NOT NULL", name="approved"),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    item_key: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    stage: Mapped[str] = mapped_column(Text, nullable=False)
+    announced_quarter: Mapped[str | None] = mapped_column(Text)
+    changelog_url: Mapped[str | None] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text, nullable=False, server_default="draft")
+    # "oracle" or the member's id.
+    drafted_by: Mapped[str] = mapped_column(Text, nullable=False)
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The leak-check warnings the approver ticked "I checked this" for.
+    checked_warnings: Mapped[list[str]] = _texts()
+    source_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = _updated_at()
+
+
+class RoadmapPublicCheck(TenantScoped, Base):
+    """A person checked the exact Public page of one publication (spec-O5 §2). It holds
+    while the page's ``content_hash`` still matches; any change lapses it."""
+
+    __tablename__ = "roadmap_public_checks"
+    __table_args__ = (
+        Index("ix_roadmap_public_checks_publication", "publication_id", "checked_at"),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    publication_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("document_publications.id", ondelete="CASCADE"), nullable=False
+    )
+    checked_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    shown_item_keys: Mapped[list[str]] = _texts()
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)

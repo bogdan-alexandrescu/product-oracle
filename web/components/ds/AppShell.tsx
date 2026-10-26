@@ -309,7 +309,7 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
  * `/i/<token>`), which a customer opens without an account and never signs in on.
  */
 function bare(pathname: string): boolean {
-  return pathname.startsWith("/login") || pathname.startsWith("/access") || pathname.startsWith("/oauth") || pathname.startsWith("/i/");
+  return pathname.startsWith("/login") || pathname.startsWith("/access") || pathname.startsWith("/oauth") || pathname.startsWith("/i/") || pathname.startsWith("/s/");
 }
 
 /** Rail and tab bar; reads the pathname, so it renders inside its own Suspense boundary. */
@@ -483,7 +483,7 @@ function PhoneHeader() {
     setAskPath(pathname);
     setAsk(false);
   }
-  if (pathname.startsWith("/i/")) return null;
+  if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return null;
   return (
     <header
       data-testid="phone-header"

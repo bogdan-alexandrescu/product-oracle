@@ -1690,6 +1690,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     no_documents,
     feedback,
     revoke_failures: [],
+    // O5: share links Oracle revoked with their creator or document (owners); none here.
+    share_revocations: [],
     access_failures: [],
     // The weekly alignment reports and their failed posts: the server adds them (./reports.ts).
     reports: [],

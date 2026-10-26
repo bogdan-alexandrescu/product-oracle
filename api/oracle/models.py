@@ -75,6 +75,8 @@ from oracle.launches.models import (  # noqa: E402
     LaunchTask,
     RequesterNote,
 )
+from oracle.live.models import LiveRead  # noqa: E402
+from oracle.live.tokens import LiveToken  # noqa: E402
 from oracle.market.models import (  # noqa: E402
     Competitor,
     CompetitorChange,
@@ -120,6 +122,7 @@ from oracle.roadmap.models import (  # noqa: E402
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
+from oracle.shares.models import ShareLink, ShareLinkView  # noqa: E402
 from oracle.simple.models import RoadmapDateSuggestion  # noqa: E402
 from oracle.slack.models import (  # noqa: E402
     DiscussionSlackLink,
@@ -171,6 +174,8 @@ __all__ = [
     "WebhookDelivery",
     "WebhookEvent",
     "BrandAsset",
+    "ShareLink",
+    "ShareLinkView",
     "NextDraftChange",
     "AlignmentReport",
     "Ritual",
@@ -221,6 +226,8 @@ __all__ = [
     "CompositionRevision",
     "Conflict",
     "Connection",
+    "LiveRead",
+    "LiveToken",
     "Document",
     "DocumentComposition",
     "DocumentPublication",

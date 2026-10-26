@@ -102,6 +102,11 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
         # O5: a new logo, name or accent shows at once, and so does the other logo when
         # the theme's background turns dark or light.
         (ev.brand.key, brand_dark(ev)) if ev.brand is not None else None,
+        # O5: the audience, and the items its rebuilt rows came from.
+        ev.audience,
+        hashlib.sha256(repr([i.__dict__ for i in ev.items]).encode()).hexdigest()
+        if ev.audience
+        else "",
         (
             ev.title,
             ev.document.slug,
@@ -110,6 +115,7 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
             ev.version.approved_at,
             ev.source_label,
         ),
+        tuple(sorted(ev.template_hides.get(ev.audience or "", ()))),
     )
 
 

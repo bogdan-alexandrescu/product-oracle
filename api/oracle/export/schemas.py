@@ -59,3 +59,15 @@ class DeckOut(BaseModel):
     theme_class: str
     css: str
     slides: list[SlideOut]
+
+
+class AudienceOut(BaseModel):
+    """O5: one audience of the roadmap variant registry (oracle.roadmap.variants)."""
+
+    key: Literal["board", "team", "engineering", "public"]
+    label: str
+    hidden_sections: list[str]
+    item_fields: list[str]
+    group_by: Literal["goal", "theme", "team", "stage"]
+    max_items_per_horizon: int | None
+    appendix: bool
