@@ -20,6 +20,7 @@ import { IntakeInspector } from "./_inspector";
 import { OPEN_GAP, STATUS, dayMonth, gateReason, type Batch } from "./_lib";
 import { ProposalsTab } from "./_proposals";
 import { QuestionsTab } from "./_questions";
+import { ReadLine } from "./_read";
 
 const PHONE = "(max-width: 600px)";
 
@@ -109,12 +110,13 @@ export function BeforeDrafting({ id }: { id: string }) {
   const blocked = gate.gate === "blocked";
   const author = s.intake.author_id === me?.user_id;
   // #370: what the controls call. Drafting is an approver's (start_intake_run); archiving
-  // is the author's or an approver's (the handler's author_or); Re-analyse and Pin new
-  // sources are the author's only.
+  // is the author's or an approver's (the handler's author_or); Re-analyse, Pin new
+  // sources and Oracle's read (Read again) are the author's only.
   const mayDraft = can("start_intake_run");
   const mayArchive = can("update_intake", author || mayDraft);
   const mayAnalyze = author && can("analyze_intake");
   const mayRepin = author && can("repin_intake");
+  const mayRead = author && can("start_intake_read");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const reason = blocked ? gateReason(gate.blocking_gap_ids.length) : null;
@@ -205,6 +207,15 @@ export function BeforeDrafting({ id }: { id: string }) {
         <p data-testid="draft-reason" className="-mt-1 mb-3 text-sm font-medium text-crit">
           {reason}
         </p>
+      )}
+      {s.ai_read && (
+        <ReadLine
+          read={s.ai_read}
+          mayRead={mayRead && !converted && !archived}
+          busy={busy}
+          onPoll={changed}
+          onRead={() => act(() => unwrap(api.POST("/v1/intakes/{intake_id}/ai-read", { params: { path: { intake_id: id } } })))}
+        />
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {archived && (

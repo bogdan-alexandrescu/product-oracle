@@ -26434,7 +26434,7 @@
           "intake"
         ],
         "summary": "Start Intake Read",
-        "description": "Analyse with Oracle (the author only): start Oracle's read of the brief and the\nauthor's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot\nstart or fails). 409 while a read is under way, on a converted or archived intake, or\nwhen Oracle's read is off for the company. Re-analyse runs the rules only.",
+        "description": "Analyse with Oracle (the author only): start Oracle's read of the brief and the\nauthor's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot\nstart or fails). 409 while a read is under way, on a converted or archived intake, or\nwhen Oracle's read is off for the company; 429 after 3 reads the author started this\nCompany day (the reads on create and repin are not counted). Re-analyse runs the rules\nonly.",
         "operationId": "start_intake_read",
         "security": [
           {
@@ -26466,6 +26466,9 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "This intake was read 3 times today; read it again tomorrow"
           },
           "422": {
             "description": "Validation Error",
@@ -45108,6 +45111,27 @@
             "type": "integer",
             "title": "Failures",
             "default": 0
+          },
+          "reads_today": {
+            "type": "integer",
+            "title": "Reads Today",
+            "default": 0
+          },
+          "reads_per_day": {
+            "type": "integer",
+            "title": "Reads Per Day",
+            "default": 3
+          },
+          "read_again_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Again Refused"
           }
         },
         "type": "object",

@@ -7528,7 +7528,9 @@ export interface paths {
          * @description Analyse with Oracle (the author only): start Oracle's read of the brief and the
          *     author's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot
          *     start or fails). 409 while a read is under way, on a converted or archived intake, or
-         *     when Oracle's read is off for the company. Re-analyse runs the rules only.
+         *     when Oracle's read is off for the company; 429 after 3 reads the author started this
+         *     Company day (the reads on create and repin are not counted). Re-analyse runs the rules
+         *     only.
          */
         post: operations["start_intake_read"];
         delete?: never;
@@ -13252,6 +13254,18 @@ export interface components {
              * @default 0
              */
             failures: number;
+            /**
+             * Reads Today
+             * @default 0
+             */
+            reads_today: number;
+            /**
+             * Reads Per Day
+             * @default 3
+             */
+            reads_per_day: number;
+            /** Read Again Refused */
+            read_again_refused?: string | null;
         };
         /** AlignmentItem */
         AlignmentItem: {
@@ -54289,6 +54303,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description This intake was read 3 times today; read it again tomorrow */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
