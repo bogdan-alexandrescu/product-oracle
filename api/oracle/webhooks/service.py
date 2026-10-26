@@ -97,7 +97,7 @@ async def capture(
         raise ValueError(f"unknown webhook event type {event_type!r}")
     wanted = await db.scalar(
         select(Webhook.id)
-        .where(Webhook.status == "active", Webhook.event_types.any(event_type))
+        .where(Webhook.status == "active", Webhook.event_types.contains([event_type]))
         .limit(1)
     )
     if wanted is None:
@@ -280,6 +280,10 @@ def _host(url: str) -> str:
 
 
 async def create(db: AsyncSession, principal: "Principal", body: WebhookIn) -> tuple[Webhook, str]:
+    # One create at a time per company, so two at nine cannot both pass the limit.
+    await db.execute(
+        select(func.pg_advisory_xact_lock(func.hashtext(f"oracle.webhooks:{principal.tenant_id}")))
+    )
     count = await db.scalar(select(func.count(Webhook.id)))
     if count >= MAX_PER_COMPANY:
         raise WebhookError("invalid", f"A company has at most {MAX_PER_COMPANY} webhooks")
