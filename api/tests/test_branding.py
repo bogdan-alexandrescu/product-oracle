@@ -403,3 +403,96 @@ async def test_the_shared_header_has_the_mark_unless_an_owner_switches_it_off(cl
         brand = await load_brand(s)
     assert MARK not in render_brand_header(brand, shared=True)
     assert brand.revision == 3 and isinstance(brand.tenant_id, uuid.UUID)
+
+
+# --- #627 review: caches, resets and failures --------------------------------------------
+
+
+async def test_the_render_key_changes_with_the_mark_and_the_disclaimer(client, branded):
+    from oracle.branding import load_brand
+
+    ctx, _ = branded
+    owner = ctx.as_("owner")
+    async with tenant_session(ctx.tenant_id) as s:
+        before = (await load_brand(s)).key
+    await client.put("/v1/branding", json=_body(accent="#0369a1", mark=False), headers=owner)
+    async with tenant_session(ctx.tenant_id) as s:
+        no_mark = (await load_brand(s)).key
+    assert no_mark != before
+    body = _body(accent="#0369a1", mark=False, disclaimer="Plans change.")
+    await client.put("/v1/branding", json=body, headers=owner)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await load_brand(s)).key != no_mark
+
+
+async def test_a_reset_keeps_the_revision_counting_and_drops_the_logos(client, branded):
+    from sqlalchemy import func, select
+
+    from oracle.branding import BrandAsset
+
+    ctx, logo = branded
+    owner = ctx.as_("owner")
+    assert (await client.get("/v1/branding", headers=owner)).json()["revision"] == 2
+    resp = await client.put("/v1/settings/branding", json={"value": None}, headers=owner)
+    assert resp.status_code == 200, resp.text
+    out = (await client.get("/v1/branding", headers=owner)).json()
+    assert out["revision"] == 3
+    assert out["logo"] is None and out["accent"] is None and out["display_name"] == "Example Labs"
+    assert (await client.get(logo["url"], headers=owner)).status_code == 404
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(func.count()).select_from(BrandAsset)) == 0
+    # The next change counts on from there.
+    assert (await _upload(client, owner, _image())).json()["revision"] == 4
+
+
+async def test_the_same_logo_uploaded_twice_at_once_is_stored_once(client, ctx):
+    """A second upload of one image, landing while the first is uncommitted, reuses the
+    row rather than failing on the unique index."""
+    import asyncio
+
+    from sqlalchemy import func, select, text
+
+    from oracle.branding import BrandAsset, reencode_logo
+
+    owner = ctx.as_("owner")
+    data = _image()
+    png, width, height = reencode_logo(data)
+    sha = hashlib.sha256(png).hexdigest()
+    async with tenant_session(ctx.tenant_id) as first:
+        first.add(
+            BrandAsset(sha256=sha, content_type="image/png", bytes=png, width=width, height=height)
+        )
+        await first.flush()
+        upload = asyncio.create_task(_upload(client, owner, data))
+        for _ in range(100):  # until the upload waits on the uncommitted row
+            await asyncio.sleep(0.05)
+            async with tenant_session(ctx.tenant_id) as probe:
+                waiting = await probe.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' "
+                        "AND query ILIKE 'INSERT INTO brand_assets%'"
+                    )
+                )
+            if waiting or upload.done():
+                break
+        await first.commit()
+    resp = await upload
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["logo"]["sha256"] == sha
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(func.count()).select_from(BrandAsset)) == 1
+    assert (await client.get(resp.json()["logo"]["url"], headers=owner)).status_code == 200
+
+
+async def test_an_image_mode_pillow_cannot_convert_is_refused_not_a_crash(client, ctx, monkeypatch):
+    from PIL import Image as PILImage
+
+    def refuse(self, *args, **kwargs):
+        raise ValueError("conversion not supported")
+
+    monkeypatch.setattr(PILImage.Image, "convert", refuse)
+    buf = io.BytesIO()
+    Image.new("1", (40, 10)).save(buf, format="PNG")  # mode "1" goes through convert
+    resp = await _upload(client, ctx.as_("owner"), buf.getvalue())
+    assert resp.status_code == 422, resp.text
+    assert NOT_AN_IMAGE in resp.json()["detail"]
