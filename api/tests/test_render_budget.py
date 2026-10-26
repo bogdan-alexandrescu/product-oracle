@@ -873,8 +873,25 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 
 
 @pytest.mark.timing
-async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
+@pytest.mark.parametrize("load_seconds", [0, 0.3])
+async def test_exports_waiting_for_the_pool_hold_no_database_connection(
+    client, monkeypatch, load_seconds
+):
+    """``load_seconds``: the queued exports' load takes that long (a busy runner's
+    database): the connection is checked once both wait for the pool, not after a guess."""
     held = Held(monkeypatch)
+    real_load = export_router._load
+    loads = []
+
+    async def slow_load(*args):
+        loads.append(args)
+        queued = len(loads) > 4  # the two behind the four rendering
+        loaded = await real_load(*args)  # its connection held until the route commits
+        if queued:
+            await asyncio.sleep(load_seconds)
+        return loaded
+
+    monkeypatch.setattr(export_router, "_load", slow_load)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
     reader = await _token(a, "viewer")
     tasks = []
