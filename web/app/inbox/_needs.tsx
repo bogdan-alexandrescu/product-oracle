@@ -297,6 +297,7 @@ export type NeedGroup =
   | "requests"
   | "dates"
   | "rituals"
+  | "intake-reads"
   | "metrics"
   | "outcomes"
   | "shipped";
@@ -1703,6 +1704,34 @@ export function ritualNeeds(inbox: InboxOut, busy: string | null, act: Act): Sta
 }
 
 /**
+ * INT2: an intake of mine Oracle couldn't read twice in a row (SwarmCloud and the built-in
+ * model both failed). One row, counted, until a read succeeds or the intake closes; Open
+ * goes to the intake, where Try again starts a read.
+ */
+export function intakeReadNeeds(inbox: InboxOut): Need[] {
+  return (inbox.intake_reads ?? []).map((r) => {
+    const label = `Oracle couldn't read ${r.title}`;
+    return {
+      key: `intake-read-${r.intake_id}`,
+      icon: "doc",
+      kind: "Brief",
+      item: (
+        <span className="truncate" title={label} data-testid="intake-read-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">{`${r.failures} failed reads in a row`}</span>,
+      at: r.at ?? null,
+      action: (
+        <LinkButton variant="secondary" href={`/intakes/${r.intake_id}`} aria-label="Open">
+          Open
+        </LinkButton>
+      ),
+    };
+  });
+}
+
+/**
  * H5 metric rows, all counted: Explain a variance and Find out (the metric's owner; each
  * opens the metrics review that lists it) and Metric not read for a day (owners; opens the
  * metric). Days are calendar days of the Company time zone. New until the visit after: a row
@@ -1816,6 +1845,7 @@ export function allNeeds(
     ...stated(launches.counted, "launches"),
     ...stated(requests.counted, "requests"),
     ...ritualNeeds(inbox, busy, act),
+    ...stated(intakeReadNeeds(inbox), "intake-reads"),
     ...metricNeeds(inbox, seenBefore),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),

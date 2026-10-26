@@ -40,6 +40,8 @@ export interface V2Db {
   /** Each intake's draft run (C5): its id and the answers that existed when it was made
    * (the mock's stand-in for the run's start); absent before any. */
   intake_runs?: Record<string, { run_id: string; answer_ids: string[] }>;
+  /** INT2: Oracle's read of each intake (./intake.ts), by intake id; absent before any. */
+  intake_reads?: Record<string, import("./intake").MockIntakeRead>;
 }
 
 /** URL segment after /v1 -> the table it lists. */

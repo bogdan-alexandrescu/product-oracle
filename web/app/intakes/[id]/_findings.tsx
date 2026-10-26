@@ -49,6 +49,8 @@ function FindingRow({ f, author, intakeId, onSet }: { f: Finding; author: boolea
     <li data-testid="finding" className="flex min-w-0 flex-col gap-2 rounded-card border border-line bg-surface p-3 text-text">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Chip kind="acc">{KIND[f.kind]}</Chip>
+        {/* INT2: what Oracle's read added is an inference, never shown as a fact. */}
+        {f.origin === "model" && <Chip kind="na">Oracle&apos;s inference</Chip>}
         {category && <span className="text-[13px] text-text2">{category}</span>}
       </div>
       <p className="text-[15px] break-words">{line ?? <span className="text-text2">Shared as a count only</span>}</p>

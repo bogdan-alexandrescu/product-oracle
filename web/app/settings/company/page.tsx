@@ -404,6 +404,73 @@ function PricingOwnerPanel() {
   );
 }
 
+/**
+ * INT2: whether Oracle reads each new or repinned intake ($1.50 a read on SwarmCloud; Oracle's
+ * built-in model when that cannot start or fails). On by default (owner answer Q2); owners
+ * change it, others see it.
+ */
+function IntakeReadPanel({ canChange }: { canChange: boolean }) {
+  const settingQ = useQuery("settings|intake_ai_read", () => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "intake_ai_read" } } })));
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const on = settingQ.data ? settingQ.data.value !== false : undefined;
+
+  async function set(value: boolean) {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const out: Schemas["SettingOut"] = await unwrap(api.PUT("/v1/settings/{key}", { params: { path: { key: "intake_ai_read" } }, body: { value } }));
+      settingQ.setData(() => out);
+      setSaved(true);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div id="intake-read" className="scroll-mt-4" data-testid="intake-read-setting">
+      <Panel
+        title="Oracle's read of new briefs"
+        tools={
+          <InfoTip label="Oracle's read of new briefs" side="bottom">
+            Oracle reads each new brief and the author&apos;s pinned sources, and adds inferences and gaps only the author sees until they share
+            them. Each read is an agent run on SwarmCloud ($1.50); when that cannot start or fails, Oracle&apos;s built-in model reads it instead.
+            Off, Oracle reads nothing and the rules read still runs.
+          </InfoTip>
+        }
+      >
+        {settingQ.error && (
+          <div className="p-4">
+            <Notice tone="error">{settingQ.error}</Notice>
+          </div>
+        )}
+        {on !== undefined && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
+            <label className="flex min-w-0 items-center gap-2 text-sm text-text">
+              <input type="checkbox" checked={on} disabled={!canChange || busy} onChange={(e) => void set(e.target.checked)} />
+              Oracle reads new intakes ($1.50 each)
+            </label>
+            {saved && (
+              <span role="status" className="text-sm font-semibold text-pass">
+                Saved
+              </span>
+            )}
+          </div>
+        )}
+        {error && (
+          <div className="px-4 pb-3 max-[600px]:px-3">
+            <Notice tone="error">{error}</Notice>
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
 /** Settings > Company: the company-wide choices an owner makes: the planning horizons, the Company time zone and the pricing owner. */
 export default function CompanySettingsPage() {
   // #370: Settings' gate answers a role that cannot read the company settings.
@@ -417,6 +484,7 @@ export default function CompanySettingsPage() {
         <div className="flex min-w-0 flex-col gap-4">
           <HorizonsPanel />
           <TimezonePanel canChange={canChange} />
+          <IntakeReadPanel canChange={canChange} />
           {/* H9: owners choose the pricing owner; others do not see the field. */}
           {canChange && can("list_members") && <PricingOwnerPanel />}
         </div>

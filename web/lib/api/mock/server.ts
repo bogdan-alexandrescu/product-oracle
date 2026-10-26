@@ -74,7 +74,7 @@ import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { intakeReadInbox, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -419,6 +419,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * with three rows that need a person, attempt 2, and a held console approval);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "intake-read-fallback" as the default company whose SwarmCloud reads of intakes fail, so
+ * Oracle's built-in model reads them (INT2 Q3); "intake-read-fails" as one where both fail,
+ * plus a brief by the owner whose last two reads failed (./intake.ts seedReadFailedTwice);
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
@@ -653,6 +656,12 @@ function seedBeforeDraftingScenario(): Db {
 }
 
 /** The default company plus a brief whose second goal was rejected since (#260). */
+function seedReadFailsScenario(): Db {
+  const db = seed();
+  seedReadFailedTwice(ensureV2(db), db.user_id);
+  return db;
+}
+
 function seedBriefGoalRejectedScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
@@ -2024,6 +2033,8 @@ function load(): Db {
             ? seedBeforeDraftingScenario
           : scenario === "brief-goal-rejected"
             ? seedBriefGoalRejectedScenario
+          : scenario === "intake-read-fails"
+            ? seedReadFailsScenario
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
@@ -3859,7 +3870,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    // INT2: Oracle's read follows the company switch; two scenarios fail its SwarmCloud read.
+    const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+    const readMode = scenario === "intake-read-fails" ? "fails" : scenario === "intake-read-fallback" ? "fallback" : "ok";
+    const readOn = () => mockSettingValue("intake_ai_read") !== false;
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, readOn, readMode }, req, p, q);
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.
@@ -4042,6 +4057,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.metrics = metricRows;
     inbox.total += metricCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
+    // INT2: my intakes Oracle couldn't read twice in a row; each counts.
+    const intakeReads = intakeReadInbox(ensureV2(db), me.id);
+    inbox.intake_reads = intakeReads;
+    inbox.total += intakeReads.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + intakeReads.length;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

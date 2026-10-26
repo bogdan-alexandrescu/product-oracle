@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, confirmInPage, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
@@ -19,6 +19,7 @@ import { GapsTab } from "./_gaps";
 import { IntakeInspector } from "./_inspector";
 import { OPEN_GAP, STATUS, dayMonth, gateReason, type Batch } from "./_lib";
 import { ProposalsTab } from "./_proposals";
+import { READ_POLL_MS, ReadLine, reading } from "./_read";
 import { QuestionsTab } from "./_questions";
 
 const PHONE = "(max-width: 600px)";
@@ -73,6 +74,13 @@ export function BeforeDrafting({ id }: { id: string }) {
   const s = summaryQ.data;
   const batchesQ = useQuery(`intake|${id}|batches|${version}|${s?.batch.current ?? ""}`, () => loadBatches(id, s?.batch.current), { keepPrevious: true });
   const changed = useCallback(() => setVersion((v) => v + 1), []);
+  // INT2: while Oracle reads the brief, the page reads the summary again every 10 s.
+  const live = reading(s?.ai_read);
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(changed, READ_POLL_MS);
+    return () => clearInterval(timer);
+  }, [live, changed]);
 
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
@@ -115,6 +123,7 @@ export function BeforeDrafting({ id }: { id: string }) {
   const mayArchive = can("update_intake", author || mayDraft);
   const mayAnalyze = author && can("analyze_intake");
   const mayRepin = author && can("repin_intake");
+  const mayRead = author && can("start_intake_read");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const reason = blocked ? gateReason(gate.blocking_gap_ids.length) : null;
@@ -206,6 +215,8 @@ export function BeforeDrafting({ id }: { id: string }) {
           {reason}
         </p>
       )}
+      {/* INT2: Oracle's read, its author's only (ai_read is null for anyone else). */}
+      {s.ai_read && <ReadLine intakeId={id} read={s.ai_read} mayStart={mayRead && !converted && !archived} onStarted={changed} />}
       {error && <Notice tone="error">{error}</Notice>}
       {archived && (
         <Notice testId="intake-archived">This brief is archived: it has left PRDs › Ideas and Oracle asks nothing more.</Notice>
