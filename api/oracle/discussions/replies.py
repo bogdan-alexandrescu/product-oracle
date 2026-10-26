@@ -317,7 +317,12 @@ async def live_citations(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> dict[int,
     """The reply's successful live reads by ref number, as citations (section 4)."""
     async with tenant_session(tenant_id) as db:
         rows = await db.scalars(
-            select(LiveRead).where(LiveRead.message_id == reply_id, LiveRead.ref_n.is_not(None))
+            # A call in flight holds its ref with status 'error' until it settles (C1).
+            select(LiveRead).where(
+                LiveRead.message_id == reply_id,
+                LiveRead.ref_n.is_not(None),
+                LiveRead.status != "error",
+            )
         )
         return {
             r.ref_n: {

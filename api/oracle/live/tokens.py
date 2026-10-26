@@ -11,8 +11,9 @@ reply ends (complete, failed or cancelled).
 Every call made with a token re-checks, in one transaction (amendment C3), with the
 discussion row ``FOR SHARE``: the token unexpired and unrevoked, its reply still
 ``streaming``, only the asker in the (private) discussion; then counts the reply's calls
-(at most :data:`MAX_READS`, cached and failed ones included, C1) and writes the call's
-``live_reads`` row before the source is asked. Adding a person, or opening the
+(at most :data:`MAX_READS`, cached and failed ones and ``live_sources`` included, C1) and
+writes the call's ``live_reads`` row, with its ref when it is a cited call, before the
+source is asked. Adding a person, or opening the
 discussion, takes the same row ``FOR UPDATE`` and is refused while a live read or a live
 token is in the chat (:func:`holds_live_reads`), so no read happens after someone joined.
 """
@@ -148,10 +149,14 @@ async def reserve(
     tool: str,
     label: str,
     item_id: str | None,
+    *,
+    cited: bool = True,
 ) -> uuid.UUID:
     """C3: in one transaction, with the discussion row FOR SHARE, re-check that the
-    token's reply may still read and record the call (``error`` until it succeeds, no
-    ref). Commits; raises 403 or the 429 of the reply's 8 (rolled back)."""
+    token's reply may still read and record the call (``error`` until it settles). A
+    ``cited`` call takes the reply's next ref now, so refs follow call order (C1); it keeps
+    it only if it succeeds (:func:`settle`). Commits; raises 403 or the 429 of the reply's
+    8 (rolled back)."""
     from oracle.discussions.models import Discussion, DiscussionMessage
     from oracle.discussions.replies import people_in
 
@@ -191,12 +196,20 @@ async def reserve(
     except HTTPException:
         await db.rollback()
         raise
+    ref_n = None
+    if cited:
+        # Under the token's lock: the reply's calls take their refs one at a time.
+        last = await db.scalar(
+            select(func.max(LiveRead.ref_n)).where(LiveRead.message_id == token.message_id)
+        )
+        ref_n = (last or 0) + 1
     read = LiveRead(
         user_id=token.user_id,
         message_id=token.message_id,
         connection_id=connection_id,
         tool=tool,
         source_label=label,
+        ref_n=ref_n,
         item_id=item_id,
         status="error",
     )
@@ -209,23 +222,20 @@ async def reserve(
 async def settle(
     db: AsyncSession, token: LiveToken, read_id: uuid.UUID, outcome: str
 ) -> int | None:
-    """A reserved call's outcome; a successful one (``ok`` or ``cached``) gets the reply's
-    next ref (C1: in call order, failed calls get none). Commits."""
-    if outcome == "error":
-        return None
-    await db.scalar(select(LiveToken.id).where(LiveToken.id == token.id).with_for_update())
-    last = await db.scalar(
-        select(func.max(LiveRead.ref_n)).where(LiveRead.message_id == token.message_id)
-    )
-    n = (last or 0) + 1
-    await db.execute(
+    """A reserved call's outcome (``ok``, ``cached`` or ``error``) and the ref it keeps: the
+    one it took when it started if it succeeded, none if it failed (C1). Commits."""
+    ref_n = await db.scalar(
         update(LiveRead)
         .where(LiveRead.id == read_id)
-        .values(status=outcome, ref_n=n)
+        .values(
+            status=outcome,
+            ref_n=None if outcome == "error" else LiveRead.ref_n,
+        )
+        .returning(LiveRead.ref_n)
         .execution_options(synchronize_session=False)
     )
     await db.commit()
-    return n
+    return ref_n
 
 
 async def holds_live_reads(db: AsyncSession, discussion_id: uuid.UUID) -> bool:

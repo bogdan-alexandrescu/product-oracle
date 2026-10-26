@@ -14,9 +14,9 @@ answers 503 on every route here.
 
 With an Ask reply's live token (oracle.live.tokens, the ``olt_`` MCP caller's
 ``x-oracle-live-token``) every call first re-checks the reply and the discussion and
-records itself (amendment C3), counts toward the reply's 8, and a success's cite is
-numbered per reply (``l:1``, ``l:2``, ...); without one it is numbered per request:
-always ``l:1``.
+records itself (amendment C3), counts toward the reply's 8 (``live_sources`` too), and a
+success's cite is numbered per reply in call order (``l:1``, ``l:2``, ...); without one it
+is numbered per request: always ``l:1``.
 """
 
 import hashlib
@@ -275,11 +275,29 @@ async def _read(
     if token is not None:
         # Before the 404 too: every call of a reply counts toward its 8 (C1).
         label = _label(conn) if conn is not None else PROVIDER_NAMES["fireflies"]
-        read_id = await tokens.reserve(db, token, conn.id if conn else None, call, label, item_id)
+        read_id = await tokens.reserve(
+            db, token, conn.id if conn else None, call, label, item_id, cited=conn is not None
+        )
         reserved = (token, read_id)
     if conn is None:
         raise _no_connection()
     label = _label(conn)
+    try:
+        return await _answer(db, principal, http, conn, label, call, args, run, item_id, reserved)
+    except BaseException:
+        if reserved is not None:
+            # However the call ended without an answer, it keeps no ref (C1); settling a
+            # call as failed twice changes nothing.
+            try:
+                await db.rollback()
+                await tokens.settle(db, *reserved, "error")
+            except Exception:
+                log.exception("could not settle a failed live read")
+        raise
+
+
+async def _answer(db, principal, http, conn, label, call, args, run, item_id, reserved):
+    """The rest of :func:`_read`, once the connection is known."""
     zone = await company_timezone(db)
     kind, _ = live.backend_of(conn.endpoint_url)
     # A reconnected key (new ciphertext) or another endpoint is another cache entry.
@@ -380,17 +398,29 @@ DateTo = Annotated[date | None, Query(description="YYYY-MM-DD, inclusive")]
 
 
 @router.get("/sources", operation_id="live_sources", response_model=list[LiveSourceOut])
-async def live_sources(principal: UserPrincipal, db: TenantDB) -> list[LiveSourceOut]:
+async def live_sources(
+    principal: UserPrincipal, db: TenantDB, token: LiveTokenOf
+) -> list[LiveSourceOut]:
     """Your active connections that Oracle can read live (v1: Fireflies), with their
     tools."""
     assert principal.user_id is not None
-    return [
+    reserved = None
+    if token is not None:
+        # Re-checked and counted toward the reply's 8 like every live call (C1); no cite.
+        read_id = await tokens.reserve(
+            db, token, None, "sources", "Live sources", None, cited=False
+        )
+        reserved = (token, read_id)
+    out = [
         LiveSourceOut(
             connection_id=c.id, provider=c.provider, label=_label(c), tools=FIREFLIES_TOOLS
         )
         for c in await connections.list_for_user(db, principal.user_id)
         if c.provider == "fireflies" and c.status == "active"
     ]
+    if reserved is not None:
+        await tokens.settle(db, *reserved, "ok")
+    return out
 
 
 @router.get(
