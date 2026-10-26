@@ -1,3 +1,4 @@
+# ruff: noqa: F811 - the fake Claude fixture is imported
 """INT2 lane 1: Oracle's read of a new intake runs as a SwarmCloud ``intake_analysis`` run.
 
 Owner answers (docs/product-oracle-v2/specs/owner-answers.md, INT2): Q2 automatic on create

@@ -99,6 +99,9 @@ class Settings(BaseSettings):
     web_search_key: SecretStr = SecretStr("")
     web_search_max_per_run: int = 30
     web_fetch_max_per_run: int = 40
+    # INT2: where Oracle's read of a new intake runs: a SwarmCloud intake_analysis run, or
+    # (the rollback, without a deploy) the built-in intake_analysis pool job as before.
+    intake_read_runtime: Literal["swarmcloud", "job"] = "swarmcloud"
 
     @model_validator(mode="after")
     def _no_reserved_domains_in_production(self) -> "Settings":
