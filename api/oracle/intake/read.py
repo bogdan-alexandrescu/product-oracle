@@ -361,13 +361,17 @@ async def tick(db: AsyncSession) -> int:
     """The tick: follow every read under way (fallbacks, failures), then start the reads
     of intakes whose queued job migration 0055 moved. Returns the reads started."""
     state = ProductIntake.analysis["extraction"]["read"]["state"].astext
-    rows = list(await db.scalars(select(ProductIntake).where(state.in_(LIVE)).limit(SYNC_PER_TICK)))
-    for intake in rows:
+    query = select(ProductIntake.id).where(state.in_(LIVE)).limit(SYNC_PER_TICK)
+    for intake_id in list(await db.scalars(query)):
+        # Read afresh: a commit or rollback before may have expired it.
+        intake = await db.get(ProductIntake, intake_id, populate_existing=True)
+        if intake is None:
+            continue
         try:
             if await sync(db, intake):
                 await db.commit()
         except Exception:
-            log.exception("intake read %s could not be followed", intake.id)
+            log.exception("intake read %s could not be followed", intake_id)
             await db.rollback()
     return await start_pending_reads(db)
 
@@ -381,9 +385,9 @@ async def start_pending_reads(db: AsyncSession, limit: int = PENDING_PER_TICK) -
     moved = select(LlmJob.intake_id).where(
         LlmJob.kind == FLOW, LlmJob.error_reason == "moved_to_swarmcloud"
     )
-    rows = list(
+    ids = list(
         await db.scalars(
-            select(ProductIntake)
+            select(ProductIntake.id)
             .where(
                 ProductIntake.id.in_(moved),
                 ProductIntake.status.not_in(intake_job.CLOSED_INTAKE),
@@ -395,7 +399,11 @@ async def start_pending_reads(db: AsyncSession, limit: int = PENDING_PER_TICK) -
         )
     )
     started = 0
-    for intake in rows:
+    for intake_id in ids:
+        # Read afresh: the submission before may have rolled the session back.
+        intake = await db.get(ProductIntake, intake_id, populate_existing=True)
+        if intake is None:
+            continue
         read = await start_read(db, None, intake)
         await db.commit()
         await submit(db, read)

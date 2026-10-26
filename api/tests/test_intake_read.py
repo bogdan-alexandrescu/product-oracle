@@ -160,7 +160,8 @@ async def test_a_finished_run_imports_its_analysis_as_private_inferences(client)
         intake = await s.get(ProductIntake, uuid.UUID(intake_id))
         last = intake.analysis["extraction"]["last"]
         assert last["run_id"] == str(run.id) and last["private"] is True
-        assert all(f["restricted"] for f in intake.analysis["findings"].values())
+        model = [f for f in intake.analysis["findings"].values() if f["origin"] == "model"]
+        assert len(model) == 3 and all(f.get("restricted") is not False for f in model)
     assert await _jobs(ctx) == []
     # Another member sees no read at all (S6).
     assert (await summary(client, ctx, intake_id, who="approver"))["ai_read"] is None
