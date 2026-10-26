@@ -150,6 +150,8 @@ def _mark_expand(html: str) -> str:
 
 def _banner(ev: ExportVersion) -> str:
     parts = [ev.title, f"Version {ev.version.number}", ev.status.replace("_", " ")]
+    if ev.audience_label:
+        parts.insert(2, f"Audience {ev.audience_label}")
     if ev.version.approved_at is not None:
         parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
     else:

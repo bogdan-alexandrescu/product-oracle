@@ -13,7 +13,7 @@
 <meta name="generator" content="Product Oracle">
 <meta name="oracle-theme" content="{{ theme_key }}">
 {% if page_fit %}<meta name="oracle-page-fit" content="{{ page_fit }}">{% endif %}
-<title>{{ title }} — v{{ number }}{% if layer != "full" %} ({{ layer_label }}){% endif %}</title>
+<title>{{ title }}{% if not link_holder %} — v{{ number }}{% endif %}{% if layer != "full" %} ({{ layer_label }}){% endif %}{% if audience_label %} ({{ audience_label }}){% endif %}</title>
 <meta name="oracle-layer" content="{{ layer }}">
 <style>
 {{ css }}
@@ -32,8 +32,10 @@
 {% if running_header %}
 <div class="doc-strings" aria-hidden="true">
   <span class="doc-strings-title">{{ header_title or title }}</span>
+  {% if not link_holder %}
   <span class="doc-strings-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
   <span class="doc-strings-status">{{ status | replace("_", " ") | capitalize }}</span>
+  {% endif %}
   <span class="doc-strings-asof">As of {{ as_of }}</span>
 </div>
 {% endif %}
@@ -44,13 +46,16 @@
     <span class="banner-doc banner-full">{{ title }}</span><span class="banner-doc banner-short">{{ header_title }}</span>
     {%- else %}<span class="banner-doc">{{ title }}</span>{% endif %}
     <span class="banner-asof">As of {{ as_of }}</span>
-    <span class="banner-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
+    {% if not link_holder %}<span class="banner-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>{% endif %}
+    {% if audience_label %}<span class="banner-audience">Audience {{ audience_label }}</span>{% endif %}
     {% if layer != "full" %}<span class="banner-layer">{{ layer_label }}: the full document has the detail</span>{% endif %}
-    <span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>
+    {% if not link_holder %}<span class="banner-status">{{ status | replace("_", " ") | capitalize }}</span>{% endif %}
     {% if source_label %}<span class="banner-source"><a href="{{ source_url }}">{% if header_source_label and header_source_label != source_label %}<span class="banner-full">{{ source_label }}</span><span class="banner-short">{{ header_source_label }}</span>{% else %}{{ source_label }}{% endif %}</a></span>{% endif %}
+    {% if not link_holder %}
     <span class="banner-date">
       {%- if approved_at %}Approved {{ approved_at }}{% else %}Not approved · imported {{ imported_at }}{% endif -%}
     </span>
+    {% endif %}
   </div>
   {% if status_header %}
   <table class="status-table">

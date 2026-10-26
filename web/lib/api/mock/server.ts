@@ -154,6 +154,7 @@ import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections,
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
+import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience } from "./audience";
 
 /**
  * latest_version, approved_version, source and an update's period are read off the versions;
@@ -2705,6 +2706,8 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
     ...d,
     kind: d.kind ?? "prd",
     visibility: d.visibility ?? "company",
+    // O5: a roadmap without a default audience reads as "team"; other kinds have none.
+    audience: d.kind === "roadmap" ? (d.audience ?? "team") : null,
     period,
     latest_version: latest?.number ?? null,
     approved_version: vs.filter((v) => v.approved_at).pop()?.number ?? null,
@@ -2978,13 +2981,15 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
 }
 
-function banner(doc: DocumentRow, v: VersionRow) {
+/** `audience`: O5, the label of the audience the export renders for (as the API's banner). */
+function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
   const status = v.approved_at ? "approved" : doc.status;
-  return `${doc.title} · version ${v.number} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
+  const badge = audience ? ` · audience ${audience}` : "";
+  return `${doc.title} · version ${v.number}${badge} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
 }
 
 /** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
-function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding()): string {
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null): string {
   const sections = v.sections
     .map((s) => {
       const tag = `h${Math.min(s.level, 3)}`;
@@ -3006,13 +3011,13 @@ function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBr
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v, audience))} · mock export</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}${sections}<ol class="citations">${notes}</ol></body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
-function exportPdf(doc: DocumentRow, v: VersionRow): string {
+function exportPdf(doc: DocumentRow, v: VersionRow, audience?: string | null): string {
   const ascii = (s: string) => s.replace(/[^\x20-\x7e]/g, "-").replace(/([\\()])/g, "\\$1");
-  const lines = [banner(doc, v), "Mock export: the API renders the real PDF.", "", ...v.sections.map((s) => s.heading)];
+  const lines = [banner(doc, v, audience), "Mock export: the API renders the real PDF.", "", ...v.sections.map((s) => s.heading)];
   const text = lines.map((l, i) => `${i ? "T* " : ""}(${ascii(l)}) Tj`).join("\n");
   const stream = `BT /F1 11 Tf 16 TL 72 740 Td\n${text}\nET`;
   const objects = [
@@ -4674,6 +4679,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
   }
 
+  // O5: the roadmap audience registry (./audience.ts), every member.
+  if (p[1] === "roadmap-audiences" && p.length === 2 && m === "GET") return json(200, AUDIENCES);
   // H8: an update starts from its template with its period (owners only); other kinds as before.
   if (p[1] === "drafts" && p.length === 2 && m === "POST") {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
@@ -5057,6 +5064,16 @@ async function route(db: Db, req: Request): Promise<Response> {
     followRunReview(db, doc, v, true, me.id);
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
+  // O5: audience= renders a roadmap for Board, Team or Engineering (./audience.ts).
+  const audience = sub === "deck" || sub === "export" ? q.get("audience") : null;
+  const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
+  if (refused) return json(refused.status, refused.body);
+  return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience) } : v, sub, q, audience);
+}
+
+/** A version's deck and export (O5: `v` already rendered for its audience, if any). */
+function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | undefined, q: URLSearchParams, audience: string | null): Response {
+  const badge = isAudience(audience) ? audienceLabel(audience) : null;
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
     if (!v.sections.some((s) => s.layer === "brief")) {
       return json(422, { detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead` });
@@ -5064,9 +5081,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (sub === "deck") {
     const versions = docVersions(db, doc);
-    return json(
-      200,
-      deckOut({
+    const deck = deckOut({
         document_id: doc.id,
         slug: doc.slug,
         title: doc.title,
@@ -5079,8 +5094,10 @@ async function route(db: Db, req: Request): Promise<Response> {
         citations: v.citations,
         // H8: a board update groups its brief sections into slides (front matter `slides`).
         slides: Array.isArray(v.front_matter.slides) ? (v.front_matter.slides as string[][]) : undefined,
-      }),
-    );
+    });
+    // As the API's deck banner: "Audience Board" after the version.
+    if (badge) deck.banner = deck.banner.replace(` · Version ${v.number}`, ` · Version ${v.number} · Audience ${badge}`);
+    return json(200, deck);
   }
   if (sub === "export") {
     const format = q.get("format") ?? "html";
@@ -5089,23 +5106,23 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(422, { detail: `the ${layer} layer exports as ${LAYER_FORMATS[layer]?.join(", ")}, not ${format}` });
     }
     if (layer === "deck") {
-      if (format === "pptx") return new Response(`PK mock deck: ${banner(doc, v)}`, { headers: { "content-type": PPTX_TYPE } });
-      return new Response(exportPdf(doc, { ...v, sections: v.sections.filter((s) => s.layer === "brief") }), {
+      if (format === "pptx") return new Response(`PK mock deck: ${banner(doc, v, badge)}`, { headers: { "content-type": PPTX_TYPE } });
+      return new Response(exportPdf(doc, { ...v, sections: v.sections.filter((s) => s.layer === "brief") }, badge), {
         headers: { "content-type": "application/pdf" },
       });
     }
     if (layer === "brief") {
       const brief = { ...v, sections: v.sections.filter((s) => s.layer === "brief") };
-      if (format === "pdf") return new Response(exportPdf(doc, brief), { headers: { "content-type": "application/pdf" } });
-      return new Response(exportHtml(doc, brief, db.branding), { headers: { "content-type": "text/html" } });
+      if (format === "pdf") return new Response(exportPdf(doc, brief, badge), { headers: { "content-type": "application/pdf" } });
+      return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
       return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
         headers: { "content-type": "text/markdown" },
       });
     }
-    if (format === "pdf") return new Response(exportPdf(doc, v), { headers: { "content-type": "application/pdf" } });
-    return new Response(exportHtml(doc, v, db.branding), { headers: { "content-type": "text/html" } });
+    if (format === "pdf") return new Response(exportPdf(doc, v, badge), { headers: { "content-type": "application/pdf" } });
+    return new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } });
   }
   return notFound("Route");
 }

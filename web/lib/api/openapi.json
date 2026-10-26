@@ -6704,7 +6704,7 @@
           "review"
         ],
         "summary": "Export Publication",
-        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it. A PDF renders on the export pool in an export place, like an\nexport (refused: 429 ``export_busy_you`` or 503 ``export_busy``).",
+        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it. A PDF renders on the export pool in an export place, like an\nexport (refused: 429 ``export_busy_you`` or 503 ``export_busy``).\n\n``audience`` (roadmaps, O5): the publication's pinned version rendered for Board, Team\nor Engineering (oracle.roadmap.variants), on the export pool.",
         "operationId": "export_publication",
         "security": [
           {
@@ -6762,6 +6762,28 @@
               "default": "full",
               "title": "Layer"
             }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "board",
+                    "team",
+                    "engineering",
+                    "public"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audience"
+            }
           }
         ],
         "responses": {
@@ -6786,10 +6808,53 @@
               }
             }
           },
+          "403": {
+            "description": "The Public audience below the approver role, or for a run"
+          },
+          "409": {
+            "description": "public_not_ready: the Public audience needs a public check"
+          },
           "422": {
-            "description": "Format not offered for the layer, or no brief"
+            "description": "Format not offered for the layer, no brief, or an audience for a document that is not a roadmap (or as markdown)"
           }
         },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/roadmap-audiences": {
+      "get": {
+        "tags": [
+          "export",
+          "roadmaps"
+        ],
+        "summary": "List Audiences",
+        "description": "O5: the audience registry (oracle.roadmap.variants): what each audience hides,\nwhich item fields it shows and how it groups them.",
+        "operationId": "list_audiences",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AudienceOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Audiences"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "x-min-role": "viewer"
       }
     },
@@ -6799,7 +6864,7 @@
           "export"
         ],
         "summary": "Export Version",
-        "description": "Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable\nslides).",
+        "description": "Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable\nslides). ``audience`` (roadmaps, O5): the rendering for Board, Team or Engineering;\nmarkdown is the stored text and has none.",
         "operationId": "export_version",
         "security": [
           {
@@ -6858,6 +6923,28 @@
               "default": "full",
               "title": "Layer"
             }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "board",
+                    "team",
+                    "engineering",
+                    "public"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audience"
+            }
           }
         ],
         "responses": {
@@ -6888,11 +6975,18 @@
               }
             }
           },
+          "403": {
+            "description": "The Public audience below the approver role, or for a run"
+          },
+          "409": {
+            "description": "public_not_ready: the Public audience needs a public check"
+          },
           "422": {
-            "description": "Format not offered for the layer, or the version has no brief"
+            "description": "Format not offered for the layer, the version has no brief, or an audience for a document that is not a roadmap (or as markdown)"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/deck": {
@@ -6929,6 +7023,28 @@
               "type": "integer",
               "title": "N"
             }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "board",
+                    "team",
+                    "engineering",
+                    "public"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audience"
+            }
           }
         ],
         "responses": {
@@ -6953,7 +7069,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/documents/{doc}/llm-jobs": {
@@ -35057,6 +35174,1115 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/roadmaps/{doc}/public-texts": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Public Texts",
+        "description": "The Public check's review list: one row per item of the version with its public\ntext, state (Approved, Draft, Excluded, Missing, Internal item changed) and leak\nfindings, the shown and left-out counts, what is removed, and the check's state.",
+        "operationId": "list_public_texts",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTextsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/public-texts/{item_key}": {
+      "put": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Put Public Text",
+        "description": "Edit, approve or exclude one item's public text. Approving is refused (422\n``leak_blocking``) while the text has a blocking leak finding, and (422\n``warnings_unchecked``) until every warning is ticked in ``checked_warnings``.",
+        "operationId": "put_public_text",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "item_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Key"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicTextIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTextOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/public-page": {
+      "put": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Put Public Page",
+        "description": "The Public page's own title and intro (the internal title is never shown). A\nblocking leak finding is 422 ``leak_blocking``; a change lapses the public check.",
+        "operationId": "put_public_page",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicPageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/public-texts/draft": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Draft Public Texts",
+        "description": "Draft public texts (O5-Q7): one ``public_text`` job on Oracle's Claude account\npool writes a draft for each item with none. It only ever drafts (H11\n``external_messages``, ceiling Draft); a person approves each text.",
+        "operationId": "draft_public_texts",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "the job is turned off, or Oracle only observes"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/versions/{n}/public-preview": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Public Preview",
+        "description": "Exactly the page a Public link holder sees, rendered by the same code\n(``render_public``) from the same rows; only the footer's dates are a link's.",
+        "operationId": "get_public_preview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/publications/{p}/public-check": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Post Public Check",
+        "description": "Mark as checked: a person looked at the exact Public page of this publication.\n409 ``not_ready`` while any item that serves a goal and is not excluded lacks an\napproved, current text, or has a blocking finding.",
+        "operationId": "post_public_check",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "P"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCheckOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_ready: what is left before the check"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/documents/{doc}/share-links": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "List Share Links",
+        "description": "The document's share links, newest first: label, audience, version, creator,\nexpiry, views (distinct browsers), last viewed and state. Never a token, a URL or a\npasscode: those are shown once.",
+        "operationId": "list_share_links",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShareLinkOut"
+                  },
+                  "title": "Response List Share Links"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Create Share Link",
+        "description": "Make a link to one publication in one audience, with a passcode (set here, or\ngenerated by Oracle) and an expiry (14 days unless chosen, 90 at most). The link's\naddress and passcode are returned once.",
+        "operationId": "create_share_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareLinkIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkCreated"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Public below owner, a run's token, or an approvers-only document"
+          },
+          "409": {
+            "description": "not_published, or no_public_check for the Public audience"
+          },
+          "422": {
+            "description": "Not a roadmap, an expiry past 90 days, or a short passcode"
+          }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/share-links/{link_id}": {
+      "patch": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Update Share Link",
+        "description": "Extend (up to 90 days from now) or move the link to another publication of its\ndocument (the token stays). The creator or an owner; audited.",
+        "operationId": "update_share_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareLinkPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/share-links/{link_id}/passcode": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Rotate Share Link Passcode",
+        "description": "A new passcode (set here, or generated), shown once. The link and its address stay;\nevery browser that opened it with the old passcode must enter the new one.",
+        "operationId": "rotate_share_link_passcode",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasscodeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasscodeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/share-links/{link_id}/revoke": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Revoke Share Link",
+        "description": "End the link now (the next request is refused). The creator, an owner, or any\napprover for a non-public link. It cannot be undone: make a new link instead.",
+        "operationId": "revoke_share_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/documents/{doc}/share-links/revoke-all": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Revoke All Share Links",
+        "description": "Revoke every live link on the document (owners).",
+        "operationId": "revoke_all_share_links",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeAllIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareRevokedCount"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/share-links/dismiss": {
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Dismiss Share Revocations",
+        "description": "Dismiss the owners' Inbox row of links revoked because their creator left, was\ndemoted, or their document changed (O5-Q10).",
+        "operationId": "dismiss_share_revocations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareDismissIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareDismissedCount"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/share-links/{link_id}/views": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Share Link Views",
+        "description": "The view log: when the link was opened (page or download), the browser family and\nthe country when the load balancer gives one, per day, and the distinct-browser\ncount. It never records who opened it (O5-Q4).",
+        "operationId": "share_link_views",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareViewsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/public/shares/{token}": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Public Share",
+        "description": "The shared page, once the passcode opened it in this browser; before that, the\npasscode form, the same for every token.",
+        "operationId": "public_share",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "401": {
+            "description": "No cookie that opens this link: the passcode form (any token)"
+          },
+          "410": {
+            "description": "This link has ended (revoked or expired), for a cookie holder"
+          },
+          "429": {
+            "description": "Too many requests (Retry-After)"
+          },
+          "503": {
+            "description": "Try again in a moment (the export pool is busy)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Unlock Public Share",
+        "description": "The passcode form's post (``passcode``, form-encoded or JSON). The right passcode\non a live link sets the link's cookie and goes back to the page; anything else is the\nsame 404, whatever the reason.",
+        "operationId": "unlock_public_share",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Opened: the cookie is set, back to the page"
+          },
+          "404": {
+            "description": "Not opened: wrong passcode, unknown, expired or revoked (one body)"
+          },
+          "429": {
+            "description": "Locked out for guessing (Retry-After)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/shares/{token}/pdf": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Public Share Pdf",
+        "description": "The page as a PDF, when the link allows downloads (O5-Q9); the same 404 as an\nunknown token before the passcode or when downloads are off.",
+        "operationId": "public_share_pdf",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "404": {
+            "description": "Not open"
+          },
+          "401": {
+            "description": "No cookie that opens this link: the passcode form (any token)"
+          },
+          "410": {
+            "description": "This link has ended (revoked or expired), for a cookie holder"
+          },
+          "429": {
+            "description": "Too many requests (Retry-After)"
+          },
+          "503": {
+            "description": "Try again in a moment (the export pool is busy)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/shares/{token}/status": {
+      "get": {
+        "tags": [
+          "shares"
+        ],
+        "summary": "Public Share Status",
+        "description": "For the web page's server render: ``locked`` until the passcode opened the link\nin this browser (for every token, known or not), then ``active`` or ``ended``.",
+        "operationId": "public_share_status",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "locked (no open cookie), active or ended",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/alignment-reports": {
       "get": {
         "tags": [
@@ -46923,6 +48149,75 @@
           "reasons"
         ],
         "title": "AtRiskItem"
+      },
+      "AudienceOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "board",
+              "team",
+              "engineering",
+              "public"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "hidden_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hidden Sections"
+          },
+          "item_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Item Fields"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "theme",
+              "team",
+              "stage"
+            ],
+            "title": "Group By"
+          },
+          "max_items_per_horizon": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Items Per Horizon"
+          },
+          "appendix": {
+            "type": "boolean",
+            "title": "Appendix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "hidden_sections",
+          "item_fields",
+          "group_by",
+          "max_items_per_horizon",
+          "appendix"
+        ],
+        "title": "AudienceOut",
+        "description": "O5: one audience of the roadmap variant registry (oracle.roadmap.variants)."
       },
       "AuthorizationServerMetadata": {
         "properties": {
@@ -61861,6 +63156,23 @@
             "title": "Visibility",
             "default": "company"
           },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
           "period": {
             "anyOf": [
               {
@@ -62267,6 +63579,23 @@
             ],
             "title": "Visibility",
             "default": "company"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
           },
           "period": {
             "anyOf": [
@@ -71849,6 +73178,14 @@
             "title": "Revoke Failures",
             "default": []
           },
+          "share_revocations": {
+            "items": {
+              "$ref": "#/components/schemas/InboxShareRevocation"
+            },
+            "type": "array",
+            "title": "Share Revocations",
+            "default": []
+          },
           "access_failures": {
             "items": {
               "$ref": "#/components/schemas/InboxAccessFailure"
@@ -72575,6 +73912,119 @@
           "reviewed"
         ],
         "title": "InboxSections"
+      },
+      "InboxShareRevocation": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "creator_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Id"
+          },
+          "creator_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Name"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
+          "revoked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Revoked At"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSharedLink"
+            },
+            "type": "array",
+            "title": "Links"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "reason",
+          "revoked_at",
+          "links"
+        ],
+        "title": "InboxShareRevocation",
+        "description": "Share links Oracle revoked because their creator left or was demoted, or their\ndocument was trashed or limited (O5-Q10): Re-share or Dismiss (owners)."
+      },
+      "InboxSharedLink": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "document_title": {
+            "type": "string",
+            "title": "Document Title"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "board",
+              "team",
+              "engineering",
+              "public"
+            ],
+            "title": "Audience"
+          },
+          "publication_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Publication Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "document",
+          "document_title",
+          "audience",
+          "publication_id"
+        ],
+        "title": "InboxSharedLink"
       },
       "InboxSource": {
         "properties": {
@@ -76651,6 +78101,11 @@
             "type": "boolean",
             "title": "Quality Review",
             "default": true
+          },
+          "public_text": {
+            "type": "boolean",
+            "title": "Public Text",
+            "default": true
           }
         },
         "type": "object",
@@ -77786,6 +79241,36 @@
         "title": "LayerImpact",
         "description": "Where the module shows up in the document (O1f brief and full layers)."
       },
+      "LeakFindingOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "words"
+        ],
+        "title": "LeakFindingOut"
+      },
       "LearningCreate": {
         "properties": {
           "outcome_id": {
@@ -78330,6 +79815,7 @@
               "refinement",
               "quality_review",
               "refinement_batch",
+              "public_text",
               "intake_analysis",
               "decision_options",
               "scope_enhance",
@@ -84167,6 +85653,47 @@
         "type": "object",
         "title": "PagePatch"
       },
+      "PasscodeIn": {
+        "properties": {
+          "passcode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passcode"
+          }
+        },
+        "type": "object",
+        "title": "PasscodeIn"
+      },
+      "PasscodeOut": {
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/ShareLinkOut"
+          },
+          "passcode": {
+            "type": "string",
+            "title": "Passcode"
+          },
+          "passcode_generated": {
+            "type": "boolean",
+            "title": "Passcode Generated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link",
+          "passcode",
+          "passcode_generated"
+        ],
+        "title": "PasscodeOut"
+      },
       "PasswordChange": {
         "properties": {
           "current_password": {
@@ -87797,6 +89324,93 @@
         ],
         "title": "ProviderOut"
       },
+      "PublicCheckOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "publication_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Publication Id"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "checked_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checked By"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          },
+          "shown_item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shown Item Keys"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "checked",
+              "lapsed"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "publication_id",
+          "version_number",
+          "checked_by",
+          "checked_at",
+          "shown_item_keys",
+          "content_hash",
+          "state"
+        ],
+        "title": "PublicCheckOut"
+      },
+      "PublicCheckState": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "checked",
+              "lapsed"
+            ],
+            "title": "State"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "PublicCheckState"
+      },
       "PublicInterview": {
         "properties": {
           "company": {
@@ -87956,6 +89570,439 @@
           "done"
         ],
         "title": "PublicInterviewTurn"
+      },
+      "PublicPageIn": {
+        "properties": {
+          "public_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Title"
+          },
+          "public_intro": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Intro"
+          }
+        },
+        "type": "object",
+        "title": "PublicPageIn"
+      },
+      "PublicPageOut": {
+        "properties": {
+          "public_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Title"
+          },
+          "public_intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Intro"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PublicPageOut"
+      },
+      "PublicRowOut": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "internal_title": {
+            "type": "string",
+            "title": "Internal Title"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "draft",
+              "excluded",
+              "missing",
+              "changed"
+            ],
+            "title": "State"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicTextOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "shown": {
+            "type": "boolean",
+            "title": "Shown"
+          },
+          "left_out_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_approved_text",
+                  "excluded",
+                  "no_goal"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left Out Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "internal_title",
+          "horizon",
+          "state",
+          "shown"
+        ],
+        "title": "PublicRowOut"
+      },
+      "PublicTextIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 280,
+            "title": "Description",
+            "default": ""
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "exploring",
+              "planned",
+              "in_progress",
+              "shipped"
+            ],
+            "title": "Stage"
+          },
+          "announced_quarter": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{4}-Q[1-4]$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Announced Quarter"
+          },
+          "changelog_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changelog Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved",
+              "excluded"
+            ],
+            "title": "State",
+            "default": "draft"
+          },
+          "checked_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Checked Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "stage"
+        ],
+        "title": "PublicTextIn"
+      },
+      "PublicTextOut": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "exploring",
+              "planned",
+              "in_progress",
+              "shipped"
+            ],
+            "title": "Stage"
+          },
+          "announced_quarter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Announced Quarter"
+          },
+          "changelog_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changelog Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved",
+              "excluded"
+            ],
+            "title": "State"
+          },
+          "drafted_by": {
+            "type": "string",
+            "title": "Drafted By"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "checked_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked Warnings",
+            "default": []
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "title",
+          "description",
+          "stage",
+          "state",
+          "drafted_by"
+        ],
+        "title": "PublicTextOut"
+      },
+      "PublicTextsOut": {
+        "properties": {
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "public_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Title"
+          },
+          "public_intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Intro"
+          },
+          "page_findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Page Findings",
+            "default": []
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PublicRowOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "shown": {
+            "type": "integer",
+            "title": "Shown"
+          },
+          "left_out": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Left Out"
+          },
+          "removed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Removed"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "check": {
+            "$ref": "#/components/schemas/PublicCheckState"
+          },
+          "not_ready": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Not Ready"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "version",
+          "rows",
+          "shown",
+          "left_out",
+          "removed",
+          "content_hash",
+          "check",
+          "not_ready"
+        ],
+        "title": "PublicTextsOut"
       },
       "PublicationOut": {
         "properties": {
@@ -95187,6 +97234,39 @@
         ],
         "title": "RevisionSummary"
       },
+      "RevokeAllIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "RevokeAllIn"
+      },
+      "RevokeIn": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "RevokeIn"
+      },
       "Risk": {
         "properties": {
           "risk": {
@@ -102282,6 +104362,469 @@
         ],
         "title": "SetupStep"
       },
+      "ShareDayOut": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "views": {
+            "type": "integer",
+            "title": "Views"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "views"
+        ],
+        "title": "ShareDayOut"
+      },
+      "ShareDismissIn": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "ShareDismissIn"
+      },
+      "ShareDismissedCount": {
+        "properties": {
+          "dismissed": {
+            "type": "integer",
+            "title": "Dismissed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dismissed"
+        ],
+        "title": "ShareDismissedCount"
+      },
+      "ShareLinkCreated": {
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/ShareLinkOut"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "passcode": {
+            "type": "string",
+            "title": "Passcode"
+          },
+          "passcode_generated": {
+            "type": "boolean",
+            "title": "Passcode Generated"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link",
+          "url",
+          "passcode",
+          "passcode_generated",
+          "expires_at"
+        ],
+        "title": "ShareLinkCreated"
+      },
+      "ShareLinkIn": {
+        "properties": {
+          "publication_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Publication Id"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "board",
+              "team",
+              "engineering",
+              "public"
+            ],
+            "title": "Audience"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "expires_in": {
+            "type": "string",
+            "enum": [
+              "24h",
+              "7d",
+              "14d",
+              "30d",
+              "90d"
+            ],
+            "title": "Expires In",
+            "default": "14d"
+          },
+          "allow_download": {
+            "type": "boolean",
+            "title": "Allow Download",
+            "default": true
+          },
+          "passcode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "publication_id",
+          "audience",
+          "label"
+        ],
+        "title": "ShareLinkIn"
+      },
+      "ShareLinkOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "publication_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Publication Id"
+          },
+          "publication_number": {
+            "type": "integer",
+            "title": "Publication Number"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "newer_publication": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newer Publication"
+          },
+          "newer_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newer Version"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "board",
+              "team",
+              "engineering",
+              "public"
+            ],
+            "title": "Audience"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ],
+            "title": "State"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked Reason"
+          },
+          "allow_download": {
+            "type": "boolean",
+            "title": "Allow Download"
+          },
+          "views": {
+            "type": "integer",
+            "title": "Views"
+          },
+          "distinct_browsers": {
+            "type": "integer",
+            "title": "Distinct Browsers"
+          },
+          "last_viewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Viewed At"
+          },
+          "locked_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document",
+          "publication_id",
+          "publication_number",
+          "version_number",
+          "audience",
+          "label",
+          "created_by",
+          "created_at",
+          "expires_at",
+          "state",
+          "allow_download",
+          "views",
+          "distinct_browsers"
+        ],
+        "title": "ShareLinkOut"
+      },
+      "ShareLinkPatch": {
+        "properties": {
+          "expires_in": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "24h",
+                  "7d",
+                  "14d",
+                  "30d",
+                  "90d"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires In"
+          },
+          "publication_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Id"
+          }
+        },
+        "type": "object",
+        "title": "ShareLinkPatch"
+      },
+      "ShareRevokedCount": {
+        "properties": {
+          "revoked": {
+            "type": "integer",
+            "title": "Revoked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revoked"
+        ],
+        "title": "ShareRevokedCount"
+      },
+      "ShareViewOut": {
+        "properties": {
+          "viewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Viewed At"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "page",
+              "download"
+            ],
+            "title": "Kind"
+          },
+          "browser_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Browser Family"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          }
+        },
+        "type": "object",
+        "required": [
+          "viewed_at",
+          "kind"
+        ],
+        "title": "ShareViewOut"
+      },
+      "ShareViewsOut": {
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Link Id"
+          },
+          "zone": {
+            "type": "string",
+            "title": "Zone"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": "Counts browsers, not people. Oracle never records who opened a link."
+          },
+          "views": {
+            "type": "integer",
+            "title": "Views"
+          },
+          "distinct_browsers": {
+            "type": "integer",
+            "title": "Distinct Browsers"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ShareViewOut"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ShareDayOut"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link_id",
+          "zone",
+          "views",
+          "distinct_browsers",
+          "entries",
+          "days"
+        ],
+        "title": "ShareViewsOut"
+      },
       "SharedDriveList": {
         "properties": {
           "drives": {
@@ -106084,6 +108627,23 @@
               }
             ],
             "title": "Theme"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
           },
           "period": {
             "anyOf": [

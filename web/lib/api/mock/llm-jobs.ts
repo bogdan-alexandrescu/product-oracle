@@ -99,7 +99,7 @@ export type LlmContext = {
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
-const KINDS: (keyof Schemas["JobSettings"])[] = ["review_comments", "reporting", "refinement", "quality_review"];
+const KINDS: (keyof Schemas["JobSettings"])[] = ["review_comments", "reporting", "refinement", "quality_review", "public_text"];
 const SWITCH: Partial<Record<Job["kind"], keyof Schemas["JobSettings"]>> = { refinement_batch: "refinement" };
 const switchOf = (kind: Job["kind"]) => (SWITCH[kind] ?? kind) as keyof Schemas["JobSettings"];
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];

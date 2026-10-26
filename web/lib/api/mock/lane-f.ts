@@ -1741,6 +1741,13 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
       problems: [{ code: "kind_mismatch", message: `template kind is ${t.kind}` }],
     });
   }
+  // O5: a roadmap's default audience (the picker's variant); other kinds have none.
+  if (input.audience && input.kind !== "roadmap") {
+    return json(422, {
+      detail: `audience is for roadmaps only, not ${input.kind}`,
+      problems: [{ code: "audience_not_roadmap", message: "audience is for roadmaps only" }],
+    });
+  }
   if (t.archived_at) {
     return json(422, {
       detail: `template '${t.key}' is archived; restore it to start new drafts`,
@@ -1767,6 +1774,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     template: t.key,
     template_version: String(tv.version),
     theme: input.theme ?? null,
+    audience: input.audience ?? null,
     created_at: created,
     updated_at: created,
   };

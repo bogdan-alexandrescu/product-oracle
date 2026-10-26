@@ -1,0 +1,63 @@
+{#- The Public version of a roadmap (oracle.roadmap.public.render_public). It has a slot
+    only for the allowlisted fields; nothing internal can appear. No script, no outside
+    fetch, no comment in the output. -#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page.title }}</title>
+<style>
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #fff; }
+header, main, footer { max-width: 72rem; margin: 0 auto; padding: 1rem 1.5rem; }
+header { border-bottom: 1px solid #e2e8f0; }
+.company { font-weight: 600; color: #0369a1; margin: 0; }
+h1 { font-size: 1.6rem; margin: .25rem 0; }
+.badge { display: inline-block; font-size: .75rem; padding: .1rem .5rem; border: 1px solid #0369a1; border-radius: 999px; color: #0369a1; }
+.intro { color: #334155; max-width: 48rem; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; }
+.column h2 { font-size: 1rem; border-bottom: 2px solid #0369a1; padding-bottom: .25rem; }
+.card { border: 1px solid #e2e8f0; border-radius: .5rem; padding: .75rem; margin-bottom: .75rem; }
+.card h3 { font-size: .95rem; margin: 0 0 .25rem; }
+.card p { margin: .25rem 0; font-size: .875rem; color: #334155; }
+.quarter { font-size: .75rem; color: #475569; }
+.empty { color: #64748b; font-size: .875rem; }
+.disclaimer { font-size: .8rem; color: #475569; border-top: 1px solid #e2e8f0; padding-top: .75rem; }
+footer { font-size: .75rem; color: #64748b; }
+</style>
+</head>
+<body>
+<header>
+<p class="company">{{ page.company }}</p>
+<h1>{{ page.title }}</h1>
+<span class="badge">Public</span>
+{% if page.intro %}<p class="intro">{{ page.intro }}</p>{% endif %}
+</header>
+<main>
+<div class="columns">
+{% for column in columns %}
+<section class="column">
+<h2>{{ column.label }}</h2>
+{% for card in column.cards %}
+<article class="card">
+<h3>{{ card.title }}</h3>
+{% if card.description %}<p>{{ card.description }}</p>{% endif %}
+{% if card.quarter %}<p class="quarter">Announced for {{ card.quarter }}</p>{% endif %}
+{% if card.changelog_url %}<p><a href="{{ card.changelog_url }}" rel="noopener noreferrer nofollow">Read the changelog</a></p>{% endif %}
+</article>
+{% else %}
+<p class="empty">Nothing here yet.</p>
+{% endfor %}
+</section>
+{% endfor %}
+</div>
+<p class="disclaimer">{{ page.disclaimer }}</p>
+</main>
+<footer>
+<p>{{ footer }}</p>
+{% if page.oracle_mark %}<p>{{ oracle_mark }}</p>{% endif %}
+</footer>
+</body>
+</html>

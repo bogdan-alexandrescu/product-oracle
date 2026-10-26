@@ -22,7 +22,7 @@ from oracle.authz import has_role, recheck_caller, require_role, require_role_no
 from oracle.docs import service as docs_service
 from oracle.docs.edit import EditForbidden, EditRefused, edit_section
 from oracle.docs.parser import DraftError
-from oracle.docs.schemas import ImportErrorResponse, VersionOut
+from oracle.docs.schemas import Audience, ImportErrorResponse, VersionOut
 from oracle.export import offload
 from oracle.jobs import service as jobs_service
 from oracle.review import collab, patches, publish, state
@@ -498,7 +498,12 @@ MEDIA = {"html": "text/html; charset=utf-8", "pdf": "application/pdf", "md": "te
                 "text/markdown": {"schema": {"type": "string"}},
             },
         },
-        422: {"description": "Format not offered for the layer, or no brief"},
+        403: {"description": "The Public audience below the approver role, or for a run"},
+        409: {"description": "public_not_ready: the Public audience needs a public check"},
+        422: {
+            "description": "Format not offered for the layer, no brief, or an audience "
+            "for a document that is not a roadmap (or as markdown)"
+        },
     },
 )
 async def export_publication(
@@ -508,11 +513,15 @@ async def export_publication(
     principal: Viewer,
     fmt: Literal["html", "pdf", "md"] = Query("html", alias="format"),
     layer: Literal["full", "brief", "deck"] = Query("full"),
+    audience: Audience | None = Query(None),
 ) -> Response:
     """The published HTML (full, brief or deck), its PDF, or the full markdown. Served
     from what was stored at publish time, so later edits, theme changes and source
     updates never change it. A PDF renders on the export pool in an export place, like an
-    export (refused: 429 ``export_busy_you`` or 503 ``export_busy``)."""
+    export (refused: 429 ``export_busy_you`` or 503 ``export_busy``).
+
+    ``audience`` (roadmaps, O5): the publication's pinned version rendered for Board, Team
+    or Engineering (oracle.roadmap.variants), on the export pool."""
     from oracle.export.pdf import PdfUnavailable, html_to_pdf
 
     row = await _publication(db, doc, p)
@@ -521,6 +530,8 @@ async def export_publication(
     html = {"full": row.html_full, "brief": row.html_brief, "deck": row.html_deck}[layer]
     if html is None:
         raise HTTPException(422, f"publication {p} has no {layer} layer")
+    if audience is not None:
+        return await _publication_audience(db, row, principal, fmt, layer, audience)
     content: str | bytes
     if fmt == "md":
         content = publish.published_markdown(row)
@@ -536,10 +547,53 @@ async def export_publication(
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
     else:
         content = html
+    return _published_file(row, fmt, layer, content)
+
+
+def _published_file(
+    row: DocumentPublication, fmt: str, layer: str, content: str | bytes, audience: str = ""
+) -> Response:
     suffix = "" if layer == "full" else f"-{layer}"
+    if audience:
+        suffix += f"-{audience}"
+    p = row.number
     name = f"{row.manifest['document']['slug']}-v{row.version_number}-published-{p}{suffix}"
     return Response(
         content=content,
         media_type=MEDIA[fmt],
         headers={"Content-Disposition": f'attachment; filename="{name}.{fmt}"'},
     )
+
+
+def _render_audience(ev: Any, layer: str, fmt: str) -> str | bytes:
+    """A publication's version in an audience. CPU-bound: on the export pool."""
+    from oracle.export.router import render_export
+
+    return render_export(ev, layer, "pdf" if fmt == "pdf" else "html")
+
+
+async def _publication_audience(
+    db: Any, row: DocumentPublication, principal: Principal, fmt: str, layer: str, audience: str
+) -> Response:
+    from oracle.export import router as exports
+    from oracle.export.pdf import PdfUnavailable
+    from oracle.export.render import NoBrief, apply_layer, detached, load_export_version
+
+    exports.check_audience_role(principal, audience)
+    if fmt == "md":
+        raise HTTPException(422, "markdown is the stored text; export an audience as html or pdf")
+    ev = await load_export_version(db, str(row.document_id), row.version_number)
+    try:
+        ev = apply_layer(ev, layer)
+    except NoBrief as e:
+        raise HTTPException(422, str(e)) from None
+    ev = detached(await exports.with_audience(db, ev, audience))
+    await db.commit()  # no connection held while it waits for the pool
+    try:
+        with offload.place(principal) as held:
+            content = await offload.run(held, _render_audience, ev, layer, fmt)
+    except offload.Refused as e:
+        return e.response()
+    except PdfUnavailable as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
+    return _published_file(row, fmt, layer, content, audience)

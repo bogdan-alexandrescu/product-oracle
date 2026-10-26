@@ -29,7 +29,7 @@ SOURCES_SECTION_ID = "sources"
 SOURCES_HEADING = "Sources and data points"
 NO_BRIEF_SECTIONS = "no_brief_sections"
 # Front matter keys a template may carry for itself; they are dropped from drafts.
-TEMPLATE_META_KEYS = ("theme", "suggest_when", "brief")
+TEMPLATE_META_KEYS = ("theme", "suggest_when", "brief", "audiences")
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
 _LAYOUT_FENCE = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```", re.S | re.M)
@@ -235,6 +235,15 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
                 f"{{#{layers.FULL_SECTION_ID}}}' heading after the brief sections",
             )
         )
+
+    # O5: a roadmap template may hide more of its own sections per audience
+    # (oracle.roadmap.variants); every section it names must exist.
+    from oracle.roadmap.variants import audiences_problems
+
+    for code, message, key in audiences_problems(
+        result.front_matter.get("audiences"), result.section_keys
+    ):
+        problems.append(Problem(code, message, None, key))
 
     # Roadmap layout blocks are read by the renderer: they must parse.
     for m in _LAYOUT_FENCE.finditer(rest):

@@ -113,6 +113,14 @@ class ExportVersion:
     zone: str = company_time.DEFAULT_ZONE
     # O5: the company's branding (oracle.branding.Brand): the header's logo and the accent.
     brand: Brand | None = None
+    # O5: the audience a roadmap renders for (oracle.roadmap.variants), None for the
+    # document as written; its items as plain values and the template's own hides.
+    audience: str | None = None
+    items: list = field(default_factory=list)
+    template_hides: dict[str, set[str]] = field(default_factory=dict)
+    # O5 share links: a signed-out link holder's render (oracle.shares.render) names no
+    # other document, no review status and no version, and links nothing into the app.
+    link_holder: bool = False
 
     @property
     def title(self) -> str:
@@ -129,13 +137,13 @@ class ExportVersion:
     @property
     def source_label(self) -> str | None:
         """ "From <PRD title> v<n>" for a version built from another document's."""
-        if self.source is None:
+        if self.source is None or self.link_holder:
             return None
         return f"From {self.source.title} v{self.source.version}"
 
     @property
     def source_url(self) -> str | None:
-        if self.source is None:
+        if self.source is None or self.link_holder:
             return None
         return app_url(f"/documents/{self.source.slug}/v/{self.source.version}")
 
@@ -157,11 +165,19 @@ class ExportVersion:
     def filename_stem(self) -> str:
         slug = re.sub(r"[^A-Za-z0-9._-]+", "-", self.document.slug).strip("-") or "document"
         suffix = "" if self.layer == "full" else f"-{self.layer}"
+        if self.audience:
+            suffix += f"-{self.audience}"
         return f"{slug}-v{self.version.number}{suffix}"
 
     @property
     def layer_label(self) -> str:
         return LAYER_LABEL.get(self.layer, self.layer)
+
+    @property
+    def audience_label(self) -> str | None:
+        from oracle.roadmap import variants
+
+        return variants.label(self.audience) if self.audience else None
 
 
 def sources_keys(sections: list[Section]) -> set[str]:
@@ -222,6 +238,83 @@ def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
     ev.sections = [
         s for s in ev.all_sections if s.layer == layers.BRIEF or s.section_key in appendix
     ]
+    return ev
+
+
+def check_audience(ev: ExportVersion, audience: str | None) -> None:
+    """Raise (oracle.roadmap.variants) when ``audience`` cannot render this version: not
+    a roadmap, or the Public audience (built from approved public texts, lane 2)."""
+    from oracle.roadmap import variants
+
+    if audience is None:
+        return
+    if ev.document.kind != "roadmap":
+        raise variants.NotARoadmap(
+            f"audience is offered for roadmaps only; '{ev.document.slug}' is a {ev.document.kind}"
+        )
+    if audience == "public":
+        raise variants.PublicNotReady(variants.PUBLIC_NOT_READY)
+
+
+async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
+    """A roadmap version's items (and their tracker issues) as plain values, for
+    :func:`apply_audience`."""
+    from oracle.roadmap.models import RoadmapItem, TrackerRecord
+    from oracle.roadmap.variants import ItemView
+
+    rows = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == ev.version.id)
+            .order_by(RoadmapItem.position)
+        )
+    )
+    tracks = {r.track_id for r in rows if r.track_id is not None}
+    issues: dict[tuple, list[tuple[str, str | None]]] = {}
+    if tracks:
+        records = await db.scalars(
+            select(TrackerRecord)
+            .where(TrackerRecord.track_id.in_(tracks), TrackerRecord.item_key.is_not(None))
+            .order_by(TrackerRecord.tracker, TrackerRecord.external_ref)
+        )
+        for rec in records:
+            issues.setdefault((rec.track_id, rec.item_key), []).append(
+                (rec.external_ref, _safe_href(rec.url) if rec.url else None)
+            )
+    ev.items = []
+    for r in rows:
+        rank = (r.priority or {}).get("rank")
+        ev.items.append(
+            ItemView(
+                key=r.item_key,
+                title=r.title,
+                outcome=r.outcome,
+                horizon=r.horizon,
+                position=r.position,
+                confidence=r.confidence,
+                rank=float(rank) if isinstance(rank, int | float) else None,
+                depends_on=list(r.depends_on or []),
+                milestone=dict(r.milestone) if r.milestone else None,
+                economics=dict(r.economics or {}),
+                tracker=issues.get((r.track_id, r.item_key), []),
+            )
+        )
+
+
+def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
+    """O5: render the (layered) export for an audience (oracle.roadmap.variants): its
+    hidden sections and the template's dropped, the item rows rebuilt from the version's
+    items with the audience's fields. Call :func:`load_audience` first."""
+    from oracle.roadmap import variants
+
+    check_audience(ev, audience)
+    if audience is None:
+        return ev
+    ev.audience = audience
+    hide = ev.template_hides.get(audience, set())
+    cards = list(ev.all_sections)
+    ev.sections = variants.rebuild(ev.sections, audience, ev.items, hide, cards)
+    ev.all_sections = variants.rebuild(cards, audience, ev.items, hide, cards)
     return ev
 
 
@@ -492,7 +585,12 @@ async def _resolve_theme(db: AsyncSession, ev: ExportVersion) -> None:
                     )
                 )
             if tv is not None:
-                candidates.append(("template", version_meta(tv.body).suggested_theme))
+                meta = version_meta(tv.body)
+                candidates.append(("template", meta.suggested_theme))
+                if document.kind == "roadmap":
+                    from oracle.roadmap.variants import template_hides
+
+                    ev.template_hides = template_hides(meta.front_matter)
     defaults = await company_draft_defaults(db)
     candidates.append(("company_default", (defaults.get(document.kind) or {}).get("theme")))
     for source, key in candidates:
@@ -720,8 +818,10 @@ def build_context(ev: ExportVersion) -> dict:
         **brand_context(ev),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
+        "audience_label": ev.audience_label,
         "source_label": ev.source_label,
         "source_url": ev.source_url,
+        "link_holder": ev.link_holder,
     }
 
 
@@ -1030,7 +1130,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "theme_name": theme.name,
         "body_class": " ".join(body_classes),
         "toc": toc if features.get("toc") else [],
-        "status_header": bool(features.get("status_header")),
+        "status_header": bool(features.get("status_header")) and not ev.link_holder,
         "legend": bool(features.get("legend")),
         "page_fit": features.get("page_fit"),
         "has_title_section": has_title_section,
@@ -1051,11 +1151,15 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # for the page's top margin (stored theme copies included, so it lives here).
         "running_header": running,
         "header_title": _cap(ev.title, HEADER_TEXT_MAX) if running else None,
-        "header_source_label": _header_source(ev.source) if running else None,
+        "header_source_label": _header_source(ev.source)
+        if running and not ev.link_holder
+        else None,
         "layer": ev.layer,
         "layer_label": ev.layer_label,
+        "audience_label": ev.audience_label,
         "source_label": ev.source_label,
         "source_url": ev.source_url,
+        "link_holder": ev.link_holder,
     }
 
 
@@ -1075,6 +1179,8 @@ def banner_line(ev: ExportVersion) -> str:
     ]
     if ev.layer != "full":
         parts.insert(2, ev.layer_label.lower())
+    if ev.audience_label:
+        parts.insert(2, f"audience {ev.audience_label}")
     if ev.version.approved_at is not None:
         parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
     if ev.source is not None:

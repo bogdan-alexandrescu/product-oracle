@@ -77,6 +77,8 @@ JOBS = (
     "scope_enhance",
     # H10: the why-not replies a person waits for after Disqualify.
     "why_not_reply",
+    # O5: a roadmap's public item texts, drafted for a person to approve.
+    "public_text",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
     # C3 Interviews: a customer interview's guide and snapshot (queued) and its turns

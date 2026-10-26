@@ -60,6 +60,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     )
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.scope_models import PrdScope
+    from oracle.shares.models import ShareLink
     from oracle.staging.models import NextDraftChange
     from oracle.v2.models import (
         ArtifactRequest,
@@ -89,6 +90,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         PrioritySnapshot: [("document_id", docs)],
         PrdScope: [("document_id", docs)],
         OutcomeRecord: [("document_id", docs)],
+        ShareLink: [("document_id", docs)],
         RoadmapChangeSet: [("roadmap_document_id", docs)],
         RoadmapItem: [("roadmap_document_id", docs)],
         DraftRoadmap: [("prd_document_id", docs)],

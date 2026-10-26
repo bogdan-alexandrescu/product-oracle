@@ -280,6 +280,8 @@ class Recommendation(BaseModel):
     theme: ThemeOption | None
     theme_reason: str
     # Roadmaps: audience variant (board / team / engineering / public) and layout options.
+    # O5: the New roadmap dialog sends it as StartDraftIn.audience, the roadmap's default
+    # audience (oracle.roadmap.variants).
     variant: str | None = None
     group_by: str | None = None
     show_capacity: bool | None = None
@@ -301,6 +303,9 @@ class StartDraftIn(BaseModel):
     template_version: int | None = Field(default=None, ge=1)
     # Defaults to the template version's suggested theme.
     theme: str | None = None
+    # O5, a roadmap only: its default audience, the picker's ``Recommendation.variant``.
+    # It only preselects; every reader may switch (oracle.roadmap.variants).
+    audience: Literal["board", "team", "engineering", "public"] | None = None
     # H8, an update only: the period it covers. Defaults to the day after the period of
     # the last approved update of the same template (else the first of this month),
     # through today.
