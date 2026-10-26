@@ -45,7 +45,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -86,6 +86,7 @@ import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, typ
 import {
   calibration,
   outcomeInboxRows,
+  outcomesPass,
   publishRefusal,
   routeQuality,
   seedLearnings,
@@ -1509,6 +1510,13 @@ function withInboxStates(
   };
 }
 
+/** H11 Check outcomes: the ticker's pass at the company's level, before outcomes are read. */
+function passOutcomes(db: Db) {
+  const autonomy = (db.autonomy ??= emptyAutonomy());
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  outcomesPass(db.quality, levelFor(autonomy, "outcomes"), owners, (a) => void oracleDid(autonomy, "outcomes", a));
+}
+
 /** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
 function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
   return {
@@ -1532,6 +1540,13 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     },
     uuid,
     now,
+    autonomy: {
+      level: () => levelFor((db.autonomy ??= emptyAutonomy()), "decisions"),
+      limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "decisions"),
+      // Who set Decide reversible calls (the mock keeps only the latest change's owner).
+      setBy: () => db.members.find((m) => m.id === db.autonomy?.updated_by)?.email ?? "an owner",
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "decisions", a),
+    },
   };
 }
 
@@ -1846,6 +1861,12 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
+    // H11 Order priorities: Oracle saves a run's order within the limits at Act.
+    autonomy: {
+      level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),
+      limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "priorities"),
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "priorities", a),
+    },
     feedback: db.feedback,
     documents: db.documents,
     confirmedGoals: () =>
@@ -2200,6 +2221,7 @@ function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): 
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
     drafts: () => draftDb(db).rows,
+    roadmapWatch: () => levelFor((db.autonomy ??= emptyAutonomy()), "roadmap_watch"),
   };
 }
 
@@ -3693,7 +3715,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (fireflies) return fireflies;
   // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
   db.autonomy ??= emptyAutonomy();
-  const autonomy = await routeAutonomy(db.autonomy, req, p, me);
+  // Undo calls the stored route as the person, where the mock has it (decisions' reviews).
+  const autonomy = await routeAutonomy(db.autonomy, req, p, me, async (u) =>
+    String(u.path).startsWith("/v1/decisions/")
+      ? route(db, new Request(new URL(String(u.path), req.url), { method: String(u.method), headers: { "Content-Type": "application/json" }, body: JSON.stringify(u.body ?? null) }))
+      : null,
+  );
   if (autonomy) return autonomy;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
@@ -3753,6 +3780,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
   };
+  passOutcomes(db);
   const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
@@ -4028,6 +4056,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.total += ritualCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + ritualCounted;
     // Outcome rows (H3): Add predictions and Outcome check due count; Oracle recorded is shown.
+    passOutcomes(db);
     const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;

@@ -74,6 +74,8 @@ export interface RoadmapContext {
   approverId?: string;
   /** E3b: the PRD drafts' items-only roadmaps (./draft-roadmap.ts), for draft refs. */
   drafts?: () => readonly DraftItems[];
+  /** H11 Watch the roadmap, read per request: Re-plan from Draft, Accept new date at Recommend. */
+  roadmapWatch?: () => "observe" | "draft" | "recommend" | "act";
 }
 
 /** A PRD version's draft roadmap as the diff reads it (./draft-roadmap.ts DraftRow). */
@@ -1444,7 +1446,10 @@ function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
     stale: ["review"],
     prd_moved: ["replan"],
   };
-  return [...first[a.kind], "keep"];
+  // H11: Oracle's one-step fixes follow Watch the roadmap; at Observe an alert only flags.
+  const level = ctx.roadmapWatch?.() ?? "recommend";
+  const offered = first[a.kind].filter((x) => (x === "accept_date" ? level === "recommend" : x === "replan" ? level !== "observe" : true));
+  return [...offered, "keep"];
 }
 
 function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: string | null): TrackAlertOut {
