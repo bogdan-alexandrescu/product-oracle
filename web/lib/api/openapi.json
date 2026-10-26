@@ -15469,7 +15469,7 @@
           "baseline"
         ],
         "summary": "Accept Proposal",
-        "description": "Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those\nfields as they are and applies the rest (#268).",
+        "description": "Apply the change as your own edit; the item is then\nlocked against Oracle's changes until a person unlocks it.\nskip_fields keeps those fields as they are and applies the rest (#268).",
         "operationId": "accept_proposal",
         "security": [
           {
@@ -69128,6 +69128,14 @@
             "title": "Imports",
             "default": []
           },
+          "no_documents": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "No Documents",
+            "default": []
+          },
           "feedback": {
             "items": {
               "$ref": "#/components/schemas/InboxDocument"
@@ -93885,6 +93893,17 @@
             ],
             "title": "Import Failed"
           },
+          "no_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Document"
+          },
           "can_retry_import": {
             "type": "boolean",
             "title": "Can Retry Import",
@@ -94701,6 +94720,17 @@
               }
             ],
             "title": "Import Failed"
+          },
+          "no_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Document"
           },
           "can_retry_import": {
             "type": "boolean",
@@ -98735,6 +98765,17 @@
             "type": "boolean",
             "title": "Can Retry Draft Import",
             "default": false
+          },
+          "draft_retry_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Retry Refused"
           },
           "items_check": {
             "anyOf": [
@@ -110344,6 +110385,17 @@
             ],
             "title": "Imported By Name"
           },
+          "imported_again": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Again"
+          },
           "approved_at": {
             "anyOf": [
               {
@@ -110674,6 +110726,17 @@
               }
             ],
             "title": "Imported By Name"
+          },
+          "imported_again": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Again"
           },
           "approved_at": {
             "anyOf": [

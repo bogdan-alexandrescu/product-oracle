@@ -433,3 +433,58 @@ async def test_trace_views_are_company_scoped(client, who):
         headers=a.as_("approver"),
     )  # fmt: skip
     assert resp.status_code == 422
+
+
+def test_the_evidence_inspector_needs_read_sources_too_for_a_run_token():
+    """Owner, 2026-10-25: the inspector shows source-item titles and links, so a run token
+    reads it with read:sources as well as read:documents, as the intake routes."""
+    from oracle.mcp import scopes
+
+    path = "/v1/documents/{doc}/versions/{n}/evidence"
+    assert scopes.allowed(frozenset({"read:documents", "read:sources"}), "GET", path)
+    assert not scopes.allowed(frozenset({"read:documents"}), "GET", path)
+    assert not scopes.allowed(frozenset({"read:sources"}), "GET", path)
+    # The version's trace and impact carry no source text: read:documents alone.
+    for leaf in ("trace", "impact"):
+        assert scopes.allowed(
+            frozenset({"read:documents"}), "GET", f"/v1/documents/{{doc}}/versions/{{n}}/{leaf}"
+        )
+
+
+@pytest.fixture
+def local_runtime():
+    """Run tokens from any address, as tests.test_mcp's own fixture."""
+    from oracle.swarm import FakeRuntime, set_runtime
+
+    set_runtime(FakeRuntime())
+    yield
+    set_runtime(None)
+
+
+async def test_a_run_reads_the_inspector_with_read_sources_and_its_users_items_live(
+    client, local_runtime
+):
+    from tests.test_mcp import mcp_client, run_token, text_of
+
+    ctx, chain, v1, weak, strong, item = await _evidence_setup(client)
+    await link_section(
+        ctx.tenant_id, v1.document_id, v1.id, "metrics", source_item_id=item, kind="evidences"
+    )
+    args = {"doc": DOC, "n": 1}
+    docs_only = await run_token(ctx.tenant_id, ["read:documents"], ctx.users["owner"].id)
+    async with mcp_client(docs_only) as c:
+        refused = await c.call_tool("get_version_evidence", args)
+        assert refused.is_error and "read:sources" in text_of(refused)
+    # A run reads its own user's never-shared item live, title included (no change).
+    both = await run_token(ctx.tenant_id, ["read:documents", "read:sources"], ctx.users["owner"].id)
+    async with mcp_client(both) as c:
+        ok = await c.call_tool("get_version_evidence", args)
+        assert not ok.is_error, text_of(ok)
+        assert "Owner-only notes" in text_of(ok)
+    # Another user's run sees that it exists, not what it says.
+    theirs = await run_token(
+        ctx.tenant_id, ["read:documents", "read:sources"], ctx.users["viewer"].id
+    )
+    async with mcp_client(theirs) as c:
+        ok = await c.call_tool("get_version_evidence", args)
+        assert not ok.is_error and "Owner-only notes" not in text_of(ok)
