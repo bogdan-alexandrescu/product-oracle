@@ -245,7 +245,16 @@ test("Simple's Home: what waits on me, the next meeting and this quarter's plan"
 
 test("Simple's Home: each part says when it has nothing", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
-  await signIn(page, EMAILS.viewer);
+  await signIn(page, EMAILS.owner);
+  // A new company still has its built-in rituals scheduled: the owner pauses them.
+  await page.goto("/company/rituals");
+  for (const title of ["Weekly goals check-in", "Monthly roadmap refresh", "Quarterly goals review"]) {
+    const row = page.getByTestId("ritual-row").filter({ hasText: title });
+    await row.click();
+    await page.getByTestId("ritual-inspector").filter({ visible: true }).getByRole("button", { name: "Pause" }).click();
+    await expect(row).toContainText("Paused");
+  }
+  await page.goto("/simple");
   await expectSimple(page, "/simple");
   await expect(page.getByTestId("simple-waiting-empty")).toContainText("Nothing waits on you");
   await expect(page.getByTestId("simple-meeting-empty")).toContainText("No meeting scheduled");

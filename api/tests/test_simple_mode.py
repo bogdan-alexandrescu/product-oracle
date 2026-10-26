@@ -52,9 +52,7 @@ async def test_experience_is_unset_until_chosen_then_remembered(client, tenant_i
     assert resp.json()["experience"] is None
 
     for mode in ("studio", "simple"):
-        resp = await client.patch(
-            "/v1/me/preferences", json={"experience": mode}, headers=headers
-        )
+        resp = await client.patch("/v1/me/preferences", json={"experience": mode}, headers=headers)
         assert resp.status_code == 200, resp.text
         assert resp.json()["experience"] == mode
         assert (await client.get("/v1/me/preferences", headers=headers)).json()[
@@ -67,16 +65,12 @@ async def test_experience_is_each_persons_own_and_checked(client, tenant_id):
     # any string is stored; no_claim=other preference keys.
     viewer = await token_with_role(tenant_id, "viewer")
     owner = await token_with_role(tenant_id, "owner")
-    resp = await client.patch(
-        "/v1/me/preferences", json={"experience": "simple"}, headers=owner
-    )
+    resp = await client.patch("/v1/me/preferences", json={"experience": "simple"}, headers=owner)
     assert resp.status_code == 200, resp.text
     assert (await client.get("/v1/me/preferences", headers=viewer)).json()["experience"] is None
 
     resp = await client.patch("/v1/me/preferences", json={"experience": "fancy"}, headers=viewer)
     assert resp.status_code == 422
     # Another key's change keeps the chosen mode.
-    resp = await client.patch(
-        "/v1/me/preferences", json={"document_view": "full"}, headers=owner
-    )
+    resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=owner)
     assert resp.json()["experience"] == "simple"
