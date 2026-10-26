@@ -45,7 +45,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { draftRefusal, emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { draftRefusal, emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -1461,6 +1461,11 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
     },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
+    nextDrafts: () => {
+      const a = (db.autonomy ??= emptyAutonomy());
+      const min = Number(a.stored.next_drafts?.limits?.min_staged);
+      return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
+    },
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -2154,6 +2159,14 @@ function load(): Db {
     const occurrence = db.rituals.occurrences.find((o) => o.ritual_id === refresh.id)!;
     db.autonomy.actions.push(seedLaunchDid(db.user_id, uuid(), launched), seedRitualDid(db.user_id, uuid(), refresh, occurrence.id));
   }
+  // #150: what Oracle did at Act within limits on a request (H11 requests): it merged a
+  // request into the one it repeats; the row links to it on Requests.
+  if (scenario === "oracle-did-request") {
+    const requests = ensureRequests(db);
+    const merged = requests.requests.find((r) => r.state === "merged" && r.merged_into_id);
+    const into = merged && requests.requests.find((r) => r.id === merged.merged_into_id);
+    if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
+  }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
@@ -2670,6 +2683,7 @@ function goalContext(db: Db, me: { id: string; role: Role }): GoalInterviewConte
     isMember: (id) => activeMember(db, id),
     uuid,
     now,
+    goalsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "goals"),
   };
 }
 
@@ -3355,6 +3369,7 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     edges: () => db.baseline.edges,
     decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
     people: () => db.members,
@@ -3980,7 +3995,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions") }, req, p, q);
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.

@@ -370,7 +370,7 @@ async def test_opening_turn_stores_versions(client, fake, monkeypatch):
         row = await s.get(DiscussionChange, uuid.UUID(stored[0]["id"]))
         assert row.from_message_id is not None and row.basis[0]["kind"] == "entity"
         turn = await s.get(DiscussionMessage, row.from_message_id)
-        assert turn.prompt == "discussion_reply.v2+discussion_reply_goal.v1"
+        assert turn.prompt == "discussion_reply.v2+discussion_reply_goal.v2"
         assert "<<<" not in turn.body
 
 

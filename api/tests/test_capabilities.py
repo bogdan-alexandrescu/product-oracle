@@ -311,6 +311,10 @@ async def test_capabilities_mark_the_per_item_operations(client, members_world, 
     body = await _caps(client, await token_with_role(members_world.tenant_id, role))
     assert body.get("per_item") == getattr(caps, "PER_ITEM", None)
     assert body["per_item"]["update_question"] == "approver"
+    # #615 review: withdrawing asked questions is the author's or an approver's (as asking
+    # them); filing a found item for someone else in the app is an owner's (as create_request).
+    assert body["per_item"]["withdraw_intake_questions"] == "approver"
+    assert body["per_item"]["file_request_candidate"] == "owner"
 
 
 # #370 fixes 6: checks split across functions (a helper checks the role, the caller raises)

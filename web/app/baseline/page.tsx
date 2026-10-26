@@ -7,6 +7,7 @@ import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, ViewO
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
+import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
@@ -101,8 +102,11 @@ export default function BaselinePage() {
   // #370: approvers change the baseline, commenters propose; a viewer only reads it.
   const canWrite = can("confirm_entity");
   const canComment = can("create_proposal");
-  // B6: a goals interview is a commenter's to start, like a proposal.
-  const canInterview = can("start_goal_interview");
+  // B6: a goals interview is a commenter's to start, like a proposal; H11: not while Shape goals
+  // is at Observe (the sentence stands where Make measurable would), and not before its level loads.
+  const goalsLevel = useGoalsLevel();
+  const canInterview = can("start_goal_interview") && goalsLevel !== undefined && goalsLevel !== "observe";
+  const goalsNote = can("start_goal_interview") && goalsLevel === "observe" ? GOALS_OBSERVE : null;
   const onAuth = useAuthRedirect();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
@@ -460,6 +464,7 @@ export default function BaselinePage() {
               discussionId={discuss?.entityId === openEntity.id ? discuss.discussionId : null}
               stepper={discuss?.entityId === openEntity.id ? stepper : null}
               onMakeMeasurable={canInterview ? () => makeMeasurable(openEntity.id) : undefined}
+              goalsNote={goalsNote}
               onCloseDiscuss={() => {
                 setDiscuss(null);
                 setSteps(null);
@@ -514,6 +519,7 @@ export default function BaselinePage() {
                   onMakeMeasurable={canInterview ? (g) => makeMeasurable(g.id) : undefined}
                   vague={vague.data?.length ?? 0}
                   onInterviewVague={canInterview ? () => void interviewVague() : undefined}
+                  goalsNote={goalsNote}
                   onAdd={setAdding}
                   onAddSubgoal={canWrite ? addSubgoal : undefined}
                 />

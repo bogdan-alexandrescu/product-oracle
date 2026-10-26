@@ -117,6 +117,8 @@ type Props = {
   stepper?: Stepper | null;
   /** B6: Make measurable on a goal that is not (commenters and up). */
   onMakeMeasurable?: () => void;
+  /** H11: Shape goals is at Observe: this sentence stands where Make measurable would. */
+  goalsNote?: string | null;
   /** B6: back from the Discuss view to the goal's details. */
   onCloseDiscuss?: () => void;
   /** B2: the "Why it needs you" card of a row from a run's review, shown first. */
@@ -143,6 +145,7 @@ export function EntityDrawer({
   discussionId,
   stepper,
   onMakeMeasurable,
+  goalsNote,
   onCloseDiscuss,
   why,
 }: Props) {
@@ -458,6 +461,16 @@ export function EntityDrawer({
               >
                 <p className="text-text2" data-testid="drawer-missing">
                   {missingTip(d.goal_check)}. Oracle asks one question at a time and proposes measurable versions.
+                </p>
+              </InspectorSection>
+            )}
+            {d.type === "goal" && d.goal_check?.measurable === false && !onMakeMeasurable && goalsNote && (
+              <InspectorSection label="Not measurable">
+                <p className="text-text2" data-testid="drawer-missing">
+                  {missingTip(d.goal_check)}.
+                </p>
+                <p className="text-text2" data-testid="goals-observe">
+                  {goalsNote}
                 </p>
               </InspectorSection>
             )}

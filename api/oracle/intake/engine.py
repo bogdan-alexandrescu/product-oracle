@@ -883,6 +883,7 @@ async def ask_batch(
     size: int,
     skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
     assign: dict[uuid.UUID, uuid.UUID] | None = None,
+    asker_answers: bool = True,
 ) -> list[StakeholderQuestion]:
     """Ask the next short batch, as :func:`choose_batch` chooses it: at most ``size``
     questions everyone sees, and the author's hidden ones ranked among them.
@@ -892,7 +893,9 @@ async def ask_batch(
     person ``assign`` names (checked by the caller) or the draft's own, else the gap's
     owner, else the intake's author, else the person asking the batch (the author or an
     approver, :func:`oracle.intake.service.ask_next`), else the longest-standing active
-    approver; someone disabled or now a viewer is passed over."""
+    approver; someone disabled or now a viewer is passed over. ``asker_answers`` False
+    (H11 ``questions`` at Draft): the person asking is never the fallback, as the
+    preview shows it (oracle.intake.summary.next_batch)."""
     questions = await intake_questions(db, intake.id)
     by_id = {g.id: g for g in await intake_gaps(db, intake.id)}
     reg = sharing.registry(intake)
@@ -902,10 +905,11 @@ async def ask_batch(
             q.asked_to = assign[q.id]
     batch = choose_batch(questions, by_id, reg, size, skip)
     able: dict[uuid.UUID, bool] = {}
+    fallback = asked_by if asker_answers else None
     for q in batch.questions:
         gap = by_id.get(q.gap_id) if q.gap_id else None
         hidden = gap is not None and sharing.gap_changes(gap, reg, sharing.EVERYONE) is None
-        q.asked_to = await default_person(db, intake, q, gap, asked_by, hidden, able)
+        q.asked_to = await default_person(db, intake, q, gap, fallback, hidden, able)
         q.status = "asked"
         q.batch = batch.number
         q.asked_by = asked_by

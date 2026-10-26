@@ -282,7 +282,7 @@ async def test_next_batch_is_empty_when_nothing_is_left(client):
         if resp.status_code == 409:
             break
     preview = (await _next(client, ctx, intake_id, "commenter")).json()
-    assert preview == {"questions": [], "remaining": 0}
+    assert preview == {"questions": [], "remaining": 0, "held": None}
 
 
 # --- the draft gate ---------------------------------------------------------------------------

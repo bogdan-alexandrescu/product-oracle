@@ -16013,6 +16013,9 @@
           "404": {
             "description": "Entity not found"
           },
+          "409": {
+            "description": "Shape goals is at Observe: Oracle opens no interview"
+          },
           "422": {
             "description": "Only goals can be interviewed | This goal is already measurable"
           }
@@ -16048,6 +16051,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Shape goals is at Observe: Oracle opens no interview"
           },
           "422": {
             "description": "Validation Error",
@@ -26040,7 +26046,7 @@
           "intake"
         ],
         "summary": "Get Next Question Batch",
-        "description": "The next batch as it would be asked, without asking it (C5; the author or an\napprover, as asking it): the same questions in the same order as\n``POST .../question-batches`` with the same ``size`` asks next, each with the person\nit would be asked of (the gap's owner, else the author), and how many are not asked\nyet. ``assign`` on the ask changes only who is asked.",
+        "description": "The next batch as it would be asked, without asking it (C5; the author or an\napprover, as asking it): the same questions in the same order as\n``POST .../question-batches`` with the same ``size`` asks next, each with the person\nit would be asked of (the gap's owner, else the author), and how many are not asked\nyet. ``assign`` on the ask changes only who is asked. At H11 ``questions`` Observe\nnothing is proposed and ``held`` says why; at Draft each question keeps its own\nnamed person.",
         "operationId": "get_next_question_batch",
         "security": [
           {
@@ -26106,7 +26112,7 @@
           "intake"
         ],
         "summary": "Ask Next Question Batch",
-        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver). Each is asked of the person ``assign`` names for it, else its gap's\nowner, else the intake's author (C2); a person who cannot answer is 422 and a\nprivate finding's question asked of anyone but the author 409, and then nothing is\nasked. ``size``: in the body or, as before, the query.",
+        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver). Each is asked of the person ``assign`` names for it, else its gap's\nowner, else the intake's author (C2); a person who cannot answer is 422 and a\nprivate finding's question asked of anyone but the author 409, and then nothing is\nasked; 409 too while Ask people questions is at Observe (H11, Oracle asks no one).\n``size``: in the body or, as before, the query.",
         "operationId": "ask_next_question_batch",
         "security": [
           {
@@ -26164,6 +26170,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QuestionBatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/intakes/{intake_id}/questions/withdraw": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Withdraw Intake Questions",
+        "description": "Withdraw these questions of the intake that are still waiting on an answer (the\nauthor or an approver): the Undo of a batch Oracle asked on its own (H11\n``questions``). Answered or otherwise settled ones stay as they are.",
+        "operationId": "withdraw_intake_questions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionsWithdraw"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionsWithdrawn"
                 }
               }
             }
@@ -36826,7 +36896,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/request-candidates/{candidate_id}/dismiss": {
@@ -78650,6 +78721,17 @@
           "remaining": {
             "type": "integer",
             "title": "Remaining"
+          },
+          "held": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held"
           }
         },
         "type": "object",
@@ -85787,6 +85869,43 @@
           "importance"
         ],
         "title": "QuestionRef"
+      },
+      "QuestionsWithdraw": {
+        "properties": {
+          "question_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Question Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_ids"
+        ],
+        "title": "QuestionsWithdraw",
+        "description": "Withdraw these questions of an intake that are still waiting (the Undo of a\nbatch Oracle asked on its own)."
+      },
+      "QuestionsWithdrawn": {
+        "properties": {
+          "question_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Question Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_ids"
+        ],
+        "title": "QuestionsWithdrawn"
       },
       "RankedFeature": {
         "properties": {
@@ -101603,6 +101722,17 @@
             "type": "array",
             "title": "Next Draft Changes",
             "default": []
+          },
+          "worth_a_draft": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worth A Draft"
           }
         },
         "type": "object",
