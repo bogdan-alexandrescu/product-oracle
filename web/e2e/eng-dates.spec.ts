@@ -193,10 +193,11 @@ test("phone: at 390 px the rows are cards, the decision bar stays on screen and 
   expect(sideways).toBeLessThanOrEqual(0);
 });
 
-test("sheet toggle: Engineering dates is on with its help, and unchecking it lowers the estimate by $5.00", async ({ page }) => {
-  // protects=the stop on by default with its help, in the estimate; fails_when=the switch is missing, unchecked, or unchecking it does not lower the estimate by $5.00; no_claim=the API's estimate ($36.50 with both stops on a rebuild).
+test("sheet toggle: Engineering dates is on with its help, unchecking it lowers the estimate by $5.00, and the run then skips the step", async ({ page }) => {
+  // protects=the stop on by default with its help, in the estimate; fails_when=the switch is missing, unchecked, unchecking it does not lower the estimate by $5.00, or the run started with it off does not skip the step with its note; no_claim=the API's estimate ($36.50 with both stops on a rebuild).
   await login(page, "approver@example.com");
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents$/);
   await page.getByRole("link", { name: "New PRD" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Dates for the shipping step");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Buyers drop off when shipping options show up late in checkout.");
@@ -212,4 +213,10 @@ test("sheet toggle: Engineering dates is on with its help, and unchecking it low
   await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
   await toggle.uncheck();
   await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $24.50");
+  // Off, the run skips the whole step, with its note.
+  await sheet(page).getByRole("button", { name: "Start drafting" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  const dates = page.getByTestId("segment-eng_dates");
+  await expect(dates.getByTestId("segment-state")).toHaveText("Skipped");
+  await expect(dates).toContainText("Engineering dates: off");
 });
