@@ -107,6 +107,11 @@ class FakeArchive:
     # Answer tools/call with content Oracle cannot read: "text" (not JSON) or "two" (two
     # text items).
     malformed: str | None = None
+    # Give the session this id on initialize (the client then may open the GET stream and
+    # ends the session with a DELETE), and answer those GET and DELETE requests with
+    # ``fail_other`` (401, 403, 429, 503) while every POST is answered.
+    session_id: str | None = None
+    fail_other: int | None = None
     # The tools called, in order: (name, arguments).
     calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     authorizations: list[str | None] = field(default_factory=list)
@@ -118,6 +123,8 @@ class FakeArchive:
             return httpx.Response(self.fail, headers=headers, text="refused")
         if request.headers.get("authorization") != f"Bearer {self.api_key}":
             return httpx.Response(401, text="bad key")
+        if self.fail_other and request.method in ("GET", "DELETE"):
+            return httpx.Response(self.fail_other, text="refused")
         if request.method != "POST" or request.url.path != "/mcp":
             return httpx.Response(405)
         message = json.loads(request.content)
@@ -145,7 +152,10 @@ class FakeArchive:
             result = self._tool(name, args)
         else:
             result = {}
-        return httpx.Response(200, json={"jsonrpc": "2.0", "id": message["id"], "result": result})
+        headers = {"mcp-session-id": self.session_id} if self.session_id else {}
+        return httpx.Response(
+            200, headers=headers, json={"jsonrpc": "2.0", "id": message["id"], "result": result}
+        )
 
     def _tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         if self.malformed == "text":
@@ -284,6 +294,8 @@ class FakeGraphQL:
     num_transcripts: int = 57
     # The plan does not offer user { num_transcripts }: answered with a GraphQL error.
     count_refused: bool = False
+    # Answer the count query alone with this HTTP status (429, 503); the list is read.
+    count_fail: int | None = None
     fail: int | None = None
     retry_after: str | None = None
     queries: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
@@ -298,6 +310,8 @@ class FakeGraphQL:
         query, variables = body["query"], body.get("variables") or {}
         self.queries.append((query, variables))
         if "num_transcripts" in query:
+            if self.count_fail:
+                return httpx.Response(self.count_fail, json={"errors": [{"message": "x"}]})
             if self.count_refused:
                 return httpx.Response(
                     200,

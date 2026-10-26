@@ -425,6 +425,24 @@ async def test_graphql_count_refused_is_null(sources, tenant_id, alice, graphql)
     assert resp.json()["note"] == "The count of meetings is not offered by this Fireflies plan."
 
 
+@pytest.mark.parametrize("fail", [429, 503])
+# protects=#717 review: a rate-limited or failing count query (user { num_transcripts })
+# gives total null with the list that was read, and says the count could not be read
+# (not that the plan lacks it), leaving the connection as it was; fails_when=a count
+# failure fails the whole call or a total is made up; no_claim=a count that times out
+# (the same path: any LiveError of the count).
+async def test_graphql_count_failure_keeps_the_list(sources, tenant_id, alice, graphql, fail):
+    sources.graphql.count_fail = fail
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/live/fireflies/{graphql}/meetings", params={"limit": 1})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] is None
+    assert [m["id"] for m in body["meetings"]] == ["g-12"]
+    assert body["note"] == "The count of meetings could not be read just now."
+    assert (await _conn(tenant_id, graphql)).status == "active"
+
+
 # protects=amendment B: a limit above 50 is capped with limit_capped, series and people
 # answer 422 with their sentences, search's total is null; fails_when=more than 50 is sent,
 # a filter is silently dropped, or a total is made up; no_claim=-.
@@ -565,6 +583,23 @@ async def test_source_timeout_is_502(sources, tenant_id, alice, archive, monkeyp
         "Fireflies Archive did not answer (timed out after 10 seconds). Synced data is still "
         "available; try again later."
     )
+
+
+@pytest.mark.parametrize("fail", [401, 403, 503])
+# protects=#717 review: only the tool call's own response decides a live archive call:
+# the session's optional GET stream and its closing DELETE answering an error leave a
+# successful result as it is and the connection active; fails_when=a refusal of the GET
+# or the DELETE turns the answer into a 424/502 or marks the connection expired;
+# no_claim=an archive that sends no session id (no GET, no DELETE: the other tests).
+async def test_archive_session_errors_do_not_decide(sources, tenant_id, alice, archive, fail):
+    sources.archive.session_id = "s-1"
+    sources.archive.fail_other = fail
+    async with client_for(alice) as a:
+        resp = await a.get(f"/v1/live/fireflies/{archive}/meetings", params={"limit": 1})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["total"] == ARCHIVE_TOTAL
+    assert (await _conn(tenant_id, archive)).status == "active"
+    assert [r["status"] for r in await _reads(tenant_id)] == ["ok"]
 
 
 # protects=errors table row 5 on both backends: an unknown meeting answers 404 "No meeting

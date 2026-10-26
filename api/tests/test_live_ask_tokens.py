@@ -271,6 +271,70 @@ async def test_eight_live_reads_per_reply(client, sources, model):
     assert LIVE_KEY not in str(rows)
 
 
+# protects=amendment C1 (#718 review): live_sources called with an olt_ token is re-checked
+# like every live tool (403 once someone joined) and counts toward the reply's 8, with no
+# ref (it carries no cite); fails_when=live_sources is free or answers after a join;
+# no_claim=live_sources without a token (tests/test_live_fireflies.py).
+async def test_live_sources_with_a_token_counts_and_is_rechecked(client, sources, model):
+    ctx, conn = await setup(client)
+    d, reply_id = await asked(client, ctx)
+    raw = await mint(ctx, "commenter", reply_id)
+    c = str(conn)
+    async with mcp_client(raw) as m:
+        for _ in range(7):
+            listed = await m.call_tool("live_sources", {})
+            assert not listed.is_error, text_of(listed)
+        last = await m.call_tool("live_fireflies_list_meetings", {"connection_id": c})
+        assert not last.is_error, text_of(last)
+        assert last.structured_content["cite"]["ref"] == "l:1"
+        ninth = await m.call_tool("live_sources", {})
+    assert ninth.is_error and CAP in text_of(ninth)
+    rows = await reads(ctx)
+    assert [(r["tool"], r["status"], r["ref_n"]) for r in rows] == [("sources", "ok", None)] * 7 + [
+        ("list_meetings", "ok", 1)
+    ]
+
+    d, reply_id = await asked(client, ctx)
+    raw = await mint(ctx, "commenter", reply_id)
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(
+            DiscussionParticipant(
+                discussion_id=uuid.UUID(d["id"]),
+                user_id=ctx.users["approver"].id,
+                added_via="added",
+            )
+        )
+        await s.commit()
+    joined = await call(raw, "live_sources", {})
+    assert joined.is_error and JOINED in text_of(joined)
+
+
+# protects=amendment C1 (#718 review): refs are numbered in call order: a call takes its
+# ref when it starts and keeps it only if it succeeds, so a call that started first and
+# finished last still has the lower ref, and a failed call has none; fails_when=refs follow
+# the order calls finish, or a failed call keeps a ref; no_claim=the gap a failed call
+# leaves while another is in flight (the later call keeps its number).
+async def test_refs_follow_call_order(client, sources, model):
+    ctx, conn = await setup(client)
+    _d, reply_id = await asked(client, ctx)
+    raw = await mint(ctx, "commenter", reply_id)
+    async with tenant_session(ctx.tenant_id) as s:
+        token = await s.scalar(select(tokens.LiveToken))
+        first = await tokens.reserve(s, token, conn, "list_meetings", LABEL, None)
+        second = await tokens.reserve(s, token, conn, "search", LABEL, None)
+        failed = await tokens.reserve(s, token, conn, "get_meeting", LABEL, "m-1")
+        assert await tokens.settle(s, token, failed, "error") is None
+        assert await tokens.settle(s, token, second, "ok") == 2
+        assert await tokens.settle(s, token, first, "cached") == 1
+    rows = {r["tool"]: (r["status"], r["ref_n"]) for r in await reads(ctx)}
+    assert rows == {
+        "list_meetings": ("cached", 1),
+        "search": ("ok", 2),
+        "get_meeting": ("error", None),
+    }
+    assert raw
+
+
 # protects=section 2 "adding a person to a chat that already holds live-read replies":
 # adding someone, mentioning someone new and making the discussion open each answer 409
 # live_reads_in_chat with the sentence, while a live read exists or while a live token is

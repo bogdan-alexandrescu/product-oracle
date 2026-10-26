@@ -312,6 +312,63 @@ async def test_messages_api_never_gets_mcp(client, sources):
     assert "Live sources" not in request.system
 
 
+# protects=section 2.1 (#718 review): when the gateway runs the reply on the Messages API
+# (an API key), no live token is minted at all, not only no MCP server sent; fails_when=a
+# token is minted for a run that cannot use it; no_claim=-.
+async def test_messages_api_mints_no_token(client, sources):
+    model = Fake()
+    previous = gateway.set_transports(
+        gateway.Transports(plan=ClaudeCodeTransport(claude_bin="/nonexistent"), api_key=model)
+    )
+    try:
+        ctx, doc = await company(client)
+        await with_key(ctx)
+        await _fireflies(ctx.tenant_id, ctx.users["commenter"], ARCHIVE_ENDPOINT)
+        d = await private_chat(client, ctx, doc)
+        await say(client, ctx, d["id"], "commenter", ASK, params={"wait": "true"})
+    finally:
+        gateway.set_transports(previous)
+    assert len(model.requests) == 1
+    assert await token_rows(ctx) == []
+
+
+class McpFake(Fake):
+    """Oracle's model on a transport that takes an MCP server, as Claude Code does."""
+
+    takes_mcp = True
+
+
+# protects=amendment C6 (#718 review, CI run 40368520080): the no-connection line goes only
+# where a live read could happen: a chat private to the asker, on the Claude Code
+# transport, with the switch on; an open chat, a chat with others and the Messages API get
+# the prompt unchanged; fails_when=the line reaches a chat others can read or a transport
+# that has no live tools; no_claim=the line's words (test_no_connection_adds_one_line).
+async def test_no_connection_line_only_where_live_could_read(client):
+    ctx, doc = await company(client)
+    await with_key(ctx, PLAN)
+    base = prompting.current(replies.JOB)[1]
+    on_mcp, on_api = McpFake(), Fake()
+    previous = gateway.set_transports(gateway.Transports(plan=on_mcp, api_key=on_api))
+    try:
+        opened = await start(client, ctx, subject=section(doc), visibility="open")
+        await say(client, ctx, opened["id"], "commenter", ASK, params={"wait": "true"})
+    finally:
+        gateway.set_transports(previous)
+    [request] = on_mcp.requests
+    assert request.system == base
+    await with_key(ctx)
+    previous = gateway.set_transports(
+        gateway.Transports(plan=ClaudeCodeTransport(claude_bin="/nonexistent"), api_key=on_api)
+    )
+    try:
+        d = await private_chat(client, ctx, doc)
+        await say(client, ctx, d["id"], "commenter", ASK, params={"wait": "true"})
+    finally:
+        gateway.set_transports(previous)
+    [request] = on_api.requests
+    assert request.system == base
+
+
 # protects=amendment C6 and AC12: an asker with no live connection gets exactly one more
 # prompt line, telling the model the no-connection sentence, and no token; fails_when=the
 # line is missing, worded otherwise, or anything else in the prompt changes;
