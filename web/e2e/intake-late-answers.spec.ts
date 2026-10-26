@@ -1,7 +1,9 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { feedbackState, login, openTab, showAll } from "./helpers";
+import { feedbackState, login, openSection, openTab, sectionAction, showAll } from "./helpers";
 
 /*
  * C5 late answers: an answer given after drafting started becomes a feedback item on the
@@ -228,4 +230,64 @@ test("a late answer's accepted suggestion is withheld with it while its finding 
 
   await level("Full");
   await expect((await done()).getByTestId("suggestion-text")).toContainText(ACCEPTED);
+});
+
+test("a late answer's lines in a version's reports and their export are withheld while its finding is private", async ({ page }) => {
+  const ACCEPTED = `Noted for Success metrics: ${REPLY}`;
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  const mine = bubble(page, ANSWER_ME);
+  await mine.getByRole("button", { name: "Answer", exact: true }).click();
+  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
+  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
+  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+
+  // The answer is accepted on v2, then a refinement makes v3, whose reports read the item.
+  await page.goto("/documents/checkout-redesign/v/2");
+  await openTab(page, "Feedback");
+  await feedbackState(page, "Open");
+  const open = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
+  await open.getByRole("button", { name: "Edit and accept" }).click();
+  await open.getByLabel("Answer").fill(ACCEPTED);
+  await open.getByRole("button", { name: "Accept edited text" }).click();
+  await expect(open).toContainText(`Resolution: Answered: ${ACCEPTED}`);
+  const users = await openSection(page, "users");
+  await sectionAction(users, "3. Users and jobs", /^Refine section/);
+  const refine = users.getByTestId("refine-panel");
+  await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
+  await refine.getByRole("button", { name: "Refine", exact: true }).click();
+  await refine.getByRole("button", { name: "Accept as next version" }).click();
+  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/3/);
+
+  const reports = async () => {
+    await page.goto("/documents/checkout-redesign/v/3");
+    await openTab(page, "History");
+    const panel = page.getByTestId("reports-panel").filter({ visible: true });
+    await panel.getByRole("tab", { name: "Resolution report" }).click();
+    return panel;
+  };
+  const exported = async (panel: Awaited<ReturnType<typeof reports>>) => {
+    const download = page.waitForEvent("download");
+    await panel.getByRole("button", { name: "Export reports MD" }).click();
+    return readFile((await (await download).path())!, "utf8");
+  };
+  let panel = await reports();
+  await expect(panel.getByRole("region", { name: "Resolution report" })).toContainText(REPLY);
+  expect(await exported(panel)).toContain(REPLY);
+
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await page.getByRole("tab", { name: /^Findings/ }).click();
+  const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
+  await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name: "Private" }).click();
+  await expect(finding.getByRole("button", { name: "Private" })).toHaveAttribute("aria-pressed", "true");
+
+  panel = await reports();
+  const resolution = panel.getByRole("region", { name: "Resolution report" });
+  await expect(resolution).toContainText("Answered after drafting started (withheld while its finding is not shared in full)");
+  // The narrative was written from every line, so it is withheld with this one.
+  await expect(resolution).toContainText("the rest of this summary is withheld while one of them is not shared in full");
+  await expect(resolution).not.toContainText(REPLY);
+  const md = await exported(panel);
+  expect(md).toContain("Answered after drafting started (withheld while its finding is not shared in full)");
+  expect(md).not.toContain(REPLY);
 });

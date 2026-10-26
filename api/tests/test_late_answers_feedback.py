@@ -279,3 +279,169 @@ async def test_a_withheld_late_answer_hides_its_suggestions_too(
     [back] = await _feedback(client, ctx)
     assert back["suggestion"]["edited_text"] == f"Edited: {body}"
     assert back["suggestion"]["rationale"] == f"The answer says: {body}"
+
+
+async def test_a_withheld_late_answer_hides_its_lines_in_job_outputs(
+    client,
+    runtime,  # noqa: F811
+):
+    """#645 re-review MAJOR 1: a reporting job's output keeps each item's summary, note and
+    explanation as they were when it ran, and a refinement's its resolution notes. While
+    the item is withheld none of them shows, for any role, in the version's reports (its
+    lines and ``latest_job``), the export, or the jobs list and detail (MCP reads the same
+    routes); the report's narrative, written from every item, is withheld with it. Shared
+    in full again, they show."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.jobs.models import LlmJob
+    from oracle.review.models import FeedbackItem
+    from tests.test_intake_sharing_round4 import share
+
+    ctx, intake_id, fid, body = await _private_answer(client)
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
+    [item] = await _feedback(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(FeedbackItem, uuid.UUID(item["id"]))
+        version_id = await s.scalar(
+            select(DocumentVersion.id)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .where(Document.slug == SLUG, DocumentVersion.number == 1)
+        )
+        # Acted on: Oracle's refinement closed it with a note quoting the answer.
+        note = f"Worked in: {body}"
+        row.status, row.resolution_note = "addressed", note
+        now = datetime.now(UTC)
+        report = LlmJob(
+            kind="reporting",
+            document_id=row.document_id,
+            version_id=version_id,
+            status="succeeded",
+            finished_at=now,
+            output={
+                "version": 1,
+                "since": None,
+                "resolution": {
+                    "summary": f"One item asked about storage: {body}",
+                    "counts": {"addressed": 1},
+                    "items": [
+                        {
+                            "feedback_id": str(row.id),
+                            "summary": row.summary,
+                            "section_key": None,
+                            "status": "addressed",
+                            "resolution_note": note,
+                            "addressed_in_version": 1,
+                            "explanation": f"Explained: {body}",
+                        }
+                    ],
+                },
+                "changes": {
+                    "since": None,
+                    "summary": "Nothing changed.",
+                    "sections": [],
+                    "new_sources": [],
+                },
+            },
+        )
+        refinement = LlmJob(
+            kind="refinement",
+            document_id=row.document_id,
+            version_id=version_id,
+            section_key="solution",
+            status="succeeded",
+            finished_at=now,
+            output={
+                "section_key": "solution",
+                "resolutions": [{"feedback_id": str(row.id), "status": "addressed", "note": note}],
+            },
+        )
+        s.add_all([report, refinement])
+        await s.commit()
+        job_ids = [str(report.id), str(refinement.id)]
+    assert body in row.summary
+
+    async def outputs() -> dict[str, str]:
+        out = {}
+        for role in ("viewer", "commenter", "approver"):
+            h = ctx.as_(role)
+            for name, url in [
+                ("reports", f"/v1/documents/{SLUG}/versions/1/reports"),
+                ("export", f"/v1/documents/{SLUG}/versions/1/reports/export"),
+                ("jobs", f"/v1/documents/{SLUG}/llm-jobs"),
+                ("feedback", f"/v1/documents/{SLUG}/feedback"),
+                *[(f"job:{j}", f"/v1/llm-jobs/{j}") for j in job_ids],
+            ]:
+                resp = await client.get(url, headers=h)
+                assert resp.status_code == 200, (url, resp.text)
+                out[f"{name}:{role}"] = resp.text
+        return out
+
+    shown = await outputs()
+    assert all(body in text for text in shown.values()), shown
+
+    assert (await share(client, ctx, intake_id, fid, "private")).status_code == 200
+    hidden = await outputs()
+    assert not [k for k, text in hidden.items() if body in text], hidden
+    reports = (
+        await client.get(f"/v1/documents/{SLUG}/versions/1/reports", headers=ctx.as_("viewer"))
+    ).json()
+    [line] = reports["resolution"]["items"]
+    assert line["summary"].startswith("Answered after drafting started")
+    assert (line["resolution_note"], line["explanation"]) == (None, "")
+    assert reports["resolution"]["counts"] == {"addressed": 1}
+    [job_line] = reports["latest_job"]["output"]["resolution"]["items"]
+    assert job_line == line
+
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
+    back = await outputs()
+    assert all(body in text for text in back.values()), back
+
+
+async def test_a_withheld_note_from_an_earlier_suggestion_stays_withheld(
+    client,
+    runtime,  # noqa: F811
+):
+    """#645 re-review: the note Accept wrote from an earlier suggestion stays withheld once
+    a newer suggestion on the item is the latest."""
+    from datetime import UTC, datetime, timedelta
+
+    from oracle.jobs.models import LlmSuggestion
+    from oracle.review.models import FeedbackItem
+    from tests.test_intake_sharing_round4 import share
+
+    ctx, intake_id, fid, body = await _private_answer(client)
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
+    [item] = await _feedback(client, ctx)
+    now = datetime.now(UTC)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(FeedbackItem, uuid.UUID(item["id"]))
+        old, new = (
+            LlmSuggestion(
+                document_id=row.document_id,
+                feedback_item_id=row.id,
+                version_number=1,
+                classification="question",
+                kind=kind,
+                text=text,
+                rationale=rationale,
+                status=status,
+                created_at=at,
+            )
+            for kind, text, rationale, status, at in [
+                ("answer", f"Yes: {body}", None, "accepted", now - timedelta(minutes=5)),
+                ("none", None, "Nothing more to change", "open", now),
+            ]
+        )
+        s.add_all([old, new])
+        row.status, row.resolution_note = "addressed", f"Answered: Yes: {body}"
+        await s.commit()
+
+    assert (await share(client, ctx, intake_id, fid, "private")).status_code == 200
+    for role in ("viewer", "approver"):
+        listed = await client.get(f"/v1/documents/{SLUG}/feedback", headers=ctx.as_(role))
+        assert listed.status_code == 200 and body not in listed.text, listed.text
+    inbox = await client.get("/v1/inbox", headers=ctx.as_("approver"))
+    assert inbox.status_code == 200 and body not in inbox.text, inbox.text
