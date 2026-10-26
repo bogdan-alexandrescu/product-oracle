@@ -330,7 +330,12 @@ Maturity key:
 - **Engineering alignment (E1):** tracker write-back and reading engineering's estimates.
   Dated roadmap milestones depend on it.
 - **Flows and wireframes (O2); Figma frames (O6):** decided, not built.
-- **Share links and audience variants for roadmaps (O5).**
+- **Share links and audience variants for roadmaps (O5), partial.** Built in the API:
+  audience variants (lane 1), the Public version and its check (lane 2), share links with
+  a passcode on `/v1/public/shares/<token>` and the ops runbook `docs/ops-share-links.md`
+  (lanes 3 and 6; an owner applies the runbook). Not built: branding (lane 4) and the web
+  screens, the Share sheet and the `/s/<token>` page (lane 5). Which service answers
+  `/s/*` is an open owner question.
 - **Slack pings (C1), a docked head-of-product chat (I4), a GitHub code indexer (S2), a
   quality bar (T2).**
 - **Known open items:**
