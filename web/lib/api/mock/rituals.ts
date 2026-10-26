@@ -10,6 +10,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { companyStamp } from "./connections";
+
 type RitualOut = Schemas["RitualOut"];
 type OccurrenceOut = Schemas["OccurrenceOut"];
 type Schedule = Schemas["RitualSchedule"] & { timezone: string };
@@ -49,14 +51,14 @@ export interface RitualsContext {
   marketWrites: () => boolean;
   /** The Baseline rebuild (rebuild.py): H11 "Keep the baseline current" is at Draft or above. */
   baselineStarts?: () => boolean;
-  /** H11 Run rituals' cost limit a run (max_run_usd). */
-  ritualRunCap?: () => number;
+  /** B1's build at the ritual's knobs (rebuild.estimate_usd): $7.00, unless a scenario prices it otherwise. */
+  rebuildUsd?: () => number;
   /** B1's Build the baseline, started as the API's create, estimate and start: the run's id, or the refusal. */
   startBaselineBuild?: () => Promise<{ id: string } | { error: string }>;
   /** A run's status in the runs mock, or null. */
   runStatus?: (id: string) => string | null;
-  /** When the last Build the baseline run finished, or null. */
-  lastBaselineBuild?: () => string | null;
+  /** The last Build the baseline run that succeeded (the latest created), or null. */
+  lastBaselineRun?: () => { id: string; created_at: string } | null;
   /** Record what Oracle did on its own ("Oracle did" Inbox row, ./autonomy.ts). */
   oracleDid?: (row: { responsibility: string; responsibility_title: string; summary: string; subject: Record<string, string>; undo: Schemas["InboxOracleAction"]["undo"]; notify_ids: string[] }) => void;
 }
@@ -252,29 +254,31 @@ function goalsBlocks(asOf: string) {
 const REBUILD = "baseline_rebuild";
 /** B1's build at the ritual's knobs: standard depth, default roles. */
 const REBUILD_USD = 7;
+/** P3: a run over this waits for an owner's approval. */
+const APPROVAL_USD = 50;
+const WAITS = " · Waits for an owner's approval";
+const approvalNote = (usd: number) => `Waiting for an owner's approval: the estimate ${usd2(usd)} is over $${APPROVAL_USD}`;
+const rebuildUsd = (ctx: RitualsContext) => ctx.rebuildUsd?.() ?? REBUILD_USD;
 const BUILD_HERE = "Build it from the Baseline page.";
 const REBUILD_FAILED = "The baseline build did not finish · Build it from the Baseline page";
 const UNDER_WAY = ["draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
 const usd2 = (n: number) => `$${n.toFixed(2)}`;
-/** As Python's `:g`: $10, $7.5. */
-const usdG = (n: number) => `$${n}`;
-
-/** Why Oracle starts no build now (rebuild.blocked), or null. */
+/** Why Oracle starts no build now (rebuild.blocked), or null: Observe. No ritual cost cap; over $50 the run waits (P3). */
 function rebuildBlocked(ctx: RitualsContext): string | null {
   if (!(ctx.baselineStarts?.() ?? true)) return `Not started: Oracle is set to observe the baseline. ${BUILD_HERE}`;
-  const cap = ctx.ritualRunCap?.() ?? 10;
-  if (REBUILD_USD > cap) return `Not started: the estimate ${usd2(REBUILD_USD)} is above your ${usdG(cap)} limit a run. ${BUILD_HERE}`;
   return null;
 }
 
 function rebuildBlocks(ctx: RitualsContext, asOf: string) {
-  const last = ctx.lastBaselineBuild?.() ?? null;
+  const last = ctx.lastBaselineRun?.() ?? null;
+  const usd = rebuildUsd(ctx);
   const rows: Row[] = [
-    last ? { text: `Last built ${last.slice(0, 16).replace("T", " ")} UTC`, href: "/runs" } : { text: "No baseline build yet", href: null },
-    { text: `Estimate ${usd2(REBUILD_USD)} at standard depth`, href: null },
+    last ? { text: `Last built ${companyStamp(last.created_at)}`, href: `/runs/${last.id}` } : { text: "No baseline build yet", href: null },
+    { text: `Estimate ${usd2(usd)} at standard depth`, href: null },
   ];
   const why = rebuildBlocked(ctx);
   if (why) rows.push({ text: why, href: null }, { text: "Build the baseline", label: "Build the baseline", href: "/baseline?build=1" });
+  else if (usd > APPROVAL_USD) rows.push({ text: `Oracle starts the build; over $${APPROVAL_USD} it waits for an owner's approval`, href: "/baseline" });
   else rows.push({ text: "Oracle starts the build; its proposals wait for review", href: "/baseline" });
   return [block(REBUILD, asOf, rows)];
 }
@@ -289,23 +293,26 @@ async function rebuildAfterReady(ctx: RitualsContext, r: Ritual, o: Occurrence) 
   if (!owner || owner.status === "disabled" || !atLeast(owner.role, "approver")) return note("Not started: the ritual's owner can no longer start runs");
   const started = (await ctx.startBaselineBuild?.()) ?? { error: "The mock cannot start runs" };
   if ("error" in started) return note(`Not started: ${started.error.charAt(0).toLowerCase()}${started.error.slice(1)}`);
-  Object.assign(o, { summary_state: "running", summary_run_id: started.id, summary_note: null, summary: null });
+  const waits = ctx.runStatus?.(started.id) === "awaiting_approval";
+  const usd = rebuildUsd(ctx);
+  Object.assign(o, { summary_state: "running", summary_run_id: started.id, summary_note: waits ? approvalNote(usd) : null, summary: null });
   ctx.oracleDid?.({
     responsibility: "baseline",
     responsibility_title: "Keep the baseline current",
-    summary: `Started the baseline rebuild · Estimate ${usd2(REBUILD_USD)}, within your ${usdG(ctx.ritualRunCap?.() ?? 10)} limit`,
+    summary: `Started the baseline rebuild · Estimate ${usd2(usd)}${waits ? WAITS : ""}`,
     subject: { kind: "ritual", key: r.id, href: `/company/rituals/${o.id}` },
     undo: { method: "POST", path: `/v1/runs/${started.id}/cancel`, body: null },
     notify_ids: [r.owner_id],
   });
 }
 
-/** A build that ended: ready once it succeeded, else failed (summaries.sync_state). */
+/** A build that ended: ready once it succeeded, else failed; under way, it says it waits for an owner's approval only while it does (rebuild.sync_state). */
 function syncRebuild(ctx: RitualsContext, o: Occurrence) {
   if (o.summary_state !== "running" || !o.summary_run_id) return;
   const status = ctx.runStatus?.(o.summary_run_id) ?? "running";
   if (status === "succeeded") Object.assign(o, { summary_state: "ready", summary_note: null });
   else if (!UNDER_WAY.includes(status)) Object.assign(o, { summary_state: "failed", summary_note: REBUILD_FAILED });
+  else o.summary_note = status === "awaiting_approval" ? approvalNote(rebuildUsd(ctx)) : null;
 }
 
 function blocksFor(kind: string, asOf: string, trackId: string, ctx?: RitualsContext) {

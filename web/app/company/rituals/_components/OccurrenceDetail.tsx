@@ -315,8 +315,8 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
 
 /**
  * The Baseline rebuild's build (oracle.rituals.rebuild): B1's Build the baseline run Oracle
- * started with its estimate, or why it started none (Observe, the cost limit, a build under
- * way) with B1's sheet one click away. Its proposals are reviewed as B1's are.
+ * started with its estimate (over $50 it says it waits for an owner's approval, P3), or why it
+ * started none (Observe, a build under way) with B1's sheet one click away. Its proposals are reviewed as B1's are.
  */
 function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block[]; canBuild: boolean }) {
   const estimate = blocks.flatMap((b) => b.rows.map((r) => r.text ?? "")).find((t) => t.startsWith("Estimate "));
@@ -328,7 +328,7 @@ function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block
       {occ.summary_state === "running" && run ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm">
-            Oracle started the baseline build{estimate ? ` · ${estimate}` : ""}. Its proposals wait for your review.
+            Oracle started the baseline build{estimate ? ` · ${estimate}` : ""}. {occ.summary_note ?? "Its proposals wait for your review."}
           </p>
           <LinkButton href={run}>Open run</LinkButton>
         </div>

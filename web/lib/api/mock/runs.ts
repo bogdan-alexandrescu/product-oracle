@@ -83,6 +83,12 @@ export function lastBaselineBuild(db: RunsDb | undefined): string | null {
   return done.sort().pop() ?? db.baseline_built_at ?? null;
 }
 
+/** The last Build the baseline run that succeeded, the latest created (as rebuild.block reads it), or null. */
+export function lastBaselineRun(db: RunsDb | undefined): { id: string; created_at: string } | null {
+  const done = (db?.runs ?? []).filter((r) => r.flow === "baseline" && r.status === "succeeded");
+  return done.sort((a, b) => a.created_at.localeCompare(b.created_at)).pop() ?? null;
+}
+
 export interface RunsContext {
   db: RunsDb;
   userId: string;
@@ -3899,4 +3905,12 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   };
   held.run.token_read_only = true;
   refresh(held.run);
+}
+
+/** A Build the baseline run that succeeded at `created_at` (the Baseline rebuild scenarios' last build). */
+export function seedFinishedBaselineBuild(ctx: Omit<RunsContext, "db">, db: RunsDb, created_at: string): RunOut {
+  const run = seedRun(ctx, db, "baseline", "", {}, created_at);
+  Object.assign(run, { document_id: null, document_slug: null, status: "succeeded", started_at: created_at, finished_at: created_at, spent_usd: run.estimate_usd ?? 0 });
+  for (const s of run.segments) Object.assign(s, { status: "succeeded", cost_usd: s.estimate_usd ?? 0 });
+  return run;
 }
