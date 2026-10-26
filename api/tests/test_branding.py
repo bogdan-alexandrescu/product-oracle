@@ -445,6 +445,23 @@ async def test_a_reset_keeps_the_revision_counting_and_drops_the_logos(client, b
     assert (await _upload(client, owner, _image())).json()["revision"] == 4
 
 
+async def test_a_raw_branding_value_on_the_settings_route_is_refused_in_the_app_s_words(
+    client, ctx
+):
+    """#654 review: the refusal names the screen a person uses, not the route or method."""
+    from oracle import wording
+
+    owner = ctx.as_("owner")
+    resp = await client.put(
+        "/v1/settings/branding", json={"value": {"accent": "#0369a1"}}, headers=owner
+    )
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert "Settings › Company › Branding" in detail, detail
+    assert "a null value here resets every default" in detail, detail
+    assert not wording.api_words(detail), detail
+
+
 async def test_the_same_logo_uploaded_twice_at_once_is_stored_once(client, ctx):
     """A second upload of one image, landing while the first is uncommitted, reuses the
     row rather than failing on the unique index."""
