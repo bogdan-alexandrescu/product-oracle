@@ -3150,7 +3150,8 @@ function goalLinks(db: Db): V2Db["section_links"] {
     out.push({
       id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
       module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
-      claim: null, created_by: null, created_at: v.created_at,
+      // As the API records it: whoever made the link (the signed-in owner here).
+      claim: null, created_by: db.user_id, created_at: v.created_at,
     });
   };
   link("checkout-redesign", "goal-trace", "g.activation");
