@@ -15222,6 +15222,11 @@ export interface components {
             per_item: {
                 [key: string]: ("viewer" | "commenter" | "approver" | "owner") | null;
             };
+            /**
+             * Simple Mode
+             * @default false
+             */
+            simple_mode: boolean;
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
@@ -28196,7 +28201,8 @@ export interface components {
          *     documents open on; brief unless they switched to the full document. ``setup_hidden``:
          *     they hid Home's Set up checklist (A1); a header chip shows it again.
          *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
-         *     ``slack_pings``: the Slack pings they get (My account).
+         *     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
+         *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
          */
         Preferences: {
             /**
@@ -28225,6 +28231,8 @@ export interface components {
              *     }
              */
             slack_pings: components["schemas"]["SlackPings"];
+            /** Experience */
+            experience?: ("simple" | "studio") | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -28235,6 +28243,8 @@ export interface components {
             /** Welcome Dismissed */
             welcome_dismissed?: boolean | null;
             slack_pings?: components["schemas"]["SlackPingsUpdate"] | null;
+            /** Experience */
+            experience?: ("simple" | "studio") | null;
         };
         /**
          * PreviousAttempt

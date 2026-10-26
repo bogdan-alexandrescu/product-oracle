@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { HopPanel } from "@/components/hop/HopPanel";
+import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
 import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
+import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
@@ -21,6 +23,8 @@ import { initialsOf } from "./Figures";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { Notice } from "./Layout";
+import { ModeRoot, ModeSwitch } from "./ModeSwitch";
+import { RAIL_SELECTED, TAB_BAR } from "./rail";
 import { Sheet } from "./Sheet";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string; match?: string };
@@ -278,16 +282,6 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
   );
 }
 
-/**
- * The selected rail item (aria-current): #225693, white, and a 3 px sky bar 6 px left of the
- * item, inset 10 px top and bottom. Styled from the attribute, so hover never repaints it.
- */
-const RAIL_SELECTED =
-  "aria-[current=page]:bg-rail-active aria-[current=page]:font-semibold aria-[current=page]:text-rail-active-text aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-2.5 aria-[current=page]:before:-left-[9px] aria-[current=page]:before:w-[3px] aria-[current=page]:before:rounded-[2px] aria-[current=page]:before:bg-rail-bar aria-[current=page]:before:content-['']";
-/** On the phone tab bar the bar sits on top instead. */
-const TAB_BAR =
-  "before:absolute before:inset-x-2.5 before:-top-1.5 before:h-[3px] before:rounded-[2px] before:bg-rail-bar before:content-['']";
-
 function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; home?: string; badge?: number | null }) {
   const active = isActive(pathname, d, home);
   return (
@@ -335,6 +329,8 @@ function Navs() {
     setMore(false);
   }
   if (!shown) return null;
+  // #723: Simple's pages have Simple's own rail, nothing of Studio's.
+  if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => <UserMenu placement={placement} />} />;
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
@@ -350,6 +346,7 @@ function Navs() {
         <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
           <Mark size={44} tone="sky" className="block" />
         </Link>
+        <ModeSwitch placement="rail" documentHome={home} />
         {DESTINATIONS.map((d) => (
           <RailLink key={d.href} d={d} pathname={pathname} home={home} badge={d.label === "Inbox" ? inbox : undefined} />
         ))}
@@ -403,6 +400,7 @@ function Navs() {
           aria-label="More"
           className="fixed inset-x-0 bottom-[68px] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
         >
+          <ModeSwitch placement="sheet" documentHome={home} />
           <ul className="mb-2 grid grid-cols-3 gap-1">
             {moreDests.map((d) => (
               <li key={d.href}>
@@ -437,6 +435,9 @@ function fallbackTitle(pathname: string): string {
   if (pathname.endsWith("/present")) return "Present";
   const other = OTHER_TITLES.find(([p]) => pathname === p || pathname.startsWith(`${p}/`));
   if (other) return other[1];
+  if (modeOf(pathname) === "simple") {
+    return [...SIMPLE_DESTINATIONS].reverse().find((d) => pathname === d.href || pathname.startsWith(`${d.href}/`))?.label ?? "Home";
+  }
   return [...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d))?.label ?? "Product Oracle";
 }
 
@@ -489,7 +490,7 @@ function PhoneHeader() {
       data-testid="phone-header"
       className="sticky top-0 z-30 hidden h-[calc(44px+env(safe-area-inset-top))] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
     >
-      <Link href="/home" aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
+      <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
         <Mark size={22} tone="sky" className="block" />
       </Link>
       <p data-testid="phone-title" className="min-w-0 flex-1 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
@@ -612,6 +613,9 @@ export function CapsError() {
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ScreenSubjectProvider>
+      <Suspense fallback={null}>
+        <ModeRoot />
+      </Suspense>
       <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto]">
         <Suspense fallback={null}>
           <Navs />

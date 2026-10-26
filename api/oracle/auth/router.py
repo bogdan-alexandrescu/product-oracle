@@ -145,4 +145,5 @@ async def capabilities(request: Request, principal: CurrentPrincipal, db: Tenant
         operations=role_capabilities(request.app, principal.role, lead),
         decide_engineering_stops=decides(principal.role, principal.user_id, stop, "", leads),
         per_item=PER_ITEM,
+        simple_mode=get_settings().simple_mode,
     )

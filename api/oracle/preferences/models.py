@@ -1,7 +1,8 @@
 """Per-user preferences: one JSON value per (user or API token, key).
 
 Known keys: ``document_view`` (O1f): ``brief`` or ``full``, the layer a document opens
-on for this user.
+on for this user; ``experience`` (#723): ``simple`` or ``studio``, the mode they last
+switched to.
 """
 
 import uuid

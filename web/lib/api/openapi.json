@@ -50885,6 +50885,11 @@
             "type": "object",
             "title": "Per Item",
             "default": {}
+          },
+          "simple_mode": {
+            "type": "boolean",
+            "title": "Simple Mode",
+            "default": false
           }
         },
         "type": "object",
@@ -86287,11 +86292,26 @@
               "feedback_wanted": false,
               "published": false
             }
+          },
+          "experience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "studio"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience"
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account)."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple)."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -86341,6 +86361,21 @@
                 "type": "null"
               }
             ]
+          },
+          "experience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "studio"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience"
           }
         },
         "type": "object",

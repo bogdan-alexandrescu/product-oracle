@@ -3,6 +3,7 @@ import { DM_Mono, Inter_Tight } from "next/font/google";
 import { Suspense, type ReactNode } from "react";
 
 import { AppShell } from "@/components/ds/AppShell";
+import { MODE_SCRIPT } from "@/components/ds/ModeSwitch";
 import { MeProvider, MeSync } from "@/lib/me";
 import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -31,6 +32,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* #723: html[data-mode] (Simple or Studio) before paint; ModeRoot keeps it in step. */}
+        <script dangerouslySetInnerHTML={{ __html: MODE_SCRIPT }} />
       </head>
       <body className="min-h-full">
         <MeProvider>

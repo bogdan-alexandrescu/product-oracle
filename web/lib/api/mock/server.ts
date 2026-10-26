@@ -498,6 +498,11 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * (AC1: it changes nothing, the name included).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/**
+ * #723: Simple mode is on in the mock (the API's ORACLE_SIMPLE_MODE); tests set this
+ * localStorage key to "off" to see the app without it (no switch, everyone in Studio).
+ */
+export const MOCK_SIMPLE_MODE_KEY = "po-mock-simple-mode";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -4045,7 +4050,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
     const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
     for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
-    return json(200, caps);
+    return json(200, { ...caps, simple_mode: localStorage.getItem(MOCK_SIMPLE_MODE_KEY) !== "off" });
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
@@ -4054,15 +4059,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
+      if (patch.experience && !["simple", "studio"].includes(patch.experience)) return json(422, { detail: "experience" });
       const pings = patch.slack_pings ?? {};
       if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
+      if (patch.experience) mine.experience = patch.experience;
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
       for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
     }
     mine.setup_hidden ??= false; // saved before A1
     mine.welcome_dismissed ??= false; // saved before the A1 welcome
+    mine.experience ??= null; // unset until the person switches (#723)
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
