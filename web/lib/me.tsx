@@ -37,7 +37,7 @@ type MeState = {
   can: (op: Operation, onItem?: boolean) => boolean;
   /** True once the capabilities of the signed-in principal have loaded. */
   capsReady: boolean;
-  /** #723: Simple mode is on (ORACLE_SIMPLE_MODE): the [Simple | Studio] switch shows. False until the capabilities load. */
+  /** #723: Simple mode is on (ORACLE_SIMPLE_MODE): the [Simple | Detailed] switch shows. False until the capabilities load. */
   simpleMode: boolean;
   /** Why the capabilities could not be read, or null. */
   capsError: string | null;

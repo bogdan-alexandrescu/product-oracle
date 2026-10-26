@@ -26,12 +26,12 @@ class Capabilities(BaseModel):
     # Operations the item decides too (oracle.capabilities.PER_ITEM): the role the handler
     # never refuses on role grounds; below it, only the item's author, asker or approver.
     per_item: dict[str, Role | None] = {}
-    # #723: Simple mode is on (ORACLE_SIMPLE_MODE): the web shows the [Simple | Studio]
+    # #723: Simple mode is on (ORACLE_SIMPLE_MODE): the web shows the [Simple | Detailed]
     # switch and lands people by their saved mode or role.
     simple_mode: bool = False
     # #723 (D13): where the caller lands while they have no saved mode: Simple for viewers
-    # and commenters, Studio for approvers and owners.
-    default_experience: Literal["simple", "studio"] = "studio"
+    # and commenters, Detailed for approvers and owners.
+    default_experience: Literal["simple", "detailed"] = "detailed"
 
 
 class Me(BaseModel):

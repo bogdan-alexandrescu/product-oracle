@@ -329,7 +329,7 @@ function Navs() {
     setMore(false);
   }
   if (!shown) return null;
-  // #723: Simple's pages have Simple's own rail, nothing of Studio's.
+  // #723: Simple's pages have Simple's own rail, nothing of Detailed's.
   if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => <UserMenu placement={placement} />} />;
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);

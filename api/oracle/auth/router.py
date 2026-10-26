@@ -147,5 +147,5 @@ async def capabilities(request: Request, principal: CurrentPrincipal, db: Tenant
         decide_engineering_stops=decides(principal.role, principal.user_id, stop, "", leads),
         per_item=PER_ITEM,
         simple_mode=get_settings().simple_mode,
-        default_experience="studio" if has_role(principal.role, "approver") else "simple",
+        default_experience="detailed" if has_role(principal.role, "approver") else "simple",
     )

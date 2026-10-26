@@ -8,14 +8,14 @@ import { useMe } from "@/lib/me";
 
 const MODES: { value: Mode; label: string }[] = [
   { value: "simple", label: "Simple" },
-  { value: "studio", label: "Studio" },
+  { value: "detailed", label: "Detailed" },
 ];
 
 /** Before paint on a full load (the layout's head script) and on every navigation after it: html[data-mode]. */
-export const MODE_SCRIPT = `try{document.documentElement.dataset.mode=/^\\/simple(\\/|$)/.test(location.pathname)?"simple":"studio"}catch(e){}`;
+export const MODE_SCRIPT = `try{document.documentElement.dataset.mode=/^\\/simple(\\/|$)/.test(location.pathname)?"simple":"detailed"}catch(e){}`;
 
 /**
- * #723: the open page's mode on the root element (`data-mode="simple"` or `"studio"`), which
+ * #723: the open page's mode on the root element (`data-mode="simple"` or `"detailed"`), which
  * scopes Simple's look (globals.css). Reads the pathname: render it inside Suspense.
  */
 export function ModeRoot() {
@@ -28,7 +28,7 @@ export function ModeRoot() {
 }
 
 /**
- * The [Simple | Studio] switch (#723, D10) at the top of both rails, and in the phone's More
+ * The [Simple | Detailed] switch (#723, D10) at the top of both rails, and in the phone's More
  * drawer. Shown only while the API says Simple is on. A choice saves the person's mode
  * (preferences.experience) and opens the matching page of the other mode.
  */

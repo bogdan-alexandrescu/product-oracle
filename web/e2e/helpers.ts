@@ -7,7 +7,7 @@ export const ADMIN = MOCK_LOGIN;
 
 /**
  * Signs in as the mock owner, or as the mock member with `email` (one per role), from a link
- * to Studio's Home (`?next=/home`): a viewer or commenter would otherwise land in Simple
+ * to Detailed's Home (`?next=/home`): a viewer or commenter would otherwise land in Simple
  * (#723; e2e/simple-mode.spec.ts signs in without one).
  */
 export async function login(page: Page, email: string = ADMIN.email) {

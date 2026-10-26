@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-        {/* #723: html[data-mode] (Simple or Studio) before paint; ModeRoot keeps it in step. */}
+        {/* #723: html[data-mode] (Simple or Detailed) before paint; ModeRoot keeps it in step. */}
         <script dangerouslySetInnerHTML={{ __html: MODE_SCRIPT }} />
       </head>
       <body className="min-h-full">

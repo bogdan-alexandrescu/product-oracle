@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 /**
  * A Simple page (#723 S1): its title and parts, drawn from the Simple tokens (globals.css,
  * html[data-mode="simple"]) so the owner's mockup picks restyle it there. The H1 hides on a
- * phone, as Studio's does: the phone header shows it.
+ * phone, as Detailed's does: the phone header shows it.
  */
 export function SimplePage({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
   return (
@@ -42,9 +42,9 @@ export function SimpleEmpty({ testId, children }: { testId: string; children: Re
 
 /**
  * A page whose screen arrives with a later part of Simple: says what arrives and links the
- * Studio page that has it today.
+ * Detailed page that has it today.
  */
-export function SimplePlaceholder({ arrives, studioHref, studioLabel }: { arrives: ReactNode; studioHref: string; studioLabel: string }) {
+export function SimplePlaceholder({ arrives, detailedHref, detailedLabel }: { arrives: ReactNode; detailedHref: string; detailedLabel: string }) {
   return (
     <div className="simple-card" data-testid="simple-placeholder">
       <p>
@@ -52,8 +52,9 @@ export function SimplePlaceholder({ arrives, studioHref, studioLabel }: { arrive
         {arrives}
       </p>
       <p>
-        <Link href={studioHref} className="font-semibold text-accent-ink hover:underline">
-          {studioLabel} in Studio
+        Until then: {detailedLabel}.{" "}
+        <Link href={detailedHref} className="font-semibold text-accent-ink hover:underline">
+          Open the detailed view
         </Link>
       </p>
     </div>

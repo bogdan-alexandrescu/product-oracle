@@ -50895,10 +50895,10 @@
             "type": "string",
             "enum": [
               "simple",
-              "studio"
+              "detailed"
             ],
             "title": "Default Experience",
-            "default": "studio"
+            "default": "detailed"
           }
         },
         "type": "object",
@@ -86308,7 +86308,7 @@
                 "type": "string",
                 "enum": [
                   "simple",
-                  "studio"
+                  "detailed"
                 ]
               },
               {
@@ -86377,7 +86377,7 @@
                 "type": "string",
                 "enum": [
                   "simple",
-                  "studio"
+                  "detailed"
                 ]
               },
               {

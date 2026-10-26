@@ -500,7 +500,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /**
  * #723: Simple mode is on in the mock (the API's ORACLE_SIMPLE_MODE); tests set this
- * localStorage key to "off" to see the app without it (no switch, everyone in Studio).
+ * localStorage key to "off" to see the app without it (no switch, everyone in Detailed).
  */
 export const MOCK_SIMPLE_MODE_KEY = "po-mock-simple-mode";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
@@ -4059,7 +4059,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
-      if (patch.experience && !["simple", "studio"].includes(patch.experience)) return json(422, { detail: "experience" });
+      if (patch.experience && !["simple", "detailed"].includes(patch.experience)) return json(422, { detail: "experience" });
       const pings = patch.slack_pings ?? {};
       if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
@@ -4071,6 +4071,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     mine.setup_hidden ??= false; // saved before A1
     mine.welcome_dismissed ??= false; // saved before the A1 welcome
     mine.experience ??= null; // unset until the person switches (#723)
+    if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));

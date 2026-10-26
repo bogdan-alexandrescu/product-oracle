@@ -13,7 +13,7 @@ import { useMe } from "@/lib/me";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
-/** Simple's destinations (#723, D10), in rail order: nothing of Studio's rail. */
+/** Simple's destinations (#723, D10), in rail order: nothing of Detailed's rail. */
 export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Home", href: SIMPLE_HOME, icon: "home", testId: "simple-nav-home" },
   { label: "One-pagers", href: "/simple/one-pagers", icon: "doc", testId: "simple-nav-one-pagers" },
@@ -23,7 +23,7 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
 ];
 
-/** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Studio's pattern). */
+/** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
 const TABS = ["Home", "One-pagers", "Roadmap", "Decisions"];
 
 function isActive(pathname: string, d: Dest): boolean {
@@ -33,7 +33,7 @@ function isActive(pathname: string, d: Dest): boolean {
 
 /**
  * Whether Simple's page and rail may draw (#725 review): once the capabilities say Simple is
- * on, never while they load or say it is off (the page then opens its Studio match). Signed
+ * on, never while they load or say it is off (the page then opens its Detailed match). Signed
  * out or unreadable, the page draws so its own calls send the person to sign in or say why.
  */
 export function useSimpleShown(): boolean {
@@ -43,10 +43,10 @@ export function useSimpleShown(): boolean {
 }
 
 /**
- * Simple's rail (#723 S1): the [Simple | Studio] switch on top, its six destinations and the
- * user menu; on a phone, the same bottom tab bar and More drawer Studio uses. Its look comes
+ * Simple's rail (#723 S1): the [Simple | Detailed] switch on top, its six destinations and the
+ * user menu; on a phone, the same bottom tab bar and More drawer Detailed uses. Its look comes
  * from the rail tokens under html[data-mode="simple"] (globals.css). While Simple is off, a
- * Simple page opens its matching Studio page instead.
+ * Simple page opens its matching Detailed page instead.
  */
 export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet") => ReactNode }) {
   const pathname = usePathname();
@@ -60,7 +60,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   }
   const off = !!me && capsReady && !simpleMode;
   useEffect(() => {
-    if (off) router.replace(switchTarget(pathname, "studio"));
+    if (off) router.replace(switchTarget(pathname, "detailed"));
   }, [off, pathname, router]);
 
   const shown = useSimpleShown();

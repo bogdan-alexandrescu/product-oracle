@@ -15229,10 +15229,10 @@ export interface components {
             simple_mode: boolean;
             /**
              * Default Experience
-             * @default studio
+             * @default detailed
              * @enum {string}
              */
-            default_experience: "simple" | "studio";
+            default_experience: "simple" | "detailed";
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
@@ -28238,7 +28238,7 @@ export interface components {
              */
             slack_pings: components["schemas"]["SlackPings"];
             /** Experience */
-            experience?: ("simple" | "studio") | null;
+            experience?: ("simple" | "detailed") | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -28250,7 +28250,7 @@ export interface components {
             welcome_dismissed?: boolean | null;
             slack_pings?: components["schemas"]["SlackPingsUpdate"] | null;
             /** Experience */
-            experience?: ("simple" | "studio") | null;
+            experience?: ("simple" | "detailed") | null;
         };
         /**
          * PreviousAttempt

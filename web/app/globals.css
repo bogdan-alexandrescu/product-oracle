@@ -523,7 +523,7 @@ code .date-mark {
  * #723 Simple: its look is these tokens, scoped to html[data-mode="simple"] (set before paint
  * by the layout's head script, kept in step by ModeRoot). Restyling Simple to the owner's
  * mockup picks is a change here: a larger type scale, more space, fewer borders, and a light
- * rail (Simple's rail and the phone bars read the same --rail-* tokens Studio's do).
+ * rail (Simple's rail and the phone bars read the same --rail-* tokens Detailed's do).
  */
 [data-mode="simple"] {
   --simple-text: 17px;

@@ -108,8 +108,8 @@ class Settings(BaseSettings):
     # INT2: where Oracle's read of a new intake runs: a SwarmCloud intake_analysis run, or
     # (the rollback, without a deploy) the built-in intake_analysis pool job as before.
     intake_read_runtime: Literal["swarmcloud", "job"] = "swarmcloud"
-    # #723 Simple: the [Simple | Studio] switch and Simple's pages (GET /v1/me/capabilities
-    # simple_mode). Off (the default, and the rollback): no switch, everyone lands in Studio.
+    # #723 Simple: the [Simple | Detailed] switch and Simple's pages (GET /v1/me/capabilities
+    # simple_mode). Off (the default, and the rollback): no switch, everyone lands in Detailed.
     simple_mode: bool = False
 
     @model_validator(mode="after")

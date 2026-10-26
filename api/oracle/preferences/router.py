@@ -11,8 +11,8 @@ from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.preferences.models import UserPreference
 
 DocumentView = Literal["brief", "full"]
-# #723: the mode a person works in, Simple or Studio; unset until they switch.
-Experience = Literal["simple", "studio"]
+# #723: the mode a person works in, Simple or Detailed; unset until they switch.
+Experience = Literal["simple", "detailed"]
 
 
 class SlackPings(BaseModel):
@@ -76,6 +76,9 @@ async def read_preferences(db, principal_id: uuid.UUID) -> Preferences:
         from oracle.slack.pings import chosen_of
 
         stored["slack_pings"] = chosen_of(stored["slack_pings"])
+    if stored.get("experience") == "studio":
+        # Detailed's name before the owner's decision on #723: no one is stranded by it.
+        stored["experience"] = "detailed"
     return Preferences(**stored)
 
 
