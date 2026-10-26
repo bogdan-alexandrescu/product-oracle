@@ -22,6 +22,7 @@ of its items gets):
 An approver sets the tier; until then the suggestion stands, with its reason in words.
 """
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import select
@@ -111,28 +112,29 @@ async def _innovation(db: AsyncSession, item: RoadmapItem, feature: Entity | Non
     return "improvement"
 
 
-async def _goal(db: AsyncSession, feature: Entity | None) -> tuple[str, str | None]:
-    goals = {
+async def confirmed_goals(db: AsyncSession) -> dict[Any, Entity]:
+    """The tenant's confirmed goals by id."""
+    return {
         g.id: g
         for g in await db.scalars(
             select(Entity).where(Entity.type == "goal", Entity.status == "confirmed")
         )
     }
-    if feature is None or not goals:
+
+
+def best_goal(goals: dict[Any, Entity], edges: Iterable[Edge]) -> tuple[str, str | None]:
+    """``(goal, goal title)`` for a feature from its confirmed ``supports`` edges to the
+    confirmed ``goals``: ``top``, ``other`` or ``none`` (see the module docstring)."""
+    if not goals:
         return "none", None
     weights = {
         gid: _number((g.attrs or {}).get("weight"), DEFAULT_WEIGHT) for gid, g in goals.items()
     }
     top = max(weights.values())
     served: list[tuple[float, float, Entity]] = []
-    for edge in await db.scalars(
-        select(Edge).where(
-            Edge.src_id == feature.id,
-            Edge.type == "supports",
-            Edge.status == "confirmed",
-            Edge.dst_id.in_(goals),
-        )
-    ):
+    for edge in edges:
+        if edge.dst_id not in goals:
+            continue
         contribution = _number((edge.attrs or {}).get("contribution"), DEFAULT_CONTRIBUTION)
         if contribution > 0:
             weight = weights[edge.dst_id]
@@ -145,6 +147,21 @@ async def _goal(db: AsyncSession, feature: Entity | None) -> tuple[str, str | No
         return "top", best[2].title
     best = max(served, key=lambda s: (s[1], s[2].title))
     return "other", best[2].title
+
+
+async def _goal(db: AsyncSession, feature: Entity | None) -> tuple[str, str | None]:
+    goals = await confirmed_goals(db)
+    if feature is None or not goals:
+        return "none", None
+    edges = await db.scalars(
+        select(Edge).where(
+            Edge.src_id == feature.id,
+            Edge.type == "supports",
+            Edge.status == "confirmed",
+            Edge.dst_id.in_(goals),
+        )
+    )
+    return best_goal(goals, edges)
 
 
 async def suggest(db: AsyncSession, launch: Launch) -> dict[str, Any]:

@@ -81,7 +81,7 @@
   {% for t in toc %}
     <li class="toc-level-{{ t.level }}"><a href="#{{ t.key }}">{{ t.heading }}</a></li>
   {% endfor %}
-    <li class="toc-level-2"><a href="#sources">{{ sources_heading }}</a></li>
+    {% if appendix %}<li class="toc-level-2"><a href="#sources">{{ sources_heading }}</a></li>{% endif %}
   </ul>
 </nav>
 {% endif %}
@@ -102,6 +102,8 @@
   {% endif %}
 {% endfor %}
 </main>
+{# O5: an audience without the appendix (Board) has no Sources section. #}
+{% if appendix %}
 <section id="sources" class="sources-appendix" aria-label="Sources and data points" data-section-key="sources">
   <h2>{{ sources_heading }}</h2>
   {% if sources_intro %}{{ sources_intro }}{% endif %}
@@ -148,6 +150,7 @@
   </ol>
   {% endif %}
 </section>
+{% endif %}
 {% if added_source_list %}
 {# E1: citations added in a spec edit, outside Oracle's Sources. #}
 <section id="added-sources" class="sources-appendix added-sources" aria-label="Added sources" data-section-key="added-sources">

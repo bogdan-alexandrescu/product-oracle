@@ -174,6 +174,13 @@ class ExportVersion:
         return LAYER_LABEL.get(self.layer, self.layer)
 
     @property
+    def audience_appendix(self) -> bool:
+        """Whether the rendering has the Sources appendix (not Board's)."""
+        from oracle.roadmap import variants
+
+        return variants.VARIANTS[self.audience].appendix if self.audience else True
+
+    @property
     def audience_label(self) -> str | None:
         from oracle.roadmap import variants
 
@@ -259,6 +266,8 @@ def check_audience(ev: ExportVersion, audience: str | None) -> None:
 async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     """A roadmap version's items (and their tracker issues) as plain values, for
     :func:`apply_audience`."""
+    from oracle.baseline.models import Edge, Entity
+    from oracle.launches import tiers
     from oracle.roadmap.models import RoadmapItem, TrackerRecord
     from oracle.roadmap.variants import ItemView
 
@@ -281,8 +290,47 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
             issues.setdefault((rec.track_id, rec.item_key), []).append(
                 (rec.external_ref, _safe_href(rec.url) if rec.url else None)
             )
+    # Each item's feature-to-goal link, as a launch's tier reads it (oracle.launches.tiers),
+    # loaded once for the version: serving no confirmed goal is never read from the
+    # card's words. With no confirmed goal in the tenant nothing is measured against one,
+    # so no item is left out or flagged.
+    goals = await tiers.confirmed_goals(db)
+    features: dict[str, Entity] = {}
+    edges: dict[uuid.UUID, list[Edge]] = {}
+    if goals and rows:
+        by_id = {
+            e.id: e
+            for e in await db.scalars(
+                select(Entity).where(Entity.id.in_({r.feature_id for r in rows if r.feature_id}))
+            )
+        }
+        by_key = {
+            e.key: e
+            for e in await db.scalars(
+                select(Entity).where(
+                    Entity.type == "feature", Entity.key.in_({r.item_key for r in rows})
+                )
+            )
+        }
+        for r in rows:
+            found = by_id.get(r.feature_id) if r.feature_id is not None else None
+            if (found := found or by_key.get(r.item_key)) is not None:
+                features[r.item_key] = found
+        for edge in await db.scalars(
+            select(Edge).where(
+                Edge.src_id.in_({f.id for f in features.values()}),
+                Edge.type == "supports",
+                Edge.status == "confirmed",
+                Edge.dst_id.in_(goals),
+            )
+        ):
+            edges.setdefault(edge.src_id, []).append(edge)
     ev.items = []
     for r in rows:
+        feature = features.get(r.item_key)
+        goal, goal_title = (
+            tiers.best_goal(goals, edges.get(feature.id, [])) if feature else ("none", None)
+        )
         rank = (r.priority or {}).get("rank")
         ev.items.append(
             ItemView(
@@ -297,6 +345,8 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 milestone=dict(r.milestone) if r.milestone else None,
                 economics=dict(r.economics or {}),
                 tracker=issues.get((r.track_id, r.item_key), []),
+                goals=[goal_title] if goal_title else [],
+                no_goal=bool(goals) and goal == "none",
             )
         )
 
@@ -304,7 +354,8 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
 def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
     """O5: render the (layered) export for an audience (oracle.roadmap.variants): its
     hidden sections and the template's dropped, the item rows rebuilt from the version's
-    items with the audience's fields. Call :func:`load_audience` first."""
+    items with the audience's fields; Board is the items' rows alone. Call
+    :func:`load_audience` first."""
     from oracle.roadmap import variants
 
     check_audience(ev, audience)
@@ -315,6 +366,10 @@ def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
     cards = list(ev.all_sections)
     ev.sections = variants.rebuild(ev.sections, audience, ev.items, hide, cards)
     ev.all_sections = variants.rebuild(cards, audience, ev.items, hide, cards)
+    if audience == "board":
+        # Board carries its rows, the title and the banner only (owner decision
+        # 2026-10-26): no citation excerpt, evidence link or source document's title.
+        ev.citations, ev.evidence_links, ev.source = [], [], None
     return ev
 
 
@@ -1160,6 +1215,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "source_label": ev.source_label,
         "source_url": ev.source_url,
         "link_holder": ev.link_holder,
+        "appendix": ev.audience_appendix,
     }
 
 

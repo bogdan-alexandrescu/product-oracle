@@ -8,11 +8,13 @@ a template's ``audiences`` front matter. Invented data only ("Example Labs").
 
 import hashlib
 import re
+import uuid
 from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
 
+from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import variants
@@ -60,6 +62,9 @@ SECTIONS = [
     ("sources", 2, "Sources and data points", "Interview notes, October."),
 ]
 
+# The items whose feature serves a confirmed goal; the others serve none.
+SERVED = ("csv-parser", "bulk-import")
+
 ITEMS = [
     # key, horizon, title, outcome, extra
     (
@@ -86,9 +91,20 @@ ITEMS = [
 ]
 
 
-async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = False) -> None:
-    """A roadmap version with structured items, a track and two tracker issues."""
+async def seed_roadmap(
+    ctx,
+    *,
+    audience: str | None = None,
+    publish: bool = False,
+    sections: list = SECTIONS,
+    template: str = "now-next-later",
+    items: list = ITEMS,
+    served: tuple[str, ...] = SERVED,
+) -> None:
+    """A roadmap version with structured items, a track and two tracker issues. The
+    items in ``served`` have a baseline feature that supports a confirmed goal (G1)."""
     await seed_company(ctx.tenant_id)
+    features = await seed_goal_links(ctx, served)
     async with tenant_session(ctx.tenant_id) as s:
         prd = Document(slug="example-labs-prd", title="Example Labs PRD", kind="prd")
         doc = Document(
@@ -96,13 +112,13 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
             title="Example Labs roadmap",
             kind="roadmap",
             status="approved",
-            template="now-next-later",
+            template=template,
             template_version="1",
             audience=audience,
         )
         s.add_all([prd, doc])
         await s.flush()
-        markdown = "\n\n".join(f"{'#' * lv} {h} {{#{k}}}\n\n{b}" for k, lv, h, b in SECTIONS)
+        markdown = "\n\n".join(f"{'#' * lv} {h} {{#{k}}}\n\n{b}" for k, lv, h, b in sections)
         version = DocumentVersion(
             document_id=doc.id,
             number=1,
@@ -116,7 +132,7 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
         )
         s.add(version)
         await s.flush()
-        for i, (key, level, heading, body) in enumerate(SECTIONS):
+        for i, (key, level, heading, body) in enumerate(sections):
             brief = key in {"summary", "goals", "brief-items", "not-doing", "top-risks"}
             s.add(
                 Section(
@@ -135,7 +151,7 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
         track = ProductTrack(prd_document_id=prd.id, roadmap_document_id=doc.id, title="Import")
         s.add(track)
         await s.flush()
-        for position, (key, horizon, title, outcome, extra) in enumerate(ITEMS):
+        for position, (key, horizon, title, outcome, extra) in enumerate(items):
             s.add(
                 RoadmapItem(
                     roadmap_document_id=doc.id,
@@ -146,6 +162,8 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
                     title=title,
                     outcome=outcome,
                     horizon=horizon,
+                    # One item is traced to its feature; the others match by key.
+                    feature_id=features.get(key) if key == "bulk-import" else None,
                     **extra,
                 )
             )
@@ -191,6 +209,27 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
             await s.commit()
 
 
+async def seed_goal_links(ctx, served: tuple[str, ...]) -> dict[str, uuid.UUID]:
+    """A confirmed goal (G1) and, per key in ``served``, a feature whose key is the item
+    key with a confirmed ``supports`` edge to it: the item's feature-to-goal link."""
+    async with tenant_session(ctx.tenant_id) as s:
+        goal = Entity(type="goal", key="g1", title="Activation", status="confirmed", origin="user")
+        s.add(goal)
+        await s.flush()
+        out = {}
+        for key in served:
+            feature = Entity(type="feature", key=key, title=key, status="confirmed", origin="user")
+            s.add(feature)
+            await s.flush()
+            s.add(
+                Edge(src_id=feature.id, dst_id=goal.id, type="supports", status="confirmed",
+                     origin="user", attrs={"contribution": 2})
+            )  # fmt: skip
+            out[key] = feature.id
+        await s.commit()
+    return out
+
+
 def _text(html: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
 
@@ -204,6 +243,35 @@ async def _headers(ctx, who: str) -> dict[str, str]:
     if who == "run":
         return await run_headers(ctx, "owner")
     return ctx.as_(who)
+
+
+# Every written text of SECTIONS (and the template ones below) that Board never shows.
+WRITTEN = ["As of October", "We grow activation", "40% to 55%", "prose row", "Dark mode"]
+WRITTEN += ["Vendor limits", "Pricing tier", "Parse every column", "New accounts import"]
+WRITTEN += ["Celebrate signups", "waits on the CSV parser", "Interview notes", "Added stickers"]
+WRITTEN += ["Example Labs PRD", "Items by horizon", "Summary", "Goals served", "Full version"]
+WRITTEN += ["12 interviews", "Appetite", "Status: in progress", "One subsection", "Why:"]
+WRITTEN += ["Nothing moved", "Import beta", "Bets placed", "Shaped pitches", "fans wear"]
+WRITTEN += ["Release", "Timeline", "Cycle", "Milestone", "Risk", "after CSV parser", "G1 "]
+
+
+def board_rows(html: str) -> list[str]:
+    """The rows of a Board export's tables, as text."""
+    return [_text(r).strip() for r in re.findall(r"<tr\b.*?</tr>", html, re.S)]
+
+
+def assert_board_rows_only(html: str) -> None:
+    """A Board export (HTML, a deck's slides) holds the shown items' rows, the title and
+    the banner (its status rows name the template and theme), and no written text of
+    the roadmap (the stylesheet is not text)."""
+    page = re.sub(r"<style\b.*?</style>|<header\b.*?</header>", "", html, flags=re.S)
+    text = _text(page)
+    assert "Sources and data points" not in text, text
+    for mark in WRITTEN + ["Markerson", REVENUE_MARK, "ENG-412", "ENG-413", ESTIMATE_MARK]:
+        assert mark not in text, (mark, text)
+    rows = board_rows(html)
+    assert "Bulk import New accounts reach their first report on day one medium Activation" in rows
+    assert "CSV parser Every column parses high Activation" in rows
 
 
 # --- the registry -------------------------------------------------------------------
@@ -261,10 +329,9 @@ async def test_board_hides_owners_effort_tracker_keys_and_goalless_items(client,
     # Items are rebuilt from roadmap_items: titles, outcomes and confidence remain.
     assert "Bulk import" in text and "first report on day one" in text
     assert "Board" in text  # the badge
-    # Dependencies collapse into one risk line per item.
-    assert "after CSV parser" in text
-    # Prose sections are kept whole.
-    assert "We grow activation this year." in text
+    # Owner decision 2026-10-26: Board renders from roadmap_items alone, so no prose
+    # section, card, table or heading of the written roadmap reaches it.
+    assert_board_rows_only(html)
 
 
 async def test_team_shows_dependencies_and_flags_goalless_items_but_no_tracker(client, ctx):
@@ -392,10 +459,49 @@ async def test_the_deck_takes_an_audience(client, ctx):
     slides = " ".join(s["html"] for s in board.json()["slides"])
     assert "Confetti" not in slides and "Bulk import" in slides
     assert "Board" in board.json()["banner"]
+    assert_board_rows_only(slides)
+    deck = board.json()
+    expand = " ".join(e["html"] for s in deck["slides"] for e in s["expand"])
+    notes = " ".join(s["notes"] or "" for s in deck["slides"])
+    for mark in WRITTEN:
+        assert mark not in _text(expand) and mark not in notes, mark
+    assert "Example Labs PRD" not in board.text
     team = await client.get(DECK, params={"audience": "team"}, headers=ctx.as_("viewer"))
     assert team.status_code == 200
     assert "Confetti" in " ".join(s["html"] for s in team.json()["slides"])
     assert "Team" in team.json()["banner"]
+
+
+async def test_the_board_deck_file_holds_rows_only(client, ctx):
+    """protects=owner decision 2026-10-26: the Board PPTX and the printable deck carry
+    the items' rows, the title and the banner only; fails_when=a written card, prose
+    section or presenter note reaches a slide; no_claim=PDF rasterising."""
+    import io
+
+    from pptx import Presentation
+
+    await seed_roadmap(ctx)
+    params = {"layer": "deck", "format": "pptx", "audience": "board"}
+    resp = await client.get(EXPORT, params=params, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    deck = Presentation(io.BytesIO(resp.content))
+    texts = []
+    for slide in deck.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                texts.append(shape.text_frame.text)
+            if shape.has_table:
+                texts += [c.text for r in shape.table.rows for c in r.cells]
+        if slide.has_notes_slide:
+            texts.append(slide.notes_slide.notes_text_frame.text)
+    text = " ".join(texts)
+    assert "Bulk import" in text and "first report on day one" in text and "Activation" in text
+    for mark in WRITTEN + ["Markerson", REVENUE_MARK, "ENG-412", "Confetti"]:
+        assert mark not in text, (mark, text)
+    params["format"] = "html"
+    printable = await client.get(EXPORT, params=params, headers=ctx.as_("viewer"))
+    assert printable.status_code == 200, printable.text
+    assert_board_rows_only(printable.text)
 
 
 async def test_the_publication_export_takes_an_audience(client, ctx):
@@ -410,6 +516,7 @@ async def test_the_publication_export_takes_an_audience(client, ctx):
     assert resp.status_code == 200, resp.text
     text = _text(resp.text)
     assert "Markerson" not in text and "Confetti" not in text and "Bulk import" in text
+    assert_board_rows_only(resp.text)
     public = await client.get(url, params={"audience": "public"}, headers=ctx.as_("viewer"))
     assert public.status_code == 403
 
@@ -509,3 +616,410 @@ async def test_start_draft_stores_the_audience_and_old_roadmaps_read_as_team(cli
         headers=ctx.as_("owner"),
     )
     assert prd.status_code == 422
+
+
+# --- #620 review: the Goal column, the why text, the goal link, every template ------
+
+
+@pytest.mark.parametrize("audience", ["team", "engineering"])
+async def test_every_audience_keeps_the_goal_column_and_the_cards_why_text(client, ctx, audience):
+    """protects=the spec's table: Board, Team and Engineering all show each item's goal;
+    the rebuilt brief table keeps the template's Goal column and each rebuilt card keeps
+    its written goal-and-evidence text; fails_when=the Goal column or a card's "why" is
+    dropped; no_claim=grouping by goal (an open owner question)."""
+    await seed_roadmap(ctx)
+    resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html, text = resp.text, _text(resp.text)
+    assert re.search(r"<th[^>]*>\s*Goal\s*</th>", html), html
+    assert re.search(r"<td[^>]*>\s*G1\s*</td>", html), html
+    # The written card of CSV parser: its why (goal and evidence) is kept.
+    assert "Parse every column. Serves G1." in text
+
+
+async def test_serving_no_goal_comes_from_the_items_goal_link_not_the_cards_words(client, ctx):
+    """protects=major 3: an item serves no confirmed goal when its feature has no
+    confirmed supports edge to a confirmed goal, whatever its card says;
+    fails_when=Board shows an unlinked item whose card does not use the phrase, or hides
+    a linked item whose card does; no_claim=goal grouping."""
+    sections = [*SECTIONS]
+    at = sections.index(("next", 2, "Next", ""))
+    sections.insert(at, ("now-audit-log", 3, "Audit log", "Record every change."))
+    items = [*ITEMS, ("audit-log", "now", "Audit log", "Every change is recorded", {})]
+    await seed_roadmap(ctx, sections=sections, items=items, served=(*SERVED, "confetti"))
+    resp = await client.get(EXPORT, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    text = _text(resp.text)
+    assert "Audit log" not in text and "Stickers" not in text
+    assert "Confetti" in text  # its feature serves G1, whatever its card says
+    assert "Signups feel celebrated" in text and "Celebrate signups" not in text
+    assert "2 items serve no confirmed goal and are left out" in text
+    team = _text(
+        (await client.get(EXPORT, params={"audience": "team"}, headers=ctx.as_("viewer"))).text
+    )
+    assert "Audit log" in team and "Record every change." in team
+
+
+ESTIMATE_MARK = "est-marker-8"
+OWNER_LINE = "Owner: Dana Markerson."
+WHY = "Why: new accounts need data on day one (G1, 12 interviews)."
+
+# Each template's own sections (api/oracle/templates/builtin/roadmap/*.md) with the
+# items written where that template keeps them: owners, tracker keys, estimates and a
+# goal-less item (Confetti) in the cards, as a writer fills them in.
+TEMPLATE_SECTIONS = {
+    "release-plan": (
+        "Release",
+        "releases",
+        [
+            ("roadmap", 1, "Example Labs release plan", "As of October."),
+            ("summary", 2, "Summary", "We grow activation this year."),
+            ("goals", 2, "Goals served", "- G1 Activation: 40% to 55% by Q4"),
+            (
+                "brief-items",
+                2,
+                "Items by release",
+                "| Release | Item | Goal | Outcome |\n|---|---|---|---|\n"
+                "| [2.4](#release-2-4) | [Bulk import](#release-2-4) | G1 | day one |\n"
+                "| | [CSV parser](#release-2-4) | G1 | parses |\n"
+                "| [2.5](#release-2-5) | [Confetti](#release-2-5) | none | delight |",
+            ),
+            ("full", 1, "Full version", ""),
+            ("releases", 2, "Releases", "One subsection per release."),
+            (
+                "release-2-4",
+                3,
+                "2.4 (Nov 3)",
+                "Status: in progress. Goals served: G1.\n\n"
+                f"- Bulk import (must). {OWNER_LINE} Tracker: ENG-412. "
+                f"Estimate: {ESTIMATE_MARK} points. {WHY}\n"
+                "- CSV parser (must). Tracker: ENG-413. Why: every column parses (G1).",
+            ),
+            ("release-2-5", 3, "2.5 (Dec 1)", f"- Confetti (could). {OWNER_LINE} Why: delight."),
+            ("drift", 2, "Drift", "Nothing moved."),
+            ("sources", 2, "Sources and data points", "Interview notes, October."),
+        ],
+    ),
+    "quarterly-timeline": (
+        "Quarter",
+        "timeline",
+        [
+            ("roadmap", 1, "Example Labs quarterly roadmap", "As of October."),
+            ("summary", 2, "Summary", "We grow activation this year."),
+            ("goals", 2, "Goals served", "- G1 Activation: 40% to 55% by Q4"),
+            (
+                "brief-items",
+                2,
+                "Items by quarter",
+                "| Quarter | Item | Goal | Outcome |\n|---|---|---|---|\n"
+                "| [Q4](#timeline) | [Bulk import](#lane-import) | G1 | day one |\n"
+                "| | [CSV parser](#lane-import) | G1 | parses |\n"
+                "| [Q1](#timeline) | [Confetti](#lane-growth) | none | delight |",
+            ),
+            ("full", 1, "Full version", ""),
+            ("timeline", 2, "Timeline", "One subsection per swimlane."),
+            (
+                "lane-import",
+                3,
+                "Import",
+                f"- Bulk import: Nov 1 to Dec 15 (estimate). {OWNER_LINE} "
+                f"Effort: {ESTIMATE_MARK}. Tracker: ENG-412. {WHY}\n"
+                "- CSV parser: Oct 20 to Nov 1. Why: every column parses (G1).",
+            ),
+            ("lane-growth", 3, "Growth", f"- Confetti: Q1. {OWNER_LINE} Why: delight."),
+            (
+                "milestones",
+                2,
+                "Key milestones",
+                "| Milestone | Date | Kind | Owner |\n|---|---|---|---|\n"
+                "| Import beta | Nov 20 | estimate | Dana Markerson |",
+            ),
+            ("sources", 2, "Sources and data points", "Interview notes, October."),
+        ],
+    ),
+    "cycle-bets": (
+        "Cycle",
+        "current",
+        [
+            ("roadmap", 1, "Example Labs cycle bets", "As of October."),
+            ("summary", 2, "Summary", "We grow activation this year."),
+            ("goals", 2, "Goals served", "- G1 Activation: 40% to 55% by Q4"),
+            (
+                "brief-items",
+                2,
+                "Bets by cycle",
+                "| Cycle | Bet | Goal | Outcome |\n|---|---|---|---|\n"
+                "| [This cycle](#current) | [Bulk import](#bet-bulk-import) | G1 | day one |\n"
+                "| | [CSV parser](#bet-csv-parser) | G1 | parses |\n"
+                "| [Next betting table](#candidates) | [Confetti](#pitch-confetti) | none | "
+                "delight |",
+            ),
+            ("full", 1, "Full version", ""),
+            ("current", 2, "This cycle", "Bets placed at the last table."),
+            (
+                "bet-bulk-import",
+                3,
+                "Bulk import",
+                f"Appetite: big batch. {OWNER_LINE} Tracker: ENG-412. "
+                f"Estimate: {ESTIMATE_MARK}. {WHY}",
+            ),
+            ("bet-csv-parser", 3, "CSV parser", "Appetite: small batch. Why: parses (G1)."),
+            ("candidates", 2, "Next betting table", "Shaped pitches."),
+            ("pitch-confetti", 3, "Confetti", f"Why now: delight. {OWNER_LINE}"),
+            ("ideas", 2, "Raw ideas", "- Stickers: fans wear the logo."),
+            ("sources", 2, "Sources and data points", "Interview notes, October."),
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize("template", list(TEMPLATE_SECTIONS))
+async def test_board_hides_internal_item_detail_in_every_template(client, ctx, template):
+    """protects=major 1 (acceptance 1): in the release-plan, quarterly-timeline and
+    cycle-bets templates Board shows no owner, tracker key, estimate or goal-less item,
+    keeps each item's goal and why, and the brief table keeps the template's own
+    Release/Quarter/Cycle and Goal columns and links only to sections that exist;
+    fails_when=any of those leak, a column is replaced by Horizon or a link points at a
+    missing #now-<key>; no_claim=grouping by goal (open owner question)."""
+    column, container, sections = TEMPLATE_SECTIONS[template]
+    await seed_roadmap(ctx, sections=sections, template=template)
+    resp = await client.get(EXPORT, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html, text = resp.text, _text(resp.text)
+    assert "Markerson" not in html
+    assert "ENG-412" not in html and "ENG-413" not in html
+    assert ESTIMATE_MARK not in html
+    assert "Confetti" not in text and "Stickers" not in text
+    assert "items serve no confirmed goal and are left out" in text
+    # Owner decision 2026-10-26: whatever the template, Board is the items' rows only.
+    assert_board_rows_only(html)
+    ids = set(re.findall(r'id="([^"]+)"', html))
+    for anchor in re.findall(r'href="#([^"]+)"', html):
+        assert anchor in ids, anchor
+    assert f'id="{container}"' not in html
+    # Team keeps the goal-less item, flagged, and its tracker keys stay hidden.
+    team = await client.get(EXPORT, params={"audience": "team"}, headers=ctx.as_("viewer"))
+    team_text = _text(team.text)
+    assert "Confetti" in team_text and "ENG-412" not in team.text
+    assert "12 interviews" in team_text
+    # Engineering shows the tracker key and the estimate.
+    eng = _text(
+        (
+            await client.get(EXPORT, params={"audience": "engineering"}, headers=ctx.as_("viewer"))
+        ).text
+    )
+    assert "ENG-412" in eng and ESTIMATE_MARK in eng
+
+
+# --- #659 review: tables survive redaction; every written owner and estimate form -----
+
+
+def _tables(html: str) -> int:
+    """The content tables of an export (not the header's status table)."""
+    return len(re.findall(r"<table\b(?![^>]*status-table)", html))
+
+
+MILESTONES_TABLE = (
+    "| Milestone | Date | Kind | Owner | Depends on |\n|---|---|---|---|---|\n"
+    "| Import beta | Nov 20 | estimate | Dana Markerson | CSV parser |"
+)
+CARD_TABLE = "| Step | Date |\n|:---|---:|\n| Beta | Nov 20 |\n| GA | Dec 15 |"
+
+
+def _with_tables(template: str) -> list:
+    """The template's sections with a table in an item card (and quarterly-timeline's
+    Key milestones table, as its template asks), as a writer fills them in."""
+    out = []
+    for key, level, heading, body in TEMPLATE_SECTIONS[template][2]:
+        if key in ("release-2-4", "lane-import", "bet-bulk-import"):
+            body = f"{body}\n\n{CARD_TABLE}"
+        if key == "milestones":
+            body = MILESTONES_TABLE
+        out.append((key, level, heading, body))
+    return out
+
+
+@pytest.mark.parametrize("audience", ["team", "engineering"])
+@pytest.mark.parametrize("template", list(TEMPLATE_SECTIONS))
+async def test_tables_in_item_areas_survive_redaction(client, ctx, template, audience):
+    """protects=#659 re-review major 1: a markdown table in an item area (a card's table,
+    quarterly-timeline's Key milestones) keeps its separator row and renders as a table in
+    every audience, only the hidden columns dropped; fails_when=the |---| row is dropped
+    and the table shows as raw "| … |" text; no_claim=tables outside the item areas."""
+    await seed_roadmap(ctx, sections=_with_tables(template), template=template)
+    resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html = resp.text
+    assert not re.search(r"<p>\s*\|", html), html
+    # The brief table, the card's table and (quarterly-timeline) Key milestones.
+    assert _tables(html) == (3 if template == "quarterly-timeline" else 2), html
+    assert re.search(r"<td[^>]*>\s*Beta\s*</td>", html), html
+    if template == "quarterly-timeline":
+        assert re.search(r"<td[^>]*>\s*Import beta\s*</td>", html), html
+        assert "Dana Markerson" in html
+
+
+@pytest.mark.parametrize("audience", ["team", "engineering"])
+async def test_a_roadmap_with_no_items_keeps_its_tables(client, ctx, audience):
+    """protects=#659 re-review major 1: a roadmap with no structured items keeps its
+    written brief table and quarterly-timeline's Key milestones table as tables;
+    fails_when=the separator rows are dropped; no_claim=rebuilt rows (no items)."""
+    sections = _with_tables("quarterly-timeline")
+    await seed_roadmap(ctx, sections=sections, template="quarterly-timeline", items=[])
+    resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html = resp.text
+    assert not re.search(r"<p>\s*\|", html), html
+    assert _tables(html) == 3, html
+    assert re.search(r"<th[^>]*>\s*Quarter\s*</th>", html), html
+
+
+async def test_board_of_a_version_without_items_says_so_in_words(client, ctx):
+    """protects=owner decision 2026-10-26: a version with no roadmap_items renders, on
+    Board, a sentence saying so (HTML, deck and publication), never the written text;
+    fails_when=Board falls back to the prose or a table; no_claim=Team."""
+    sections = _with_tables("quarterly-timeline")
+    await seed_roadmap(ctx, sections=sections, template="quarterly-timeline", items=[],
+                       publish=True)  # fmt: skip
+    for url, params in (
+        (EXPORT, {"audience": "board"}),
+        (EXPORT, {"audience": "board", "layer": "brief"}),
+        (f"/v1/documents/{SLUG}/publications/1/export", {"audience": "board"}),
+    ):
+        resp = await client.get(url, params=params, headers=ctx.as_("viewer"))
+        assert resp.status_code == 200, resp.text
+        text = _text(resp.text)
+        assert variants.BOARD_NO_ITEMS in text, text
+        assert _tables(resp.text) == 0, resp.text
+        for mark in WRITTEN + ["Markerson", "Beta"]:
+            assert mark not in text, (mark, text)
+    deck = await client.get(DECK, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert deck.status_code == 200, deck.text
+    assert variants.BOARD_NO_ITEMS in _text(" ".join(s["html"] for s in deck.json()["slides"]))
+
+
+# Written owner, estimate and tracker parts as writers put them: (text, field).
+WRITTEN_PARTS = [
+    ("Owner: Dana M. Markerson.", "owner"),
+    ("Owner: Dr. Markerson.", "owner"),
+    ("Owners: Dana Markerson, Lee Q. Parkwood.", "owner"),
+    ("**Owner:** Dana Markerson.", "owner"),
+    ("Lead: Dana Markerson.", "owner"),
+    ("DRI: Dana Markerson.", "owner"),
+    ("Assignee: Dana Markerson.", "owner"),
+    ("Owner (PM): Dana Markerson.", "owner"),
+    ("Owned by Dana Markerson.", "owner"),
+    ("Owner — Dana Markerson.", "owner"),
+    ("Owner - Dana Markerson.", "owner"),
+    ("Story points: 8 est-marker.", "effort"),
+    ("Points: 8 est-marker.", "effort"),
+    ("Size: L est-marker.", "effort"),
+    ("Est: 3w est-marker.", "effort"),
+    ("Est.: 3w est-marker.", "effort"),
+    ("Estimate: 3 weeks est-marker.", "effort"),
+    ("Jira: ENG-9 est-marker.", "tracker"),
+    ("Ticket: ENG-9 est-marker.", "tracker"),
+    ("Tracker: ENG-9 est-marker.", "tracker"),
+]
+SECRET = {"owner": "Markerson", "effort": "est-marker", "tracker": "est-marker"}
+
+
+@pytest.mark.parametrize("part,field_", WRITTEN_PARTS)
+@pytest.mark.parametrize("audience", ["team", "engineering"])
+def test_every_written_form_of_owner_estimate_and_tracker(part, field_, audience):
+    """protects=#659 re-review major 2: Team hides estimates and tracker keys and keeps
+    owners; Engineering keeps all three; fails_when=a form leaks, or the text around it
+    is lost; no_claim=Board (built from the items only)."""
+    variant = variants.VARIANTS[audience]
+    line = f"- Bulk import (must). {part} Why: day one (G1)."
+    out = variants.redact(line, variant, [])
+    hidden = field_ in variants.hidden_fields(variant)
+    assert (SECRET[field_] not in out) is hidden, out
+    assert out.startswith("- Bulk import (must).") and out.endswith("Why: day one (G1)."), out
+
+
+HEADERS = [
+    ("Owner(s)", "owner"),
+    ("Owners", "owner"),
+    ("Assignee", "owner"),
+    ("Lead", "owner"),
+    ("DRI", "owner"),
+    ("Owner (PM)", "owner"),
+    ("Story points", "effort"),
+    ("Points", "effort"),
+    ("Size", "effort"),
+    ("Est.", "effort"),
+    ("Estimate", "effort"),
+    ("Jira", "tracker"),
+    ("Ticket", "tracker"),
+    ("Tracker", "tracker"),
+]
+
+
+@pytest.mark.parametrize("header,field_", HEADERS)
+@pytest.mark.parametrize("audience", ["team", "engineering"])
+def test_table_columns_headed_by_any_form_are_dropped(header, field_, audience):
+    """protects=#659 re-review major 2: a column headed Owner(s), Assignee, Est., Jira…
+    is dropped where the audience hides that field, and the table stays a table;
+    fails_when=the column shows, or the separator row is lost; no_claim=prose."""
+    variant = variants.VARIANTS[audience]
+    table = f"| Item | {header} | Goal |\n|---|---|---|\n| Bulk import | est-marker | G1 |"
+    out = variants.redact(table, variant, []).split("\n")
+    hidden = field_ in variants.hidden_fields(variant)
+    assert len(out) == 3 and variants._TABLE_SEP.match(out[1]), out
+    assert ("est-marker" not in "\n".join(out)) is hidden, out
+    assert len(variants._split_row(out[1])) == len(variants._split_row(out[0])), out
+
+
+def test_prose_that_only_looks_like_a_label_is_kept():
+    """protects=Team keeps prose: "Key points:" or "Sizes vary" are not estimate labels;
+    fails_when=a sentence is cut; no_claim=labelled parts."""
+    team = variants.VARIANTS["team"]
+    line = "Key points: imports lead to reports. Sizes vary by plan."
+    assert variants.redact(line, team, []) == line
+
+
+async def test_a_tenant_with_no_confirmed_goals_shows_board_as_before(client, ctx):
+    """protects=#659 re-review minor: with no confirmed goal in the tenant there is
+    nothing to serve, so Board shows every item rather than none; fails_when=Board is
+    empty with "4 items serve no confirmed goal"; no_claim=tenants with goals."""
+    await seed_roadmap(ctx, served=())
+    async with tenant_session(ctx.tenant_id) as s:
+        for goal in await s.scalars(select(Entity).where(Entity.type == "goal")):
+            goal.status = "proposed"
+        await s.commit()
+    resp = await client.get(EXPORT, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    text = _text(resp.text)
+    assert "Bulk import" in text and "CSV parser" in text, text
+    # Every item's row shows (no written card text); nothing is left out or flagged.
+    assert "Confetti" in text and "Stickers" in text, text
+    assert "Celebrate signups" not in text and "Signups feel celebrated" in text, text
+    assert "left out" not in text and variants.NO_GOAL_FLAG not in text, text
+    assert "\u2691 Confetti" not in text, text
+
+
+async def test_loading_the_items_reads_the_goals_once(ctx, monkeypatch):
+    """protects=#659 re-review minor: a render loads the confirmed goals once, not per
+    item; fails_when=the goals query runs per item; no_claim=query count of the rest."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+    from oracle.export import render
+
+    await seed_roadmap(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        ev = await render.load_export_version(s, SLUG, 1)
+        goal_reads = []
+
+        def count(conn, cursor, statement, *args):
+            if "entities.type = " in statement and "entities.status = " in statement:
+                goal_reads.append(statement)
+
+        event.listen(get_engine().sync_engine, "before_cursor_execute", count)
+        try:
+            await render.load_audience(s, ev)
+        finally:
+            event.remove(get_engine().sync_engine, "before_cursor_execute", count)
+    assert len(ev.items) == len(ITEMS)
+    assert len(goal_reads) == 1, goal_reads
