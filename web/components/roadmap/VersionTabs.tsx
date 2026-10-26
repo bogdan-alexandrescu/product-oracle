@@ -6,8 +6,9 @@ import type { DraftRoadmapSummary } from "@/lib/api/draft-roadmap";
 
 /**
  * A version's page tabs, directly under its header (E2): Document and Items on a roadmap
- * version; Document and Roadmap on every PRD version (E1: the draft's items-only roadmap,
- * "Roadmap 4", or "Roadmap · deriving" / "Roadmap · queued" while it has no items yet).
+ * version; Document, Roadmap and Evidence on every PRD version (E1: the draft's items-only
+ * roadmap, "Roadmap 4", or "Roadmap · deriving" / "Roadmap · queued" while it has no items
+ * yet; v2 screen 3: the evidence inspector).
  * Links, not buttons; the active one carries aria-current="page".
  */
 export function VersionTabs({
@@ -21,7 +22,7 @@ export function VersionTabs({
   doc: string;
   n: number;
   kind: string | null | undefined;
-  active: "document" | "items" | "roadmap";
+  active: "document" | "items" | "roadmap" | "evidence";
   /** The version's item count; while it loads the label is "Items". */
   count?: number;
   /** A PRD version's draft roadmap summary (VersionOut.draft_roadmap). */
@@ -34,6 +35,7 @@ export function VersionTabs({
       ? [
           { key: "document", label: "Document", href: base },
           { key: "roadmap", label: roadmapLabel(draft), href: `${base}/roadmap` },
+          { key: "evidence", label: "Evidence", href: `${base}/evidence` },
         ]
       : [
           { key: "document", label: "Document", href: base },

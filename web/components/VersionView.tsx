@@ -40,6 +40,7 @@ import { DraftRoadmapPane } from "@/components/roadmap/DraftRoadmapPane";
 import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
 import { VersionTabs } from "@/components/roadmap/VersionTabs";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
+import { EvidencePane } from "@/components/evidence/EvidencePane";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
@@ -112,7 +113,7 @@ function readSelection(): Selection | null {
  * on both, so approval and date marks never differ between tabs. A PRD version has Document
  * and Roadmap (E1, `pane="roadmap"`: the draft's items-only roadmap).
  */
-export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" }) {
+export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" | "evidence" }) {
   const router = useRouter();
   const onDocument = pane === "document";
   const { me, can, capsReady } = useMe();
@@ -268,13 +269,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         ? `/documents/${doc}/v/${v}/items`
         : pane === "roadmap" && document_?.kind === "prd"
           ? `/documents/${doc}/v/${v}/roadmap`
-          : `/documents/${doc}/v/${v}`,
+          : pane === "evidence" && document_?.kind === "prd"
+            ? `/documents/${doc}/v/${v}/evidence`
+            : `/documents/${doc}/v/${v}`,
     [pane, isRoadmap, document_?.kind, doc],
   );
   // Only a roadmap has an Items tab: a PRD's /items opens the version.
   useEffect(() => {
     if (pane === "items" && document_ && document_.kind !== "roadmap") router.replace(`/documents/${doc}/v/${n}`);
     // E1: only a PRD has a Roadmap tab; a roadmap's /roadmap opens its Items tab.
+    // Only a PRD version has an Evidence tab.
+    if (pane === "evidence" && document_ && document_.kind !== "prd") router.replace(`/documents/${doc}/v/${n}`);
     if (pane === "roadmap" && document_ && document_.kind !== "prd") {
       router.replace(document_.kind === "roadmap" ? `/documents/${doc}/v/${n}/items` : `/documents/${doc}/v/${n}`);
     }
@@ -1248,8 +1253,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             onStatus={verQ.reload}
           />
         )}
+        {/* v2 screen 3: the evidence inspector; it says itself when the version is not found. */}
+        {pane === "evidence" && document_?.kind === "prd" && (
+          <EvidencePane doc={doc} n={n} title={document_.title} latest={latest ?? n} />
+        )}
         {pane !== "document" && !document_ && !error && <Loading label="Loading version…" />}
-        {pane !== "document" && error && <ErrorNote>{error}</ErrorNote>}
+        {pane !== "document" && error && !(pane === "evidence" && document_) && <ErrorNote>{error}</ErrorNote>}
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}

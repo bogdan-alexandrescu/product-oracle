@@ -40,6 +40,18 @@ interface TraceVersion {
   approved_at?: string | null;
   source_version_id?: string | null;
   sections: { section_key: string; heading: string; level: number; layer: string; content_hash: string; citation_keys: string[] }[];
+  /** The draft's own citations ([c:id] markers), as GET version serves them. */
+  citations?: { cite_key: string; source: string; ref: string; title?: string | null; excerpt?: string | null; retrieved_at?: string | null }[];
+}
+/** A baseline evidence row (./baseline.ts), a section link's evidence target. */
+interface TraceEvidence {
+  id: string;
+  url?: string | null;
+  ref?: string | null;
+  excerpt?: string | null;
+  source_kind: string;
+  source_removed: boolean;
+  confidence?: number | null;
 }
 interface TraceEntity {
   id: string;
@@ -58,6 +70,8 @@ export interface TraceContext {
   entities: TraceEntity[];
   /** Baseline edges, to walk a linked entity up to the goals it serves. */
   edges?: { src_id: string; dst_id: string; type: string; status: string }[];
+  /** Baseline evidence rows, the evidence a section link may point at. */
+  evidence?: TraceEvidence[];
   userId: string;
   role: Role;
   now: () => string;
@@ -214,23 +228,46 @@ function report(
   return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected, subject.kind), counts, truncated: Boolean(ctx.v2.walk_truncated) };
 }
 
+/** A link's target as oracle.trace.evidence.targets resolves it; null when it no longer exists (the API drops it). */
+function linkTarget(ctx: TraceContext, l: V2Db["section_links"][number]): Schemas["SectionLinkTarget"] | null {
+  if (l.evidence_id) {
+    const ev = ctx.evidence?.find((x) => x.id === l.evidence_id);
+    if (!ev) return null;
+    return {
+      type: "evidence", id: ev.id, title: ev.ref || ev.url || null, confidence: ev.confidence ?? null, url: ev.url ?? null,
+      ref: ev.ref ?? null, excerpt: ev.excerpt ?? null, source_kind: ev.source_kind, restricted: false, source_removed: ev.source_removed,
+    };
+  }
+  // Only a source's owner reads its items (AUD-9); the mock's linked items are someone else's.
+  if (l.source_item_id) return { type: "source_item", id: l.source_item_id, title: null, url: null, source_kind: "gdocs", restricted: true, source_removed: false };
+  const e = ctx.entities.find((x) => x.id === l.entity_id);
+  if (!e) return null;
+  return { type: "entity", id: e.id, title: e.title, entity_type: e.type, status: e.status, locked: e.locked, confidence: e.confidence ?? null, ref: `${e.type}:${e.key}`, restricted: false, source_removed: false };
+}
+
+/** Strongest source first (B3): by confidence, unscored last, then oldest first. */
+function byStrength(a: Schemas["SectionLinkView"], b: Schemas["SectionLinkView"]): number {
+  const ca = a.target.confidence;
+  const cb = b.target.confidence;
+  if ((ca == null) !== (cb == null)) return ca == null ? 1 : -1;
+  if (ca != null && cb != null && ca !== cb) return cb - ca;
+  return a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id);
+}
+
 function linkViews(ctx: TraceContext, version: TraceVersion, key: string): Schemas["SectionLinkView"][] {
   const hash = version.sections.find((s) => s.section_key === key)?.content_hash;
   return ctx.v2.section_links
     .filter((l) => l.document_id === version.document_id && (l.version_id === version.id || l.version_id === null) && l.section_key === key)
-    .map((l) => {
-      const e = ctx.entities.find((x) => x.id === l.entity_id);
-      const target: Schemas["SectionLinkTarget"] = l.source_item_id
-        ? { type: "source_item", id: l.source_item_id, source_kind: "upload", restricted: true, source_removed: false }
-        : e
-          ? { type: "entity", id: e.id, title: e.title, entity_type: e.type, status: e.status, locked: e.locked, confidence: e.confidence ?? null, ref: `${e.type}:${e.key}`, restricted: false, source_removed: false }
-          : { type: "evidence", id: l.evidence_id ?? l.id, title: "Buyer interviews (synthetic)", ref: "buyer-interviews.md", confidence: 0.8, restricted: false, source_removed: false };
-      return {
+    .flatMap((l) => {
+      const target = linkTarget(ctx, l);
+      if (!target) return [];
+      return [{
         id: l.id, kind: l.kind, precision: l.precision, claim: l.claim ?? null, module_key: l.module_key ?? null,
         composition_revision: l.composition_revision ?? null, current: !l.section_hash || l.section_hash === hash, target,
         created_by: l.created_by ?? null, created_at: l.created_at,
-      };
-    });
+      }];
+    })
+    .sort(byStrength);
 }
 
 /** Handles the trace routes; null when the path is not one of them. */
@@ -244,7 +281,11 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
   // /v1/documents/{doc}/versions/{n}/(trace|evidence|impact|section-links)
   if (p[1] === "documents" && p[3] === "versions" && p.length === 6 && ["trace", "evidence", "impact", "section-links"].includes(p[5])) {
     const found = findVersion(ctx, p[2], Number(p[4]));
-    if (!found) return notFound("Version");
+    if (!found) {
+      // As oracle.docs.service words it.
+      const known = ctx.documents.some((x) => x.slug === p[2] || x.id === p[2]);
+      return json(404, { detail: known ? `version ${p[4]} of '${p[2]}' not found` : `document '${p[2]}' not found` });
+    }
     const { d, v } = found;
     const onVersion = v2.artifact_dependencies.filter((x) => x.upstream_version_id === v.id);
     if (p[5] === "trace" && m === "GET") {
@@ -284,7 +325,10 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
           .map((s) => ({
             section_key: s.section_key, heading: s.heading, level: s.level, layer: s.layer, section_hash: s.content_hash,
             links: linkViews(ctx, v, s.section_key),
-            citations: s.citation_keys.map((k) => ({ cite_key: k, source: "upload", ref: `${k}.md`, title: `Synthetic source ${k}`, excerpt: null, retrieved_at: null })),
+            citations: s.citation_keys.flatMap((k) => {
+              const c = v.citations?.find((x) => x.cite_key === k);
+              return c ? [{ cite_key: k, source: c.source, ref: c.ref, title: c.title ?? null, excerpt: c.excerpt ?? null, retrieved_at: c.retrieved_at ?? null }] : [];
+            }),
           })),
       };
       return json(200, out);
@@ -303,9 +347,12 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       for (const l of links) {
         const section = v.sections.find((s) => s.section_key === l.section_key);
         if (!section) return json(422, { detail: `version ${v.number} has no section '${l.section_key}'` });
+        if (l.entity_id && !ctx.entities.some((e) => e.id === l.entity_id)) return json(422, { detail: `unknown baseline entity ${l.entity_id}` });
+        if (l.evidence_id && !ctx.evidence?.some((e) => e.id === l.evidence_id)) return json(422, { detail: `unknown evidence ${l.evidence_id}` });
+        if (l.precision === "claim" && !(l.claim ?? "").trim()) return json(422, { detail: "a claim link needs the claim" });
         created.push({
           id: ctx.uuid(), document_id: d.id, version_id: v.id, section_key: l.section_key, section_hash: section.content_hash,
-          composition_revision: null, module_key: l.module_key ?? null, kind: l.kind, entity_id: l.entity_id ?? null,
+          composition_revision: v2.compositions.find((c) => c.document_id === d.id)?.current_revision ?? null, module_key: l.module_key ?? null, kind: l.kind, entity_id: l.entity_id ?? null,
           evidence_id: l.evidence_id ?? null, source_item_id: l.source_item_id ?? null, precision: l.precision ?? "section",
           claim: l.claim ?? null, created_by: ctx.userId, created_at: ctx.now(),
         });
