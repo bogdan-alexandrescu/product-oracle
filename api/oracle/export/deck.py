@@ -34,6 +34,7 @@ from oracle.export.render import (
     _jinja,
     _themed_markdown,
     absolute_doc_links,
+    brand_dark,
     section_body_html,
     sources_keys,
     token_vars,
@@ -310,6 +311,9 @@ def build_deck(ev: ExportVersion) -> Deck:
     if brand is not None:
         # O5: the brand's accent replaces the theme's on slides and in the PPTX.
         tokens = brand.apply_accent(tokens)
+    # O5: the dark logo on a dark theme's slides, the light one otherwise.
+    dark = brand_dark(ev)
+    logo_png, logo_size = brand.logo_for(dark) if brand is not None else (None, None)
     css = "\n".join(
         [
             slide_stylesheet(),
@@ -334,9 +338,9 @@ def build_deck(ev: ExportVersion) -> Deck:
         css=Markup(css),
         slides=slides,
         brand_name=brand.display_name if brand is not None else None,
-        brand_logo=render_brand_logo(brand),
-        brand_logo_png=brand.logo_png if brand is not None else None,
-        brand_logo_size=brand.logo_size if brand is not None else None,
+        brand_logo=render_brand_logo(brand, dark=dark),
+        brand_logo_png=logo_png,
+        brand_logo_size=logo_size,
     )
     macro = _jinja().get_template("slide.html.j2").module.slide  # type: ignore[attr-defined]
     for slide in slides:

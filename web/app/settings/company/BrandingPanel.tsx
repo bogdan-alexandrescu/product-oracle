@@ -93,6 +93,37 @@ function Preview({ name, accent, light, dark }: { name: string; accent: string |
 }
 
 /**
+ * Which logo exports and decks use (owner decision, 2026-10-26): the dark one on a dark theme
+ * background, the logo otherwise; with no dark logo, the logo everywhere. Lists the API's choice
+ * for each built-in theme.
+ */
+function ThemeLogos({ brand }: { brand: BrandingOut }) {
+  if (!brand.logo && !brand.logo_dark) return null;
+  if (!brand.logo_dark) {
+    return (
+      <p data-testid="brand-theme-note" className="text-[13px] text-text2">
+        With no dark logo, every export and deck uses the logo.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <p data-testid="brand-theme-note" className="text-[13px] text-text2">
+        Exports and decks use the dark logo on a dark background and the logo on a light one.
+      </p>
+      <ul data-testid="brand-theme-logos" className="flex flex-col gap-0.5 text-[13px] text-text2">
+        {brand.theme_logos.map((t) => (
+          <li key={t.key}>
+            <span className="font-semibold text-text">{t.name}</span>
+            {`: ${t.variant === "dark" ? "dark" : "light"} background, uses the ${t.variant === "dark" ? "dark logo" : "logo"}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
  * O5 lane 4: Settings › Company › Branding. The company's display name, logo (and an optional
  * dark one), accent, public disclaimer and the "Made with Product Oracle" mark; every export and
  * shared page uses them. Owners edit (`can_edit`); everyone else reads.
@@ -168,6 +199,7 @@ export function BrandingPanel() {
                 Logo <span data-testid="brand-logo-size">{`${brand.logo.width} × ${brand.logo.height} px`}</span>
               </p>
             )}
+            <ThemeLogos brand={brand} />
             {brand.can_edit ? (
               <form
                 className="flex flex-col gap-4"

@@ -7,6 +7,7 @@
 import {
   BRANDING_LIMITS,
   contrastOnWhite,
+  darkBackground,
   DEFAULT_DISCLAIMER,
   normalHex,
   passesAA,
@@ -15,6 +16,8 @@ import {
   type BrandingOut,
   type BrandLogo,
 } from "@/lib/api/branding-types";
+
+import { builtinThemeBackgrounds } from "./lane-f";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type StoredLogo = Omit<BrandLogo, "url">;
@@ -59,6 +62,8 @@ export function brandingOut(b: BrandingDb, role: Role): BrandingOut {
     oracle_mark: b.oracle_mark,
     revision: b.revision,
     can_edit: role === "owner",
+    // As the API: the dark logo on a dark background, the logo otherwise and without one.
+    theme_logos: builtinThemeBackgrounds().map((t) => ({ ...t, variant: b.logo_dark && darkBackground(t.background) ? "dark" : "light" })),
   };
 }
 
@@ -190,9 +195,13 @@ export async function routeBranding(b: BrandingDb, role: Role, req: Request, p: 
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
 
-/** The brand header every HTML export's body starts with (the light logo, at most 40 px high). */
-export function brandHeaderHtml(b: BrandingDb): string {
-  const bytes = b.logo ? b.assets[b.logo.sha256] : undefined;
+/**
+ * The brand header every HTML export's body starts with (at most 40 px high): the dark logo
+ * on a dark `background`, the logo otherwise and while no dark logo is uploaded.
+ */
+export function brandHeaderHtml(b: BrandingDb, background = "#ffffff"): string {
+  const logo = b.logo_dark && darkBackground(background) ? b.logo_dark : b.logo;
+  const bytes = logo ? b.assets[logo.sha256] : undefined;
   const img = bytes ? `<img class="brand-logo" src="data:image/png;base64,${bytes}" alt="${esc(b.display_name)}" height="40">` : "";
   return `<header class="brand-header">${img}<span class="brand-name">${esc(b.display_name)}</span></header>`;
 }

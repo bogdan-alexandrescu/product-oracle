@@ -12,6 +12,12 @@ stripped, decompression bombs refused). SVG is refused: it can carry script. Mem
 logo at ``/uploads/brand/<sha256>.png``, as ``image/png`` with ``nosniff`` and a CSP that
 runs nothing. Exports, decks, PPTX and shared pages inline it as a ``data:`` image from the
 header partial (:func:`render_brand_header`), the one data image the renderer allows.
+
+Which logo (owner decision, 2026-10-26): the dark one when the theme's background is dark
+(WCAG relative luminance below :data:`DARK_LUMINANCE`, :func:`dark_background`), the light
+one otherwise, and the light one everywhere while no dark logo is uploaded
+(:meth:`Brand.uses_dark`). Exports, decks, PPTX and publications all choose so, and the
+Branding preview lists the choice for each built-in theme (``theme_logos``).
 """
 
 import base64
@@ -38,7 +44,14 @@ from oracle.authz import has_role, not_for_runs, recheck_caller, require_role
 from oracle.branding_models import BrandAsset
 from oracle.tenancy import current_tenant
 
-__all__ = ["BrandAsset", "Brand", "load_brand", "render_brand_header", "router"]
+__all__ = [
+    "BrandAsset",
+    "Brand",
+    "dark_background",
+    "load_brand",
+    "render_brand_header",
+    "router",
+]
 
 MAX_LOGO_BYTES = 512 * 1024
 MAX_LOGO_SIDE = 2000
@@ -48,6 +61,8 @@ LOGO_FORMATS = {"PNG", "JPEG", "WEBP"}
 NOT_AN_IMAGE = "Upload a PNG, JPEG or WebP"
 TOO_BIG = "The logo must be at most 512 KB"
 TOO_LARGE = "The logo must be at most 2,000 × 2,000 px"
+# A background below this relative luminance (WCAG) is dark: the dark logo goes on it.
+DARK_LUMINANCE = 0.5
 TOO_LIGHT = "This colour is too light to read on white. Pick a darker one."
 DEFAULT_DISCLAIMER = (
     "This roadmap shows our current plans. It is not a commitment, and plans and timing can change."
@@ -127,6 +142,21 @@ def check_accent(value: Any) -> str | None:
     return value.lower()
 
 
+def dark_background(colour: Any) -> bool:
+    """Whether a hex ``colour`` is a dark background (relative luminance below
+    :data:`DARK_LUMINANCE`); no colour, or not a hex one, is the page's white."""
+    from oracle.templates.validation import luminance
+
+    if not isinstance(colour, str) or not _HEX.match(colour):
+        return False
+    return luminance(colour) < DARK_LUMINANCE
+
+
+def theme_background(tokens: dict | None) -> str | None:
+    """A theme's page background (its tokens' ``colors.background``), if it sets one."""
+    return ((tokens or {}).get("colors") or {}).get("background")
+
+
 async def stored(db: AsyncSession) -> dict[str, Any]:
     from oracle.tenant_settings_api import get_setting
 
@@ -195,6 +225,18 @@ class Brand:
     logo_png: bytes | None = None
     logo_size: tuple[int, int] | None = None
     logo_dark_png: bytes | None = None
+    logo_dark_size: tuple[int, int] | None = None
+
+    def uses_dark(self, background: Any) -> bool:
+        """Whether a page on ``background`` shows the dark logo: the background is dark
+        and a dark logo is uploaded (without one the light logo is used everywhere)."""
+        return self.logo_dark_png is not None and dark_background(background)
+
+    def logo_for(self, dark: bool) -> tuple[bytes | None, tuple[int, int] | None]:
+        """The PNG and its size a page shows (``dark``: :meth:`uses_dark`)."""
+        if dark and self.logo_dark_png is not None:
+            return self.logo_dark_png, self.logo_dark_size
+        return self.logo_png, self.logo_size
 
     @property
     def logo_data_uri(self) -> str | None:
@@ -254,6 +296,7 @@ async def load_brand(db: AsyncSession) -> Brand:
         logo_png=light.bytes if light else None,
         logo_size=(light.width, light.height) if light else None,
         logo_dark_png=dark.bytes if dark else None,
+        logo_dark_size=(dark.width, dark.height) if dark else None,
     )
 
 
@@ -325,6 +368,15 @@ class BrandLogo(BaseModel):
     url: str
 
 
+class ThemeLogo(BaseModel):
+    """Which logo a built-in theme's exports and decks use."""
+
+    key: str
+    name: str
+    background: str
+    variant: Variant
+
+
 class BrandingOut(BaseModel):
     display_name: str
     logo: BrandLogo | None
@@ -334,6 +386,7 @@ class BrandingOut(BaseModel):
     oracle_mark: bool
     revision: int
     can_edit: bool
+    theme_logos: list[ThemeLogo] = []
     updated_at: datetime | None = None
 
 
@@ -350,12 +403,32 @@ def _logo(value: Any) -> BrandLogo | None:
     return BrandLogo(**value, url=f"/uploads/brand/{value['sha256']}.png")
 
 
+def theme_logos(has_dark: bool) -> list[ThemeLogo]:
+    """The logo each built-in theme uses (the Branding preview's note)."""
+    from oracle.templates.builtins import BUILTIN_THEMES
+
+    out = []
+    for theme in BUILTIN_THEMES:
+        background = theme_background(theme.tokens) or "#ffffff"
+        dark = has_dark and dark_background(background)
+        out.append(
+            ThemeLogo(
+                key=theme.key,
+                name=theme.name,
+                background=background,
+                variant="dark" if dark else "light",
+            )
+        )
+    return out
+
+
 async def _out(db: AsyncSession, principal: Principal) -> BrandingOut:
     value = await stored(db)
+    logo_dark = _logo(value.get("logo_dark"))
     return BrandingOut(
         display_name=value.get("display_name") or await company_name(db),
         logo=_logo(value.get("logo")),
-        logo_dark=_logo(value.get("logo_dark")),
+        logo_dark=logo_dark,
         accent=value.get("accent"),
         public_disclaimer=value.get("public_disclaimer") or DEFAULT_DISCLAIMER,
         oracle_mark=bool(value.get("oracle_mark", True)),
@@ -363,6 +436,7 @@ async def _out(db: AsyncSession, principal: Principal) -> BrandingOut:
         can_edit=has_role(principal.role, "owner")
         and principal.run_id is None
         and principal.run_token_id is None,
+        theme_logos=theme_logos(logo_dark is not None),
     )
 
 

@@ -513,3 +513,105 @@ async def test_an_image_mode_pillow_cannot_convert_is_refused_not_a_crash(client
     resp = await _upload(client, ctx.as_("owner"), buf.getvalue())
     assert resp.status_code == 422, resp.text
     assert NOT_AN_IMAGE in resp.json()["detail"]
+
+
+# --- the dark logo on dark backgrounds (owner decision, 2026-10-26) ----------------------
+
+DARK_BG = "#111827"  # relative luminance ~0.01
+
+
+def _sha_of(uri: str) -> str:
+    return hashlib.sha256(base64.b64decode(uri.split(",", 1)[1])).hexdigest()
+
+
+async def _export_version(ctx, background: str | None):
+    """The checkout PRD v1 as an export reads it, its theme's background set to
+    ``background`` (None: the built-in theme as it is)."""
+    from oracle.export.render import detached, load_export_version
+
+    async with tenant_session(ctx.tenant_id) as s:
+        ev = detached(await load_export_version(s, "checkout", 1))
+    if background is not None:
+        tokens = dict(ev.theme.tokens or {})
+        tokens["colors"] = {**(tokens.get("colors") or {}), "background": background}
+        ev.theme.tokens = tokens
+    return ev
+
+
+@pytest.fixture
+async def two_logos(client, ctx):
+    owner = ctx.as_("owner")
+    assert (await _import(client, ctx.as_("token"), DRAFT)).status_code == 201
+    light = (await _upload(client, owner, _image())).json()["logo"]
+    dark = (await _upload(client, owner, _image(colour=(250, 250, 250)), variant="dark")).json()
+    return ctx, light, dark["logo_dark"]
+
+
+def test_the_luminance_rule_picks_dark_below_one_half():
+    from oracle.branding import dark_background
+
+    assert dark_background(DARK_BG) is True
+    assert dark_background("#000") is True
+    assert dark_background("#767676") is True  # ~0.18
+    assert dark_background("#ffffff") is False
+    assert dark_background("#f3f4f6") is False
+    assert dark_background("#bcbcbc") is False  # ~0.50
+    assert dark_background(None) is False  # no background: the page's white
+
+
+async def test_a_dark_theme_uses_the_dark_logo_and_a_light_theme_the_light_one(two_logos):
+    from oracle.export import deck as decks
+    from oracle.export.pptx import deck_to_pptx
+    from oracle.export.render import render_html
+
+    ctx, light, dark = two_logos
+    for background, want in ((DARK_BG, dark), (None, light), ("#fafafa", light)):
+        ev = await _export_version(ctx, background)
+        html = render_html(ev)
+        assert [_sha_of(u) for u in _data_png(html)] == [want["sha256"]], background
+        deck = decks.build_deck(ev)
+        assert [_sha_of(u) for u in _data_png(deck.slides[0].html)] == [want["sha256"]]
+        assert hashlib.sha256(deck.brand_logo_png).hexdigest() == want["sha256"]
+        assert deck.brand_logo_size == (want["width"], want["height"])
+        prs = Presentation(io.BytesIO(deck_to_pptx(deck)))
+        pictures = [s for s in prs.slides[0].shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
+        assert [hashlib.sha256(p.image.blob).hexdigest() for p in pictures] == [want["sha256"]]
+
+
+async def test_without_a_dark_logo_the_light_logo_is_used_everywhere(client, ctx):
+    from oracle.export import deck as decks
+    from oracle.export.render import render_html
+
+    assert (await _import(client, ctx.as_("token"), DRAFT)).status_code == 201
+    light = (await _upload(client, ctx.as_("owner"), _image())).json()["logo"]
+    for background in (DARK_BG, None):
+        ev = await _export_version(ctx, background)
+        assert [_sha_of(u) for u in _data_png(render_html(ev))] == [light["sha256"]]
+        deck = decks.build_deck(ev)
+        assert hashlib.sha256(deck.brand_logo_png).hexdigest() == light["sha256"]
+
+
+async def test_the_present_key_changes_when_the_logo_choice_changes(two_logos):
+    from types import SimpleNamespace
+
+    from oracle.export import present
+
+    ctx, _, _ = two_logos
+    who = SimpleNamespace(tenant_id=ctx.tenant_id)
+    dark = present.key(who, await _export_version(ctx, DARK_BG))
+    light = present.key(who, await _export_version(ctx, "#fafafa"))
+    # Same theme row and revision: only the background, and so the logo, differs.
+    assert dark != light
+    assert present.key(who, await _export_version(ctx, "#000000")) == dark
+
+
+async def test_the_branding_preview_says_which_logo_each_built_in_theme_uses(client, two_logos):
+    from oracle.templates.builtins import BUILTIN_THEMES
+
+    ctx, _, _ = two_logos
+    out = (await client.get("/v1/branding", headers=ctx.as_("viewer"))).json()
+    assert [t["key"] for t in out["theme_logos"]] == [t.key for t in BUILTIN_THEMES]
+    for row, theme in zip(out["theme_logos"], BUILTIN_THEMES, strict=True):
+        assert row["name"] == theme.name
+        assert row["background"] == theme.tokens["colors"]["background"]
+        assert row["variant"] == "light"  # every built-in theme is light today

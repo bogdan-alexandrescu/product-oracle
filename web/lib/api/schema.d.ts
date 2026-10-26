@@ -14933,6 +14933,11 @@ export interface components {
             revision: number;
             /** Can Edit */
             can_edit: boolean;
+            /**
+             * Theme Logos
+             * @default []
+             */
+            theme_logos: components["schemas"]["ThemeLogo"][];
             /** Updated At */
             updated_at?: string | null;
         };
@@ -36122,6 +36127,23 @@ export interface components {
             heading?: string | null;
             /** Mono */
             mono?: string | null;
+        };
+        /**
+         * ThemeLogo
+         * @description Which logo a built-in theme's exports and decks use.
+         */
+        ThemeLogo: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Background */
+            background: string;
+            /**
+             * Variant
+             * @enum {string}
+             */
+            variant: "light" | "dark";
         };
         /** ThemeOption */
         ThemeOption: {

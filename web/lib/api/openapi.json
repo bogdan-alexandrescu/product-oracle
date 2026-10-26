@@ -50079,6 +50079,14 @@
             "type": "boolean",
             "title": "Can Edit"
           },
+          "theme_logos": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeLogo"
+            },
+            "type": "array",
+            "title": "Theme Logos",
+            "default": []
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -108890,6 +108898,39 @@
         },
         "type": "object",
         "title": "ThemeFonts"
+      },
+      "ThemeLogo": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "background": {
+            "type": "string",
+            "title": "Background"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ],
+            "title": "Variant"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "background",
+          "variant"
+        ],
+        "title": "ThemeLogo",
+        "description": "Which logo a built-in theme's exports and decks use."
       },
       "ThemeOption": {
         "properties": {
