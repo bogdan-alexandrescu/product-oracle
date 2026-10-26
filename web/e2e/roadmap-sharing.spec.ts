@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * a roadmap's Audience switch, the Share sheet with its passcode shown once, the Links
  * table with View log, Extend, New passcode and Revoke, the signed-out /s/<token> page with
  * its passcode form, the Plan > Roadmap documents Shared column and the owners' Inbox row.
- * The "sharing" scenario seeds a published roadmap (Example Labs roadmap v1), one Team link
+ * The "sharing" scenario seeds a published roadmap (Platform roadmap, autumn v1), one Team link
  * with two views, and two links Oracle revoked when their creator left.
  */
 
@@ -94,7 +94,7 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   const holder = await page.context().newPage();
   await holder.goto(new URL(url).pathname);
   await expect(holder.getByRole("heading", { name: "Enter the passcode" })).toBeVisible();
-  await expect(holder.getByText("Example Labs")).toHaveCount(0);
+  await expect(holder.getByText("Example Co")).toHaveCount(0);
   await holder.getByLabel("Passcode").fill("wrong-pass-code");
   await holder.getByRole("button", { name: "Open" }).click();
   await expect(holder.getByText("That passcode did not open a link.")).toBeVisible();
@@ -102,7 +102,7 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   await holder.getByRole("button", { name: "Open" }).click();
   const shared = holder.frameLocator('iframe[title="Shared roadmap"]');
   await expect(shared.getByText("Audience Board")).toBeVisible();
-  await expect(shared.getByRole("link", { name: "Download PDF" })).toBeVisible();
+  await expect(holder.getByRole("button", { name: "Download PDF" })).toBeVisible();
 });
 
 test("the Links table: View log, New passcode and Revoke, and the ended page", async ({ page }) => {
@@ -150,7 +150,7 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   // The holder's next request is refused, with no company name.
   await page.goto(path);
   await expect(page.getByText("This link has ended. Ask the person who sent it for a new one.")).toBeVisible();
-  await expect(page.getByText("Example Labs")).toHaveCount(0);
+  await expect(page.getByText("Example Co")).toHaveCount(0);
 });
 
 test("Extend and Move to a newer version keep the link", async ({ page }) => {
@@ -207,7 +207,7 @@ test("an unpublished roadmap asks to publish first", async ({ page }) => {
 test("Plan > Roadmap documents shows each roadmap's active links and next expiry", async ({ page }) => {
   await sharing(page);
   await page.goto("/plan/documents");
-  const row = page.getByRole("row").filter({ hasText: "Example Labs roadmap" });
+  const row = page.getByRole("row").filter({ hasText: "Platform roadmap, autumn" });
   await expect(row.getByTestId("shared-cell")).toContainText("1 active");
   await expect(row.getByTestId("shared-cell")).toContainText(/ends .*Nov/);
   const other = page.getByRole("row").filter({ hasText: "Usage alerts roadmap" });

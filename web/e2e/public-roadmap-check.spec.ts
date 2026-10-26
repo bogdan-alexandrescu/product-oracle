@@ -11,7 +11,7 @@ import { login } from "./helpers";
 
 const DOC = "/documents/example-labs-roadmap";
 // Internal words that must never reach the Public page.
-const MARKERS = ["Falcon alerts rework", "Billing ledger v2", "Northwind", "Dependencies and owners", "ENG-512", "Admin", "Partner API beta"];
+const MARKERS = ["Platform roadmap, autumn", "Falcon alerts rework", "Billing ledger v2", "Northwind", "Dependencies and owners", "ENG-512", "Admin", "Partner API beta"];
 
 async function sharing(page: Page, email?: string) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
@@ -40,7 +40,7 @@ test("check the Public version, then share it with a passcode", async ({ page })
   await expect(removed).toContainText("tracker links");
 
   const preview = page.frameLocator('iframe[title="Public page preview"]');
-  await expect(preview.getByRole("heading", { name: "Example Labs roadmap" })).toBeVisible();
+  await expect(preview.getByRole("heading", { name: "Example Co roadmap" })).toBeVisible();
   await expect(preview.getByText("This roadmap shows our current plans. It is not a commitment, and plans and timing can change.")).toBeVisible();
 
   // The draft names a seeded customer: the blocking finding stops its approval.
@@ -85,7 +85,7 @@ test("check the Public version, then share it with a passcode", async ({ page })
   await page.getByLabel("Passcode").fill(code);
   await page.getByRole("button", { name: "Open" }).click();
   const shared = page.frameLocator('iframe[title="Shared roadmap"]');
-  await expect(shared.getByRole("heading", { name: "Example Labs roadmap" })).toBeVisible();
+  await expect(shared.getByRole("heading", { name: "Example Co roadmap" })).toBeVisible();
   for (const stage of ["Shipped recently", "In progress", "Planned", "Exploring"]) {
     await expect(shared.getByRole("heading", { name: stage })).toBeVisible();
   }
