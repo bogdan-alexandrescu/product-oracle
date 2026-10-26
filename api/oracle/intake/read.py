@@ -502,7 +502,7 @@ async def analysis_input(
     """The job's exact payload for the token of this intake's own read (Q1): 403 for
     people, API tokens and MCP clients; 404 for any other run token (another intake's run,
     another flow, no read:intake-input, a stale snapshot, or a run its author did not
-    create). The read is audited like every excerpt read."""
+    create). Each read is audited as ``intake.evidence_query`` (spec-INT2)."""
     from oracle.runtokens import RunToken
 
     if principal.run_id is None or principal.run_token_id is None:
@@ -523,7 +523,7 @@ async def analysis_input(
         raise ReadError(404, "Intake not found")
     body, known, chosen = await intake_job.payload(db, intake)
     await audit.record(
-        db, principal, "intake.evidence_read", "intake", intake.id,
+        db, principal, "intake.evidence_query", "intake", intake.id,
         {"route": "get_intake_analysis_input", "run_id": str(run.id),
          "item_ids": [str(i.id) for i in chosen]},
     )  # fmt: skip
