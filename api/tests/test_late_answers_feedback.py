@@ -104,14 +104,9 @@ async def test_answers_before_drafting_make_no_feedback(client, runtime):  # noq
     assert s["answers_since_run"] == 0 and s["late_answers_as_feedback"] == 0
 
 
-async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
-    client,
-    runtime,  # noqa: F811
-):
-    """#587 review MAJOR 2: the feedback item quoting an answer follows its finding's
-    level; and an answer given while the finding was private becomes feedback once it is
-    shared in full."""
-    from tests.test_intake_sharing_round4 import _model_question, _privacy_gap, authored_with, share
+async def _private_answer(client) -> tuple:
+    """A drafted intake whose model question's finding is private, answered late."""
+    from tests.test_intake_sharing_round4 import _model_question, _privacy_gap, authored_with
 
     holder: dict = {}
 
@@ -130,7 +125,6 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
 
             gateway.set_transports(holder["previous"])
     q = await _model_question(ctx, intake_id)
-    fid = str(q.gap_id)
     run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
     approver = ctx.as_("approver")
     assert (await client.post(f"/v1/runs/{run_id}/estimate", headers=approver)).status_code == 200
@@ -146,6 +140,19 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
     )
     assert resp.status_code == 201, resp.text
     assert await _feedback(client, ctx) == []
+    return ctx, intake_id, str(q.gap_id), body
+
+
+async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
+    client,
+    runtime,  # noqa: F811
+):
+    """#587 review MAJOR 2: the feedback item quoting an answer follows its finding's
+    level; and an answer given while the finding was private becomes feedback once it is
+    shared in full."""
+    from tests.test_intake_sharing_round4 import share
+
+    ctx, intake_id, fid, body = await _private_answer(client)
     # Shared in full: now it is feedback.
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
     [item] = await _feedback(client, ctx)
@@ -156,8 +163,42 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
         listed = await client.get(f"/v1/documents/{SLUG}/feedback", headers=ctx.as_("viewer"))
         assert listed.status_code == 200 and body not in listed.text
         assert (await read_summary(client, ctx, intake_id))["late_answers_as_feedback"] == 0
-    # Shared from summary up again: the answer is feedback again, once.
+    # Shared at summary alone (#595 re-review): the answer is feedback again, once.
     assert (await share(client, ctx, intake_id, fid, "summary")).status_code == 200
+    [item] = await _feedback(client, ctx)
+    assert body in item["summary"]
+    assert (await read_summary(client, ctx, intake_id))["late_answers_as_feedback"] == 1
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
     [item] = await _feedback(client, ctx)
     assert body in item["summary"]
+
+
+async def test_a_late_answer_someone_acted_on_is_kept_with_its_quote_withheld(
+    client,
+    runtime,  # noqa: F811
+):
+    """#595 re-review: an item someone triaged is not deleted (nor what hangs off it) when
+    its finding goes private: it stays, its quote withheld, and reads in full once shared."""
+    from tests.test_intake_sharing_round4 import share
+
+    ctx, intake_id, fid, body = await _private_answer(client)
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
+    [item] = await _feedback(client, ctx)
+    resp = await client.patch(
+        f"/v1/feedback/{item['id']}",
+        json={"status": "addressed", "resolution_note": "Covered in Security."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert (await share(client, ctx, intake_id, fid, "private")).status_code == 200
+    [kept] = await _feedback(client, ctx)
+    assert kept["id"] == item["id"] and body not in kept["summary"]
+    assert kept["summary"].startswith("Answered after drafting started")
+    assert (kept["status"], kept["resolution_note"]) == ("addressed", "Covered in Security.")
+    assert (await read_summary(client, ctx, intake_id))["late_answers_as_feedback"] == 0
+
+    assert (await share(client, ctx, intake_id, fid, "summary")).status_code == 200
+    [back] = await _feedback(client, ctx)
+    assert back["id"] == item["id"] and body in back["summary"]
+    assert (await read_summary(client, ctx, intake_id))["late_answers_as_feedback"] == 1

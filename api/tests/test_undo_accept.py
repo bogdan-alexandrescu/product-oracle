@@ -175,12 +175,13 @@ async def test_undo_takes_an_approver(client, ctx, pool, fake):
     assert (await undo(client, ctx, ids["goal_s"], headers)).status_code == 200
 
 
-async def refine(client, ctx, fake, key: str, body: dict) -> None:
+async def refine(client, ctx, fake, key: str, body: dict) -> str:
     resp = await client.post(f"{DOC}/versions/1/sections/{key}/refine", json=body,
                              headers=ctx["headers"])  # fmt: skip
     assert resp.status_code == 201, resp.text
     fake.script["refinement"].append({"heading": "Goal trace", "body_md": "Serves activation."})
     await tick(client, ctx)
+    return resp.json()["id"]
 
 
 async def test_an_unapplied_refinement_holds_undo_only_while_it_can_be_applied(
@@ -197,6 +198,20 @@ async def test_an_unapplied_refinement_holds_undo_only_while_it_can_be_applied(
     await refine(client, ctx, fake, "goal-trace", {"suggestion_ids": [], "instruction": "Short."})
     resp = await undo(client, ctx, ids["goal_s"])
     assert resp.status_code == 200, resp.text
+
+
+async def test_a_replaced_refinement_cannot_be_applied(client, ctx, pool, fake):
+    """#595 re-review: once a newer refinement of the section replaced a preview, Undo
+    no longer waits on it, so applying it is refused (else it would mark a re-opened
+    suggestion applied)."""
+    ids = await staged_setup(client, ctx, fake)
+    older = await refine(client, ctx, fake, "goal-trace", {})
+    await refine(client, ctx, fake, "goal-trace", {"suggestion_ids": [], "instruction": "Short."})
+    assert (await undo(client, ctx, ids["goal_s"])).status_code == 200
+    resp = await client.post(f"/v1/llm-jobs/{older}/apply", json={}, headers=ctx["headers"])
+    assert resp.status_code == 409, resp.text
+    assert "newer refinement" in resp.json()["detail"]
+    assert (await feedback(client, ctx))[ids["goal"]]["suggestion"]["status"] == "open"
 
 
 async def test_a_refinement_of_an_older_version_never_holds_undo(client, ctx, pool, fake):

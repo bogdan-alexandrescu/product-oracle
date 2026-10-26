@@ -96,7 +96,7 @@ test("a late answer leaves the PRD's feedback when its finding goes back to priv
     await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
   };
   const listed = async () => {
-    await page.goto("/documents/checkout-redesign");
+    await page.goto("/documents/checkout-redesign/v/2");
     await openTab(page, "Feedback");
     await feedbackState(page, "Open");
     await showAll(page);
