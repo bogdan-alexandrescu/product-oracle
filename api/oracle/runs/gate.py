@@ -125,6 +125,13 @@ BLOCKING_SOURCES: dict[str, Source] = {
 }
 
 
+# Reasons of the roadmap items review only an owner waives (H4 §5 Waive): a waiver names
+# them, never covers them by naming none, and is its own action (the field below), so an
+# approver's waiver on the same item neither replaces it nor is replaced by it.
+OWNER_WAIVES = frozenset({"stopped_but_planned"})
+OWNER_WAIVE_FIELD = "owner"
+
+
 def waivable(kind: str, code: str) -> bool:
     source = BLOCKING_SOURCES.get(kind)
     return (

@@ -668,12 +668,16 @@ async def put_action(
         )
         if refusal is not None:
             raise service.Forbidden(refusal)
+    field = body.field
+    if body.kind == "waive" and cp.kind == "roadmap_items":
+        # An owner's waiver of Stopped in the strategy is its own action (gate.OWNER_WAIVES).
+        field = gate.OWNER_WAIVE_FIELD if OWNER_WAIVES & set(body.answers) else None
     existing = await db.scalar(
         select(CheckpointAction).where(
             CheckpointAction.checkpoint_id == cp.id,
             CheckpointAction.item_key == body.item_key,
             CheckpointAction.kind == body.kind,
-            func.coalesce(CheckpointAction.field, "") == (body.field or ""),
+            func.coalesce(CheckpointAction.field, "") == (field or ""),
         )
     )
     if existing is not None and not may_stage and existing.created_by != principal.id:
@@ -686,11 +690,17 @@ async def put_action(
         if existing is not None:
             await _withdraw(db, principal, existing.question_id)
         question_id = await _ask(db, principal, run, cp, body, ctx)
+    answers = list(body.answers)
+    if body.kind == "waive" and existing is not None and existing.state == "staged":
+        # A waiver answers only the reasons it names: waiving another reason of the item
+        # adds it to the waiver before (naming none covers them all).
+        answers = [*existing.answers, *(a for a in answers if a not in existing.answers)]
+        answers = answers if existing.answers and body.answers else []
     action = existing or CheckpointAction(
-        checkpoint_id=cp.id, item_key=body.item_key, kind=body.kind, field=body.field
+        checkpoint_id=cp.id, item_key=body.item_key, kind=body.kind, field=field
     )
     action.value = body.value
-    action.answers = list(body.answers)
+    action.answers = answers
     action.note = (body.note or "").strip() or None
     action.state = "staged" if stages else "suggested"
     action.question_id = question_id
@@ -748,8 +758,8 @@ async def _apply_now(
     return action
 
 
-# Drift reasons of the roadmap items review only an owner waives (H4 §5 Waive).
-OWNER_WAIVES = frozenset({"stopped_but_planned"})
+# H4 §5 Waive: Stopped in the strategy is an owner's to waive.
+OWNER_WAIVES = gate.OWNER_WAIVES
 OWNER_WAIVES_TEXT = "Only an owner waives an item the product strategy stops"
 
 
@@ -977,11 +987,14 @@ async def _sent_yaml(db: AsyncSession, cp: Checkpoint) -> str | None:
 
 
 def _answers(action: ReviewAction, reason: dict[str, Any]) -> bool:
-    """A staged action answers a reason it names, every reason of its item when it names
-    none, and a waiver answers them all. Questions answer nothing."""
+    """A staged action answers a reason it names and every reason of its item when it
+    names none, but for a waiver naming none: never one only an owner waives (H4 §5).
+    Questions answer nothing."""
     if action.state != "staged" or action.kind == "question":
         return False
-    return action.kind == "waive" or not action.answers or reason["code"] in action.answers
+    if action.answers:
+        return reason["code"] in action.answers
+    return action.kind != "waive" or reason["code"] not in OWNER_WAIVES
 
 
 async def _actions(db: AsyncSession, checkpoint_ids: list[uuid.UUID]) -> list[CheckpointAction]:

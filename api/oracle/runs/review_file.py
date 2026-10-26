@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from oracle import company_time, safe_yaml
+from oracle.runs.gate import OWNER_WAIVES
 from oracle.runs.schemas import ReviewAction
 
 VERSION = 1
@@ -60,12 +61,21 @@ EntryBuilder = Callable[
 
 
 def _answers(action: ReviewAction, reason: dict[str, Any]) -> bool:
-    """As the D8 read counts them: a staged action answers a reason it names, every reason
-    of its item when it names none, and a waiver answers them all. Questions answer
-    nothing."""
+    """As the D8 read counts them: a staged action answers a reason it names and every
+    reason of its item when it names none, but a waiver naming none never answers one only
+    an owner waives (gate.OWNER_WAIVES, H4 §5). Questions answer nothing."""
     if action.kind == "question":
         return False
-    return action.kind == "waive" or not action.answers or reason["code"] in action.answers
+    if action.answers:
+        return reason["code"] in action.answers
+    return action.kind != "waive" or reason["code"] not in OWNER_WAIVES
+
+
+def _waived_codes(action: ReviewAction, reasons: list[dict[str, Any]], key: str) -> list[str]:
+    """The codes a waiver answers: those it names, else its item's but an owner's."""
+    if action.answers:
+        return list(action.answers)
+    return [r["code"] for r in reasons if r["item"] == key and r["code"] not in OWNER_WAIVES]
 
 
 # --------------------------------------------------------------------------- roadmap_items
@@ -113,7 +123,7 @@ def _roadmap_items(
         for a in mine:
             if a.kind == "waive":
                 why = a.value.get("reason") if isinstance(a.value, dict) else None
-                codes = list(a.answers) or [r["code"] for r in reasons if r["item"] == key]
+                codes = _waived_codes(a, reasons, key)
                 waived += [{"id": key, "code": c, "reason": why} for c in codes or [None]]
                 continue
             if a.kind == "edit":
@@ -159,7 +169,7 @@ def _baseline_confirm(
         if a.kind == "look_again":
             entries.append({"id": a.item_key, "action": "question", "note": value.get("note")})
         elif a.kind == "waive":
-            codes = list(a.answers) or [r["code"] for r in reasons if r["item"] == a.item_key]
+            codes = _waived_codes(a, reasons, a.item_key)
             waived += [{"id": a.item_key, "code": c, "reason": value.get("reason")} for c in codes]
     return entries, waived
 
