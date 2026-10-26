@@ -60,6 +60,7 @@ from oracle.jobs.service import (
     job_out,
     latest_number,
     on_version_imported,
+    shown_output,
 )
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
@@ -269,7 +270,8 @@ async def staged_changes(
                 section_key=key,
                 section_heading=heading,
                 feedback_summary=item.summary if item else "",
-                text=r.edited_text or r.text or "",
+                # #636 re-review: none of a withheld item's text (the next draft still takes it).
+                text="" if item and item.withheld_at else r.edited_text or r.text or "",
                 accepted_by=r.decided_by,
                 accepted_by_name=who.get(r.decided_by) if r.decided_by else None,
                 accepted_at=r.decided_at,
@@ -610,7 +612,8 @@ async def preview(db: AsyncSession, doc: str, job_id: uuid.UUID) -> NextDraftPre
     )
     if job.status != "succeeded" or not job.output:
         return out
-    data = job.output
+    # #645 re-review: a withheld item's resolution notes are withheld (the build keeps them).
+    data = await shown_output(db, job.output)
     fids = {
         uuid.UUID(r["feedback_id"]) for s in data.get("sections") or [] for r in s["resolutions"]
     }

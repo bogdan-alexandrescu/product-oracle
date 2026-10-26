@@ -69,7 +69,8 @@ for (const [width, height] of [
 
     await metric.getByRole("button", { name: "Accept", exact: true }).click();
     await expect(notice(page)).toContainText("Staged for draft 6");
-    await expect(notice(page).getByRole("button", { name: "Undo" })).toHaveCount(0);
+    // Undo after Accept (inbox-undo-accept.spec.ts drives it).
+    await expect(notice(page).getByRole("button", { name: "Undo" })).toBeVisible();
     // No reload: the row left New, the counts and the badge follow.
     await expect(row(page, METRIC)).toHaveCount(0);
     await expect(tab(page, "New")).toHaveText(`New${newBefore - 1}`);

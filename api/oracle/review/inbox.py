@@ -19,7 +19,13 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs import kinds
 from oracle.jobs.models import LlmSuggestion
 from oracle.jobs.next_draft import current_job
-from oracle.jobs.service import latest_suggestions, staged_suggestions
+from oracle.jobs.service import (
+    latest_suggestions,
+    oracle_notes,
+    shown_note,
+    staged_suggestions,
+    suggestion_out,
+)
 from oracle.preferences.models import UserPreference
 from oracle.review.models import FeedbackItem
 from oracle.review.service import feedback_state, latest_numbers, staged_for_agents
@@ -115,6 +121,7 @@ async def feedback_states(
     rows = [*live, *settled]
     suggestions = await latest_suggestions(db, [f.id for f in rows])
     staged = await staged_suggestions(db, [f.id for f in live])
+    notes = await oracle_notes(db, rows)
     latest = await latest_numbers(db, {f.document_id for f in rows})
     docs = {
         d.id: d
@@ -144,6 +151,8 @@ async def feedback_states(
             settled_listed += 1
         d = docs.get(f.document_id)
         acting = s if s is not None and s.status == "open" else None
+        # #636 re-review: a withheld item's suggestion text and rationale are left out.
+        shown = suggestion_out(acting, f.withheld_at is not None) if acting else None
         items.append(
             InboxFeedbackItem(
                 id=f.id,
@@ -158,7 +167,7 @@ async def feedback_states(
                 title=d.title if d else None,
                 latest_version=latest.get(f.document_id),
                 state=state,  # type: ignore[arg-type]
-                resolution_note=f.resolution_note,
+                resolution_note=shown_note(f, notes),
                 addressed_in_version=f.addressed_in_version,
                 staged_for_version=(latest.get(f.document_id) or 0) + 1
                 if state == "staged"
@@ -167,9 +176,9 @@ async def feedback_states(
                 suggestion_status=s.status if s else None,  # type: ignore[arg-type]
                 suggestion_kind=s.kind if s else None,
                 suggestion_id=acting.id if acting else None,
-                suggestion_text=_excerpt(acting.edited_text or acting.text) if acting else None,
+                suggestion_text=_excerpt(shown.edited_text or shown.text) if shown else None,
                 suggestion_pushback=acting.pushback is not None if acting else None,
-                suggestion_rationale=_excerpt(acting.rationale) if acting else None,
+                suggestion_rationale=_excerpt(shown.rationale) if shown else None,
             )
         )
     items.sort(key=lambda i: (i.created_at, str(i.id)), reverse=True)

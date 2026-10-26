@@ -598,6 +598,10 @@ async def set_sharing(
         from oracle.intake import answers
 
         await answers.propose_shared(db, principal, intake, [g for g in gaps if str(g.id) in moved])
+        # And a late answer's feedback item quotes it only while others read it in full.
+        from oracle.intake import late_answers
+
+        await late_answers.on_sharing(db, intake, [g for g in gaps if str(g.id) in moved])
     await flush_or_conflict(db)
     return done
 

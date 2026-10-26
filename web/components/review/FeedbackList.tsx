@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { AgentStagedNote, SectionLink, StageForAgents, TriageActions, type GoTo } from "@/components/FeedbackPanel";
+import { AgentStagedNote, FromQuestionLink, SectionLink, StageForAgents, TriageActions, type GoTo } from "@/components/FeedbackPanel";
 import {
   SuggestionActions,
   SuggestionCard,
@@ -316,6 +316,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
             {item.anchor && <Quote>{item.anchor.exact}</Quote>}
           </>
         )}
+        <FromQuestionLink item={item} />
         <AgentStagedNote item={item} />
         {item.resolution_note && (
           <p className="mt-1 text-sm leading-5 break-words text-text2">
