@@ -117,15 +117,16 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const view = spec.stale.find((s) => s.artifact_version_id === v.id);
   const reasons = [...new Set([...(view?.reasons ?? []), ...(d.lineage?.reasons ?? [])])];
   const status = VERSION_STATUS[v.status];
-  const chips = (
+  const chipsOf = (kind: ChipKind) => (
     <>
-      <Chip kind="line">{DESIGN_KIND[d.kind] ?? d.kind}</Chip>
+      <Chip kind={kind}>{DESIGN_KIND[d.kind] ?? d.kind}</Chip>
       <Chip kind={status.kind}>{status.label}</Chip>
       <Chip kind={fresh.kind} dot>
         {running ? `${fresh.label} · regeneration running` : fresh.label}
       </Chip>
     </>
   );
+  const chips = chipsOf("line");
 
   const inspector = (
     <ReviewInspector
@@ -134,7 +135,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       shown={shown}
       brief={brief}
       reasons={reasons}
-      chips={chips}
+      chips={chipsOf("na")}
       roles={roles}
       meId={me?.user_id ?? null}
       onChanged={reload}
@@ -324,7 +325,7 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
             referrerPolicy="no-referrer"
             title={`${output.title ?? output.name} (${output.name})`}
             srcDoc={asDocument(output, q.data)}
-            className={`block w-full rounded border-0 bg-white ${output.media_type === "text/html" ? "h-[520px]" : "h-[360px]"}`}
+            className={`block w-full rounded border-0 bg-white ${output.media_type === "text/html" ? "h-[520px] max-[600px]:h-[440px]" : "h-[360px] max-[600px]:h-[220px]"}`}
           />
         )}
       </div>
@@ -516,7 +517,7 @@ function AnnotationsSection({
             type="button"
             aria-pressed={on}
             onClick={() => setQuiet(label === "No comments")}
-            className={`rounded-full px-2.5 py-0.5 text-[13px] font-semibold ${on ? "bg-accent text-on-accent" : "bg-surface2 text-text2 hover:text-text"}`}
+            className={`rounded-full px-2.5 py-0.5 text-[13px] whitespace-nowrap font-semibold ${on ? "bg-accent text-on-accent" : "bg-surface2 text-text2 hover:text-text"}`}
           >
             {label}
           </button>

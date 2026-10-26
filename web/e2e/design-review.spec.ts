@@ -29,6 +29,8 @@ test("an approver opens the flow from the tech brief: sandboxed canvas, Approve 
   await login(page, "approver@example.com");
   await openFlow(page);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Early shipping cost: user flows");
+  // It belongs with its tech brief: the rail marks PRDs.
+  await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   const frame = canvas(page).locator("iframe");
   await expect(frame).toHaveAttribute("sandbox", "");
   await expect(frame).toHaveAttribute("title", /checkout-flow\.svg/);
