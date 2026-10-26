@@ -191,6 +191,28 @@ test("claude accounts: other roles read the pool and get no controls", async ({ 
   await expect(page.getByTestId("fallback").getByRole("button")).toHaveCount(0);
 });
 
+// protects = BGD 2026-10-25: every role reads the pool, but which Claude account a row holds
+// (its email and organisation) is shown to owners alone; fails_when = a viewer or an approver
+// sees an account's email, organisation or its "Claude account" fact, or an owner no longer
+// does; no_claim = the API's own stripping (api/tests/test_claude_accounts_api.py).
+test("claude accounts: only an owner sees whose Claude account a row holds", async ({ page, browser }) => {
+  await openAccounts(page);
+  await row(page, "personal").getByRole("button").click();
+  await expect(detail(page).getByTestId("fact-claude-account")).toHaveText(/ada@example\.com · Example Studio/);
+
+  for (const role of ["viewer", "approver"] as const) {
+    const other = await browser.newPage();
+    await other.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
+    await openAccounts(other);
+    await row(other, "personal").getByRole("button").click();
+    await expect(detail(other)).toContainText("Jobs on it");
+    await expect(detail(other).getByTestId("fact-claude-account")).toHaveCount(0);
+    await expect(other.locator("body")).not.toContainText("ada@example.com");
+    await expect(other.locator("body")).not.toContainText("Example Studio");
+    await other.close();
+  }
+});
+
 test("runs say they execute in SwarmCloud", async ({ page }) => {
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-runs").click();

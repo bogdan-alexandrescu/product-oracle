@@ -11421,7 +11421,7 @@
           "claude-accounts"
         ],
         "summary": "List Claude Accounts",
-        "description": "Every account in the company's pool, with the sweep's liveness and the fallback.",
+        "description": "Every account in the company's pool, with the sweep's liveness and the fallback.\nBelow owner, without who holds each account (its Claude email and organisation).",
         "operationId": "list_claude_accounts",
         "responses": {
           "200": {
@@ -34052,7 +34052,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/track-alerts/{alert_id}/reopen": {
@@ -34105,7 +34106,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/track-alerts/{alert_id}/accept-date": {

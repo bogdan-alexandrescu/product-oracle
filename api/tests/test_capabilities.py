@@ -187,7 +187,11 @@ async def test_the_engineering_lead_flag_gates_engineering_stops(client):
 # A role check in a handler (or what it calls) that can refuse: a 403 raised in a function
 # that checks a role itself (has_role, the lead helpers) or through what it calls (a helper
 # such as is_decider or may_edit_task), or a call to a function that does.
-_ROLE_CHECKS = ("has_role(", "may_decide(", "may_verify_dates(", "lead_refusal(")
+# ``in_audience(``: a track alert's keep and reopen are its audience's (the track's owner,
+# else every owner, and the engineering leads for date slips), whatever the role.
+_ROLE_CHECKS = (
+    "has_role(", "may_decide(", "may_verify_dates(", "lead_refusal(", "in_audience(",
+)  # fmt: skip
 _REFUSALS = ("HTTP_403_FORBIDDEN", "Forbidden(", "ForbiddenError(", "(403", "403,")
 _ROUTE_ROLE = (require_role, require_role_now)
 # Found by the search but not a refusal of the caller's role above the route's.
@@ -346,6 +350,15 @@ def test_per_item_says_what_the_api_enforces():
     assert caps.PER_ITEM.get("approve_version", "missing") == "owner"
     assert "get_plan" not in caps.PER_ITEM
     assert "get_plan_item_history" not in caps.PER_ITEM
+
+
+def test_track_alert_keep_and_reopen_are_the_alerts_to_decide():
+    """#618 review: keep and reopen let a viewer through the route and refuse an owner who
+    is not the alert's audience, so only the alert (its ``actions``) says who may."""
+    import oracle.capabilities as caps
+
+    for op in ("keep_track_alert", "reopen_track_alert"):
+        assert caps.PER_ITEM.get(op, "missing") is None, op
 
 
 async def test_an_approver_is_told_the_owner_starts_strategy_drafts(client):

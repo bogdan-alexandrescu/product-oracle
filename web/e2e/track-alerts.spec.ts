@@ -142,6 +142,33 @@ test("the slipped item's inspector shows the slip card with its actions; a viewe
   await viewer.close();
 });
 
+// protects = #618 review: Keep watching and Reopen are the alert's audience's (the track's
+// owner, else every owner; the engineering leads for slips), so an approver on an unowned
+// track sees the slip's other actions but neither of them, and the owner keeps and reopens;
+// fails_when = the approver is offered Keep watching (which the API refuses with 403), or the
+// owner loses Keep watching or Reopen; no_claim = the API's audience (test_track_alerts.py).
+test("an approver outside the alert's audience is not offered Keep watching; the owner keeps and reopens", async ({ page, browser }) => {
+  const approver = await browser.newPage();
+  await withSlip(approver, "approver");
+  await login(approver);
+  await openPlan(approver);
+  await selectSlip(approver);
+  await expect(card(approver).getByRole("button", { name: "Re-plan" })).toBeVisible();
+  await expect(card(approver).getByRole("button", { name: "Keep watching" })).toHaveCount(0);
+  await expect(card(approver).getByRole("button", { name: "Reopen" })).toHaveCount(0);
+  await approver.close();
+
+  await withSlip(page);
+  await login(page);
+  await openPlan(page);
+  await selectSlip(page);
+  await card(page).getByRole("button", { name: "Keep watching" }).click();
+  await card(page).getByRole("button", { name: "Keep watching" }).click();
+  await expect(card(page).getByTestId("plan-alert-kept")).toBeVisible();
+  await card(page).getByRole("button", { name: "Reopen" }).click();
+  await expect(card(page).getByRole("button", { name: "Keep watching" })).toBeVisible();
+});
+
 // protects = Re-plan on the slip card drafts a roadmap run from the track and opens it, in
 // Draft; fails_when = nothing happens, an error shows, or the run opens in another state;
 // no_claim = the run's estimate and cost gates (runs specs).

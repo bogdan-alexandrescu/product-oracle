@@ -3,7 +3,9 @@ remove, holders, history, and the fallback credential.
 
 Ported from SwarmCloud's broker routes (``quota_broker/main.py``) and swarm-api's
 proxy (``swarm_api/routes/accounts.py``). Every member may read the pool; every change
-needs the owner role. No route returns key material, not even a length.
+needs the owner role. No route returns key material, not even a length. Who holds an
+account (the Claude email and organisation it signed in as) is an owner's to read: below
+owner the listing carries neither (BGD 2026-10-25).
 
 The company comes from the caller's session, never from a request field. An account
 id that is not this company's answers 404, the same as one that does not exist.
@@ -20,7 +22,7 @@ from sqlalchemy import select
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
-from oracle.authz import recheck_caller, require_role, require_role_now
+from oracle.authz import has_role, recheck_caller, require_role, require_role_now
 from oracle.claude_accounts import fallback, store
 from oracle.claude_accounts.accounts import (
     DEFAULT_STALE_AFTER,
@@ -265,8 +267,11 @@ class SweepOut(BaseModel):
 # --- shaping ------------------------------------------------------------------------
 
 
-def account_out(account: Account, *, now: datetime | None = None) -> AccountOut:
-    """One account for a person to read. ``stale`` is computed: the server owns the clock."""
+def account_out(
+    account: Account, *, now: datetime | None = None, holder: bool = True
+) -> AccountOut:
+    """One account for a person to read. ``stale`` is computed: the server owns the clock.
+    ``holder``: whether the caller may read who holds it (owners only)."""
     now = now or datetime.now(UTC)
     observed = account.observed_at
     takes = account.provider == "anthropic" and choose([account], now) is not None
@@ -300,8 +305,8 @@ def account_out(account: Account, *, now: datetime | None = None) -> AccountOut:
         takes_calls=takes,
         spent_by=spent[0] if spent else None,
         spent_until=spent[1] if spent else None,
-        claude_email=account.claude_email,
-        claude_organization=account.claude_organization,
+        claude_email=account.claude_email if holder else None,
+        claude_organization=account.claude_organization if holder else None,
     )
 
 
@@ -350,12 +355,14 @@ def _unprocessable(message: str) -> HTTPException:
 
 @router.get("", response_model=AccountsPage)
 async def list_claude_accounts(principal: Member, db: TenantDB) -> AccountsPage:
-    """Every account in the company's pool, with the sweep's liveness and the fallback."""
+    """Every account in the company's pool, with the sweep's liveness and the fallback.
+    Below owner, without who holds each account (its Claude email and organisation)."""
     listing = await store.list_reporting(db)
     now = datetime.now(UTC)
     spare = await fallback.describe(db)
+    holder = has_role(principal.role, "owner")  # type: ignore[arg-type]
     return AccountsPage(
-        accounts=[account_out(a, now=now) for a in listing.accounts],
+        accounts=[account_out(a, now=now, holder=holder) for a in listing.accounts],
         unreadable_documents=listing.unreadable,
         unreadable_document_count=len(listing.unreadable),
         refresh_sweep=RefreshSweepOut(**await liveness(db)),

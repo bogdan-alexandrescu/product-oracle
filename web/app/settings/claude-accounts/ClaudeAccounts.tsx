@@ -655,13 +655,16 @@ function Detail({
       ]}
     >
       <InspectorSection label="Facts">
-        <Fact label="Claude account" testId="fact-claude-account">
-          {claudeAccountOf(account) ?? (
-            <span className="font-normal text-text2" title="Claude reports it at sign-in; a pasted saved login carries none.">
-              Not reported
-            </span>
-          )}
-        </Fact>
+        {/* Who holds the account is an owner's to read; the API sends it to owners alone. */}
+        {owner && (
+          <Fact label="Claude account" testId="fact-claude-account">
+            {claudeAccountOf(account) ?? (
+              <span className="font-normal text-text2" title="Claude reports it at sign-in; a pasted saved login carries none.">
+                Not reported
+              </span>
+            )}
+          </Fact>
+        )}
         {account.spent_by && <Fact label="Spent">Over its {limitWord(account.spent_by)}</Fact>}
         {account.reason && <Fact label="Reason">{reasonLabel(account.reason)}</Fact>}
         <Fact label="Jobs on it">{account.assigned}</Fact>
