@@ -5,8 +5,8 @@ one ``reason_contradicts_evidence`` message.
 One call through :func:`oracle.llm.gateway.complete` with the built-in job
 ``override_reason_check`` (600 output tokens), made synchronously inside
 ``POST /v1/priorities/overrides`` while the person waits, cut off after
-:data:`DEADLINE_SECONDS`. At most :data:`DAILY_CAP` checks per company per UTC day,
-counted from that day's ``priority_override.reason_checked`` audit events.
+:data:`DEADLINE_SECONDS`. At most :data:`DAILY_CAP` checks per company per day (in the
+Company time zone), counted from that day's ``priority_override.reason_checked`` audit events.
 
 The model step never stops a person from saving: no Claude account, a gateway error, the
 deadline, an answer that is not the JSON asked for, or the daily cap all give a rules-only
@@ -26,8 +26,6 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
-from datetime import time as day_start
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -35,6 +33,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.jobs import prompting
 from oracle.llm import gateway
 from oracle.llm.transports import LlmOutOfTime
@@ -162,8 +161,10 @@ def parse_answer(text: str, allowed: set[str]) -> tuple[str, dict[str, Any] | No
 
 
 async def checks_today(db: AsyncSession) -> int:
-    """This company's model checks so far this UTC day (its audit events)."""
-    since = datetime.combine(datetime.now(UTC).date(), day_start.min, tzinfo=UTC)
+    """This company's model checks so far this company day (its audit events), in the
+    Company time zone."""
+    zone = await company_time.company_time_zone(db)
+    since = company_time.day_start(company_time.today(zone), zone)
     return int(
         await db.scalar(
             select(func.count())

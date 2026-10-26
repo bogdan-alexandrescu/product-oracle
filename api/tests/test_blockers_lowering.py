@@ -347,6 +347,31 @@ async def test_reopening_a_blocker_whose_documents_were_dropped_while_resolved_t
     assert (await _check(ctx, doc_id)).status == "critical"
 
 
+async def _status_rights(client, ctx, blocker_id, who: str) -> tuple[bool, str | None]:
+    resp = await client.get(f"/v1/blockers/{blocker_id}", headers=ctx.as_(who))
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    return out["can_set_status"], out["set_status_why_not"]
+
+
+async def test_the_strategy_says_when_an_approver_may_not_set_the_status(client):
+    """The blocker's read carries what POST .../status would answer this caller: the
+    web shows Set status disabled with the API's reason rather than a button that 403s."""
+    ctx = await make_ctx()
+    doc_id, b = await _blocker(client, ctx)
+    assert await _status_rights(client, ctx, b["id"], "approver") == (True, None)
+    await _resolve(client, ctx, b["id"])
+    assert await _status_rights(client, ctx, b["id"], "approver") == (True, None)
+    resp = await _patch(client, ctx, b["id"], "approver", document_ids=[])
+    assert resp.status_code == 200, resp.text
+    assert await _status_rights(client, ctx, b["id"], "approver") == (False, REOPEN)
+    assert await _status_rights(client, ctx, b["id"], "owner") == (True, None)
+    # Put back, the approver may set it again.
+    resp = await _patch(client, ctx, b["id"], "approver", document_ids=[str(doc_id)])
+    assert resp.status_code == 200, resp.text
+    assert await _status_rights(client, ctx, b["id"], "approver") == (True, None)
+
+
 async def test_an_approver_may_resolve_edit_and_reopen_a_gating_blocker(client):
     """The legitimate approver path: resolve with a reason, edit what does not lower it,
     reopen it; it gates again."""

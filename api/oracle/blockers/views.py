@@ -160,6 +160,12 @@ async def strategies(
     evidence_rows = service.grouped(await _entity_evidence(db, ids), "entity_id")
     documents = await _documents_of(db, [e for e, _ in readable], specs)
     impacted = await _impacted(db, specs)
+    # The B4 role, read once for every resolved blocker's Set status answer.
+    role = (
+        await service.decider_role(db)
+        if any(s.status == "resolved" for s in specs.values())
+        else None
+    )
     out = []
     for entity, spec in readable:
         gate = service.assess(entity, spec, inputs)
@@ -176,6 +182,7 @@ async def strategies(
         opts = options.get(entity.id, [])
         recommended = service.recommended_option(opts)
         evidence = await baseline_evidence.present(db, principal, evidence_rows.get(entity.id, []))
+        why_not = await service.status_refusal(db, principal, entity, spec, role)
         out.append(
             BlockerStrategy(
                 blocker=_blocker_out(
@@ -215,6 +222,8 @@ async def strategies(
                 ],
                 risk_acceptance=acceptance,
                 documents=documents.get(entity.id, []),
+                can_set_status=why_not is None,
+                set_status_why_not=why_not,
             )
         )
     out.sort(key=lambda s: _order(s))

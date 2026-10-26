@@ -19,7 +19,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
-from oracle import audit, autonomy_drafts, changes
+from oracle import audit, autonomy_drafts, changes, company_time
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.launches import changelog, service
@@ -373,7 +373,8 @@ async def create_changelog_entry(
         audience=body.audience,
         title=body.title.strip(),
         body=body.body.strip(),
-        released_on=body.released_on or service.now().date(),
+        released_on=body.released_on
+        or company_time.day(service.now(), await company_time.company_time_zone(db)),
         created_actor=principal.actor,
     )
     db.add(entry)

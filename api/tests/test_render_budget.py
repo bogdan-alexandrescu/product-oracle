@@ -314,9 +314,9 @@ async def test_an_import_keeps_its_dates_for_the_version(client, monkeypatch):
 async def test_template_dates_are_found_once_per_template_body(monkeypatch):
     body = "---\ntitle: T\n---\n\n# Plan {#plan}\n\nKickoff 2026-11-30.\n"
     calls = count_calls(monkeypatch, doc_dates, "template_dates")
-    first = await doc_dates.template_dates_async(body)
+    first = await doc_dates.template_dates_async(body, date(2026, 10, 20))
     assert first == {("plan", "2026-11-30")}
-    assert await doc_dates.template_dates_async(body) == first
+    assert await doc_dates.template_dates_async(body, date(2026, 10, 20)) == first
     assert calls[0] == 1
 
 
@@ -873,15 +873,33 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 
 
 @pytest.mark.timing
-async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
+@pytest.mark.parametrize("load_seconds", [0, 0.3])
+async def test_exports_waiting_for_the_pool_hold_no_database_connection(
+    client, monkeypatch, load_seconds
+):
+    """``load_seconds``: the queued exports' load takes that long (a busy runner's
+    database): the connection is checked once both wait for the pool, not after a guess."""
     held = Held(monkeypatch)
+    real_load = export_router._load
+    loads = []
+
+    async def slow_load(*args):
+        loads.append(args)
+        queued = len(loads) > 4  # the two behind the four rendering
+        loaded = await real_load(*args)  # its connection held until the route commits
+        if queued:
+            await asyncio.sleep(load_seconds)
+        return loaded
+
+    monkeypatch.setattr(export_router, "_load", slow_load)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
     reader = await _token(a, "viewer")
     tasks = []
     try:
         tasks += await _fill(client, a, b, c)  # four rendering, two queued
         await until(lambda: held.started == 4)
-        await asyncio.sleep(0.1)
+        # Both queued exports wait for a worker (in the pool's queue), not still loading.
+        await until(lambda: offload.POOL._work_queue.qsize() == 2)
         assert get_engine().pool.checkedout() == 0
         other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
         assert other.status_code == 200, other.text

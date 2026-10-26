@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes, safe_yaml, wording
+from oracle import audit, changes, company_time, safe_yaml, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.docs import layers, named_codes
@@ -611,12 +611,12 @@ async def _check_document_dates(
     from oracle.roadmap import doc_dates
 
     title = draft.front_matter.get("title")
-    ref = doc_dates.import_day()
+    ref = doc_dates.import_day(await company_time.company_time_zone(db))
     try:
         found = await doc_dates.found_for_draft(
             draft.sections, title=title if isinstance(title, str) else None, ref=ref
         )
-        exempt = await doc_dates.template_dates_async(template_body) if template_body else None
+        exempt = await doc_dates.template_dates_async(template_body, ref) if template_body else None
     except (safe_yaml.ParseTimeout, doc_dates.DatesUnavailable):
         await db.rollback()
         raise DraftError(
