@@ -11,8 +11,8 @@ the new column only, which is empty.
 
 The downgrade drops both columns (the items stay, without their link).
 
-Revision ID: 0057_late_answers
-Revises: 0056_slack_pings
+Revision ID: 0063_late_answers
+Revises: 0062_source_sync
 """
 
 from collections.abc import Sequence
@@ -20,8 +20,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0057_late_answers"
-down_revision: str | None = "0056_slack_pings"
+revision: str = "0063_late_answers"
+down_revision: str | None = "0062_source_sync"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

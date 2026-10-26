@@ -10,16 +10,16 @@ Live-safe: one UPDATE on the few rows behind archived briefs; no schema change.
 The downgrade does nothing: which brief a released request was behind is not kept (the
 audit log names it), and a request may since be behind another brief.
 
-Revision ID: 0055_release_archived_briefs
-Revises: 0054_reply_opened
+Revision ID: 0057_release_archived_briefs
+Revises: 0056_slack_pings
 """
 
 from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0055_release_archived_briefs"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0057_release_archived_briefs"
+down_revision: str | None = "0056_slack_pings"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

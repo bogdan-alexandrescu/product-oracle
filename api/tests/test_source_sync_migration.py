@@ -1,4 +1,4 @@
-"""Migration 0057_source_sync (S4 Freshness, A2 §8): the background sync's backoff on
+"""Migration 0062_source_sync (S4 Freshness, A2 §8): the background sync's backoff on
 ``sources``: ``sync_failures`` (0 by default) and ``next_sync_at`` (nullable).
 
 Card: protects=both columns come and go with the revision, chained on 0056_slack_pings
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0057_source_sync"
-PREVIOUS = "0056_slack_pings"
+REVISION = "0062_source_sync"
+PREVIOUS = "0061_discussion_decision_change"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_source_sync")
@@ -67,7 +67,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 def test_upgrade_and_downgrade(scratch_db):

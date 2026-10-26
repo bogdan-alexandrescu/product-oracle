@@ -8,8 +8,8 @@ Live-safe: one nullable column, no default, no rewrite.
 
 The downgrade drops the column (connections read the default endpoint again).
 
-Revision ID: 0055_fireflies_endpoint
-Revises: 0054_reply_opened
+Revision ID: 0058_fireflies_endpoint
+Revises: 0057_release_archived_briefs
 """
 
 from collections.abc import Sequence
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0055_fireflies_endpoint"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0058_fireflies_endpoint"
+down_revision: str | None = "0057_release_archived_briefs"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

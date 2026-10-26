@@ -11,8 +11,8 @@ Live-safe: one UPDATE over the PostHog metrics with an error (a handful of rows)
 
 The downgrade changes nothing (the old text is gone).
 
-Revision ID: 0055_metric_errors_fixed
-Revises: 0054_reply_opened
+Revision ID: 0059_metric_errors_fixed
+Revises: 0058_fireflies_endpoint
 """
 
 from collections.abc import Sequence
@@ -20,8 +20,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0055_metric_errors_fixed"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0059_metric_errors_fixed"
+down_revision: str | None = "0058_fireflies_endpoint"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

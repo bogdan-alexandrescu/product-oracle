@@ -1,4 +1,4 @@
-"""Migration 0055_fireflies_endpoint (#602): ``connections.endpoint_url``.
+"""Migration 0058_fireflies_endpoint (#602): ``connections.endpoint_url``.
 
 An owner-set GraphQL endpoint on a Fireflies connection; a connection without one reads
 the default endpoint, as before.
@@ -21,8 +21,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0055_fireflies_endpoint"
-PREVIOUS = "0054_reply_opened"
+REVISION = "0058_fireflies_endpoint"
+PREVIOUS = "0057_release_archived_briefs"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_fireflies_endpoint")
@@ -69,7 +69,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 def test_upgrade_and_downgrade(scratch_db):

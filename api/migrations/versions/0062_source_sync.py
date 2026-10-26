@@ -9,8 +9,8 @@ Live-safe: a nullable column and an integer column with a constant default (no r
 
 The downgrade drops both columns (only the backoff state goes).
 
-Revision ID: 0057_source_sync
-Revises: 0056_slack_pings
+Revision ID: 0062_source_sync
+Revises: 0061_discussion_decision_change
 """
 
 from collections.abc import Sequence
@@ -18,8 +18,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0057_source_sync"
-down_revision: str | None = "0056_slack_pings"
+revision: str = "0062_source_sync"
+down_revision: str | None = "0061_discussion_decision_change"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

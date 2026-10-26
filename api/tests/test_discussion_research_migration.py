@@ -1,4 +1,4 @@
-"""Migration 0055_discussion_research (G2 §4 Research this): ``discussion_messages.run_id``
+"""Migration 0060_discussion_research (G2 §4 Research this): ``discussion_messages.run_id``
 and the ``discussion_research`` flow on ``runs.flow``.
 
 Card: protects=the column and the flow value come and go with the revision, chained on
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0055_discussion_research"
-PREVIOUS = "0054_reply_opened"
+REVISION = "0060_discussion_research"
+PREVIOUS = "0059_metric_errors_fixed"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_discussion_research")
@@ -73,7 +73,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 def test_upgrade_and_downgrade(scratch_db):

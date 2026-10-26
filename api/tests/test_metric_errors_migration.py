@@ -1,4 +1,4 @@
-"""Migration 0055_metric_errors_fixed (#565 review minor): a metric error stored before
+"""Migration 0059_metric_errors_fixed (#565 review minor): a metric error stored before
 #565, which may carry PostHog's own text, becomes the fixed sentence every member may read.
 
 Card: protects=after the upgrade no metric's last_error is anything but one of Oracle's
@@ -22,8 +22,8 @@ from sqlalchemy.engine import make_url
 from oracle.metrics import posthog, pull
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0055_metric_errors_fixed"
-PREVIOUS = "0054_reply_opened"
+REVISION = "0059_metric_errors_fixed"
+PREVIOUS = "0058_fireflies_endpoint"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_metric_errors")
@@ -73,7 +73,7 @@ def _metric(tenant: uuid.UUID, title: str, error: str | None) -> uuid.UUID:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 def test_old_posthog_text_becomes_the_fixed_sentence(scratch_db):

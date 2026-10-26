@@ -8,16 +8,16 @@ the same transaction (every existing row already passes), under a short lock tim
 
 The downgrade deletes the ``decision`` changes and restores the old check.
 
-Revision ID: 0057_discussion_decision_change
-Revises: 0056_slack_pings
+Revision ID: 0061_discussion_decision_change
+Revises: 0060_discussion_research
 """
 
 from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0057_discussion_decision_change"
-down_revision: str | None = "0056_slack_pings"
+revision: str = "0061_discussion_decision_change"
+down_revision: str | None = "0060_discussion_research"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

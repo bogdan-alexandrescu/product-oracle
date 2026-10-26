@@ -1,4 +1,4 @@
-"""Migration 0055_release_archived_briefs (#599 re-review MAJOR 1, decided "Release on
+"""Migration 0057_release_archived_briefs (#599 re-review MAJOR 1, decided "Release on
 archive", BGD 2026-10-25): the requests behind a brief archived before archiving released
 them, and that never made a PRD, are released (their brief link cleared) once.
 
@@ -25,8 +25,8 @@ from tests.intake_helpers import create_intake
 from tests.test_requests import get, goal
 from tests.test_requests_brief import qualified
 
-REVISION = "0055_release_archived_briefs"
-PREVIOUS = "0054_reply_opened"
+REVISION = "0057_release_archived_briefs"
+PREVIOUS = "0056_slack_pings"
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def _migration():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 async def test_releases_requests_behind_briefs_archived_before(client, ctx):

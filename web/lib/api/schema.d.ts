@@ -7545,7 +7545,9 @@ export interface paths {
          *     approver, as asking it): the same questions in the same order as
          *     ``POST .../question-batches`` with the same ``size`` asks next, each with the person
          *     it would be asked of (the gap's owner, else the author), and how many are not asked
-         *     yet. ``assign`` on the ask changes only who is asked.
+         *     yet. ``assign`` on the ask changes only who is asked. At H11 ``questions`` Observe
+         *     nothing is proposed and ``held`` says why; at Draft each question keeps its own
+         *     named person.
          */
         get: operations["get_next_question_batch"];
         put?: never;
@@ -7571,9 +7573,32 @@ export interface paths {
          *     or an approver). Each is asked of the person ``assign`` names for it, else its gap's
          *     owner, else the intake's author (C2); a person who cannot answer is 422 and a
          *     private finding's question asked of anyone but the author 409, and then nothing is
-         *     asked. ``size``: in the body or, as before, the query.
+         *     asked; 409 too while Ask people questions is at Observe (H11, Oracle asks no one).
+         *     ``size``: in the body or, as before, the query.
          */
         post: operations["ask_next_question_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/questions/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Intake Questions
+         * @description Withdraw these questions of the intake that are still waiting on an answer (the
+         *     author or an approver): the Undo of a batch Oracle asked on its own (H11
+         *     ``questions``). Answered or otherwise settled ones stay as they are.
+         */
+        post: operations["withdraw_intake_questions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -25622,6 +25647,8 @@ export interface components {
             questions: components["schemas"]["QuestionCard"][];
             /** Remaining */
             remaining: number;
+            /** Held */
+            held?: string | null;
         };
         /** NextDraftApply */
         NextDraftApply: {
@@ -28307,6 +28334,20 @@ export interface components {
              * @default []
              */
             fills: string[];
+        };
+        /**
+         * QuestionsWithdraw
+         * @description Withdraw these questions of an intake that are still waiting (the Undo of a
+         *     batch Oracle asked on its own).
+         */
+        QuestionsWithdraw: {
+            /** Question Ids */
+            question_ids: string[];
+        };
+        /** QuestionsWithdrawn */
+        QuestionsWithdrawn: {
+            /** Question Ids */
+            question_ids: string[];
         };
         /** RankedFeature */
         RankedFeature: {
@@ -33869,6 +33910,8 @@ export interface components {
              */
             next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
             agents_run?: components["schemas"]["NextDraftRun"] | null;
+            /** Worth A Draft */
+            worth_a_draft?: string | null;
         };
         /**
          * StagedDiscussionChange
@@ -47404,6 +47447,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Shape goals is at Observe: Oracle opens no interview */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Only goals can be interviewed | This goal is already measurable */
             422: {
                 headers: {
@@ -47434,6 +47484,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InterviewsOut"];
                 };
+            };
+            /** @description Shape goals is at Observe: Oracle opens no interview */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -52759,6 +52816,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionBatch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_intake_questions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionsWithdraw"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionsWithdrawn"];
                 };
             };
             /** @description Validation Error */

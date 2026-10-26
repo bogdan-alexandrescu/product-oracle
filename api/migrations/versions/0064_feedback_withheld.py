@@ -14,8 +14,8 @@ made from late answers (0057), a handful.
 
 The downgrade drops the column (the summary stays withheld; the suggestions read in full).
 
-Revision ID: 0058_feedback_withheld
-Revises: 0057_late_answers
+Revision ID: 0064_feedback_withheld
+Revises: 0063_late_answers
 """
 
 from collections.abc import Sequence
@@ -23,8 +23,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0058_feedback_withheld"
-down_revision: str | None = "0057_late_answers"
+revision: str = "0064_feedback_withheld"
+down_revision: str | None = "0063_late_answers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

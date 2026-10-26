@@ -1,6 +1,6 @@
-"""Migration 0058_feedback_withheld (#636 re-review): ``feedback_items.withheld_at``.
+"""Migration 0064_feedback_withheld (#636 re-review): ``feedback_items.withheld_at``.
 
-Card: protects=the flag comes and goes with the revision, chained on 0057_late_answers as
+Card: protects=the flag comes and goes with the revision, chained on 0063_late_answers as
 the single head, nullable, and set on the late-answer items already kept with the withheld
 summary; fails_when=the upgrade misses the column or the backfill (or flags another item),
 or the downgrade leaves it; no_claim=what a withheld item hides
@@ -20,8 +20,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0058_feedback_withheld"
-PREVIOUS = "0057_late_answers"
+REVISION = "0064_feedback_withheld"
+PREVIOUS = "0063_late_answers"
 WITHHELD = "Answered after drafting started (withheld while its finding is not shared in full)"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)

@@ -11,8 +11,8 @@ Live-safe: one nullable column with no default and no rewrite, a partial index o
 Downgrade: deletes the research runs (their messages keep their text, ``run_id`` goes),
 narrows the check and drops the column.
 
-Revision ID: 0055_discussion_research
-Revises: 0054_reply_opened
+Revision ID: 0060_discussion_research
+Revises: 0059_metric_errors_fixed
 """
 
 from collections.abc import Sequence
@@ -22,8 +22,8 @@ from alembic import op
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0055_discussion_research"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0060_discussion_research"
+down_revision: str | None = "0059_metric_errors_fixed"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

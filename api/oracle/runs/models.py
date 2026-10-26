@@ -49,7 +49,7 @@ FLOWS = (
     "pricing_memo",
     # H7 Competitive digest (migration 0052_market): the monthly digest's write-up.
     "competitive_digest",
-    # G2 §4 (migration 0055_discussion_research): Research this, from inside a discussion.
+    # G2 §4 (migration 0060_discussion_research): Research this, from inside a discussion.
     "discussion_research",
 )
 RUN_STATUSES = (

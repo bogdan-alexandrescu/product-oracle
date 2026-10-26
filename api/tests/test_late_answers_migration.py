@@ -1,4 +1,4 @@
-"""Migration 0057_late_answers (C5 late answers): ``feedback_items.intake_question_id`` and
+"""Migration 0063_late_answers (C5 late answers): ``feedback_items.intake_question_id`` and
 ``feedback_items.intake_answer_id``.
 
 Card: protects=both link columns come and go with the revision, chained on
@@ -20,8 +20,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0057_late_answers"
-PREVIOUS = "0056_slack_pings"
+REVISION = "0063_late_answers"
+PREVIOUS = "0062_source_sync"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_late_answers")
@@ -68,7 +68,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0058_feedback_withheld"]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 def _unique() -> list[str]:

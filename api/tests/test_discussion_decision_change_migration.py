@@ -1,4 +1,4 @@
-"""Migration 0057_discussion_decision_change (G3 + H1, #187, #193): a discussion change of
+"""Migration 0061_discussion_decision_change (G3 + H1, #187, #193): a discussion change of
 kind ``decision``.
 
 Card: protects=the kind CHECK allows ``decision`` with the revision and only then, chained on
@@ -21,8 +21,8 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0057_discussion_decision_change"
-PREVIOUS = "0056_slack_pings"
+REVISION = "0061_discussion_decision_change"
+PREVIOUS = "0060_discussion_research"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_decision_change")
@@ -69,7 +69,7 @@ def _change(tenant: uuid.UUID, d: uuid.UUID, kind: str) -> None:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0064_feedback_withheld"]
 
 
 def test_upgrade_and_downgrade(scratch_db):
