@@ -121,6 +121,8 @@ export interface RunsContext {
   baselineReview?: (runId: string, actions: DraftActionRow[]) => BaselineReviewOf;
   /** D10: the designated decider of the document a run review reviews (its review policy), if any. */
   reviewDecider?: (c: CheckpointOut) => string | null;
+  /** H11 (oracle.autonomy_drafts): why a run may not draft a document of this kind, at Observe. */
+  draftRefusal?: (flow: RunOut["flow"], kind: string | null | undefined) => string | null;
   /**
    * The "undelivered" scenario: SwarmCloud does not take a checkpoint decision until the
    * next tick. The decision is recorded (and final) but the decide call answers 503, as the
@@ -1622,6 +1624,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
         return fail(422, `the ${KIND_NAME[doc.kind]} has no approved version to start from`);
       }
     }
+    const observing = doc ? ctx.draftRefusal?.(input.flow, doc.kind) : null;
+    if (observing) return fail(409, observing);
     if (doc && flow.target_kind && doc.kind !== flow.target_kind) {
       return fail(422, `document '${ref}' is a ${KIND_NAME[doc.kind]}, not a ${KIND_NAME[flow.target_kind]}`);
     }

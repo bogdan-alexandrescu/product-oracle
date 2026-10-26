@@ -569,7 +569,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "strategy is a person's call",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "H4",
     "wired_by_name": "H4 Strategy and vision",
     "limits_default": null
@@ -592,7 +592,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "the vision itself",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "H4",
     "wired_by_name": "H4 Strategy and vision",
     "limits_default": null
@@ -615,7 +615,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "what is said to people outside the company",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "H6",
     "wired_by_name": "H6 Launches and changelog",
     "limits_default": null
@@ -820,4 +820,16 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
     }
   }
   return null;
+}
+
+/** As oracle.autonomy_drafts.run_refusal: at Observe Oracle drafts no strategy, vision, nor update. */
+const DRAFT_KINDS: Record<string, [string, string]> = {
+  strategy: ["strategy", "product strategy"],
+  vision: ["vision", "vision"],
+  update: ["external_messages", "board or investor update"],
+};
+export function draftRefusal(db: AutonomyDb, flow: string, kind: string | null | undefined): string | null {
+  if (!["strategy_draft", "update_draft", "feedback_loop"].includes(flow) || !kind || !(kind in DRAFT_KINDS)) return null;
+  const [key, what] = DRAFT_KINDS[kind];
+  return levelFor(db, key) === "observe" ? `Oracle drafts no ${what} at Observe` : null;
 }
