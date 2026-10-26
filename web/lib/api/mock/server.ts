@@ -89,6 +89,7 @@ import {
 } from "./runs";
 import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
+import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
@@ -4117,6 +4118,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
       replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)),
+      // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
+      liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
       slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
@@ -4277,6 +4280,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   const fireflies = await routeFirefliesBrowse(p, q);
   if (fireflies) return fireflies;
+  // #710: the live tools, on the caller's own connections (./live.ts).
+  const live = routeLive(req, p, q);
+  if (live) return live;
   // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
   db.autonomy ??= emptyAutonomy();
   // Undo calls the stored route as the person, where the mock has it (decisions' reviews).
