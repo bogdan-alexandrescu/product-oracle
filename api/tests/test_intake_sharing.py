@@ -512,3 +512,12 @@ async def test_an_intake_analysed_before_s6_fails_closed(client, fake):
                 assert secret not in text, (who, name, secret)
     mine = await read_summary(client, ctx, intake_id, "author")
     assert any(g["statement"] == MODEL_GAP for g in mine["gaps"])
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")
