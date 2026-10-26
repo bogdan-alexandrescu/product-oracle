@@ -192,3 +192,67 @@ test.describe("phone", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+test("impact: on desktop each output is drawn once, as a graph node, with no grouped list under it", async ({ page }) => {
+  await scenario(page, "impact");
+  await openImpact(page);
+  const graph = page.getByRole("region", { name: "Lineage" });
+  await expect(graph.getByTestId("lineage-output").filter({ hasText: "Checkout flow" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Affected outputs" })).toBeHidden();
+});
+
+test("impact: a review row (a source's permission changed) offers only Mark reviewed", async ({ page }) => {
+  await scenario(page, "impact");
+  await openImpact(page);
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
+  await page.getByRole("grid", { name: "Affected outputs" }).getByText("Early shipping cost brief").click();
+  await page.getByRole("complementary", { name: /Early shipping cost brief/ }).getByRole("link", { name: "Recorded change" }).click();
+  await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
+  await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Early shipping cost brief" }).click();
+  const r = row(page, "Early shipping cost brief");
+  await expect(r.getByText("Review", { exact: true })).toBeVisible();
+  await expect(r.getByTestId("plan-how")).toContainText("Check the claims that relied on the changed source");
+  await expect(r.getByRole("button", { name: /Accept regeneration|Reconcile/ })).toHaveCount(0);
+  await r.getByRole("button", { name: "Mark reviewed" }).click();
+  await expect(r.getByTestId("plan-freshness")).toHaveText("Under review");
+});
+
+test("impact: the table view filters its outputs: all, potentially stale, approved", async ({ page }) => {
+  await scenario(page, "impact");
+  await openImpact(page);
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
+  const table = page.getByRole("grid", { name: "Affected outputs" });
+  const filter = page.getByRole("group", { name: "Filter outputs" });
+  await expect(filter.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(table).toContainText("Cart wireframes");
+  await filter.getByRole("button", { name: /^Potentially stale/ }).click();
+  await expect(table).toContainText("Checkout flow");
+  await expect(table).not.toContainText("Cart wireframes");
+  await filter.getByRole("button", { name: /^Approved/ }).click();
+  await expect(table).toContainText("Early shipping cost brief");
+  await expect(table).not.toContainText("Checkout flow");
+  await filter.getByRole("button", { name: /^All/ }).click();
+  await expect(table).toContainText("Cart wireframes");
+});
+
+test.describe("phone, once", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("impact: on a phone an output's steps are drawn once, in its sheet, in either view", async ({ page }) => {
+    await scenario(page, "impact");
+    await login(page);
+    await page.goto("/documents/checkout-redesign/v/2/impact");
+    await page.getByRole("region", { name: "Affected outputs" }).getByRole("button", { name: /Checkout flow/ }).click();
+    await expect(page.getByRole("dialog", { name: /Checkout flow/ }).getByText("1 · Settle staleness")).toBeVisible();
+    await expect(page.getByText("1 · Settle staleness")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Accept regeneration" })).toHaveCount(1);
+    await expect(page.getByRole("complementary", { name: "Regeneration plan" })).toHaveCount(0);
+    await page.getByRole("dialog", { name: /Checkout flow/ }).getByRole("button", { name: /^Close/ }).click();
+
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
+    await page.getByRole("grid", { name: "Affected outputs" }).getByText("Cart wireframes").click();
+    await expect(page.getByRole("dialog", { name: /Cart wireframes/ }).getByText("1 · Settle staleness")).toBeVisible();
+    await expect(page.getByText("1 · Settle staleness")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Accept regeneration" })).toHaveCount(1);
+  });
+});
