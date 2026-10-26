@@ -223,3 +223,63 @@ async def test_decision_is_offered_and_written_by_hand(client):
     )
     assert resp.status_code == 201, resp.text
     assert resp.json()["change"]["status"] == "suggested"
+
+
+# protects=#585 review: Ask's D8 question action on a waiting stop comes from the discussion
+# (its change and discussion named), and the change stays done when the stop is decided;
+# fails_when=the action shows as a plain row action, or deciding the stop turns the done
+# change back to suggested; no_claim=the review screen's display.
+async def test_ask_at_a_checkpoint_item_is_linked_to_the_change(review):  # noqa: F811
+    rv = review
+    _tenant[0] = rv.tenant_id
+    d_id = await item_discussion(rv)
+    cid = await add_change(rv.tenant_id, d_id, "ask_person",
+                           {"asked_to": rv.id("approver"), "prompt": "Is push ready?"})  # fmt: skip
+    await act(rv.client, rv.h("commenter"), cid, "ask")
+    async with tenant_session(rv.tenant_id) as s:
+        [action] = list(await s.scalars(select(CheckpointAction)))
+        assert action.origin == "discussion"
+        assert (str(action.discussion_id), str(action.discussion_change_id)) == (d_id, cid)
+        from oracle.runs.models import Checkpoint
+        from oracle.staging import hooks
+
+        await hooks.decided(s, await s.get(Checkpoint, action.checkpoint_id), "approved")
+        assert (await s.get(DiscussionChange, uuid.UUID(cid))).status == "done"
+
+
+# protects=#585 review: keeping a move Oracle pushed back on needs a new reason, as on the
+# Priorities screen and in the mock; fails_when=confirm with no reason keeps the move on the
+# reason Oracle pushed back on; no_claim=the reason check's model.
+async def test_keeping_a_pushed_back_move_needs_a_reason(client):
+    ctx = await make_ctx()
+    _tenant[0] = ctx.tenant_id
+    ids = await _baseline(ctx)
+    d = await start(client, ctx, subject_kind="priorities", subject={}, title="Order")
+    cid = await add_change(ctx.tenant_id, d["id"], "priority_move",
+                           {"feature_id": str(ids["bulk-edit"]),
+                            "above_feature_id": str(ids["usage-alerts"]),
+                            "reason": "Sales asked for it this quarter"})  # fmt: skip
+    await act(client, ctx.as_("approver"), cid, "apply", expect=409)
+    refused = await act(client, ctx.as_("approver"), cid, "apply", confirm=True, expect=422)
+    assert refused["detail"] == "Say why you apply it anyway"
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.scalars(select(PriorityOverride))).all() == []
+        assert (await s.get(DiscussionChange, uuid.UUID(cid))).status == "proposed"
+
+
+# protects=#585 review: a scope requirement naming a requirement or feature that does not
+# exist is refused when it is written, not at Stage; fails_when=it is stored;
+# no_claim=Stage's own check (it stays).
+async def test_a_scope_requirement_must_name_what_exists(client):
+    ctx = await make_ctx()
+    goal = await entity(client, ctx, type="goal", key="activation", title="Raise activation")
+    d = await start(client, ctx, subject_kind="entity", subject={"entity_id": goal["id"]},
+                    title="Scope")  # fmt: skip
+    missing = str(uuid.uuid4())
+    for payload in ({"op": "cut", "requirement_id": missing},
+                    {"op": "add", "feature_id": missing, "text": "Export a CSV"}):  # fmt: skip
+        resp = await client.post(f"/v1/discussions/{d['id']}/changes",
+                                 json={"kind": "scope_requirement", "payload": payload},
+                                 headers=ctx.as_("approver"))  # fmt: skip
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == "The change's target is not there"
