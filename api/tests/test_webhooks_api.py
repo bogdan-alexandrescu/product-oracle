@@ -211,7 +211,9 @@ async def test_a_run_token_is_refused_403_on_every_route(client, tenant_id, owne
         ("GET", f"/v1/webhooks/{hook}", None),
         ("POST", f"/v1/webhooks/{hook}/rotate-secret", {}),
     ):
-        resp = await client.request(method, path, json=body, headers=bearer(token))
+        # A run token's REST call is its creator's credential marked with the run token.
+        headers = {**owner.headers, "x-oracle-run-token": token}
+        resp = await client.request(method, path, json=body, headers=headers)
         assert resp.status_code == 403, (method, path, resp.status_code)
     async with mcp_client(token) as c:
         names = {t.name for t in (await c.list_tools()).tools}
