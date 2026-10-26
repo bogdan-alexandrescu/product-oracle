@@ -253,6 +253,7 @@ def check_audience(ev: ExportVersion, audience: str | None) -> None:
 async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     """A roadmap version's items (and their tracker issues) as plain values, for
     :func:`apply_audience`."""
+    from oracle.baseline.models import Edge, Entity
     from oracle.launches import tiers
     from oracle.roadmap.models import RoadmapItem, TrackerRecord
     from oracle.roadmap.variants import ItemView
@@ -276,11 +277,47 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
             issues.setdefault((rec.track_id, rec.item_key), []).append(
                 (rec.external_ref, _safe_href(rec.url) if rec.url else None)
             )
+    # Each item's feature-to-goal link, as a launch's tier reads it (oracle.launches.tiers),
+    # loaded once for the version: serving no confirmed goal is never read from the
+    # card's words. With no confirmed goal in the tenant nothing is measured against one,
+    # so no item is left out or flagged.
+    goals = await tiers.confirmed_goals(db)
+    features: dict[str, Entity] = {}
+    edges: dict[uuid.UUID, list[Edge]] = {}
+    if goals and rows:
+        by_id = {
+            e.id: e
+            for e in await db.scalars(
+                select(Entity).where(Entity.id.in_({r.feature_id for r in rows if r.feature_id}))
+            )
+        }
+        by_key = {
+            e.key: e
+            for e in await db.scalars(
+                select(Entity).where(
+                    Entity.type == "feature", Entity.key.in_({r.item_key for r in rows})
+                )
+            )
+        }
+        for r in rows:
+            found = by_id.get(r.feature_id) if r.feature_id is not None else None
+            if (found := found or by_key.get(r.item_key)) is not None:
+                features[r.item_key] = found
+        for edge in await db.scalars(
+            select(Edge).where(
+                Edge.src_id.in_({f.id for f in features.values()}),
+                Edge.type == "supports",
+                Edge.status == "confirmed",
+                Edge.dst_id.in_(goals),
+            )
+        ):
+            edges.setdefault(edge.src_id, []).append(edge)
     ev.items = []
     for r in rows:
-        # The item's feature-to-goal link, as a launch's tier reads it: serving no
-        # confirmed goal is never read from the card's words.
-        goal, goal_title = await tiers._goal(db, await tiers._feature(db, r))
+        feature = features.get(r.item_key)
+        goal, goal_title = (
+            tiers.best_goal(goals, edges.get(feature.id, [])) if feature else ("none", None)
+        )
         rank = (r.priority or {}).get("rank")
         ev.items.append(
             ItemView(
@@ -296,7 +333,7 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 economics=dict(r.economics or {}),
                 tracker=issues.get((r.track_id, r.item_key), []),
                 goals=[goal_title] if goal_title else [],
-                no_goal=goal == "none",
+                no_goal=bool(goals) and goal == "none",
             )
         )
 

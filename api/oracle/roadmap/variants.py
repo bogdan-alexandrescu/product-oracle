@@ -18,12 +18,18 @@ it never changes the text. The registry below is the source of truth: the API se
 - the sections where a template writes its items (``ITEM_AREAS``: horizons, releases,
   timeline lanes, key milestones, cycle bets, pitches and raw ideas) keep their written
   text without what the audience hides: labelled owner (Board), tracker, estimate or
-  effort and dependency parts (``Owner: …``, ``Tracker: …``), table columns so headed,
-  sentences naming an item's tracker issue, and revenue framing (Engineering);
+  effort and dependency parts in their common written forms (``Owner: …``, ``Lead:``,
+  ``DRI:``, ``Owner (PM):``, ``Owned by …``, ``Owner — …``, ``Story points:``, ``Est.:``,
+  ``Jira:``, ``Tracker: …``; a name runs on past an initial's or a title's full stop),
+  table columns so headed (``Owner(s)``, ``Est.``), sentences naming an item's tracker
+  issue, and revenue framing (Engineering). A table keeps its header and separator rows;
 - items that serve no confirmed goal (their feature has no confirmed ``supports`` edge
   to a confirmed goal, oracle.launches.tiers) are left out of Board, their cards and
-  lines included, with the line "N items serve no confirmed goal and are left out", and
-  flagged ⚑ in Team and Engineering.
+  the lines about them (a line starting with the item's title, or naming it and not
+  starting with another item's, and a dropped bullet's wrapped lines) included, with
+  the line "N items serve no confirmed goal and are left out", and flagged ⚑ in Team
+  and Engineering. A tenant with no confirmed goal has nothing to serve: no item is left
+  out or flagged.
 
 The Public audience is never made by filtering the internal text: it is built from
 approved public texts (lane 2). Until a version has a public check, asking for it is
@@ -227,11 +233,19 @@ def audiences_problems(raw: Any, section_keys: list[str]) -> list[tuple[str, str
 
 # --- rendering ------------------------------------------------------------------------
 
-# Labelled parts of a written card ("Owner: Dana.", "**Tracker**: ENG-1;") and the
-# field each one belongs to; the audience hides the fields it does not show.
+# Labelled parts of a written card ("Owner: Dana.", "**Tracker**: ENG-1;", "Owned by
+# Dana", "Owner (PM) — Dana") and the field each one belongs to; the audience hides the
+# fields it does not show. The same words head the table columns it drops.
 _LABELS = {
     "owner": "owner",
     "owners": "owner",
+    "owned by": "owner",
+    "lead": "owner",
+    "leads": "owner",
+    "dri": "owner",
+    "assignee": "owner",
+    "assignees": "owner",
+    "assigned to": "owner",
     "tracker": "tracker",
     "tracker key": "tracker",
     "tracker keys": "tracker",
@@ -239,19 +253,36 @@ _LABELS = {
     "issues": "tracker",
     "epic": "tracker",
     "epics": "tracker",
+    "jira": "tracker",
+    "ticket": "tracker",
+    "tickets": "tracker",
     "estimate": "effort",
     "estimates": "effort",
+    "est": "effort",
     "effort": "effort",
+    "story points": "effort",
+    "points": "effort",
+    "size": "effort",
     "depends on": "depends_on",
     "dependencies": "depends_on",
 }
-_LABELLED = re.compile(
-    r"(?<![\w-])(?:\*\*)?(?P<label>[A-Za-z][A-Za-z ]{1,20}?)(?:\*\*)?\s*:(?:\*\*)?"
-    r"(?:[^.;|\n]|\.(?=\S))*[.;]?[ \t]*"
+# Labels written without a separator ("Owned by Dana").
+_BARE_LABELS = ("owned by", "assigned to")
+_PART = re.compile(
+    r"(?<![\w-])(?:\*\*|__)?(?:"
+    r"(?P<label>"
+    + "|".join(re.escape(k) for k in sorted(set(_LABELS) - set(_BARE_LABELS), key=len)[::-1])
+    + rf"|{REVENUE_PREFIX}[\w ]{{0,20}}?)(?!\w)(?:\(s\))?\.?(?:\s*\((?P<role>[^()\n]{{1,24}})\))?"
+    r"(?:\*\*|__)?\s*(?::|—|–|\s-\s)(?:\*\*|__)?"
+    r"|(?P<bare>" + "|".join(_BARE_LABELS) + r")\s+)[ \t]*",
+    re.IGNORECASE,
 )
+# A full stop inside a name: an initial ("Dana M. Markerson") or a title ("Dr. Markerson").
+_NAME_STOPS = frozenset({"dr", "mr", "mrs", "ms", "mx", "prof", "jr", "sr", "st"})
 _SENTENCE_END = re.compile(r"(?<=[.;!?])\s+")
 _LINK = re.compile(r"\[([^\]]*)\]\(#([^)\s]+)\)")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}")
+_LIST_ITEM = re.compile(r"^(?P<indent>\s*)(?:[-*+]|\d+[.)])\s+")
 
 
 def hidden_fields(variant: Variant) -> set[str]:
@@ -267,7 +298,10 @@ def hidden_fields(variant: Variant) -> set[str]:
 
 
 def _label_field(label: str) -> str | None:
-    label = label.strip().lower()
+    """The field a label or column header names: "Owner(s)", "Owner (PM)", "Est." and
+    "**Jira**" included."""
+    label = re.sub(r"\(s\)|\([^()]*\)\s*$|[*_]", "", label).strip(" .:").lower()
+    label = re.sub(r"\s+", " ", label)
     if label.startswith(REVENUE_PREFIX):
         return REVENUE_PREFIX
     return _LABELS.get(label)
@@ -338,31 +372,132 @@ def _mentions(line: str, name: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", line, re.IGNORECASE) is not None
 
 
+def _value_end(text: str, i: int, field_: str, closer: str | None) -> int:
+    """Where a labelled part's value that starts at ``i`` ends: at ``;``, ``|``, the
+    line's end, ``closer`` (the ``)`` of "(Owner: Dana)") or a full stop ending the
+    sentence; an owner's name runs on past an initial's or a title's full stop."""
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c in ";|\n" or c == closer:
+            return i
+        if c == "." and (i + 1 == n or text[i + 1].isspace()):
+            word = re.search(r"([A-Za-z]+)$", text[:i])
+            w = word.group(1) if word else ""
+            name_stop = (len(w) == 1 and w.isupper()) or w.lower() in _NAME_STOPS
+            if not (field_ == "owner" and name_stop and i + 1 < n):
+                return i
+        i += 1
+    return n
+
+
+def _strip_parts(text: str, hidden: set[str]) -> str:
+    """``text`` without its labelled parts whose field is in ``hidden``. A label counts
+    only where a part starts (line start, after punctuation, a bullet or a cell), so
+    prose such as "Key points:" or "lead to" is kept."""
+    out: list[str] = []
+    pos = 0
+    while (m := _PART.search(text, pos)) is not None:
+        label_ = m.group("label") or m.group("bare")
+        field_ = _label_field(label_)
+        before = text[: m.start()].rstrip(" \t")
+        if field_ not in hidden or (before and before[-1].isalnum()):
+            out.append(text[pos : m.end()])
+            pos = m.end()
+            continue
+        closer = ")" if before.endswith("(") else None
+        end = _value_end(text, m.end(), field_, closer)
+        if closer and end < len(text) and text[end] == ")":
+            # "(Owner: Dana)": the brackets go with it.
+            out.append(text[pos : m.start()].rstrip(" \t")[:-1].rstrip(" \t"))
+            end += 1
+        else:
+            out.append(text[pos : m.start()])
+            if end < len(text) and text[end] in ".;":
+                end += 1
+        while end < len(text) and text[end] in " \t":
+            end += 1
+        pos = end
+    out.append(text[pos:])
+    return "".join(out)
+
+
+def _redact_part(text: str, hidden: set[str], refs: list[str]) -> str:
+    """A line or a table cell without its hidden labelled parts and the sentences
+    naming a hidden tracker issue."""
+    new = _strip_parts(text, hidden)
+    if refs and any(_mentions(new, r) for r in refs):
+        parts = _SENTENCE_END.split(new)
+        new = " ".join(p for p in parts if not any(_mentions(p, r) for r in refs))
+    return new.rstrip() if new != text else text
+
+
+def _lead(line: str) -> str:
+    """A line's text after its bullet, emphasis or link bracket."""
+    text = _LIST_ITEM.sub("", line, count=1).lstrip()
+    return re.sub(r"^(?:\*\*|__|\[)+", "", text)
+
+
+def _names_dropped(text: str, drop_titles: list[str], titles: list[str]) -> bool:
+    """Whether a line (or a table cell) is about an item in ``drop_titles``: it starts
+    with that item's title; else it names it and does not start with another item's
+    title (a short common title never drops another item's line)."""
+    if not drop_titles:
+        return False
+    lead = _lead(text).lower()
+
+    def starts(title: str) -> bool:
+        t = title.strip().lower()
+        return bool(t) and lead.startswith(t) and not lead[len(t) : len(t) + 1].isalnum()
+
+    if any(starts(t) for t in drop_titles):
+        return True
+    if any(starts(t) for t in titles):
+        return False
+    return any(_mentions(text, t) for t in drop_titles)
+
+
 def redact(text: str, variant: Variant, items: list[ItemView], drop_titles: list[str]) -> str:
     """Written item text without what ``variant`` hides (see the module docstring), and
-    without the lines naming an item in ``drop_titles`` (Board's goal-less items)."""
+    without the lines naming an item in ``drop_titles`` (Board's goal-less items) and a
+    dropped bullet's wrapped lines. A table keeps its header and separator rows; only
+    hidden columns, cells' hidden parts and a dropped item's rows go."""
     hidden = hidden_fields(variant)
     refs = [ref for i in items for ref, _ in i.tracker] if "tracker" in hidden else []
-    text = _drop_columns(text or "", hidden)
+    titles = [i.title for i in items]
+    lines = _drop_columns(text or "", hidden).split("\n")
     out: list[str] = []
     fence = False
-    for line in text.split("\n"):
+    dropped: int | None = None  # the indent of a dropped bullet, while its lines run on
+    for n, line in enumerate(lines):
         if line.lstrip().startswith("```"):
             fence = not fence
         if fence or line.lstrip().startswith("```") or not line.strip():
+            dropped = None
             out.append(line)
             continue
-        if any(_mentions(line, t) for t in drop_titles):
+        bullet = _LIST_ITEM.match(line)
+        if dropped is not None:
+            if not (bullet and len(bullet.group("indent")) <= dropped) and not _is_row(line):
+                continue
+            dropped = None
+        if _is_row(line):
+            nxt = lines[n + 1] if n + 1 < len(lines) else ""
+            if _TABLE_SEP.match(line) or _TABLE_SEP.match(nxt):
+                out.append(line)  # the header and separator rows stay
+                continue
+            cells = _split_row(line)
+            if any(_names_dropped(c, drop_titles, titles) for c in cells if c):
+                continue
+            new_cells = [_redact_part(c, hidden, refs) for c in cells]
+            out.append(line if new_cells == cells else _join_row(new_cells))
             continue
-        new = _LABELLED.sub(
-            lambda m: "" if _label_field(m.group("label")) in hidden else m.group(0), line
-        )
-        if refs and any(_mentions(new, r) for r in refs):
-            parts = _SENTENCE_END.split(new)
-            new = " ".join(p for p in parts if not any(_mentions(p, r) for r in refs))
-        if new != line:
-            new = new.rstrip()
-        if not new.strip(" -*+|\t"):
+        if _names_dropped(line, drop_titles, titles):
+            if bullet:
+                dropped = len(bullet.group("indent"))
+            continue
+        new = _redact_part(line, hidden, refs)
+        if new != line and not new.strip(" -*+\t"):
             continue
         out.append(new)
     return "\n".join(out).strip("\n")
