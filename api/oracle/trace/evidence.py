@@ -12,7 +12,8 @@ that a source item backs the claim, and its kind, not what it says. A run (S6) r
 source item as it reads it everywhere else: one its user's intakes withhold, one
 deleted upstream, or one ever frozen by sharing with no release readable now is
 restricted; one a share released shows the title and link released, never the item's
-current ones.
+current ones. A run reads evidence and entity confidence as of its pinned snapshot
+(``oracle.baseline.evidence.run_view``), people the live one.
 """
 
 import uuid
@@ -22,7 +23,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
-from oracle.baseline.evidence import run_versions, withheld_from
+from oracle.baseline.evidence import run_versions, run_view, withheld_from
 from oracle.baseline.models import Entity, Evidence
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
@@ -116,12 +117,23 @@ async def targets(
                 select(SourceItemVersion).where(SourceItemVersion.id.in_(version_ids))
             )
             released = {v.item_id: v for v in rows}
+    # A run reads confidence as of its pin, as the baseline detail does (S6, owner
+    # 2026-10-20): each evidence row's and each entity's; people read the stored score.
+    view = None
+    if principal is not None:
+        view = await run_view(
+            db,
+            principal,
+            entity_ids=ent_ids | {e.entity_id for e in evidence.values() if e.entity_id},
+            edge_ids={e.edge_id for e in evidence.values() if e.edge_id},
+        )
     out: dict[uuid.UUID, SectionLinkTarget] = {}
     for lk in links:
         if lk.evidence_id in evidence:
             e = evidence[lk.evidence_id]
             out[lk.id] = SectionLinkTarget(
-                type="evidence", id=e.id, title=e.ref or e.url, confidence=_float(e.confidence),
+                type="evidence", id=e.id, title=e.ref or e.url,
+                confidence=view.by_evidence.get(e.id) if view else _float(e.confidence),
                 url=e.url, ref=e.ref, excerpt=e.excerpt, source_kind=e.kind,
                 source_removed=e.source_item_id in removed,
             )  # fmt: skip
@@ -150,7 +162,8 @@ async def targets(
             n = entities[lk.entity_id]
             out[lk.id] = SectionLinkTarget(
                 type="entity", id=n.id, title=n.title, entity_type=n.type, status=n.status,
-                locked=n.locked, confidence=_float(n.confidence), ref=f"{n.type}:{n.key}",
+                locked=n.locked, ref=f"{n.type}:{n.key}",
+                confidence=view.confidence("entity", n.id) if view else _float(n.confidence),
             )  # fmt: skip
     return out
 
