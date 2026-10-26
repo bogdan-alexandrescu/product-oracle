@@ -20,8 +20,9 @@ on their confusable skeleton (:func:`skeleton`, UTS #39 §4): NFD, every combini
 confusables.txt (vendored in ``unicode/`` for the Unicode version Python reports), so a
 mark on or inside a name ("Northwi\u0307nd", "N\u00f6rthwind", U+0130) and mixed-script
 look-alikes are found. They also match on the strict skeleton (:func:`strict_skeleton`:
-the same, but every character mapped before case is folded, so a capital I, Greek Iota or
-Cyrillic I stands in for a small l as Unicode says); a name is found when either form
+every character mapped before case is folded, so a capital I, Greek Iota or Cyrillic I
+stands in for a small l as Unicode says, then mapped and folded again until nothing
+changes, so a stored "M" and a written "m" meet); a name is found when either form
 matches. A public text holding an invisible character is refused when saved
 (:func:`format_characters`), so what an approver reads is what was checked; only the
 joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, the
@@ -261,15 +262,27 @@ def _prototype(char: str) -> str:
     return "i" if prototype == "l" and char.isupper() else prototype
 
 
+# Rounds of mapping and casefolding before the strict skeleton stops changing (two or
+# three in practice: "M" -> "m" -> "rn").
+_STRICT_ROUNDS = 8
+
+
 @_cached
 def strict_skeleton(text: str) -> str:
-    """``text``'s skeleton exactly as UTS #39 §4 defines it, then casefolded: NFD, every
-    combining mark and Default_Ignorable dropped, each character mapped through
+    """``text``'s skeleton as UTS #39 §4 defines it, taken to a fixed point with casefolding:
+    NFD, every combining mark and Default_Ignorable dropped, each character mapped through
     confusables.txt as it is (capital I, Greek Iota and Cyrillic I to "l"; "m" to "rn"),
-    NFD again and casefolded. Unlike :func:`skeleton`, case is folded last, so a capital I
-    stands in for a small l ("RivaICo" is "RivalCo")."""
-    text = _strip_invisible(_drop_marks(text, _MARKS)).translate(SKELETON_MAP)
-    return _drop_marks(text, _MARKS).casefold()
+    casefolded, and mapped and folded again until nothing changes. Unlike :func:`skeleton`,
+    a capital I stands in for a small l ("RivaICo" is "RivalCo"); and as the map is applied
+    after folding too, case and look-alikes meet in any order (a stored "Mallory" and a
+    written "maIIory" are both "rnallory")."""
+    for _ in range(_STRICT_ROUNDS):
+        before = text
+        text = _strip_invisible(_drop_marks(text, _MARKS)).translate(SKELETON_MAP)
+        text = _drop_marks(text, _MARKS).casefold()
+        if text == before:
+            break
+    return text
 
 
 _GENERIC_SKELETONS = frozenset(map(skeleton, GENERIC_COMPANY_WORDS))
@@ -361,6 +374,20 @@ def _forms(text: str) -> tuple[str, str]:
     return tuple(" ".join(_WORD.findall(fn(read))) for fn in (skeleton, strict_skeleton))
 
 
+def _record_strict(text: str) -> str:
+    """The strict skeleton of a company's own record (a name, note or slug): its capital I
+    is a real I, so case is folded first ("GOLD MINE" is "gold rnine", not "gold rnlne")."""
+    return strict_skeleton(_read(text).casefold())
+
+
+def _record_forms(text: str) -> tuple[str, str]:
+    """:func:`_forms` of a company's own record, its strict form by :func:`_record_strict`."""
+    return (
+        " ".join(_WORD.findall(skeleton(_read(text)))),
+        " ".join(_WORD.findall(_record_strict(text))),
+    )
+
+
 def _plain(text: str) -> str:
     """``text`` without its combining marks, for splitting a name into its parts."""
     return unicodedata.normalize("NFC", _drop_marks(_read(text), _MARKS))
@@ -372,7 +399,7 @@ def _names(text: str, names: list[str]) -> list[str]:
     padded = [f" {form} " for form in _forms(text)]
     out: list[str] = []
     for name in names:
-        forms = _forms(name or "")
+        forms = _record_forms(name or "")
         if len(forms[0]) < MIN_NAME or name in out:
             continue
         if any(f" {n} " in p for n, p in zip(forms, padded, strict=True)):
@@ -464,7 +491,7 @@ def _note_copies(text: str, notes: list[str]) -> list[str]:
     texts = [f" {form} " for form in _forms(text)]
     out: list[str] = []
     for note in notes:
-        for form, words in zip(_forms(note or ""), texts, strict=True):
+        for form, words in zip(_record_forms(note or ""), texts, strict=True):
             parts = form.split()
             runs = (" ".join(parts[i : i + NOTE_WORDS]) for i in range(len(parts) - NOTE_WORDS + 1))
             run = next((r for r in runs if f" {r} " in words), None)
@@ -514,7 +541,7 @@ def check(
     codes += [
         s
         for s in ctx.slugs
-        if _slug_in(skeleton(_read(s)), skel) or _slug_in(strict_skeleton(_read(s)), strict)
+        if _slug_in(skeleton(_read(s)), skel) or _slug_in(_record_strict(s), strict)
     ]
     add("internal_code", codes)
     add("internal_host", _hosts(text, ctx))

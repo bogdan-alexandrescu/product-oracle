@@ -1073,23 +1073,18 @@ def test_the_strict_skeleton_is_a_fixed_point():
 
 
 def _recase(rng, text: str) -> str:
-    """``text`` as it is, lower case, upper case, title case or each letter's case drawn."""
-    return rng.choice(
-        [
-            text,
-            text.lower(),
-            text.upper(),
-            text.title(),
-            "".join(c.upper() if rng.random() < 0.5 else c.lower() for c in text),
-        ]
-    )
+    """``text`` as it is, in lower, upper, title or swapped case. Not each letter's case
+    drawn: "QuIlΙfeather" holds a real capital I for i and a stand-in for l, which no
+    reader tells apart."""
+    return rng.choice([text, text.lower(), text.upper(), text.title(), text.swapcase()])
 
 
 def test_seeded_names_in_any_case_with_look_alikes_are_still_found():
     """protects=#697 re-review (property): the stored name and the written text each take
     a random case, then the written text's letters are swapped for confusables.txt
     look-alikes of either case and given random marks; every variant is still found;
-    fails_when="Mallory" stored and "maIIory" written passes."""
+    fails_when="Mallory" stored and "maIIory" written, or "GOLD MINE" stored and
+    "GoІd Mine" written, passes."""
     import random
 
     rng = random.Random(697)
@@ -1107,8 +1102,15 @@ def test_seeded_names_in_any_case_with_look_alikes_are_still_found():
             stored = _recase(rng, name)
             ctx = _ctx(**{field_name: [*getattr(_ctx(), field_name), stored]})
             chars = []
-            for ch in _recase(rng, name):
-                pool = alikes.get(ch, []) + alikes.get(ch.lower(), []) + alikes.get(ch.upper(), [])
+            written = _recase(rng, name)
+            for ch in written:
+                pool = alikes.get(ch, []) + alikes.get(ch.upper(), [])
+                if ch.isupper():
+                    pool += alikes.get(ch.lower(), [])
+                # Next to a real capital I, or in capitals, a stand-in for l reads as I
+                # ("QUILⲒFEATHER" is "QUILIFEATHER"; "qUIΙL..." no reader tells apart).
+                if ch in "lL" and ("I" in written or written.isupper()):
+                    pool = []
                 if pool and rng.random() < 0.4:
                     ch = rng.choice(pool)
                 chars.append(ch)
