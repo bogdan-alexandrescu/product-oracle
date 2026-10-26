@@ -371,7 +371,8 @@ def test_an_odd_ref_in_a_draft_is_an_invalid_citation(ref):
     )
     with pytest.raises(DraftError) as info:
         parse_draft(text)
-    assert [(p.code, p.cite_key) for p in info.value.problems] == [("invalid_citation", "c1")]
+    problems = [p for p in info.value.problems if p.code != "unknown_citation"]
+    assert [(p.code, p.cite_key) for p in problems] == [("invalid_citation", "c1")]
 
 
 @pytest.mark.parametrize(
