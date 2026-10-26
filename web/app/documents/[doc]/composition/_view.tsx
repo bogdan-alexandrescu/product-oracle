@@ -22,6 +22,7 @@ import {
   SELECTION_LABEL,
   diffLine,
   draftOrder,
+  lastKeys,
   hasProblems,
   matches,
   move,
@@ -67,12 +68,13 @@ const TABS: { value: Tab; label: string }[] = [
 
 /** The Composition inspector of a PRD (v2 screen 1, picks.md 1). */
 export function CompositionView({ doc }: { doc: string }) {
-  const { can } = useMe();
+  const { can, role } = useMe();
   const phone = useIsPhone();
   const pathname = usePathname();
   const params = useSearchParams();
   const tab = (TABS.find((t) => t.value === params.get("tab"))?.value ?? "modules") as Tab;
   const docQ = useQuery(`doc:${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
+  const packsQ = useQuery("module-packs", () => unwrap(api.GET("/v1/module-packs")));
   const q = useQuery(`composition:${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/composition", { params: { path: { doc } } })));
   const [changes, setChanges] = useState<Changes>(NO_CHANGES);
   const [confirming, setConfirming] = useState(false);
@@ -87,8 +89,6 @@ export function CompositionView({ doc }: { doc: string }) {
 
   const mayConfirm = can("confirm_composition_revision");
   const mayPublish = can("publish_composition");
-  // A module whose contract asks for the owner role: only an owner adds or removes it.
-  const ownerRole = can("put_module_policy");
   const data = q.data;
   const next = (data?.head_revision ?? 0) + 1;
 
@@ -134,7 +134,7 @@ export function CompositionView({ doc }: { doc: string }) {
   } else if (tab === "catalog") {
     body = <CatalogTab phone={phone} />;
   } else if (tab === "policy") {
-    body = <PolicyTab phone={phone} prdModules={(data.working ?? data.current ?? data.recommendation)?.modules ?? []} prdTitle={docQ.data?.title ?? data.slug} />;
+    body = <PolicyTab phone={phone} onSaved={() => void q.reload()} prdModules={(data.working ?? data.current ?? data.recommendation)?.modules ?? []} prdTitle={docQ.data?.title ?? data.slug} />;
   } else if (tab === "history") {
     body = <HistoryTab data={data} />;
   } else {
@@ -145,6 +145,7 @@ export function CompositionView({ doc }: { doc: string }) {
     const source = sources.find((s) => s.value === view) ?? sources[0];
     // A new revision starts from the newest one: the draft's order is over its modules.
     const base = (data.working ?? data.current ?? data.recommendation)?.modules ?? [];
+    const last = lastKeys(base);
     const custom = changes.order;
     const all = sortModules((source?.modules ?? []).map((m) => (custom?.includes(m.key) ? { ...m, order: (custom.indexOf(m.key) + 1) * 10 } : m)));
     const rows = all.filter((m) => matches(m, filter));
@@ -156,8 +157,7 @@ export function CompositionView({ doc }: { doc: string }) {
         m={m}
         changes={changes}
         canChange={mayConfirm}
-        ownerOnly={m.required_review_role === "owner" && !ownerRole}
-        onToggle={() => setChanges((c) => toggle(c, m.key, m.included))}
+        onToggle={() => setChanges((c) => toggle(c, m.key, m.included, last))}
         onMove={(() => {
           const order = draftOrder(changes, base);
           const at = order.indexOf(m.key);
@@ -230,6 +230,11 @@ export function CompositionView({ doc }: { doc: string }) {
     const staged = changes.add.length + changes.remove.length > 0 || changes.order !== null;
     body = (
       <Split inspector={!phone && selected ? detail(selected, false) : undefined}>
+        {data.policy_changed_at && (
+          <Notice testId="policy-changed" tone="warn" action={<Button onClick={loadPreview}>Preview with new policy</Button>}>
+            <b>Company policy changed {formatDate(data.policy_changed_at)}.</b> Compositions are only flagged; confirm a new revision to apply it.
+          </Notice>
+        )}
         {data.legacy && data.recommendation && (
           <Notice
             testId="legacy-notice"
@@ -241,7 +246,8 @@ export function CompositionView({ doc }: { doc: string }) {
               ) : undefined
             }
           >
-            This PRD has no composition yet. Oracle recommends {data.recommendation.summary.included} modules from {data.recommendation.packs.join(", ")}.
+            This PRD has no composition yet. Oracle recommends {data.recommendation.summary.included} modules from{" "}
+            {data.recommendation.packs.map((id) => packsQ.data?.find((p) => p.id === id)?.title ?? id).join(", ")}.
           </Notice>
         )}
         {previewError && <Notice tone="error">{previewError}</Notice>}
@@ -315,7 +321,7 @@ export function CompositionView({ doc }: { doc: string }) {
                 <li key={k} className="flex items-center gap-2">
                   <span>+ {titleOf(k)}</span>
                   <span className={`${MONO} text-text2`}>{k}</span>
-                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, false))}>
+                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, false, last))}>
                     Undo
                   </Button>
                 </li>
@@ -324,7 +330,7 @@ export function CompositionView({ doc }: { doc: string }) {
                 <li key={k} className="flex items-center gap-2">
                   <span>− {titleOf(k)}</span>
                   <span className={`${MONO} text-text2`}>{k}</span>
-                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, true))}>
+                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, true, last))}>
                     Undo
                   </Button>
                 </li>
@@ -377,6 +383,11 @@ export function CompositionView({ doc }: { doc: string }) {
         status={
           data && (
             <>
+              {role && (
+                <Chip kind="acc" data-testid="viewing-as">
+                  Viewing as {role}
+                </Chip>
+              )}
               {data.current ? (
                 <Chip kind="pass" data-testid="composition-in-force">
                   Rev {data.current.number} in force

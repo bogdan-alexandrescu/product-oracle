@@ -45,7 +45,7 @@ function moved(p: Settings, key: string, to: Lane): Settings {
  * on top, an inspector per catalog entry. Owners move modules and save (PUT /v1/module-policy);
  * everyone else reads it.
  */
-export function PolicyTab({ phone, prdModules, prdTitle }: { phone: boolean; prdModules: Module[]; prdTitle: string }) {
+export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boolean; onSaved: () => void; prdModules: Module[]; prdTitle: string }) {
   const { can } = useMe();
   const owner = can("put_module_policy");
   const policyQ = useQuery("module-policy", () => unwrap(api.GET("/v1/module-policy")));
@@ -91,6 +91,7 @@ export function PolicyTab({ phone, prdModules, prdTitle }: { phone: boolean; prd
       const out = await unwrap(Promise.resolve(res));
       policyQ.setData(() => out);
       setEdit(null);
+      onSaved();
       setResult("Policy saved. Compositions in force are not changed: each PRD applies it when someone confirms a new revision.");
     } catch (e) {
       setError(errorMessage(e));

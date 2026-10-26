@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-import { Button, Chip, Icon, Label, Notice, SegmentedControl, Sheet } from "@/components/ds";
+import { Button, Chip, Icon, Label, Notice, SegmentedControl, Sheet, useFocusTrap } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
@@ -29,12 +29,9 @@ export function Modal({
   children: ReactNode;
 }) {
   const id = useId();
-  useEffect(() => {
-    if (phone) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [phone, onClose]);
+  const dialog = useRef<HTMLDivElement>(null);
+  // On a desktop focus stays inside the dialog and Escape closes it (the Sheet does both on a phone).
+  useFocusTrap(dialog, !phone, onClose);
   if (phone) {
     return (
       <Sheet open title={title} onClose={onClose}>
@@ -45,8 +42,10 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10">
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-labelledby={`${id}-title`}
         className="w-full max-w-4xl overflow-hidden rounded-inspector border border-line bg-surface text-text shadow-tip"
       >

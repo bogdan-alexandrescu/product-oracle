@@ -158,12 +158,12 @@ test("moving a module after Sources and data points shows the API's order_violat
 
 test("an owner-review module: an approver cannot add it, an owner can", async ({ page }) => {
   // protects=a module whose contract asks for the owner role is off for an approver with
-  // "Requires the owner role" and on for an owner; fails_when=the approver is offered it.
+  // "Your role cannot add or remove it: it needs the owner role." and on for an owner; fails_when=the approver is offered it.
   await openComposition(page, "approver");
   await row(page, "agents.tool-policies").click();
   await expect(inspector(page)).toContainText("Owner review");
   await expect(inspector(page).getByRole("button", { name: "Remove from draft" })).toBeDisabled();
-  await expect(inspector(page)).toContainText("Requires the owner role");
+  await expect(inspector(page)).toContainText("Your role cannot add or remove it: it needs the owner role.");
 
   await signOut(page);
   await openComposition(page, "owner");

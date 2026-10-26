@@ -32,7 +32,6 @@ export function ModuleDetail({
   m,
   changes,
   canChange,
-  ownerOnly,
   onToggle,
   onMove,
   bare = false,
@@ -41,8 +40,6 @@ export function ModuleDetail({
   changes: Changes;
   /** May stage changes (an approver); null: read only. */
   canChange: boolean;
-  /** The module asks for the owner role and the caller does not have it. */
-  ownerOnly: boolean;
   onToggle: () => void;
   /** Moves it up (-1) or down (+1) in the draft's order; null where it cannot move that way. */
   onMove: { up: (() => void) | null; down: (() => void) | null } | null;
@@ -184,7 +181,7 @@ export function ModuleDetail({
       {canChange && (
         <InspectorSection>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant={staged ? "ghost" : m.included ? "danger" : "solid"} disabled={ownerOnly} onClick={onToggle}>
+            <Button variant={staged ? "ghost" : m.included ? "danger" : "solid"} disabled={!m.can_change} onClick={onToggle}>
               {staged ? "Undo" : m.included ? "Remove from draft" : "Add to draft"}
             </Button>
             {onMove && (
@@ -197,7 +194,7 @@ export function ModuleDetail({
                 </Button>
               </>
             )}
-            {ownerOnly && <span className="text-sm text-text2">Requires the owner role</span>}
+            {!m.can_change && <span className="text-sm text-text2">Your role cannot add or remove it: it needs the {m.required_review_role} role.</span>}
           </div>
         </InspectorSection>
       )}

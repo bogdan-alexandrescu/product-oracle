@@ -76,15 +76,29 @@ export function sortModules(modules: Module[]): Module[] {
   );
 }
 
-export function toggle(changes: Changes, key: string, included: boolean): Changes {
+/** The section the API keeps last: a module rendering it comes after every other one. */
+const SOURCES_SECTION = "sources";
+
+/** The modules that must stay last in an order (they render the sources section). */
+export function lastKeys(modules: Module[]): string[] {
+  return modules.filter((m) => m.section_ids.includes(SOURCES_SECTION)).map((m) => m.key);
+}
+
+export function toggle(changes: Changes, key: string, included: boolean, last: string[] = []): Changes {
   const add = changes.add.filter((k) => k !== key);
   const remove = changes.remove.filter((k) => k !== key);
   const staged = changes.add.includes(key) || changes.remove.includes(key);
-  // A custom order lists every included module: one leaving drops out, one coming goes last.
+  // A custom order lists every included module: one leaving drops out, one coming goes last
+  // but before the modules that must stay last (Sources and data points).
   const goesOut = staged ? changes.add.includes(key) : included;
-  const order = changes.order && (goesOut ? changes.order.filter((k) => k !== key) : [...changes.order, key]);
+  const order = changes.order && (goesOut ? changes.order.filter((k) => k !== key) : insertBefore(changes.order, key, last));
   if (staged) return { add, remove, order };
   return included ? { add, remove: [...remove, key], order } : { add: [...add, key], remove, order };
+}
+
+function insertBefore(order: string[], key: string, last: string[]): string[] {
+  const at = order.findIndex((k) => last.includes(k));
+  return at < 0 || last.includes(key) ? [...order, key] : [...order.slice(0, at), key, ...order.slice(at)];
 }
 
 /** The draft's included modules in order: its custom order, else the newest revision's

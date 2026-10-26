@@ -158,7 +158,13 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
     user_reason: null,
     ordered_by_user: false,
     required_review_role: c.required_review_role,
+    can_change: false,
   };
+}
+
+/** Each module with can_change for the caller's role (never stored in a revision). */
+function withCanChange<M extends Composed>(modules: M[], role: Role): M[] {
+  return modules.map((m) => ({ ...m, can_change: atLeast(role, m.required_review_role as Role) }));
 }
 
 function summary(modules: Composed[]): Schemas["CompositionSummary"] {
@@ -399,13 +405,14 @@ function revisionOf(
   reason: string,
   db: ModulesDb,
   status: Revision["status"] = "confirmed",
+  decidedAt: string = AT,
 ): Revision {
   return {
     id: `a3000000-0000-4000-8000-${String(100 + number).padStart(12, "0")}`,
     number,
     status,
     decided_by: userId,
-    decided_at: AT,
+    decided_at: decidedAt,
     reason,
     parent_number: parent?.number ?? null,
     document_version_id: null,
@@ -430,10 +437,16 @@ function inForce(revisions: Revision[]): Revision | null {
   return [...revisions].reverse().find((r) => r.status === "confirmed" || r.status === "published") ?? null;
 }
 
-function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }): Schemas["InspectorOut"] {
+function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }, role: Role): Schemas["InspectorOut"] {
   const revisions = db.revisions[doc.id] ?? [];
   const head = revisions[revisions.length - 1] ?? null;
-  const current = inForce(revisions);
+  const inForceRev = inForce(revisions);
+  const current = inForceRev && { ...inForceRev, modules: withCanChange(inForceRev.modules, role) };
+  const working = head?.status === "working" ? { ...head, modules: withCanChange(head.modules, role) } : null;
+  const rec = current ? null : recommend(db, PACK_A, {}, doc.template);
+  // The company policy saved after the revision in force was decided.
+  const saved = db.policy.updated_at;
+  const policyChanged = current?.decided_at && saved && saved > current.decided_at ? saved : null;
   return {
     document_id: doc.id,
     slug: doc.slug,
@@ -442,11 +455,12 @@ function inspector(db: ModulesDb, doc: { id: string; slug: string; template: str
     lock_version: head ? revisions.length : null,
     head_revision: head?.number ?? null,
     current,
-    working: head?.status === "working" ? head : null,
-    recommendation: current ? null : { ...recommend(db, PACK_A, {}, doc.template), document_id: doc.id },
+    working,
+    recommendation: rec && { ...rec, modules: withCanChange(rec.modules, role), document_id: doc.id },
     revisions: [...revisions].reverse().map(summaryOf),
     sections: { version: null, unmapped: [] },
     problems: [],
+    policy_changed_at: policyChanged,
   };
 }
 
@@ -583,7 +597,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
     const rec = { ...recommend(db, pack, extra, data.template ?? doc?.template ?? "oracle-default"), document_id: doc?.id ?? null };
     applyChanges(db, rec, head, data.changes, ctx, null);
-    return json(200, rec);
+    return json(200, { ...rec, modules: withCanChange(rec.modules, ctx.role) });
   }
 
   if (p[1] === "documents" && p[2] && p[3] === "composition") {
@@ -592,7 +606,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const revisions = (db.revisions[doc.id] ??= []);
     const head = revisions[revisions.length - 1] ?? null;
     const current = inForce(revisions);
-    if (m === "GET" && !p[4]) return json(200, inspector(db, doc));
+    if (m === "GET" && !p[4]) return json(200, inspector(db, doc, ctx.role));
     if (m === "POST" && p[4] === "revisions") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
       const data = await body<Schemas["RevisionIn"]>();
@@ -618,8 +632,8 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
         // supersedes nothing.
         for (const r of revisions) if (r.status === "confirmed" || r.status === "working") r.status = "superseded";
       }
-      revisions.push(revisionOf(rec, revisions.length + 1, status === "confirmed" ? current : head, ctx.userId, data.reason, db, status));
-      return json(201, inspector(db, doc));
+      revisions.push(revisionOf(rec, revisions.length + 1, status === "confirmed" ? current : head, ctx.userId, data.reason, db, status, new Date().toISOString()));
+      return json(201, inspector(db, doc, ctx.role));
     }
     if (m === "POST" && p[4] === "publish") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
