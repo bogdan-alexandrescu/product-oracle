@@ -10,6 +10,7 @@ import asyncio
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
@@ -55,6 +56,12 @@ def _check() -> str:
     return _run(
         "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_checkpoints_kind'"
     )[0][0]
+
+
+def test_chains_on_the_single_head():
+    script = ScriptDirectory.from_config(_cfg())
+    assert script.get_revision(REVISION).down_revision == PREVIOUS
+    assert script.get_heads() == [REVISION]
 
 
 def test_up_down_up_keeps_every_other_kind(scratch_db):
