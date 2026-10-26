@@ -47,6 +47,9 @@ test("an owner switches the audience: Board hides its sections and goal-less ite
   await expect(board.getByRole("heading", { name: "Dependencies and owners" })).toHaveCount(0);
   await expect(board.getByRole("heading", { name: "Ops console cleanup" })).toHaveCount(0);
   await expect(board.getByText("1 item serves no confirmed goal and is left out.")).toBeVisible();
+  // Its rows sit under the goal each item's feature serves, per horizon (Now and Next).
+  await expect(board.getByRole("heading", { name: "Cut monthly churn to 2%" })).toHaveCount(2);
+  await expect(board.getByRole("heading", { name: "Grow self-serve sign-ups" })).toHaveCount(2);
 
   // The export follows the audience.
   const download = page.waitForEvent("download");
