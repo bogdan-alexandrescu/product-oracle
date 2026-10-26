@@ -60,6 +60,7 @@ LOCKED = "Section {section} is approved and locked"
 RECORDERS = "Engineering leads and approvers record date bases"
 NOT_FOUND = "Change not found"
 CHOOSE_APPROVER = "Choose who decides it"
+KEEP_REASON = "Say why you apply it anyway"
 # The stops whose items take a D8 question action (oracle.runs.actions.VOCABULARY).
 QUESTION_STOPS = ("roadmap_items", "feature_set", "eng_review")
 # Kinds whose target is the feature or person an edit may change.
@@ -281,8 +282,8 @@ async def _target_problem(
     if kind == "answer":
         q = await db.get(StakeholderQuestion, payload["question_id"])
         return None if q is not None and q.status == "open" else "target"
-    if kind in ("scope_feature", "priority_move", "priority_pin"):
-        ids = [payload["feature_id"], payload.get("above_feature_id")]
+    if kind in ("scope_feature", "scope_requirement", "priority_move", "priority_pin"):
+        ids = [payload.get(k) for k in ("feature_id", "requirement_id", "above_feature_id")]
         for raw in filter(None, ids):
             if await db.get(Entity, raw) is None and await _scope_title(db, raw) is None:
                 return "target"
@@ -946,7 +947,7 @@ async def ask(
     k = _need_kind(c, "ask_person")
     _need_role(seat, k.role, "Commenters and up ask a person")
     p = c.edited_payload or c.payload
-    action = await _ask_at_checkpoint(db, principal, d, p)
+    action = await _ask_at_checkpoint(db, principal, d, c.id, p)
     if action is not None:
         ref = {"question_id": str(action.question_id), "action_id": str(action.id)}
         c = await db.get(DiscussionChange, change_id, with_for_update=True, populate_existing=True)
@@ -987,7 +988,11 @@ def _question_subject(d: Discussion) -> dict[str, Any]:
 
 
 async def _ask_at_checkpoint(
-    db: AsyncSession, principal: "Principal", d: Discussion, p: dict[str, Any]
+    db: AsyncSession,
+    principal: "Principal",
+    d: Discussion,
+    change_id: uuid.UUID,
+    p: dict[str, Any],
 ) -> Any:
     """The D8 question action on the subject's item while its stop waits and takes
     questions; None otherwise (C2 asks directly)."""
@@ -1005,9 +1010,11 @@ async def _ask_at_checkpoint(
         return None
     body = ActionIn(item_key=s["item_key"], kind="question",
                     value={"asked_to": str(p["asked_to"]), "text": p["prompt"]})  # fmt: skip
+    # From the discussion (G4), though the question is asked now, whatever the stop
+    # decides: the change is done already (oracle.staging.hooks leaves it so).
+    source = actions.ActionSource(d.id, change_id, d.visibility == "private")
     try:
-        # Not tied to the change: the question is asked now, whatever the stop decides.
-        return await actions.put_action(db, principal, d.run_id, cp.id, body)
+        return await actions.put_action(db, principal, d.run_id, cp.id, body, source=source)
     except runs.RunError as e:
         raise DiscussionError(getattr(e, "status", 409), str(e)) from e
 
@@ -1035,6 +1042,9 @@ async def apply(
     _need_kind(c, "priority_move", "priority_pin")
     _need_role(seat, "approver", APPROVERS_ACT.format(verb="apply"))
     p = c.edited_payload or c.payload
+    if confirm and not (reason or "").strip():
+        # Keeping a move Oracle pushed back on needs its own reason (C9).
+        raise DiscussionError(422, KEEP_REASON)
     why = (reason or "").strip() or p["reason"]
     try:
         body = OverrideCreate(

@@ -191,7 +191,9 @@ async def _scope_action(
         )
     else:
         raise StagingError(422, "Name the feature the requirement belongs to")
-    found = (await db.execute(rows.order_by(PrdScope.created_at.desc()).limit(1))).first()
+    # The discussion's own run first, then the newest waiting stop.
+    own = [(PrdScope.run_id == d.run_id).desc()] if d.run_id is not None else []
+    found = (await db.execute(rows.order_by(*own, PrdScope.created_at.desc()).limit(1))).first()
     if found is None:
         raise StagingError(409, "No feature set waiting for approval has this feature")
     item, scope = found
