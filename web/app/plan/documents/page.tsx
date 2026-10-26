@@ -23,7 +23,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { DOC_STATUS_LABEL, formatDate, formatDateTime } from "@/lib/format";
+import { DOC_STATUS_LABEL, formatDateTime, formatDay } from "@/lib/format";
 import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -50,8 +50,15 @@ function SharedCell({ slug }: { slug: string }) {
   const active = (q.data ?? []).filter((l) => l.state === "active");
   const next = active.map((l) => l.expires_at).sort()[0];
   return (
-    <span data-testid="shared-cell" className="tnum text-sm text-text2">
-      {!q.data ? "" : next ? `${active.length} active · ends ${formatDate(next)}` : "—"}
+    <span data-testid="shared-cell" className="tnum block text-sm leading-4 text-text2">
+      {!q.data ? "" : next ? (
+        <>
+          <span className="block">{active.length} active</span>
+          <span className="block">ends {formatDay(next)}</span>
+        </>
+      ) : (
+        "—"
+      )}
     </span>
   );
 }
@@ -214,7 +221,7 @@ export default function RoadmapDocumentsPage() {
           {
             key: "shared",
             header: "Shared",
-            width: "170px",
+            width: "96px",
             hideOnPhone: true,
             cell: (r: Row) => (r.kind === "roadmap" ? <SharedCell slug={r.d.slug} /> : null),
           },
