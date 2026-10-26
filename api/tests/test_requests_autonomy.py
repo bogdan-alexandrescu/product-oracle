@@ -13,10 +13,14 @@ people only. Each test's card: protects=<the observable>; fails_when=<the wrong 
 it rejects>; no_claim=<what green does not prove>.
 """
 
+import uuid
+
 import pytest
 from sqlalchemy import select
 
 from oracle.autonomy_models import OracleAction
+from oracle.docs.models import Document
+from oracle.requests.models import ProductRequest
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_requests import add, audits, get, goal
@@ -277,3 +281,30 @@ async def test_undo_of_a_merge_into_a_no_withdraws_its_reply(client, ctx):
     (action,) = await actions(ctx)
     assert (await undo(client, ctx, action)).status_code == 200
     assert [r["status"] for r in await mine()] in ([], ["withdrawn"])
+
+
+@pytest.mark.parametrize("level", ["draft", "recommend"])
+async def test_a_suggestion_naming_a_hidden_title_shows_only_at_recommend_to_who_may_see_it(
+    client, ctx, level
+):
+    """protects=#665 on main: both gates on a request's suggestion. #615 shows Oracle's
+    suggestions at Recommend and above only; #621 (main) withholds one naming a hidden
+    document, matched in the field itself (an em dash survives). At Recommend the owner
+    reads it and a commenter does not; at Draft nobody does; fails_when=either gate is
+    lost in the merge (the commenter reads the hidden title, or Draft shows it);
+    no_claim=the Requests screen (Playwright)."""
+    title = "Annual plan — the 2027 price list"
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Document(slug=f"memo-{uuid.uuid4().hex[:6]}", title=title, kind="pricing",
+                       visibility="approvers"))  # fmt: skip
+        await s.commit()
+    await set_level(client, ctx, level)
+    a = await add(client, ctx, title="Remember my address")
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(ProductRequest, uuid.UUID(a["id"]))
+        assert row is not None
+        row.suggestion = {"rationale": f"Follows {title}.", "confidence": 0.7}
+        await s.commit()
+    for who, sees in (("owner", level == "recommend"), ("commenter", False)):
+        got = await get(client, ctx, a["id"], who)
+        assert (got["suggestion"] is not None) is sees, (level, who, got["suggestion"])
