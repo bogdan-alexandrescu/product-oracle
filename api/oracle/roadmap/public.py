@@ -119,7 +119,7 @@ class Review:
 
     def not_ready(self) -> list[dict[str, Any]]:
         """What stops a public check: every item that serves a goal and is not excluded
-        needs an approved, current text without a blocking finding."""
+        needs an approved, current text without a blocking finding or an unticked warning."""
         left: list[dict[str, Any]] = []
         for r in self.rows:
             if r.shown or r.left_out_reason in ("excluded", "no_goal"):
@@ -280,7 +280,13 @@ async def review(db: AsyncSession, document: Document, version: DocumentVersion)
                 internal_title=item.title,
             )
         serves = item.item_key not in no_goal
-        shown = serves and state == "approved" and not leak_check.blocking(findings)
+        # A warning found since the text was approved (a decision named later) is not
+        # ticked: the text is left out until a person checks it again.
+        ticked = set(text.checked_warnings or []) if text else set()
+        unticked = set(leak_check.warnings(findings)) - ticked
+        shown = (
+            serves and state == "approved" and not leak_check.blocking(findings) and not unticked
+        )
         reason = None
         if not serves:
             reason = "no_goal"

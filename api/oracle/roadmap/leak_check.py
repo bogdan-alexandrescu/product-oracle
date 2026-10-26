@@ -59,13 +59,17 @@ BLOCKING = (
     "alternative_name",
     "internal_code",
     "internal_host",
-    # Beyond the spec's table: what a public text must never name either.
+)
+WARNINGS = (
+    "money_or_metric",
+    "date",
+    "internal_title_copy",
+    # Beyond the spec's table, warnings the approver ticks (owner decision, 2026-10-26):
     "internal_document",  # an approvers-only document (H8), by title or slug
     "decision",  # a decision's title (the decision log is internal)
     "pricing",  # a win/loss plan or quoted price (H9)
     "internal_note",  # five words or more copied from an item's internal note
 )
-WARNINGS = ("money_or_metric", "date", "internal_title_copy")
 
 # Shorter names match too often inside ordinary words to be told apart from them.
 MIN_NAME = 3
@@ -461,6 +465,7 @@ def _slug_forms(text: str) -> tuple[str, ...]:
     )
 
 
+@functools.lru_cache(maxsize=8192)
 def _letter(char: str) -> str | None:
     """The pattern of one character of a company's own record (a name, note or slug): any
     of its readings (:func:`_char_forms`), or a stand-in holding one; None when every
@@ -609,25 +614,114 @@ def _hosts(text: str, ctx: LeakContext) -> list[str]:
 
 
 def _note_copies(text: str, notes: list[str]) -> list[str]:
-    texts = [f" {form} " for form in _forms(text)]
+    """Each note that ``text`` copies NOTE_WORDS words or more of, as the first copied run's
+    words on their skeleton. Each word of a note (:func:`_note_words`) is matched once
+    against the text's words, then runs are found by position, so the cost grows with the
+    words, not the runs, and a company's notes from every roadmap version stay quick."""
+    forms = [form.split() for form in _forms(text)]
+    at: list[dict[str, list[int]]] = []  # each form: a word's positions
+    for tokens in forms:
+        positions: dict[str, list[int]] = {}
+        for i, token in enumerate(tokens):
+            positions.setdefault(token, []).append(i)
+        at.append(positions)
+    # The text's words by first character, so a note word is compiled and tried only
+    # against the words it could match.
+    by_first: dict[str, set[str]] = {}
+    for positions in at:
+        for token in positions:
+            by_first.setdefault(token[0], set()).add(token)
+    hits: dict[str, frozenset[str]] = {}  # a note word's pattern: the text words it matches
+
+    def matched(word: _NoteWord) -> frozenset[str]:
+        if word.pattern not in hits:
+            candidates = [
+                t
+                for f in word.firsts
+                for t in by_first.get(f, ())
+                if word.shortest <= len(t) <= word.longest and t[-1] in word.lasts
+            ]
+            compiled = _word_pattern(word.pattern) if candidates else None
+            hits[word.pattern] = frozenset(t for t in candidates if compiled.fullmatch(t))
+        return hits[word.pattern]
+
     out: list[str] = []
     for note in notes:
-        run = next((w for p, w in _note_runs(note or "") if any(p.search(t) for t in texts)), None)
-        if run:
-            out.append(run)
+        words = _note_words(note or "")
+        if len(words) < NOTE_WORDS:
+            continue
+        found = [matched(w) for w in words]
+        for start in range(len(words) - NOTE_WORDS + 1):
+            run = found[start : start + NOTE_WORDS]
+            if all(run) and any(_run_in(positions, run) for positions in at):
+                out.append(" ".join(w.plain for w in words[start : start + NOTE_WORDS]))
+                break
     return out
 
 
-@functools.lru_cache(maxsize=256)
-def _note_runs(note: str) -> tuple[tuple[re.Pattern[str], str], ...]:
-    """Each run of NOTE_WORDS words of an internal note: its pattern (:func:`_record_words`)
-    and its words on their skeleton."""
-    words = _record_words(note)
-    runs = (words[i : i + NOTE_WORDS] for i in range(len(words) - NOTE_WORDS + 1))
+def _run_in(positions: dict[str, list[int]], run: list[frozenset[str]]) -> bool:
+    """Whether one form of a text holds ``run`` (the words each place may hold) in a row."""
+    starts = {i for t in run[0] for i in positions.get(t, ())}
+    for k, words in enumerate(run[1:], 1):
+        here = {i for t in words for i in positions.get(t, ())}
+        starts = {i for i in starts if i + k in here}
+        if not starts:
+            return False
+    return bool(starts)
+
+
+@dataclass(frozen=True)
+class _NoteWord:
+    pattern: str  # :func:`_record_words`
+    plain: str  # on its skeleton
+    firsts: str  # the characters a text word it matches can start with
+    lasts: str  # ... and end with
+    shortest: int  # the lengths such a text word can have
+    longest: int
+
+
+# Every roadmap version's notes are read on each check: room for many thousands.
+@functools.lru_cache(maxsize=16384)
+def _note_words(note: str) -> tuple[_NoteWord, ...]:
+    """Each word of an internal note (:func:`_record_words`), with what a text word that
+    matches it can start and end with and how long it can be (:func:`_ends`)."""
+    letters: list[list[tuple[str, str, int, int]]] = []
+    in_word = False
+    for char in _read(note) + " ":
+        ends = _ends(char) if _letter(char) is not None else None
+        if ends is not None:
+            if not in_word:
+                letters.append([])
+            letters[-1].append(ends)
+        in_word = ends is not None
     return tuple(
-        (re.compile(" " + " ".join(p for p, _ in run) + " "), " ".join(w for _, w in run))
-        for run in runs
+        _NoteWord(
+            p, w, chars[0][0], chars[-1][1], sum(c[2] for c in chars), sum(c[3] for c in chars)
+        )  # fmt: skip
+        for (p, w), chars in zip(_record_words(note), letters, strict=True)
     )
+
+
+@functools.lru_cache(maxsize=8192)
+def _ends(char: str) -> tuple[str, str, int, int]:
+    """What a record's letter (:func:`_letter`) matches: the first and last characters of
+    each of its readings, with the stand-ins holding one, and the shortest and longest
+    reading."""
+    forms = _char_forms_cached(char)
+    words = sorted({"".join(_TOKEN.findall(f)) for f in forms} - {""})
+    stand_ins = [c for f in forms for c in _STAND_INS_FOR.get(f, "")]
+    lengths = [len(w) for w in words] + [1] * bool(stand_ins)
+    return (
+        "".join(dict.fromkeys([w[0] for w in words] + stand_ins)),
+        "".join(dict.fromkeys([w[-1] for w in words] + stand_ins)),
+        min(lengths),
+        max(lengths),
+    )
+
+
+@functools.lru_cache(maxsize=16384)
+def _word_pattern(pattern: str) -> re.Pattern[str]:
+    return re.compile(pattern)
 
 
 def _quarter_months(quarter: str | None) -> set[str]:

@@ -353,6 +353,27 @@ async def test_the_four_ticked_kinds_are_approved_once_ticked(client, ctx, over,
     assert [(f["code"], f["severity"]) for f in body["findings"]] == [(code, "warning")]
 
 
+async def test_a_warning_found_after_approving_leaves_the_text_out(client, ctx):
+    """protects=owner decision (2026-10-26): the four kinds no longer block, so a decision
+    recorded after a text was approved, whose title the text holds, leaves the text out
+    of the render until a person ticks it; fails_when=the unticked text is still shown."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    assert "Import your accounts in one go" in _text(
+        (await client.get(PREVIEW, headers=ctx.as_("approver"))).text
+    )
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Decision(number=8, title="Import your accounts", approver_id=ctx.users["owner"].id,
+                       driver="oracle", origin="manual"))  # fmt: skip
+        await s.commit()
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Import your accounts in one go" not in text
+    resp = await put_text(client, ctx, "bulk-import", checked_warnings=["decision"])
+    assert resp.status_code == 200, resp.text
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Import your accounts in one go" in text
+
+
 def test_the_four_ticked_kinds_are_warnings_and_names_still_block():
     """protects=owner decision (2026-10-26): exactly the four kinds moved to the warnings;
     people's names and the spec's other findings still block; fails_when=a kind is in the
