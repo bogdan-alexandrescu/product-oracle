@@ -118,10 +118,12 @@ test("a run that finished with no document: an Inbox row says why and what to do
 
   // Retry import on the run imports it and clears the row; the version's history says who
   // imported it again.
+  // The first visit's page stays in the DOM, hidden: only the row shown counts.
   await page.getByTestId("nav-inbox").click();
-  await page.getByRole("row").filter({ has: row }).getByRole("link", { name: "Open" }).click();
+  const seen = page.getByTestId("inbox-no-document").filter({ visible: true });
+  await page.getByRole("row").filter({ has: seen }).getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${NO_DOCUMENT_RUN}$`));
-  const prd = page.getByTestId("segment-prd_draft");
+  const prd = page.getByTestId("segment-prd_draft").filter({ visible: true });
   await prd.getByRole("button", { name: "Retry import" }).click();
   await expect(prd).toContainText("Imported as guest-checkout v");
   await noRowInTheInbox(page);
@@ -147,26 +149,26 @@ test("the No document row clears itself once a later run imports the document", 
   await page.getByTestId("segment-prd_draft").filter({ visible: true }).getByRole("button", { name: "Start a new run" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("PRD document")).toHaveValue("guest-checkout");
+  // Only the PRD review stops: the other stops are switched off.
+  const stops = dialog.getByRole("checkbox", { name: /^Stop for / });
+  await expect(stops.first()).toBeVisible();
+  for (const stop of await stops.all()) {
+    if (!/PRD review/.test((await stop.getAttribute("aria-label")) ?? "")) await stop.uncheck();
+  }
+  await expect(dialog.getByRole("checkbox", { name: "Stop for PRD review" })).toBeChecked();
   await dialog.getByRole("button", { name: "Estimate" }).click();
   await dialog.getByRole("button", { name: "Start run" }).click();
   await expect(page).not.toHaveURL(new RegExp(NO_DOCUMENT_RUN));
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const runUrl = page.url();
 
-  // Its stops approved up to the PRD review, which is decided in the version its draft made.
+  // The agents run to the PRD review, which is decided in the version its draft made.
   const prd = page.getByTestId("segment-prd_draft").filter({ visible: true });
   const review = prd.getByTestId("checkpoint-prd_review").filter({ hasText: "Waiting" });
-  for (let i = 0; i < 8 && !(await review.count()); i++) {
+  await expect(async () => {
     await page.getByRole("button", { name: "Check agents now" }).click();
-    const approve = page
-      .getByTestId(/^checkpoint-/)
-      .filter({ visible: true, hasText: "Waiting" })
-      .getByRole("button", { name: "Approve and continue" });
-    if (await approve.count()) {
-      await approve.first().click();
-      await expect(approve).toHaveCount(0);
-    }
-  }
+    await expect(review).toHaveCount(1, { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await review.getByRole("link", { name: "Open review" }).click();
   await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1\?run_review=/);
   const bar = page.getByTestId("run-review-bar").filter({ visible: true });
