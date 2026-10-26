@@ -18,6 +18,7 @@ import pytest
 from fastapi.routing import _IncludedRouter
 from sqlalchemy import select
 
+from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.auth.iap import ASSERTION_HEADER
 from oracle.auth.models import User
 from oracle.baseline.models import Entity, Proposal
@@ -73,11 +74,13 @@ async def _mcp_token(ctx, who: str) -> str:
 
 
 async def _senders(ctx) -> dict[str, dict[str, str]]:
-    run = await run_token(ctx.tenant_id, ["write:proposals"], ctx.users["owner"].id)
+    run = await run_token(ctx.tenant_id, ["write:proposals"], ctx.users["commenter"].id)
     mcp = await _mcp_token(ctx, "commenter")
     return {
         "commenter": ctx.as_("commenter"),
-        "run": {"Authorization": f"Bearer {run}"},
+        # A run's REST call, as the MCP server makes it in-process: its creator's session
+        # and the run token.
+        "run": {**ctx.as_("commenter"), RUN_TOKEN_HEADER: run},
         "mcp": {"Authorization": f"Bearer {mcp}"},
     }
 
@@ -277,16 +280,23 @@ async def test_a_same_origin_cookie_write_passes(client, ctx):
 
 
 async def test_bearer_tokens_are_not_browser_credentials(client, ctx):
-    """An API token, a run token and an MCP token write from anywhere."""
-    run = await run_token(ctx.tenant_id, ["write:proposals"], ctx.users["owner"].id)
+    """An API token and an MCP token write from anywhere; a run's in-process REST call
+    (its creator's session and the run token, no Origin) is not refused."""
     mcp = await _mcp_token(ctx, "approver")
-    for i, raw in enumerate((ctx.token, run, mcp)):
+    for i, raw in enumerate((ctx.token, mcp)):
         headers = {"Authorization": f"Bearer {raw}", "Origin": FOREIGN,
                    "sec-fetch-site": "cross-site"}  # fmt: skip
         fields = {"type": "feature", "key": f"from-bearer-{i}", "title": "Bearer"}
         body = {"op": "create", "kind": "entity", "fields": fields}
         resp = await client.post(f"{B}/proposals", json=body, headers=headers)
         assert resp.status_code == 201, (i, resp.text)
+    run = await run_token(ctx.tenant_id, ["write:proposals"], ctx.users["approver"].id)
+    body = {"op": "create", "kind": "entity",
+            "fields": {"type": "feature", "key": "from-run", "title": "Run"}}  # fmt: skip
+    headers = {**ctx.as_("approver"), RUN_TOKEN_HEADER: run}
+    resp = await client.post(f"{B}/proposals", json=body, headers=headers)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["proposer"]["kind"] == "run"
 
 
 RAW = {
