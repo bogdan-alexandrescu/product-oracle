@@ -470,7 +470,9 @@ async def test_retry_rechecks_under_the_lock_before_clearing_a_stuck_lookup(
 
     async def set_lost(value):
         async with tenant_session(tenant_id) as s:
-            seg = await s.scalar(select(RunSegment).where(RunSegment.run_id == run_id))
+            seg = await s.scalar(
+                select(RunSegment).where(RunSegment.run_id == run_id, RunSegment.seq == 1)
+            )
             art = dict(seg.artifacts)
             if value is None:
                 art.pop("lost")
@@ -500,7 +502,11 @@ async def test_advance_takes_the_current_attempt_not_the_last_listed(client, own
     use(swarm)
     run = await started(client, auth)
     async with tenant_session(tenant_id) as s:
-        seg = await s.scalar(select(RunSegment).where(RunSegment.run_id == uuid.UUID(run["id"])))
+        # The first segment: the run has more, and an unordered read returns whichever
+        # row the scan meets first (after an update, under load, not always this one).
+        seg = await s.scalar(
+            select(RunSegment).where(RunSegment.run_id == uuid.UUID(run["id"]), RunSegment.seq == 1)
+        )
         art = dict(seg.artifacts)
         # A found earlier submission listed after the current one (a higher number).
         art["attempts"] = [
