@@ -9,7 +9,7 @@ import { wordDiff } from "@/lib/diff";
 import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
-import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type NextDraftChangeRow, type StartRun } from "./next-draft";
+import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type AgentsRun, type NextDraftChangeRow, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -68,6 +68,8 @@ export type LlmContext = {
   runEstimateUsd?: () => number | null;
   /** D12: starts the agents' feedback-loop run for Build next draft. */
   startRun?: StartRun;
+  /** #574 review: the agents' feedback-loop run under way on the document, with the ids it was sent. */
+  agentsRun?: (docId: string) => AgentsRun | null;
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */

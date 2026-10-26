@@ -152,6 +152,8 @@ export type DiscussionsContext = {
   documentText?: (d: DiscussionRow) => DocumentSection[];
   /** F3 Date bases' rights for me (leads.date_rights): verify, propose, or none. */
   dateRights?: () => "verify" | "propose" | null;
+  /** G4: an approver's Stage of a section change on a document's discussion: writes its next_draft_changes row; returns its id. */
+  stageNextDraft?: (d: DiscussionRow, c: ChangeRow, reason: string | null) => string;
   /** F3's schedule-basis route (./roadmap.ts POST /v1/schedule-bases): Record writes through it. */
   recordBasis?: (body: Schemas["ScheduleBasisCreate"]) => Promise<Response>;
 };
@@ -984,7 +986,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         status: "staged",
         override_reason: str(input.override_reason) || null,
         reason: d.visibility === "private" ? str(input.reason) : null,
-        result_ref: { kind: c.target.run_id ? "checkpoint_action" : "next_draft_change", id: ctx.uuid() },
+        result_ref: c.target.run_id
+          ? { kind: "checkpoint_action", id: ctx.uuid() }
+          : { kind: "next_draft_change", id: (d.document_id && ctx.stageNextDraft?.(d, c, str(input.reason) || null)) || ctx.uuid() },
       });
       line(`${name} staged: ${c.label}`);
     } else if (verb === "Record") {

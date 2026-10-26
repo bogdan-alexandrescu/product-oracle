@@ -67,6 +67,7 @@ import {
   seedRuns,
   seedScopeReviewRuns,
   sendBackEntries,
+  BUILD_UNDER_WAY,
   type RunsContext,
   type RunsDb,
 } from "./runs";
@@ -1447,6 +1448,15 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
     },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
+    // #574 review: the agents' feedback-loop run under way on the document, as the API's agents_run.
+    agentsRun: (docId) => {
+      const run = ((db.runs?.runs ?? []) as SentRun[])
+        .filter((r) => r.flow === "feedback_loop" && r.document_id === docId && BUILD_UNDER_WAY.includes(r.status))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      if (!run) return null;
+      const sent = run.sent ? [...run.sent.feedback_ids, ...run.sent.suggestion_ids, ...(run.sent.next_draft_change_ids ?? [])] : [];
+      return { id: run.id, flow: run.flow, flow_title: run.flow_title, status: run.status, created_at: run.created_at, sent };
+    },
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -1969,7 +1979,11 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       }
       // G4: the discussions' section changes it was sent are applied in this version too.
       for (const r of db.llm?.next_draft_changes ?? []) {
-        if (sent?.next_draft_change_ids?.includes(r.id) && r.status === "staged") Object.assign(r, { status: "applied", applied_in_version: v.number });
+        if (!sent?.next_draft_change_ids?.includes(r.id) || r.status !== "staged" || r.document_id !== doc.id) continue;
+        Object.assign(r, { status: "applied", applied_in_version: v.number });
+        // As the API's import: the discussion change it came from is done.
+        const change = db.discussions?.changes?.find((c) => c.result_ref?.kind === "next_draft_change" && c.result_ref.id === r.id);
+        if (change?.status === "staged") Object.assign(change, { status: "done", decision_note: `Applied in draft ${v.number}` });
       }
       touch(db, doc.id);
       return {
@@ -3591,6 +3605,33 @@ async function route(db: Db, req: Request): Promise<Response> {
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
       slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
+      // G4: an approver's Stage of a section change writes its next_draft_changes row, as the API's.
+      stageNextDraft: (d, c, reason) => {
+        const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+        const rows = (llm.next_draft_changes ??= []);
+        const p = (c.edited_payload ?? c.payload) as { section_key?: string; instruction?: string; text?: string };
+        const version = typeof d.subject.version === "number" ? d.subject.version : null;
+        const latest = db.versions.filter((v) => v.document_id === d.document_id).reduce((n, v) => Math.max(n, v.number), 0);
+        const id = uuid();
+        rows.push({
+          id,
+          document_id: d.document_id!,
+          section_key: String(p.section_key ?? ""),
+          raised_on_version: version ?? (latest || 1),
+          instruction: String(p.instruction ?? "").slice(0, 1000),
+          text: p.text ?? null,
+          reason: reason?.trim().slice(0, 1000) || null,
+          status: "staged",
+          applied_in_version: null,
+          from_private: d.visibility === "private",
+          lock_version: 1,
+          discussion_id: d.id,
+          staged_by: me.id,
+          suggested_by: c.suggested_by ?? null,
+          created_at: now(),
+        });
+        return id;
+      },
       // G3 Record: F3's date rights and its schedule-basis route, as the API's record() uses them.
       dateRights: () => {
         const leads = engineeringLeads(db);

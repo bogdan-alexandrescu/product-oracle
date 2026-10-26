@@ -353,7 +353,7 @@ const PRD_DEFAULT_TEMPLATE = "oracle-default";
 const FACTOR = 1.5;
 const FINAL = ["succeeded", "failed", "cancelled"];
 // B1: a Build the baseline run in these states is under way; another is refused.
-const BUILD_UNDER_WAY: RunOut["status"][] = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+export const BUILD_UNDER_WAY: RunOut["status"][] = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
 
 /** As the API: one baseline build at a time (409 naming the one under way). */
 function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {

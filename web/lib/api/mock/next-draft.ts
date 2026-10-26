@@ -250,18 +250,39 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     });
   }
   const job = currentJob(ctx, doc.id);
-  const sections = new Set([...items, ...changes].filter((i) => !i.section_gone).map((i) => i.section_key));
+  // #574 review: what the agents' run under way was sent is in that run, not staged.
+  const run = ctx.agentsRun?.(doc.id) ?? null;
+  const sent = new Set(run?.sent ?? []);
+  const agents = agentItems(ctx, doc.id);
+  const free = <T,>(xs: T[], id: (x: T) => string) => xs.filter((x) => !sent.has(id(x)));
+  const held = <T,>(xs: T[], id: (x: T) => string) => xs.filter((x) => sent.has(id(x)));
+  const agentsRun: Schemas["NextDraftRun"] | null = run
+    ? {
+        id: run.id,
+        flow: run.flow,
+        flow_title: run.flow_title,
+        status: run.status,
+        created_at: run.created_at,
+        items: held(items, (i) => i.suggestion_id),
+        agent_items: held(agents, (a) => a.feedback_id),
+        next_draft_changes: held(changes, (c) => c.id),
+      }
+    : null;
+  const freeItems = free(items, (i) => i.suggestion_id);
+  const freeChanges = free(changes, (c) => c.id);
+  const sections = new Set([...freeItems, ...freeChanges].filter((i) => !i.section_gone).map((i) => i.section_key));
   return {
     document_id: doc.id,
     slug: doc.slug,
     latest_version: latest?.number ?? null,
     next_version: (latest?.number ?? 0) + 1,
-    items,
+    items: freeItems,
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
     draft_job: job,
-    agent_items: agentItems(ctx, doc.id),
-    next_draft_changes: changes,
+    agent_items: free(agents, (a) => a.feedback_id),
+    next_draft_changes: freeChanges,
+    agents_run: agentsRun,
   };
 }
 
@@ -293,6 +314,13 @@ function chosen(ctx: LlmContext, doc: Doc, input: Schemas["NextDraftIn"]): Chose
 export function runEstimate(ctx: LlmContext, depth: string): number {
   return ctx.runEstimateUsd?.() ?? RUN_BASE_USD * (DEPTH[depth] ?? 1);
 }
+
+/** #574 review: the agents' run under way on a document (as the API's agents_run), with the ids it was sent. */
+export type AgentsRun = Omit<Schemas["NextDraftRun"], "items" | "agent_items" | "next_draft_changes"> & { sent: string[] };
+
+/** The API's refusal while the agents' run is under way: a second build would make what it was sent again. */
+const runRefusal = (run: AgentsRun) =>
+  `the agents' run ${run.id} is writing this document's next draft; build again once it ends: ${globalThis.location?.origin ?? ""}/runs/${run.id}`;
 
 export type StartRun = (
   doc: Doc,
@@ -451,8 +479,10 @@ export async function nextDraftRoute(
     const latest = latestOf(ctx, doc.id);
     const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
     const hit = [...c.texts, ...c.rows].filter((t) => locked.has(t.section_key));
-    const refused =
-      engine === "agents"
+    const run = ctx.agentsRun?.(doc.id) ?? null;
+    const refused = run
+      ? runRefusal(run)
+      : engine === "agents"
         ? null
         : !enabled(doc)
           ? "Refinement is turned off for this document"
@@ -474,9 +504,13 @@ export async function nextDraftRoute(
 
   if (p[4] === "run" && m === "POST") {
     const input = (await body<Schemas["NextDraftRunIn"]>()) ?? {};
+    const run = ctx.agentsRun?.(doc.id) ?? null;
+    if (run) return fail(409, runRefusal(run));
     const c = chosen(ctx, doc, input);
     if (c instanceof Response) return c;
     if (chooseEngine(c.texts, c.agents).engine === "oracle") return fail(409, "these changes need no agents; build them with Oracle");
+    const pending = currentJob(ctx, doc.id);
+    if (pending) return fail(409, `Oracle's build of the next draft is pending (job ${pending.id}); apply or discard it first`);
     if (!hooks.startRun) return fail(503, "runs are not available");
     const depth = input.depth ?? "standard";
     return hooks.startRun(doc, {
@@ -493,6 +527,8 @@ export async function nextDraftRoute(
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
     if (!enabled(doc)) return fail(409, turnedOff("refinement"));
+    const run = ctx.agentsRun?.(doc.id) ?? null;
+    if (run) return fail(409, runRefusal(run));
     const pending = currentJob(ctx, doc.id);
     if (pending && ["queued", "running"].includes(pending.status)) {
       return fail(409, "the next draft is already being built; wait for it or discard it");
