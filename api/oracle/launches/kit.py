@@ -23,6 +23,13 @@ launch that is still ``todo`` or ``drafted`` to ``drafted`` with its text, repla
 launch's earlier Oracle draft changelog entries with the ones given (``draft``, never
 published here), and drafts the notes it names. An invalid one changes nothing but
 ``kit_error`` on the launch.
+
+#541 part 5: what the kit writes is read by every member (and some of it goes outside), so
+the run reads as a commenter (oracle.runs.flows ``member_output``) and the import checks
+its text the same way, whoever started it: a file whose text names a decision or a
+document a commenter may not see (oracle.docs.visibility ``Hidden.names``) is refused as
+an invalid one is. Its refs need no such check: a requester_ref names one of this
+launch's own notes, or nothing is drafted for it.
 """
 
 import re
@@ -34,7 +41,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
-from oracle.launches.checklist import tasks_of
+from oracle.docs import visibility
+from oracle.launches.checklist import BY_KEY, tasks_of
 from oracle.launches.models import (
     CHANGELOG_AUDIENCES,
     CHANGELOG_CATEGORIES,
@@ -73,7 +81,9 @@ def _text(value: Any, where: str, problems: list[str], *, empty: bool = True) ->
 
 
 def validate(text: str, launch_id: uuid.UUID) -> tuple[dict[str, Any] | None, list[str]]:
-    """(the file's data, []) or (None, problems)."""
+    """(the file's data, []) or (None, problems). #562 review: a problem repeats no key or
+    value the file holds (``kit_error`` is shown to every member): it names the allowed
+    ones instead."""
     try:
         data = safe_yaml.load(text)
     except safe_yaml.SafeYamlError as e:
@@ -84,10 +94,12 @@ def validate(text: str, launch_id: uuid.UUID) -> tuple[dict[str, Any] | None, li
     if data.get("version") != 1:
         problems.append("version must be 1")
     if str(data.get("launch")) != str(launch_id):
-        problems.append(f"launch is {data.get('launch')!r}, not this launch ({launch_id})")
+        problems.append(f"launch must be this launch ({launch_id})")
     unknown = set(data) - {"version", "launch", "changelog", "tasks", "notes"}
     if unknown:
-        problems.append(f"unknown keys: {', '.join(sorted(map(str, unknown)))}")
+        problems.append(
+            f"{len(unknown)} unknown key(s): the keys are version, launch, changelog, tasks, notes"
+        )
     changelog = data.get("changelog") or []
     if not isinstance(changelog, list):
         problems.append("changelog must be a list")
@@ -120,11 +132,17 @@ def validate(text: str, launch_id: uuid.UUID) -> tuple[dict[str, Any] | None, li
                     problems.append(f"tasks.pre_mortem.{part} must be a list of strings")
             extra = set(value) - {p for p, _, _ in PRE_MORTEM}
             if extra:
-                problems.append(f"tasks.pre_mortem has unknown keys: {', '.join(map(str, extra))}")
+                problems.append(
+                    f"tasks.pre_mortem has {len(extra)} unknown key(s): the keys are "
+                    + ", ".join(p for p, _, _ in PRE_MORTEM)
+                )
         elif key in TEXT_TASKS:
             _text(value, f"tasks.{key}", problems)
         else:
-            problems.append(f"tasks.{key}: Oracle drafts no task {key!r}")
+            problems.append(
+                "tasks names a task Oracle drafts no text for: the tasks are pre_mortem, "
+                + ", ".join(TEXT_TASKS)
+            )
     notes = data.get("notes") or []
     if not isinstance(notes, list):
         problems.append("notes must be a list")
@@ -169,9 +187,34 @@ def _note_for(notes: list[RequesterNote], ref: str) -> RequesterNote | None:
     return None
 
 
-async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict[str, Any]:
+def _texts(data: dict[str, Any]) -> list[tuple[str, str]]:
+    """(where, text) of every text the file would store."""
+    out: list[tuple[str, str]] = []
+    for i, e in enumerate(data.get("changelog") or []):
+        out.append((f"changelog[{i}].title", e["title"]))
+        out.append((f"changelog[{i}].body", e.get("body") or ""))
+    for key, value in (data.get("tasks") or {}).items():
+        out.append((f"tasks.{key}", pre_mortem_markdown(value) if key == "pre_mortem" else value))
+    for i, n in enumerate(data.get("notes") or []):
+        out.append((f"notes[{i}].body", n["body"]))
+    return out
+
+
+async def names_hidden(db: AsyncSession, data: dict[str, Any]) -> list[str]:
+    """Where the file's text names something a commenter may not see."""
+    hidden = await visibility.hidden_for_reader(db, as_member=True)
+    if hidden is None:
+        return []
+    return [where for where, text in _texts(data) if hidden.names(text)]
+
+
+async def import_kit(
+    db: AsyncSession, launch: Launch, text: str | None, *, external: bool = True
+) -> dict[str, Any]:
     """Import a launch.yaml into its launch (the caller commits). Returns what changed,
-    or ``{"error": ...}`` (recorded as ``kit_error``)."""
+    or ``{"error": ...}`` (recorded as ``kit_error``). ``external=False`` (H11
+    ``external_messages`` at Observe): only internal tasks, internal changelog entries and
+    notes to members are taken; words for people outside are left to people."""
     if text is None:
         launch.kit_error = f"the run left no {FILE}"
         return {"error": launch.kit_error}
@@ -179,11 +222,22 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
     if data is None:
         launch.kit_error = f"{FILE} was refused: " + "; ".join(problems[:5])
         return {"error": launch.kit_error, "problems": problems}
+    named = await names_hidden(db, data)
+    if named:
+        problems = [
+            f"{where} names a decision or a document only owners and approvers may see: leave "
+            "it out (every member reads the kit)"
+            for where in named
+        ]
+        launch.kit_error = f"{FILE} was refused: " + "; ".join(problems[:5])
+        return {"error": launch.kit_error, "problems": problems}
     tasks = {t.key: t for t in await tasks_of(db, launch.id) if t.key}
     drafted: list[str] = []
 
     def draft(key: str, body: str) -> None:
         task = tasks.get(key)
+        if not external and (key not in BY_KEY or BY_KEY[key].audience == "external"):
+            return
         if task is not None and task.status in ("todo", "drafted"):
             task.body = body
             task.status = "drafted"
@@ -213,6 +267,7 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
             created_actor=audit.ORACLE,
         )
         for e in data.get("changelog") or []
+        if external or e["audience"] == "internal"
     ]
     db.add_all(entries)
     if entries:
@@ -224,7 +279,9 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
     noted = 0
     for n in data.get("notes") or []:
         note = _note_for(notes, n["requester_ref"])
-        if note is not None and note.status == "drafted":
+        if note is None or note.status != "drafted":
+            continue
+        if external or note.requester_kind == "member":
             note.body = n["body"].strip()
             noted += 1
     if noted:

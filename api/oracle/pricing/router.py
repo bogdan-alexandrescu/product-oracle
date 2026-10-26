@@ -12,7 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now, require_role_or_absent
 from oracle.decisions import service as decisions_service
 from oracle.decisions.schemas import DecisionOut
@@ -48,8 +48,8 @@ OUTCOME_ERRORS = {
     404: {"description": "No such record in this company, or a reader below approver"},
     409: {"description": "Stale lock_version"},
     422: {"description": "A result or reason outside its list, Other without a note, a "
-          "future decided_on, a value without its currency, or another person's source "
-          "item"},
+          "future decided_on, a value without its currency, another person's source "
+          "item, or an alternative that is not one of the company's active ones"},
 }  # fmt: skip
 
 
@@ -61,11 +61,17 @@ async def list_deal_outcomes(
     reason: Reason | None = None,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
+    competitor_id: uuid.UUID | None = None,
 ) -> list[DealOutcomeOut]:
     """Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are
-    inclusive days."""
+    inclusive days; ``competitor_id`` keeps the records linked to that alternative."""
     return await outcomes.list_outcomes(
-        db, result=result, reason=reason, date_from=date_from, date_to=date_to
+        db,
+        result=result,
+        reason=reason,
+        date_from=date_from,
+        date_to=date_to,
+        competitor_id=competitor_id,
     )
 
 
@@ -121,6 +127,7 @@ async def delete_deal_outcome(outcome_id: uuid.UUID, db: TenantDB, principal: Ap
 @router.post(
     "/deal-outcomes/import",
     response_model=ImportOut,
+    dependencies=[body_type("text/csv", "application/csv")],
     responses={
         **OUTCOME_ERRORS,
         422: {"description": "Over 1 MB or 2,000 rows, no header row, or not UTF-8 CSV"},

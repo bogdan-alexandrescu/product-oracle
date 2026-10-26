@@ -28,7 +28,7 @@ from oracle.config import get_settings
 from oracle.main import app
 from oracle.mcp import scopes
 from oracle.runs.models import Run
-from oracle.runtokens import SCOPES, mint_run_token
+from oracle.runtokens import SCOPES, mint_run_token, verify_run_token
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings import TenantSetting
 from oracle.web import robots
@@ -142,7 +142,11 @@ async def _run_token(tenant_id: uuid.UUID, user: User, run_scopes: list[str]) ->
 
 
 async def _as_run(tenant_id: uuid.UUID, user: User, run_scopes=("read:web",)) -> dict:
-    return {**_session(user), RUN_TOKEN_HEADER: await _run_token(tenant_id, user, run_scopes)}
+    """What Oracle's MCP server sends for a run token: the token and the run binding."""
+    raw = await _run_token(tenant_id, user, run_scopes)
+    claims = await verify_run_token(raw)
+    binding = auth_service.sign_run_binding(user.id, claims.run_id)
+    return {**_session(user), RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
 
 
 @pytest.fixture

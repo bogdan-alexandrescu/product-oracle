@@ -101,11 +101,15 @@ export function OccurrenceDetail({ id }: { id: string }) {
         </span>
       </p>
       <div className="flex flex-col gap-3">
-        <SummaryCard
-          occ={occ}
-          canAsk={can("summarize_ritual_occurrence") && (occ.kind !== "metrics_review" || openVariances(blocks, live) > 0)}
-          onChanged={reload}
-        />
+        {occ.kind === "baseline_rebuild" ? (
+          <RebuildCard occ={occ} blocks={blocks} canBuild={can("confirm_entity")} />
+        ) : (
+          <SummaryCard
+            occ={occ}
+            canAsk={can("summarize_ritual_occurrence") && (occ.kind !== "metrics_review" || openVariances(blocks, live) > 0)}
+            onChanged={reload}
+          />
+        )}
         {blocks.length === 0 ? (
           <Panel title="Pre-read">
             <p className="px-4 py-3 text-sm text-text2">The pre-read is not ready yet</p>
@@ -244,6 +248,7 @@ const NO_CITATIONS = new Map();
 
 /**
  * Oracle's summary: written, being written, failed or not started, or Summarize with Oracle.
+ * Every kind's summary is Markdown, drawn with MarkdownBody (#556).
  * A competitive digest's is the digest (H7): Markdown the importer cleaned (no raw HTML, links
  * only to Oracle pages and this run's recorded results), written with "Write the digest with
  * Oracle". A metrics review's is Explain with Oracle (H5: its own run drafts each variance's
@@ -260,7 +265,8 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
     : metrics
       ? { title: "Summary", ask: "Explain with Oracle", running: "Writing…", failed: "Summary failed · Explain with Oracle to retry", none: "No summary" }
       : { title: "Summary", ask: "Summarize with Oracle", running: "Writing the summary…", failed: "Summary failed · Summarize with Oracle to retry", none: "No summary" };
-  const body = useMemo(() => (digest && occ.summary ? parseBlocks(occ.summary) : null), [digest, occ.summary]);
+  // #556: every kind's summary is Markdown; it renders as the digest's does (links only where isSafeHref allows).
+  const body = useMemo(() => (occ.summary ? parseBlocks(occ.summary) : null), [occ.summary]);
   const ask = async () => {
     setBusy(true);
     setError(null);
@@ -284,13 +290,9 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
       <h2 className="mb-1 font-display text-[17px] font-bold">{words.title}</h2>
       {occ.summary_state === "ready" && occ.summary ? (
         <>
-          {body ? (
-            <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
-              <MarkdownBody blocks={body} highlights={NO_HIGHLIGHTS} activeId={null} citations={NO_CITATIONS} onHighlightClick={() => {}} />
-            </div>
-          ) : (
-            <p className="text-[15px] whitespace-pre-wrap">{occ.summary}</p>
-          )}
+          <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
+            <MarkdownBody blocks={body ?? []} highlights={NO_HIGHLIGHTS} activeId={null} citations={NO_CITATIONS} onHighlightClick={() => {}} />
+          </div>
           <p className="mt-1 text-[13px] text-text2">Written by Oracle</p>
         </>
       ) : occ.summary_state === "running" ? (
@@ -307,6 +309,46 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
+    </section>
+  );
+}
+
+/**
+ * The Baseline rebuild's build (oracle.rituals.rebuild): B1's Build the baseline run Oracle
+ * started with its estimate (over $50 it says it waits for an owner's approval, P3), or why it
+ * started none (Observe, a build under way) with B1's sheet one click away. Its proposals are reviewed as B1's are.
+ */
+function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block[]; canBuild: boolean }) {
+  const estimate = blocks.flatMap((b) => b.rows.map((r) => r.text ?? "")).find((t) => t.startsWith("Estimate "));
+  const run = occ.summary_run_id ? `/runs/${occ.summary_run_id}` : null;
+  const build = canBuild && <LinkButton href="/baseline?build=1">Build the baseline</LinkButton>;
+  return (
+    <section data-testid="occurrence-rebuild" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
+      <h2 className="mb-1 font-display text-[17px] font-bold">Baseline build</h2>
+      {occ.summary_state === "running" && run ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm">
+            Oracle started the baseline build{estimate ? ` · ${estimate}` : ""}. {occ.summary_note ?? "Its proposals wait for your review."}
+          </p>
+          <LinkButton href={run}>Open run</LinkButton>
+        </div>
+      ) : occ.summary_state === "ready" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm">The build finished. Its proposals are on the Baseline page.</p>
+          <LinkButton href="/baseline">Open baseline</LinkButton>
+        </div>
+      ) : occ.summary_state === "failed" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-crit">{occ.summary_note ?? "The baseline build did not finish"}</p>
+          {run && <LinkButton href={run}>Open run</LinkButton>}
+          {build}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-text2">{occ.summary_note ?? "Oracle starts the build when the rebuild falls due."}</p>
+          {occ.summary_state === "not_started" && build}
+        </div>
+      )}
     </section>
   );
 }

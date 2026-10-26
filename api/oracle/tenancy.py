@@ -13,8 +13,23 @@ With a tenant set:
 Limits: filtering applies to ORM entities. Core statements against ``Table`` objects
 and ``text()`` are not rewritten; avoid them in request code.
 
-``unscoped_session()`` skips all of this. It exists for the two places that must work
-before a tenant is known (authentication lookups, the seed command) and nowhere else.
+``unscoped_session()`` skips all of this. The rule: use it only where no tenant is known
+yet or the work is no single tenant's, and keep it to the lookup; whatever then reads
+or writes a company's rows opens ``tenant_session`` for that company. Its users today:
+
+- Credential and link lookups, which find the tenant from a globally unique key before
+  one is known: passwords (``oracle.auth.service.authenticate_user``), API tokens
+  (``resolve_api_token``), run tokens (``oracle.runtokens.verify_run_token``), MCP OAuth
+  access tokens and clients (``oracle.mcp.oauth.verify``, ``oracle.mcp.oauth.service``),
+  public interview links (``oracle.interviews.public``), a Slack team's install
+  (``oracle.slack.events``) and IAP's default company (``oracle.auth.iap``).
+- Loops over every company, which list tenant ids and then work in each one's own
+  ``tenant_session``: the job worker (``oracle.jobs.worker``), the ticker
+  (``oracle.ticker.router``), the Claude account sweep (``oracle.claude_accounts.sweep``)
+  and the built-in module seed (``oracle.modules.service.seed_all_companies``).
+- Deployment-wide work: the runtime's learned features (``oracle.swarm.learned``, no
+  tenant column), the version-link repair (``oracle.sources.repair``, one ``text()``
+  UPDATE over every company's rows) and the seed command (``oracle.seed``).
 """
 
 import uuid
@@ -115,7 +130,7 @@ async def tenant_session(tenant_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
 
 @asynccontextmanager
 async def unscoped_session() -> AsyncIterator[AsyncSession]:
-    """A session with tenant scoping OFF. Auth lookups and seeding only."""
+    """A session with tenant scoping OFF: only as the module docstring lists."""
     async with get_sessionmaker()() as session:
         session.info[UNSCOPED_KEY] = True
         yield session

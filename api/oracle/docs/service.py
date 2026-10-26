@@ -828,6 +828,33 @@ def draft_revisions(draft: ParsedDraft, layer_of: dict[str, str]) -> dict[str, s
     }
 
 
+# #541 part 5: a run that reads as a member wrote a draft naming what a member may not see.
+NAMES_HIDDEN = "names_hidden"
+
+
+async def check_member_draft(db: AsyncSession, run_id: uuid.UUID, markdown: str) -> None:
+    """Refuse the draft of a run that reads as a member (a draft of a company-wide
+    document, oracle.runs.service.reads_as_member) when it names a decision or a
+    document a commenter may not see (its number, title or id: oracle.docs.visibility
+    ``Hidden.names``). The refusal names nothing hidden; the run sends it back to the
+    writer as any refused draft."""
+    from oracle.docs import visibility
+    from oracle.runs.models import Run
+    from oracle.runs.service import reads_as_member
+
+    run = await db.get(Run, run_id)
+    if run is None or not await reads_as_member(db, run):
+        return
+    hidden = await visibility.hidden_for_reader(db, as_member=True)
+    if hidden is not None and hidden.names(markdown):
+        raise DraftError([ImportProblem(
+            code=NAMES_HIDDEN,
+            message="the draft names a decision or a document that only owners and approvers "
+            "may see (its number, title or id), and every member reads this document: leave "
+            "it out",
+        )])  # fmt: skip
+
+
 async def import_draft(
     db: AsyncSession,
     doc: str,
@@ -909,6 +936,8 @@ async def import_draft(
     draft = await parse_draft_async(markdown)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
+    if run_id is not None:
+        await check_member_draft(db, run_id, markdown)
     held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
@@ -1262,6 +1291,13 @@ async def import_draft(
             **({"held_sections": sorted(held)} if held else {}),
         },
     )
+    if not template_only:
+        # Slack pings: the reviewers who chose "draft ready" (oracle.slack.pings).
+        from oracle.slack import pings
+
+        await pings.draft_ready(
+            db, document, version.number, principal.user_id if principal else None
+        )
     await (db.commit() if commit else db.flush())
     if dates is not None:
         # The version's text is the draft's: reading it parses nothing again.

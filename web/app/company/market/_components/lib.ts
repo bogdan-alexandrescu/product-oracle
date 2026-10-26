@@ -103,13 +103,16 @@ export const REASONS: Record<Reason, string> = {
 export const CURRENCIES = ["USD", "EUR", "GBP"] as const;
 
 /**
- * The alternative a record names. H7's alternatives have landed, but an imported file's
- * alternative column is not matched to them: the import keeps it as text, "Alternative: <name>"
- * in the note (api oracle/pricing/outcomes.py), and this reads it back.
+ * The alternative a record names: the linked H7 alternative's name, else the text an import
+ * kept for a name that is none of the company's alternatives, "Alternative: <name>" in the
+ * note (api oracle/pricing/outcomes.py).
  */
-export function alternativeOf(d: Pick<Deal, "reason_note">): string | null {
-  return /(?:^|\n)Alternative: (.+)$/m.exec(d.reason_note ?? "")?.[1] ?? null;
+export function alternativeOf(d: Pick<Deal, "competitor_name" | "reason_note">): string | null {
+  return d.competitor_name ?? /(?:^|\n)Alternative: (.+)$/m.exec(d.reason_note ?? "")?.[1] ?? null;
 }
+
+/** An alternative as the Win and loss filter and form list it: archived ones say so. */
+export const alternativeLabel = (c: Pick<Competitor, "name" | "status">) => (c.status === "archived" ? `${c.name} (archived)` : c.name);
 
 /** The pricing memo list's key, shared by the Pricing tab and a memo's header. */
 export const MEMOS_KEY = "pricing-memos";

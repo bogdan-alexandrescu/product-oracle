@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
+import { SlackPingsPanel } from "@/components/account/SlackPingsPanel";
 import { Expiry, expiryText, Scopes, TokenStatus, tokenState, when } from "@/components/ApiTokensSettings";
 import { ROLE_LABEL } from "@/components/MembersSettings";
 import { Field, INPUT } from "@/app/settings/_components/fields";
@@ -44,7 +45,7 @@ const lifetimeDays = (l: Lifetime) => (l === "never" ? null : (Number(l) as 30 |
 /** What a password change and Sign out everywhere also revoke (AC1). */
 const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)";
 
-/** My account: every signed-in member's own sign-in, password, personal tokens, MCP clients. */
+/** My account: every signed-in member's own sign-in, password, personal tokens, MCP clients, Slack pings. */
 export function MyAccount() {
   const router = useRouter();
   const { clear } = useMe();
@@ -120,6 +121,7 @@ export function MyAccount() {
         {account && <PasswordPanel account={account} onChanged={refreshCredentials} />}
         <TokensPanel query={tokensQ} />
         <ClientsPanel query={clientsQ} />
+        <SlackPingsPanel />
       </Split>
       <ConfirmDialog
         open={signOutOpen}

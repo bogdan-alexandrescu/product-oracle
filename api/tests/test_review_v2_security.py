@@ -382,7 +382,8 @@ async def test_a_forged_run_header_is_refused(client):
     resp = await client.get(
         f"/v1/documents/{DOC}", headers={**ctx.auth, "x-oracle-run-token": "ort_forged"}
     )
-    assert resp.status_code == 401
+    # Refused before it is read: a run token counts only in Oracle's in-process MCP call.
+    assert resp.status_code == 403
 
 
 async def _agent_import(ctx, markdown: str):

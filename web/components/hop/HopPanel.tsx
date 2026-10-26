@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
-import { Button, Chip, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
+import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -197,81 +197,6 @@ function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (id: stri
   );
 }
 
-const CHANGE_STATUS: Record<Schemas["DiscussionChangeOut"]["status"], string> = {
-  proposed: "Proposed",
-  suggested: "Suggested",
-  staged: "Staged",
-  done: "Done",
-  dismissed: "Dismissed",
-  superseded: "Superseded",
-};
-
-/** "Section 1. Behaviour is approved and locked" when a section_edit's section is (G4): never staged. */
-async function lockedReason(c: Schemas["DiscussionChangeOut"]): Promise<string | null> {
-  if (c.kind !== "section_edit") return null;
-  const doc = String(c.target.document_id ?? "");
-  if (!doc) return null;
-  const n = Number(c.target.version) || (await unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } }))).latest_version;
-  if (!n) return null;
-  const v = await unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } }));
-  const key = String((c.edited_payload ?? c.payload).section_key ?? c.target.section_key);
-  const s = v.sections.find((x) => x.section_key === key);
-  if (!s || s.verdict?.verdict !== "approved" || s.verdict.lapsed_at) return null;
-  const name = /^\d/.test(s.heading) ? s.heading : `${s.ordinal}. ${s.heading}`;
-  return `Section ${name} is approved and locked`;
-}
-
-/**
- * The changes Oracle proposed in this chat (G3), each with its status. Approvers see Stage
- * (c6; commenters never stage, so it is hidden for them): disabled with the reason, since a
- * locked section is never changed and staging from the panel is not open yet.
- */
-function ChangesCard({ id, tick }: { id: string; tick: number }) {
-  const { can } = useMe();
-  const [changes, setChanges] = useState<(Schemas["DiscussionChangeOut"] & { locked: string | null })[]>([]);
-  useEffect(() => {
-    let live = true;
-    unwrap(api.GET("/v1/discussions/{discussion_id}/changes", { params: { path: { discussion_id: id } } }))
-      .then((rows) => Promise.all(rows.map(async (c) => ({ ...c, locked: await lockedReason(c).catch(() => null) }))))
-      .then((rows) => live && setChanges(rows))
-      .catch(() => live && setChanges([]));
-    return () => {
-      live = false;
-    };
-  }, [id, tick]);
-  if (!changes.length) return null;
-  // #370 fixes 4: can() decides (stage_discussion_change: an approver's on any change).
-  const stages = can("stage_discussion_change");
-  return (
-    <section aria-label="Changes" className="flex flex-col gap-2 rounded-lg border border-line p-3" data-testid="hop-changes">
-      <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">Changes</h3>
-      <ul className="flex flex-col gap-3">
-        {changes.map((c) => {
-          const why = c.locked ?? "Staging is not open yet";
-          return (
-            <li key={c.id} className="flex flex-col gap-1.5 text-[15px]" data-testid="hop-change">
-              <div className="flex min-w-0 items-start gap-2">
-                <span className="min-w-0 flex-1 break-words">{c.label}</span>
-                <Chip kind="acc">{CHANGE_STATUS[c.status]}</Chip>
-              </div>
-              {stages && c.kind === "section_edit" && c.status === "proposed" && (
-                <div className="flex flex-col items-start gap-1">
-                  <Button variant="ghost" disabled title={why} aria-describedby={`stage-why-${c.id}`}>
-                    Stage
-                  </Button>
-                  <span id={`stage-why-${c.id}`} className="text-sm font-medium text-warn" data-testid="hop-change-blocked">
-                    {why}
-                  </span>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
 /** The thread's own subject and starter, for the header's About chip and Share as discussion. */
 function useDiscussion(id: string | null, tick: number) {
   const [d, setD] = useState<Schemas["DiscussionOut"] | null>(null);
@@ -291,7 +216,8 @@ function useDiscussion(id: string | null, tick: number) {
 /**
  * The head-of-product panel (G7): "Ask Oracle", what it is about (this page or General),
  * the chats here and the reader's recent ones, a new chat, and a chat's thread with Share
- * as discussion. Panel chats are private: just the reader and Oracle.
+ * as discussion. Panel chats are private: just the reader and Oracle. The thread carries
+ * G3's changes card and its actions (Stage, Suggest, Edit, Dismiss…) as anywhere else.
  */
 export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {
   const { can } = useMe();
@@ -402,7 +328,6 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
               }}
               onChanged={() => setTick((t) => t + 1)}
             />
-            <ChangesCard id={view.id} tick={tick} />
             {isPanelChat && d.me.can_manage && writes && (
               <div>
                 <Button variant="ghost" icon="comment" onClick={() => setView({ kind: "share", id: view.id })}>

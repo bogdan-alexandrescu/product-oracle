@@ -103,6 +103,7 @@ from oracle.roadmap.schemas import (
 )
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import KnobsIn, RunCreate, RunOut
+from oracle.tenancy import current_tenant
 from oracle.trace import router as _trace_router  # noqa: F401 - trace.mark_stale runs first
 
 router = APIRouter(prefix="/v1", tags=["roadmaps"])
@@ -1028,7 +1029,9 @@ async def _is_disabled(db: AsyncSession, member: User) -> bool:
         return False
     return bool(
         await db.scalar(
-            text("SELECT disabled_at IS NOT NULL FROM users WHERE id = :id"), {"id": member.id}
+            # text(): the tenant scope (oracle.tenancy) does not apply, so name it here.
+            text("SELECT disabled_at IS NOT NULL FROM users WHERE id = :id AND tenant_id = :t"),
+            {"id": member.id, "t": current_tenant(db)},
         )
     )
 

@@ -328,6 +328,58 @@ test("a rejected draft: Send back to writer pre-fills Request changes with the s
   await expect(status(page)).toHaveText("Running");
 });
 
+test("Send back to writer fills the segment's own review, not another stop waiting on it", async ({ page }) => {
+  // protects=hardening 2026-10-20 (sendBack); fails_when=the refusal's summary lands in the
+  // first deciding stop's note when that stop is not the segment's own review;
+  // no_claim=what Request changes sends (the test above).
+  await login(page);
+  const id = await seedRejectedDraft(page, true);
+  // Another stop of the same segment waits on me, listed before the segment's own review.
+  await page.evaluate((id) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const run = db.runs.runs.find((r: { id: string }) => r.id === id);
+    const own = run.checkpoints.find((c: { kind: string }) => c.kind === "prd_review");
+    run.checkpoints.unshift({ ...own, id: crypto.randomUUID(), kind: "roadmap_review", payload: { segment_seq: 4 } });
+    localStorage.setItem(key, JSON.stringify(db));
+  }, id);
+  await page.goto(`/runs/${id}`);
+  const prd = page.getByTestId("segment-prd_draft");
+  const other = prd.getByTestId("checkpoint-roadmap_review").getByLabel("Note for the agents");
+  const note = prd.getByTestId("checkpoint-prd_review").getByLabel("Note for the agents");
+  await expect(other).toHaveValue("");
+  await prd.getByRole("button", { name: "Send back to writer" }).click();
+  await expect(note).toHaveValue(SUMMARY);
+  await expect(note).toBeFocused();
+  await expect(other).toHaveValue("");
+});
+
+test("the in-page ask makes the page behind it inert, and gives focus back on close", async ({ page }) => {
+  // protects=hardening 2026-10-20 (ConfirmDialog); fails_when=the page behind the ask can
+  // be clicked or read by assistive technology while it is open, or stays inert after it;
+  // no_claim=the ask's own keys (the cancel test above).
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  const cancel = page.getByTestId("run-cancel").filter({ visible: true });
+  const ask = page.getByRole("alertdialog", { name: "Cancel run" });
+  const main = page.locator("main");
+  await expect(main).not.toHaveAttribute("inert");
+  await cancel.click();
+  await expect(ask).toBeVisible();
+  await expect(main).toHaveAttribute("inert", "");
+  // The run's own controls and the navigation are behind it: inert, not just key-trapped.
+  const inert = (el: Element) => el.closest("[inert]") !== null;
+  expect(await cancel.evaluate(inert)).toBe(true);
+  expect(await page.getByTestId("nav-runs").first().evaluate(inert)).toBe(true);
+  expect(await ask.evaluate(inert)).toBe(false);
+  await ask.getByRole("button", { name: "Back" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(main).not.toHaveAttribute("inert");
+  await expect(cancel).toBeFocused();
+  await expect(page.locator("[inert]")).toHaveCount(0);
+});
+
 test("Decide scrolls to the decision panel and focuses it", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 520 });
   await login(page);

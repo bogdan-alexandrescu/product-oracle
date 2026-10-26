@@ -19,7 +19,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
-from oracle import audit, changes
+from oracle import audit, autonomy_drafts, changes
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.launches import changelog, service
@@ -46,10 +46,14 @@ from oracle.launches.schemas import (
     TaskPatch,
 )
 from oracle.roadmap import router as _roadmap_router  # noqa: F401 - roadmap.items runs first
+from oracle.runs import extensions
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 
 router = APIRouter(prefix="/v1", tags=["launches"])
+
+# H11 external_messages: at Observe the kit run is told to keep to internal words.
+extensions.register_prompt_lines("launch_kit", autonomy_drafts.kit_lines)
 
 Reader = Annotated[Principal, Depends(require_role("viewer"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
@@ -189,7 +193,7 @@ async def add_launch_task(
         raise _fail(e) from e
     await db.commit()
     await db.refresh(task)
-    return service.task_out(task, service.effective_tier(launch))
+    return service.task_out(task, service.effective_tier(launch), await service.hidden_for(db))
 
 
 @router.patch("/launch-tasks/{task_id}", response_model=TaskOut)
@@ -212,7 +216,8 @@ async def update_launch_task(
     await db.commit()
     await db.refresh(task)
     launch = await db.get(Launch, task.launch_id)
-    return service.task_out(task, service.effective_tier(launch) if launch else None)
+    tier = service.effective_tier(launch) if launch else None
+    return service.task_out(task, tier, await service.hidden_for(db))
 
 
 # --- requester notes ----------------------------------------------------------------------------
@@ -231,7 +236,8 @@ async def list_requester_notes(
         .where(RequesterNote.launch_id == launch_id)
         .order_by(RequesterNote.created_at, RequesterNote.id)
     )
-    return [service.note_out(n) for n in rows]
+    hidden = await service.hidden_for(db)
+    return [service.note_out(n, hidden) for n in rows]
 
 
 @router.post("/launches/{launch_id}/notes", response_model=RequesterNoteOut, status_code=201)
@@ -245,7 +251,7 @@ async def add_requester(
     )
     await db.commit()
     await db.refresh(note)
-    return service.note_out(note)
+    return service.note_out(note, await service.hidden_for(db))
 
 
 @router.patch("/requester-notes/{note_id}", response_model=RequesterNoteOut)
@@ -272,7 +278,7 @@ async def update_requester_note(
         raise _fail(e) from e
     await db.commit()
     await db.refresh(note)
-    return service.note_out(note)
+    return service.note_out(note, await service.hidden_for(db))
 
 
 @router.post("/launches/{launch_id}/notify-members", response_model=NotifiedOut)
@@ -309,7 +315,9 @@ async def list_changelog(
         query = query.where(ChangelogEntry.status == status_)
     if since is not None:
         query = query.where(ChangelogEntry.released_on >= since)
-    return list(await db.scalars(query.limit(limit)))
+    rows = list(await db.scalars(query.limit(limit)))
+    # #541 part 5: a draft naming what the reader may not see is left out for them.
+    return service.changelog_shown(rows, await service.hidden_for(db))
 
 
 @router.get(

@@ -179,7 +179,8 @@ async def test_a_disabled_member_cannot_act_through_mcp_or_a_run(client):
 async def test_a_disabled_creators_run_token_header_is_refused(client):
     """The in-process REST call for a run carries the creator's session and the run
     token; a disabled creator's is refused even with a session minted earlier."""
-    from oracle.auth.deps import RUN_TOKEN_HEADER
+    from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+    from oracle.auth.service import sign_run_binding
 
     ctx = await setup(client)
     pm = await person(ctx.tenant_id, "approver", "pm")
@@ -189,7 +190,8 @@ async def test_a_disabled_creators_run_token_header_is_refused(client):
         await s.flush()
         raw = await mint_run_token(s, run.id, ["read:documents"], 600)
         await s.commit()
-    headers = {**pm.headers, RUN_TOKEN_HEADER: raw}
+    binding = sign_run_binding(pm.user_id, run.id)
+    headers = {**pm.headers, RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
     assert (await client.get(f"/v1/documents/{DOC}", headers=headers)).status_code == 200
     assert (await disable(client, ctx, pm.user_id)).status_code == 200
     assert (await client.get(f"/v1/documents/{DOC}", headers=headers)).status_code == 401

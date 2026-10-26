@@ -5,7 +5,7 @@ tenant_settings, user_preferences); nothing here proves the web draws it (web/e2
 """
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import delete, event
@@ -124,7 +124,7 @@ async def test_commenters_get_their_own_steps_and_viewers_none(client, tenant_id
     assert [s["key"] for s in body["steps"]] == ["connect", "sources"]
     assert body["total"] == 2 and body["done"] == 0
     body = await _setup(client, viewer)
-    assert body == {"steps": [], "done": 0, "total": 0, "hidden": False}
+    assert body == {"steps": [], "done": 0, "total": 0, "hidden": False, "welcome": False}
 
 
 async def test_only_a_signed_in_person_may_ask(client, tenant_id, owner):
@@ -142,7 +142,7 @@ async def test_only_a_signed_in_person_may_ask(client, tenant_id, owner):
     assert resp.json()["detail"] == "Setup is for people signed in"
     resp = await client.get("/v1/setup", headers={**owner.headers, RUN_TOKEN_HEADER: run_token})
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "Setup is for people signed in"
+    assert resp.json()["detail"] == "A run token acts only through Oracle's MCP server"
     assert (await client.get("/v1/setup")).status_code == 401
 
 
@@ -312,7 +312,7 @@ async def test_the_cost_is_fixed_whatever_the_size(tenant_id, owner, members):
             event.remove(engine, "before_cursor_execute", count)
     assert [st.key for st in out.steps] == OWNER_KEYS
     assert out.steps[2].count == members
-    # One statement per owner step (eight), plus the hide preference.
+    # One statement per owner step (eight), plus the hide preference and the welcome.
     assert len(statements) <= 9, statements
 
 
@@ -371,3 +371,46 @@ def test_the_web_checklist_names_every_step_the_api_returns():
     block = source.split("const STEPS", 1)[1].split("\n};", 1)[0]
     web_keys = re.findall(r"^  (\w+): \{$", block, flags=re.M)
     assert web_keys == [s.key for s in setup.STEPS]
+
+
+async def _invited(tenant_id, email: str, role: str, accepted_at: datetime):
+    person = await make_person(tenant_id, email, role)
+    async with tenant_session(tenant_id) as s:
+        s.add(Invite(email=email, role=role, accepted_at=accepted_at))
+        await s.commit()
+    return person
+
+
+async def test_a_member_who_joined_by_invite_is_welcomed(client, tenant_id, owner):
+    # protects=the welcome is for every member who joined through an invite, however long
+    # ago, until they dismiss it (#140 A1 welcome, BGD 2026-10-25: no time window);
+    # fails_when=the company's own owner or a member added without an invite is welcomed,
+    # or one who joined by invite long ago is not; no_claim=the wording (the web's copy).
+    now = datetime.now(UTC)
+    invited = await _invited(tenant_id, "invited@example.com", "commenter", now)
+    viewer = await _invited(tenant_id, "reader@example.com", "viewer", now)
+    old = await _invited(tenant_id, "longago@example.com", "approver", now - timedelta(days=400))
+    seeded = await make_person(tenant_id, "seeded@example.com", "commenter")
+    assert (await _setup(client, invited))["welcome"] is True
+    assert (await _setup(client, viewer))["welcome"] is True
+    assert (await _setup(client, old))["welcome"] is True
+    assert (await _setup(client, seeded))["welcome"] is False
+    assert (await _setup(client, owner))["welcome"] is False
+
+
+async def test_dismissing_the_welcome_is_each_persons_own(client, tenant_id, owner):
+    # protects=Dismiss keeps the welcome away for that person only, any role, however long
+    # ago they joined; fails_when=it comes back, a viewer is refused, or one person's
+    # dismissal hides another's; no_claim=the web's dismiss button.
+    now = datetime.now(UTC)
+    first = await _invited(tenant_id, "first@example.com", "viewer", now)
+    second = await _invited(tenant_id, "second@example.com", "commenter", now)
+    old = await _invited(tenant_id, "third@example.com", "approver", now - timedelta(days=400))
+    for person in (first, old):
+        resp = await client.patch(
+            "/v1/me/preferences", json={"welcome_dismissed": True}, headers=person.headers
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["welcome_dismissed"] is True
+        assert (await _setup(client, person))["welcome"] is False
+    assert (await _setup(client, second))["welcome"] is True

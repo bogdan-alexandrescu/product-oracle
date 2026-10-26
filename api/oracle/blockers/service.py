@@ -141,8 +141,9 @@ def _aware(value: datetime) -> datetime:
 
 
 def _writer(principal: Principal, reason: str | None) -> baseline.Writer:
-    # The only writer allowed to change attrs.blocker (baseline.MANAGED_ATTRS).
-    return baseline.Writer(principal, "user", reason=reason, manages=("blocker",))
+    # The only writer allowed to change attrs.blocker (baseline.MANAGED_ATTRS); it also
+    # clears an intake's suggested blocker when Promote makes it one.
+    return baseline.Writer(principal, "user", reason=reason, manages=("blocker", PROPOSED_KEY))
 
 
 # --- lookups: the constraint-only rule ---------------------------------------------------
@@ -256,9 +257,15 @@ async def _check_documents(db: AsyncSession, ids: list[uuid.UUID]) -> None:
         raise InvalidError(f"Unknown documents: {', '.join(missing)}")
 
 
-async def _check_user(db: AsyncSession, user_id: uuid.UUID | None, what: str = "owner") -> None:
-    if user_id is not None and await db.get(User, user_id) is None:
+async def _check_user(
+    db: AsyncSession, user_id: uuid.UUID | None, what: str = "owner", *, active: bool = False
+) -> None:
+    """``active``: a newly named owner is a member who is not disabled."""
+    user = await db.get(User, user_id) if user_id is not None else None
+    if user_id is not None and user is None:
         raise InvalidError(f"The {what} is not a user of this company")
+    if active and user is not None and user.disabled_at is not None:
+        raise InvalidError(f"The {what} is a disabled member")
 
 
 async def _check_evidence(db: AsyncSession, ids: list[uuid.UUID]) -> None:
@@ -647,7 +654,7 @@ async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCr
     impacted = await _check_entities(db, _dedupe(body.impacted_entity_ids or []))
     document_ids = _dedupe(body.document_ids or [])
     await _check_documents(db, document_ids)
-    await _check_user(db, body.owner_id)
+    await _check_user(db, body.owner_id, active=True)
     spec = BlockerSpec(
         type=body.type,
         limit_kind=body.limit_kind or "other",
@@ -671,6 +678,10 @@ async def create_blocker(db: AsyncSession, principal: Principal, body: BlockerCr
         entity = await require_constraint(db, body.entity_id, for_update=True)
         if "blocker" in (entity.attrs or {}):
             raise ConflictError(f"constraint:{entity.key} is already a blocker; PATCH it")
+        if entity.status == "rejected":
+            raise ConflictError(f"constraint:{entity.key} is rejected; restore it first")
+        if PROPOSED_KEY in (entity.attrs or {}) and entity.status != "confirmed":
+            raise ConflictError(f"constraint:{entity.key} is not accepted yet; accept it first")
         fields: dict[str, Any] = {"attrs": {"blocker": dump(spec)}}
         # An intake answer's suggested blocker (B4, owner 2026-10-20): promoting it
         # clears the mark in the same write, so it is never both or neither.
@@ -738,7 +749,7 @@ async def update_blocker(
         spec.document_ids = _dedupe(body.document_ids or [])
         await _check_documents(db, spec.document_ids)
     if "owner_id" in given:
-        await _check_user(db, body.owner_id)
+        await _check_user(db, body.owner_id, active=body.owner_id != spec.owner_id)
         spec.owner_id = body.owner_id
     for name in ("type", "limit_kind", "severity"):
         if name in given and getattr(body, name) is not None:

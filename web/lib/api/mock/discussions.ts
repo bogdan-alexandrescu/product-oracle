@@ -154,6 +154,10 @@ export type DiscussionsContext = {
   dateRights?: () => "verify" | "propose" | null;
   /** F3's schedule-basis route (./roadmap.ts POST /v1/schedule-bases): Record writes through it. */
   recordBasis?: (body: Schemas["ScheduleBasisCreate"]) => Promise<Response>;
+  /** "Section 1. Behaviour is approved and locked" when the document's latest version has the section approved; else null. */
+  lockedSection?: (documentId: string, sectionKey: string) => string | null;
+  /** B6's one path for a goal version's Propose (./goal-interview.ts proposeVersion): its refusal or pushback, or null when proposed. */
+  proposeGoalMeasure?: (c: ChangeRow, d: DiscussionRow, payload: Record<string, unknown> | null) => Response | null;
 };
 
 /** A section of the document a discussion is on, as Oracle reads it (markers stripped). */
@@ -642,6 +646,12 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     d.updated_at = ctx.now();
   };
 
+  const lockedOf = (c: ChangeRow, d: DiscussionRow) => {
+    if (c.kind !== "section_edit") return null;
+    const doc = str(c.target.document_id) || d.document_id;
+    const key = str((c.edited_payload ?? c.payload).section_key) || str(c.target.section_key);
+    return doc && key ? (ctx.lockedSection?.(doc, key) ?? null) : null;
+  };
   const changesOf = (d: DiscussionRow) => (db.changes ?? []).filter((c) => c.discussion_id === d.id);
   /** G3: a change as this reader sees it: the kind's action, what else they may do, and whether Stage asks for a reason. */
   const changeOut = (c: ChangeRow, d: DiscussionRow): ChangeOut => {
@@ -651,9 +661,21 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const anyWriter = verb === "Propose" || verb === "Ask";
     // Record: F3's date rights decide, not the role (as the API's action_for).
     const records = verb === "Record" ? !!ctx.dateRights?.() : null;
-    const allowed = writer && open && (records ?? (anyWriter || atLeast(me.role, "approver")));
+    // AUD-1: a section approved since the change was proposed is never staged (the API's why_not).
+    const locked = open ? lockedOf(c, d) : null;
+    const allowed = writer && open && !locked && (records ?? (anyWriter || atLeast(me.role, "approver")));
     const whyNot =
-      allowed || !open ? null : d.status !== "open" ? "This discussion is closed" : verb === "Record" ? RECORDERS : verb === "Stage" ? STAGE_WHY_NOT : APPROVERS_ACT;
+      allowed || !open
+        ? null
+        : d.status !== "open"
+          ? "This discussion is closed"
+          : locked
+            ? locked
+            : verb === "Record"
+              ? RECORDERS
+              : verb === "Stage"
+                ? STAGE_WHY_NOT
+                : APPROVERS_ACT;
     return {
       id: c.id,
       discussion_id: c.discussion_id,
@@ -978,6 +1000,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     } else if (step === "dismiss") {
       Object.assign(c, { status: "dismissed", decision_note: str(input.note) || null });
     } else if (verb === "Stage") {
+      const locked = lockedOf(c, d);
+      if (locked) return refuse(422, locked);
       if (c.pushback && !str(input.override_reason)) return refuse(422, "Oracle pushed back on this. Give a reason to stage it anyway.");
       if (d.visibility === "private" && !str(input.reason)) return refuse(422, "Write the reason everyone will see");
       Object.assign(c, {
@@ -1001,6 +1025,14 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
       c.lock_version += 1;
       return json(200, { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } });
+    } else if (verb === "Propose" && c.kind === "goal_measure" && ctx.proposeGoalMeasure) {
+      // A goal version takes B6's path: B5's checks (422) and Oracle's pushback once (409).
+      const edit = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload) ? (input.payload as Record<string, unknown>) : null;
+      const refused = ctx.proposeGoalMeasure(c, d, edit);
+      if (refused) return refused;
+      line(`${name} ${VERB_PAST[verb]}: ${c.label}`);
+      c.lock_version += 1;
+      return json(200, { change: changeOut(c, d), result: { proposal_id: c.result_ref?.proposal_id, status: "open" } });
     } else if (verb) {
       Object.assign(c, { status: "done", result_ref: { id: ctx.uuid() } });
       line(`${name} ${VERB_PAST[verb]}: ${c.label}`);

@@ -182,6 +182,11 @@ def test_action_and_why_not_per_role_and_kind():
     assert changes.action_for(seat("commenter"), goal).allowed is True
     a = changes.action_for(seat("approver", author_only=True), c)
     assert (a.allowed, a.why_not) == (False, changes.SHARE_FIRST)
+    edit = DiscussionChange(kind="section_edit", status="proposed", proposed_by_kind="oracle")
+    locked = changes.LOCKED.format(section="2. Problem")
+    for role in ("commenter", "approver"):
+        a = changes.action_for(seat(role), edit, locked=locked)
+        assert (a.verb, a.allowed, a.why_not) == ("Stage", False, locked)
     assert changes.can_of(seat("viewer"), c, None).model_dump() == {
         "suggest": False, "edit": False, "withdraw": False, "dismiss": False}  # fmt: skip
     assert changes.can_of(seat("commenter"), c, None).suggest is True
@@ -861,6 +866,29 @@ async def test_stage_rechecks_the_section_lock(client, monkeypatch):
     async with tenant_session(ctx.tenant_id) as s:
         assert list(await s.scalars(select(NextDraftChange))) == []
         assert (await s.get(DiscussionChange, uuid.UUID(cid))).status == "proposed"
+
+
+# protects=G7 criterion 6 through G3's card: a section_edit on a section approved since it
+# was proposed lists Stage as not allowed, with "Section <n>. <heading> is approved and
+# locked" as its why_not, for an approver; other sections stay stageable; fails_when=Stage
+# is offered on a locked section or the reason is missing; no_claim=Stage's own re-check
+# (test_stage_rechecks_the_section_lock).
+async def test_a_locked_sections_change_says_why_it_cannot_be_staged(client, monkeypatch):
+    ctx, doc = await company(client)
+    _tenant[0] = ctx.tenant_id
+    d = await start(client, ctx, subject=section(doc))
+    locked_id = await add_change(ctx.tenant_id, d["id"], "section_edit", section_change())
+    free_id = await add_change(ctx.tenant_id, d["id"], "section_edit", section_change("users"))
+
+    async def locked(db, document_id):
+        return {"problem"}
+
+    monkeypatch.setattr(changes, "locked_sections", locked)
+    seen = {c["id"]: c for c in await listed(client, ctx.as_("approver"), d["id"])}
+    assert seen[locked_id]["action"] == {
+        "verb": "Stage", "allowed": False,
+        "why_not": "Section 2. Problem is approved and locked"}  # fmt: skip
+    assert seen[free_id]["action"] == {"verb": "Stage", "allowed": True, "why_not": None}
 
 
 # protects=3.2 Edit at a checkpoint: a commenter's Edit makes the change their suggestion and

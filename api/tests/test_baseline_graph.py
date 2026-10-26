@@ -663,8 +663,9 @@ async def test_summary_is_frozen_when_the_proposal_is_decided(client, ctx):
 
 async def test_intake_proposal_hides_person(client, ctx):
     """protects: decision S6 Private findings (who answered stays with the finding's author).
-    fails_when: proposer.user_id or the answerer's email appears on an intake answer's
-    proposal.
+    fails_when: a person can pass a proposal off as an intake answer's, hiding who sent it
+    (an intake answer's own proposal, labelled "From an intake answer", is tested in
+    tests/test_promote_csrf.py).
     no_claim: does not test the sharing levels themselves."""
     await _member(ctx, "answerer@example.com")
     body = {
@@ -678,15 +679,5 @@ async def test_intake_proposal_hides_person(client, ctx):
         },
     }
     resp = await client.post(f"{B}/proposals", json=body, headers=ctx.as_("answerer@example.com"))
-    assert resp.status_code == 201, resp.text
-    made = resp.json()
-    assert made["summary"] == "Add constraint “Carrier terms” (suggested blocker)"
-    for p in (made, *await _listed(client, ctx)):
-        assert p["proposer"] == {
-            "kind": "intake",
-            "label": "From an intake answer",
-            "run_id": None,
-            "user_id": None,
-            "email": None,
-        }
-        assert "answerer" not in str(p["proposer"])
+    assert resp.status_code == 422, resp.text
+    assert await _listed(client, ctx) == []

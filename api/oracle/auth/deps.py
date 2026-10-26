@@ -7,9 +7,10 @@ Every authenticated endpoint takes ``principal: CurrentPrincipal`` and/or
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,8 +25,8 @@ from oracle.tenancy import tenant_session
 # the run's creator). The value is the run id signed by the server and bound to the
 # acting user (oracle.auth.service.sign_run_binding). A run sees more than people do
 # (S6: the full text of what a finding shared in full), so the header is trusted only
-# when its signature verifies for the authenticated user; a bare or forged run id is
-# ignored and the caller stays the person, with person rules.
+# when its signature verifies for the authenticated user; a bare, forged, expired or
+# malformed one is refused with 400 (``_run_of``, fail closed), never read as the person.
 RUN_HEADER = "x-oracle-run-id"
 
 _bearer = HTTPBearer(auto_error=False, description="API token for the agent track")
@@ -55,6 +56,10 @@ class Principal:
     # agent's work (oracle.docs.service.import_draft holds approved text), and it reads
     # as a run (S6).
     run_id: uuid.UUID | None = None
+    # #541 part 4: a run of a flow whose output every member reads (FlowDef.member_output)
+    # reads as a commenter would, whoever started it (oracle.docs.visibility.restricted);
+    # its role still decides what it may write.
+    as_member: bool = False
 
     @property
     def is_run(self) -> bool:
@@ -191,6 +196,17 @@ async def _for_run(principal: Principal, raw: str) -> Principal:
     return replace(principal, run_id=run.id, run_token_id=claims.token_id)
 
 
+async def _member_run(principal: Principal) -> bool:
+    """Whether the principal's run reads as a member: a flow whose output every member
+    reads, or a draft of a company-wide document (oracle.runs.service.reads_as_member)."""
+    from oracle.runs.models import Run
+    from oracle.runs.service import reads_as_member
+
+    async with tenant_session(principal.tenant_id) as s:
+        run = await s.get(Run, principal.run_id)
+        return run is not None and await reads_as_member(s, run)
+
+
 def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
     raw = request.headers.get(RUN_HEADER)
     if not raw:
@@ -213,12 +229,21 @@ async def get_principal(
 ) -> Principal:
     principal = await _authenticate(request, bearer, cookie)
     # Oracle's MCP server marks a run token's in-process REST call twice: with the run
-    # token (re-read under the review gate) and with a server-signed run binding. Either
-    # one alone marks the call as the run's; both must name the same run.
+    # token (re-read under the review gate) and with a server-signed run binding. The
+    # binding alone marks the call as the run's; the token counts only with a binding,
+    # and both must name the same run.
     run_token = request.headers.get(RUN_TOKEN_HEADER)
-    if run_token is not None:
-        principal = await _for_run(principal, run_token)
     run_id = _run_of(request, principal)
+    if run_token is not None:
+        if run_id is None:
+            # Only that call carries the binding: a run token sent straight to REST would
+            # skip /mcp's egress allowlist and act with the creator's whole role, not the
+            # token's scopes (security report c5b8604f, minor 1).
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "A run token acts only through Oracle's MCP server",
+            )
+        principal = await _for_run(principal, run_token)
     if run_id is not None and principal.run_id is not None and principal.run_id != run_id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -226,6 +251,8 @@ async def get_principal(
         )
     if run_id is not None:
         principal = replace(principal, run_id=run_id)
+    if principal.run_id is not None:
+        principal = replace(principal, as_member=await _member_run(principal))
     # Parses of this request count against one person: the user, else the token; a run
     # token's, the run (oracle.safe_yaml.MAX_PER_OWNER).
     owner = principal.run_id or principal.user_id or principal.token_id
@@ -283,6 +310,78 @@ def _allowed_origins(request: Request) -> set[str]:
     return {h.lower() for h in hosts if h}
 
 
+CROSS_SITE_REFUSED = "Cross-site request refused"
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+def browser_signed(request: Request) -> bool:
+    """Whether the browser's own credentials sign the request in (the session cookie or
+    Google sign-in's IAP header), not a bearer token a browser never sends on its own."""
+    if request.headers.get("authorization"):
+        return False
+    return bool(
+        request.cookies.get(get_settings().session_cookie_name)
+        or request.headers.get(iap.ASSERTION_HEADER)
+    )
+
+
+def cross_site(request: Request) -> bool:
+    """A request signed in by the browser's credentials that another site sent: its
+    ``Sec-Fetch-Site`` says so, or its ``Origin`` (without one, its ``Referer``) is not
+    one of ours. A request with none of them is not a browser's, and passes."""
+    from urllib.parse import urlsplit
+
+    if not browser_signed(request):
+        return False
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return True
+    origin = request.headers.get("origin")
+    if origin is None:
+        referer = request.headers.get("referer")
+        return bool(referer) and urlsplit(referer).netloc.lower() not in _allowed_origins(request)
+    return origin == "null" or urlsplit(origin).netloc.lower() not in _allowed_origins(request)
+
+
+class SameOriginMiddleware:
+    """:func:`same_origin` on every request that may change something (any method but
+    GET, HEAD and OPTIONS), app-wide: no route, mounted app or route added later goes
+    without it."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope["method"] not in _SAFE_METHODS:
+            if cross_site(Request(scope)):
+                response = JSONResponse({"detail": CROSS_SITE_REFUSED}, 403)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+def body_type(*media_types: str) -> Any:
+    """A raw-body route's Content-Type check (415): a declared type must be one of
+    ``media_types``, and a request the browser signs in itself must declare one, so a
+    form or ``text/plain`` body never reaches the route. A bearer-token script may
+    leave it out. The caller is authenticated first (the route's own get_principal,
+    cached for the request), so a read-only credential is refused as such (403, AC1)
+    and an anonymous one as such (401), whatever type its body declares."""
+
+    async def check(
+        request: Request, _principal: Annotated[Principal, Depends(get_principal)]
+    ) -> None:
+        declared = request.headers.get("content-type")
+        if declared is None and not browser_signed(request):
+            return
+        if (declared or "").split(";", 1)[0].strip().lower() not in media_types:
+            raise HTTPException(
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                f"Send the body as {media_types[0]}",
+            )
+
+    return Depends(check)
+
+
 async def same_origin(request: Request) -> None:
     """Refuse a cross-site request signed in by the browser's own credentials (403).
 
@@ -290,26 +389,10 @@ async def same_origin(request: Request) -> None:
     a run, disable a member): it has no JSON body, so the browser sends it cross-site
     without a CORS preflight, and SameSite=Lax does not cover every case (a same-site
     sibling host, IAP's own cookie). Checked only when the session cookie or Google
-    sign-in signs the request in: a bearer token is never sent by a browser on its own.
-    A browser sends ``Sec-Fetch-Site`` and ``Origin`` on such a request; a request with
-    neither is not a browser's, and passes."""
-    from urllib.parse import urlsplit
-
-    if request.headers.get("authorization"):
-        return
-    ambient = request.cookies.get(get_settings().session_cookie_name) or request.headers.get(
-        iap.ASSERTION_HEADER
-    )
-    if not ambient:
-        return
-    refused = HTTPException(status.HTTP_403_FORBIDDEN, "Cross-site request refused")
-    if request.headers.get("sec-fetch-site") == "cross-site":
-        raise refused
-    origin = request.headers.get("origin")
-    if origin is None:
-        return
-    if origin == "null" or urlsplit(origin).netloc.lower() not in _allowed_origins(request):
-        raise refused
+    sign-in signs the request in: a bearer token is never sent by a browser on its own
+    (:func:`cross_site`). :class:`SameOriginMiddleware` applies it to every write."""
+    if cross_site(request):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, CROSS_SITE_REFUSED)
 
 
 async def get_db(principal: CurrentPrincipal) -> AsyncIterator[AsyncSession]:

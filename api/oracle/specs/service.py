@@ -683,6 +683,9 @@ async def import_spec(
             )
             try:
                 with lineage.generating(gen):
+                    # #541 part 5: a spec of a company-wide document is checked as a
+                    # member reads it.
+                    await docs_service.check_member_draft(s, run.id, composed.markdown or "")
                     result = await docs_service.import_draft(
                         s, inputs.slug, composed.markdown or "", principal, kind="spec"
                     )

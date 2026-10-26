@@ -19,7 +19,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs import kinds
 from oracle.jobs.models import LlmSuggestion
 from oracle.jobs.next_draft import current_job
-from oracle.jobs.service import latest_suggestions
+from oracle.jobs.service import latest_suggestions, staged_suggestions
 from oracle.preferences.models import UserPreference
 from oracle.review.models import FeedbackItem
 from oracle.review.service import feedback_state, latest_numbers, staged_for_agents
@@ -64,15 +64,18 @@ async def mark_seen(db: AsyncSession, principal_id: uuid.UUID, at: datetime | No
     await db.flush()
 
 
+_STAGED = (
+    LlmSuggestion.kind == "section_text",
+    LlmSuggestion.status == "accepted",
+    LlmSuggestion.applied_in_version.is_(None),
+)
+
+
 def _with_staged_change():
     """Items with an accepted section-text change no draft has applied yet. They stay live
     (Staged) whatever their own status (owner, 2026-10-20): closing the item, as a draft's
     resolutions or an approval do, does not take the change out of the next draft."""
-    return select(LlmSuggestion.feedback_item_id).where(
-        LlmSuggestion.kind == "section_text",
-        LlmSuggestion.status == "accepted",
-        LlmSuggestion.applied_in_version.is_(None),
-    )
+    return select(LlmSuggestion.feedback_item_id).where(*_STAGED)
 
 
 async def feedback_states(
@@ -111,6 +114,7 @@ async def feedback_states(
     )
     rows = [*live, *settled]
     suggestions = await latest_suggestions(db, [f.id for f in rows])
+    staged = await staged_suggestions(db, [f.id for f in live])
     latest = await latest_numbers(db, {f.document_id for f in rows})
     docs = {
         d.id: d
@@ -126,7 +130,7 @@ async def feedback_states(
     settled_listed = 0
     for f in rows:
         s = suggestions.get(f.id)
-        state = feedback_state(f.status, s, f.staged_for_agents_at)
+        state = feedback_state(f.status, staged.get(f.id, s), f.staged_for_agents_at)
         if state == "open" and (seen is None or f.created_at > seen):
             state = "new"
         if f.id in live_ids:
@@ -180,15 +184,7 @@ def _agent_staged():
 async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
     """One row per document with staged changes: 'N changes staged for draft N+1',
     counting the text changes and the items staged for the agents."""
-    doc_ids = set(
-        await db.scalars(
-            select(LlmSuggestion.document_id).where(
-                LlmSuggestion.kind == "section_text",
-                LlmSuggestion.status == "accepted",
-                LlmSuggestion.applied_in_version.is_(None),
-            )
-        )
-    )
+    doc_ids = set(await db.scalars(select(LlmSuggestion.document_id).where(*_STAGED)))
     agents = dict(
         (
             await db.execute(

@@ -4,10 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { DocToolbar } from "@/components/DocToolbar";
+import { baseName, changeSummary } from "@/components/roadmap/CompareBar";
+import { horizonLabel } from "@/components/roadmap/item-row";
+import { ChangeChips } from "@/components/roadmap/ItemChanges";
+import { changeLine } from "@/components/roadmap/useItemsDiff";
 import { Chip, Empty, InfoTip, LinkButton, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, LayerBadge, Loading, SpecStateBadge } from "@/components/ui";
-import { api, unwrap, type SectionDiff } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { sectionHref } from "@/lib/section-link";
@@ -284,6 +288,98 @@ function Toggle({ label, name, checked, onChange }: { label: string; name: strin
   );
 }
 
+type ItemsDiffOrNot = { diff: Schemas["ItemsDiffOut"] } | { notReady: string };
+
+/**
+ * E3 on the text diff page: the roadmap items of the two versions compared item by item
+ * (a PRD's draft items, or a roadmap version's items), as the Items tab compares them.
+ * Changed, new and dropped items show; unchanged ones wait for the toggle. A version whose
+ * draft items are not ready says so.
+ */
+function DiffItems({ doc, kind, from, to }: { doc: string; kind: "prd" | "roadmap"; from: number; to: number }) {
+  const [showUnchanged, setShowUnchanged] = useState(false);
+  const q = useQuery<ItemsDiffOrNot>(`diff-items|${doc}|${from}|${to}`, async () => {
+    try {
+      const query = { head: `${doc}@${to}`, base: `${doc}@${from}` };
+      return { diff: await unwrap(api.GET("/v1/roadmap-items/diff", { params: { query } })) };
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) return { notReady: e.message };
+      throw e;
+    }
+  });
+  const diff = q.data && "diff" in q.data ? q.data.diff : null;
+  const items = diff?.items ?? [];
+  const shown = items.filter((c) => showUnchanged || c.change !== "unchanged");
+  const titles = new Map(items.map((c) => [c.item_key, c.title]));
+  const open = `/documents/${doc}/v/${to}/${kind === "prd" ? "roadmap" : "items"}`;
+  if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
+  return (
+    <Panel
+      title="Roadmap items"
+      count={diff?.base ? shown.length : undefined}
+      testId="diff-items"
+      tools={
+        <>
+          {diff?.base && (
+            <Toggle label="Unchanged" name="Show unchanged items" checked={showUnchanged} onChange={setShowUnchanged} />
+          )}
+          <LinkButton href={open}>Open items</LinkButton>
+        </>
+      }
+    >
+      <div className="flex min-w-0 flex-col gap-2 px-4 py-3 max-[600px]:px-3">
+        {!q.data && <Loading label="Comparing items…" />}
+        {q.data && "notReady" in q.data && <p className="text-[15px] text-text2">{q.data.notReady}</p>}
+        {diff && !diff.base && <p className="text-[15px] text-text2">No items to compare with</p>}
+        {diff?.base && diff.summary && (
+          <p data-testid="diff-items-summary" className="tnum text-sm text-text2">
+            Since {baseName(diff, "previous")}: {changeSummary(diff.summary)}
+          </p>
+        )}
+        {shown.length > 0 && (
+          <ul className="flex flex-col">
+            {shown.map((c) => {
+              const dropped = c.change === "dropped";
+              const horizon = dropped ? c.base_horizon : c.head_horizon;
+              return (
+                <li
+                  key={`${c.change}-${c.item_key}`}
+                  data-testid="diff-item"
+                  data-change={c.change}
+                  className="flex min-w-0 flex-col gap-1 border-t border-line py-2 first:border-t-0"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className={`min-w-0 max-w-full truncate font-semibold ${dropped ? "text-text2" : ""}`} title={c.title}>
+                      {dropped ? <s>{c.title}</s> : c.title}
+                    </span>
+                    {horizon && <Chip kind="na">{horizonLabel(horizon)}</Chip>}
+                    <ChangeChips change={c} />
+                  </div>
+                  {(c.fields.length > 0 || c.notes.length > 0) && (
+                    <ul className="flex flex-col gap-0.5 text-sm">
+                      {c.fields.map((f) => (
+                        <li key={f.field} className="break-words">
+                          {changeLine(f, titles)}
+                        </li>
+                      ))}
+                      {c.notes.map((f) => (
+                        <li key={`note-${f.field}`} className="break-words text-text2">
+                          {changeLine(f, titles)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {diff?.base && shown.length === 0 && <p className="text-[15px] text-text2">No item changed</p>}
+      </div>
+    </Panel>
+  );
+}
+
 export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: number }) {
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [briefOnly, setBriefOnly] = useState(false);
@@ -361,6 +457,9 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
         {ready && !diffQ.data && !diffQ.error && <Loading label="Computing diff…" />}
         {diffQ.data && (
           <div className="flex flex-col gap-3">
+            {(docQ.data?.kind === "prd" || docQ.data?.kind === "roadmap") && fromN !== toN && (
+              <DiffItems doc={doc} kind={docQ.data.kind} from={fromN!} to={toN!} />
+            )}
             <Panel
               title="Sections"
               count={shown.length}

@@ -20,6 +20,7 @@ from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx, make_item
 from tests.day_helpers import company_today
+from tests.market_helpers import add_competitor
 from tests.test_mcp import mcp_client, text_of
 
 URL = "/v1/deal-outcomes"
@@ -105,7 +106,7 @@ async def test_an_approver_records_a_deal_and_a_commenter_cannot(client, ctx):
 async def test_the_rules_refuse_with_422(client, ctx):
     """protects=Other without a note, a future decided_on (the company's tomorrow), a value
     without its currency, a currency outside USD/EUR/GBP, a result or reason outside its
-    list, an empty or 121-character account and an H7 competitor_id are 422s; fails_when=
+    list, an empty or 121-character account and an unknown competitor_id are 422s; fails_when=
     any of them creates a row; no_claim=the CSV path (its own test)."""
     tomorrow = (company_today() + timedelta(days=2)).isoformat()
     bad = [
@@ -265,6 +266,7 @@ async def test_csv_imports_good_rows_and_lists_bad_ones_by_line(client, ctx):
         "dry_run": False,
         "created": 3,
         "skipped": [{"line": 4, "message": "decided_on must be YYYY-MM-DD"}],
+        "unmatched_alternatives": ["Alternative Co"],
     }
     rows = {r["account"]: r for r in (await client.get(URL, headers=ctx.as_("owner"))).json()}
     assert set(rows) == {"Account 14", "Account 15", "Account 17"}
@@ -355,6 +357,117 @@ async def test_too_many_rows_or_bytes_refuse_the_whole_file(client, ctx):
     assert resp.status_code == 403
     resp = await _import(client, ctx, _csv(*[row] * 2000), dry_run=True)
     assert resp.status_code == 200 and resp.json()["created"] == 2000
+
+
+# --------------------------------------------------------------------------- alternatives
+
+
+async def _alternative(client, ctx, name: str, aliases=()) -> str:
+    resp = await add_competitor(client, ctx, name=name, aliases=aliases)
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+async def test_a_record_links_one_of_the_companys_alternatives(client, ctx):
+    """protects=a record created or edited with an active alternative's competitor_id
+    keeps it and shows the alternative's name; null clears it; an unknown id, another
+    company's alternative or an archived one is a 422; once linked, archiving the
+    alternative keeps the link and its name, and an edit of other fields still saves;
+    fails_when=a foreign or archived alternative is accepted, the name is missing, or an
+    archived link blocks an edit; no_claim=the web form (the e2e covers it)."""
+    a = await _alternative(client, ctx, "Competitor A")
+    b = await _alternative(client, ctx, "Competitor B")
+    other = await make_ctx("Other Co")
+    foreign = await _alternative(client, other, "Competitor C")
+    row = await _create(client, ctx, reason="alternative", competitor_id=a)
+    assert row["competitor_id"] == a and row["competitor_name"] == "Competitor A"
+    for bad in (foreign, "00000000-0000-0000-0000-000000000001"):
+        resp = await client.post(URL, json=_deal(competitor_id=bad), headers=ctx.as_("approver"))
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == "competitor_id is not one of the company's alternatives"
+    url = f"{URL}/{row['id']}"
+    resp = await client.patch(
+        url, json={"lock_version": row["lock_version"], "competitor_id": b},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    row = resp.json()
+    assert row["competitor_id"] == b and row["competitor_name"] == "Competitor B"
+    archived = await client.post(f"/v1/competitors/{b}/archive", headers=ctx.as_("approver"))
+    assert archived.status_code == 200, archived.text
+    got = (await client.get(URL, headers=ctx.as_("owner"))).json()[0]
+    assert got["competitor_id"] == b and got["competitor_name"] == "Competitor B"
+    resp = await client.patch(
+        url, json={"lock_version": row["lock_version"], "plan": "Business", "competitor_id": b},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    row = resp.json()
+    fresh = await _create(client, ctx, account="Account 15")
+    resp = await client.patch(
+        f"{URL}/{fresh['id']}", json={"lock_version": fresh["lock_version"], "competitor_id": b},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "competitor_id is an archived alternative"
+    resp = await client.patch(
+        url, json={"lock_version": row["lock_version"], "competitor_id": None},
+        headers=ctx.as_("approver"),
+    )  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["competitor_id"] is None and resp.json()["competitor_name"] is None
+
+
+async def test_the_list_filters_by_alternative(client, ctx):
+    """protects=GET ?competitor_id= lists only the records linked to that alternative,
+    with the other filters still applied; fails_when=the filter is ignored or drops a
+    linked record; no_claim=the Win and loss screen (the e2e covers it)."""
+    a = await _alternative(client, ctx, "Competitor A")
+    b = await _alternative(client, ctx, "Competitor B")
+    await _create(client, ctx, account="Account 1", competitor_id=a)
+    await _create(client, ctx, account="Account 2", competitor_id=a, result="won")
+    await _create(client, ctx, account="Account 3", competitor_id=b)
+    await _create(client, ctx, account="Account 4")
+    rows = (await client.get(URL, params={"competitor_id": a}, headers=ctx.as_("owner"))).json()
+    assert sorted(r["account"] for r in rows) == ["Account 1", "Account 2"]
+    rows = (
+        await client.get(URL, params={"competitor_id": a, "result": "won"},
+                         headers=ctx.as_("owner"))
+    ).json()  # fmt: skip
+    assert [r["account"] for r in rows] == ["Account 2"]
+
+
+async def test_csv_matches_an_alternative_by_name_or_alias(client, ctx):
+    """protects=the alternative column links an active alternative by its name or one of
+    its aliases in any case and spacing, adding nothing to reason_note; a name that is
+    no alternative's (or only an archived one's) is kept as text in reason_note and listed
+    once in unmatched_alternatives, in the dry run too; fails_when=a match is kept as text,
+    an archived alternative is linked, or an unmatched name is lost; no_claim=fuzzy
+    matching (none: names differ by more than case and spacing are not matched)."""
+    a = await _alternative(client, ctx, "Competitor A", aliases=["CompA"])
+    gone = await _alternative(client, ctx, "Old Rival")
+    await client.post(f"/v1/competitors/{gone}/archive", headers=ctx.as_("approver"))
+    body = _csv(
+        "lost,Account 1,,,,,2026-09-01,alternative,,competitor  a,",
+        "lost,Account 2,,,,,2026-09-01,alternative,Went with them,COMPA,",
+        "lost,Account 3,,,,,2026-09-01,alternative,,Example Rival,",
+        "lost,Account 4,,,,,2026-09-01,alternative,,Example Rival,",
+        "lost,Account 5,,,,,2026-09-01,alternative,,Old Rival,",
+    )
+    dry = (await _import(client, ctx, body, dry_run=True)).json()
+    assert dry["created"] == 5
+    assert dry["unmatched_alternatives"] == ["Example Rival", "Old Rival"]
+    resp = await _import(client, ctx, body)
+    assert resp.status_code == 200, resp.text
+    rows = {r["account"]: r for r in (await client.get(URL, headers=ctx.as_("owner"))).json()}
+    assert rows["Account 1"]["competitor_id"] == a and rows["Account 1"]["reason_note"] is None
+    assert rows["Account 2"]["competitor_id"] == a
+    assert rows["Account 2"]["reason_note"] == "Went with them"
+    assert rows["Account 2"]["competitor_name"] == "Competitor A"
+    assert rows["Account 3"]["competitor_id"] is None
+    assert rows["Account 3"]["reason_note"] == "Alternative: Example Rival"
+    assert rows["Account 5"]["competitor_id"] is None
+    assert rows["Account 5"]["reason_note"] == "Alternative: Old Rival"
 
 
 # --------------------------------------------------------------------------- run tokens

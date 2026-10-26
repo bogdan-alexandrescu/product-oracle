@@ -5,7 +5,8 @@ approvers only; an update is created with it). For a commenter or a viewer an
 ``approvers`` document is absent: a direct read is a 404, a list has no row for it, search
 has no hit, and what hangs off it (feedback, comments, suggestions, discussions, Inbox
 rows) is not shown either. A run's calls act as the run's creator (oracle.auth.deps), so a
-run token reads such a document only when its run was started by an approver or owner.
+run token reads such a document only when its run was started by an approver or owner,
+and never in a run whose output every member reads (below).
 
 The rule lives here only:
 
@@ -33,12 +34,23 @@ of hidden decisions and documents (:func:`hidden_decision_ids`, :func:`hidden_do
 oracle.rituals.blocks.for_reader), and a run reads it as a commenter would, since what it
 writes from it is shown to every member.
 
+A run of a flow whose output every member reads (``FlowDef.member_output``: the ritual
+summary, variance explanations, the competitive digest, request triage, a code map) reads
+every tool as a commenter would, whoever started it (``Principal.as_member``, set from
+the run's flow in oracle.auth.deps); its importer checks what it cites as a commenter
+(:data:`MEMBER`); and what such a run wrote is withheld at read time from a reader to
+whom it names something hidden (:func:`names_hidden`).
+
 A new document's visibility comes from its kind (:func:`default_for`), on every path
 that creates one (a template start, an import).
 """
 
+import html
+import re
+import unicodedata
 import uuid
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import (
@@ -62,7 +74,7 @@ from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
-from oracle.tenancy import TenantSession
+from oracle.tenancy import TenantSession, current_tenant
 
 COMPANY = "company"
 APPROVERS = "approvers"
@@ -81,8 +93,23 @@ def default_for(kind: str) -> str:
 
 def restricted(principal: Any) -> bool:
     """Whether ``approvers`` documents are hidden from ``principal`` (None: Oracle's own
-    work, which sees everything)."""
-    return principal is not None and not has_role(principal.role, MIN_ROLE)
+    work, which sees everything): a commenter or a viewer, and a run whose output every
+    member reads (``as_member``), whoever started it."""
+    if principal is None:
+        return False
+    return getattr(principal, "as_member", False) or not has_role(principal.role, MIN_ROLE)
+
+
+class _Member:
+    """A reader who sees what a commenter sees (:data:`MEMBER`)."""
+
+    role = "commenter"
+    as_member = True
+
+
+# For Oracle's own checks of what it keeps for every member (an importer's refs):
+# ``bind(session, MEMBER)`` makes the session's reads a commenter's.
+MEMBER = _Member()
 
 
 def visible_to(principal: Any) -> ColumnElement[bool]:
@@ -143,12 +170,176 @@ async def hidden_decision_ids(
     from oracle.decisions.models import Decision
 
     decisions = Decision.__table__
+    # A Core select: the tenant scope (oracle.tenancy) does not apply, so name it here.
     stmt = (
         select(decisions.c.id)
-        .where(decisions.c.id.in_(wanted), not_(_decision_visible(decisions.c)))
+        .where(
+            decisions.c.tenant_id == current_tenant(session),
+            decisions.c.id.in_(wanted),
+            not_(_decision_visible(decisions.c)),
+        )
         .execution_options(oracle_all_documents=True)
     )
     return set(await session.scalars(stmt))
+
+
+@dataclass(frozen=True)
+class Hidden:
+    """What the session's principal may not see, to check text Oracle wrote for every
+    member (a summary, a variance draft) at read time: the hidden decisions (ids, baseline
+    entity ids, numbers, titles) and documents (ids, slugs, titles)."""
+
+    decision_ids: frozenset[uuid.UUID]
+    document_ids: frozenset[uuid.UUID]
+    ids: frozenset[str]
+    numbers: frozenset[int]
+    words: frozenset[str]
+
+    def cites(
+        self,
+        decision_ids: Iterable[uuid.UUID | None] = (),
+        document_ids: Iterable[uuid.UUID | None] = (),
+    ) -> bool:
+        return bool(self.decision_ids & set(decision_ids) or self.document_ids & set(document_ids))
+
+    def names(self, text: str | None) -> bool:
+        """Whether ``text`` names a hidden decision (``D-<n>``, its title, its id or its
+        entity's) or a hidden document (its title, slug or id), whatever the case; an id
+        also without its dashes. A title is found whatever its Unicode normalisation,
+        whitespace, typographic or ASCII quotes and dashes, and in JSON or HTML escapes
+        (#621 review: :func:`_fold`, :func:`_unescaped`). Paraphrase is not caught: a
+        decision described without its number, title or id, a title shorter than
+        ``_MIN_TITLE``, a one-word slug, a number written another way ("decision 7"), an
+        id cut up or re-encoded. Those need
+        the meaning of the text, which a read-time check does not have; a run that reads
+        as a member never reads them, so only output written before #541 part 4/5 or by
+        hand can hold them."""
+        if not text:
+            return False
+        for folded in {_fold(t) for t in _unescaped(text)}:
+            if any(i in folded for i in self.ids):
+                return True
+            if any(w in folded for w in self.words):
+                return True
+            if any(int(n) in self.numbers for n in _D_NUMBER.findall(folded)):
+                return True
+        return False
+
+    def names_in(self, value: Any) -> bool:
+        """Whether any string in ``value`` (a row: dicts, lists, their keys and values)
+        :meth:`names` something hidden, each string checked as itself (#621 review: not
+        as ``json.dumps`` of the row, which escapes non-ASCII characters and quotes)."""
+        if isinstance(value, str):
+            return self.names(value)
+        if isinstance(value, dict):
+            return any(self.names_in(k) or self.names_in(v) for k, v in value.items())
+        if isinstance(value, list | tuple | set | frozenset):
+            return any(self.names_in(v) for v in value)
+        return value is not None and self.names(str(value))
+
+
+_D_NUMBER = re.compile(r"\bD-(\d+)\b", re.IGNORECASE)
+# #621 review: typographic quotes and dashes read as their ASCII forms, so a title is found
+# whichever the text uses.
+_TYPOGRAPHIC = str.maketrans(
+    dict.fromkeys("\u2018\u2019\u201a\u201b\u2032", "'")
+    | dict.fromkeys("\u201c\u201d\u201e\u201f\u2033", '"')
+    | dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-")
+)
+_SPACE = re.compile(r"\s+")
+_JSON_ESCAPE = re.compile(r"\\(u[0-9a-fA-F]{4}|.)", re.DOTALL)
+_JSON_CHARS = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f"}
+
+
+def _fold(text: str) -> str:
+    """``text`` as titles are compared (#621 review): case-folded, NFKC-normalised,
+    typographic quotes and dashes as ASCII, every run of whitespace one space."""
+    folded = unicodedata.normalize("NFKC", text.casefold()).translate(_TYPOGRAPHIC)
+    return _SPACE.sub(" ", folded).strip()
+
+
+def _json_unescaped(text: str) -> str:
+    """``text`` with JSON string escapes (``\\u2014``, ``\\"``, a surrogate pair) undone."""
+
+    def one(m: re.Match[str]) -> str:
+        e = m.group(1)
+        return chr(int(e[1:], 16)) if e[0] == "u" else _JSON_CHARS.get(e, e)
+
+    out = _JSON_ESCAPE.sub(one, text)
+    return out.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+
+
+def _unescaped(text: str) -> set[str]:
+    """``text`` and its readings with JSON and HTML escapes undone (#621 review: a raw
+    file, a JSON column or Markdown can carry a title escaped)."""
+    out = {text, html.unescape(text)}
+    if "\\" in text:
+        j = _json_unescaped(text)
+        out |= {j, html.unescape(j)}
+    return out
+
+
+# A title shorter than this is not looked for in text (it would match ordinary words).
+_MIN_TITLE = 12
+
+
+def _words_of(*titles: str | None) -> set[str]:
+    out = set()
+    for title in titles:
+        for t in (title or "", (title or "").partition(": ")[2]):
+            t = _fold(t)
+            if len(t) >= _MIN_TITLE:
+                out.add(t)
+    return out
+
+
+def _id_forms(*ids: uuid.UUID | None) -> set[str]:
+    """An id as text, lower case, with and without its dashes."""
+    return {f for i in ids if i is not None for f in (str(i).lower(), uuid.UUID(str(i)).hex)}
+
+
+async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -> Hidden | None:
+    """What the session's principal may not see (:class:`Hidden`); None for owners,
+    approvers and Oracle's own sessions, who see everything. ``as_member``: what a
+    commenter may not see, whoever reads (what Oracle builds for every member)."""
+    if not as_member and not restricted(principal_of(session)):
+        return None
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    documents = Document.__table__
+    # Core selects: the tenant scope (oracle.tenancy) does not apply, so name it here, or
+    # every company's hidden titles and numbers would hide (and reveal) text in this one.
+    tenant = current_tenant(session)
+    d_rows = (
+        await session.execute(
+            select(decisions.c.id, decisions.c.number, decisions.c.title, decisions.c.entity_id)
+            .where(decisions.c.tenant_id == tenant, not_(_decision_visible(decisions.c)))
+            .execution_options(oracle_all_documents=True)
+        )
+    ).all()
+    doc_rows = (
+        await session.execute(
+            select(documents.c.id, documents.c.slug, documents.c.title)
+            .where(documents.c.tenant_id == tenant, documents.c.visibility != COMPANY)
+            .execution_options(oracle_all_documents=True)
+        )
+    ).all()
+    words: set[str] = set()
+    ids: set[str] = set()
+    for _id, _n, title, entity_id in d_rows:
+        words |= _words_of(title)
+        ids |= _id_forms(_id, entity_id)
+    for _id, slug, title in doc_rows:
+        words |= _words_of(title, slug if "-" in (slug or "") else None)
+        ids |= _id_forms(_id)
+    return Hidden(
+        decision_ids=frozenset(r[0] for r in d_rows),
+        document_ids=frozenset(r[0] for r in doc_rows),
+        ids=frozenset(ids),
+        numbers=frozenset(r[1] for r in d_rows),
+        words=frozenset(words),
+    )
 
 
 @event.listens_for(TenantSession, "do_orm_execute")
@@ -268,6 +459,18 @@ def _attached_visible(cls: Any) -> ColumnElement[bool]:
         or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
         or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
     )
+
+
+def member_entity_visible(cls: Any) -> ColumnElement[bool]:
+    """A baseline entity a commenter may see, whoever reads (what Oracle puts in the
+    prompt of a run that reads as a member)."""
+    return _entity_visible(cls)
+
+
+def member_attached_visible(cls: Any) -> ColumnElement[bool]:
+    """A revision, evidence row, proposal or conflict a commenter may see, whoever reads
+    (a count Oracle builds for every member)."""
+    return _attached_visible(cls)
 
 
 def _change_visible(cls: Any) -> ColumnElement[bool]:

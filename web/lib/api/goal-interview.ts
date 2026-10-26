@@ -1,6 +1,6 @@
 /**
- * B6 Goals interview's routes, typed here until the OpenAPI types are regenerated: the
- * calls go through the same client (mock or real), by path.
+ * B6 Goals interview's routes, and G3's generic change actions on its versions, typed here:
+ * the calls go through the same client (mock or real), by path.
  */
 import { api, unwrap, type EntityOut, type Schemas } from "./client";
 
@@ -68,20 +68,27 @@ export type ProposeResult =
   | { kind: "pushback"; reason: string }
   | { kind: "error"; message: string };
 
-/** POST /v1/baseline/goal-measures/{change_id}/propose; `payload` is the person's Edit (null: as offered). */
-export async function proposeMeasure(changeId: string, payload: GoalMeasure | null, keep = false): Promise<ProposeResult> {
-  const { data, error, response } = await loose.POST("/v1/baseline/goal-measures/{change_id}/propose", {
-    params: { path: { change_id: changeId } },
-    body: { payload, keep },
+/**
+ * G3's generic Propose (POST /v1/discussion-changes/{change_id}/propose; B6's own route is
+ * gone): `payload` is the person's Edit (null: as offered), saved only when it is used.
+ * Oracle's pushback comes once; proposing again keeps the target.
+ */
+export async function proposeMeasure(change: DiscussionChange, payload: GoalMeasure | null): Promise<ProposeResult> {
+  const { data, error, response } = await loose.POST("/v1/discussion-changes/{change_id}/propose", {
+    params: { path: { change_id: change.id } },
+    body: { lock_version: change.lock_version, ...(payload ? { payload } : {}) },
   });
-  if (response.ok) return { kind: "ok", change: data as DiscussionChange };
+  if (response.ok) return { kind: "ok", change: (data as { change: DiscussionChange }).change };
   const body = (error ?? {}) as { detail?: unknown; errors?: unknown; pushback?: unknown };
   if (response.status === 422 && Array.isArray(body.errors)) return { kind: "invalid", errors: body.errors as Schemas["GoalProblem"][] };
   if (response.status === 409 && body.pushback) return { kind: "pushback", reason: String(body.detail ?? "") };
   return { kind: "error", message: typeof body.detail === "string" ? body.detail : `Request failed (${response.status})` };
 }
 
-/** POST /v1/baseline/goal-measures/{change_id}/dismiss (approvers). */
-export function dismissMeasure(changeId: string): Promise<DiscussionChange> {
-  return unwrap(loose.POST("/v1/baseline/goal-measures/{change_id}/dismiss", { params: { path: { change_id: changeId } } })) as Promise<DiscussionChange>;
+/** G3's generic Dismiss (POST /v1/discussion-changes/{change_id}/dismiss; approvers). */
+export async function dismissMeasure(change: DiscussionChange): Promise<DiscussionChange> {
+  const out = (await unwrap(
+    loose.POST("/v1/discussion-changes/{change_id}/dismiss", { params: { path: { change_id: change.id } }, body: { lock_version: change.lock_version } }),
+  )) as { change: DiscussionChange };
+  return out.change;
 }

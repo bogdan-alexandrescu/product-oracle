@@ -1274,7 +1274,8 @@ export interface paths {
          *     whose reason names the discussion and links its page; approvers accept it in Baseline.
          *     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
          *     and a target the start or current value already meets gets Oracle's pushback once
-         *     (409); proposing it again keeps it and logs the override.
+         *     (409); proposing it again keeps it and logs the override. ``payload``: the person's
+         *     Edit, proposed instead and saved only when it is used.
          */
         post: operations["propose_discussion_change"];
         delete?: never;
@@ -4752,50 +4753,6 @@ export interface paths {
         get: operations["list_vague_goals"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/baseline/goal-measures/{change_id}/propose": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Propose Goal Measure
-         * @description Propose a measurable version of the goal: a baseline proposal ("From discussion
-         *     <title>") an approver accepts. ``payload``: the person's Edit (it may set owner_id and
-         *     weight). Its fields pass B5's checks first (422, nothing created). A target the start
-         *     or current value already meets gets Oracle's pushback once (409); sending it again,
-         *     or with ``keep``, proposes it and records the override in the summary.
-         */
-        post: operations["propose_goal_measure"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/baseline/goal-measures/{change_id}/dismiss": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Dismiss Goal Measure
-         * @description Dismiss one of Oracle's versions (approvers).
-         */
-        post: operations["dismiss_goal_measure"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10941,7 +10898,7 @@ export interface paths {
         /**
          * List Deal Outcomes
          * @description Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are
-         *     inclusive days.
+         *     inclusive days; ``competitor_id`` keeps the records linked to that alternative.
          */
         get: operations["list_deal_outcomes"];
         put?: never;
@@ -14734,6 +14691,15 @@ export interface components {
             /** Web Finding Id */
             web_finding_id: string | null;
         };
+        /** ChangeProposeIn */
+        ChangeProposeIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /**
          * ChangeResult
          * @description Every action's answer: the change, and what acting created (a staged change, a
@@ -16741,6 +16707,8 @@ export interface components {
             reason_note: string | null;
             /** Competitor Id */
             competitor_id: string | null;
+            /** Competitor Name */
+            competitor_name?: string | null;
             /** Price Quoted */
             price_quoted: string | null;
             /** Source Item Id */
@@ -20594,18 +20562,6 @@ export interface components {
              */
             matched_on: "brief" | "feature";
         };
-        /** GoalMeasureAct */
-        GoalMeasureAct: {
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Keep
-             * @default false
-             */
-            keep: boolean;
-        };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
             /** Detail */
@@ -21107,6 +21063,11 @@ export interface components {
             created: number;
             /** Skipped */
             skipped: components["schemas"]["ImportSkipped"][];
+            /**
+             * Unmatched Alternatives
+             * @default []
+             */
+            unmatched_alternatives: string[];
         };
         /** ImportProblem */
         ImportProblem: {
@@ -26940,6 +26901,8 @@ export interface components {
          * @description What the signed-in user (or API token) chose. ``document_view``: the layer
          *     documents open on; brief unless they switched to the full document. ``setup_hidden``:
          *     they hid Home's Set up checklist (A1); a header chip shows it again.
+         *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
+         *     ``slack_pings``: the Slack pings they get (My account).
          */
         Preferences: {
             /**
@@ -26953,6 +26916,21 @@ export interface components {
              * @default false
              */
             setup_hidden: boolean;
+            /**
+             * Welcome Dismissed
+             * @default false
+             */
+            welcome_dismissed: boolean;
+            /**
+             * @default {
+             *       "draft_ready": true,
+             *       "review_requested": true,
+             *       "comments": false,
+             *       "feedback_wanted": false,
+             *       "published": false
+             *     }
+             */
+            slack_pings: components["schemas"]["SlackPings"];
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -26960,6 +26938,9 @@ export interface components {
             document_view?: ("brief" | "full") | null;
             /** Setup Hidden */
             setup_hidden?: boolean | null;
+            /** Welcome Dismissed */
+            welcome_dismissed?: boolean | null;
+            slack_pings?: components["schemas"]["SlackPingsUpdate"] | null;
         };
         /**
          * PreviousAttempt
@@ -32451,6 +32432,11 @@ export interface components {
             total: number;
             /** Hidden */
             hidden: boolean;
+            /**
+             * Welcome
+             * @default false
+             */
+            welcome: boolean;
         };
         /** SetupStep */
         SetupStep: {
@@ -32620,6 +32606,54 @@ export interface components {
             channels: components["schemas"]["SlackChannelOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /**
+         * SlackPings
+         * @description Which Slack pings the member gets (oracle.slack.pings): ``review_requested`` and
+         *     ``draft_ready`` on by default, the rest off.
+         */
+        SlackPings: {
+            /**
+             * Draft Ready
+             * @default true
+             */
+            draft_ready: boolean;
+            /**
+             * Review Requested
+             * @default true
+             */
+            review_requested: boolean;
+            /**
+             * Comments
+             * @default false
+             */
+            comments: boolean;
+            /**
+             * Feedback Wanted
+             * @default false
+             */
+            feedback_wanted: boolean;
+            /**
+             * Published
+             * @default false
+             */
+            published: boolean;
+        };
+        /**
+         * SlackPingsUpdate
+         * @description Only the pings sent change; the others keep the member's choice.
+         */
+        SlackPingsUpdate: {
+            /** Draft Ready */
+            draft_ready?: boolean | null;
+            /** Review Requested */
+            review_requested?: boolean | null;
+            /** Comments */
+            comments?: boolean | null;
+            /** Feedback Wanted */
+            feedback_wanted?: boolean | null;
+            /** Published */
+            published?: boolean | null;
         };
         /**
          * SlackStatusOut
@@ -39717,7 +39751,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ChangeActIn"];
+                "application/json": components["schemas"]["ChangeProposeIn"];
             };
         };
         responses: {
@@ -46643,102 +46677,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VagueGoalOut"][];
-                };
-            };
-        };
-    };
-    propose_goal_measure: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["GoalMeasureAct"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscussionChangeOut"];
-                };
-            };
-            /** @description Change not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Oracle's pushback (once), closed, or the version was acted on */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GoalMeasurePushback"];
-                };
-            };
-            /** @description Goal fields rejected (B5), every problem */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["YamlImportError"];
-                };
-            };
-        };
-    };
-    dismiss_goal_measure: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscussionChangeOut"];
-                };
-            };
-            /** @description Change not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not proposed */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -58257,6 +58195,7 @@ export interface operations {
                 reason?: ("price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other") | null;
                 from?: string | null;
                 to?: string | null;
+                competitor_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -58294,7 +58233,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -58346,7 +58285,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -58394,7 +58333,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -58448,7 +58387,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;

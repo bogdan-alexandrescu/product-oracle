@@ -8,7 +8,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { todayIn, useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
-import { CURRENCIES, REASONS, RESULTS, type Deal, type Reason, type Result } from "./lib";
+import { alternativeLabel, CURRENCIES, REASONS, RESULTS, type Competitor, type Deal, type Reason, type Result } from "./lib";
 import { Modal } from "./Modal";
 
 type Form = {
@@ -21,6 +21,7 @@ type Form = {
   decided_on: string;
   reason: Reason;
   reason_note: string;
+  competitor_id: string;
   price_quoted: string;
 };
 
@@ -29,9 +30,10 @@ const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
 /**
  * Add or edit one win or loss record (H9): the result, the account as given (no contact
  * details), the day it was decided (not after today in the Company time zone) and the main
- * reason; Other needs a note.
+ * reason; Other needs a note. It may name one of the company's alternatives (H7): an active
+ * one, or the archived one it already names.
  */
-export function DealDialog({ deal, onClose, onSaved }: { deal: Deal | null; onClose: () => void; onSaved: () => void }) {
+export function DealDialog({ deal, alternatives, onClose, onSaved }: { deal: Deal | null; alternatives: Competitor[]; onClose: () => void; onSaved: () => void }) {
   const today = todayIn(useCompanyZone());
   const [f, setF] = useState<Form>(() => ({
     result: deal?.result ?? "lost",
@@ -43,10 +45,12 @@ export function DealDialog({ deal, onClose, onSaved }: { deal: Deal | null; onCl
     decided_on: deal?.decided_on ?? today,
     reason: deal?.reason ?? "price",
     reason_note: deal?.reason_note ?? "",
+    competitor_id: deal?.competitor_id ?? "",
     price_quoted: deal?.price_quoted ?? "",
   }));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const offered = alternatives.filter((c) => c.status === "active" || c.id === deal?.competitor_id);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
 
   async function submit(e: FormEvent) {
@@ -65,6 +69,7 @@ export function DealDialog({ deal, onClose, onSaved }: { deal: Deal | null; onCl
       decided_on: f.decided_on,
       reason: f.reason,
       reason_note: f.reason_note.trim() || null,
+      competitor_id: f.competitor_id || null,
       price_quoted: f.price_quoted.trim() || null,
     } satisfies Partial<Schemas["DealOutcomeIn"]>;
     setBusy(true);
@@ -142,6 +147,19 @@ export function DealDialog({ deal, onClose, onSaved }: { deal: Deal | null; onCl
             ))}
           </select>
         </label>
+        {(offered.length > 0 || f.competitor_id) && (
+          <label className={LABEL}>
+            Alternative
+            <select className={INPUT} value={f.competitor_id} onChange={(e) => set("competitor_id", e.target.value)}>
+              <option value="">None</option>
+              {offered.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {alternativeLabel(c)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className={LABEL}>
           Note{f.reason === "other" ? " (needed for Other)" : ""}
           <textarea className={INPUT} rows={2} value={f.reason_note} maxLength={2000} onChange={(e) => set("reason_note", e.target.value)} />

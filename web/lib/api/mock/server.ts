@@ -23,7 +23,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
+import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
 import {
   discussionInboxRows,
@@ -45,7 +45,7 @@ import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INV
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { draftRefusal, emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -55,6 +55,8 @@ import {
   FEATURE_SET_RUN,
   fromRunCheckpoint,
   lastBaselineBuild,
+  lastBaselineRun,
+  seedFinishedBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
   routeRuns,
@@ -170,6 +172,8 @@ export interface Db {
   lane_f?: LaneFState;
   /** Runs, checkpoints and their artifacts (./runs.ts); absent in data saved before runs existed. */
   runs?: RunsDb;
+  /** The Baseline rebuild's Build the baseline estimate in the "rebuild-costly" ($14) and "rebuild-over-approval" ($70) scenarios. */
+  baseline_build_usd?: number;
   /** D12: the agents' run estimate in the "next-draft-costly" scenario. */
   next_draft_run_usd?: number;
   /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
@@ -348,6 +352,8 @@ function launchesContext(db: Db, me: MemberRow): LaunchesContext {
     role: me.role,
     askerId: db.members.find((x) => x.role === "commenter")?.id ?? null,
     trackId: db.roadmap?.tracks[0]?.id ?? null,
+    // H11 external_messages: at Observe the kit keeps to internal words.
+    externalWords: () => levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") !== "observe",
     roadmapItems: (trackId) => {
       const t = db.roadmap?.tracks.find((x) => x.id === trackId);
       if (!t) return null;
@@ -369,6 +375,14 @@ function ensureLaunches(db: Db): LaunchesDb {
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
+/** Slack pings a member gets until they choose (api oracle.slack.pings.DEFAULTS). */
+const SLACK_PINGS: Schemas["SlackPings"] = {
+  draft_ready: true,
+  review_requested: true,
+  comments: false,
+  feedback_wanted: false,
+  published: false,
+};
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
 /**
@@ -1627,7 +1641,7 @@ async function routePricing(db: Db, me: MemberRow, req: Request, p: string[], q:
     if (p.length === 4 && p[3] === "decide" && req.method === "POST") return decideMemo(db, me, p[2]);
     return null;
   }
-  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q);
+  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q, ensureMarket(db).competitors);
   if (p[1] === "settings" && p[2] === "pricing_owner" && req.method === "PUT" && me.role === "owner") {
     const { value } = (JSON.parse((await req.clone().text()) || "{}") ?? {}) as { value?: unknown };
     if (value != null && !db.members.some((m) => m.id === value && m.role === "owner" && m.status === "active")) {
@@ -1650,6 +1664,22 @@ function seedPricingScenario(db: Db) {
   };
   db.members.push(second);
   db.pricing = { deals: seedDeals(pricingContext(db.members.find((m) => m.id === db.user_id)!), db.user_id) };
+  // H7's alternatives the deals name: Account 9 was lost to Competitor A; Old Rival is archived.
+  const market = emptyMarket();
+  const alternative = (key: string, name: string, kind: MarketDb["competitors"][number]["kind"], aliases: string[], status: "active" | "archived" = "active") => ({
+    id: uuid(),
+    name,
+    kind,
+    website: kind === "status_quo" ? null : `https://${key}.example`,
+    aliases,
+    description: null,
+    status,
+    lock_version: 1,
+  });
+  const rival = alternative("competitor-a", "Competitor A", "direct", ["CompA"]);
+  market.competitors.push(rival, alternative("spreadsheets", "Spreadsheets", "status_quo", ["a spreadsheet"]), alternative("old-rival", "Old Rival", "direct", [], "archived"));
+  db.market = market;
+  db.pricing.deals.find((d) => d.account === "Account 9")!.competitor_id = rival.id;
   const window: EvidenceWindow = { from: "2026-04-24", to: "2026-10-23" };
   const memo = (slug: string, title: string, question: string, approvedAt: string) => {
     const doc: DocumentRow = {
@@ -1696,6 +1726,33 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     decisions: () => db.decisions?.decisions ?? [],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
+    baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
+    rebuildUsd: () => db.baseline_build_usd ?? 7,
+    // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
+    startBaselineBuild: async () => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const call = async (path: string[], body?: unknown): Promise<{ ok: true; id?: string } | { ok: false; error: string }> => {
+        const req = new Request(new URL(`/${path.join("/")}`, "http://mock.local"), { method: "POST", body: body === undefined ? undefined : JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+        const res = (await routeRuns({ ...runsContext(db), db: db.runs! }, req, path))!;
+        const out = (await res.json()) as { id?: string; detail?: string };
+        return res.ok ? { ok: true, id: out.id } : { ok: false, error: String(out.detail ?? "Oracle could not start the build") };
+      };
+      const created = await call(["v1", "runs"], { flow: "baseline", knobs: { depth: "standard", checkpoints: { baseline_confirm: true } } });
+      if (!created.ok) return { error: created.error };
+      const id = created.id!;
+      for (const step of ["estimate", "start"]) {
+        const done = await call(["v1", "runs", id, step]);
+        if (!done.ok) return { error: done.error };
+        // The "rebuild-costly" and "rebuild-over-approval" scenarios price the build otherwise.
+        const run = db.runs!.runs.find((r) => r.id === id);
+        if (step === "estimate" && run && db.baseline_build_usd != null) Object.assign(run, { estimate_usd: db.baseline_build_usd, needs_approval: db.baseline_build_usd > 50 });
+      }
+      return { id };
+    },
+    runStatus: (id) => db.runs?.runs.find((r) => r.id === id)?.status ?? null,
+    lastBaselineRun: () => lastBaselineRun(db.runs),
+    oracleDid: (row) =>
+      (db.autonomy ??= emptyAutonomy()).actions.push({ ...row, id: uuid(), created_at: new Date().toISOString(), undone_at: null, opened_by: [], undone_by: null }),
   };
 }
 
@@ -1816,6 +1873,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     setEffort: (key, size, runId) => setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
+    draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     ask: (q) => {
@@ -2063,6 +2121,13 @@ function load(): Db {
     if (goal) db.quality = { outcomes, learnings: seedLearnings(db.user_id) };
   }
   db.autonomy = emptyAutonomy();
+  // The Baseline rebuild (rebuild.py): Build the baseline priced $14 (above the old $10 ritual
+  // limit) or $70 (over P3's $50), with one build finished on 20 October.
+  if (scenario === "rebuild-costly" || scenario === "rebuild-over-approval") {
+    db.baseline_build_usd = scenario === "rebuild-costly" ? 14 : 70;
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    seedFinishedBaselineBuild(runsContext(db), db.runs, "2026-10-20T16:00:00Z");
+  }
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.
   db.discussions =
@@ -2595,6 +2660,19 @@ function addReview(
   return r;
 }
 
+/** B6 Goals interview's context: its routes, and G3's Propose on a goal version, write through it. */
+function goalContext(db: Db, me: { id: string; role: Role }): GoalInterviewContext {
+  return {
+    baseline: db.baseline,
+    discussions: () => (db.discussions ??= emptyDiscussions()),
+    members: db.members,
+    me: { id: me.id, role: me.role },
+    isMember: (id) => activeMember(db, id),
+    uuid,
+    now,
+  };
+}
+
 function lockedKeys(db: Db, v: VersionRow): string[] {
   return v.sections
     .filter((s) => latestReview(db, v.id, s.section_key)?.verdict === "approved")
@@ -2754,7 +2832,43 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     done: steps.filter((st) => st.done).length,
     total: steps.length,
     hidden: db.preferences?.[me.email]?.setup_hidden === true,
+    welcome: welcomed(db, me),
   };
+}
+
+/** A1 welcome: the member joined through an invite (however long ago) and has not dismissed it. */
+function welcomed(db: Db, me: MemberRow): boolean {
+  if (db.preferences?.[me.email]?.welcome_dismissed === true) return false;
+  return db.invites.some((i) => i.email === me.email && i.accepted_at);
+}
+
+/**
+ * A first sign-in with an open, unexpired invite's email takes it, as the API's Google (IAP)
+ * sign-in does (oracle.auth.iap, oracle.members.service.claim_open_invite). The mock has no
+ * Google sign-in, so its sign-in form stands in for it; the API's password sign-in never
+ * takes an invite: a member with the invite's role, the
+ * invite accepted. Null when there is no such invite.
+ */
+function claimInvite(db: Db, email: string): MemberRow | null {
+  const at = now();
+  const invite = db.invites.find((i) => i.email === email && i.status === "open" && (!i.expires_at || i.expires_at > at));
+  if (!invite) return null;
+  Object.assign(invite, { status: "accepted", accepted_at: at });
+  const member: MemberRow = {
+    id: uuid(),
+    email,
+    name: invite.name ?? null,
+    role: invite.role,
+    engineering_lead: !!invite.engineering_lead,
+    created_at: at,
+    last_sign_in_at: null,
+    disabled_at: null,
+    disabled_by: null,
+    status: "active",
+    open_tokens: 0,
+  };
+  db.members.push(member);
+  return member;
 }
 
 /** Where an invitee signs in with Google: the app's own address in the mock. */
@@ -3431,8 +3545,11 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
-    const member = db.members.find((x) => x.email === email.trim().toLowerCase());
+    const address = email.trim().toLowerCase();
     db.account ??= seedAccount(db.members, uuid);
+    const member =
+      db.members.find((x) => x.email === address) ??
+      (passwordOk(db.account, address, password, MOCK_LOGIN.password) ? claimInvite(db, address) : null);
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
@@ -3529,14 +3646,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
-    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
+    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false, welcome_dismissed: false, slack_pings: { ...SLACK_PINGS } });
+    mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
+      const pings = patch.slack_pings ?? {};
+      if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
+      if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
+      for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
     }
     mine.setup_hidden ??= false; // saved before A1
+    mine.welcome_dismissed ??= false; // saved before the A1 welcome
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
@@ -3593,6 +3716,12 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (me.role === "owner" || (leads.includes(me.id) && atLeast(me.role, "commenter"))) return "verify";
         return atLeast(me.role, "approver") ? (leads.length ? "propose" : "verify") : null;
       },
+      lockedSection: (documentId, sectionKey) => {
+        const v = db.versions.filter((x) => x.document_id === documentId).sort((a, b) => b.number - a.number)[0];
+        const s = v && lockedKeys(db, v).includes(sectionKey) ? v.sections.find((x) => x.section_key === sectionKey) : undefined;
+        return s ? `Section ${/^\d/.test(s.heading) ? s.heading : `${s.ordinal}. ${s.heading}`} is approved and locked` : null;
+      },
+      proposeGoalMeasure: (c, d, payload) => proposeVersion(goalContext(db, me), c, d, payload),
       recordBasis: async (b) => {
         const ctx = roadmapContext(db, me);
         db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
@@ -3661,15 +3790,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
-    const goalCtx: GoalInterviewContext = {
-      baseline: db.baseline,
-      discussions: () => (db.discussions ??= emptyDiscussions()),
-      members: db.members,
-      me: { id: me.id, role: me.role },
-      isMember: (id) => activeMember(db, id),
-      uuid,
-      now,
-    };
+    const goalCtx = goalContext(db, me);
     const res = await routeGoalInterview(goalCtx, req, p);
     if (res) return res;
     if (p[2] === "proposals" && p[3] && p[4] === "accept" && req.method === "POST") {

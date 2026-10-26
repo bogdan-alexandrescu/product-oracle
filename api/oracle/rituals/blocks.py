@@ -20,10 +20,12 @@ from oracle import company_time
 from oracle.baseline import figures
 from oracle.baseline.figures import Figure
 from oracle.baseline.models import Edge, Entity, GoalMeasurement, Proposal
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
 from oracle.market import blocks as market_blocks
 from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
+from oracle.rituals import rebuild
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
 from oracle.runs.models import Checkpoint, Run
 from oracle.v2.models import BlockerResolutionEvent
@@ -217,10 +219,16 @@ async def since_last(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
     runs = await count(
         select(func.count()).select_from(Run).where(Run.finished_at.between(*window))
     )
+    # Built once and read by every member: a proposal on a decision a commenter may not
+    # see (oracle.docs.visibility) is not counted.
     proposals = await count(
         select(func.count())
         .select_from(Proposal)
-        .where(Proposal.status == "accepted", Proposal.decided_at.between(*window))
+        .where(
+            Proposal.status == "accepted",
+            Proposal.decided_at.between(*window),
+            visibility.member_attached_visible(Proposal),
+        )
     )
     # Blockers (CR-04): constraint entities carrying a blocker strategy, opened in the
     # window, and those whose status turned resolved in it.
@@ -646,6 +654,8 @@ async def variances(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
 
 # H7 Competitive digest's four blocks (oracle.market.blocks).
 TITLES.update(market_blocks.TITLES)
+# The Baseline rebuild's one block (oracle.rituals.rebuild).
+TITLES.update(rebuild.TITLES)
 
 Builder = Callable[[AsyncSession, BlockCtx], Awaitable[list[dict[str, Any]]]]
 BUILDERS: dict[str, Builder] = {
@@ -674,6 +684,7 @@ BUILDERS: dict[str, Builder] = {
     "metrics_table": metrics_table,
     "variances": variances,
     **market_blocks.BUILDERS,
+    rebuild.BLOCK: rebuild.block,
 }
 
 
@@ -712,8 +723,6 @@ async def for_reader(
     oracle.docs.visibility; None when every row stays. A pre-read is built with Oracle's
     view (the ticker, an owner's Prepare) and stored once, so this runs on every read.
     Anything counted over rows is counted by the reader over what is left."""
-    from oracle.docs import visibility
-
     rows = [r for b in built for r in b.get("rows") or []]
     decisions = await visibility.hidden_decision_ids(
         db, (_ref(r, "decision_id") for r in rows), as_member=as_member
@@ -722,8 +731,16 @@ async def for_reader(
         db, [_ref(r, "document_id") for r in rows], as_member=as_member
     )
 
+    # #541 part 5: a row whose text names what the reader may not see (a changelog draft
+    # a launch kit run wrote as its starter) goes too.
+    named = await visibility.hidden_for_reader(db, as_member=as_member) if rows else None
+
     def hidden(r: dict[str, Any]) -> bool:
-        return _ref(r, "decision_id") in decisions or _ref(r, "document_id") in documents
+        if _ref(r, "decision_id") in decisions or _ref(r, "document_id") in documents:
+            return True
+        return named is not None and any(
+            named.names(r.get(k)) for k in ("text", "title") if isinstance(r.get(k), str)
+        )
 
     if not any(hidden(r) for r in rows):
         return None

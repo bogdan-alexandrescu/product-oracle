@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import inspect, select
 
 from oracle import autonomy
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.baseline import (
     conflicts,
@@ -86,6 +86,8 @@ Approver = Annotated[Principal, Depends(require_role("approver"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 # H11: a run's propose_change while the baseline is at observe.
 OBSERVING_BASELINE = "Oracle is set to observe the baseline"
+# The YAML import's body types (the CLI sends application/yaml).
+YAML_TYPES = ("application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml")
 
 
 async def _fresh(db, *rows):
@@ -960,6 +962,7 @@ async def export_yaml(principal: Reader, db: TenantDB) -> PlainTextResponse:
 @router.post(
     "/yaml",
     response_model=YamlImportResult,
+    dependencies=[body_type(*YAML_TYPES)],
     responses={
         403: {"model": YamlImportError, "description": "A change the caller's role may not make"},
         413: {"description": "File larger than 1 MiB (ORACLE_MAX_BODY_BYTES)"},

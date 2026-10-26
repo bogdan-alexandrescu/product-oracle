@@ -10,10 +10,12 @@ import pytest
 from sqlalchemy import func, select, update
 
 from oracle.auth.models import ROLES, User
+from oracle.auth.service import sign_run_binding
 from oracle.authz import has_role
 from oracle.mcp.oauth import service
 from oracle.mcp.oauth.models import OAuthClient, OAuthCode, OAuthToken
 from oracle.mcp.oauth.verify import verify_access_token, www_authenticate
+from oracle.runs.models import Run
 from oracle.seed import seed
 from oracle.tenancy import tenant_session, unscoped_session
 from tests.test_iap import HEADER, _join_at_once, assertion, fetches  # noqa: F401  (fetches: IAP on)
@@ -210,6 +212,26 @@ async def test_register_lands_in_the_default_tenant(client):
     async with unscoped_session() as s:
         row = await s.scalar(select(OAuthClient).where(OAuthClient.client_id == reg["client_id"]))
     assert row.tenant_id == first.tenant_id
+
+
+async def test_register_is_rate_limited(client, monkeypatch):
+    """Registration needs no sign-in and adds a client row and an audit record to the
+    default company: past the hourly cap it is refused (429) and adds nothing."""
+    await seed()
+    monkeypatch.setattr(service, "REGISTER_LIMIT", 3)
+    for _ in range(3):
+        await register(client)
+    resp = await client.post("/oauth/register", json={"redirect_uris": [REDIRECT]})
+    assert resp.status_code == 429, resp.text
+    assert resp.headers.get("retry-after")
+    async with unscoped_session() as s:
+        assert await s.scalar(select(func.count()).select_from(OAuthClient)) == 3
+        # Registrations older than the window no longer count.
+        await s.execute(
+            update(OAuthClient).values(created_at=datetime.now(UTC) - timedelta(hours=2))
+        )
+        await s.commit()
+    await register(client)
 
 
 async def test_register_before_setup_is_unavailable(client):
@@ -696,3 +718,38 @@ async def test_access_token_works_on_mcp_and_rest(client, scope, can_write):
     )
     resp = await client.get("/v1/me", headers={"Authorization": "Bearer poa_unknown"})
     assert resp.status_code == 401
+
+
+@pytest.mark.parametrize("binding", ["bad", "valid"])
+async def test_a_run_header_reads_as_not_signed_in(client, binding):
+    """A run header that does not verify is a 400 on the API; on the consent pages the
+    browser is simply not signed in (sign in, 401), never an error page. A valid one
+    is a run, and a run never grants access either."""
+    r = await sign_in(client)
+    reg = await register(client)
+    _, challenge = pkce()
+    handle = await consent_handle(client, authorize_params(reg["client_id"], challenge))
+    value = "not-a-signed-value"
+    if binding == "valid":
+        async with tenant_session(r.tenant_id) as s:
+            user = await s.scalar(select(User).where(User.email == r.user_email))
+            run = Run(flow="baseline_to_prd", status="running", created_by=user.id)
+            s.add(run)
+            await s.commit()
+            value = sign_run_binding(user.id, run.id)
+        assert (await client.get("/v1/me", headers={"x-oracle-run-id": value})).status_code == 200
+    header = {"x-oracle-run-id": value}
+    resp = await client.get(
+        "/oauth/authorize", params=authorize_params(reg["client_id"], challenge), headers=header
+    )
+    assert resp.status_code == 302, resp.text
+    assert resp.headers["location"].startswith(f"{BASE}/login?next=")
+    resp = await client.get("/oauth/authorize/request", params={"request": handle}, headers=header)
+    assert resp.status_code == 401, resp.text
+    resp = await client.post(
+        "/oauth/authorize/decision", json={"request": handle, "approve": True}, headers=header
+    )
+    assert resp.status_code == 401, resp.text
+    # Without the header the same browser is signed in.
+    resp = await client.get("/oauth/authorize/request", params={"request": handle})
+    assert resp.status_code == 200, resp.text

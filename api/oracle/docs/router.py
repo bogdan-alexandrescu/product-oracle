@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.docs import service
 from oracle.docs.parser import DraftError
@@ -104,6 +104,7 @@ async def set_document_visibility(
             "content": {"text/markdown": {"schema": {"type": "string"}}},
         }
     },
+    dependencies=[body_type("text/markdown", "text/x-markdown", "text/x-md")],
 )
 async def import_version(
     doc: str,
