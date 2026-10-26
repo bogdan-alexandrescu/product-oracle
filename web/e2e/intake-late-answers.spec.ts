@@ -200,7 +200,7 @@ test("a late answer's accepted suggestion is withheld with it while its finding 
   await open.getByRole("button", { name: "Edit and accept" }).click();
   await open.getByLabel("Answer").fill(ACCEPTED);
   await open.getByRole("button", { name: "Accept edited text" }).click();
-  await expect(open).toHaveCount(0);
+  await expect(open).toContainText(`Resolution: Answered: ${ACCEPTED}`);
 
   const level = async (name: "Private" | "Full") => {
     await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
@@ -223,6 +223,7 @@ test("a late answer's accepted suggestion is withheld with it while its finding 
   await expect(kept).toHaveCount(1);
   await expect(kept).toContainText("withheld while its finding is not shared in full");
   await expect(kept.getByTestId("suggestion")).toBeVisible();
+  await expect(kept).toContainText("Resolution: Withheld while its finding is not shared in full");
   await expect(kept).not.toContainText(REPLY);
 
   await level("Full");
