@@ -2071,7 +2071,7 @@ function load(): Db {
   db.discussions =
     scenario === "discussions"
       ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
-      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
+      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO || scenario === STORED_REFUSALS_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : scenario === SLACK_SCENARIO
           ? seedDiscussionsScenario(db, seedSlackBridge)
@@ -2119,6 +2119,8 @@ function load(): Db {
   if (scenario === STORED_REFUSALS_SCENARIO) {
     seedStoredRefusalRun(db.runs!, runsContext(db), SPENT);
     seedStoredRefusals(llmContext(db, db.user_id, "owner"));
+    // #644 re-review: the "discussion-replies" seed's failed reply stored the refusal on Oct 18.
+    for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
   }
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");

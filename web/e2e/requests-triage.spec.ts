@@ -100,6 +100,20 @@ test("the daily run that could not start says why", async ({ page }) => {
   await expect(status).not.toContainText("did not run");
 });
 
+test("a triage that failed with no reason says when, one sentence after another", async ({ page }) => {
+  // protects=#644 re-review (minor): a failed run with no stored error still ends "did not
+  // finish" before its when; fails_when=the line reads "did not finishFailed …";
+  // no_claim=a run that stored its error (stored-refusals-everywhere.spec.ts).
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "triage-failed-quietly"));
+  await login(page, "approver@example.com");
+  await openRequests(page);
+  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  const status = page.getByTestId("triage-status");
+  await expect(status.getByTestId("failed-at")).toBeVisible({ timeout: 15_000 });
+  await expect(status).toContainText(/Oracle's last triage did not finish\. Failed Oct \d+, \d+:\d{2} [AP]M P[DS]T\./);
+  await expect(status).not.toContainText("finishFailed");
+});
+
 for (const email of ["commenter@example.com", "viewer@example.com"]) {
   test(`${email.split("@")[0]}s do not start triage`, async ({ page }) => {
     // protects=behaviour rule 2 (approvers and owners start triage); fails_when=Classify now is

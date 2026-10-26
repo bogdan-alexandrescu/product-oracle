@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY, STORED_REFUSALS_SCENARIO } from "../lib/api/mock/server";
-import { login, openSection, sectionAction } from "./helpers";
+import { login, openSection, openTab, sectionAction } from "./helpers";
 
 /**
  * #561 review (MAJOR 1): every surface that shows a stored Claude-pool refusal says when it
@@ -114,4 +114,19 @@ test("a code map the pool refused says when it failed, the refusal in the past",
   await expect(line).toContainText(`The code map run failed: index: ${THEN}`);
   await expect(line.getByRole("button", { name: "Map the code" })).toBeVisible();
   await noCurrentRefusal(page);
+});
+
+test("a discussion reply the pool refused reads the refusal in the past", async ({ page }) => {
+  // #644 re-review (MAJOR 1): an approver opening a discussion whose Oracle reply failed on a
+  // stored refusal reads it as what was so then, its time in words, not "is spent" now.
+  await page.goto("/documents/team-workspaces/v/2");
+  await openTab(page, "Feedback");
+  const panel = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
+  await panel.getByTestId("feedback-discussions").click();
+  await panel.getByTestId("discussion-row").filter({ hasText: "Caps: ship without detection?" }).first().click();
+  const thread = page.getByTestId("discussion-thread").filter({ visible: true });
+  await expect(thread.getByTestId("oracle-reply").last().getByTestId("oracle-reply-error")).toHaveText(THEN);
+  await expect(thread).not.toContainText("is spent");
+  await expect(thread).not.toContainText("can take this call");
+  await expect(thread).not.toContainText("2026-10-25T");
 });

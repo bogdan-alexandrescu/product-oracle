@@ -14,6 +14,7 @@ import type { Schemas } from "@/lib/api/client";
 import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-changes";
 
 import { companyDayInWords } from "./connections";
+import { readableRefusal } from "./refusal";
 
 type Role = Schemas["MemberOut"]["role"];
 type Member = { id: string; email: string; role: Role; status?: string | null };
@@ -70,6 +71,8 @@ export type MessageRow = {
   status?: Schemas["DiscussionMessageOut"]["status"];
   citations?: Record<string, unknown>[];
   error_reason?: string | null;
+  /** The gateway's refusal as stored when the reply failed (replies.produce: str(e)). */
+  error?: string | null;
   cancel_requested?: boolean;
   /** Pushback (G2, B6): the reason Oracle pushed back. */
   pushback?: { reason: string } | null;
@@ -754,7 +757,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     edited_at: x.edited_at,
     deleted: !!x.deleted_at,
     error_reason: x.error_reason ?? null,
-    error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? (ctx.refusal?.() ?? NO_ACCOUNT_MESSAGE) : "Oracle can't reply right now.") : null,
+    // As replies.error_copy: an approver reads the stored refusal as it was then, in the company's zone (#644 re-review).
+    error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? (readableRefusal(x.error ?? ctx.refusal?.(), true) ?? NO_ACCOUNT_MESSAGE) : "Oracle can't reply right now.") : null,
     pushback: x.pushback ?? null,
     usage: null,
   });
@@ -1161,7 +1165,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       }
       if (p[5] === "retry" && m === "POST") {
         if (row.status !== "failed" && row.status !== "cancelled") return refuse(409, "Only a failed or stopped reply can be retried");
-        Object.assign(row, { status: "pending", body: "", citations: [], error_reason: null, cancel_requested: false });
+        Object.assign(row, { status: "pending", body: "", citations: [], error_reason: null, error: null, cancel_requested: false });
         return json(200, messageOut(row));
       }
       return null;

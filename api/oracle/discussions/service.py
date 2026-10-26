@@ -782,7 +782,10 @@ async def list_discussions(
 
 
 def message_out(
-    m: DiscussionMessage, users: dict[uuid.UUID, User], role: str | None = None
+    m: DiscussionMessage,
+    users: dict[uuid.UUID, User],
+    role: str | None = None,
+    zone: str = company_time.DEFAULT_ZONE,
 ) -> DiscussionMessageOut:
     def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
@@ -807,7 +810,7 @@ def message_out(
         edited_at=m.edited_at,
         deleted=deleted,
         error_reason=m.error_reason,
-        error=replies.error_copy(m, role),
+        error=replies.error_copy(m, role, zone),
         pushback=m.pushback,
         usage=ReplyUsage(
             model=m.model,
@@ -829,7 +832,10 @@ async def messages_out(
     ids = {m.author_id for m in rows if m.author_id} | {u for m in rows for u in m.mentions}
     users = await users_by_id(db, ids)
     role = principal.role if principal is not None else None
-    return [message_out(m, users, role) for m in rows]
+    # Once a page, and only when a failed reply has a stored error to read (#644 re-review).
+    failed = any(m.status == "failed" and m.error for m in rows)
+    zone = await company_time.company_time_zone(db) if failed else company_time.DEFAULT_ZONE
+    return [message_out(m, users, role, zone) for m in rows]
 
 
 async def list_messages(

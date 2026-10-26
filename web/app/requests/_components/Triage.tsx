@@ -80,7 +80,8 @@ export function TriageStatusLine({ status }: { status: Status | undefined }) {
           ) : (
             // When it failed, then what was so then (#633 re-review).
             <>
-              Oracle&apos;s last triage did not finish{status.error ? ". " : ""}
+              {/* The ". " follows the sentence whenever more follows it: a when, a why or both. */}
+              Oracle&apos;s last triage did not finish{status.error || (status.status === "failed" && status.finished_at) ? ". " : ""}
               {status.status === "failed" && status.finished_at && <span data-testid="failed-at">{failedAt(status.finished_at)}. </span>}
               {status.error}
             </>
