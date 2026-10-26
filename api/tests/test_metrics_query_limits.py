@@ -449,8 +449,14 @@ def test_the_row_limit_wraps_the_parsed_statement():
     assert sent == f"SELECT * FROM ({query[:-1]}) LIMIT {posthog.MAX_ROWS}"
 
 
-_TABLES = ["events", "events FINAL", "events SAMPLE 1 OFFSET 0", "events SAMPLE 1/10",
-           "(SELECT * FROM events)", "(SELECT * FROM events SAMPLE 1 OFFSET 0)"]  # fmt: skip
+# (table, what follows its alias): FINAL and SAMPLE come after the alias in HogQL.
+_TABLES = [("events", ""), ("events", " FINAL"), ("events", " SAMPLE 1 OFFSET 0"),
+           ("events", " SAMPLE 1/10"), ("events", " FINAL SAMPLE 1/10 OFFSET 1/2"),
+           ("(SELECT * FROM events)", ""),
+           ("(SELECT * FROM events SAMPLE 1 OFFSET 0)", "")]  # fmt: skip
+_PLACES = ["{}", "SELECT 1 FROM ({})", "SELECT 1 FROM events WHERE 1 IN ({})", "SELECT ({})",
+           "SELECT 1 FROM events WHERE EXISTS ({})", "WITH x AS ({}) SELECT 1 FROM events",
+           "SELECT 1 FROM events WHERE 1 IN (1, ({}))"]  # fmt: skip
 _WORDS = ["order", "where", "limit", "offset", "sample", "group", "having", "prewhere",
           "window", "qualify", "join", "final", "settings", "array", "global", "e"]  # fmt: skip
 _OTHERS = [", cohort_people", ", numbers(10)", ", system.tables", " JOIN cohort_people c ON 1 = 1",
@@ -461,17 +467,20 @@ _OTHERS = [", cohort_people", ", numbers(10)", ", system.tables", " JOIN cohort_
 def _fuzz_cases() -> list[tuple[str, bool]]:
     """(query, allowed): each table form, with no alias, a bare or AS alias (a clause word
     or a plain name), followed by another table (refused) or a JOIN of persons (allowed
-    when the alias is a plain name), at the top level, in a subquery or an IN."""
+    when the alias is a plain name), in each of :data:`_PLACES`. sqlglot cannot parse
+    SAMPLE then JOIN inside a scalar, EXISTS or IN-list subquery, so those are refused
+    (fail closed) and not expected to pass."""
     cases = []
-    for table in _TABLES:
+    for table, after in _TABLES:
         for alias in ["", *(f" {w}" for w in _WORDS), *(f" AS {w}" for w in _WORDS)]:
             plain = alias.split()[-1:] in ([], ["e"])
-            for wrap in ("{}", "SELECT 1 FROM ({})", "SELECT 1 FROM events WHERE 1 IN ({})"):
+            for wrap in _PLACES:
                 for other in _OTHERS:
-                    body = f"SELECT count() FROM {table}{alias}{other}"
+                    body = f"SELECT count() FROM {table}{alias}{after}{other}"
                     cases.append((wrap.format(body), False))
-                if plain:
-                    body = f"SELECT count() FROM {table}{alias} JOIN persons p ON 1 = 1 WHERE 1 = 1"
+                if plain and not ("SAMPLE" in after and _PLACES.index(wrap) > 2):
+                    join = " JOIN persons p ON 1 = 1 WHERE 1 = 1"
+                    body = f"SELECT count() FROM {table}{alias}{after}{join}"
                     cases.append((wrap.format(body), True))
     return cases
 
@@ -479,9 +488,10 @@ def _fuzz_cases() -> list[tuple[str, bool]]:
 def test_fuzz_aliases_keywords_and_joins():
     """protects=#643 re-review: over every combination of a table form (FINAL, SAMPLE,
     SAMPLE OFFSET, a subquery), an alias (none, bare or after AS, a clause word or a
-    name), a place (top level, subquery, IN) and a second source (a comma join, a JOIN,
-    a table function, a system table, ARRAY JOIN over a subquery), a source outside the
-    allowed tables is always refused and a JOIN of persons with a plain alias passes;
+    name), a place (top level, FROM, IN, a scalar, EXISTS, WITH) and a second source (a
+    comma join, a JOIN, a table function, a system table, ARRAY JOIN over a subquery), a
+    source outside the allowed tables is always refused and a JOIN of persons with a plain
+    alias passes;
     fails_when=any combination reads another table; no_claim=forms outside these lists."""
     leaks, refused = [], []
     for query, allowed in _fuzz_cases():
