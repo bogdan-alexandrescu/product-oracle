@@ -683,3 +683,151 @@ def test_the_public_routes_are_never_mcp_tools_and_members_routes_are():
     assert set(share_public.OPERATIONS) <= {t.operation_id for t in ops}
     assert not names & set(share_public.OPERATIONS)
     assert {"create_share_link", "revoke_share_link", "list_share_links"} <= names
+
+
+# --- #646 review ---------------------------------------------------------------------
+
+
+async def test_parallel_wrong_guesses_meet_the_lock(client, ctx):
+    """protects=Q5 lock-out under a burst: wrong passcodes sent at the same time count
+    before the slow passcode check, so no more than PASSCODE_TRIES are ever checked in a
+    window; fails_when=a burst of parallel guesses is checked in full before the lock;
+    no_claim=the lock-out numbers (the owner's)."""
+    import asyncio
+
+    await seed_roadmap(ctx, publish=True)
+    token = token_of((await create(client, ctx, "owner")).json())
+    burst = share_public.CLIENT_PASSCODE_TRIES - 2
+    answers = await asyncio.gather(
+        *(unlock(client, token, f"wrong-guess-{i:03d}") for i in range(burst))
+    )
+    codes = [r.status_code for r in answers]
+    assert codes.count(404) <= share_public.PASSCODE_TRIES, codes
+    assert codes.count(429) >= burst - share_public.PASSCODE_TRIES, codes
+    resp = await unlock(client, token, PASSCODE)
+    assert resp.status_code == 429 and int(resp.headers["retry-after"]) > 0
+
+
+async def test_the_right_passcode_after_wrong_ones_still_opens_and_clears_the_count(client, ctx):
+    """protects=Q5: counting a try before the check never locks a holder who gets it
+    right inside the limit; fails_when=a right passcode counts as a miss."""
+    await seed_roadmap(ctx, publish=True)
+    token = token_of((await create(client, ctx, "owner")).json())
+    for _ in range(share_public.PASSCODE_TRIES - 1):
+        assert (await unlock(client, token, "wrong-guess-000")).status_code == 404
+    assert (await unlock(client, token, PASSCODE)).status_code == 303
+    for _ in range(share_public.PASSCODE_TRIES - 1):
+        assert (await unlock(client, token, "wrong-guess-000")).status_code == 404
+    assert (await unlock(client, token, PASSCODE)).status_code == 303
+
+
+async def _built_from_a_restricted_prd(ctx) -> None:
+    """The roadmap's version names the PRD it was built from, the PRD is limited to owners
+    and approvers, and a body links to it."""
+    from oracle.docs.models import DocumentVersion, Section
+
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == "example-labs-prd"))
+        prd.visibility = "approvers"
+        prd_version = DocumentVersion(
+            document_id=prd.id, number=3, markdown="# PRD", content_hash="p" * 64,
+            front_matter={}, warnings=[], approved_at=datetime(2026, 10, 1, tzinfo=UTC),
+        )  # fmt: skip
+        s.add(prd_version)
+        await s.flush()
+        doc = await s.scalar(select(Document).where(Document.slug == SLUG))
+        version = await s.scalar(
+            select(DocumentVersion).where(DocumentVersion.document_id == doc.id)
+        )
+        version.source_version_id = prd_version.id
+        section = await s.scalar(
+            select(Section).where(
+                Section.version_id == version.id, Section.section_key == "summary"
+            )
+        )
+        section.body_md += " See [the PRD](/documents/example-labs-prd/v/3#goals)."
+        await s.commit()
+
+
+@pytest.mark.parametrize("audience", ["board", "team", "engineering"])
+async def test_a_link_holder_sees_no_other_document_status_or_version(client, ctx, audience):
+    """protects=spec-O5 §3 (a link holder never sees any other document; no outbound link
+    but changelog links): the page names no source PRD, links nothing into the app, and
+    shows no review status or version count; fails_when=the export banner's "From <PRD>
+    v<n>", its app link, "Approved" or "Version n of m" reaches the page; no_claim=the
+    web /s page (lane 5)."""
+    await seed_roadmap(ctx, publish=True)
+    await _built_from_a_restricted_prd(ctx)
+    token = token_of((await create(client, ctx, "owner", audience=audience)).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    body_text = _text(page.text)
+    assert "We grow activation" in body_text
+    assert "the PRD" in body_text  # the link's words stay, the link goes
+    for leak in ("Example Labs PRD", "example-labs-prd", "/documents/", "Approved",
+                 "Superseded", "Version 1", "banner-source", "banner-status"):  # fmt: skip
+        assert leak not in page.text, leak
+    hrefs = re.findall(r'href="([^"]*)"', page.text)
+    assert all(h.startswith("#") for h in hrefs), hrefs
+
+
+def test_the_per_address_tables_drop_old_entries(monkeypatch):
+    """protects=memory: an address that stops calling leaves the in-memory windows;
+    fails_when=the tables grow with every new client address."""
+    share_public.reset_limits()
+    clock = [1000.0]
+    monkeypatch.setattr(share_public.time, "monotonic", lambda: clock[0])
+    # The request stands for its client address here.
+    monkeypatch.setattr(share_public, "_client", lambda address: address)
+    request = str
+
+    for i in range(50):
+        assert share_public._client_allowed(request(f"198.51.100.{i}")) is None
+    assert len(share_public._client_hits) == 50
+    clock[0] += share_public.LOCK_SECONDS + 1
+    assert share_public._client_allowed(request("203.0.113.9")) is None
+    assert list(share_public._client_hits) == ["203.0.113.9"]
+
+
+async def test_an_owner_demoted_to_approver_loses_their_public_links(client, ctx):
+    """protects=Q2/Q10: a Public link is an owner's; an owner demoted to approver no
+    longer controls theirs, so it ends (a Board link they made stays); fails_when=the
+    demoted approver keeps a live Public link."""
+    await seed_public(ctx)
+    await approve_both(client, ctx)
+    resp = await client.post(
+        f"/v1/roadmaps/{SLUG}/publications/1/public-check", headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 201, resp.text
+    approver = ctx.users["approver"].id
+    promote = await client.patch(
+        f"/v1/members/{approver}", json={"role": "owner"}, headers=ctx.as_("owner")
+    )
+    assert promote.status_code == 200, promote.text
+    public = await create(client, ctx, "approver", audience="public", label="Customers")
+    assert public.status_code == 201, public.text
+    board = await create(client, ctx, "approver")
+    assert board.status_code == 201, board.text
+    demote = await client.patch(
+        f"/v1/members/{approver}", json={"role": "approver"}, headers=ctx.as_("owner")
+    )
+    assert demote.status_code == 200, demote.text
+    states = {r["audience"]: r["state"] for r in
+              (await client.get(LINKS, headers=ctx.as_("owner"))).json()}  # fmt: skip
+    assert states == {"public": "revoked", "board": "active"}
+
+
+async def test_capabilities_let_approvers_manage_their_links(client, ctx):
+    """protects=the capabilities registry matches the routes: an approver may call
+    create, extend/move, rotate and revoke, and the item decides the rest (their own
+    links, a non-public audience); fails_when=the web hides an approver's own link
+    actions or offers an approver a Public link."""
+    resp = await client.get("/v1/me/capabilities", headers=ctx.as_("approver"))
+    caps = resp.json()
+    for op in ("create_share_link", "update_share_link", "rotate_share_link_passcode",
+               "revoke_share_link", "list_share_links"):  # fmt: skip
+        assert caps["operations"][op] is True, op
+    for op in ("create_share_link", "update_share_link", "rotate_share_link_passcode",
+               "revoke_share_link"):  # fmt: skip
+        assert caps["per_item"][op] == "owner", op
+    assert caps["operations"]["revoke_all_share_links"] is False
