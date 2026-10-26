@@ -751,7 +751,8 @@ async def test_board_hides_internal_item_detail_in_every_template(client, ctx, t
 
 
 def _tables(html: str) -> int:
-    return len(re.findall(r"<table\b", html))
+    """The content tables of an export (not the header's status table)."""
+    return len(re.findall(r"<table\b(?![^>]*status-table)", html))
 
 
 MILESTONES_TABLE = (
@@ -932,7 +933,10 @@ async def test_a_tenant_with_no_confirmed_goals_shows_board_as_before(client, ct
     assert resp.status_code == 200, resp.text
     text = _text(resp.text)
     assert "Bulk import" in text and "CSV parser" in text, text
-    assert "serve no confirmed goal" not in text and "serves no confirmed goal" not in text
+    # The written cards' own words show; nothing is left out or flagged.
+    assert "Confetti" in text and "Stickers" in text, text
+    assert "left out" not in text and variants.NO_GOAL_FLAG not in text, text
+    assert "\u2691 Confetti" not in text, text
 
 
 async def test_loading_the_items_reads_the_goals_once(ctx, monkeypatch):
