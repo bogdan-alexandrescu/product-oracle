@@ -1623,7 +1623,7 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
     renderAudience: (doc, v, audience) => {
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
-      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience) }, audienceLabel(audience));
+      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience) }, db.branding, audienceLabel(audience));
     },
   };
 }
