@@ -641,9 +641,10 @@ async def stream(
         visibility.bind(db, principal)
         row = await db.get(DiscussionMessage, reply_id)
         assert row is not None
-        if len(row.body) > sent and row.status != "complete":
-            if text := guard.take(row.body[sent:], final=True):
-                yield sse("delta", {"text": text})
+        rest = row.body[sent:] if row.status != "complete" else ""
+        # What was held back, once the whole text is checked.
+        if text := guard.take(rest, final=True):
+            yield sse("delta", {"text": text})
         # ``done`` and the citations as the list shows them (research.for_reader).
         [out] = await service.messages_out(db, [row], principal)
         if cites := guard.citations(out.citations):
