@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes, safe_yaml, wording
+from oracle import audit, changes, safe_yaml, webhooks, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.docs import layers, named_codes
@@ -1237,7 +1237,8 @@ async def import_draft(
     document.title = draft.title
     document.template = draft.template
     document.template_version = draft.template_version
-    if document.status == "approved":
+    to_review = document.status == "approved"
+    if to_review:
         # A newer, unapproved version now exists.
         document.status = "in_review"
 
@@ -1262,6 +1263,18 @@ async def import_draft(
             **({"held_sections": sorted(held)} if held else {}),
         },
     )
+    await webhooks.capture(
+        db,
+        "draft.version_created",
+        principal,
+        document_id=document.id,
+        version=version.number,
+        origin=origin,
+    )
+    if to_review:
+        await webhooks.capture(
+            db, "draft.in_review", principal, document_id=document.id, version=version.number
+        )
     await (db.commit() if commit else db.flush())
     if dates is not None:
         # The version's text is the draft's: reading it parses nothing again.

@@ -18,6 +18,7 @@ from oracle.config import get_settings
 from oracle.members.models import INVITE_TTL, Invite, MemberFollowUp
 from oracle.members.schemas import InviteOut, InviteStatus, MemberOut, plain_address
 from oracle.tenant_settings import TenantSetting
+from oracle.webhooks import service as webhooks_service
 
 if TYPE_CHECKING:
     import httpx
@@ -205,6 +206,9 @@ async def set_role(
     await audit.record(
         session, principal, "member.role", "user", user.id, {"before": before, "after": role}
     )
+    # I1: below approver their webhooks pause; below owner, owners-and-approvers content
+    # goes off them.
+    await webhooks_service.creator_role_changed(session, principal, user.id, role)
     if cleared:
         await audit.record(
             session,
@@ -413,6 +417,8 @@ async def disable_member(
     tokens = await select_tokens(session, user.id)
     for token in tokens:
         token.revoked_at = at
+    # I1: their webhooks pause; a restore does not resume them.
+    await webhooks_service.creator_disabled(session, principal, user.id)
     await session.execute(
         update(OAuthToken)
         .where(*_grants_where(user.id))
