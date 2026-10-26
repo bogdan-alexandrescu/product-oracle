@@ -15,7 +15,7 @@ async function pasteKey(page: Page, endpoint: string) {
   const card = page.getByTestId("connection-card-fireflies");
   await card.getByRole("button", { name: "Paste a token" }).click();
   const form = card.getByRole("form", { name: "Fireflies token" });
-  await form.getByLabel("Token").fill("ff-example-key");
+  await form.getByLabel("Token", { exact: true }).fill("ff-example-key");
   await form.getByLabel("GraphQL endpoint (optional)").fill(endpoint);
   await form.getByRole("button", { name: "Connect" }).click();
   return form;
@@ -43,7 +43,7 @@ test("fireflies endpoint: an owner sets it and sees it on the source; an approve
   // So does the source's coverage on the Sources page (#602 review).
   await page.goto("/sources");
   await page.getByTestId("coverage-table").locator("tr[data-row]").filter({ hasText: "Customer calls" }).click();
-  await expect(page.getByTestId("coverage-inspector").getByTestId("coverage-endpoint")).toHaveText("https://ff.example.com/v2/graphql");
+  await expect(page.getByTestId("coverage-inspector").getByTestId("coverage-endpoint").getByRole("paragraph")).toHaveText("https://ff.example.com/v2/graphql");
   await page.goto("/settings/sources");
 
   // An approver sees it, with no way to change it or to set one.
@@ -54,7 +54,7 @@ test("fireflies endpoint: an owner sets it and sees it on the source; an approve
   await expect(accounts).toContainText("Endpoint: https://ff.example.com/v2/graphql");
   await expect(accounts.getByRole("button", { name: "Change endpoint" })).toHaveCount(0);
   await card.getByRole("button", { name: "Paste a token" }).click();
-  await expect(card.getByRole("form", { name: "Fireflies token" }).getByLabel("Token")).toBeVisible();
+  await expect(card.getByRole("form", { name: "Fireflies token" }).getByLabel("Token", { exact: true })).toBeVisible();
   await expect(card.getByLabel("GraphQL endpoint (optional)")).toHaveCount(0);
 });
 
