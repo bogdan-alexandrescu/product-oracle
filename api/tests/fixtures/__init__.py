@@ -29,3 +29,19 @@ async def import_draft(client, headers, text: str, doc: str = "checkout-redesign
     return await client.post(
         f"/v1/documents/{doc}/versions", content=text.encode(), headers={**headers, **MARKDOWN}
     )
+
+
+# The baseline items the fixtures' ``source: oracle`` citations name ("baseline goal g1 ...",
+# "baseline decision show-shipping-early ..."): the import refuses a ref that names none.
+ORACLE_REFS = (("goal", "g1"), ("decision", "show-shipping-early"))
+
+
+async def seed_oracle_refs(tenant_id: uuid.UUID) -> None:
+    """The company's baseline items the fixtures' oracle citations name."""
+    from oracle.baseline.models import Entity
+    from oracle.tenancy import tenant_session
+
+    async with tenant_session(tenant_id) as s:
+        for type_, key in ORACLE_REFS:
+            s.add(Entity(type=type_, key=key, title=key, status="confirmed", origin="user"))
+        await s.commit()

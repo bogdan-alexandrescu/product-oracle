@@ -122,6 +122,7 @@ import hashlib
 import logging
 import time
 import uuid
+import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -4139,17 +4140,15 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 run_id=run.id,
                 # A run's draft is kept: its unverified dates are marked and recorded.
                 unverified_dates="mark",
+                # The slug of a document the run was to create: never another document's
+                # next version (checked under the document's row lock).
+                run_creates=run.document_id is None,
             )
         except DraftError as exc:
-            problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
             # The string stays (older readers); the run page, the Inbox and MCP read the
             # problems and their summary, and the problems are the findings when the draft
-            # goes back to the writer (_send_back).
-            return {
-                "error": f"{name} was rejected: {problems}",
-                "problems": [p.model_dump(mode="json") for p in exc.problems],
-                "summary": rejection.summary(name, exc.problems),
-            }
+            # goes back to the writer (_send_back). All capped (rejection.refused).
+            return rejection.refused(name, exc.problems)
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
             return {"error": f"{name} was not imported: {exc}"}
         if not result.created and source_id and result.version.source is None:
@@ -4839,7 +4838,9 @@ async def _send_back(
             f"back to the writer: {checkpoint} waits for a person.",
         )
         return False
-    findings = workflow.import_findings(name, imported.get("problems") or [])
+    findings = workflow.import_findings(
+        name, imported.get("problems") or [], imported.get("problems_total")
+    )
     payload = {"verdict": NOT_YET, "findings": findings}
     # The same id for the same wait: a post repeated after a lost response is a replay.
     answer_id = str(uuid.uuid5(run.id, f"send-back/{wf['id']}/{step}"))
@@ -8941,6 +8942,20 @@ def _draft_retry_refusal(
     return None
 
 
+async def _slug_taken(db: AsyncSession, run: Run) -> str | None:
+    """The slug of the document a run was to create (``knobs.document_slug``) when a
+    document of it exists now that none of the run's versions is in: another document,
+    which the run's import must not add a version to."""
+    slug = None if run.document_id else (run.knobs or {}).get("document_slug")
+    if not slug:
+        return None
+    doc = await docs_service.find_document(db, slug)
+    if doc is None:
+        return None
+    # A version the run's agents imported themselves (push_draft) is the run's.
+    return None if await docs_service.run_imported_into(db, doc.id, run.id) else slug
+
+
 def _draft_retry_role(review: Checkpoint | None) -> str:
     """Who retries: the review's approver role or above while the run waits at it; once
     the run finished, owners only."""
@@ -8972,27 +8987,38 @@ def _draft_retries(
     return out
 
 
+# A retry's import runs in a session of its own (:func:`_import_draft`), two connections
+# each (no lock held): a burst imports this many at a time per process, the rest waiting
+# with no connection held, so it cannot drain the pool.
+DRAFT_RETRY_SLOTS = 2
+_draft_retry_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _retry_slots() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    slots = _draft_retry_slots.get(loop)
+    if slots is None:
+        slots = _draft_retry_slots[loop] = asyncio.Semaphore(DRAFT_RETRY_SLOTS)
+    return slots
+
+
 async def retry_draft_import(
     db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
 ) -> None:
-    """Retry import from the run page (owner, 2026-10-20): the draft a segment left, whose
-    import at segment end was refused, is imported again as at segment end (an Oracle that
-    now accepts it, or a cause that went away).
+    """:func:`_retry_draft_import`, :data:`DRAFT_RETRY_SLOTS` at a time: the request's
+    connection goes back to the pool while it waits for a slot."""
+    await db.commit()
+    async with _retry_slots():
+        await _retry_draft_import(db, principal, run_id, seq)
 
-    While the run waits at that segment's review: by the review's approver role or above;
-    the review stays open and its SwarmCloud wait is untouched, so the person still
-    decides. After the run finished (the review was approved past the refusal, before that
-    was refused): owners only, while no version from any of the run's attempts exists; the
-    run's checkpoints do not change, and the new version goes through the document's own
-    review. Refused on a cancelled or failed run.
 
-    Imported, the run names the document and the import replaces the error on the segment
-    and in the review's payload; refused again, the new error replaces the old. Either way
-    noted on the segment and audited. Once imported there is nothing to retry (409).
-    The run's row stays locked through the import, so a second retry waits and then finds
-    nothing to retry. The role the retry needs depends on the review (the checkpoint's
-    approver role while it waits, an owner after the run finished), so it is read here:
-    under the review gate, the caller is re-read with it (CR-06), before anything else."""
+async def _retry_checked(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
+) -> tuple[Run, RunSegment, Checkpoint, str]:
+    """The run (its row locked, under the review gate), the segment, its review and the
+    run's kind, when ``principal`` may retry that segment's import now; raises otherwise."""
     from oracle.auth.service import caller_refusal
     from oracle.review import publish
 
@@ -9016,11 +9042,50 @@ async def retry_draft_import(
     refusal = _draft_retry_refusal(run, segment, review, kind, _run_version(segments, checkpoints))
     if refusal is not None or review is None:
         raise RunError(f"nothing to retry: {refusal}")
-    finished = run.status == "succeeded"
+    return run, segment, review, kind
+
+
+async def _retry_draft_import(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
+) -> None:
+    """Retry import from the run page (owner, 2026-10-20): the draft a segment left, whose
+    import at segment end was refused, is imported again as at segment end (an Oracle that
+    now accepts it, or a cause that went away).
+
+    While the run waits at that segment's review: by the review's approver role or above;
+    the review stays open and its SwarmCloud wait is untouched, so the person still
+    decides. After the run finished (the review was approved past the refusal, before that
+    was refused): owners only, while no version from any of the run's attempts exists; the
+    run's checkpoints do not change, and the new version goes through the document's own
+    review. Refused on a cancelled or failed run.
+
+    Imported, the run names the document and the import replaces the error on the segment
+    and in the review's payload; refused again, the new error replaces the old. Either way
+    noted on the segment and audited. Once imported there is nothing to retry (409).
+    The import runs with nothing locked, as at segment end (:func:`_advance`): the checks
+    are made under the run's row lock, committed, the draft imported in its own session,
+    then the run locked and checked again before the result is written. A second retry
+    that imported meanwhile finds nothing to retry then (its import of the same draft
+    added nothing). The role the retry needs depends on the review (the checkpoint's
+    approver role while it waits, an owner after the run finished), so it is read here:
+    under the review gate, the caller is re-read with it (CR-06), before anything else."""
+    run, segment, review, kind = await _retry_checked(db, principal, run_id, seq)
+    if (taken := await _slug_taken(db, run)) is not None:
+        raise RunError(f"{taken} now names another document: the run's draft is not added to it")
     name = flows.draft_file(kind)
+    markdown = _art(segment)["files"][name]
+    # Committed first: the import runs in its own transaction, with the run's row and the
+    # review gate released (no second connection taken while they are held).
+    await db.commit()
+    imported = await _import_draft(db, run, kind, markdown)
+    # Locked and checked again: the run may have been cancelled, or another retry imported.
+    try:
+        run, segment, review, kind = await _retry_checked(db, principal, run_id, seq)
+    except RunError as exc:
+        raise RunError(f"{exc} (the run changed while its draft was imported)") from exc
+    finished = run.status == "succeeded"
     art = _art(segment)
     previous = art["import"]["error"]
-    imported = await _import_draft(db, run, kind, art["files"][name])
     who = "An owner" if principal.role == "owner" else "An approver"
     after = " after the run finished" if finished else ""
     if imported.get("document_id"):

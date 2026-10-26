@@ -141,6 +141,22 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # "- get_run_discussions: summaries and staged changes from the people's discussions about
 # this run" (G5 §3.4); ROADMAP_PINS_BEFORE_G5 proves nothing else moved.
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["497efdbb4d7b4e2e", "c6d17cd2b337ff49"],
+    (True, "roadmap-board", True): ["438a572f4e58cc8d", "14613bde4e3cb8b9"],
+    (True, None, False): ["ee0177925d74c55c", "67c7379394daf2e7"],
+    (True, None, True): ["097d20a3ddff3bd6", "5d9063a27f287333"],
+    (False, "roadmap-board", False): ["be4c7a4d9453a990", "5f23e39c1ca585ab"],
+    (False, "roadmap-board", True): ["be4c7a4d9453a990", "5f23e39c1ca585ab"],
+    (False, None, False): ["c5085ee61ca920b4", "55e646c0f3bad861"],
+    (False, None, True): ["c5085ee61ca920b4", "55e646c0f3bad861"],
+}
+# Refreshed once more for the citation contract's ref rule (2026-10-25 hardening), whose
+# only change is REF_RULE in the contract; ROADMAP_PINS_BEFORE_REF_RULE proves it.
+REF_RULE = (
+    "a ref with a scheme other than http, https or urn (for oracle, one that names no "
+    "baseline item of the company), "
+)
+ROADMAP_PINS_BEFORE_REF_RULE = {
     (True, "roadmap-board", False): ["58c9a09daa046d4f", "cd29acdff89ff04b"],
     (True, "roadmap-board", True): ["4ed5355ca2c8a5c6", "3dbd391534f079e2"],
     (True, None, False): ["a77b9eb1b9711f3f", "233941cfdf924864"],
@@ -216,10 +232,12 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
     for s in steps:
-        assert s[2].count(G5_TOOL_LINE) == 1
-    before = [
-        hashlib.sha256(s[2].replace(G5_TOOL_LINE, "").encode()).hexdigest()[:16] for s in steps
-    ]
+        assert s[2].count(G5_TOOL_LINE) == 1 and s[2].count(REF_RULE) == 1
+    texts = [s[2].replace(REF_RULE, "") for s in steps]
+    assert [hashlib.sha256(t.encode()).hexdigest()[:16] for t in texts] == (
+        ROADMAP_PINS_BEFORE_REF_RULE[case]
+    )
+    before = [hashlib.sha256(t.replace(G5_TOOL_LINE, "").encode()).hexdigest()[:16] for t in texts]
     assert before == ROADMAP_PINS_BEFORE_G5[case]
 
 
