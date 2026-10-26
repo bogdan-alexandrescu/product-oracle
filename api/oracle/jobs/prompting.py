@@ -43,7 +43,7 @@ CURRENT = {
     "why_not_reply": "why_not_reply.v1",
     "discussion_reply": "discussion_reply.v2",
     # B6: appended to discussion_reply's for a discussion on a goal.
-    "discussion_reply_goal": "discussion_reply_goal.v1",
+    "discussion_reply_goal": "discussion_reply_goal.v2",
     "discussion_summary": "discussion_summary.v1",
 }
 

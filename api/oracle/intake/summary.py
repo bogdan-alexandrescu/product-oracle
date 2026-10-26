@@ -22,8 +22,8 @@ from oracle.baseline import conflicts as baseline_conflicts
 from oracle.baseline import scoring
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Conflict, Entity
+from oracle.intake import autoask, drafting, engine, sharing
 from oracle.intake import categories as cats
-from oracle.intake import drafting, engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.answers import next_actions
 from oracle.intake.models import IntakeProposal
@@ -736,8 +736,19 @@ async def next_batch(
 ) -> NextBatch:
     """The next batch as ``principal`` would ask it (C5): the questions
     :func:`engine.choose_batch` picks, in order, each with the person it would be asked of
-    (:func:`engine.default_person`). Nothing is asked or changed."""
+    (:func:`engine.default_person`). Nothing is asked or changed.
+
+    H11 ``questions``: at Observe nothing is proposed and ``held`` says why; at Draft
+    each question keeps its own named person, never the reader (``autoask``)."""
     view = await View(intake, principal).load(db)
+    held = await autoask.held(db)
+    if held:
+        return NextBatch(
+            questions=[],
+            remaining=sum(q.status == "draft" for q in view.questions),
+            held=held,
+        )
+    asker = principal.id if await autoask.proposes_asker(db) else None
     raw = await engine.intake_questions(db, intake.id)
     skip = await hidden_gap_ids(db, intake, principal)
     batch = engine.choose_batch(raw, view.raw, view.reg, size, skip)
@@ -747,7 +758,7 @@ async def next_batch(
     for q in batch.questions:
         gap = view.raw.get(q.gap_id) if q.gap_id else None
         hidden = gap is not None and sharing.gap_changes(gap, view.reg, sharing.EVERYONE) is None
-        person = await engine.default_person(db, intake, q, gap, principal.id, hidden, able)
+        person = await engine.default_person(db, intake, q, gap, asker, hidden, able)
         # A copy: the stored row keeps its person until the batch is asked.
         out = StakeholderQuestionOut.model_validate(shown[q.id])
         chosen.append(out.model_copy(update={"asked_to": person}))

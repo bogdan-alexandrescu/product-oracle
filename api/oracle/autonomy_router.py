@@ -52,8 +52,8 @@ class AutonomyItem(BaseModel):
     limits_schema: dict[str, Any] | None = None
     fixed_limits: list[str] = []
     limits_summary: str | None = None
-    # False: the behaviour the levels steer is not built yet; the level takes effect
-    # when the pick ``wired_by`` ships.
+    # False: the behaviour the current level steers is not built yet; the level takes
+    # effect when the pick ``wired_by`` ships.
     wired: bool
     wired_by: str
     wired_by_name: str
@@ -83,12 +83,13 @@ class AutonomyIn(BaseModel):
 
 def item_out(r: autonomy.Responsibility, stored: dict[str, Any] | None) -> AutonomyItem:
     lim = autonomy.effective_limits(r, (stored or {}).get("limits"))
+    level = autonomy.level_of(r, stored)
     return AutonomyItem(
         key=r.key,
         title=r.title,
         group=r.group,
         group_title=autonomy.GROUPS[r.group],
-        level=autonomy.level_of(r, stored),
+        level=level,
         default=r.default,
         ceiling=r.ceiling,
         allowed=autonomy.allowed(r),
@@ -98,7 +99,7 @@ def item_out(r: autonomy.Responsibility, stored: dict[str, Any] | None) -> Auton
         limits_schema=r.limits.model_json_schema() if r.limits is not None else None,
         fixed_limits=autonomy.fixed_limits(r.limits),
         limits_summary=r.summary(lim),
-        wired=r.wired,
+        wired=r.wired_at(level),
         wired_by=r.wired_by,
         wired_by_name=r.wired_by_name,
     )

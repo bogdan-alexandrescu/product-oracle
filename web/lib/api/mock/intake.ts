@@ -76,7 +76,13 @@ export interface IntakeContext {
   /** The approved (locked) section keys of a document's latest version, by its id or slug; a
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
+  /** H11 Ask people questions: the level Oracle follows now (Recommend without it). */
+  questionsLevel?: () => "observe" | "draft" | "recommend" | "act";
 }
+
+/** H11 questions at Observe: why no batch is proposed or asked (as oracle.intake.autoask). */
+export const QUESTIONS_OBSERVE = "Oracle is set to observe questions: it asks no one. An owner can change this in Settings › Autonomy.";
+const questionsLevel = (ctx: IntakeContext) => ctx.questionsLevel?.() ?? "recommend";
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
@@ -404,9 +410,11 @@ function askBatch(db: V2Db, ctx: IntakeContext, intake: Intake, size: number, as
   for (const q of questions) if (q.status === "draft" && assign[q.id]) q.asked_to = assign[q.id];
   const drafts = chooseDrafts(questions, size);
   const n = Math.max(0, ...questions.map((q) => q.batch ?? 0)) + 1;
+  // At Draft (H11 questions) the person the preview named, never the sender (as the API).
+  const asker = questionsLevel(ctx) !== "draft";
   for (const q of drafts) {
     const g = db.gaps.find((x) => x.id === q.gap_id);
-    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q), updated_at: now() });
+    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q, asker), updated_at: now() });
     if (g && g.status === "unknown") g.status = "asked";
   }
   return drafts;
@@ -419,13 +427,13 @@ function chooseDrafts(questions: Question[], size: number): Question[] {
 
 /** Who a question is asked of: its own person, else its gap's owner, else the intake's author,
  * else the asker, else the first approver; a private finding's question, the author. */
-function personFor(db: V2Db, ctx: IntakeContext, intake: Intake, q: Question): string | null {
+function personFor(db: V2Db, ctx: IntakeContext, intake: Intake, q: Question, asker = true): string | null {
   const g = db.gaps.find((x) => x.id === q.gap_id);
   if (privateGap(db, g)) return intake.author_id ?? null;
   // Without a member list, the mock cannot tell who can answer: anyone named may be asked.
   const able = (id: string | null | undefined): id is string => !!id && (!ctx.people || canAnswer(ctx, id));
   const approver = (ctx.people ?? []).find((x) => x.status !== "disabled" && atLeast(x.role, "approver"))?.id;
-  return [q.asked_to, g?.owner_id, intake.author_id, ctx.userId].find(able) ?? approver ?? intake.author_id ?? null;
+  return [q.asked_to, g?.owner_id, intake.author_id, asker ? ctx.userId : null].find(able) ?? approver ?? intake.author_id ?? null;
 }
 
 /** A batch's cards (GET .../question-batch, .../next-batch). */
@@ -493,7 +501,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
     Object.assign(intake, fields);
     applyBriefFields(db, ctx, intake);
-    askBatch(db, ctx, intake, input.batch_size ?? 5);
+    // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
+    if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
   }
 
@@ -538,9 +547,13 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const size = Number(q.get("size") ?? 5);
       if (!(size >= 1 && size <= 10)) return fail(422, "size is 1 to 10");
       const questions = db.questions.filter((x) => x.intake_id === intake.id);
-      // Copies: the stored question keeps its person until the batch is asked.
-      const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x) }));
-      return json(200, { questions: cards(db, shown), remaining: questions.filter((x) => x.status === "draft").length } satisfies Schemas["NextBatch"]);
+      const remaining = questions.filter((x) => x.status === "draft").length;
+      const level = questionsLevel(ctx);
+      if (level === "observe") return json(200, { questions: [], remaining, held: QUESTIONS_OBSERVE } satisfies Schemas["NextBatch"]);
+      // Copies: the stored question keeps its person until the batch is asked. At Draft each
+      // keeps its own named person, never the reader.
+      const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x, level !== "draft") }));
+      return json(200, { questions: cards(db, shown), remaining, held: null } satisfies Schemas["NextBatch"]);
     }
     if (leaf === "composition-inputs" && m === "GET") {
       const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
@@ -584,6 +597,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     if (leaf === "question-batches" && m === "POST") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
+      if (questionsLevel(ctx) === "observe") return fail(409, QUESTIONS_OBSERVE);
       const input = await body<Schemas["QuestionBatchAsk"] | null>();
       const assign = input?.assign ?? {};
       for (const [qid, person] of Object.entries(assign)) {
@@ -595,6 +609,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const asked = askBatch(db, ctx, intake, Number(input?.size ?? q.get("size") ?? 5), assign);
       if (!asked.length) return fail(409, "No questions left to ask");
       return json(200, batchView(db, intake, asked[0].batch ?? null));
+    }
+    if (leaf === "questions" && p[4] === "withdraw" && m === "POST") {
+      // The Undo of a batch Oracle asked on its own: still-waiting questions are withdrawn.
+      if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver withdraws these questions");
+      const ids = new Set((await body<Schemas["QuestionsWithdraw"]>())?.question_ids ?? []);
+      if (!ids.size) return fail(422, "Name at least one question");
+      const done = db.questions.filter((x) => x.intake_id === intake.id && ids.has(x.id) && (x.status === "asked" || x.status === "delegated"));
+      for (const x of done) Object.assign(x, { status: "withdrawn", updated_at: now() });
+      return json(200, { question_ids: done.map((x) => x.id) } satisfies Schemas["QuestionsWithdrawn"]);
     }
     if (leaf === "runs" && m === "POST") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
