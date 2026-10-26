@@ -92,7 +92,7 @@ export function seedModules(documentId: string | null, userId: string): ModulesD
     mod("economics.value", "Value and cost economics", "conditional", 120, ["value-economics"], BOTH, ["goals.outcomes"]),
     mod("risks.register", "Risks", "required", 130, ["risk-register"], BOTH),
     mod("platform.tenant-isolation", "Multi-tenant isolation", "conditional", 210, ["tenant-isolation"], [PACK_B]),
-    mod("agents.tool-policies", "Tool policies", "conditional", 240, ["tool-policies"], [PACK_B]),
+    { ...mod("agents.tool-policies", "Tool policies", "conditional", 240, ["tool-policies"], [PACK_B]), required_review_role: "owner" },
     mod("sources.data-points", "Sources and data points", "required", 1000, ["sources", "sources-list", "sources-data", "sources-evidence"], BOTH),
   ];
   const db: ModulesDb = {
@@ -141,7 +141,7 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
     policy_source: "pack",
     explanation: [],
     basis: [],
-    missing_information: included || c.policy !== "conditional" ? [] : ["Input scope.capabilities is missing."],
+    missing_information: [],
     questions: [],
     depends_on: c.depends_on,
     required_by: [],
@@ -204,9 +204,29 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
         return composed(c, true, "mandatory", `Mandatory in pack ${pack}.`, (i + 1) * 10);
       }
       const held = caps.includes(hints[c.key] ?? "");
-      return held
+      const out = held
         ? composed(c, true, "suggested", `Suggested: scope.capabilities contains '${hints[c.key]}'`, (i + 1) * 10)
         : composed(c, false, "optional", "Not suggested: its condition did not hold.", 0);
+      if (hints[c.key]) {
+        out.basis = [
+          {
+            path: "scope.capabilities",
+            op: "contains",
+            expected: hints[c.key],
+            actual: caps.length ? caps : null,
+            holds: held,
+            missing: caps.length === 0,
+            knowledge_state: caps.length ? "user_decision" : "unknown",
+            evidence_ids: [],
+            source: caps.length ? "intake" : null,
+          },
+        ];
+        if (!caps.length) {
+          out.missing_information = ["Input scope.capabilities is missing."];
+          out.questions = [{ key: `${c.key}.capabilities`, prompt: "Which capabilities are in scope?", category: "scope", importance: "high", fills: ["scope.capabilities"] }];
+        }
+      }
+      return out;
     });
   return {
     document_id: null,
@@ -218,11 +238,71 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
     summary: summary(modules),
     modules,
     problems: [],
-    outline: modules
-      .filter((m) => m.included)
-      .flatMap((m) => m.section_ids.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "full" as const, module: m.key, origin: "module" as const }))),
+    outline: outlineOf(modules),
     inputs: inputs(pack, extra, template),
   };
+}
+
+/** Carries a person's earlier decisions from `head` and applies `changes`, as the composer
+ * does; returns the problems (fatal ones refuse a confirm, a preview reports them). */
+function applyChanges(
+  rec: Schemas["RecommendationOut"],
+  head: Revision | null,
+  changes: Schemas["ChangesIn"] | null | undefined,
+  ctx: ModulesContext,
+  reason: string | null,
+): Schemas["CompositionProblem"][] {
+  const problems: Schemas["CompositionProblem"][] = [];
+  const problem = (code: string, message: string, module: string | null) => problems.push({ code, message, module, fatal: true });
+  for (const earlier of head?.modules ?? []) {
+    const target = rec.modules.find((x) => x.key === earlier.key);
+    if (earlier.decided_by !== "user" || !target || target.selection === "mandatory") continue;
+    Object.assign(target, { included: earlier.included, decided_by: "user", user_reason: earlier.user_reason, overridden_by: earlier.overridden_by });
+  }
+  for (const key of changes?.remove ?? []) {
+    const target = rec.modules.find((x) => x.key === key);
+    // Re-sending an earlier removal refreshes its reason and who decided.
+    const again = head?.modules.some((e) => e.key === key && e.decided_by === "user" && !e.included);
+    if (!target || (!target.included && !again)) {
+      problem("not_included", `${key} is not in the composition.`, key);
+      continue;
+    }
+    if (target.selection === "mandatory") {
+      problem("required_module", `${target.title} is mandatory (${target.reason}) and cannot be removed. Change the company module policy to make it optional first.`, key);
+      continue;
+    }
+    if (!atLeast(ctx.role, target.required_review_role as Role)) {
+      problem("role_required", `Removing ${target.title} needs the ${target.required_review_role} role.`, key);
+      continue;
+    }
+    Object.assign(target, { included: false, decided_by: "user", user_reason: reason, overridden_by: ctx.userId });
+  }
+  for (const key of changes?.add ?? []) {
+    const target = rec.modules.find((x) => x.key === key);
+    if (!target) {
+      problem("unknown_module", `${key} is not an available module.`, key);
+      continue;
+    }
+    if (!atLeast(ctx.role, target.required_review_role as Role)) {
+      problem("role_required", `Adding ${target.title} needs the ${target.required_review_role} role.`, key);
+      continue;
+    }
+    Object.assign(target, { included: true, decided_by: "user", user_reason: reason, overridden_by: ctx.userId });
+  }
+  rec.summary = summary(rec.modules);
+  rec.problems = problems;
+  rec.valid = !problems.some((x) => x.fatal);
+  rec.outline = outlineOf(rec.modules);
+  return problems;
+}
+
+function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
+  return modules
+    .filter((m) => m.included)
+    .flatMap((m) => [
+      ...m.layer_impact.brief_sections.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "brief" as const, module: m.key, origin: "module" as const })),
+      ...m.section_ids.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "full" as const, module: m.key, origin: "module" as const })),
+    ]);
 }
 
 function inspected(m: Composed, db: ModulesDb): Schemas["InspectedModule"] {
@@ -425,8 +505,14 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const data = await body<Schemas["CompositionRecommendIn"]>();
     const doc = data.document ? ctx.document(data.document) : null;
     if (data.document && !doc) return json(404, { detail: `document '${data.document}' not found` });
-    const pack = data.packs?.[0] ?? (data.inputs?.category === "ai_agent_platform" ? PACK_B : PACK_A);
-    return json(200, { ...recommend(db, pack, data.inputs ?? {}, data.template ?? doc?.template ?? "oracle-default"), document_id: doc?.id ?? null });
+    // For a document, the newest revision's packs, inputs and decisions are the starting point.
+    const revisions = doc ? (db.revisions[doc.id] ?? []) : [];
+    const head = revisions[revisions.length - 1] ?? null;
+    const pack = data.packs?.[0] ?? head?.packs[0] ?? (data.inputs?.category === "ai_agent_platform" ? PACK_B : PACK_A);
+    const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
+    const rec = { ...recommend(db, pack, extra, data.template ?? doc?.template ?? "oracle-default"), document_id: doc?.id ?? null };
+    applyChanges(rec, head, data.changes, ctx, null);
+    return json(200, rec);
   }
 
   if (p[1] === "documents" && p[2] && p[3] === "composition") {
@@ -447,29 +533,13 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       const category = data.inputs?.category ?? head?.inputs.category;
       const pack = data.packs?.[0] ?? carried ?? db.policy.default_packs[0] ?? (category === "ai_agent_platform" ? PACK_B : PACK_A);
       const packsSource = data.packs?.length || carried ? "chosen" : db.policy.default_packs.length ? "default" : "category";
-      const rec = recommend(db, pack, data.inputs ?? {}, data.template ?? doc.template ?? "oracle-default");
+      // Inputs not given are derived from the newest revision.
+      const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
+      const rec = recommend(db, pack, extra, data.template ?? doc.template ?? "oracle-default");
       rec.inputs.policy = { ...rec.inputs.policy, packs_source: packsSource };
-      // A person's earlier decisions carry into the next revision.
-      for (const earlier of head?.modules ?? []) {
-        const target = rec.modules.find((x) => x.key === earlier.key);
-        if (earlier.decided_by !== "user" || !target || target.selection === "mandatory") continue;
-        Object.assign(target, { included: earlier.included, decided_by: "user", user_reason: earlier.user_reason, overridden_by: earlier.overridden_by });
-      }
-      for (const key of data.changes?.remove ?? []) {
-        const target = rec.modules.find((x) => x.key === key);
-        // Re-sending an earlier removal refreshes its reason and who decided.
-        const again = head?.modules.some((e) => e.key === key && e.decided_by === "user" && !e.included);
-        if (!target || (!target.included && !again)) return refused("not_included", `${key} is not in the composition.`, key);
-        if (target.selection === "mandatory") {
-          return refused("required_module", `${target.title} is mandatory (${target.reason}) and cannot be removed.`, key);
-        }
-        Object.assign(target, { included: false, decided_by: "user", user_reason: data.reason, overridden_by: ctx.userId });
-      }
-      for (const key of data.changes?.add ?? []) {
-        const target = rec.modules.find((x) => x.key === key);
-        if (!target) return refused("unknown_module", `${key} is not an available module.`, key);
-        Object.assign(target, { included: true, decided_by: "user", user_reason: data.reason, overridden_by: ctx.userId });
-      }
+      const problems = applyChanges(rec, head, data.changes, ctx, data.reason);
+      const fatal = problems.filter((x) => x.fatal);
+      if (fatal.length) return json(422, { detail: fatal[0].message, problems: fatal });
       rec.summary = summary(rec.modules);
       const status = data.status ?? "confirmed";
       if (status === "confirmed") {

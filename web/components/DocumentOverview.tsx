@@ -254,6 +254,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               }
               action={
                 <>
+                  {d.kind === "prd" && <LinkButton href={`/documents/${d.slug}/composition`}>Composition</LinkButton>}
                   {d.kind === "prd" && <BuildRoadmapButton prd={d} />}
                   {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
                   {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
