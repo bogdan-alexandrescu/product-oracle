@@ -5,7 +5,12 @@ import { expect, test, type Page } from "./test";
 const CUSTOM = "https://ff.example.com/graphql";
 
 async function openConnections(page: Page) {
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+  const settings = page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings");
+  const href = (await settings.getAttribute("href"))!;
+  await settings.click();
+  // Next keeps the page left behind in the DOM, hidden: a Settings strip found before the new
+  // page shows would be that hidden one for good, so the click waits for the page it opens.
+  await page.waitForURL((u) => (href === "/settings" ? u.pathname.startsWith("/settings/") : u.pathname === href));
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-connections").click();
   await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();
   return page.getByTestId("connection-card-fireflies");
