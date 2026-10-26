@@ -875,13 +875,23 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 @pytest.mark.timing
 async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
     held = Held(monkeypatch)
+    handed = 0
+    real_run = offload.run
+
+    async def run(*args):
+        nonlocal handed
+        handed += 1
+        return await real_run(*args)
+
+    # An export takes its place before it reads (and commits): wait until all six are
+    # handed to the pool, not for a guessed time (CI's slower database lost the race).
+    monkeypatch.setattr(offload, "run", run)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
     reader = await _token(a, "viewer")
     tasks = []
     try:
         tasks += await _fill(client, a, b, c)  # four rendering, two queued
-        await until(lambda: held.started == 4)
-        await asyncio.sleep(0.1)
+        await until(lambda: held.started == 4 and handed == 6)
         assert get_engine().pool.checkedout() == 0
         other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
         assert other.status_code == 200, other.text
