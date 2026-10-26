@@ -290,6 +290,9 @@ class InspectorOut(BaseModel):
     recommendation: RecommendationOut | None = None
     revisions: list[RevisionSummary]
     sections: DocumentSectionsOut
+    # When the company module policy was saved after the revision in force was decided;
+    # null when it was not (or there is none). Re-confirming applies the policy.
+    policy_changed_at: datetime | None = None
     # On the response to confirming or saving a revision: its non-fatal problems, such
     # as an earlier decision set aside (`decision_superseded`). Empty on reads.
     problems: list[CompositionProblem] = []

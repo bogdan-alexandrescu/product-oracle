@@ -53915,6 +53915,11 @@
             "type": "string",
             "title": "Required Review Role",
             "default": "approver"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
           }
         },
         "type": "object",
@@ -71324,6 +71329,11 @@
             "title": "Required Review Role",
             "default": "approver"
           },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          },
           "sections_present": {
             "items": {
               "type": "string"
@@ -71470,6 +71480,18 @@
           },
           "sections": {
             "$ref": "#/components/schemas/DocumentSectionsOut"
+          },
+          "policy_changed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Changed At"
           },
           "problems": {
             "items": {
