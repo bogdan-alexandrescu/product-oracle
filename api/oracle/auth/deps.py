@@ -24,8 +24,8 @@ from oracle.tenancy import tenant_session
 # the run's creator). The value is the run id signed by the server and bound to the
 # acting user (oracle.auth.service.sign_run_binding). A run sees more than people do
 # (S6: the full text of what a finding shared in full), so the header is trusted only
-# when its signature verifies for the authenticated user; a bare or forged run id is
-# ignored and the caller stays the person, with person rules.
+# when its signature verifies for the authenticated user; a bare, forged, expired or
+# malformed one is refused with 400 (``_run_of``, fail closed), never read as the person.
 RUN_HEADER = "x-oracle-run-id"
 
 _bearer = HTTPBearer(auto_error=False, description="API token for the agent track")

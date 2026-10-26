@@ -10,8 +10,11 @@ READ_AREAS = {
     # ones only (oracle.engineering.codemaps.visible).
     # Request replies quote askers' words, the same rule as requester notes (H10).
     # H9: interviews hold customer words, source text.
+    # A source item (/v1/source-items/{id}) is source text itself: a run reads it as
+    # the route allows (S6: shared items at the version released only).
     "read:sources": {
         "sources",
+        "source-items",
         "search",
         "snapshots",
         "requester-notes",

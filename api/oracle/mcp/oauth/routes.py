@@ -180,16 +180,18 @@ async def oauth_register(body: ClientRegistrationIn):
 async def _signed_in_user(request: Request) -> Principal | None:
     """The person in this browser (Google sign-in or the session cookie), else ``None``.
 
-    Bearer tokens are deliberately not consulted: only a person can grant access.
+    Bearer tokens are deliberately not consulted: only a person can grant access. A run
+    header that does not verify (400, ``oracle.auth.deps._run_of``) reads as not signed
+    in too: a browser never sends one, and a run never grants access.
     """
     cookie = request.cookies.get(get_settings().session_cookie_name)
     try:
         principal = await get_principal(request, None, cookie)
     except HTTPException as e:
-        if e.status_code == status.HTTP_401_UNAUTHORIZED:
+        if e.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED):
             return None
         raise
-    return principal if principal.kind == "user" else None
+    return principal if principal.kind == "user" and not principal.is_run else None
 
 
 def _bad_authorize(description: str) -> JSONResponse:
