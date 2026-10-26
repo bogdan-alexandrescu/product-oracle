@@ -77,8 +77,8 @@ def test_down_refuses_while_an_eng_dates_checkpoint_exists(scratch_db):
     # it; no_claim=-.
     command.upgrade(_cfg(), REVISION)
     _run(
-        "INSERT INTO tenants (id, name, slug) VALUES "
-        "('00000000-0000-0000-0000-0000000000a1', 'T', 't')"
+        "INSERT INTO tenants (id, name) VALUES "
+        "('00000000-0000-0000-0000-0000000000a1', 'Example Co')"
     )
     _run(
         "INSERT INTO runs (tenant_id, id, flow, status, knobs, created_by) VALUES "
