@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+
 import { login } from "./helpers";
 
 /*
@@ -141,4 +143,94 @@ test("a decision with a prediction shows its outcome's status under Expected and
   await outcome.getByRole("link", { name: "Open in Outcomes" }).click();
   await expect(page).toHaveURL(/\/plan\/outcomes\?outcome=/);
   await expect(page.getByTestId("outcome-inspector").filter({ visible: true })).toContainText(CAPS);
+});
+
+// #570 review: Edit sends the linked items and evidence back, so one that is gone since, or
+// one the editor may not see, must neither block the save nor be dropped by it.
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+const PRICING = "Price: Should the Starter plan cost less for teams under 5 seats?";
+
+async function editTitle(page: Page, title: string) {
+  await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
+  const form = inspector(page).getByRole("form", { name: "Edit decision" });
+  await form.getByLabel("Decision", { exact: true }).fill(title);
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(inspector(page)).toContainText(title);
+}
+
+test("a title-only edit saves after evidence the decision rests on is removed from the baseline", async ({ page }) => {
+  // protects=once an approver removes, in the baseline drawer, evidence a proposal rests on,
+  // Edit still saves and neither the inspector nor the form shows the gone evidence or an
+  // id; fails_when=Save is refused with "unknown evidence_ids: <id>" (the form cannot show,
+  // so cannot untick, the gone row); no_claim=a deleted baseline item (the web has no
+  // Delete for items; pytest covers it), the mock stands in for the API.
+  await login(page, APPROVER);
+  await openCaps(page);
+  await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
+  const form = inspector(page).getByRole("form", { name: "Edit decision" });
+  await form.getByRole("group", { name: "Linked items" }).getByLabel("Find an item to link").fill("guided");
+  await form.getByRole("group", { name: "Linked items" }).getByRole("button", { name: /^Guided setup · Feature/ }).click();
+  await form.getByRole("group", { name: "Evidence" }).getByRole("checkbox", { name: new RegExp(STALL) }).check();
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(inspector(page).getByTestId("decision-evidence")).toContainText(STALL);
+
+  await page.goto("/baseline");
+  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  const drawer = page.getByRole("dialog", { name: "Guided setup" });
+  await drawer.getByRole("list", { name: "Evidence" }).getByRole("button", { name: "Remove example-org/storefront#128" }).click();
+  const ask = drawer.getByRole("form", { name: "Remove evidence" });
+  await ask.getByLabel("Reason").fill("Cited on the wrong feature.");
+  await ask.getByRole("button", { name: "Remove" }).click();
+  await expect(drawer.getByRole("status")).toContainText("Removed");
+
+  await openCaps(page);
+  await expect(inspector(page).getByTestId("decision-evidence")).toHaveCount(0);
+  await editTitle(page, `${CAPS}, revised`);
+  await expect(inspector(page)).not.toContainText(UUID);
+  await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
+  const again = inspector(page).getByRole("form", { name: "Edit decision" });
+  await expect(again.getByRole("group", { name: "Evidence" })).not.toContainText(STALL);
+  await expect(again).not.toContainText(UUID);
+});
+
+test("a commenter's edit keeps a linked item only approvers may see, and never shows it to them", async ({ page }) => {
+  // protects=an approver links D-5 to a pricing decision's baseline item (owners and
+  // approvers only); the commenter who proposed D-5 sees no chip, title or id for it in the
+  // inspector or the Edit pickers, saves a title-only edit, and the approver still reads the
+  // link afterwards; fails_when=the commenter's save is refused ("unknown entity_ids"),
+  // drops the link, or shows "A baseline item"/the item to the commenter; no_claim=the
+  // mock stands in for the API's visibility rule (pytest covers the API's).
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "pricing"]);
+  await login(page, APPROVER);
+  await openCaps(page);
+  await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
+  const form = inspector(page).getByRole("form", { name: "Edit decision" });
+  const linked = form.getByRole("group", { name: "Linked items" });
+  await linked.getByLabel("Find an item to link").fill("starter plan");
+  await linked.getByRole("button", { name: new RegExp(`^${PRICING.replace(/[?]/g, "\\?")} · Decision`) }).click();
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(inspector(page).getByTestId("decision-rests-on").getByRole("link", { name: PRICING })).toBeVisible();
+
+  await login(page, COMMENTER);
+  await openCaps(page);
+  await expect(inspector(page).getByTestId("decision-rests-on")).toHaveCount(0);
+  await expect(inspector(page)).not.toContainText(PRICING);
+  await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
+  const mine = inspector(page).getByRole("form", { name: "Edit decision" });
+  await expect(mine.getByRole("group", { name: "Linked items" })).not.toContainText("A baseline item");
+  await expect(mine).not.toContainText(PRICING);
+  await mine.getByRole("group", { name: "Linked items" }).getByLabel("Find an item to link").fill("starter plan");
+  await expect(mine.getByRole("group", { name: "Linked items" })).toContainText("No baseline item matches");
+  await mine.getByRole("button", { name: "Cancel" }).click();
+  await editTitle(page, `${CAPS}, revised`);
+  await expect(inspector(page)).not.toContainText(UUID);
+
+  await login(page, APPROVER);
+  await openCaps(page);
+  await expect(inspector(page)).toContainText(`${CAPS}, revised`);
+  await expect(inspector(page).getByTestId("decision-rests-on").getByRole("link", { name: PRICING })).toBeVisible();
 });
