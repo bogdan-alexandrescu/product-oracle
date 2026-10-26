@@ -31,11 +31,12 @@ test("a member chooses their Slack pings on My account", async ({ page }) => {
   for (const key of ["review_requested", "draft_ready"]) await expect(ping(page, key)).toBeChecked();
   for (const key of ["comments", "feedback_wanted", "published"]) await expect(ping(page, key)).not.toBeChecked();
 
-  await panel(page).getByText("A draft is ready for my review").click();
+  await panel(page).getByText("A draft is ready for my review", { exact: true }).click();
   await expect(ping(page, "draft_ready")).not.toBeChecked();
-  await panel(page).getByText("Comments and replies").click();
+  await panel(page).getByText("Comments and replies", { exact: true }).click();
   await expect(ping(page, "comments")).toBeChecked();
-  await ping(page, "review_requested").uncheck();
+  // The box flips once the choice is saved, so click it and wait for the new state.
+  await ping(page, "review_requested").click();
   await expect(ping(page, "review_requested")).not.toBeChecked();
   await expect(ping(page, "review_requested")).toBeEnabled();
 
@@ -53,7 +54,8 @@ test("without Slack connected a viewer still chooses and is told who connects it
   await login(page);
   await page.goto("/account");
   await expect(panel(page).getByTestId("slack-pings-off")).toContainText("an owner connects it in Settings › Notifications");
-  await ping(page, "published").check();
+  await ping(page, "published").click();
+  await expect(ping(page, "published")).toBeChecked();
   await page.reload();
   await expect(ping(page, "published")).toBeChecked();
 });
