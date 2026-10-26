@@ -34,9 +34,12 @@ export function PageHeader({
   back?: ReactNode;
   testId?: string;
 }) {
-  // One flat wrapping row. On a phone the phone header draws the title, so the H1 is kept
-  // for screen readers only, and the status chips and the action share the line when the
-  // chips fit at their full width; otherwise the action drops below them.
+  // One flat wrapping row. The status chips take their full width (flex-auto, not a 0 basis)
+  // so they drop to a line of their own when the title and the actions leave no room for
+  // them, instead of being squeezed until a chip's text wraps. On a phone the phone header
+  // draws the title, so the H1 is kept for screen readers only, and the status chips and the
+  // action share the line when the chips fit at their full width; otherwise the action drops
+  // below them.
   return (
     <header
       data-testid={testId}
@@ -49,7 +52,7 @@ export function PageHeader({
         {suffix && <span className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
       </h1>
       <div
-        className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 max-[600px]:flex-auto ${status ? "" : "max-[600px]:hidden"}`}
+        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"}`}
       >
         {status}
       </div>
