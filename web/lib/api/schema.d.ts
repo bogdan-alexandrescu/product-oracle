@@ -3472,6 +3472,7 @@ export interface paths {
         /**
          * List Claude Accounts
          * @description Every account in the company's pool, with the sweep's liveness and the fallback.
+         *     Below owner, without who holds each account (its Claude email and organisation).
          */
         get: operations["list_claude_accounts"];
         put?: never;
