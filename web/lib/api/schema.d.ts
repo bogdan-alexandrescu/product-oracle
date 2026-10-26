@@ -11793,6 +11793,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Drafts
+         * @description The open working and submitted drafts the caller may see: their participants, the
+         *     company's owners, the roadmap's decider, required reviewers and owners.
+         */
+        get: operations["list_simple_drafts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Draft
+         * @description One draft the caller may see (404 otherwise).
+         */
+        get: operations["get_simple_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Simple Draft
+         * @description Submit the draft: it is imported as the roadmap's next version and goes through the
+         *     document's review policy; readers keep the published version until it is approved.
+         */
+        post: operations["submit_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Simple Draft
+         * @description Approve a submitted draft: the decider's approval waits for every required
+         *     reviewer's; a required reviewer's approves every section of the version. The version
+         *     is approved (published to readers) when all are in.
+         */
+        post: operations["approve_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Simple Draft
+         * @description Open a session on a working draft whose session closed: its author or the decider.
+         */
+        post: operations["resume_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/stack": {
         parameters: {
             query?: never;
@@ -19538,6 +19642,11 @@ export interface components {
              * @default []
              */
             versions: components["schemas"]["VersionSummary"][];
+            /**
+             * Changes In Review
+             * @default 0
+             */
+            changes_in_review: number;
         };
         /** DocumentRef */
         DocumentRef: {
@@ -23331,6 +23440,11 @@ export interface components {
              * @default []
              */
             simple_decisions: components["schemas"]["InboxSimpleChange"][];
+            /**
+             * Simple Approvals
+             * @default []
+             */
+            simple_approvals: components["schemas"]["InboxSimpleApproval"][];
         };
         /**
          * InboxOutcome
@@ -23564,6 +23678,32 @@ export interface components {
             reviewed: number;
         };
         /**
+         * InboxSimpleApproval
+         * @description A roadmap version from a Simple draft waiting for my approval as a required
+         *     reviewer (``simple_approvals``, counted in ``total``).
+         */
+        InboxSimpleApproval: {
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            document: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number | null;
+            /** Submitted By */
+            submitted_by: string | null;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Decider Approved */
+            decider_approved: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+        };
+        /**
          * InboxSimpleChange
          * @description A proposal waiting for me (``simple_proposals``) or a decision on my proposal
          *     (``simple_decisions``).
@@ -23578,7 +23718,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status";
             /**
              * Status
              * @enum {string}
@@ -34350,7 +34490,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -34378,10 +34518,15 @@ export interface components {
             /** Document Id */
             document_id: string | null;
             /**
+             * Draft Ids
+             * @default []
+             */
+            draft_ids: string[];
+            /**
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -34476,6 +34621,83 @@ export interface components {
             slug: string;
             /** Title */
             title: string;
+        };
+        /** SimpleDraftBrief */
+        SimpleDraftBrief: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "submitted" | "approved" | "discarded";
+            /** Changes */
+            changes: number;
+        };
+        /**
+         * SimpleDraftOut
+         * @description A working draft of one roadmap (S3b): its changes until submitted, then the version
+         *     in review and who it waits on.
+         */
+        SimpleDraftOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            document: components["schemas"]["SimpleDocRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "submitted" | "approved" | "discarded";
+            /** Base Version */
+            base_version: number | null;
+            /** Version */
+            version: number | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Participant Ids */
+            participant_ids: string[];
+            /** Changes */
+            changes: number;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Submitted By */
+            submitted_by: string | null;
+            /** Decider Approved */
+            decider_approved: boolean;
+            /** Waiting On */
+            waiting_on: string[];
+            /** Approved At */
+            approved_at: string | null;
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
+            /** Can Submit */
+            can_submit: boolean;
+            /** Can Resume */
+            can_resume: boolean;
+            /** Can Approve */
+            can_approve: boolean;
         };
         /** SimpleFlag */
         SimpleFlag: {
@@ -34600,6 +34822,11 @@ export interface components {
             /** Estimated */
             estimated: boolean;
         };
+        /** SimpleResumeOut */
+        SimpleResumeOut: {
+            session: components["schemas"]["SimpleSessionOut"];
+            draft: components["schemas"]["SimpleDraftOut"];
+        };
         /** SimpleRoadmapItem */
         SimpleRoadmapItem: {
             /**
@@ -34673,6 +34900,16 @@ export interface components {
             items: components["schemas"]["SimpleRoadmapItem"][];
             /** Milestones */
             milestones: components["schemas"]["SimpleMilestone"][];
+            /**
+             * Changes In Review
+             * @default 0
+             */
+            changes_in_review: number;
+            /**
+             * Drafts
+             * @default []
+             */
+            drafts: components["schemas"]["SimpleDraftBrief"][];
         };
         /** SimpleSessionIn */
         SimpleSessionIn: {
@@ -62882,6 +63119,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_drafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"][];
+                };
+            };
+        };
+    };
+    get_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleResumeOut"];
                 };
             };
             /** @description Validation Error */

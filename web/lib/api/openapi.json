@@ -40824,6 +40824,256 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/drafts": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Drafts",
+        "description": "The open working and submitted drafts the caller may see: their participants, the\ncompany's owners, the roadmap's decider, required reviewers and owners.",
+        "operationId": "list_simple_drafts",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SimpleDraftOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Simple Drafts"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/drafts/{draft_id}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Draft",
+        "description": "One draft the caller may see (404 otherwise).",
+        "operationId": "get_simple_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/drafts/{draft_id}/submit": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Submit Simple Draft",
+        "description": "Submit the draft: it is imported as the roadmap's next version and goes through the\ndocument's review policy; readers keep the published version until it is approved.",
+        "operationId": "submit_simple_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/drafts/{draft_id}/approve": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Approve Simple Draft",
+        "description": "Approve a submitted draft: the decider's approval waits for every required\nreviewer's; a required reviewer's approves every section of the version. The version\nis approved (published to readers) when all are in.",
+        "operationId": "approve_simple_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/drafts/{draft_id}/resume": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Resume Simple Draft",
+        "description": "Open a session on a working draft whose session closed: its author or the decider.",
+        "operationId": "resume_simple_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleResumeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
+      }
+    },
     "/v1/strategy/stack": {
       "get": {
         "tags": [
@@ -62987,6 +63237,11 @@
             "type": "array",
             "title": "Versions",
             "default": []
+          },
+          "changes_in_review": {
+            "type": "integer",
+            "title": "Changes In Review",
+            "default": 0
           }
         },
         "type": "object",
@@ -73108,6 +73363,14 @@
             "type": "array",
             "title": "Simple Decisions",
             "default": []
+          },
+          "simple_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleApproval"
+            },
+            "type": "array",
+            "title": "Simple Approvals",
+            "default": []
           }
         },
         "type": "object",
@@ -73659,6 +73922,77 @@
         ],
         "title": "InboxSections"
       },
+      "InboxSimpleApproval": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "document": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "decider_approved": {
+            "type": "boolean",
+            "title": "Decider Approved"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_id",
+          "document",
+          "version",
+          "submitted_by",
+          "submitted_at",
+          "decider_approved",
+          "state"
+        ],
+        "title": "InboxSimpleApproval",
+        "description": "A roadmap version from a Simple draft waiting for my approval as a required\nreviewer (``simple_approvals``, counted in ``total``)."
+      },
       "InboxSimpleChange": {
         "properties": {
           "id": {
@@ -73679,7 +74013,16 @@
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
-              "move_dependency"
+              "move_dependency",
+              "override_priority",
+              "add_item_task",
+              "edit_item_task",
+              "set_item_task_status",
+              "add_action_item",
+              "edit_action_item",
+              "set_action_item_status",
+              "add_launch_task",
+              "set_launch_task_status"
             ],
             "title": "Op"
           },
@@ -103849,7 +104192,16 @@
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
-              "move_dependency"
+              "move_dependency",
+              "override_priority",
+              "add_item_task",
+              "edit_item_task",
+              "set_item_task_status",
+              "add_action_item",
+              "edit_action_item",
+              "set_action_item_status",
+              "add_launch_task",
+              "set_launch_task_status"
             ],
             "title": "Op"
           },
@@ -103920,6 +104272,15 @@
             ],
             "title": "Document Id"
           },
+          "draft_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Draft Ids",
+            "default": []
+          },
           "op": {
             "type": "string",
             "enum": [
@@ -103933,7 +104294,16 @@
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
-              "move_dependency"
+              "move_dependency",
+              "override_priority",
+              "add_item_task",
+              "edit_item_task",
+              "set_item_task_status",
+              "add_action_item",
+              "edit_action_item",
+              "set_action_item_status",
+              "add_launch_task",
+              "set_launch_task_status"
             ],
             "title": "Op"
           },
@@ -104173,6 +104543,198 @@
           "title"
         ],
         "title": "SimpleDocRef"
+      },
+      "SimpleDraftBrief": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "working",
+              "submitted",
+              "approved",
+              "discarded"
+            ],
+            "title": "Status"
+          },
+          "changes": {
+            "type": "integer",
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "status",
+          "changes"
+        ],
+        "title": "SimpleDraftBrief"
+      },
+      "SimpleDraftOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "working",
+              "submitted",
+              "approved",
+              "discarded"
+            ],
+            "title": "Status"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "participant_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Participant Ids"
+          },
+          "changes": {
+            "type": "integer",
+            "title": "Changes"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          },
+          "decider_approved": {
+            "type": "boolean",
+            "title": "Decider Approved"
+          },
+          "waiting_on": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Waiting On"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "blocked_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocked By",
+            "default": []
+          },
+          "can_submit": {
+            "type": "boolean",
+            "title": "Can Submit"
+          },
+          "can_resume": {
+            "type": "boolean",
+            "title": "Can Resume"
+          },
+          "can_approve": {
+            "type": "boolean",
+            "title": "Can Approve"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document",
+          "status",
+          "base_version",
+          "version",
+          "created_by",
+          "created_at",
+          "participant_ids",
+          "changes",
+          "submitted_at",
+          "submitted_by",
+          "decider_approved",
+          "waiting_on",
+          "approved_at",
+          "can_submit",
+          "can_resume",
+          "can_approve"
+        ],
+        "title": "SimpleDraftOut",
+        "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
       },
       "SimpleFlag": {
         "properties": {
@@ -104477,6 +105039,22 @@
         ],
         "title": "SimplePhase"
       },
+      "SimpleResumeOut": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/SimpleSessionOut"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/SimpleDraftOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session",
+          "draft"
+        ],
+        "title": "SimpleResumeOut"
+      },
       "SimpleRoadmapItem": {
         "properties": {
           "id": {
@@ -104702,6 +105280,19 @@
             },
             "type": "array",
             "title": "Milestones"
+          },
+          "changes_in_review": {
+            "type": "integer",
+            "title": "Changes In Review",
+            "default": 0
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftBrief"
+            },
+            "type": "array",
+            "title": "Drafts",
+            "default": []
           }
         },
         "type": "object",
