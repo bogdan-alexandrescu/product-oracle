@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /*
  * H1 follow-ups (#193): pickers for the evidence, linked baseline items and subjects of a
@@ -215,6 +215,7 @@ test("a commenter's edit keeps a linked item only approvers may see, and never s
   await expect(form).toHaveCount(0);
   await expect(inspector(page).getByTestId("decision-rests-on").getByRole("link", { name: PRICING })).toBeVisible();
 
+  await signOut(page);
   await login(page, COMMENTER);
   await openCaps(page);
   await expect(inspector(page).getByTestId("decision-rests-on")).toHaveCount(0);
@@ -229,6 +230,7 @@ test("a commenter's edit keeps a linked item only approvers may see, and never s
   await editTitle(page, `${CAPS}, revised`);
   await expect(inspector(page)).not.toContainText(UUID);
 
+  await signOut(page);
   await login(page, APPROVER);
   await openCaps(page);
   await expect(inspector(page)).toContainText(`${CAPS}, revised`);
