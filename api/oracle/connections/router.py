@@ -21,7 +21,7 @@ from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.auth.service import may_sign_in
-from oracle.authz import has_role, require_role
+from oracle.authz import has_role, not_for_runs, require_role, require_role_now
 from oracle.config import get_settings
 from oracle.connections import oauth, service
 from oracle.connections.models import Connection
@@ -174,6 +174,10 @@ def endpoint_url(conn: Connection) -> str | None:
 
 
 OWNER_ONLY = "Only an Oracle owner can set or change a Fireflies endpoint"
+ANOTHER_ACCOUNT = (
+    "That key belongs to another Fireflies account than this connection's; "
+    "connect it as a new connection"
+)
 
 
 def _endpoint(provider: Provider, url: str | None, principal: Principal) -> str | None:
@@ -356,7 +360,8 @@ async def set_connection_endpoint(
     connection_id: uuid.UUID,
     body: EndpointIn,
     principal: UserPrincipal,
-    _: Annotated[Principal, Depends(require_role("owner"))],
+    _: Annotated[Principal, Depends(not_for_runs)],
+    __: Annotated[Principal, Depends(require_role_now("owner"))],
     db: TenantDB,
     http: FirefliesHttp,
 ) -> ConnectionOut:
@@ -374,11 +379,8 @@ async def set_connection_endpoint(
     except ProviderUnavailable as e:
         raise _unavailable(e) from None
     if identity.account_id != conn.account_id:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"That key belongs to {identity.label}, not {conn.account_label}; "
-            "connect it as a new connection",
-        )
+        # A fixed sentence: the account's name comes from the endpoint's server.
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, ANOTHER_ACCOUNT)
     before = endpoint_url(conn)
     try:
         conn = await service.save(

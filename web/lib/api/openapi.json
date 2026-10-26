@@ -10298,7 +10298,8 @@
             "description": "A token Oracle will not use (a Slack bot token)"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/connections/{connection_id}/endpoint": {
@@ -10360,7 +10361,8 @@
             "description": "An endpoint Oracle does not call, or not a Fireflies connection"
           }
         },
-        "x-min-role": "owner"
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/connections/{provider}/authorize": {

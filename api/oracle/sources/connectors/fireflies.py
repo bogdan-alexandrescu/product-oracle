@@ -65,6 +65,7 @@ import json
 import logging
 import math
 import re
+import socket
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -600,6 +601,24 @@ _PRIVATE = (
     "The endpoint points to a private, local or internal network address, which "
     "Product Oracle does not call."
 )
+# A last label that is a number (decimal, octal or hex): resolvers read such a host as an
+# IPv4 address (0177.0.0.1, 0x7f000001, 127.1), whatever its form.
+_NUMERIC_LABEL = re.compile(r"(0x[0-9a-f]*|[0-9]+)", re.IGNORECASE)
+
+
+def _odd_ipv4(host: str) -> EndpointRefused:
+    """The refusal for a host written as an IPv4 address in a form other than four decimal
+    numbers: private when it reads as a private address, else refused all the same."""
+    try:
+        address = socket.inet_ntoa(socket.inet_aton(host))
+    except OSError:
+        return EndpointRefused("The endpoint is not a valid URL.")
+    if not public_address(address):
+        return EndpointRefused(_PRIVATE)
+    return EndpointRefused(
+        "The endpoint writes an IP address in an octal, hex or shortened form; write it as "
+        "four decimal numbers, or use the host name."
+    )
 
 
 def check_endpoint(url: str | None) -> str | None:
@@ -630,11 +649,17 @@ def check_endpoint(url: str | None) -> str | None:
     try:
         ipaddress.ip_address(host)
     except ValueError:
+        if _NUMERIC_LABEL.fullmatch(host.rsplit(".", 1)[-1]):
+            raise _odd_ipv4(host) from None
         if "." not in host:
             raise EndpointRefused(_PRIVATE) from None
     else:
         if not public_address(host):
             raise EndpointRefused(_PRIVATE)
+    try:
+        httpx.URL(normalized)
+    except httpx.InvalidURL:
+        raise EndpointRefused("The endpoint is not a valid URL.") from None
     return None if normalized == DEFAULT_ENDPOINT else normalized
 
 
@@ -679,11 +704,15 @@ def _origin(url: httpx.URL) -> tuple[str, str, int | None]:
 async def post(
     client: httpx.AsyncClient, endpoint: str, api_key: str, payload: dict[str, Any]
 ) -> httpx.Response:
-    """POST to the endpoint with the key. A redirect is followed only to the same host
-    (re-checked by :func:`check_endpoint`, at most MAX_REDIRECTS); one to another host is
-    refused before anything is sent there, so the key only reaches the configured host."""
+    """POST to the endpoint with the key. A redirect is followed only to the same scheme,
+    host and port (at most MAX_REDIRECTS): that host was checked already, and the guarded
+    transport checks the address of every connect. One to another host is refused before
+    anything is sent there, so the key only reaches the configured host."""
     headers = {"Authorization": f"Bearer {api_key}"}
-    url = httpx.URL(endpoint)
+    try:
+        url = httpx.URL(endpoint)
+    except httpx.InvalidURL:
+        raise EndpointRefused("The endpoint is not a valid URL.") from None
     home = _origin(url)
     for _ in range(MAX_REDIRECTS + 1):
         response = await client.post(url, json=payload, headers=headers, follow_redirects=False)
@@ -691,16 +720,15 @@ async def post(
             return response
         location = response.headers.get("Location")
         await response.aclose()
-        target = url.join(location) if location else None
+        try:
+            target = url.join(location) if location else None
+        except httpx.InvalidURL:
+            target = None
         if target is None or _origin(target) != home:
             raise EndpointRefused(
                 "The Fireflies endpoint redirected to another address, which Product "
                 "Oracle does not follow (the API key is sent only to the configured host)."
             )
-        try:
-            check_endpoint(str(target.copy_with(query=None, fragment=None)))
-        except EndpointRefused as exc:
-            raise EndpointRefused(f"The Fireflies endpoint redirected badly: {exc}") from None
         url = target
     raise EndpointRefused("The Fireflies endpoint redirects too many times.")
 
