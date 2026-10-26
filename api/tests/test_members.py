@@ -223,6 +223,8 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/documents/{doc}/versions", "viewer", {}),
     ("GET", V, "viewer", {}),
     ("GET", V + "/markdown", "viewer", {}),
+    # S4: any member asks; only the draft's author sees a count, others get it hidden.
+    ("GET", V + "/new-items", "viewer", {}),
     # D10: the run review a version's review decides; any member reads it.
     ("GET", V2 + "/run-review", "viewer", {}),
     ("GET", "/v1/documents/{doc}/diff", "viewer", {"params": {"from": 1, "to": 2}}),

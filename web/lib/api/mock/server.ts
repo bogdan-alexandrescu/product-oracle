@@ -73,7 +73,7 @@ import {
 import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
-import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
+import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
@@ -2012,7 +2012,7 @@ function load(): Db {
             ? seedEngCheckNoLead
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
-          : scenario === "run-review"
+          : scenario === "run-review" || scenario === DRAFT_NEW_ITEMS_SCENARIO
             ? seedRunReview
           : scenario === "run-review-decider"
             ? seedRunReviewDecider
@@ -4227,6 +4227,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     // D10: the last section approved approves the run review of this version.
     followRunReview(db, doc, v, false, me.id);
     return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
+  }
+  if (sub === "new-items" && m === "GET") {
+    // S4: the draft's author (the person its run acted for, else its importer) sees what
+    // changed in their own sources since the draft's run pinned them (oracle.docs.fresh).
+    const found = runReviewOf(db, doc.id, v.number);
+    const author = found ? found.run.created_by : v.imported_by;
+    if (!author || author !== me.id) return json(200, { version: v.number, as_of: null, count: null, visible: false });
+    const as_of = found?.run.snapshot_as_of ?? v.created_at;
+    return json(200, { version: v.number, as_of, count: itemsChangedSince(as_of, db.members.find((x) => x.id === author)?.email ?? "", me.email), visible: true });
   }
   if (sub === "run-review" && m === "GET") {
     const found = runReviewOf(db, doc.id, v.number);
