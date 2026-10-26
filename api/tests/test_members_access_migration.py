@@ -61,7 +61,7 @@ def scratch_db():
 
 def test_one_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0055_late_answers"]
+    assert script.get_heads() == ["0056_feedback_withheld"]
     assert script.get_revision(REVISION).down_revision == BEFORE
 
 
