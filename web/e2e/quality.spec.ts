@@ -134,6 +134,46 @@ test("hide rules, model and other people until the rater picks a status", async 
   await expect(row(page, "goal_alignment").getByTestId("rules-cell")).toHaveText("Hidden");
 });
 
+test("hide until I pick: a criterion the rater has rated stays shown, after a reload too", async ({ page }) => {
+  await open(page, { role: "commenter", scenario: "quality" });
+  await row(page, "scope_testability").click();
+  const insp = inspector(page);
+  await insp.getByLabel("Hide rules, model and other people until I pick").check();
+  const form = insp.getByTestId("rating-form");
+  await form.getByRole("button", { name: "Warning" }).click();
+  await form.getByLabel("Rationale").fill("Two acceptance criteria cannot be tested.");
+  await form.getByRole("button", { name: "Submit rating" }).click();
+
+  // Mockup A: the stored message says how the people now agree with the rules.
+  await expect(page.getByTestId("rating-stored")).toContainText(/Rating stored as human report .*; people agreement is now 1\/3\.$/);
+  await expect(row(page, "scope_testability").getByTestId("rules-cell")).toHaveText("Critical");
+  await expect(row(page, "scope_testability").getByTestId("people-cell")).toHaveText(/2 warning\s*1 critical/);
+  await expect(insp.getByTestId("hidden-until-pick")).toHaveCount(0);
+  await expect(insp.getByTestId("evaluator")).toHaveCount(5);
+  await expect(row(page, "goal_alignment").getByTestId("rules-cell")).toHaveText("Hidden");
+
+  await page.reload();
+  await expect(row(page, "scope_testability").getByTestId("rules-cell")).toHaveText("Critical");
+  await expect(row(page, "scope_testability").getByTestId("model-cell")).toHaveText("Critical");
+  await expect(row(page, "goal_alignment").getByTestId("rules-cell")).toHaveText("Hidden");
+});
+
+test("hide until I pick: counts and filters do not give away what is hidden", async ({ page }) => {
+  await open(page, { role: "commenter", scenario: "quality" });
+  const panel = page.getByTestId("criteria-panel");
+  const disagrees = page.getByRole("button", { name: /Model disagrees/ });
+  await expect(panel).toContainText(/\d+ warning/);
+  await expect(disagrees).not.toHaveText(/Model disagrees\s*0$/);
+
+  await row(page, "scope_testability").click();
+  await inspector(page).getByLabel("Hide rules, model and other people until I pick").check();
+  await expect(panel).not.toContainText(/\d+ (pass|warning|critical|n\/a)/);
+  await expect(disagrees).toHaveText(/Model disagrees\s*0$/);
+  await disagrees.click();
+  await expect(page.getByTestId("criterion-row")).toHaveCount(0);
+  await expect(panel).toContainText("No criteria match this filter");
+});
+
 test("viewer: reads everything, rates nothing, queues nothing", async ({ page }) => {
   await open(page, { role: "viewer", scenario: "quality" });
   await expect(page.getByTestId("view-only")).toBeVisible();
@@ -169,27 +209,36 @@ test("approver: no model review yet, queue one, the job runs and the model colum
   await expect(history(page).getByTestId("history-row").first()).toContainText("Succeeded");
 });
 
-test("a failed model job says why and retries", async ({ page }) => {
+test("a failed model job says why and retries, once, in History", async ({ page }) => {
   await open(page, { role: "approver", scenario: "quality-job-failed" });
-  const failed = page.getByTestId("job-failed");
-  await expect(failed).toContainText("Quality review failed: Every Claude account is paused.");
+  const failed = history(page).getByTestId("history-row").filter({ hasText: "Failed" });
+  await expect(failed).toContainText("Every Claude account is paused.");
+  await expect(failed).toContainText("Next reset");
+  // #623 review: the job is drawn once, not as a notice and a History row.
+  await expect(page.getByText(/Every Claude account is paused/)).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(1);
   await failed.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("job-done")).toContainText("Model review done");
-  await expect(page.getByTestId("job-failed")).toHaveCount(0);
+  // Token counts read as the mockup's "12.4k in".
+  await expect(page.getByTestId("job-done")).toContainText(/\b3\.\dk in · 600 out · /);
+  await expect(history(page).getByTestId("history-row").filter({ hasText: "Failed" })).toHaveCount(0);
 });
 
-test("a running model job can be cancelled from History", async ({ page }) => {
+test("a running model job shows once, in History, and is cancelled there", async ({ page }) => {
   await open(page, { role: "owner", scenario: "quality-job-running" });
-  await expect(page.getByTestId("job-active")).toContainText("Running");
   const jobRow = history(page).getByTestId("history-row").filter({ hasText: "Running" });
+  await expect(jobRow).toHaveCount(1);
+  await expect(page.getByText("Running", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Cancel" })).toHaveCount(1);
+  await expect(page.getByTestId("page-queue-review")).toBeDisabled();
   await jobRow.getByRole("button", { name: "Cancel" }).click();
   await expect(history(page).getByTestId("history-row").filter({ hasText: "Cancelled" })).toHaveCount(1);
-  await expect(page.getByTestId("job-active")).toHaveCount(0);
+  await expect(page.getByTestId("page-queue-review")).toBeEnabled();
 });
 
 test("commenter sees no Retry or Cancel on a model job", async ({ page }) => {
   await open(page, { role: "commenter", scenario: "quality-job-failed" });
-  await expect(page.getByTestId("job-failed")).toBeVisible();
+  await expect(history(page).getByTestId("history-row").filter({ hasText: "Failed" })).toContainText("Every Claude account is paused.");
   await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
 });
 
@@ -245,9 +294,15 @@ test("loading: the criteria table draws placeholder rows first", async ({ page }
 });
 
 test("reached from the version page and from Publish", async ({ page }) => {
+  // A commenter sees "Check readiness" beside the Quality link.
+  await page.addInitScript(([k]) => localStorage.setItem(k, "commenter"), [MOCK_ROLE_KEY] as const);
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
-  await page.getByRole("link", { name: "Quality" }).click();
+  // The Quality link does not wear the "Check readiness" link's icon.
+  const quality = page.getByRole("link", { name: "Quality" });
+  const readinessIcon = await page.getByRole("link", { name: "Check readiness" }).locator("svg").innerHTML();
+  expect(await quality.locator("svg").innerHTML()).not.toBe(readinessIcon);
+  await quality.click();
   await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2\/quality$/);
   await expect(page.getByTestId("criterion-row")).toHaveCount(13);
 
