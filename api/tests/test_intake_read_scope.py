@@ -42,9 +42,7 @@ async def _intake_with_run(client, ctx) -> tuple[str, Run]:
     out = await create_intake(client, ctx, ai_extraction=True)
     intake_id = out["intake"]["id"]
     async with tenant_session(ctx.tenant_id) as s:
-        run = await s.scalar(
-            select(Run).where(Run.knobs["read_intake_id"].astext == intake_id)
-        )
+        run = await s.scalar(select(Run).where(Run.knobs["read_intake_id"].astext == intake_id))
     assert run is not None
     return intake_id, run
 
@@ -103,7 +101,7 @@ async def test_the_runs_token_reads_exactly_the_jobs_payload(client):
     async with tenant_session(ctx.tenant_id) as s:
         events = list(await s.scalars(select(AuditEvent).where(
             AuditEvent.action == "intake.evidence_read")))  # fmt: skip
-        assert any(e.details.get("route") == "get_intake_analysis_input" for e in events)
+        assert any(e.data.get("route") == "get_intake_analysis_input" for e in events)
         minted = list(await s.scalars(select(RunToken).where(RunToken.run_id == run.id)))
         assert all(t.scopes == [SCOPE] for t in minted)
 

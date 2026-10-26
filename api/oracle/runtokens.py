@@ -30,6 +30,9 @@ SCOPES = (
     # H7: Oracle's web tools (search_web, fetch_web_page); the competitive digest's
     # segment only (migration 0052_market).
     "read:web",
+    # INT2: the one run-bound read of an intake's analysis input (the job's payload); the
+    # intake_analysis segment only (migration 0055_intake_read).
+    "read:intake-input",
 )
 
 

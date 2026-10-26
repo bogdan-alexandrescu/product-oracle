@@ -49,6 +49,8 @@ FLOWS = (
     "pricing_memo",
     # H7 Competitive digest (migration 0052_market): the monthly digest's write-up.
     "competitive_digest",
+    # INT2 (migration 0055_intake_read): Oracle's read of a new intake.
+    "intake_analysis",
 )
 RUN_STATUSES = (
     "draft",

@@ -53,9 +53,9 @@ def _run(sql: str, **params):
 
 
 def _check(name: str) -> str:
-    return _run(
-        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n", n=name
-    )[0][0]
+    return _run("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n", n=name)[
+        0
+    ][0]
 
 
 @pytest.fixture
@@ -89,10 +89,7 @@ def test_upgrade_cancels_queued_jobs_and_downgrade_refuses_under_a_live_read(scr
     command.upgrade(_cfg(), REVISION)
     assert "intake_analysis" in _check("ck_runs_flow")
     assert "read:intake-input" in _check("ck_run_tokens_scopes")
-    rows = dict(
-        (r[0], (r[1], r[2]))
-        for r in _run("SELECT id, status, error_reason FROM llm_jobs")
-    )
+    rows = dict((r[0], (r[1], r[2])) for r in _run("SELECT id, status, error_reason FROM llm_jobs"))
     assert rows[queued] == ("cancelled", "moved_to_swarmcloud")
     assert rows[done][0] == "succeeded" and rows[other][0] == "queued"
 
