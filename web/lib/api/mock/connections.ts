@@ -106,7 +106,7 @@ export function mockSettingValue(key: string): unknown {
   return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
-function companyZone(): string {
+export function companyZone(): string {
   const zone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone });

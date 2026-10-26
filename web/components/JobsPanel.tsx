@@ -6,7 +6,7 @@ import { Button, Empty, InfoTip } from "@/components/ds";
 import { InlineError, JobStatusChip } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from "@/lib/api/client";
-import { formatDateTime, formatUsd, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDateTime, formatUsd, jobFailure, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -65,6 +65,7 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
   const cancel = (job.status === "queued" || job.status === "running") && can("cancel_llm_job");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
   const act = async (what: "retry" | "cancel") => {
     setBusy(true);
     setError(null);
@@ -86,7 +87,7 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
   return (
     <li className="border-b border-line py-3 last:border-b-0" data-testid="llm-job" data-status={job.status}>
       <div className="flex flex-wrap items-center gap-2">
-        <JobStatusChip status={job.status} />
+        <JobStatusChip status={job.status} at={job.finished_at} />
         <span className="font-semibold text-text" data-testid="job-kind">
           {JOB_KIND_LABEL[job.kind]}
         </span>
@@ -97,9 +98,12 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
       {note && <p className="mt-1 text-[15px] leading-[22px] text-text">{note}</p>}
       {job.status === "failed" && (
         <div className="mt-1.5 rounded-lg bg-crit-bg px-2.5 py-2 text-sm leading-5 text-crit" data-testid="job-error">
-          <p className="font-semibold">{job.error ?? "The job failed."}</p>
+          <p className="font-semibold">{jobFailure({ error: job.error, error_reason: null })}</p>
           {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && <p className="mt-0.5">{NO_ACCOUNT_REASON[job.error_reason]}</p>}
-          {job.next_reset_at && <p className="tnum mt-0.5">Next reset: {formatDateTime(job.next_reset_at)}</p>}
+          {/* A reset already past says nothing about now (#556). */}
+          {job.next_reset_at && Date.parse(job.next_reset_at) > now && (
+            <p className="tnum mt-0.5">Next reset: {formatDateTime(job.next_reset_at)}</p>
+          )}
         </div>
       )}
       {job.status === "queued" && job.error && <p className="mt-1 text-sm font-medium text-warn">{job.error}</p>}

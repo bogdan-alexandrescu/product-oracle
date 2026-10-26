@@ -27,7 +27,7 @@ test("Oracle's work: status, account and cost behind Details, and a clear no-acc
 
   const reports = kind("Reports");
   await expect(reports).toHaveAttribute("data-status", "failed");
-  await expect(reports.getByTestId("job-error")).toContainText("No Claude account can take this call");
+  await expect(reports.getByTestId("job-error")).toContainText("No Claude account could take this call");
   await expect(reports.getByTestId("job-error")).toContainText("Every Claude account is paused");
 
   await reports.getByRole("button", { name: "Retry" }).click();

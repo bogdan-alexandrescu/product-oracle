@@ -15409,6 +15409,8 @@ export interface components {
             run_status?: string | null;
             /** Error */
             error?: string | null;
+            /** Failed At */
+            failed_at?: string | null;
             /** Stale At */
             stale_at?: string | null;
             /** Mine */
@@ -15472,6 +15474,8 @@ export interface components {
             run_status?: string | null;
             /** Error */
             error?: string | null;
+            /** Failed At */
+            failed_at?: string | null;
             /** Stale At */
             stale_at?: string | null;
             /** Mine */
@@ -22873,6 +22877,8 @@ export interface components {
             status: string;
             /** Error */
             error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
         };
         /**
          * InterviewLinkOut

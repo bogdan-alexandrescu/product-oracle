@@ -30,6 +30,8 @@
 import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 import { mockUuid } from "./ids";
+import { SPENT } from "./llm-jobs";
+import { readableRefusal } from "./refusal";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type RequestOut = Schemas["RequestOut"];
@@ -58,6 +60,10 @@ interface TriageRun {
   created_by: string;
   started_at: string;
   finished_at: string | null;
+  /** How it failed, as runs.service stores it ("{segment}: {error}"); absent when it succeeded. */
+  error?: string;
+  /** It failed with no error stored (the "triage-failed-quietly" scenario, #644 re-review). */
+  failed?: boolean;
 }
 
 /** A request as stored: the API's row, before themes, PRDs and mentions are joined. */
@@ -205,6 +211,10 @@ const NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'";
 const TRIAGE_MS = 3_000;
 const EXCERPT_MAX = 400;
 const SKIPPED_SCENARIO = "triage-skipped";
+/** server.STORED_REFUSALS_SCENARIO (#633 re-review): the Claude pool refuses the triage run. */
+const REFUSED_SCENARIO = "stored-refusals";
+/** The triage run fails with no error stored (#644 re-review): the line says only when. */
+export const TRIAGE_FAILED_QUIETLY_SCENARIO = "triage-failed-quietly";
 const SKIPPED =
   "Oracle's daily triage did not run on 2026-10-22: it runs as the approver who turned it on or else an owner, and none of them is an active member";
 
@@ -648,7 +658,13 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
   // --- triage (Classify now and the header's status line) --------------------------------
   if (p[1] === "requests" && p[2] === "triage" && p.length === 3) {
     const run = db.triage ?? null;
-    if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS) {
+    if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS && localStorage.getItem("po-mock-scenario") === REFUSED_SCENARIO) {
+      run.finished_at = now();
+      run.error = `triage: ${SPENT}`;
+    } else if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS && localStorage.getItem("po-mock-scenario") === TRIAGE_FAILED_QUIETLY_SCENARIO) {
+      run.finished_at = now();
+      run.failed = true;
+    } else if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS) {
       // The run ends: a suggestion for every New request with none (data only; nothing decided).
       const goal = [...confirmed][0];
       for (const r of db.requests.filter((x) => x.state === "new" && !x.suggestion)) {
@@ -669,10 +685,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       const status: Schemas["TriageStatus"] = run
         ? {
             ...daily,
-            run_id: run.id, status: run.finished_at ? "succeeded" : "running", active: !run.finished_at,
+            run_id: run.id, status: !run.finished_at ? "running" : run.error || run.failed ? "failed" : "succeeded", active: !run.finished_at,
             automatic: false, started_at: run.started_at, finished_at: run.finished_at,
             suggestions: db.requests.filter((r) => r.suggestion?.run_id === run.id).length,
-            found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length, error: null,
+            found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length,
+            // As the API: the stored error read through the refusal rewrite, in the past (#633 re-review).
+            error: readableRefusal(run.error, true),
           }
         : {
             ...daily,

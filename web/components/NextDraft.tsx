@@ -10,7 +10,7 @@ import { Button, Chip, Icon, InfoTip, Notice } from "@/components/ds";
 import { JobStatusChip } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone, zoneDay } from "@/lib/dates";
-import { formatDateTime, NO_ACCOUNT_REASON, turnedOff } from "@/lib/format";
+import { formatDateTime, jobFailure, turnedOff } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -307,7 +307,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
       <HeroChip>
         <VersionStep from={preview?.base_version ?? staged.latest_version} to={preview?.next_version ?? next} />
       </HeroChip>
-      {job && <JobStatusChip status={job.status} />}
+      {job && <JobStatusChip status={job.status} at={job.finished_at} />}
     </>
   );
 
@@ -333,7 +333,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
       >
         {job?.status === "failed" ? (
           <Notice tone="error">
-            {job.error ?? "The build failed"} {job.error_reason && NO_ACCOUNT_REASON[job.error_reason]}
+            {jobFailure(job, "The build failed.")}
           </Notice>
         ) : (
           <div data-testid="next-draft-progress" className="flex flex-col gap-2.5 py-2">

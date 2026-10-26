@@ -130,7 +130,8 @@ test("the discussion refusal gives the clearing time in words", async ({ page })
   await panel.getByTestId("feedback-discussions").click();
   await panel.getByTestId("discussion-row").filter({ hasText: "Caps: ship without detection?" }).first().click();
   const error = page.getByTestId("discussion-thread").filter({ visible: true }).getByTestId("oracle-reply").last().getByTestId("oracle-reply-error");
-  await expect(error).toContainText("every Claude account is spent; the earliest window clears");
+  // A failed reply says what was so when it ran, not now (#644 re-review).
+  await expect(error).toContainText("every Claude account was spent; the earliest window was due to clear");
   await expect(error).toContainText(WORDED);
   await expect(error).not.toContainText(ISO);
 });

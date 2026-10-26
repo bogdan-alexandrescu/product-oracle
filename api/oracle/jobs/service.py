@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
+from oracle.claude_accounts.pool import readable_refusal
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.schemas import ImportProblem, VersionOut
@@ -135,9 +136,13 @@ async def jobs_out(db: AsyncSession, jobs: list[LlmJob]) -> list[LlmJobOut]:
                 )
             ).all()
         )
+    # #556: a refusal stored before #403's wording reads the way one is written now.
+    zone = await company_time.company_time_zone(db) if any(j.error for j in jobs) else None
     out = []
     for j in jobs:
         o = LlmJobOut.model_validate(j)
+        if zone is not None:
+            o.error = readable_refusal(o.error, zone, past=j.status == "failed")
         o.version_number = numbers.get(j.version_id) if j.version_id else None
         o.cost_usd = float(j.cost_usd) if j.cost_usd is not None else None
         out.append(o)

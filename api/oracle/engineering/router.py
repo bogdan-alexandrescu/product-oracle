@@ -21,9 +21,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.baseline.models import Entity
+from oracle.claude_accounts.pool import readable_refusal
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion
 from oracle.engineering import codemap, codemaps
@@ -178,11 +180,23 @@ async def get_tech_brief(
 
 
 async def _map_out(
-    db: AsyncSession, principal: Principal, row: CodeMap, source: Source, *, detail: bool
+    db: AsyncSession,
+    principal: Principal,
+    row: CodeMap,
+    source: Source,
+    *,
+    detail: bool,
+    zone: str | None = None,
 ) -> CodeMapOut:
-    run_status = (
-        await db.scalar(select(Run.status).where(Run.id == row.run_id)) if row.run_id else None
+    """``zone``: the company's, when the caller has read it already (a list reads it once)."""
+    if zone is None:
+        zone = await company_time.company_time_zone(db) if row.error else company_time.DEFAULT_ZONE
+    run = (
+        (await db.execute(select(Run.status, Run.finished_at).where(Run.id == row.run_id))).first()
+        if row.run_id
+        else None
     )
+    run_status = run.status if run else None
     fields = dict(
         id=row.id,
         source_id=row.source_id,
@@ -198,7 +212,9 @@ async def _map_out(
         counts=CodeMapCounts(**codemap.counts(row.content)),
         run_id=row.run_id,
         run_status=run_status,
-        error=row.error,
+        # How its run ended, read then, not now, in the company's zone (#633 re-review).
+        error=readable_refusal(row.error, zone, past=row.status == "failed"),
+        failed_at=run.finished_at if run and row.status == "failed" else None,
         stale_at=row.stale_at,
         mine=codemaps.mine(principal, source),
         created_at=row.created_at,
@@ -239,7 +255,10 @@ async def list_code_maps(
     if status_:
         query = query.where(CodeMap.status == status_)
     rows = (await db.execute(query)).all()
-    return [await _map_out(db, principal, m, s, detail=False) for m, s in rows]
+    # The company's zone once a list, not once a failed map (#644 re-review).
+    failed = any(m.error for m, _s in rows)
+    zone = await company_time.company_time_zone(db) if failed else company_time.DEFAULT_ZONE
+    return [await _map_out(db, principal, m, s, detail=False, zone=zone) for m, s in rows]
 
 
 @router.get("/code-maps/{code_map_id}", response_model=CodeMapDetail)

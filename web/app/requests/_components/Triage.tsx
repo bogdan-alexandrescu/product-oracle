@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Chip, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { failedAt } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 type Status = Schemas["TriageStatus"];
@@ -77,7 +78,13 @@ export function TriageStatusLine({ status }: { status: Status | undefined }) {
           ) : status.status === "succeeded" ? (
             `${plural(status.suggestions, "suggestion")}, ${status.found} found in your sources`
           ) : (
-            `Oracle's last triage did not finish${status.error ? `: ${status.error}` : ""}`
+            // When it failed, then what was so then (#633 re-review).
+            <>
+              {/* The ". " follows the sentence whenever more follows it: a when, a why or both. */}
+              Oracle&apos;s last triage did not finish{status.error || (status.status === "failed" && status.finished_at) ? ". " : ""}
+              {status.status === "failed" && status.finished_at && <span data-testid="failed-at">{failedAt(status.finished_at)}. </span>}
+              {status.error}
+            </>
           )}
           {" · "}
         </>

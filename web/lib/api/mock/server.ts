@@ -44,7 +44,7 @@ import {
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
@@ -69,6 +69,7 @@ import {
   seedRunReviewRun,
   seedRuns,
   seedScopeReviewRuns,
+  seedStoredRefusalRun,
   sendBackEntries,
   BUILD_UNDER_WAY,
   type RunsContext,
@@ -102,7 +103,7 @@ import {
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
@@ -453,6 +454,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * (AC1: it changes nothing, the name included).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
+export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
@@ -2192,7 +2195,7 @@ function load(): Db {
   db.discussions =
     scenario === "discussions"
       ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
-      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
+      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO || scenario === STORED_REFUSALS_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : scenario === SLACK_SCENARIO
           ? seedDiscussionsScenario(db, seedSlackBridge)
@@ -2236,6 +2239,13 @@ function load(): Db {
   if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
+  // #561 review: a run, its segment, roadmap items and a next-draft build that failed on Oct 18 on a stored refusal; refinements refused now.
+  if (scenario === STORED_REFUSALS_SCENARIO) {
+    seedStoredRefusalRun(db.runs!, runsContext(db), SPENT);
+    seedStoredRefusals(llmContext(db, db.user_id, "owner"));
+    // #644 re-review: the "discussion-replies" seed's failed reply stored the refusal on Oct 18.
+    for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
+  }
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -2592,6 +2602,7 @@ function draftDb(db: Db): DraftRoadmapDb {
   return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => {
     const drafts = seedDraftRoadmaps(draftCtx(db));
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === APPROVED_PLAN_SCENARIO) seedApprovedPlanDraft(draftCtx(db), drafts);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO) seedStoredRefusalDraft(draftCtx(db), drafts, SPENT);
     return drafts;
   }));
 }
@@ -3489,7 +3500,11 @@ function ensureRequests(db: Db): RequestsDb {
 
 /** The interviews, seeded on first use with the fixture's invited interview (`i-mock-token`). */
 function ensureInterviews(db: Db): InterviewsDb {
-  db.interviews ??= seeded("interviews", () => seedInterviews({ ownerId: db.user_id }));
+  db.interviews ??= seeded("interviews", () => ({
+    ...seedInterviews({ ownerId: db.user_id }),
+    // #604 re-review: the "stored-refusals" scenario's pool refuses every guide job.
+    ...(localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO && { refuse: true }),
+  }));
   return db.interviews;
 }
 
@@ -3859,6 +3874,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
+    refuse: localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
   });
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).

@@ -140,6 +140,7 @@ from oracle.authz import has_role
 from oracle.baseline import yaml_io
 from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
+from oracle.claude_accounts.pool import readable_refusal
 from oracle.decisions import capture as decisions_capture
 from oracle.docs import service as docs_service
 from oracle.docs import visibility, written
@@ -565,6 +566,8 @@ class _Refs:
     slugs: dict[uuid.UUID, str]
     kinds: dict[uuid.UUID, str]
     sources: dict[uuid.UUID, VersionSource]
+    # The Company time zone a stored error's moments are read in (#556).
+    zone: str = company_time.DEFAULT_ZONE
 
     def get(self, document_id: uuid.UUID | None) -> str | None:
         return self.slugs.get(document_id) if document_id else None
@@ -575,7 +578,9 @@ def _source_id(run: Run) -> uuid.UUID | None:
     return uuid.UUID(raw) if raw else None
 
 
-async def _refs(db: AsyncSession, runs: list[Run]) -> _Refs:
+async def _refs(
+    db: AsyncSession, runs: list[Run], segments: list[RunSegment] | None = None
+) -> _Refs:
     ids = {r.document_id for r in runs if r.document_id}
     slugs: dict[uuid.UUID, str] = {}
     kinds: dict[uuid.UUID, str] = {}
@@ -586,7 +591,12 @@ async def _refs(db: AsyncSession, runs: list[Run]) -> _Refs:
         for doc_id, slug, kind in rows.all():
             slugs[doc_id], kinds[doc_id] = slug, kind
     sources = await docs_service.version_sources(db, [_source_id(r) for r in runs])
-    return _Refs(slugs, kinds, sources)
+    zone = (
+        await company_time.company_time_zone(db)
+        if any(r.error for r in runs) or any(s.error for s in segments or [])
+        else company_time.DEFAULT_ZONE
+    )
+    return _Refs(slugs, kinds, sources, zone)
 
 
 def _progress(run: Run, segments: list[RunSegment]) -> RunProgress:
@@ -634,7 +644,7 @@ def _summary(
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
         review_link=review_link.link(waiting) if waiting else None,
-        error=run.error,
+        error=readable_refusal(run.error, refs.zone, past=run.status == "failed"),
         stuck=_stuck(run),
         can_retry=_can_retry(run),
         can_stop_cancelling=_cancel_stuck(run) is not None,
@@ -1034,6 +1044,7 @@ def _segment_out(
     knobs: flows.Knobs,
     kind: str = "prd",
     can_retry_draft_import: bool = False,
+    zone: str = company_time.DEFAULT_ZONE,
 ) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
@@ -1074,7 +1085,7 @@ def _segment_out(
         autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
-        error=segment.error,
+        error=readable_refusal(segment.error, zone, past=segment.status == "failed"),
         # #258: only while it runs, and only what was read of its current workflow.
         agents=[SegmentAgent(**a) for a in progress.get("agents") or []],
         checked_at=progress.get("checked_at"),
@@ -1198,7 +1209,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     vague = await _vague_goals(db, checkpoints)
     live = await _live_reasons(db, checkpoints)
     asked = await _open_questions(db, staged)
-    refs = await _refs(db, [run])
+    refs = await _refs(db, [run], segments)
     knobs = _knobs(run)
     kind = await _target_kind(db, run)
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
@@ -1242,7 +1253,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         runtime=runtime.name,
         notes=notes,
         note_refs=note_refs,
-        segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
+        segments=[_segment_out(run, s, knobs, kind, s.seq in retries, refs.zone) for s in segments],
         checkpoints=[
             _checkpoint_out(
                 c,

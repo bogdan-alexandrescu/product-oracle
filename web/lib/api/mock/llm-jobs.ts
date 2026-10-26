@@ -9,6 +9,7 @@ import { wordDiff } from "@/lib/diff";
 import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
+import { jobOut } from "./refusal";
 import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type AgentsRun, type NextDraftChangeRow, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
@@ -31,6 +32,8 @@ export interface LlmDb {
   next_draft_changes?: NextDraftChangeRow[];
   /** Job kinds an owner turned off, per document id. */
   disabled: Record<string, Job["kind"][]>;
+  /** #561 review: job kinds the Claude pool refuses (every account spent; the "stored-refusals" scenario). */
+  refuse?: Job["kind"][];
 }
 
 export type LlmContext = {
@@ -334,6 +337,10 @@ export function tick(ctx: LlmContext) {
     const vs = doc ? versionsOf(ctx, doc) : [];
     const v = vs.find((x) => x.number === job.version_number) ?? vs.at(-1);
     if (!doc || !v) continue;
+    if (ctx.db.refuse?.includes(job.kind)) {
+      Object.assign(job, { status: "failed", attempts: job.attempts + 1, started_at: ctx.now(), finished_at: ctx.now(), error: SPENT, error_reason: "no_account_available", next_reset_at: SPENT_RESET });
+      continue;
+    }
     if (job.kind === "review_comments") finish(ctx, job, runReview(ctx, job, doc, v));
     else if (job.kind === "reporting") {
       const since = (job.input.since as number | undefined) ?? (v.number > 1 ? v.number - 1 : null);
@@ -342,6 +349,13 @@ export function tick(ctx: LlmContext) {
     else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
 }
+
+// ------------------------------------------------------------------ stored refusals
+
+/** A refusal stored before #403's wording: every account spent, the earliest reset as raw UTC. */
+export const SPENT_RESET = "2026-10-25T22:00:00.475990Z";
+export const SPENT = "No Claude account can take this call: every Claude account is spent; the earliest window clears 2026-10-25T22:00:00.475990+00:00";
+
 
 // ------------------------------------------------------------------ seed
 
@@ -434,7 +448,48 @@ export function seedLlm(ctx: Omit<LlmContext, "db"> & { db?: LlmDb }): LlmDb {
     }),
   );
   seedOutreach(c);
+  seedStoredRefusal(c);
   return db;
+}
+
+/** #556 item 2: Saved carts v2's reports failed on Oct 18 with a refusal stored before #403's wording. */
+function seedStoredRefusal(c: LlmContext) {
+  const doc = c.documents.find((d) => d.slug === "saved-carts");
+  const v = doc && versionsOf(c, doc).find((x) => x.number === 2);
+  if (!doc || !v) return;
+  c.db.jobs.push(
+    makeJob(c, doc, "reporting", v, {
+      status: "failed",
+      attempts: 1,
+      requested_by: null,
+      created_at: "2026-10-18T23:11:58Z",
+      started_at: "2026-10-18T23:12:00Z",
+      finished_at: "2026-10-18T23:12:00Z",
+      error: SPENT,
+      error_reason: "no_account_available",
+      next_reset_at: SPENT_RESET,
+    }),
+  );
+}
+
+/** #561 review, the "stored-refusals" scenario: Clinic outreach's draft 6 build failed on Oct 18 on the same refusal, and every refinement now is refused. */
+export function seedStoredRefusals(c: LlmContext) {
+  const doc = c.documents.find((d) => d.slug === "clinic-outreach");
+  const v = doc && versionsOf(c, doc).at(-1);
+  if (!doc || !v) return;
+  c.db.jobs.push(
+    makeJob(c, doc, BATCH, v, {
+      status: "failed",
+      attempts: 1,
+      created_at: "2026-10-18T23:11:58Z",
+      started_at: "2026-10-18T23:12:00Z",
+      finished_at: "2026-10-18T23:12:00Z",
+      error: SPENT,
+      error_reason: "no_account_available",
+      next_reset_at: SPENT_RESET,
+    }),
+  );
+  c.db.refuse = ["refinement"];
 }
 
 /**
@@ -583,18 +638,18 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   if (jobRoute) {
     const job = db.jobs.find((j) => j.id === p[2]);
     if (!job) return fail(404, "Job not found");
-    if (!p[3] && m === "GET") return json(200, job);
+    if (!p[3] && m === "GET") return json(200, jobOut(job));
     if (p[3] === "cancel" && m === "POST") {
       if (!["queued", "running"].includes(job.status)) return fail(409, `a ${job.status} job cannot be cancelled`);
       Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
-      return json(200, job);
+      return json(200, jobOut(job));
     }
     if (p[3] === "retry" && m === "POST") {
       if (!["failed", "cancelled"].includes(job.status)) return fail(409, `a ${job.status} job cannot be retried`);
       const doc = ctx.documents.find((d) => d.id === job.document_id);
       if (doc && !enabled(doc, job.kind)) return fail(409, turnedOff(switchOf(job.kind)));
       Object.assign(job, { status: "queued", attempts: 0, error: null, error_reason: null, next_reset_at: null, started_at: null, finished_at: null });
-      return json(200, job);
+      return json(200, jobOut(job));
     }
     if (p[3] === "preview" && m === "GET") {
       if (job.kind !== "refinement" || job.status !== "succeeded") return fail(409, "only a finished refinement has a preview");
@@ -703,11 +758,14 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       const v = vs.find((x) => x.number === input.version) ?? vs.at(-1)!;
       const job = makeJob(ctx, doc, input.kind, v, input.since ? { input: { version: v.number, since: input.since } } : {});
       db.jobs.push(job);
-      return json(201, job);
+      return json(201, jobOut(job));
     }
     return json(
       200,
-      db.jobs.filter((j) => j.document_id === doc.id).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      db.jobs
+        .filter((j) => j.document_id === doc.id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map(jobOut),
     );
   }
   if (p[3] === "suggestions") {
@@ -734,7 +792,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       generated_at: done?.finished_at ?? null,
       resolution: done?.output?.resolution ?? null,
       changes: done?.output?.changes ?? null,
-      latest_job: jobs[0] ?? null,
+      latest_job: jobs[0] ? jobOut(jobs[0]) : null,
     });
   }
   // .../sections/{key}/refine
@@ -754,5 +812,5 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     input: { version: v.number, suggestion_ids: accepted.map((s) => s.id), instruction },
   });
   db.jobs.push(job);
-  return json(201, job);
+  return json(201, jobOut(job));
 }

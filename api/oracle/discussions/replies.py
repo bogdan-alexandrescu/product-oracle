@@ -43,6 +43,8 @@ from sqlalchemy.orm import aliased
 
 from oracle import audit
 from oracle.authz import has_role
+from oracle.claude_accounts.pool import readable_refusal
+from oracle.company_time import DEFAULT_ZONE
 from oracle.discussions import changes, context
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.jobs import prompting
@@ -504,8 +506,9 @@ def sse(event: str, data: Any) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
 
-def error_copy(row: DiscussionMessage, role: str | None) -> str | None:
-    """What a failed reply says to this reader (3.7)."""
+def error_copy(row: DiscussionMessage, role: str | None, zone: str = DEFAULT_ZONE) -> str | None:
+    """What a failed reply says to this reader (3.7): the gateway's refusal as it was then,
+    in ``zone`` (the company's), not now (#644 re-review)."""
     if row.status != "failed":
         return None
     if row.error_reason == "timeout":
@@ -513,7 +516,7 @@ def error_copy(row: DiscussionMessage, role: str | None) -> str | None:
     if row.error_reason == "interrupted":
         return CUT_OFF
     if row.error_reason in ("no_account", "rate_limited") and role and has_role(role, "approver"):
-        return row.error or CANT_REPLY
+        return readable_refusal(row.error, zone, past=True) or CANT_REPLY
     return CANT_REPLY
 
 

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Button, Chip, confirmInPage, Notice, type ChipKind } from "@/components/ds";
 import { DOCS_ONLY } from "@/components/tech-brief";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { failedAt, formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Source = Schemas["SourceOut"];
@@ -99,7 +99,12 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
           )}
         </span>
       </div>
-      {map?.status === "failed" && map.error && <p className="break-words text-sm text-crit">{map.error}</p>}
+      {map?.status === "failed" && map.error && (
+        <p className="break-words text-sm text-crit">
+          {map.failed_at && <span data-testid="failed-at">{failedAt(map.failed_at)}. </span>}
+          {map.error}
+        </p>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
     </li>
   );
