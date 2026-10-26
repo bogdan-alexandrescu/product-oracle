@@ -1,12 +1,6 @@
 """Migration 0071_live_reads (#710 lane 1): the live_reads table and browse_calls.kind.
 
-Card: protects=live_reads and browse_calls.kind come and go with the revision, chained on
-0070_brand_assets as the single head; existing browse_calls rows read as the picker's
-('browse'); kind and status take only their values; the downgrade drops the table and the
-column and keeps the picker's rows; fails_when=the upgrade misses a column or check, an
-existing row gets another kind, or the downgrade leaves anything behind or deletes picker
-rows; no_claim=the routes' use of the tables (tests/test_live_fireflies.py), live_tokens
-(lane 2).
+Each test carries its own card.
 
 Sync on purpose (Alembic runs its own event loop); its own scratch database."""
 
@@ -69,12 +63,21 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
+# protects=0071_live_reads chains on 0070_brand_assets, and the live stack's head
+# (0072_live_tokens) is the single head; fails_when=the revision is re-parented or a second
+# head appears; no_claim=what the revision creates (test_upgrade_and_downgrade).
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_heads() == ["0072_live_tokens"]
 
 
+# protects=live_reads and browse_calls.kind come and go with the revision: an existing
+# browse_calls row reads as the picker's ('browse'), status and kind take only their
+# values, a deleted connection leaves its read without the id, and the downgrade drops the
+# table and the column; fails_when=the upgrade misses a column or check, an existing row
+# gets another kind, or the downgrade leaves anything behind; no_claim=the routes' use of
+# the tables (tests/test_live_fireflies.py), live_tokens (lane 2).
 def test_upgrade_and_downgrade(scratch_db):
     command.upgrade(_cfg(), PREVIOUS)
     tenant, user, conn = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
