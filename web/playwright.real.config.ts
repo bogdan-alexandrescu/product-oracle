@@ -33,6 +33,8 @@ export default defineConfig({
         ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS: "1",
         // Oracle's model in discussion-stream.spec.ts: a fake Messages API the spec starts.
         ORACLE_ANTHROPIC_API_URL: `http://127.0.0.1:${FAKE_CLAUDE_PORT}`,
+        // Agent runs (slice.spec.ts) on the deterministic FakeRuntime, never SwarmCloud.
+        ORACLE_RUNTIME: "fake",
       },
       timeout: 120_000,
       reuseExistingServer: false,
