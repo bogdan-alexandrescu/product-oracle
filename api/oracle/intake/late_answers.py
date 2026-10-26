@@ -10,13 +10,15 @@ other open feedback; Oracle's review job looks at it as at any new feedback.
 Raised when the answer is given if the PRD has a version, else when the run imports
 its draft (:func:`sync`). An answer to a gap others may not read in full (S6: private,
 or shared at counts only) is never quoted in feedback, which every approver reads: the
-intake page still counts it. Nothing here commits.
+intake page still counts it. The item follows the finding's level (:func:`on_sharing`):
+withdrawn (deleted) when the finding goes back to private or to counts, raised when it is
+shared from summary up, also for an answer given while it was private. Nothing here commits.
 """
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -151,6 +153,53 @@ async def sync(db: AsyncSession, run: Run, document_id: uuid.UUID) -> int:
 
         await jobs_service.on_feedback(db, document_id, version)
     return made
+
+
+async def on_sharing(db: AsyncSession, intake: ProductIntake, gaps: list[KnowledgeGap]) -> None:
+    """These gaps' findings changed level (S6): the items quoting their late answers are
+    withdrawn when others may no longer read the answers in full, and raised when they may
+    (#587 review)."""
+    from oracle.intake.answers import proposal_mode
+
+    hidden = [g.id for g in gaps if proposal_mode(intake, g) != "full"]
+    if hidden:
+        questions = select(StakeholderQuestion.id).where(
+            StakeholderQuestion.intake_id == intake.id, StakeholderQuestion.gap_id.in_(hidden)
+        )
+        gone = list(
+            await db.scalars(
+                delete(FeedbackItem)
+                .where(FeedbackItem.intake_question_id.in_(questions))
+                .returning(FeedbackItem.id)
+            )
+        )
+        for item_id in gone:
+            await audit.record(
+                db, audit.ORACLE, "feedback.withdraw", "feedback_item", item_id,
+                {"intake_id": str(intake.id), "reason": "finding_not_shared"},
+            )  # fmt: skip
+    shown = [g.id for g in gaps if g.id not in hidden]
+    if not shown or (target := await _target(db, intake)) is None:
+        return
+    run, pinned = target
+    document_id = intake.document_id or run.document_id
+    version = await latest(db, document_id) if document_id else None
+    if document_id is None or version is None:
+        return
+    rows = await db.execute(
+        select(StakeholderQuestion, StakeholderAnswer)
+        .join(StakeholderAnswer, StakeholderAnswer.question_id == StakeholderQuestion.id)
+        .where(StakeholderQuestion.intake_id == intake.id, StakeholderQuestion.gap_id.in_(shown))
+        .order_by(StakeholderAnswer.created_at, StakeholderAnswer.id)
+    )
+    made = 0
+    for question, answer in rows.all():
+        if str(answer.id) not in pinned:
+            made += await _raise(db, intake, document_id, version, question, answer) is not None
+    if made:
+        from oracle.jobs import service as jobs_service
+
+        await jobs_service.on_feedback(db, document_id, version)
 
 
 async def counted(db: AsyncSession, intake: ProductIntake) -> int:

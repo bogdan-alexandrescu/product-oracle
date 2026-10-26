@@ -4170,8 +4170,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             # C5: the intake's answers given while this draft was written become feedback.
             from oracle.intake import late_answers
 
-            if await late_answers.sync(s, run, result.version.document_id):
-                await s.commit()
+            # Committed also when it raised nothing: it links the intake to its PRD, which
+            # an answer given later needs to become feedback (#587 review).
+            await late_answers.sync(s, run, result.version.document_id)
+            await s.commit()
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),

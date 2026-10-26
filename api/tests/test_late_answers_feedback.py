@@ -111,9 +111,7 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
     """#587 review MAJOR 2: the feedback item quoting an answer follows its finding's
     level; and an answer given while the finding was private becomes feedback once it is
     shared in full."""
-    from tests.test_intake_sharing_round4 import _model_question, _privacy_gap, authored_with
-    from tests.test_intake_sharing_round4 import fake as _  # noqa: F401
-    from tests.test_intake_sharing_round4 import share
+    from tests.test_intake_sharing_round4 import _model_question, _privacy_gap, authored_with, share
 
     holder: dict = {}
 
@@ -133,17 +131,23 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
             gateway.set_transports(holder["previous"])
     q = await _model_question(ctx, intake_id)
     fid = str(q.gap_id)
-    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
     run_id = (await _create_run(client, ctx, intake_id)).json()["id"]
     approver = ctx.as_("approver")
     assert (await client.post(f"/v1/runs/{run_id}/estimate", headers=approver)).status_code == 200
     assert (await client.post(f"/v1/runs/{run_id}/start", headers=approver)).status_code == 200
     await _import(ctx, run_id)
 
+    # Answered while the finding is private: counted on the intake page, no feedback.
     body = "Addresses are stored encrypted."
-    resp = await client.post(f"/v1/questions/{q.id}/answers",
-                             json={"kind": "answer", "body": body}, headers=ctx.as_("author"))  # fmt: skip
+    resp = await client.post(
+        f"/v1/questions/{q.id}/answers",
+        json={"kind": "answer", "body": body},
+        headers=ctx.as_("author"),
+    )
     assert resp.status_code == 201, resp.text
+    assert await _feedback(client, ctx) == []
+    # Shared in full: now it is feedback.
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
     [item] = await _feedback(client, ctx)
     assert body in item["summary"]
 
@@ -152,17 +156,8 @@ async def test_a_late_answer_hides_while_its_finding_is_not_shared_in_full(
         listed = await client.get(f"/v1/documents/{SLUG}/feedback", headers=ctx.as_("viewer"))
         assert listed.status_code == 200 and body not in listed.text
         assert (await read_summary(client, ctx, intake_id))["late_answers_as_feedback"] == 0
-    # Shared in full again: the answer is feedback again, once.
+    # Shared from summary up again: the answer is feedback again, once.
+    assert (await share(client, ctx, intake_id, fid, "summary")).status_code == 200
     assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
     [item] = await _feedback(client, ctx)
     assert body in item["summary"]
-
-    # An answer given while private becomes feedback once the finding is shared in full.
-    assert (await share(client, ctx, intake_id, fid, "private")).status_code == 200
-    later = "Keys rotate every quarter."
-    resp = await client.post(f"/v1/questions/{q.id}/answers",
-                             json={"kind": "answer", "body": later}, headers=ctx.as_("author"))  # fmt: skip
-    assert resp.status_code == 201, resp.text
-    assert await _feedback(client, ctx) == []
-    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
-    assert sorted(later in i["summary"] for i in await _feedback(client, ctx)) == [False, True]
