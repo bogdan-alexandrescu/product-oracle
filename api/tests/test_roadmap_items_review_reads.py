@@ -104,3 +104,19 @@ async def test_the_review_screens_reads_do_not_grow_with_its_items(client, owner
     many, _ = await reads_of(client, auth, big_run)
     assert len(many) == len(few), (len(few), len(many))
     assert len(many) <= MAX_RUN_READS, len(many)
+
+
+async def test_the_run_is_read_once_with_its_research_gate(client, owner, runtime):  # noqa: F811
+    """protects=the run in the path is read once per request: the discussion research gate
+    (oracle.discussions.research.run_reader) reads it and the route reuses that read;
+    fails_when=the gate reads the run and the route reads it again (#638's CI: the review
+    screen read 25 > MAX_REVIEW_READS, the run 14 > MAX_RUN_READS); no_claim=who the gate
+    lets read a research run (tests/test_discussion_research_gate.py)."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    run_url, review_url = await staged_review(client, auth, runtime, 1)
+    for url in (run_url, review_url):
+        reads, _ = await reads_of(client, auth, url)
+        by_id = [st for st in reads if st.startswith("SELECT runs.") and "runs.id = " in st]
+        assert len(by_id) == 1, by_id
