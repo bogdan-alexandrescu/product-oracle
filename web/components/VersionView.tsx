@@ -1104,7 +1104,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
           {document_?.kind === "prd" && (
-            <LinkButton icon="check" href={`/documents/${doc}/v/${n}/quality`} data-testid="quality-link">
+            <LinkButton icon="priorities" href={`/documents/${doc}/v/${n}/quality`} data-testid="quality-link">
               Quality
             </LinkButton>
           )}

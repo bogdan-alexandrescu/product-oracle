@@ -88,6 +88,11 @@ function failedWhy(job: Job): string {
   return (job.error_reason && NO_ACCOUNT_REASON[job.error_reason]) || job.error || "the job failed";
 }
 
+/** A token count as the mockup reads it: 600, 12.4k. */
+function tokens(n: number): string {
+  return n < 1000 ? String(n) : `${(n / 1000).toFixed(1)}k`;
+}
+
 function countsLine(counts: unknown): string {
   const c = (counts ?? {}) as Record<string, number>;
   return ORDER.filter((s) => c[s]).map((s) => `${c[s]} ${STATUS[s].word}`).join(" · ");
@@ -95,7 +100,7 @@ function countsLine(counts: unknown): string {
 
 /** Quality evaluation of a PRD version (v2 screen 5): criteria table, inspector, History. */
 export function QualityView({ doc, n }: { doc: string; n: number }) {
-  const { can } = useMe();
+  const { can, me } = useMe();
   const onAuth = useAuthRedirect();
   const zone = useCompanyZone();
   const phone = useIsPhone();
@@ -159,6 +164,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const reloadReadiness = readinessQ.reload;
   const reloadReports = reportsQ.reload;
   const setJobs = jobsQ.setData;
+  const setReadiness = readinessQ.setData;
   useEffect(() => {
     if (!activeId) return;
     const timer = window.setInterval(async () => {
@@ -176,17 +182,20 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const indexOf = (key: string) => advisory.findIndex((i) => i.key === key) + 1;
   const hasModel = !!readiness?.model_review;
   const judged = advisory.filter((i) => i.model).length;
+  const draftOf = (key: string) => drafts[key] ?? EMPTY_DRAFT;
+  // Picked: a status in the draft, or the viewer's own stored rating.
+  const hidden = (i: Item) =>
+    blind && mayRate && !i.hard && !draftOf(i.key).status && !(me?.user_id && i.human.some((h) => h.rater_id === me.user_id));
+  // A hidden criterion gives nothing away through the filters either.
   const tests: Record<Filter, (i: Item) => boolean> = {
     all: () => true,
-    disagrees: (i) => i.agreement.model === false,
-    unrated: (i) => !i.hard && i.human.length === 0,
-    skipped: (i) => !i.hard && hasModel && !i.model,
+    disagrees: (i) => !hidden(i) && i.agreement.model === false,
+    unrated: (i) => !i.hard && !hidden(i) && i.human.length === 0,
+    skipped: (i) => !i.hard && !hidden(i) && hasModel && !i.model,
     hard: (i) => i.hard,
   };
   const rows = items.filter(tests[filter]);
   const selected = items.find((i) => i.key === picked) ?? (phone ? null : (rows[0] ?? null));
-  const draftOf = (key: string) => drafts[key] ?? EMPTY_DRAFT;
-  const hidden = (i: Item) => blind && mayRate && !i.hard && !draftOf(i.key).status;
 
   async function act(name: string, call: () => Promise<unknown>) {
     setBusy(name);
@@ -229,13 +238,21 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           body: { ratings: [{ criterion: item.key, status: dr.status, rationale: dr.rationale.trim(), section_keys: dr.sections }] },
         }),
       );
+      const [fresh] = await Promise.all([
+        unwrap(api.GET("/v1/documents/{doc}/versions/{n}/readiness", { params: { path: { doc, n } } })),
+        reloadReports(),
+      ]);
+      setReadiness(() => fresh);
       setDrafts((prev) => {
         const next = { ...prev };
         delete next[item.key];
         return next;
       });
-      await Promise.all([reloadReadiness(), reloadReports()]);
-      setStored(`Rating stored as human report ${shortId(out.id)} · ${zoneDateTime(out.created_at, zone)}.`);
+      const people = agreed(fresh.items.find((i) => i.key === item.key) ?? item);
+      setStored(
+        `Rating stored as human report ${shortId(out.id)} · ${zoneDateTime(out.created_at, zone)}` +
+          (people ? `; people agreement is now ${people.k}/${people.n}.` : "."),
+      );
     });
 
   const select = (key: string) => {
@@ -358,7 +375,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
     },
   ];
 
-  const tally = (s: Status) => advisory.filter((i) => i.status === s).length;
+  const tally = (s: Status) => advisory.filter((i) => !hidden(i) && i.status === s).length;
   const filterItems = [
     { value: "all" as const, label: "All", count: items.length },
     { value: "disagrees" as const, label: "Model disagrees", count: items.filter(tests.disagrees).length },
@@ -434,7 +451,6 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   );
 
   const done = latestJob && latestJob.id === watched && latestJob.status === "succeeded" ? latestJob : null;
-  const failed = latestJob?.status === "failed" ? latestJob : null;
 
   return (
     <Page>
@@ -474,41 +490,6 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         ) : (
           readiness && <Notice testId="no-model-review">No model review for v{n} yet.{mayQueue ? "" : " An approver can queue one."}</Notice>
         )}
-        {active && (
-          <Notice
-            testId="job-active"
-            action={
-              mayCancel && (
-                <Button variant="ghost" disabled={busy != null} onClick={() => cancel(active.id)}>
-                  Cancel
-                </Button>
-              )
-            }
-          >
-            <Chip kind="acc" dot>
-              {JOB_STATUS_LABEL[active.status]}
-            </Chip>{" "}
-            Quality review · <span className="font-mono">{shortId(active.id)}</span> · attempt {Math.max(1, active.attempts)}
-            {active.error_reason && ` · ${NO_ACCOUNT_REASON[active.error_reason] ?? active.error_reason}`}
-            {active.next_reset_at && ` Next reset ${zoneDateTime(active.next_reset_at, zone)}.`}
-          </Notice>
-        )}
-        {failed && (
-          <Notice
-            tone="error"
-            testId="job-failed"
-            action={
-              mayRetry && (
-                <Button variant="ghost" disabled={busy != null} onClick={() => retry(failed.id)}>
-                  Retry
-                </Button>
-              )
-            }
-          >
-            Quality review failed: {failedWhy(failed)}
-            {failed.next_reset_at && ` Next reset ${zoneDateTime(failed.next_reset_at, zone)}.`}
-          </Notice>
-        )}
         {done && (
           <Notice tone="pass" testId="job-done">
             Model review done: {String(done.output?.criteria ?? 0)} criteria judged
@@ -516,7 +497,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
             {done.input_tokens != null && (
               <span className="font-mono text-[13px]">
                 {" "}
-                {done.input_tokens} in · {done.output_tokens ?? 0} out · {formatUsd(done.cost_usd)}
+                {tokens(done.input_tokens)} in · {tokens(done.output_tokens ?? 0)} out · {formatUsd(done.cost_usd)}
               </span>
             )}
           </Notice>
@@ -971,10 +952,19 @@ function HistoryPanel({
       wrap: true,
       cell: (r) => {
         if (r.kind === "job") {
-          return r.job.status === "failed" ? (
-            <span className="text-sm text-crit">{failedWhy(r.job)}</span>
+          const j = r.job;
+          const reset = j.next_reset_at && ` Next reset ${zoneDateTime(j.next_reset_at, zone)}.`;
+          return j.status === "failed" ? (
+            <span className="text-sm text-crit">
+              {failedWhy(j)}
+              {reset}
+            </span>
           ) : (
-            <span className="text-sm text-text2">Attempt {Math.max(1, r.job.attempts)}</span>
+            <span className="text-sm text-text2">
+              Attempt {Math.max(1, j.attempts)}
+              {j.error_reason && ` · ${NO_ACCOUNT_REASON[j.error_reason] ?? j.error_reason}`}
+              {reset}
+            </span>
           );
         }
         const s = r.report.summary;
