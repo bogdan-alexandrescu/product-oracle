@@ -60,7 +60,7 @@ function History({ item }: { item: PlanItem }) {
   );
 }
 
-/** F2 §2: what one import changed on an issue, in plain words ("ENG-405: To do → In progress, date Nov 30 → Dec 9"). */
+/** F2 §2: what one import changed on an issue, in plain words ("ENG-405: Open → In progress, date Nov 30 → Dec 9"). */
 function trackerEventLine(e: Schemas["ItemTrackerEvent"]): string {
   return `${e.external_ref}: ${e.changes.map(changeWords).join(", ")}`;
 }

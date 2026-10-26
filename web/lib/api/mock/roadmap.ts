@@ -1429,7 +1429,7 @@ export const TRACK_ALERTS_MANY_SCENARIO = "track-alerts-many";
 export const TRACK_ALERTS_ACTIONS_SCENARIO = "track-alerts-actions";
 /**
  * "track-alerts" plus ENG-405's earlier imports: one a day from Sep 28 to Oct 19, each raising
- * its estimate by one, and the slip's import (Oct 20) also moving it from To do to In progress:
+ * its estimate by one, and the slip's import (Oct 20) also moving it from todo to in_progress:
  * 23 imports, more than the item history lists.
  */
 export const TRACK_ALERTS_HISTORY_SCENARIO = "track-alerts-history";

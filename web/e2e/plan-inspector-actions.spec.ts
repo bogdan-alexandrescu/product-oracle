@@ -135,7 +135,7 @@ test("the item's history shows one line per import, the newest 20, and says how 
   const events = history.getByTestId("plan-tracker-event");
   await expect(events).toHaveCount(20);
   await expect(events.first()).toHaveText("ENG-405: estimate 4 → 5 · Oct 1");
-  await expect(events.last()).toHaveText("ENG-405: To do → In progress, date Nov 30 → Dec 9 · Oct 20");
+  await expect(events.last()).toHaveText("ENG-405: Open → In progress, date Nov 30 → Dec 9 · Oct 20");
   await expect(history.getByTestId("plan-tracker-older")).toHaveText("3 earlier tracker updates aren't shown.");
 });
 
