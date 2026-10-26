@@ -1666,6 +1666,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     // Simple S3a: proposals and decisions on them are added by the server (./simple-changes.ts).
     simple_proposals: [],
     simple_decisions: [],
+    simple_approvals: [],
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],

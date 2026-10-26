@@ -50,6 +50,18 @@ interface SimpleDb {
   /** Simple S3a (./simple-changes.ts): sessions and changes. */
   sessions?: Schemas["SimpleSessionOut"][];
   changes?: Schemas["SimpleChangeOut"][];
+  /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
+  drafts?: MockDraft[];
+  /** S3b: non-versioned targets (item tasks, action items, overrides, launch tasks) by id. */
+  targets?: Record<string, Record<string, unknown>>;
+}
+
+/** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
+ * draft's; `published` keeps the roadmap's published items for those who may not see it. */
+interface MockDraft {
+  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve">;
+  roadmap: string;
+  published: { items: SeedItem[]; own: SimpleDb["own"] };
 }
 
 const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string }> = {
@@ -224,7 +236,43 @@ function regenerate(db: SimpleDb, today: string): number {
   return open;
 }
 
-export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams): Schemas["SimpleRoadmapOut"] | null {
+const OPEN_DRAFT = ["working", "submitted"];
+
+/** A draft's applied changes, not undone. */
+export function draftChanges(db: SimpleDb, id: string): number {
+  const cs = db.changes ?? [];
+  return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
+}
+
+/** Who sees a draft in the mock (no deciders, reviewers or track owners): owners and its people. */
+export function seesDraft(d: MockDraft, me: { id: string; role: Role }): boolean {
+  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id);
+}
+
+/** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
+function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleDb; hidden: number; visible: Schemas["SimpleDraftBrief"][] } {
+  let items = db.items;
+  let own = db.own;
+  let hidden = 0;
+  const visible: Schemas["SimpleDraftBrief"][] = [];
+  for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status))) {
+    if (seesDraft(d, me)) {
+      visible.push({ id: d.out.id, document_id: d.out.document.id, status: d.out.status, changes: draftChanges(db, d.out.id) });
+      continue;
+    }
+    hidden += draftChanges(db, d.out.id);
+    const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
+    items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
+    own = { ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))), ...d.published.own };
+  }
+  const shownDocs = new Set(visible.map((v) => v.document_id));
+  hidden += (db.changes ?? []).filter((c) => c.status === "proposed" && me.role !== "owner" && c.document_id && !shownDocs.has(c.document_id)).length;
+  return { db: { ...db, items, own }, hidden, visible };
+}
+
+export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { id: string; role: Role }): Schemas["SimpleRoadmapOut"] | null {
+  const reader = me ? readerView(db, me) : { db, hidden: 0, visible: [] };
+  db = reader.db;
   const today = iso(mockNowMs());
   const w = simpleWindows(today);
   const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
@@ -285,6 +333,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams): Schema
     milestones: [
       { id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now", status: "planned", item_ids: [db.ids["alert-digest"]] },
     ],
+    changes_in_review: reader.hidden,
+    drafts: reader.visible,
   };
 }
 
@@ -299,7 +349,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: { id: string; role: R
   const today = iso(mockNowMs());
   if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   if (!p[3] && m === "GET") {
-    const out = roadmapOut(db, me.role, q);
+    const out = roadmapOut(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
   if (p[3] !== "date-suggestions") return null;
@@ -330,4 +380,4 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: { id: string; role: R
   return json(200, { ...s, can_decide: true });
 }
 
-export type { SimpleDb };
+export type { MockDraft, SeedItem, SimpleDb };

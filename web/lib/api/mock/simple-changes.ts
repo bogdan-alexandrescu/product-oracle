@@ -8,11 +8,20 @@
  * change whose `before` differs from the stored values answers 409 with the current values
  * and who changed them last; undo works for its author, in its open session, while the item
  * still holds the change's `after`. Sessions close after 30 minutes without a change.
+ *
+ * S3b (api/oracle/simple/drafts.py): an applied change of a roadmap's item goes into the
+ * roadmap's working draft (one per roadmap; the session joins it); readers who may not see
+ * it (here: anyone but owners and its people) read the published items and a
+ * `changes_in_review` count (./simple-roadmap.ts). Submit makes it the next version in
+ * review; with no required reviewers in the mock, an owner's approval publishes it. Undo
+ * works inside a working draft only; its author resumes it after its session closed.
+ * Non-versioned targets (item tasks, action items, priority overrides, launch tasks) are
+ * owners' to apply and others' to propose, kept in `db.targets` and undone like the rest.
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { draftChanges, roadmapOut, seesDraft, type MockDraft, type SimpleDb } from "./simple-roadmap";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -42,6 +51,18 @@ const FIELDS: Record<string, string[]> = {
   accept_risk: ["risk"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
+/** S3b: non-versioned ops (api/oracle/simple/targets.py) and the target id each creates. */
+const TARGETS: Record<string, { id: string; adds?: boolean }> = {
+  add_item_task: { id: "task_id", adds: true },
+  edit_item_task: { id: "task_id" },
+  set_item_task_status: { id: "task_id" },
+  add_action_item: { id: "action_item_id", adds: true },
+  edit_action_item: { id: "action_item_id" },
+  set_action_item_status: { id: "action_item_id" },
+  add_launch_task: { id: "task_id", adds: true },
+  set_launch_task_status: { id: "task_id" },
+  override_priority: { id: "item_id" },
+};
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -150,7 +171,116 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
 
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if (ctx.role === "owner" || c.by === ctx.id || c.routed_to.includes(ctx.id)) return true;
+  if ((db.drafts ?? []).some((d) => (c.draft_ids ?? []).includes(d.out.id) && seesDraft(d, ctx))) return true;
   return (db.sessions ?? []).some((s) => s.id === c.session_id && s.started_by === ctx.id);
+}
+
+/** The drafts a change writes (drafts.write_items): the roadmaps' working drafts, opened on
+ * their published items; for an undo, the change's own drafts while they are working. */
+function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): string[] | Response {
+  if (TARGETS[c.op]) return [];
+  const roadmaps = [...new Set(touched(c).map((id) => seed(db, keyOf(db, id)!).roadmap))];
+  const out: string[] = [];
+  for (const rm of roadmaps) {
+    const drafts = (db.drafts ??= []);
+    let d = drafts.find((x) => x.roadmap === rm && x.out.status === "working");
+    if (undo) {
+      if (!d || !(c.draft_ids ?? []).includes(d.out.id)) return json(409, { detail: "Its draft was submitted: undo works only inside a working draft" });
+    } else if (!d) {
+      const waiting = drafts.find((x) => x.roadmap === rm && x.out.status === "submitted");
+      if (waiting) return json(409, { detail: `This roadmap's draft is in review as version ${waiting.out.version}: changes wait until it is approved` });
+      const items = db.items.filter((x) => x.roadmap === rm);
+      const keys = new Set(items.map((x) => x.key));
+      d = {
+        roadmap: rm,
+        published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))) }),
+        out: {
+          id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
+          status: "working", base_version: 1, version: null, created_by: session.started_by, created_at: iso(mockNowMs()), participant_ids: [session.started_by],
+          submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [], approved_at: null, blocked_by: [],
+        },
+      };
+      drafts.push(d);
+    }
+    if (!d.out.participant_ids.includes(session.started_by)) d.out.participant_ids.push(session.started_by);
+    out.push(d.out.id);
+  }
+  return out;
+}
+
+function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["SimpleDraftOut"] {
+  const owner = ctx.role === "owner";
+  return {
+    ...d.out, changes: draftChanges(db, d.out.id),
+    can_submit: d.out.status === "working" && owner, can_resume: d.out.status === "working" && d.out.created_by === ctx.id,
+    can_approve: d.out.status === "submitted" && owner,
+  };
+}
+
+/** /v1/simple/drafts (drafts.listing, submit, approve, resume). */
+function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]): Response | null {
+  const now = iso(mockNowMs());
+  const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status));
+  if (!p[3] && m === "GET") return json(200, open.filter((d) => seesDraft(d, ctx)).map((d) => draftOut(db, ctx, d)));
+  const d = (db.drafts ?? []).find((x) => x.out.id === p[3] && seesDraft(x, ctx));
+  if (!d) return json(404, { detail: "No such draft" });
+  if (!p[4] && m === "GET") return json(200, draftOut(db, ctx, d));
+  if (m !== "POST") return null;
+  if (p[4] === "submit") {
+    if (ctx.role !== "owner") return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
+    if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
+    if (!draftChanges(db, d.out.id)) return json(422, { detail: "Nothing to submit: the draft has no changes" });
+    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
+    return json(200, draftOut(db, ctx, d));
+  }
+  if (p[4] === "approve") {
+    if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
+    if (ctx.role !== "owner") return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // No required reviewers in the mock: the approval publishes the version.
+    Object.assign(d.out, { decider_approved: true, status: "approved", approved_at: now });
+    return json(200, draftOut(db, ctx, d));
+  }
+  if (p[4] === "resume") {
+    if (d.out.created_by !== ctx.id) return json(403, { detail: "Only the draft's author or the roadmap's decider resumes it" });
+    if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status}: only a working draft resumes` });
+    const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
+    return json(200, { session, draft: draftOut(db, ctx, d) });
+  }
+  return null;
+}
+
+/** A non-versioned change (targets.create): owners apply it, others propose it. */
+function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"], session: Session | undefined): Response {
+  const now = iso(mockNowMs());
+  const spec = TARGETS[body.op];
+  const target: Values = { ...body.target };
+  const applies = ctx.role === "owner";
+  if (target.item_id && !keyOf(db, target.item_id)) return json(404, { detail: "No such roadmap item" });
+  if (body.op === "override_priority" && !String((body.after ?? {}).reason ?? "").trim()) return json(422, { detail: "after.reason: one line, 1 to 500 characters" });
+  if (spec.adds) target[spec.id] = crypto.randomUUID();
+  const id = String(target[spec.id] ?? "");
+  const stored = (db.targets ??= {})[id] ?? {};
+  const before: Values = spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
+  if (!spec.adds && !same(before, body.before)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
+    draft_ids: [], op: body.op, target, before, after: { ...body.after }, status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null, routed_to: applies ? [] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  if (applies) {
+    writeTarget(db, change, change.after);
+    session!.last_change_at = now;
+  }
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
+function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): void {
+  const spec = TARGETS[c.op];
+  const id = String(c.target[spec.id]);
+  const targets = (db.targets ??= {});
+  if (spec.adds && undo) delete targets[id];
+  else targets[id] = { ...(targets[id] ?? {}), ...values };
 }
 
 /** The new [start, end] of every item a fix moves (changes._fix_plan). */
@@ -202,8 +332,8 @@ function normal(fields: string[], values: Values): Values {
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   const now = iso(mockNowMs());
   const target: Values = { ...body.target };
-  const key = keyOf(db, target.item_id);
-  if (!key) return json(404, { detail: "No such roadmap item" });
+  const key = TARGETS[body.op] ? "" : keyOf(db, target.item_id);
+  if (key === undefined) return json(404, { detail: "No such roadmap item" });
   const applies = ctx.role === "owner";
   let session: Session | undefined;
   if (body.session_id) {
@@ -214,6 +344,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       return json(409, { detail: "This session is closed; start a new one" });
     }
   } else if (applies) session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
+  if (TARGETS[body.op]) return createTarget(db, ctx, body, session);
   let before: Values;
   let after: Values;
   if (FIXES.includes(body.op)) {
@@ -268,13 +399,16 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     before = read(db, key, stored, target);
   }
   const change: Change = {
-    id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), op: body.op, target, before, after,
+    id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), draft_ids: [], op: body.op, target, before, after,
     status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
     routed_to: applies ? [] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
   let flags: Schemas["SimpleItemFlags"][];
   if (applies) {
+    const drafts = intoDrafts(db, change, session!);
+    if (drafts instanceof Response) return drafts;
+    change.draft_ids = drafts;
     apply(db, change, after);
     flags = flagsFor(db, touched(change));
     session!.last_change_at = now;
@@ -291,10 +425,11 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
 
 /** /v1/simple/sessions and /v1/simple/changes (api/oracle/simple/changes_router.py). */
 export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "simple" || (p[2] !== "sessions" && p[2] !== "changes")) return null;
+  if (p[1] !== "simple" || !["sessions", "changes", "drafts"].includes(p[2] ?? "")) return null;
   const m = req.method;
   const now = iso(mockNowMs());
   if (m === "POST" && ctx.role === "viewer") return json(403, { detail: "Requires the commenter role" });
+  if (p[2] === "drafts") return routeDrafts(db, ctx, m, p);
   if (p[2] === "sessions") {
     if (!p[3] && m === "POST") {
       const body = (await req.json().catch(() => ({}))) as { kind?: Session["kind"] };
@@ -329,28 +464,44 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     if ((db.changes ?? []).some((x) => x.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
-    const now_ = current(db, c, c.after);
-    if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
-    apply(db, c, c.before, true);
+    if (TARGETS[c.op]) writeTarget(db, c, c.before, true);
+    else {
+      const now_ = current(db, c, c.after);
+      if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
+      const drafts = intoDrafts(db, c, s, true);
+      if (drafts instanceof Response) return drafts;
+      apply(db, c, c.before, true);
+    }
     const u: Change = { ...c, id: crypto.randomUUID(), before: c.after, after: c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
     db.changes!.push(u);
     s.last_change_at = now;
-    return json(201, { change: view(db, ctx, u), flags: flagsFor(db, touched(c)) });
+    return json(201, { change: view(db, ctx, u), flags: TARGETS[c.op] ? [] : flagsFor(db, touched(c)) });
   }
   if (RANK[ctx.role] < RANK.owner) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals" });
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
-  if (p[4] === "accept") {
+  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
+  else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
+    // Into the decider's working draft (their editing session's).
+    const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
+    const drafts = intoDrafts(db, c, session);
+    if (drafts instanceof Response) return drafts;
+    c.draft_ids = drafts;
+    session.last_change_at = now;
     apply(db, c, c.after);
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
-  return json(200, { change: view(db, ctx, c), flags: flagsFor(db, touched(c)) });
+  return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] ? [] : flagsFor(db, touched(c)) });
 }
 
 /** Inbox rows (changes.inbox_rows): proposals waiting for me, decisions on mine. */
-export function simpleInboxRows(db: SimpleDb | undefined, me: string, seen: string | null): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][] } {
+export function simpleInboxRows(
+  db: SimpleDb | undefined,
+  me: string,
+  seen: string | null,
+): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
   const changes = db?.changes ?? [];
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
     const key = db ? keyOf(db, c.target.item_id) : undefined;
@@ -365,5 +516,7 @@ export function simpleInboxRows(db: SimpleDb | undefined, me: string, seen: stri
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+    // S3b: the mock's roadmaps name no required reviewers, so no draft waits on anyone.
+    simple_approvals: [],
   };
 }
