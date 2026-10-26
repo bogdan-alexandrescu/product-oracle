@@ -357,8 +357,9 @@ def _ctx(**kw) -> flows.PromptContext:
 
 
 # Flows whose spec lists their tools exactly and that have no checkpoint to read: H7's
-# competitive digest (#518; test_market_digest pins its tools).
-WITHOUT_CHECKPOINT_REVIEW = {"competitive_digest"}
+# competitive digest (#518; test_market_digest pins its tools) and INT2's intake read
+# (its one tool, get_intake_analysis_input; test_intake_read_scope pins it).
+WITHOUT_CHECKPOINT_REVIEW = {"competitive_digest", "intake_analysis"}
 
 
 def test_every_segment_prompt_of_every_flow_names_the_tool():
