@@ -39,6 +39,7 @@ from tests.test_intake_sharing import (
     LEVELS,
     MODEL_GAP,
     SECRETS,
+    _intake_read_on_the_job,  # noqa: F401 (autouse fixture: INT2's job path)
     authored_intake,
     findings,
     read_summary,
