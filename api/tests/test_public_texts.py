@@ -9,6 +9,7 @@ public check. Invented data only ("Example Labs", "Northwind Traders").
 import dataclasses
 import hashlib
 import re
+import unicodedata
 from datetime import date
 
 import pytest
@@ -827,3 +828,150 @@ async def test_a_trashed_roadmap_hides_its_public_texts_and_checks(client, ctx):
     resp = await client.post(f"/v1/documents/{SLUG}/restore", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     assert await counts() == (2, 1)
+
+
+# --- #691 re-review: names match on their confusable skeleton --------------------------
+
+
+def test_the_confusables_table_is_vendored_for_pythons_unicode_version():
+    """protects=#691 re-review: names match through Unicode's own confusables.txt, pinned
+    in the repository with its licence, for the Unicode version Python's unicodedata
+    reports; fails_when=the file or its licence is missing, or it is another version."""
+    path = leak_check.CONFUSABLES_FILE
+    assert path.is_file(), path
+    licence = path.parent / "LICENSE.txt"
+    assert "UNICODE LICENSE V3" in licence.read_text(encoding="utf-8")
+    head = path.read_text(encoding="utf-8")[:1000]
+    assert f"# Version: {unicodedata.unidata_version}\n" in head
+    assert len(leak_check.SKELETON_MAP) > 6000
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("As Northwi\u0307nd asked", "customer_name"),  # combining dot above on the i
+        ("As NORTHW\u0130ND asked", "customer_name"),  # U+0130, i + dot when lowercased
+        ("As Northw\u1ecbnd asked", "customer_name"),  # dot below
+        ("As N\u00f6rthwind asked", "customer_name"),  # diaeresis
+        ("As Nor\u1e6fhwind asked", "customer_name"),  # macron below
+        ("As No\u0308rthwind asked", "customer_name"),  # decomposed diaeresis
+        ("Built with Quill\u0336feather", "person_name"),  # a mark inside the name
+        ("Built with Quill\u20ddfeather", "person_name"),  # an enclosing mark (Me)
+        ("Built with Quill\u0903feather", "person_name"),  # a spacing mark (Mc)
+        ("Built with Q\u057dill\u0192eather", "person_name"),  # Armenian u, f with hook
+        ("Built with Quillf\u0435\u0430th\u0435r", "person_name"),  # Cyrillic e and a
+        ("As N\u03bf\u0433thwind asked", "customer_name"),  # Greek omicron, Cyrillic ghe
+        ("Faster than Riv\u03b1l\u0421o", "alternative_name"),  # Greek alpha, Cyrillic Es
+        ("See Pr\u00f2ject Bl\u00fceb\u00efrd acquisition", "internal_document"),
+        ("Because we s\u00fcnset the l\u00e9gacy importer", "decision"),
+    ],
+)
+def test_combining_marks_and_look_alikes_never_split_or_hide_a_name(text, code):
+    """protects=#691 re-review: a name is matched on its confusable skeleton (NFD, every
+    combining mark and Default_Ignorable dropped, casefolded, mapped through
+    confusables.txt), so a mark on or inside a name, U+0130 and mixed-script look-alikes
+    are found; fails_when="Northwi\u0307nd" or "N\u00f6rthwind" passes."""
+    findings = leak_check.check(text, _ctx())
+    assert code in [f.code for f in leak_check.blocking(findings)], findings
+
+
+def test_ordinary_accented_words_still_pass():
+    """protects=#691 re-review: dropping marks only matters where a name is; ordinary
+    words with accents have no finding; fails_when=caf\u00e9 or r\u00e9sum\u00e9 is
+    flagged."""
+    for text in (
+        "A caf\u00e9 for your r\u00e9sum\u00e9, not a na\u00efve one",
+        "Cafe\u0301, re\u0301sume\u0301 and nai\u0308ve, decomposed",
+        "Fa\u00e7ade, d\u00e9j\u00e0 vu, pi\u00f1ata and \u00fcber-fast import",
+        "\u0130stanbul, Malm\u00f6 and Z\u00fcrich teams",
+    ):
+        assert leak_check.check(text, _ctx()) == [], text
+
+
+def _look_alikes() -> dict[str, list[str]]:
+    """Each ASCII letter's look-alikes from the vendored confusables.txt, read here on its
+    own so the test does not share the code's parser."""
+    out: dict[str, list[str]] = {}
+    for line in leak_check.CONFUSABLES_FILE.read_text(encoding="utf-8").splitlines():
+        fields = [f.strip() for f in line.split("#", 1)[0].split(";")]
+        if len(fields) < 3 or " " in fields[0] or " " in fields[1]:
+            continue
+        source, target = chr(int(fields[0], 16)), chr(int(fields[1], 16))
+        if target.isascii() and target.isalpha() and not source.isascii():
+            if source.isalpha() and unicodedata.normalize("NFKC", source) == source:
+                out.setdefault(target.lower(), []).append(source)
+    return out
+
+
+MARKS = [
+    chr(c)
+    for c in range(0x300, 0x2000)
+    if unicodedata.category(chr(c)) in ("Mn", "Mc", "Me") and unicodedata.combining(chr(c))
+][:200] + ["\u20dd", "\u20e3", "\u0903", "\u0489"]
+
+
+def test_seeded_names_with_random_marks_and_look_alikes_are_still_found():
+    """protects=#691 re-review (property): every seeded name, with random combining marks
+    inserted and random letters swapped for confusables.txt look-alikes, is still found;
+    fails_when=any one variant passes the check."""
+    import random
+
+    rng = random.Random(691)
+    alikes = _look_alikes()
+    seeded = [
+        ("Quillfeather", "person_name"),
+        ("Northwind", "customer_name"),
+        ("RivalCo", "alternative_name"),
+        ("Lumen Quarry", "person_name"),
+    ]
+    ctx = _ctx(people=[PERSON, "Lumen Quarry"])
+    missed = []
+    for name, code in seeded:
+        for _ in range(100):
+            chars = []
+            for ch in name:
+                pool = alikes.get(ch.lower(), [])
+                if pool and rng.random() < 0.4:
+                    ch = rng.choice(pool)
+                chars.append(ch)
+                if ch != " " and rng.random() < 0.4:
+                    chars.append(rng.choice(MARKS))
+            variant = "".join(chars)
+            text = f"Built for {variant} soon"
+            found = leak_check.check(text, ctx)
+            if code not in [f.code for f in leak_check.blocking(found)]:
+                missed.append(variant)
+    assert missed == [], [ascii(m) for m in missed[:10]]
+
+
+def test_a_phone_number_in_keycap_emoji_is_found():
+    """protects=#691 re-review (minor): a phone number written as keycap emoji reads as
+    its digits; fails_when="5\ufe0f\u20e3..." passes."""
+    keycaps = "".join(f"{d}\ufe0f\u20e3" for d in "4155550134")
+    assert leak_check.format_characters(keycaps) == []
+    found = leak_check.check(f"Call {keycaps} today", _ctx())
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+
+
+async def test_an_unchanged_page_title_is_not_refused_when_the_intro_changes(client, ctx):
+    """protects=#691 re-review (minor): put_public_page refuses only the texts a save
+    changes; an unchanged title that now names a new member is still left out at render
+    (and reported), but does not block editing the intro; fails_when=the intro edit is
+    422 for the old title."""
+    await seed(ctx)
+    resp = await client.put(
+        PAGE, json={"public_title": "What Lumen is building"}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(User(email="lq@example.com", password_hash="x", role="viewer", name="Lumen Quarry"))
+        await s.commit()
+    resp = await client.put(
+        PAGE, json={"public_intro": "Plans for the year."}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+    assert {f["code"] for f in resp.json()["findings"]} == {"person_name"}
+    resp = await client.put(
+        PAGE, json={"public_title": "What Lumen ships"}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "leak_blocking"
