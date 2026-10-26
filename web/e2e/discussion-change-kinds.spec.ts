@@ -121,3 +121,109 @@ test("a commenter proposes a decision that lands in the decision log", async ({ 
   await expect(inspector).toContainText(DECISION);
   await expect(inspector.getByTestId("decision-option").filter({ hasText: "Saved carts first" })).toBeVisible();
 });
+
+const propose = async (page: Page, kind: string) => {
+  await card(page).getByRole("button", { name: "Propose a change" }).click();
+  await card(page).getByRole("combobox", { name: "Kind of change" }).selectOption({ label: kind });
+  return card(page).getByTestId("change-form");
+};
+const stagingBar = (page: Page) => page.getByTestId("staging-bar").filter({ visible: true });
+
+// protects=#585 review, the mock as the API: an approver's Ask on the waiting feature-set stop's
+// item is the item's D8 question action, staged at that stop and shown in its staging bar as
+// from the discussion; fails_when=Ask makes a plain question the stop never shows;
+// no_claim=the question in the asked person's Inbox (the questions specs).
+test("an approver's Ask on a waiting stop's item is that stop's question", async ({ page }) => {
+  await withScenario(page);
+  await login(page, APPROVER);
+  await openDiscussion(page);
+  await expect(stagingBar(page)).toContainText("Nothing staged");
+  await change(page, ASK).getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(handled(page).locator("summary")).toHaveText("1 handled");
+  await page.reload();
+  const chip = stagingBar(page).getByTestId("staged-chip");
+  await expect(chip).toHaveText("Question saved-carts");
+  await expect(chip.getByTestId("chip-discussion")).toBeVisible();
+});
+
+// protects=#585 review, the scope forms and the mock's Stage as the API: an approver writes
+// "Exclude Saved carts" and "Add a requirement under Saved carts" through Propose a change,
+// and Stage refuses both with the API's 409 since no waiting feature set holds Saved carts,
+// the changes staying open; fails_when=the forms lose the feature, the decision, the reason or
+// the text, or the mock stages a scope change no stop holds; no_claim=staging at a stop that
+// holds the feature (pytest: test_scope_feature_is_staged_at_the_feature_set_stop).
+test("an approver writes scope changes and Stage needs a feature set holding the feature", async ({ page }) => {
+  await withScenario(page);
+  await login(page, APPROVER);
+  await openDiscussion(page);
+  let form = await propose(page, "Include, exclude or defer a feature");
+  await expect(form.getByRole("combobox", { name: "Feature", exact: true })).toHaveValue(/.+/);
+  await form.getByRole("button", { name: "Exclude", exact: true }).click();
+  await form.getByRole("textbox", { name: "Reason" }).fill("No goal this quarter needs it");
+  await form.getByRole("button", { name: "Propose" }).click();
+  const exclude = change(page, "Exclude Saved carts: No goal this quarter needs it");
+  await exclude.getByRole("button", { name: "Stage", exact: true }).click();
+  await expect(exclude).toContainText("No feature set waiting for approval has this feature");
+  await expect(exclude).toHaveAttribute("data-status", "proposed");
+
+  form = await propose(page, "Add, change or cut a requirement");
+  await form.getByRole("button", { name: "Add", exact: true }).click();
+  await form.getByRole("combobox", { name: "Feature it belongs to" }).selectOption({ label: "Saved carts" });
+  await form.getByRole("textbox", { name: "Requirement text" }).fill("A saved cart lasts thirty days");
+  await form.getByRole("button", { name: "Propose" }).click();
+  const add = change(page, "A saved cart lasts thirty days");
+  await add.getByRole("button", { name: "Stage", exact: true }).click();
+  await expect(add).toContainText("No feature set waiting for approval has this feature");
+  await expect(stagingBar(page)).toContainText("Nothing staged");
+});
+
+// protects=#585 review, the priority forms: an approver writes a move (feature, above which,
+// reason) and a pin (feature, position, reason) through Propose a change and applies each,
+// which ends Done with the line in the thread; fails_when=either form loses a field or Apply
+// leaves it open; no_claim=C9's own rules (pytest, the priorities specs).
+test("an approver writes and applies a priority move and a pin", async ({ page }) => {
+  await withScenario(page);
+  await login(page, APPROVER);
+  await openDiscussion(page);
+  let form = await propose(page, "Move a priority");
+  await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Guided setup" });
+  await form.getByRole("combobox", { name: "Move above" }).selectOption({ label: "Saved carts" });
+  const why = "Activation needs setup before carts this quarter";
+  await form.getByRole("textbox", { name: "Reason" }).fill(why);
+  await form.getByRole("button", { name: "Propose" }).click();
+  const moved = `Move Guided setup above Saved carts: ${why}`;
+  await change(page, moved).getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Approver applied: ${moved}`);
+
+  form = await propose(page, "Pin a priority");
+  await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Saved carts" });
+  await form.getByRole("spinbutton", { name: "Position" }).fill("2");
+  const pinWhy = "Committed to the launch partner for next month";
+  await form.getByRole("textbox", { name: "Reason" }).fill(pinWhy);
+  await form.getByRole("button", { name: "Propose" }).click();
+  const pinned = `Pin Saved carts at #2: ${pinWhy}`;
+  await change(page, pinned).getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(thread(page).getByTestId("discussion-system-line").last()).toHaveText(`Approver applied: ${pinned}`);
+  await handled(page).locator("summary").click();
+  await expect(change(page, moved)).toHaveAttribute("data-status", "done");
+  await expect(change(page, pinned)).toHaveAttribute("data-status", "done");
+});
+
+// protects=#585 review, Ask's person picker: a commenter writes "Ask someone" (whom, the
+// question) and asks it, which ends Done with the line in the thread; fails_when=the picker or
+// the question is lost; no_claim=the asked person's Inbox (the questions specs).
+test("a commenter writes a question for a person and asks it", async ({ page }) => {
+  await withScenario(page);
+  await login(page, COMMENTER);
+  await openDiscussion(page);
+  const form = await propose(page, "Ask someone");
+  await form.getByRole("combobox", { name: "Ask whom" }).selectOption({ label: "Approver" });
+  await form.getByRole("textbox", { name: "Question" }).fill("Who owns cart expiry?");
+  await form.getByRole("button", { name: "Propose" }).click();
+  const asked = "Ask Approver: Who owns cart expiry?";
+  await expect(change(page, asked).getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await change(page, asked).getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Commenter asked: ${asked}`);
+  await handled(page).locator("summary").click();
+  await expect(change(page, asked)).toHaveAttribute("data-status", "done");
+});
