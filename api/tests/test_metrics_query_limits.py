@@ -227,12 +227,105 @@ def test_the_plain_forms_still_pass(query):
     posthog.check_query(query)
 
 
+KEYWORD_ALIASES = [
+    # a clause word after AS
+    "SELECT count() FROM events AS order, cohort_people",
+    "SELECT count() FROM events AS where, cohort_people",
+    "SELECT count() FROM events AS limit, cohort_people",
+    "SELECT count() FROM events AS group, cohort_people",
+    "SELECT count() FROM events AS Qualify, cohort_people",
+    "SELECT 1 FROM (SELECT count() FROM events AS where, cohort_people)",
+    "SELECT count() FROM (SELECT * FROM events AS order, numbers(1000000))",
+    "SELECT count() FROM events WHERE person_id IN "
+    "(SELECT id FROM persons AS having, cohort_people)",
+    "SELECT count() FROM (SELECT 1 AS x FROM events) AS offset, cohort_people",
+    "SELECT count() FROM events e JOIN persons AS window ON e.person_id = window.id, cohort_people",
+    # a clause word directly after the table: an implicit alias
+    "SELECT count() FROM events order, cohort_people",
+    "SELECT count() FROM events where, cohort_people",
+    "SELECT count() FROM events prewhere , cohort_people",
+    "SELECT 1 FROM (SELECT count() FROM events order, cohort_people)",
+    "SELECT count() FROM (SELECT * FROM events limit, numbers(1000000))",
+    "SELECT count() FROM events WHERE person_id IN (SELECT id FROM persons having, cohort_people)",
+    "SELECT count() FROM (SELECT 1 AS x FROM events) offset, cohort_people",
+    "SELECT count() FROM events e JOIN persons limit ON e.person_id = limit.id, cohort_people",
+    "SELECT count() FROM events AS e where, cohort_people",
+    "SELECT count() FROM events where JOIN persons p ON 1 = 1, cohort_people",
+]
+
+
+@pytest.mark.parametrize("query", KEYWORD_ALIASES)
+def test_a_keyword_used_as_a_table_alias_is_refused(query):
+    """protects=#608 re-review MAJOR 1: a clause word (ORDER, WHERE, HAVING, LIMIT, ...)
+    used as a table's alias, after AS or bare, does not end the FROM clause, so a comma
+    join after it is still refused, with and without subqueries; fails_when=an approver's
+    metric reads cohort_people or scans numbers() past the allowed tables;
+    no_claim=HogQL's own parser."""
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(query)
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(posthog.limited(query))
+
+
+@pytest.mark.parametrize("query", KEYWORD_ALIASES[:3] + KEYWORD_ALIASES[10:12])
+async def test_the_pull_path_refuses_a_keyword_alias(fake_posthog, query):
+    """protects=#608 re-review MAJOR 1: query_number, which the weekly pull and Check now
+    call on a saved metric, refuses a keyword-aliased comma join before any request;
+    fails_when=a saved metric reads a table outside the allowed four with the owner's
+    key; no_claim=PostHog's own caps."""
+    conn = posthog.Connection(host="eu", project_id="12345", api_key="phx_test")
+    with pytest.raises(posthog.PostHogError):
+        await posthog.query_number(conn, query)
+    assert fake_posthog.requests == []
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT count() FROM events WHERE event IN(cohort_people)",
+        "SELECT count() FROM events WHERE event IN ( cohort_people )",
+        "SELECT count() FROM events WHERE in(event, cohort_people)",
+        "SELECT count() FROM events WHERE event NOT IN (raw_sessions)",
+        "SELECT count() FROM events WHERE in(event, events)",
+    ],
+)
+def test_a_bare_name_as_an_in_operand_is_refused(query):
+    """protects=#608 re-review minor: IN (name) and in(x, name) with a bare name, which
+    HogQL may read as a table, are refused; fails_when=an IN reads cohort_people or
+    another table; no_claim=HogQL's own parser."""
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT count() FROM events WHERE event = 'x' ORDER BY 1 LIMIT 1 OFFSET 0",
+        "SELECT count() FROM events e WHERE e.event = 'x' GROUP BY e.event HAVING count() > 1",
+        "SELECT count() FROM events AS e PREWHERE e.event = 'x'",
+        "SELECT count() AS c FROM (SELECT 1 AS x FROM events) AS t WHERE t.x = 1 LIMIT 1",
+        "SELECT count() FROM events WHERE event IN ('a', 'b') AND person_id IN "
+        "(SELECT id FROM persons WHERE id IN (1, 2))",
+        "SELECT count() FROM events WHERE event IN (NULL, 'a')",
+        "SELECT count() FROM events WHERE event IN (lower('A'), 'b')",
+    ],
+)
+def test_clauses_after_a_table_or_alias_still_pass(query):
+    """protects=#608 re-review MAJOR 1: WHERE, PREWHERE, GROUP BY, HAVING, ORDER BY,
+    LIMIT and OFFSET after a table, its alias or a subquery still end the FROM clause, and
+    IN over literals, calls or a subquery passes; fails_when=the stricter alias rule
+    refuses an ordinary metric query; no_claim=HogQL's own parser."""
+    posthog.check_query(query)
+
+
 @pytest.mark.parametrize(
     "query",
     [
         "SELECT 1) UNION ALL SELECT event FROM (SELECT event FROM events",
         "SELECT count() FROM events, raw_sessions",
         "SELECT count() FROM `system.tables`",
+        "SELECT count() FROM events AS order, cohort_people",
+        "SELECT count() FROM events order, cohort_people",
     ],
 )
 async def test_a_bypass_is_422_and_never_sent(client, ctx, clock, fake_posthog, query):
