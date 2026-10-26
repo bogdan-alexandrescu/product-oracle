@@ -26,7 +26,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Hashable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 import httpx
@@ -34,10 +34,10 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
-from oracle.connections import browse
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import FirefliesHttp, UserPrincipal
+from oracle.live import budget
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
@@ -50,23 +50,24 @@ CACHE_SECONDS = 60.0
 CACHE_ENTRIES = 1000
 # The browse budgets, in one place: fireflies.ai's (the lower Fireflies plans allow 50
 # calls a day), and the looser one of an owner-set endpoint on another host.
-CALLS_PER_MINUTE = 10
-CALLS_PER_DAY = 25
-OTHER_HOST_CALLS_PER_MINUTE = 60
-OTHER_HOST_CALLS_PER_DAY = 1000
+# Shared with live reads (oracle.live.budget, #710).
+CALLS_PER_MINUTE = budget.PICKER_CALLS_PER_MINUTE
+CALLS_PER_DAY = budget.PICKER_CALLS_PER_DAY
+OTHER_HOST_CALLS_PER_MINUTE = budget.PICKER_OTHER_HOST_CALLS_PER_MINUTE
+OTHER_HOST_CALLS_PER_DAY = budget.PICKER_OTHER_HOST_CALLS_PER_DAY
 LIMIT_REACHED = "Fireflies limit reached, try later"
 UNREACHABLE = "Fireflies could not be reached: try again in a moment"
-_WINDOWS = (
-    (timedelta(minutes=1), CALLS_PER_MINUTE, "a minute"),
-    (timedelta(days=1), CALLS_PER_DAY, "a day"),
+_WINDOWS: budget.Windows = (
+    (budget.MINUTE, CALLS_PER_MINUTE, "minute"),
+    (budget.DAY, CALLS_PER_DAY, "day"),
 )
-_OTHER_HOST_WINDOWS = (
-    (timedelta(minutes=1), OTHER_HOST_CALLS_PER_MINUTE, "a minute"),
-    (timedelta(days=1), OTHER_HOST_CALLS_PER_DAY, "a day"),
+_OTHER_HOST_WINDOWS: budget.Windows = (
+    (budget.MINUTE, OTHER_HOST_CALLS_PER_MINUTE, "minute"),
+    (budget.DAY, OTHER_HOST_CALLS_PER_DAY, "day"),
 )
 
 
-def _budget(conn: Connection) -> tuple[tuple[timedelta, int, str], ...]:
+def _budget(conn: Connection) -> budget.Windows:
     return _WINDOWS if fireflies.fireflies_host(conn.endpoint_url) else _OTHER_HOST_WINDOWS
 
 
@@ -146,12 +147,7 @@ def reset_limits() -> None:
     _cache.clear()
 
 
-def _later(seconds: int) -> str:
-    if seconds < 120:
-        return f"{seconds} seconds"
-    if seconds < 7200:
-        return f"{math.ceil(seconds / 60)} minutes"
-    return f"{math.ceil(seconds / 3600)} hours"
+_later = budget.later
 
 
 def _limited(detail: str, seconds: int | None) -> HTTPException:
@@ -162,24 +158,20 @@ def _limited(detail: str, seconds: int | None) -> HTTPException:
 async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
     """Reserve ``calls`` Fireflies calls for this connection, or answer 429. Commits.
     Counted in the one browse budget of every picker (oracle.connections.browse)."""
-    budget = _budget(conn)
-    windows = tuple((window, limit) for window, limit, _ in budget)
-    refused = await browse.reserve(db, conn.id, calls, windows, _now())
+    refused = await budget.spend(db, conn.id, calls, _budget(conn), _now())
     if refused is not None:
-        seconds, index = refused
-        _, limit, per = budget[index]
         raise _limited(
-            f"Browsing may make {limit} Fireflies calls {per} for this connection, so "
-            f"syncs keep the rest of your Fireflies quota. Try again in {_later(seconds)}.",
-            seconds,
+            f"Browsing may make {refused.limit} Fireflies calls a {refused.per} for this "
+            "connection, so syncs keep the rest of your Fireflies quota. Try again in "
+            f"{_later(refused.seconds)}.",
+            refused.seconds,
         )
 
 
 async def _more(db: TenantDB, conn: Connection) -> bool:
     """Reserve one more Fireflies call for a series list's next page: False when the
     browse budget refuses it."""
-    windows = tuple((window, limit) for window, limit, _ in _budget(conn))
-    return await browse.reserve(db, conn.id, 1, windows, _now()) is None
+    return await budget.spend(db, conn.id, 1, _budget(conn), _now()) is None
 
 
 async def _cached(

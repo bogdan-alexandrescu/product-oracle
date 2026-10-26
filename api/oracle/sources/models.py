@@ -185,15 +185,21 @@ class Snapshot(TenantScoped, Base):
     txn_snapshot: Mapped[str | None] = mapped_column(Text, server_default=text(TXN_SNAPSHOT))
 
 
+BROWSE_CALL_KINDS = ("browse", "live")
+
+
 class BrowseCall(TenantScoped, Base):
     """Provider calls made while browsing a connection for a source picker (S5): what a
     connection may still spend is counted here, so every API process sees the same
     budget (oracle.sources.fireflies_browse)."""
 
     __tablename__ = "browse_calls"
+    __table_args__ = (CheckConstraint(_in("kind", BROWSE_CALL_KINDS), name="kind"),)
 
     connection_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("connections.id", ondelete="CASCADE"), nullable=False, index=True
     )
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     calls: Mapped[int] = mapped_column(Integer, nullable=False)
+    # "browse" (a picker) or "live" (oracle.live, #710): one budget table, two spenders.
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="browse")

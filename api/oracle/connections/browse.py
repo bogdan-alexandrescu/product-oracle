@@ -106,11 +106,16 @@ async def reserve(
     calls: int,
     windows: tuple[tuple[timedelta, int], ...] = WINDOWS,
     now: datetime | None = None,
+    *,
+    kind: str = "browse",
+    counted: tuple[str, ...] | None = None,
 ) -> tuple[int, int] | None:
     """Reserve ``calls`` provider calls for browsing through a connection: None when
     reserved, else the seconds until they fit and the index of the ``(window, limit)``
     that refused them. Counted in
-    ``browse_calls``, one reservation at a time per connection across API processes.
+    ``browse_calls`` as ``kind`` (``browse``, or ``live`` for oracle.live), one reservation
+    at a time per connection across API processes; ``counted`` limits which kinds the
+    windows count (None: every kind).
     Commits (a refusal too: it writes nothing but the cleanup)."""
     now = now or _now()
     longest = max(window for window, _ in windows)
@@ -120,13 +125,12 @@ async def reserve(
             BrowseCall.connection_id == connection_id, BrowseCall.at <= now - longest
         )
     )
-    spent = (
-        await db.execute(
-            select(BrowseCall.at, BrowseCall.calls)
-            .where(BrowseCall.connection_id == connection_id)
-            .order_by(BrowseCall.at)
-        )
-    ).all()
+    spent_q = select(BrowseCall.at, BrowseCall.calls).where(
+        BrowseCall.connection_id == connection_id
+    )
+    if counted is not None:
+        spent_q = spent_q.where(BrowseCall.kind.in_(counted))
+    spent = (await db.execute(spent_q.order_by(BrowseCall.at))).all()
     for index, (window, limit) in enumerate(windows):
         recent = [(at, n) for at, n in spent if at > now - window]
         used = sum(n for _, n in recent)
@@ -140,7 +144,7 @@ async def reserve(
                     break
             await db.commit()
             return max(1, math.ceil(wait.total_seconds())), index
-    db.add(BrowseCall(connection_id=connection_id, at=now, calls=calls))
+    db.add(BrowseCall(connection_id=connection_id, at=now, calls=calls, kind=kind))
     await db.commit()
     return None
 
