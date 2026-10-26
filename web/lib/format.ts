@@ -23,11 +23,19 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   oracle: "Oracle baseline",
 };
 
+/** An absolute http(s) URL with a host: the only ref a citation opens as a link. */
+const HTTP_URL = /^https?:\/\/[^\s/\\?#]+/i;
+
+/** Whether a ref (a citation's, a piece of evidence's) may go in an href. */
+export const isHttpUrl = (ref: string): boolean => HTTP_URL.test(ref);
+
 /**
  * Where a citation opens, or null when its ref is not a link: an "oracle" citation names a
- * baseline item in free text ("baseline decision <key> ..."), shown as text.
+ * baseline item in free text ("baseline decision <key> ..."), shown as text, and any ref
+ * that is not an http(s) URL (javascript:, data:, ...) is never put in an href.
  */
-export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null => (c.source === "oracle" ? null : c.ref);
+export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null =>
+  c.source !== "oracle" && HTTP_URL.test(c.ref) ? c.ref : null;
 
 /**
  * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,

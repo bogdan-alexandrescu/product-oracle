@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
-from oracle.docs.schemas import citation_contract
+from oracle.docs.schemas import CITATION_CONTRACT_MARK, with_citation_contract
 from oracle.engineering import briefs, codemap
 from oracle.priorities.run_order import FORMAT as PRIORITY_FORMAT
 from oracle.runs.feature_set import FORMAT as FEATURE_SET_FORMAT
@@ -244,7 +244,8 @@ class SegmentDef:
         return self.checkpoint
 
     def task_for(self, kind: str) -> str:
-        return self.task.replace("{draft}", draft_file(kind)).replace("{doc}", KIND_NAMES[kind])
+        task = self.task.replace("{draft}", draft_file(kind)).replace("{doc}", KIND_NAMES[kind])
+        return with_citation_contract(task)
 
 
 # Document kinds a run writes, and how prompts name them.
@@ -332,8 +333,9 @@ DECLINED_LINE = (
     "A request the company said no to (state disqualified) is not scope unless a person "
     "reopens it; cite its decision when it comes up."
 )
-# Stated in every task that writes a draft (owner, 2026-10-20).
-CITATION_CONTRACT = citation_contract()
+# Stated in every task that writes a draft (owner, 2026-10-20), when the task is read
+# (:meth:`SegmentDef.task_for`).
+CITATION_CONTRACT = CITATION_CONTRACT_MARK
 
 # H7: the strategy draft may cite the market, carefully.
 STRATEGY_MARKET = (

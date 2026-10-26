@@ -30,7 +30,7 @@ import {
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, isHttpUrl } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -181,7 +181,8 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
       <span className="mt-1 block font-mono text-[13px] break-all text-text2" data-testid="card-id">
         {ev.id}
       </span>
-      {ev.ref && !ev.source_removed && (
+      {/* Only an http(s) URL opens: an upload's file name or another scheme is no link. */}
+      {ev.ref && isHttpUrl(ev.ref) && !ev.source_removed && (
         <a
           href={ev.ref}
           target="_blank"

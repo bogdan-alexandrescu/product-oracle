@@ -35,9 +35,22 @@ def citation_contract() -> str:
         "null when there is no score, with confidence_note saying why) and low_confidence "
         "(true when the confidence is under the company's low threshold). Every [c:id] chip "
         "in the body must match a citation's id. Oracle refuses a draft with any other "
-        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, or a chip that "
-        "matches no id."
+        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, a ref with "
+        "a scheme other than http, https or urn (for oracle, one that names no baseline "
+        "item of the company), or a chip that matches no id."
     )
+
+
+# Where a text built at import (a flow's task, an MCP tool's description) states the
+# citation contract: filled in when the text is read (:func:`with_citation_contract`).
+CITATION_CONTRACT_MARK = "{citation_contract}"
+
+
+def with_citation_contract(text: str) -> str:
+    """``text`` with the citation contract where it has :data:`CITATION_CONTRACT_MARK`."""
+    if CITATION_CONTRACT_MARK not in text:
+        return text
+    return text.replace(CITATION_CONTRACT_MARK, citation_contract())
 
 
 Verdict = Literal["approved", "changes_requested", "rejected"]

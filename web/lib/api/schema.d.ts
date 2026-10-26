@@ -18344,6 +18344,8 @@ export interface components {
              * @default []
              */
             problems: components["schemas"]["ImportProblem"][];
+            /** Problems Total */
+            problems_total?: number | null;
             /** Summary */
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;

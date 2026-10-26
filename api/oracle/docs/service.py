@@ -5,12 +5,13 @@ content hash -> write version, sections, citations -> locked-section warning ->
 apply resolutions -> audit -> commit.
 """
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from oracle.docs import layers, named_codes
 from oracle.docs.diff import diff_sections
 from oracle.docs.models import DOCUMENT_KINDS, Citation, Document, DocumentVersion, Section
 from oracle.docs.parser import (
+    CitationIn,
     DraftError,
     ParsedDraft,
     cited_entries,
@@ -64,6 +66,11 @@ class VisibilityKindError(ValueError):
 
 class ImportConflictError(RuntimeError):
     """A concurrent import won the race for the version number or slug."""
+
+
+class SlugTakenError(ImportConflictError):
+    """A run's import of the document it was to create (``run_creates``): the slug names
+    a document none of the run's versions is in, which the run's draft is not added to."""
 
 
 class BaseVersionConflictError(ImportConflictError):
@@ -127,6 +134,21 @@ async def find_document(db: AsyncSession, doc: str, *, for_update: bool = False)
     if for_update:
         stmt = stmt.with_for_update()
     return await db.scalar(stmt)
+
+
+async def run_imported_into(db: AsyncSession, document_id: uuid.UUID, run_id: uuid.UUID) -> bool:
+    """Whether a version of the document was imported for the run (its import is audited
+    with the run's id: the run's own push_draft, or its import at segment end)."""
+    found = await db.scalar(
+        select(AuditEvent.id)
+        .where(
+            AuditEvent.action == "document.version_imported",
+            AuditEvent.data["document_id"].astext == str(document_id),
+            AuditEvent.data["run_id"].astext == str(run_id),
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 async def get_document_or_404(db: AsyncSession, doc: str) -> Document:
@@ -705,6 +727,49 @@ async def _check_document_dates(
     ], dates
 
 
+# An oracle citation's ref names a baseline item: "baseline <kind> <key>", then free text
+# ("baseline goal g1 (activation), locked").
+ORACLE_REF_RE = re.compile(r"^\s*baseline\s+(?P<type>[a-z_]+)\s+(?P<key>[^\s,;()]+)")
+
+
+async def _oracle_ref_problems(
+    db: AsyncSession, citations: list[CitationIn]
+) -> list[ImportProblem]:
+    """An ``invalid_citation`` problem per oracle citation whose ref names no baseline item
+    of this company (the session is tenant-scoped; a rejected item is none): every citation
+    counts in the quality criteria (oracle.quality.criteria), so a made-up one is refused,
+    not kept."""
+    from oracle.baseline.models import Entity
+
+    named: dict[int, tuple[str, str] | None] = {}
+    for i, c in enumerate(citations):
+        if c.source == "oracle":
+            m = ORACLE_REF_RE.match(c.ref)
+            named[i] = (m["type"], m["key"].rstrip(".:")) if m else None
+    wanted = {pair for pair in named.values() if pair is not None}
+    found: set[tuple[str, str]] = set()
+    if wanted:
+        rows = await db.execute(
+            select(Entity.type, Entity.key).where(
+                tuple_(Entity.type, Entity.key).in_(sorted(wanted)),
+                Entity.status != "rejected",
+            )
+        )
+        found = {(t, k) for t, k in rows}
+    # The citation's id is the key the draft's author wrote (as the parser's refusals
+    # echo it), not a database id.
+    keys = {i: citations[i].id for i, pair in named.items() if pair not in found}
+    return [
+        ImportProblem(
+            code="invalid_citation",
+            message=f"citation #{i + 1} ({key}) is invalid: ref names no "
+            "baseline item of this company",
+            cite_key=key,
+        )
+        for i, key in keys.items()
+    ]
+
+
 async def _citation_items(
     db: AsyncSession, draft: ParsedDraft
 ) -> tuple[dict[str, uuid.UUID], list[VersionWarning]]:
@@ -873,6 +938,7 @@ async def import_draft(
     date_sections: set[str] | None = None,
     commit: bool = True,
     template_only: bool = False,
+    run_creates: bool = False,
 ) -> ImportResult:
     """Import a draft as the next version of ``doc``.
 
@@ -906,6 +972,11 @@ async def import_draft(
     revisions check only the sections they change (``""``: the title). ``template_only``:
     the draft is a template's skeleton (a ``template_only`` note on the version, #255).
 
+    ``run_creates``: ``doc`` is the slug of the document run ``run_id`` was to create.
+    Checked under the document's row lock: when a document of it exists that none of the
+    run's versions is in (a member created it meanwhile), the import is a
+    :class:`SlugTakenError`, never a version of that document.
+
     ``commit=False`` flushes the version and leaves the commit to the caller, which writes
     more in the same transaction (a roadmap change set's proposal, oracle.roadmap.changeset).
 
@@ -933,7 +1004,16 @@ async def import_draft(
         except safe_yaml.ParseTimeout as exc:
             raise DraftError([ImportProblem(code=exc.code, message=str(exc))]) from exc
     # Off the event loop, time-capped: the draft is untrusted text (oracle.safe_yaml).
-    draft = await parse_draft_async(markdown)
+    try:
+        draft = await parse_draft_async(markdown)
+    except DraftError as exc:
+        # The oracle refs of the citations that parsed are checked too: one refusal names
+        # every problem, not the parse's first and the refs' on the next try.
+        if refused := await _oracle_ref_problems(db, exc.citations):
+            raise DraftError([*exc.problems, *refused], citations=exc.citations) from exc
+        raise
+    if refused := await _oracle_ref_problems(db, draft.citations):
+        raise DraftError(refused)
     if draft.template is None and template is not None:
         draft.template, draft.template_version = template
     if run_id is not None:
@@ -941,6 +1021,14 @@ async def import_draft(
     held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
+    if (
+        run_creates
+        and document is not None
+        and not (run_id is not None and await run_imported_into(db, document.id, run_id))
+    ):
+        raise SlugTakenError(
+            f"{doc} now names another document: the run's draft is not added to it"
+        )
     if document is None:
         if is_uuid(doc):
             raise NotFoundError(f"document '{doc}' not found")

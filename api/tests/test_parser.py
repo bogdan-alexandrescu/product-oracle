@@ -1,6 +1,6 @@
 import pytest
 
-from oracle.docs.parser import DraftError, body_text, parse_draft
+from oracle.docs.parser import CitationIn, DraftError, body_text, parse_draft
 from tests.fixtures import FEEDBACK_GUEST, FEEDBACK_SHIPPING, draft
 
 V1_KEYS = [
@@ -271,3 +271,120 @@ def test_citation_item_that_is_not_a_uuid_still_parses():
     citations = "citations:\n  - id: c1\n    source: web\n    ref: x\n    item: not-a-uuid\n"
     parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
     assert parsed.citations[0].item == "not-a-uuid"
+
+
+@pytest.mark.parametrize(
+    ("ref", "scheme"),
+    [
+        ("javascript:alert(1)", "javascript"),
+        ("JavaScript:alert(1)", "javascript"),
+        ("java\tscript:alert(1)", "javascript"),
+        (" data:text/html,x", "data"),
+        ("ftp://example.com/x", "ftp"),
+    ],
+)
+def test_a_non_oracle_ref_with_a_scheme_other_than_http_is_refused(ref, scheme):
+    # The web opens a citation's ref as a link: no URL but http(s) gets in.
+    text = _draft(
+        "# T {#t}\n\nA claim [c:c1].\n",
+        citations=f'citations:\n  - id: c1\n    source: slack\n    ref: "{ref}"\n',
+    )
+    with pytest.raises(DraftError) as info:
+        parse_draft(text)
+    (problem,) = [p for p in info.value.problems if p.code != "unknown_citation"]
+    assert (problem.code, problem.cite_key) == ("invalid_citation", "c1")
+    assert problem.message == (
+        f"citation #1 (c1) is invalid: ref's scheme '{scheme}:' isn't accepted (http, https or urn)"
+    )
+
+
+def test_http_https_schemeless_and_oracle_refs_parse():
+    # A ref with no scheme (an upload's name, an item's id) is kept and shown as text.
+    text = _draft(
+        "# T {#t}\n\n[c:a] [c:b] [c:u] [c:n] [c:o]\n",
+        citations="citations:\n"
+        "  - {id: a, source: web, ref: 'HTTPS://example.com/a'}\n"
+        "  - {id: b, source: github, ref: 'http://example.com/b'}\n"
+        "  - {id: u, source: upload, ref: 'buyer-interviews.md'}\n"
+        "  - {id: n, source: notion, ref: 'urn:uuid:7c9e6679-7425-40de-944b-e07fc1f90ae7'}\n"
+        "  - {id: o, source: oracle, ref: 'baseline goal g1'}\n",
+    )
+    assert [c.id for c in parse_draft(text).citations] == ["a", "b", "u", "n", "o"]
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        # Protocol-relative and path-absolute: a browser resolves these to another host.
+        "//evil.example/x",
+        "\\\\evil.example\\x",
+        "/\\evil.example/x",
+        "\\/evil.example/x",
+        "/docs/notes.md",
+        # An http(s) URL with no host after the scheme.
+        "https:/evil.example/x",
+        "https:///evil.example/x",
+        "http:evil.example",
+        "https:\\\\evil.example",
+        # Whitespace of any kind at either end, and control or invisible characters.
+        "\u00a0javascript:alert(1)",
+        "\u200bjavascript:alert(1)",
+        "\ufeffjavascript:alert(1)",
+        "\u2028https://example.com/a",
+        "https://example.com/a\u3000",
+        "https://example.com/a ",
+        "java\u200dscript:alert(1)",
+        "notes\u0000.md",
+        # Schemes that are never a link, in any case.
+        "DATA:text/html,x",
+        "VbScript:msgbox(1)",
+        "file:///etc/passwd",
+        "jAvAsCrIpT:alert(1)",
+    ],
+)
+@pytest.mark.parametrize("source", ["web", "upload"])
+def test_an_odd_ref_is_refused_at_import(ref, source):
+    # Only an absolute http(s) URL with a host, a urn or a plain name gets in (an oracle
+    # ref names a baseline item, checked at import): nothing a browser could resolve to a
+    # link elsewhere.
+    with pytest.raises(ValueError, match="ref"):
+        CitationIn(id="c1", source=source, ref=ref)
+
+
+@pytest.mark.parametrize(
+    "ref", ["\u00a0baseline goal g1", "baseline goal g1\u200b", "\ufeffbaseline goal g1 "]
+)
+def test_an_oracle_ref_with_odd_whitespace_is_refused(ref):
+    with pytest.raises(ValueError, match="ref"):
+        CitationIn(id="c1", source="oracle", ref=ref)
+
+
+@pytest.mark.parametrize(
+    "ref",
+    ["\u00a0javascript:alert(1)", "\ufeffjavascript:x", "//evil.example/x", "https:///x"],
+)
+def test_an_odd_ref_in_a_draft_is_an_invalid_citation(ref):
+    escaped = ref.encode("unicode_escape").decode()
+    text = _draft(
+        "# T {#t}\n\nA claim [c:c1].\n",
+        citations=f'citations:\n  - id: c1\n    source: web\n    ref: "{escaped}"\n',
+    )
+    with pytest.raises(DraftError) as info:
+        parse_draft(text)
+    problems = [p for p in info.value.problems if p.code != "unknown_citation"]
+    assert [(p.code, p.cite_key) for p in problems] == [("invalid_citation", "c1")]
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "https://example.com/a",
+        "HTTPS://Example.com/a?b=c#d",
+        "http://example.com:8080",
+        "urn:uuid:7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "buyer-interviews.md",
+        "Buyer interviews, March.pdf",
+    ],
+)
+def test_a_plain_ref_still_parses(ref):
+    assert CitationIn(id="c1", source="web", ref=ref).ref == ref
