@@ -19,16 +19,14 @@ import secrets
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, crypto
-from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
-from oracle.authz import has_role
 from oracle.members.names import display_name
 from oracle.webhooks import events
 from oracle.webhooks.models import Webhook, WebhookDelivery, WebhookEvent
@@ -44,6 +42,9 @@ from oracle.webhooks.schemas import (
 SECRET_PREFIX = "whsec_"
 MAX_PER_COMPANY = 10
 ROTATION_OVERLAP = timedelta(hours=24)
+if TYPE_CHECKING:
+    from oracle.auth.deps import Principal
+
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
@@ -126,7 +127,7 @@ def _set_secret(hook: Webhook, secret: str) -> None:
     hook.secret_hint = secret[-4:]
 
 
-def credential(principal: Principal) -> dict[str, str]:
+def credential(principal: "Principal") -> dict[str, str]:
     """The credential a create or rotate came through, for its audit row (Q4)."""
     if principal.grant_id is not None:
         return {"kind": "mcp_client", "grant_id": str(principal.grant_id)}
@@ -161,7 +162,7 @@ async def _creator_role(db: AsyncSession, creator: uuid.UUID) -> str | None:
     return None if token is None or token.revoked_at is not None else token.role
 
 
-def visible(principal: Principal):
+def visible(principal: "Principal"):
     """The webhooks ``principal`` manages: an owner's are every one, an approver's their own."""
     stmt = select(Webhook)
     if principal.role != "owner":
@@ -169,14 +170,14 @@ def visible(principal: Principal):
     return stmt
 
 
-async def get(db: AsyncSession, principal: Principal, webhook_id: uuid.UUID) -> Webhook:
+async def get(db: AsyncSession, principal: "Principal", webhook_id: uuid.UUID) -> Webhook:
     hook = await db.scalar(visible(principal).where(Webhook.id == webhook_id))
     if hook is None:
         raise WebhookError("not_found", "Not found")
     return hook
 
 
-async def outs(db: AsyncSession, principal: Principal, hooks: list[Webhook]) -> list[WebhookOut]:
+async def outs(db: AsyncSession, principal: "Principal", hooks: list[Webhook]) -> list[WebhookOut]:
     who = await names(db, {h.created_by for h in hooks})
     last: dict[uuid.UUID, WebhookDelivery] = {}
     if hooks:
@@ -255,7 +256,7 @@ async def _notify(db: AsyncSession, principal: Any, recipients, kind: str, title
 
 
 async def _approvers_content(
-    db: AsyncSession, principal: Principal, hook: Webhook, on: bool, reason: str | None
+    db: AsyncSession, principal: "Principal", hook: Webhook, on: bool, reason: str | None
 ) -> None:
     """Turn owners-and-approvers content on or off (Q2): an owner, with a reason, and on
     only while the webhook's creator is an owner."""
@@ -278,7 +279,7 @@ def _host(url: str) -> str:
     return (urlsplit(url).hostname or "").lower()
 
 
-async def create(db: AsyncSession, principal: Principal, body: WebhookIn) -> tuple[Webhook, str]:
+async def create(db: AsyncSession, principal: "Principal", body: WebhookIn) -> tuple[Webhook, str]:
     count = await db.scalar(select(func.count()).select_from(Webhook))
     if count >= MAX_PER_COMPANY:
         raise WebhookError("invalid", f"A company has at most {MAX_PER_COMPANY} webhooks")
@@ -321,7 +322,7 @@ async def create(db: AsyncSession, principal: Principal, body: WebhookIn) -> tup
 
 
 async def update(
-    db: AsyncSession, principal: Principal, hook: Webhook, body: WebhookPatch
+    db: AsyncSession, principal: "Principal", hook: Webhook, body: WebhookPatch
 ) -> Webhook:
     flag = body.include_approvers_content
     if flag is not None and flag != hook.include_approvers_content:
@@ -373,7 +374,7 @@ async def update(
     return hook
 
 
-async def delete(db: AsyncSession, principal: Principal, hook: Webhook) -> None:
+async def delete(db: AsyncSession, principal: "Principal", hook: Webhook) -> None:
     await audit.record(
         db, principal, "webhook.delete", "webhook", hook.id, {"name": hook.name, "host": hook.host}
     )
@@ -382,7 +383,7 @@ async def delete(db: AsyncSession, principal: Principal, hook: Webhook) -> None:
 
 
 async def rotate(
-    db: AsyncSession, principal: Principal, hook: Webhook, end_old_now: bool
+    db: AsyncSession, principal: "Principal", hook: Webhook, end_old_now: bool
 ) -> tuple[Webhook, str]:
     """A new secret, returned once. The old one keeps signing for 24 hours (both signatures
     are sent), unless ``end_old_now``."""
@@ -410,7 +411,7 @@ async def rotate(
     return hook, secret
 
 
-async def take_over(db: AsyncSession, principal: Principal, hook: Webhook) -> Webhook:
+async def take_over(db: AsyncSession, principal: "Principal", hook: Webhook) -> Webhook:
     """An owner makes a paused webhook of someone else's their own (audited). Its
     owners-and-approvers content goes off: the new creator turns it on again, with a
     reason, if it should be."""
@@ -484,5 +485,7 @@ async def creator_role_changed(
     promotion does not resume them. Below owner: owners-and-approvers content goes off."""
     if role != "owner":
         await _content_off(db, principal, {user_id}, "creator_demoted")
+    from oracle.authz import has_role
+
     if not has_role(role, "approver"):
         await _pause_creators(db, principal, {user_id}, "creator_demoted")

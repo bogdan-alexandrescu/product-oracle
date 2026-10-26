@@ -52,6 +52,17 @@ approver_or_absent.min_role = "approver"  # type: ignore[attr-defined]
 Approver = Annotated[Principal, Depends(approver_or_absent)]
 
 
+async def owner_after_absent(principal: Approver) -> Principal:
+    """:func:`approver_or_absent`, then 403 for an approver (taking over is an owner's)."""
+    if principal.role != "owner":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only an owner can take over a webhook")
+    return principal
+
+
+owner_after_absent.min_role = "owner"  # type: ignore[attr-defined]
+Owner = Annotated[Principal, Depends(owner_after_absent)]
+
+
 def _refused(e: service.WebhookError) -> HTTPException:
     return HTTPException(_STATUS[e.code], str(e))
 
@@ -168,7 +179,7 @@ async def rotate_webhook_secret(
     "/webhooks/{webhook_id}/take-over",
     response_model=WebhookOut,
 )
-async def take_over_webhook(webhook_id: uuid.UUID, principal: Approver, db: TenantDB) -> WebhookOut:
+async def take_over_webhook(webhook_id: uuid.UUID, principal: Owner, db: TenantDB) -> WebhookOut:
     """An owner makes a paused webhook of someone else's their own."""
     await _write(db, principal)
     hook = await _load(db, principal, webhook_id)
