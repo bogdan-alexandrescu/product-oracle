@@ -539,7 +539,6 @@ async def public_share_status(token: str, request: Request) -> JSONResponse:
     return _json({"state": state, "allow_download": link.allow_download}, 200)
 
 
-
 @short_router.get("/s/{token}")
 async def short_share_address(token: str, request: Request) -> Response:
     """307 to the link's public page, the query kept; the token is not looked up."""
