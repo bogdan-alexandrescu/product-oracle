@@ -1,6 +1,7 @@
 """The deck as PPTX (O1f): the same slides as Present mode and the deck PDF.
 
-A 16:9 presentation with a title slide (the version banner), one slide per brief
+A 16:9 presentation with a title slide (the company's logo and name, O5, and the version
+banner), one slide per brief
 section and the Sources and data points slides. Each slide's body is built from the
 section's markdown: paragraphs, bullet and numbered lists, minor headings and tables
 (as native PowerPoint tables); presenter notes go into the slide's notes. Colours and
@@ -250,6 +251,36 @@ def _add_body(slide, s: Slide, deck: Deck, style: dict) -> None:
     flush_text()
 
 
+LOGO_HEIGHT = Inches(0.6)
+LOGO_MAX_WIDTH = Inches(4)
+
+
+def _add_brand(slide, deck: Deck, style: dict, width) -> None:
+    """O5: the company's logo (at most 0.6 in high) and name on the title slide."""
+    top = Inches(0.7)
+    left = MARGIN
+    if deck.brand_logo_png:
+        w, h = deck.brand_logo_size or (4, 1)
+        height = LOGO_HEIGHT
+        pic_width = int(height * w / max(h, 1))
+        if pic_width > LOGO_MAX_WIDTH:
+            pic_width, height = LOGO_MAX_WIDTH, int(LOGO_MAX_WIDTH * h / max(w, 1))
+        slide.shapes.add_picture(
+            BytesIO(deck.brand_logo_png), left, top, width=pic_width, height=height
+        )
+        top += LOGO_HEIGHT + Inches(0.15)
+    if deck.brand_name:
+        name = _textbox(slide, left, top, width, Inches(0.45))
+        _write_runs(
+            name.paragraphs[0],
+            [Run(deck.brand_name, bold=True)],
+            16,
+            style["body"],
+            style["mono"],
+            style["muted"],
+        )
+
+
 def deck_to_pptx(deck: Deck) -> bytes:
     tokens = deck.tokens or {}
     heading_font = _font(tokens, "heading")
@@ -276,6 +307,7 @@ def deck_to_pptx(deck: Deck) -> bytes:
         fill.fore_color.rgb = style["background"]
         width = WIDTH - 2 * MARGIN
         if s.kind == "title":
+            _add_brand(slide, deck, style, width)
             kicker = _textbox(slide, MARGIN, Inches(2.2), width, Inches(0.5))
             _write_runs(
                 kicker.paragraphs[0],

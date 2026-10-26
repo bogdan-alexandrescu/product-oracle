@@ -17,12 +17,16 @@
  * critical blocker is open; a draft run keeps the answers that existed when it was made
  * (answers_since_run counts the later ones); an intake question's Inbox row opens
  * /intakes/<id>. seedBeforeDrafting adds the "before-drafting" scenario's brief.
+ * INT2 Oracle's read: the author's ai_read, and POST .../ai-read, which finishes at once
+ * here (the API's run takes minutes); at most READS_PER_DAY reads the author starts per
+ * intake per Company day, then 429 in the API's words (owner decision 2026-10-26).
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
 import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { displayName } from "@/lib/names";
 import { baselineReviewStatus } from "./baseline";
+import { companyDayIso, mockSettingValue } from "./connections";
 import type { V2Db } from "./v2";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -345,7 +349,28 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     shared_counts: [],
     is_author: intake.author_id === userId,
     ...drafting(db, intake),
+    // INT2: Oracle's read, the author's only (others get null: the read is private).
+    ai_read: intake.author_id === userId ? aiRead(db, intake) : null,
   };
+}
+
+/** INT2: reads the author may start per intake per Company day (oracle.intake.read.READS_PER_DAY). */
+export const READS_PER_DAY = 3;
+const READ_CAPPED = `This intake was read ${READS_PER_DAY} times today; read it again tomorrow`;
+
+/** The reads the author started on the Company day now, as oracle.intake.read.reads_today. */
+function readsToday(db: V2Db, intake: Intake): number {
+  const today = companyDayIso(new Date());
+  return (db.intake_reads?.[intake.id]?.on_demand ?? []).filter((at) => companyDayIso(at) === today).length;
+}
+
+/** The author's ai_read, as oracle.intake.read.state_out. */
+function aiRead(db: V2Db, intake: Intake): Schemas["AiReadOut"] {
+  const today = readsToday(db, intake);
+  const cap = { reads_today: today, reads_per_day: READS_PER_DAY, read_again_refused: today >= READS_PER_DAY ? READ_CAPPED : null };
+  const read = db.intake_reads?.[intake.id]?.read;
+  if (!read) return { state: "off", off_reason: mockSettingValue("intake_ai_read") === false ? "company" : "intake", sources: 0, dropped_refs: 0, failures: 0, ...cap };
+  return { ...read, ...cap };
 }
 
 /** The intake's draft run, and the answers given after it (C5). */
@@ -707,6 +732,19 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       return json(200, m === "PATCH" ? out[0] : out);
     }
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
+    if (leaf === "ai-read" && m === "POST") {
+      if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can ask Oracle to read it");
+      if (intake.status === "converted" || intake.status === "archived") return fail(409, `The intake is ${intake.status}`);
+      if (mockSettingValue("intake_ai_read") === false) return fail(409, "Oracle's read is off for this company");
+      if (readsToday(db, intake) >= READS_PER_DAY) return fail(429, READ_CAPPED);
+      const now = new Date().toISOString();
+      const reads = (db.intake_reads ??= {});
+      reads[intake.id] = {
+        read: { state: "done", path: "swarmcloud", started_at: now, finished_at: now, sources: 0, added: { items: 0, gaps: 0 }, dropped_refs: 0, failures: 0 },
+        on_demand: [...(reads[intake.id]?.on_demand ?? []), now].slice(-READS_PER_DAY),
+      };
+      return json(202, aiRead(db, intake));
+    }
     if (leaf === "analyze" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can re-run its analysis");
       syncQuestions(db, intake);
@@ -1016,7 +1054,7 @@ function privateGap(db: V2Db, gap: Gap | null | undefined): boolean {
 }
 const CHECKPOINT_LABEL: Record<string, string> = {
   baseline_confirm: "Confirm the baseline", feature_set: "Feature set and dependencies", priority_order: "Priority order",
-  prd_review: "PRD review", eng_review: "Engineering review", roadmap_items: "Roadmap items", roadmap_review: "Roadmap review",
+  prd_review: "PRD review", eng_review: "Engineering review", eng_dates: "Engineering dates", roadmap_items: "Roadmap items", roadmap_review: "Roadmap review",
 };
 
 /** An active member who can answer: commenter or above. */
@@ -1117,6 +1155,14 @@ export function seedBeforeDrafting(db: V2Db, authorId: string, approverId: strin
   const gap = (category: Category) => db.gaps.find((g) => g.intake_id === intake.id && g.category === category)!;
   gap("blockers").importance = "critical";
   syncQuestions(db, intake, at);
+  // INT2: Oracle read the brief when it was created (not one of the author's reads).
+  db.intake_reads = {
+    ...(db.intake_reads ?? {}),
+    [intake.id]: {
+      read: { state: "done", path: "swarmcloud", started_at: at, finished_at: "2026-10-19T09:04:00Z", sources: 1, added: { items: 2, gaps: 1 }, dropped_refs: 0, failures: 0 },
+      on_demand: [],
+    },
+  };
   const question = (category: Category) => db.questions.find((x) => x.intake_id === intake.id && x.category === category)!;
   question("blockers").rationale = `${LABEL.blockers} gap, critical.`;
   const ask = (category: Category, batch: number, to: string, when: string) => {

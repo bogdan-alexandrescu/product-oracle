@@ -68,6 +68,14 @@ from every member's Google Docs sources in the same request, with no Drive call
   digest runs may make in the Company time zone's month (counted from ``web_searches``);
   0 turns web search off.
 
+- ``intake_ai_read`` (INT2): true (the default) or false: Oracle reads each new or repinned
+  intake whose author left ``ai_extraction`` on, as a $1.50 SwarmCloud run
+  (``oracle.intake.read``); false starts none.
+- ``branding`` (O5): display name, logo, accent, public disclaimer and the "Made with
+  Product Oracle" switch (``oracle.branding``); written only through ``PUT /v1/branding``
+  and the logo routes, so its revision bumps on every change. A reset here bumps it too
+  and deletes the stored logos (``oracle.branding.reset``).
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -86,6 +94,7 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import not_for_runs, recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
+from oracle.branding import DEFAULT as BRANDING_DEFAULT
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
@@ -148,6 +157,10 @@ DEFAULTS: dict[str, Any] = {
     "pricing_owner": None,
     # H7 Competitive digest: open-web searches per month across runs; 0 turns them off.
     "web_searches_per_month": 200,
+    # INT2: Oracle reads new intakes (a $1.50 SwarmCloud run each; owner answer Q2, on).
+    "intake_ai_read": True,
+    # O5 lane 4: the company's branding (oracle.branding), changed on PUT /v1/branding only.
+    "branding": BRANDING_DEFAULT,
 }
 MAX_WEB_SEARCHES_PER_MONTH = 2000
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
@@ -335,6 +348,10 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
             raise InvalidSetting(f"{key} must be a whole number from {lo} to {hi}")
         return value
+    if key == "intake_ai_read":
+        if not isinstance(value, bool):
+            raise InvalidSetting("intake_ai_read must be true or false")
+        return value
     if key == "web_searches_per_month":
         hi = MAX_WEB_SEARCHES_PER_MONTH
         if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= hi:
@@ -373,6 +390,11 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         from oracle.pricing.decide import check_pricing_owner
 
         return await check_pricing_owner(session, value)
+    if key == "branding":
+        raise InvalidSetting(
+            "branding changes on Settings › Company › Branding, where the logo is uploaded "
+            "too (a null value here resets every default)"
+        )
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: change it on "
@@ -549,7 +571,12 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
     previous = await get_setting(db, key)
     if body.value is None:
-        await clear_setting(db, key)
+        if key == "branding":
+            from oracle.branding import reset as reset_branding
+
+            await reset_branding(db, principal, previous)
+        else:
+            await clear_setting(db, key)
         await _follow(db, key, previous)
         extra = await _company_narrowing(db, principal, before)
         await audit.record(

@@ -432,3 +432,12 @@ async def test_answers_since_run_is_zero_before_drafting(client):
     ctx = await company()
     out = await intake_with_source(client, ctx)
     assert out["answers_since_run"] == 0
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")

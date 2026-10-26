@@ -47,6 +47,11 @@ type Ctx = {
   readOnly: boolean;
   canComment: boolean;
   canDecide: boolean;
+  /**
+   * The role's capabilities have answered (or failed): until then canDecide is not known, and
+   * no Resolve is offered, as the author's would resolve only the thread, not the item.
+   */
+  rolesReady: boolean;
   userId: string | null;
   showLayer: boolean;
   /** Section links open here (the full document when the brief hides them). */
@@ -196,7 +201,7 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
     // An approver resolves or reopens any item (the item and its thread); a comment's author
     // resolves their own thread.
     const triage =
-      live && !(deciding && openSuggestion) ? (
+      live && ctx.rolesReady && !(deciding && openSuggestion) ? (
         ctx.canDecide ? (
           <TriageActions item={item} onChanged={ctx.onTriaged ?? onChanged} />
         ) : mine && comment ? (

@@ -5,6 +5,7 @@
  * One linked row per entity, synthetic placeholders only. Lanes add their writes here.
  */
 import type { Schemas } from "@/lib/api/client";
+import type { DeletedEntity } from "./impact";
 
 export interface V2Db {
   modules: Schemas["ModuleDefinitionOut"][];
@@ -40,9 +41,17 @@ export interface V2Db {
   /** Each intake's draft run (C5): its id and the answers that existed when it was made
    * (the mock's stand-in for the run's start); absent before any. */
   intake_runs?: Record<string, { run_id: string; answer_ids: string[]; document?: string }>;
+  /** INT2: Oracle's read of each intake (the author's only) and when the author started
+   * reads (the newest last; the reads on create and repin are not among them); absent
+   * before any read. */
+  intake_reads?: Record<string, { read: Omit<Schemas["AiReadOut"], "reads_today" | "reads_per_day" | "read_again_refused">; on_demand: string[] }>;
   /** C5 late answers: the answers given after drafting started that became feedback items
    * on the PRD (answer id -> where), as late_answers.on_answer makes them. */
   late_answer_feedback?: Record<string, { intake_id: string; slug: string; version: number; withheld?: boolean }>;
+  /** Baseline items deleted after outputs were built on them (the "impact" scenario, ./impact.ts). */
+  deleted_entities?: DeletedEntity[];
+  /** The impact walk stops at its limit (the "impact-large" scenario): reports say truncated. */
+  walk_truncated?: boolean;
 }
 
 /** URL segment after /v1 -> the table it lists. */

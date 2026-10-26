@@ -206,6 +206,9 @@ class ComposedModule(CompositionModule):
     # The position is a person's (this change's order, or an earlier one carried).
     ordered_by_user: bool = False
     required_review_role: str = "approver"
+    # Whether the caller's role may add or remove it (required_review_role). Read only:
+    # worked out per read, never stored in a revision.
+    can_change: bool = False
 
 
 class CompositionProblem(BaseModel):
@@ -453,6 +456,12 @@ def _policy(ctx: Context, key: str, contract: ModuleContract) -> tuple[str, Poli
 
 def _role_ok(role: str, needed: str) -> bool:
     return role in ROLES and ROLES.index(role) >= ROLES.index(needed)
+
+
+def mark_can_change(modules: list[ComposedModule], role: str) -> None:
+    """Sets each module's can_change for a caller with `role`."""
+    for m in modules:
+        m.can_change = _role_ok(role, m.required_review_role)
 
 
 def _candidate_keys(ctx: Context, changes: Changes | None) -> list[str]:
@@ -1122,6 +1131,7 @@ __all__ = [
     "QuestionRef",
     "TemplateSection",
     "compose",
+    "mark_can_change",
     "outline",
     "validate_fields",
 ]

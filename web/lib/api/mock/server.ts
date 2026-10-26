@@ -19,6 +19,7 @@ import { applied, handOver, membersDetailRoute, type MembersContext, type Member
 import type { HandOver } from "@/lib/api/members-types";
 import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
+import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
@@ -49,7 +50,7 @@ import {
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { nudges } from "./learned";
@@ -71,6 +72,7 @@ import {
   routeRuns,
   scopeStop,
   seedEngCheckRun,
+  seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
   seedFeatureSetRun,
@@ -122,6 +124,8 @@ import {
   seedOutcomes,
   seedQuality,
   addDecisionOutcome,
+  seedQualityScenario,
+  storeModelReview,
   type QualityContext,
   type QualityDb,
 } from "./quality";
@@ -129,8 +133,9 @@ import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from ".
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
-import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
+import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
+import { seedImpact } from "./impact";
 import { routeTrace } from "./trace";
 import {
   DRAFT_OPTIONS,
@@ -147,6 +152,7 @@ import {
 } from "./pricing";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
+import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /**
@@ -214,6 +220,10 @@ export interface Db {
   trash?: TrashDb;
   /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
   review_v2?: ReviewV2Db;
+  /** The draft run proposed per v2 artifact request from the Impact plan, by request id. */
+  impact_runs?: Record<string, string>;
+  /** I1: Settings › Webhooks, their events and delivery log (./webhooks.ts). */
+  webhooks?: WebhooksDb;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
@@ -246,6 +256,8 @@ export interface Db {
   launches?: LaunchesDb;
   /** H9: win and loss records (./pricing.ts); seeded in the "pricing" scenario only. */
   pricing?: PricingDb;
+  /** O5 lane 4: the company's branding and its logos' bytes (./branding.ts); absent in older saved data. */
+  branding?: BrandingDb;
   /** Alternatives, watched pages, the change log, web findings and positioning (./market.ts, H7). */
   market?: MarketDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -956,6 +968,26 @@ function seedSuggestions(): Db {
 }
 
 /**
+ * The seeded spec: approver@example.com approved its wireframes' v1; the
+ * "design-named-approver" scenario names admin@example.com its engineering approver.
+ */
+function specsSeed(db: Db): SpecsDb {
+  const person = (email: string): SpecPerson | undefined => {
+    const m = db.members.find((x) => x.email === email);
+    return m && { id: m.id, name: displayName(m.email, m.name) };
+  };
+  const admin = person("admin@example.com");
+  const named = localStorage.getItem(MOCK_SCENARIO_KEY) === "design-named-approver" && admin ? [admin] : [];
+  return seedSpecs({ approver: person("approver@example.com"), named });
+}
+
+/** A member's display name (api/oracle/members/names.py), as the specs mock's actor_name. */
+function specActorName(db: Db, id: string): string | null {
+  const m = db.members.find((x) => x.id === id);
+  return m ? displayName(m.email, m.name) : null;
+}
+
+/**
  * A3 "eng-review" scenario: the default company with commenter@example.com named engineering
  * lead, and a run waiting at an Engineering review stop (./runs.ts).
  */
@@ -974,6 +1006,18 @@ function seedEngCheck(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-check", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * F4 lane B "eng-dates" scenario: the default company with commenter@example.com named
+ * engineering lead, a Baseline to PRD run waiting at its Engineering dates and one waiting
+ * for its PRD version's roadmap items (./runs.ts).
+ */
+function seedEngDates(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -1479,7 +1523,7 @@ function seed(): Db {
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
     const brief = docs.get("checkout-redesign-early-shipping-cost-spec")!;
     for (const v of db.versions) if (v.document_id === brief.id) v.source = null;
-    db.specs ??= seedSpecs();
+    db.specs ??= specsSeed(db);
     for (const s of db.specs.specs) if (s.document_slug === brief.slug) s.request.source_document_id = docs.get("usage-alerts")!.id;
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
@@ -1562,6 +1606,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       const min = Number(a.stored.next_drafts?.limits?.min_staged);
       return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
     },
+    runQualityReview: (job, versionId) => storeModelReview(ensureV2(db), job, versionId),
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -2242,6 +2287,8 @@ function load(): Db {
             ? seedEngCheck
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
+          : scenario === "eng-dates"
+            ? seedEngDates
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
           : scenario === "run-review" || scenario === DRAFT_NEW_ITEMS_SCENARIO
@@ -2498,6 +2545,7 @@ const CHECKPOINT_NAMES: Record<string, string> = {
   priority_order: "Priority order",
   prd_review: "PRD review",
   eng_review: "Engineering review",
+  eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
   request_triage: "Request triage",
@@ -2935,7 +2983,8 @@ function banner(doc: DocumentRow, v: VersionRow) {
   return `${doc.title} · version ${v.number} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
 }
 
-function exportHtml(doc: DocumentRow, v: VersionRow): string {
+/** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding()): string {
   const sections = v.sections
     .map((s) => {
       const tag = `h${Math.min(s.level, 3)}`;
@@ -2957,7 +3006,7 @@ function exportHtml(doc: DocumentRow, v: VersionRow): string {
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title></head><body><p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
@@ -3448,6 +3497,29 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
   };
 }
 
+/** The webhooks mock's view of the db (./webhooks.ts); its Inbox rows are review-v2 notifications. */
+function webhooksContext(db: Db, me: { id: string; role: Role }): WebhooksContext {
+  const base = {
+    me: { id: me.id, role: me.role },
+    members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.id === me.id ? me.role : x.role })),
+    tokens: (db.account ??= seedAccount(db.members, uuid)).tokens
+      .filter((t) => !t.user_id && (t.kind === "personal" || t.kind === "service"))
+      .map((t) => ({ id: t.id, name: t.name })),
+    notifications: db.review_v2!.notifications,
+    company: { id: "c0000000-0000-4000-8000-00000000c0de", name: "Example Co" },
+    uuid,
+    now,
+  };
+  db.webhooks ??= seedWebhooks(base, localStorage.getItem(MOCK_SCENARIO_KEY));
+  return { ...base, db: db.webhooks };
+}
+
+/** The webhooks mock's view for sending run events: the signed-in member (who acted), if any. */
+function webhooksDeliveryContext(db: Db): WebhooksContext {
+  const member = db.members.find((x) => x.email === sessionOf(db)) ?? db.members.find((m) => m.id === db.user_id)!;
+  return webhooksContext(db, withMockRole(member));
+}
+
 /** The v2 review mock's view of the db; a section save copies the latest version. */
 function reviewV2Context(db: Db, userId: string, role: Role) {
   return {
@@ -3460,7 +3532,7 @@ function reviewV2Context(db: Db, userId: string, role: Role) {
     now,
     hash,
     exportHtml: (doc: { id: string }, v: { id: string }) =>
-      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!),
+      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!, db.branding),
     editSection: (doc: { id: string }, key: string, heading: string | null, bodyMd: string) => {
       const latest = docVersions(db, db.documents.find((d) => d.id === doc.id)!).pop()!;
       const sections = latest.sections.map((s) =>
@@ -3501,12 +3573,55 @@ function goalLinks(db: Db): V2Db["section_links"] {
     out.push({
       id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
       module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
-      claim: null, created_by: null, created_at: v.created_at,
+      // As the API records it: whoever made the link (the signed-in owner here).
+      claim: null, created_by: db.user_id, created_at: v.created_at,
     });
   };
   link("checkout-redesign", "goal-trace", "g.activation");
   link("checkout-redesign", "goal-trace", "g.paid-conversion");
   link("team-workspaces", "scope", "f.team-invites");
+  return out;
+}
+
+/**
+ * v2 screen 3 "evidence" scenario: Checkout redesign PRD v2's sections linked to baseline
+ * evidence (one from a removed source, one behind a claim), a restricted source item, a
+ * feature and a stale link to a proposed one; and one link on the approved Usage alerts v1.
+ */
+function evidenceLinks(db: Db): V2Db["section_links"] {
+  const doc = findDocument(db, "checkout-redesign");
+  if (!doc) return [];
+  const v2 = docVersions(db, doc)[1];
+  const alerts = findDocument(db, "usage-alerts");
+  const approved = alerts ? docVersions(db, alerts).find((v) => v.approved_at) : undefined;
+  const entity = (key: string) => db.baseline.entities.find((e) => e.key === key)?.id ?? null;
+  const evidence = (ref: string) => db.baseline.evidence.find((e) => e.ref === ref)?.id ?? null;
+  const out: V2Db["section_links"] = [];
+  const link = (
+    v: VersionRow | undefined,
+    section_key: string,
+    kind: V2Db["section_links"][number]["kind"],
+    target: { entity_id?: string | null; evidence_id?: string | null; source_item_id?: string | null },
+    more: { precision?: "section" | "paragraph" | "claim"; claim?: string; stale?: boolean; module_key?: string; at?: string } = {},
+  ) => {
+    if (!v || !v.sections.some((s) => s.section_key === section_key)) return;
+    if (!target.entity_id && !target.evidence_id && !target.source_item_id) return;
+    out.push({
+      id: uuid(), document_id: v.document_id, version_id: v.id, section_key,
+      // A stale link was made on an earlier revision of its section.
+      section_hash: more.stale ? "0".repeat(16) : (v.sections.find((s) => s.section_key === section_key)?.content_hash ?? null),
+      composition_revision: more.module_key ? 1 : null, module_key: more.module_key ?? null, kind,
+      entity_id: target.entity_id ?? null, evidence_id: target.evidence_id ?? null, source_item_id: target.source_item_id ?? null,
+      precision: more.precision ?? "section", claim: more.claim ?? null, created_by: db.user_id, created_at: more.at ?? v.created_at,
+    });
+  };
+  link(v2, "problem", "evidences", { evidence_id: evidence("Sample store spec") }, { precision: "paragraph" });
+  link(v2, "problem", "mentions", { source_item_id: "6f1e2d3c-4b5a-4968-8778-a1b2c3d4e5f6" }, { precision: "paragraph" });
+  link(v2, "goal-trace", "claims", { evidence_id: evidence("#sales thread") }, { precision: "claim", claim: "Week-1 activation rises once the cost shows early." });
+  link(v2, "goal-trace", "implements", { entity_id: entity("f.usage-export") }, { stale: true, at: "2026-10-16T15:00:00Z" });
+  link(v2, "scope", "tests", { entity_id: entity("f.guided-setup") }, { precision: "paragraph", module_key: "acceptance-criteria" });
+  link(v2, "risks", "evidences", { evidence_id: evidence("Onboarding review (meeting)") }, { stale: true });
+  link(approved, "behaviour", "evidences", { evidence_id: evidence("Sample store spec") });
   return out;
 }
 
@@ -3558,6 +3673,23 @@ function itemUses(db: Db): Schemas["UsedIn"][] {
   return uses;
 }
 
+/** The quality data, seeded once; a "quality…" scenario adds its reports and jobs (./quality.ts). */
+function ensureQuality(db: Db): QualityDb {
+  if (db.quality) return db.quality;
+  db.quality = seedQuality();
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY) ?? "";
+  const doc = findDocument(db, "team-workspaces");
+  const v = doc && findVersion(db, doc, 2);
+  const id = (email: string) => db.members.find((m) => m.email === email)?.id ?? db.user_id;
+  if (scenario.startsWith("quality") && doc && v && db.llm) {
+    seedQualityScenario(scenario, {
+      quality: db.quality, v2: ensureV2(db), jobs: db.llm.jobs, disabled: db.llm.disabled, documentId: doc.id, versionId: v.id,
+      owner: db.user_id, approver: id("approver@example.com"), commenter: id("commenter@example.com"),
+    });
+  }
+  return db.quality;
+}
+
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -3565,6 +3697,18 @@ function ensureV2(db: Db): V2Db {
     db.v2 = seeded("v2", () => {
       const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
       v2.section_links.push(...goalLinks(db));
+      const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+      if (version && (scenario === "impact" || scenario === "impact-large")) {
+        const roadmap = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+        seedImpact(v2, {
+          versionId: version.id,
+          roadmapVersionId: db.versions.find((v) => v.document_id === roadmap?.id)?.id ?? null,
+          entity: db.baseline.entities.find((e) => e.key === "f.guided-setup") ?? db.baseline.entities.find((e) => e.type !== "goal") ?? null,
+          userId: db.user_id,
+          uuid,
+        }, scenario === "impact-large");
+      }
+      if (scenario === "evidence") v2.section_links.push(...evidenceLinks(db));
       return v2;
     });
   }
@@ -3784,7 +3928,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
   if (p[0] === "healthz") return json(200, { status: "ok", database: "mock" });
-  if (p[0] !== "v1") return notFound("Route");
+  if (p[0] !== "v1" && p[0] !== "uploads") return notFound("Route");
 
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
@@ -3835,6 +3979,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  // O5 lane 4: the company's branding and its logos (members read, owners change).
+  if (p[0] === "uploads" || p[1] === "branding") {
+    return (await routeBranding((db.branding ??= emptyBranding()), me.role, req, p, q)) ?? notFound("Route");
+  }
   // H8: an "approvers" document (an update) is absent for commenters and viewers, on every
   // documents path (its versions, markdown, exports, deck, feedback, comments, scope, ...).
   if (p[1] === "documents" && p[2]) {
@@ -3856,8 +4004,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       versions: db.versions,
       runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
       intakes: () => ensureV2(db).intakes,
-      specRequests: () => (db.specs ??= seedSpecs()).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
+      specRequests: () => (db.specs ??= specsSeed(db)).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
+      deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
       uuid,
       now,
     },
@@ -3873,6 +4022,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
     const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
     const decider = db.members.find((x) => x.email === "approver@example.com");
+    // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
+    const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
+    if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
+      db.review_v2.policies.push({
+        document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+      });
+    }
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
       db.review_v2.policies.push({
         document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
@@ -3880,6 +4037,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       });
     }
   }
+  // I1: webhooks check roles themselves; seeded before the notifications they write are read.
+  const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
+  if (hooks) return hooks;
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
@@ -3906,6 +4066,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
+  // I1: revoking a live user-less API token pauses the webhooks it made (members.service.revoke_api_token).
+  const revoking = m === "DELETE" && p[1] === "api-tokens" && !p[3] && me.role === "owner"
+    ? (db.account ??= seedAccount(db.members, uuid)).tokens.find((t) => t.id === p[2] && !t.user_id && !t.revoked_at && (t.kind === "personal" || t.kind === "service"))
+    : undefined;
   const accountOut = await accountRoute(
     {
       db: (db.account ??= seedAccount(db.members, uuid)),
@@ -3925,6 +4089,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     p,
     q,
   );
+  if (revoking && accountOut?.status === 204) tokenRevoked(webhooksContext(db, me), revoking.id);
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "discussions" || p[1] === "discussion-changes") {
@@ -4057,7 +4222,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
   if (p[1] === "trace" && p[2] === "staleness" && p[3] === "actions" && m === "POST") {
-    const acted = await specStalenessAction({ db: (db.specs ??= seedSpecs()), userId: me.id, role: me.role, uuid, now }, req);
+    const acted = await specStalenessAction({ db: (db.specs ??= specsSeed(db)), userId: me.id, name: (id) => specActorName(db, id), role: me.role, uuid, now }, req);
     if (acted) return acted;
   }
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
@@ -4069,6 +4234,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         versions: db.versions,
         entities: db.baseline.entities,
         edges: db.baseline.edges,
+        evidence: db.baseline.evidence,
         userId: me.id,
         role: me.role,
         now,
@@ -4141,6 +4307,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
+  ensureQuality(db);
   // C7: a scope_enhance job lives with the run's scope (./scope.ts).
   const scopeJob = scopeJobRoute(db.runs, p, now);
   if (scopeJob) return scopeJob;
@@ -4165,9 +4332,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
-  db.quality ??= seedQuality();
+  const qualityDb = ensureQuality(db);
   const qualityCtx: QualityContext = {
-    db: db.quality,
+    db: qualityDb,
     v2: v2db,
     userId: me.id,
     role: me.role,
@@ -4177,17 +4344,37 @@ async function route(db: Db, req: Request): Promise<Response> {
       return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+    queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
+    job: (id) => llm.db.jobs.find((j) => j.id === id),
   };
   passOutcomes(db);
   const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
   if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
-    db.specs ??= seedSpecs();
+    db.specs ??= specsSeed(db);
+    // An artifact request of the v2 rows (the Impact plan's outputs) that the specs mock does
+    // not hold: Propose regeneration as the API's (a draft run, nothing settled or started).
+    const v2req = p[3] === "regenerate" && m === "POST" && !db.specs.specs.some((x) => x.request.id === p[2])
+      ? ensureV2(db).artifact_requests.find((x) => x.id === p[2])
+      : undefined;
+    if (v2req) {
+      if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+      const proposed = (db.impact_runs ??= {});
+      if (proposed[v2req.id]) return json(409, { detail: "this spec's run has not ended (it is draft): let it finish, or cancel it on its run page, first" });
+      const prd = db.documents.find((d) => d.id === v2req.source_document_id);
+      const out: Schemas["RegenerationOut"] = {
+        request_id: v2req.id, run_id: uuid(), prd_version: prd ? (docVersions(db, prd).pop()?.number ?? 1) : 1,
+        section_keys: v2req.section_keys, dropped_section_keys: [], reasons: [],
+      };
+      proposed[v2req.id] = out.run_id;
+      return json(201, out);
+    }
     const specs = await routeSpecs(
       {
         db: db.specs,
         userId: me.id,
+        name: (id) => specActorName(db, id),
         role: me.role,
         uuid,
         now,
@@ -4825,7 +5012,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
     if (superseded) return json(409, { detail: superseded });
     // #396: a spec version that may be stale is refused, in the app's words; its id in refs.
-    const stale = doc.kind === "spec" && !v.approved_at ? staleSpecRefusal((db.specs ??= seedSpecs()), doc.slug, v.number) : null;
+    const stale = doc.kind === "spec" && !v.approved_at ? staleSpecRefusal((db.specs ??= specsSeed(db)), doc.slug, v.number) : null;
     if (stale) return json(422, stale);
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
@@ -4910,7 +5097,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (layer === "brief") {
       const brief = { ...v, sections: v.sections.filter((s) => s.layer === "brief") };
       if (format === "pdf") return new Response(exportPdf(doc, brief), { headers: { "content-type": "application/pdf" } });
-      return new Response(exportHtml(doc, brief), { headers: { "content-type": "text/html" } });
+      return new Response(exportHtml(doc, brief, db.branding), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
       return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
@@ -4918,7 +5105,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       });
     }
     if (format === "pdf") return new Response(exportPdf(doc, v), { headers: { "content-type": "application/pdf" } });
-    return new Response(exportHtml(doc, v), { headers: { "content-type": "text/html" } });
+    return new Response(exportHtml(doc, v, db.branding), { headers: { "content-type": "text/html" } });
   }
   return notFound("Route");
 }
@@ -5002,7 +5189,10 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   const next = queue.then(async () => {
     const db = load();
+    const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     const res = await route(db, req);
+    // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
+    if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     save(db);
     return res;
   });

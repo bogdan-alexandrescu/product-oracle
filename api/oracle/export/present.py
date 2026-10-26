@@ -27,7 +27,7 @@ from fastapi import HTTPException, status
 
 from oracle.export import offload
 from oracle.export.deck import Deck
-from oracle.export.render import ExportVersion
+from oracle.export.render import ExportVersion, brand_dark
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
@@ -99,6 +99,9 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
         RENDERER,
         (theme.id, theme.updated_at) if theme is not None else None,
         marks,
+        # O5: a new logo, name or accent shows at once, and so does the other logo when
+        # the theme's background turns dark or light.
+        (ev.brand.key, brand_dark(ev)) if ev.brand is not None else None,
         (
             ev.title,
             ev.document.slug,

@@ -3,12 +3,14 @@
 import { useState } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel, ViewOnly } from "@/components/ds";
+import { BRANDING_OPS } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
+import { BrandingPanel } from "./BrandingPanel";
 
 /** The planning_horizons setting (oracle.tenant_settings_api): B2 Goals framework. */
 type Horizons = { short_quarters: number; medium_quarters: number; long_from_months: number; long_to_months: number };
@@ -404,23 +406,31 @@ function PricingOwnerPanel() {
   );
 }
 
-/** Settings > Company: the company-wide choices an owner makes: the planning horizons, the Company time zone and the pricing owner. */
+/**
+ * Settings > Company: the company-wide choices an owner makes: the planning horizons, the Company
+ * time zone, the pricing owner and the branding (O5 lane 4). Every member reads the branding.
+ */
 export default function CompanySettingsPage() {
-  // #370: Settings' gate answers a role that cannot read the company settings.
+  // #370: Settings' gate answers a role that cannot read the company settings or the branding.
   const { can, capsReady } = useMe();
   // #401: the time zone is an owner's to change; a role that reads the page but changes nothing sees View only.
   const canChange = can("put_setting");
+  const readsSettings = can("get_setting_endpoint");
+  const readsBranding = can(BRANDING_OPS.get);
   return (
     <>
-      <PageHeader title="Company" status={capsReady && can("get_setting_endpoint") && !canChange ? <ViewOnly /> : undefined} />
-      {can("get_setting_endpoint") && (
-        <div className="flex min-w-0 flex-col gap-4">
-          <HorizonsPanel />
-          <TimezonePanel canChange={canChange} />
-          {/* H9: owners choose the pricing owner; others do not see the field. */}
-          {canChange && can("list_members") && <PricingOwnerPanel />}
-        </div>
-      )}
+      <PageHeader title="Company" status={capsReady && (readsSettings || readsBranding) && !canChange ? <ViewOnly /> : undefined} />
+      <div className="flex min-w-0 flex-col gap-4">
+        {readsSettings && (
+          <>
+            <HorizonsPanel />
+            <TimezonePanel canChange={canChange} />
+            {/* H9: owners choose the pricing owner; others do not see the field. */}
+            {canChange && can("list_members") && <PricingOwnerPanel />}
+          </>
+        )}
+        {readsBranding && <BrandingPanel />}
+      </div>
     </>
   );
 }

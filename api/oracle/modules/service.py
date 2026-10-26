@@ -41,6 +41,7 @@ from oracle.modules.composer import (
     Provenance,
     TemplateSection,
     compose,
+    mark_can_change,
 )
 from oracle.modules.schemas import (
     ComposeIn,
@@ -555,6 +556,7 @@ async def recommend(
             previous = await _head(db, composition.id)
     built = await build(db, data, document=document, previous=previous)
     comp = compose(built.ctx, changes_of(data, role, actor_id, None))
+    mark_can_change(comp.modules, role)
     return recommendation_out(built, comp, document)
 
 
@@ -675,7 +677,7 @@ async def confirm(
         composition_id=composition.id,
         number=number,
         status=data.status,
-        modules=[m.model_dump(mode="json") for m in comp.modules],
+        modules=[m.model_dump(mode="json", exclude={"can_change"}) for m in comp.modules],
         inputs=built.inputs.model_dump(mode="json"),
         decided_by=actor_id,
         decided_at=datetime.now(UTC),
@@ -943,6 +945,8 @@ async def inspect(db: AsyncSession, document: Document, *, role: str) -> Inspect
         if working_row is not None
         else None
     )
+    if working is not None:
+        mark_can_change(working.modules, role)
 
     if current_row is None:
         try:
@@ -964,6 +968,14 @@ async def inspect(db: AsyncSession, document: Document, *, role: str) -> Inspect
         )
 
     current = _detail(current_row, by_number, catalog, composition, present, number)
+    _, policy_row = await registry.read_policy(db)
+    decided = current_row.decided_at or current_row.created_at
+    policy_changed_at = (
+        policy_row.updated_at
+        if policy_row is not None and policy_row.updated_at and policy_row.updated_at > decided
+        else None
+    )
+    mark_can_change(current.modules, role)
     claimed = {s for m in current.modules if m.included for s in m.section_ids}
     return InspectorOut(
         document_id=document.id,
@@ -976,6 +988,7 @@ async def inspect(db: AsyncSession, document: Document, *, role: str) -> Inspect
         working=working,
         revisions=summaries,
         sections={"version": number, "unmapped": [s for s in present if s not in claimed]},
+        policy_changed_at=policy_changed_at,
     )
 
 

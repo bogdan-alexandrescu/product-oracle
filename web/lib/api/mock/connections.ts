@@ -99,6 +99,8 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   company_timezone: "America/Los_Angeles",
   // H9: the pricing owner's member id; null is the earliest active owner.
   pricing_owner: null,
+  // INT2: Oracle reads new intakes ($1.50 a read), on by default (owner answer Q2).
+  intake_ai_read: true,
 };
 
 /** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */

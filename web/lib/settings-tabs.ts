@@ -1,5 +1,6 @@
 "use client";
 
+import { BRANDING_OPS } from "@/lib/api/branding-types";
 import { useMe, type Operation } from "@/lib/me";
 
 /**
@@ -8,12 +9,15 @@ import { useMe, type Operation } from "@/lib/me";
  */
 export const SETTINGS_TABS: { label: string; href: string; testId: string; read: Operation }[] = [
   { label: "Members", href: "/settings/members", testId: "nav-members", read: "list_people" },
-  { label: "Company", href: "/settings/company", testId: "nav-company", read: "get_setting_endpoint" },
+  // O5 lane 4: every member reads the company's branding there; the other company settings are the owner's.
+  { label: "Company", href: "/settings/company", testId: "nav-company", read: BRANDING_OPS.get },
   { label: "API tokens", href: "/settings/api-tokens", testId: "nav-api-tokens", read: "list_api_tokens" },
   { label: "Connections", href: "/settings/connections", testId: "nav-connections", read: "list_connections" },
   { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts", read: "list_claude_accounts" },
   { label: "Sources", href: "/settings/sources", testId: "nav-sources", read: "list_sources" },
   { label: "Notifications", href: "/settings/notifications", testId: "nav-notifications", read: "list_company_integrations" },
+  // I1: approvers (their own) and owners (every one); absent below approver (#370).
+  { label: "Webhooks", href: "/settings/webhooks", testId: "nav-webhooks", read: "list_webhooks" },
   // H5: the PostHog connection the weekly metrics are read from; owners alone (#370).
   { label: "Analytics", href: "/settings/analytics", testId: "nav-analytics", read: "get_analytics_integration" },
   { label: "Templates", href: "/settings/templates", testId: "nav-templates", read: "list_templates" },

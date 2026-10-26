@@ -13,6 +13,7 @@ import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
 import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, useFixedHere, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
+import { useWebhookRows } from "./_webhooks";
 
 type Source = Schemas["SourceOut"];
 
@@ -59,7 +60,9 @@ export default function InboxPage() {
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
   // D9: the child rows I fixed on this visit stay, done with Undo.
   const fixed = useFixedHere();
-  const rows = inbox ? allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows) : null;
+  // I1: webhook notices (paused, failing, a changed address), from my notifications.
+  const webhookRows = useWebhookRows(busy, act, seenBefore);
+  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows), ...webhookRows] : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -138,6 +141,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "rituals", title: "Rituals" },
   { id: "metrics", title: "Metrics" },
   { id: "outcomes", title: "Outcomes" },
+  { id: "webhooks", title: "Webhooks" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },
   { id: "decisions", title: "Decisions" },

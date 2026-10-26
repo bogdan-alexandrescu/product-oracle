@@ -5,7 +5,6 @@ while a client's request body is read. Synthetic placeholders only."""
 
 import asyncio
 import uuid
-from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
@@ -16,7 +15,7 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import DOC, DRAFT, MARKDOWN, person, setup
 from tests.test_review_v2_security_3 import disable
-from tests.test_review_v2_security_6 import _read, _started, _tick
+from tests.test_review_v2_security_6 import OVERSPEND, _read, _started, _tick
 
 WAIT = 5  # seconds: long enough for any route here, short enough to fail fast
 
@@ -193,7 +192,7 @@ async def test_a_resume_racing_a_cancel_does_not_reopen_the_run(
     """Paused on overrun with its segment done; the owner resumes, and while the
     resume imports the segment's baseline.yaml the run is cancelled."""
     ctx = await setup(client)
-    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50))]
+    runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND)]
     knobs = {} if checkpoint else {"checkpoints": {"baseline_confirm": False}}
     run = await _started(client, ctx, **knobs)
     await _tick(client, ctx)

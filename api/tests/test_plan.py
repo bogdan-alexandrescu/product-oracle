@@ -541,6 +541,12 @@ def test_engineering_stop_lines():
         7,
         True,
     )
+    # F4 lane B: the dates stop's own kind names itself and waits for the lead too.
+    assert line("eng_dates", "eng_dates", "approver", "approver", me, lead) == (
+        "Engineering dates · waiting for the engineering lead",
+        7,
+        False,
+    )
     # No lead yet (A3): the approvers decide.
     assert line("eng_review", "eng_check", "approver", "viewer", me, None) == (
         "Engineering check · waiting for approver",

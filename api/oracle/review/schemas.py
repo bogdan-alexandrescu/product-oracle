@@ -433,6 +433,8 @@ NotificationKind = Literal[
     "campaign",
     "patch_proposed",
     "published",
+    "webhook_paused",
+    "webhook_url_changed",
 ]
 
 

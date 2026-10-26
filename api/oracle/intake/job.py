@@ -1,8 +1,11 @@
 """The ``intake_analysis`` built-in job: light extraction on Oracle's Claude account pool.
 
 It runs like the other built-in jobs (docs/llm-jobs.md): queued, claimed by the worker
-or ``oracle tick``, one model call through ``oracle.llm``. Never SwarmCloud. (Under V2c
-and V2d this is background work that moves to SwarmCloud in wave 2: INT-2.)
+or ``oracle tick``, one model call through ``oracle.llm``. INT2 moved the read to a
+SwarmCloud ``intake_analysis`` run (``oracle.intake.read``); this job stays as that run's
+fallback when it cannot start or fails (owner answer Q3) and as the rollback
+(``ORACLE_INTAKE_READ_RUNTIME=job``). :func:`payload` is also exactly what the run reads
+(``GET /v1/intakes/{id}/analysis-input``), and :func:`apply_answer` stores either answer.
 
 Untrusted content stays data (§5, §12): the system prompt is the fixed prompt file, and
 the user message carries, outside ``untrusted_data``, only Oracle's own fixed values (ids,
@@ -152,8 +155,36 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
     if intake.status in CLOSED_INTAKE:
         # Converted or archived while the model was thinking.
         return {"intake_id": str(intake.id), "skipped": f"the intake is {intake.status}"}
+    out = await apply_answer(s, intake, answer, known, chosen, {"llm_job_id": str(job.id)})
+    # INT2: the read this job is (the rollback, or the fallback for a SwarmCloud read).
+    from oracle.intake import read
 
+    read.job_finished(intake, job, out)
+    await s.flush()
+    return out
+
+
+async def apply_answer(
+    s: AsyncSession,
+    intake: ProductIntake,
+    answer: dict[str, Any],
+    known: dict[str, uuid.UUID],
+    chosen: list[ev.PinnedItem],
+    marker: dict[str, Any],
+) -> dict[str, Any]:
+    """Store a model answer (the job's, or an intake_analysis run's analysis.yaml) as AI
+    inferences and open gaps, checked as described above. ``known``/``chosen``: the refs
+    and items of the payload the model was given; ``marker``: what produced the answer
+    (``llm_job_id`` or ``run_id``), kept on ``analysis.extraction``. Returns the counts;
+    ``dropped_refs`` counts evidence refs outside the payload's."""
+    if not isinstance(answer, dict):
+        answer = {}
     conf = {i.id: i.confidence for i in chosen}
+    dropped_refs = 0
+    for raw in [*(answer.get("items") or []), *(answer.get("gaps") or [])]:
+        refs = raw.get("evidence_refs") if isinstance(raw, dict) else None
+        if isinstance(refs, list):
+            dropped_refs += sum(1 for r in refs if str(r) not in known)
     # The author's sources were read: what the model writes is a finding (S6).
     restricted = bool(chosen)
     analysis = dict(intake.analysis or {})
@@ -260,7 +291,7 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         analysis["model_category"] = _text(answer["category"])[:40]
     analysis["extraction"] = {
         **(analysis.get("extraction") or {}),
-        "llm_job_id": str(job.id),
+        **marker,
         "snapshot_id": str(intake.source_snapshot_ids[-1]) if intake.source_snapshot_ids else None,
     }
     # The job read what it was given, cited or not (S6, owner 2026-10-19).
@@ -277,4 +308,5 @@ async def run(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         "dropped": dropped,
         "sources_read": len(known),
         "private": restricted,
+        "dropped_refs": dropped_refs,
     }

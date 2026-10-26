@@ -32,6 +32,7 @@ import { DateMarker, type ExpandCtx, type Highlight } from "@/components/Markdow
 import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
+import { SpecDesignLinks } from "@/components/DesignReview";
 import { SpecStaleness } from "@/components/SpecStaleness";
 import { buildCodeIndex } from "@/lib/code-index";
 import { useCodeEntities } from "@/lib/codes";
@@ -40,6 +41,7 @@ import { DraftRoadmapPane } from "@/components/roadmap/DraftRoadmapPane";
 import { RoadmapItemsPane } from "@/components/roadmap/RoadmapItemsPane";
 import { VersionTabs } from "@/components/roadmap/VersionTabs";
 import { ApproveButton, ExportButtons } from "@/components/VersionActions";
+import { EvidencePane } from "@/components/evidence/EvidencePane";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
@@ -112,10 +114,10 @@ function readSelection(): Selection | null {
  * on both, so approval and date marks never differ between tabs. A PRD version has Document
  * and Roadmap (E1, `pane="roadmap"`: the draft's items-only roadmap).
  */
-export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" }) {
+export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" | "evidence" }) {
   const router = useRouter();
   const onDocument = pane === "document";
-  const { me, can, capsReady } = useMe();
+  const { me, can, capsReady, capsError } = useMe();
   // #370: what the signed-in person may call. Comments (create_comment); section verdicts
   // (review_section), which also stand for the other decisions on a version.
   const canComment = can("create_comment");
@@ -268,13 +270,17 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         ? `/documents/${doc}/v/${v}/items`
         : pane === "roadmap" && document_?.kind === "prd"
           ? `/documents/${doc}/v/${v}/roadmap`
-          : `/documents/${doc}/v/${v}`,
+          : pane === "evidence" && document_?.kind === "prd"
+            ? `/documents/${doc}/v/${v}/evidence`
+            : `/documents/${doc}/v/${v}`,
     [pane, isRoadmap, document_?.kind, doc],
   );
   // Only a roadmap has an Items tab: a PRD's /items opens the version.
   useEffect(() => {
     if (pane === "items" && document_ && document_.kind !== "roadmap") router.replace(`/documents/${doc}/v/${n}`);
     // E1: only a PRD has a Roadmap tab; a roadmap's /roadmap opens its Items tab.
+    // Only a PRD version has an Evidence tab.
+    if (pane === "evidence" && document_ && document_.kind !== "prd") router.replace(`/documents/${doc}/v/${n}`);
     if (pane === "roadmap" && document_ && document_.kind !== "prd") {
       router.replace(document_.kind === "roadmap" ? `/documents/${doc}/v/${n}/items` : `/documents/${doc}/v/${n}`);
     }
@@ -942,6 +948,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         readOnly,
         canComment,
         canDecide,
+        rolesReady: capsReady || !!capsError,
         userId: me?.user_id ?? me?.token_id ?? null,
         showLayer: hasBrief,
         goTo,
@@ -1079,6 +1086,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               Compare with v{n - 1}
             </LinkButton>
           )}
+          {/* v2 screen 2: what this version changes for the outputs built on earlier ones. */}
+          {document_?.kind === "prd" && (
+            <LinkButton variant="ghost" href={`/documents/${doc}/v/${n}/impact`}>
+              Impact
+            </LinkButton>
+          )}
           {version?.source && (
             <span className="text-sm text-text2">
               <SourceLink source={version.source} />
@@ -1106,6 +1119,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             <HeldRewritesButton open={held.open} active={heldOpen} onClick={() => setHeldOpen((o) => !o)} />
           )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+          {document_?.kind === "prd" && (
+            <LinkButton icon="priorities" href={`/documents/${doc}/v/${n}/quality`} data-testid="quality-link">
+              Quality
+            </LinkButton>
+          )}
           {document_?.kind === "prd" && n === latest && !canDecide && (
             <LinkButton icon="check" href={`/documents/${doc}/publish`}>
               Check readiness
@@ -1117,6 +1135,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         {document_?.kind === "spec" && version && !version.approved_at && (
           <SpecStaleness doc={doc} n={n} mayApprove={canApprove} onChanged={() => void verQ.reload()} />
         )}
+        {/* v2 screen 4: the spec's user flow and wireframes, and their review. */}
+        {document_?.kind === "spec" && <SpecDesignLinks doc={doc} />}
 
         {onDocument && hasBrief && (
           <p
@@ -1237,8 +1257,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             onStatus={verQ.reload}
           />
         )}
+        {/* v2 screen 3: the evidence inspector; it says itself when the version is not found. */}
+        {pane === "evidence" && document_?.kind === "prd" && (
+          <EvidencePane doc={doc} n={n} title={document_.title} latest={latest ?? n} />
+        )}
         {pane !== "document" && !document_ && !error && <Loading label="Loading version…" />}
-        {pane !== "document" && error && <ErrorNote>{error}</ErrorNote>}
+        {pane !== "document" && error && !(pane === "evidence" && document_) && <ErrorNote>{error}</ErrorNote>}
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}

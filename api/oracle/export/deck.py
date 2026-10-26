@@ -21,6 +21,7 @@ from pathlib import Path
 
 from markupsafe import Markup, escape
 
+from oracle.branding import BRAND_CSS, render_brand_logo
 from oracle.docs import layers
 from oracle.docs.models import Section
 from oracle.docs.parser import strip_citations
@@ -33,6 +34,7 @@ from oracle.export.render import (
     _jinja,
     _themed_markdown,
     absolute_doc_links,
+    brand_dark,
     section_body_html,
     sources_keys,
     token_vars,
@@ -93,6 +95,11 @@ class Deck:
     slides: list[Slide]
     # Provenance (O4b): "From <PRD title> v<n>".
     source_label: str | None = None
+    # O5: the company's name and logo on the title slide (and the PPTX's).
+    brand_name: str | None = None
+    brand_logo: Markup = Markup("")
+    brand_logo_png: bytes | None = None
+    brand_logo_size: tuple[int, int] | None = None
 
 
 @cache
@@ -300,9 +307,17 @@ def build_deck(ev: ExportVersion) -> Deck:
 
     theme = ev.theme
     tokens = (theme.tokens or {}) if theme is not None else {}
+    brand = ev.brand
+    if brand is not None:
+        # O5: the brand's accent replaces the theme's on slides and in the PPTX.
+        tokens = brand.apply_accent(tokens)
+    # O5: the dark logo on a dark theme's slides, the light one otherwise.
+    dark = brand_dark(ev)
+    logo_png, logo_size = brand.logo_for(dark) if brand is not None else (None, None)
     css = "\n".join(
         [
             slide_stylesheet(),
+            BRAND_CSS if brand is not None else "",
             token_vars(tokens, ".deck"),
             slide_variant_css(theme.key if theme else None, bool(theme and theme.builtin)),
             company_slide_css(theme),
@@ -322,6 +337,10 @@ def build_deck(ev: ExportVersion) -> Deck:
         tokens=tokens,
         css=Markup(css),
         slides=slides,
+        brand_name=brand.display_name if brand is not None else None,
+        brand_logo=render_brand_logo(brand, dark=dark),
+        brand_logo_png=logo_png,
+        brand_logo_size=logo_size,
     )
     macro = _jinja().get_template("slide.html.j2").module.slide  # type: ignore[attr-defined]
     for slide in slides:

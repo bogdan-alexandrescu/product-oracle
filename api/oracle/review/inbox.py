@@ -12,7 +12,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -44,12 +44,21 @@ def _excerpt(text: str | None) -> str | None:
     return text if len(text) <= EXCERPT else text[:EXCERPT] + "…"
 
 
-async def last_seen(db: AsyncSession, principal_id: uuid.UUID) -> datetime | None:
-    value = await db.scalar(
-        select(UserPreference.value).where(
-            UserPreference.principal_id == principal_id, UserPreference.key == LAST_SEEN
-        )
+async def last_seen_and(
+    db: AsyncSession, principal_id: uuid.UUID, *flags: ColumnElement[bool]
+) -> tuple[datetime | None, list[bool]]:
+    """My last Inbox visit, and each of ``flags`` in the same read (#689 review: the Inbox's
+    checks for rows most readers never have ride on it rather than read on their own)."""
+    stored = (
+        select(UserPreference.value)
+        .where(UserPreference.principal_id == principal_id, UserPreference.key == LAST_SEEN)
+        .scalar_subquery()
     )
+    value, *got = (await db.execute(select(stored, *flags))).one()
+    return _seen_at(value), [bool(f) for f in got]
+
+
+def _seen_at(value: Any) -> datetime | None:
     try:
         return datetime.fromisoformat(value) if isinstance(value, str) else None
     except ValueError:

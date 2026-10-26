@@ -51,6 +51,8 @@ FLOWS = (
     "competitive_digest",
     # G2 §4 (migration 0060_discussion_research): Research this, from inside a discussion.
     "discussion_research",
+    # INT2 (migration 0068_intake_read): Oracle's read of a new intake.
+    "intake_analysis",
 )
 RUN_STATUSES = (
     "draft",
@@ -69,6 +71,7 @@ CHECKPOINT_KINDS = (
     "priority_order",
     "prd_review",
     "eng_review",
+    "eng_dates",
     "roadmap_items",
     "roadmap_review",
     "request_triage",

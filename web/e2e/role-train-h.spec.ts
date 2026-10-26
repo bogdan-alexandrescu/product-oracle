@@ -75,7 +75,9 @@ for (const role of ROLES) {
       await expect(panel.getByRole("button", { name: "Save" })).toBeVisible();
       await expect(viewOnly(page)).toHaveCount(0);
     } else {
-      await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
+      // O5 lane 4: everyone reads the company's branding there, and nothing else of Company.
+      await expect(page.getByTestId("branding-panel")).toBeVisible();
+      await expect(viewOnly(page)).toHaveText("View only");
       await expect(page.getByTestId("timezone-panel")).toHaveCount(0);
     }
   });

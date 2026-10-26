@@ -102,9 +102,10 @@ test("the slice: a brief becomes a published PRD and a roadmap", async ({ page }
   // 4. The PRD draft: Draft with Oracle, every stop but the PRD review switched off.
   await draft.click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
-  // No baseline was approved yet: Oracle rebuilds it first, so its stop is listed too.
-  await expect(sheet.getByRole("switch")).toHaveCount(5);
-  for (const stop of ["Confirm the baseline", "Feature set and dependencies", "Engineering check", "Priority order"]) {
+  // No baseline was approved yet: Oracle rebuilds it first, so its stop is listed too; the
+  // Engineering dates stop (#690) is on by default, and off it skips its step.
+  await expect(sheet.getByRole("switch")).toHaveCount(6);
+  for (const stop of ["Confirm the baseline", "Feature set and dependencies", "Engineering check", "Priority order", "Engineering dates"]) {
     await sheet.getByRole("switch", { name: stop }).uncheck();
   }
   await expect(sheet.getByRole("switch", { name: "PRD review" })).toBeChecked();

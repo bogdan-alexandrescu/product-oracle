@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from oracle import company_time, safe_yaml
+from oracle.branding import Brand, load_brand
 from oracle.config import get_settings
 from oracle.docs import layers
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
@@ -110,6 +111,8 @@ class ExportVersion:
     date_marks: list = field(default_factory=list)
     # The Company time zone the export's dates are shown in (#463).
     zone: str = company_time.DEFAULT_ZONE
+    # O5: the company's branding (oracle.branding.Brand): the header's logo and the accent.
+    brand: Brand | None = None
 
     @property
     def title(self) -> str:
@@ -356,6 +359,7 @@ async def load_export_version(db: AsyncSession, doc: str, n: int) -> ExportVersi
         stored_sections=stored,
         date_marks=marks,
         zone=await company_time.company_time_zone(db),
+        brand=await load_brand(db),
     )
     if version.source_version_id is not None:
         from oracle.docs.service import version_sources
@@ -713,11 +717,34 @@ def build_context(ev: ExportVersion) -> dict:
             if e["key"] in headings
         ],
         "css": Markup(stylesheet()),
+        **brand_context(ev),
         "layer": ev.layer,
         "layer_label": ev.layer_label,
         "source_label": ev.source_label,
         "source_url": ev.source_url,
     }
+
+
+def brand_context(ev: ExportVersion, accent: bool = True) -> dict:
+    """The header partial (O5): the logo as the one ``data:`` image an export holds, the
+    company's name, and (``accent``) the brand's accent over the stylesheet's."""
+    from oracle.branding import BRAND_CSS, accent_css, render_brand_header
+
+    return {
+        "brand_header": render_brand_header(ev.brand, dark=brand_dark(ev)),
+        "brand_css": Markup(BRAND_CSS) if ev.brand is not None else Markup(""),
+        "accent_css": accent_css(ev.brand) if accent else Markup(""),
+    }
+
+
+def brand_dark(ev: ExportVersion) -> bool:
+    """Whether ``ev``'s exports and deck show the dark logo: its theme's background is
+    dark and a dark logo is uploaded (owner decision, 2026-10-26; no theme: white)."""
+    from oracle.branding import theme_background
+
+    if ev.brand is None or ev.theme is None:
+        return False
+    return ev.brand.uses_dark(theme_background(ev.theme.tokens))
 
 
 @cache
@@ -842,7 +869,8 @@ def themed_stylesheet() -> str:
 def build_themed_context(ev: ExportVersion) -> dict:
     theme = ev.theme
     assert theme is not None
-    tokens = theme.tokens or {}
+    # O5: the brand's accent replaces the theme's (checked when an owner saves it).
+    tokens = ev.brand.apply_accent(theme.tokens) if ev.brand is not None else theme.tokens or {}
     features = tokens.get("features") or {}
     hidden = HIDDEN_ROADMAP_SECTIONS if ev.document.kind == "roadmap" else set()
 
@@ -1017,6 +1045,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "added_label": ev.added_label,
         "css": Markup(themed_stylesheet()),
         "token_css": Markup(token_css(tokens)),
+        **brand_context(ev, accent=False),
         "theme_css": Markup(theme.css or ""),
         # The theme repeats the header on every PDF page: themed.css keeps it short enough
         # for the page's top margin (stored theme copies included, so it lives here).

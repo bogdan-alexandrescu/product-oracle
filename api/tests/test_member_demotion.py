@@ -11,6 +11,7 @@ from oracle.runs.models import Run, RunSegment
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import person, setup
 from tests.test_review_v2_security_6 import (  # noqa: F401
+    OVERSPEND,
     _at_checkpoint,
     _decide,
     _read,
@@ -137,7 +138,7 @@ async def _paused(client, ctx, runtime):  # noqa: F811
     queues the next segment."""
     from oracle.swarm import Outcome
 
-    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
+    runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND, polls=1)]
     run = await _started(client, ctx, checkpoints={"baseline_confirm": False})
     await _tick(client, ctx)
     await _tick(client, ctx)

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from oracle.engineering import check as eng_check
+from oracle.engineering import dates as eng_dates
 from oracle.runs.feature_set import FILE_PROBLEMS
 from oracle.runs.models import Checkpoint
 from oracle.runs.schemas import Gate, GateLeft
@@ -101,6 +102,10 @@ def _eng_review(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return eng_check.reasons(cp, [])
 
 
+def _eng_dates(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
+    return eng_dates.reasons(cp, [])
+
+
 def _live(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     """A kind whose reasons are read live, not stored (:data:`LIVE_KINDS`)."""
     return [], 0
@@ -122,6 +127,8 @@ BLOCKING_SOURCES: dict[str, Source] = {
     "priority_order": Source(_priority_order, None, ORDER_NOT_WAIVED),
     # F4 Engineering check: a verdict per feature and an answer per blocking question.
     "eng_review": Source(_eng_review, None, eng_check.NOT_WAIVED, live=eng_check.reasons),
+    # F4 Engineering dates: each proposed date accepted, changed or marked No date.
+    "eng_dates": Source(_eng_dates, None, eng_dates.NOT_WAIVED, live=eng_dates.reasons),
 }
 
 

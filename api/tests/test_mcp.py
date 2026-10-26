@@ -221,6 +221,8 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
         "login",
         "logout",
         "upload_files",
+        # O5 lane 4: the company logo, multipart like upload_files (#654).
+        "upload_brand_logo",
         "stream_discussion_reply",
         "create_personal_token",
         "change_password",
@@ -246,6 +248,7 @@ async def test_parity_over_the_wire(tenant_id):
     token = await api_token(tenant_id)
     async with mcp_client(token) as c:
         result = await c.list_tools()
+        instructions = c.instructions or ""
     names = {t.name for t in result.tools}
     for op in app_operations(app):
         # Run-only operations (H7's web tools, read:web) are never offered to people.
@@ -255,6 +258,9 @@ async def test_parity_over_the_wire(tenant_id):
         assert op.tool_name in names or f"{op.tool_name}_op" in names, op.tool_name
     unavailable = result.meta["oracle/unavailable"]
     assert any("login" in u for u in unavailable)
+    # #654: the logo upload is multipart; the server's instructions name it with its reason.
+    assert any("upload_brand_logo" in u and "multipart" in u for u in unavailable)
+    assert "(upload_brand_logo): multipart upload; use the REST API" in instructions
 
 
 async def test_routes_added_later_become_tools(tenant_id):

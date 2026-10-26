@@ -120,6 +120,7 @@ async def test_flow_catalog(client, owner, runtime):
         "eng_review",
         "priority_order",
         "prd_review",
+        "eng_dates",
     ]
     assert body["approval_threshold_usd"] == 50
     assert body["runtime"] == "fake"
@@ -163,12 +164,13 @@ def test_segment_tools_are_tools_of_the_mcp_server():
 
 async def test_full_flow_through_every_checkpoint(client, owner, runtime):
     tenant_id, auth = owner
-    run = await started(client, auth)
+    # F4 lane B: the Engineering dates stop's own path is tests/test_eng_dates_stop.py.
+    run = await started(client, auth, checkpoints={"eng_dates": False})
     assert run["status"] == "running"
     assert run["estimate_usd"] == 31.5
     assert run["snapshot_id"] and run["snapshot_as_of"]
     assert run["overrun_ceiling_usd"] == pytest.approx(47.25)
-    assert [s["status"] for s in run["segments"]] == ["running"] + ["pending"] * 4
+    assert [s["status"] for s in run["segments"]] == ["running"] + ["pending"] * 4 + ["skipped"]
 
     expected = ["baseline_confirm", "feature_set", "eng_review", "priority_order", "prd_review"]
     for i, kind in enumerate(expected):
@@ -221,7 +223,7 @@ async def test_full_flow_through_every_checkpoint(client, owner, runtime):
 
 async def test_run_token_scopes_per_segment(client, owner, runtime):
     _, auth = owner
-    run = await started(client, auth)
+    run = await started(client, auth, checkpoints={"eng_dates": False})
     raws = []
     for _ in range(5):
         await tick(client, auth)
@@ -229,7 +231,7 @@ async def test_run_token_scopes_per_segment(client, owner, runtime):
         raws.append(runtime.submitted[len(raws)].mcp.token)
 
     flow = flows.FLOWS["baseline_to_prd"]
-    for spec, segment in zip(runtime.submitted, flow.segments, strict=True):
+    for spec, segment in zip(runtime.submitted, flow.segments[:5], strict=True):
         assert spec.labels["segment"] == segment.name
         assert spec.mcp.scopes == segment.scopes
         assert spec.mcp.url.endswith("/mcp")
@@ -251,13 +253,18 @@ async def test_token_is_live_while_its_segment_runs(client, owner, runtime):
 
 async def test_skipped_checkpoints(client, owner, runtime):
     _, auth = owner
-    run = await started(client, auth, checkpoints={"feature_set": False, "priority_order": False})
+    run = await started(
+        client,
+        auth,
+        checkpoints={"feature_set": False, "priority_order": False, "eng_dates": False},
+    )
     assert run["knobs"]["checkpoints"] == {
         "baseline_confirm": True,
         "feature_set": False,
         "eng_review": True,
         "priority_order": False,
         "prd_review": True,
+        "eng_dates": False,
     }
     await tick(client, auth)
     run = await decide(client, auth, await get(client, auth, run["id"]))
@@ -302,9 +309,9 @@ async def test_estimate_over_50_waits_for_an_owner(client, owner, runtime):
     approver = await as_user(tenant_id, "approver")
     run = await create(client, approver, depth="deep")
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=approver)).json()
-    assert est["total_usd"] == 63.0
+    assert est["total_usd"] == 73.0
     assert est["needs_approval"] is True
-    assert [s["estimate_usd"] for s in est["segments"]] == [14.0, 16.0, 10.0, 5.0, 18.0]
+    assert [s["estimate_usd"] for s in est["segments"]] == [14.0, 16.0, 10.0, 5.0, 18.0, 10.0]
 
     resp = await client.post(f"/v1/runs/{run['id']}/start", headers=approver)
     assert resp.json()["status"] == "awaiting_approval"
@@ -337,7 +344,8 @@ async def test_estimate_at_50_starts_without_approval(client, owner, runtime):
         "priority": ["analyst"],  # 3
         "prd_draft": ["writer", "critic"],  # 9
     }
-    run = await started(client, auth, depth="deep", roles=roles)
+    # eng_dates off (F4 lane B, on by default: another architect, 5).
+    run = await started(client, auth, depth="deep", roles=roles, checkpoints={"eng_dates": False})
     assert run["estimate_usd"] == 50.0
     assert run["status"] == "running"
 
@@ -364,9 +372,10 @@ async def test_start_needs_an_estimate(client, owner, runtime):
 async def test_overrun_pauses_and_an_owner_resumes(client, owner, runtime):
     tenant_id, auth = owner
     approver = await as_user(tenant_id, "approver")
-    # Estimate 31.50, ceiling 47.25: halfway the baseline has spent 25, then 50.
+    # Estimate 31.50 (the dates stop off), ceiling 47.25: halfway the baseline has spent 25,
+    # then 50.
     runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
-    run = await started(client, auth)
+    run = await started(client, auth, checkpoints={"eng_dates": False})
 
     await tick(client, auth)
     run = await get(client, auth, run["id"])
@@ -399,7 +408,7 @@ async def test_overrun_pauses_and_an_owner_resumes(client, owner, runtime):
 async def test_overrun_owner_cancels(client, owner, runtime):
     _, auth = owner
     runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=2)]
-    run = await started(client, auth)
+    run = await started(client, auth, checkpoints={"eng_dates": False})
     # Ceiling 39.75: two polls at 25 keep it running, the end at 50 pauses it.
     await tick(client, auth)
     await tick(client, auth)
@@ -429,7 +438,7 @@ async def test_cancel_a_running_run(client, owner, runtime):
     assert resp.status_code == 200
     run = resp.json()
     assert run["status"] == "cancelled" and run["finished_at"]
-    assert [s["status"] for s in run["segments"]] == ["cancelled"] * 5
+    assert [s["status"] for s in run["segments"]] == ["cancelled"] * 6
     assert runtime.cancelled == [workflow_id]
     assert await verify_run_token(runtime.submitted[0].mcp.token) is None
     assert (await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)).status_code == 409
@@ -468,9 +477,9 @@ async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
 
     run = await get(client, auth, run["id"])
     first = run["segments"][0]
-    assert run["estimate_usd"] == 31.5
-    assert sum(s["estimate_usd"] for s in run["segments"]) == pytest.approx(31.5)
-    assert run["overrun_ceiling_usd"] == pytest.approx(47.25)
+    assert run["estimate_usd"] == 36.5
+    assert sum(s["estimate_usd"] for s in run["segments"]) == pytest.approx(36.5)
+    assert run["overrun_ceiling_usd"] == pytest.approx(54.75)
     assert all("cost_usd" in s for s in run["segments"])
     assert first["cost_usd"] == pytest.approx(first["estimate_usd"] * 0.9)
     assert first["attempts"][0]["cost_usd"] == pytest.approx(first["cost_usd"])
@@ -479,7 +488,7 @@ async def test_runs_api_keeps_every_cost_field(client, owner, runtime):
     listed = await client.get("/v1/runs", headers=auth)
     assert listed.status_code == 200, listed.text
     row = next(r for r in listed.json() if r["id"] == run["id"])
-    assert row["estimate_usd"] == 31.5
+    assert row["estimate_usd"] == 36.5
     assert row["spent_usd"] == pytest.approx(run["spent_usd"])
 
 
@@ -654,7 +663,7 @@ async def test_patch_a_draft_clears_its_estimate(client, owner, runtime):
     assert body["knobs"]["depth"] == "quick"
     assert body["document_slug"] == "renamed-prd"
     est = (await client.post(f"/v1/runs/{run['id']}/estimate", headers=auth)).json()
-    assert est["total_usd"] == 15.75
+    assert est["total_usd"] == 18.25
     await client.post(f"/v1/runs/{run['id']}/start", headers=auth)
     resp = await client.patch(f"/v1/runs/{run['id']}", json={}, headers=auth)
     assert resp.status_code == 409
@@ -837,7 +846,7 @@ async def test_rows_written(client, owner, runtime):
     run = await started(client, auth)
     async with tenant_session(tenant_id) as s:
         row = await s.get(Run, uuid.UUID(run["id"]))
-        assert row.knobs["spend_ceiling_usd"] == "47.2500"
+        assert row.knobs["spend_ceiling_usd"] == "54.7500"
         segs = list(await s.scalars(select(RunSegment).order_by(RunSegment.seq)))
         assert [s_.estimate_usd for s_ in segs] == [
             Decimal("7.00"),
@@ -845,6 +854,7 @@ async def test_rows_written(client, owner, runtime):
             Decimal("5.00"),
             Decimal("2.50"),
             Decimal("9.00"),
+            Decimal("5.00"),
         ]
 
 
@@ -1036,7 +1046,7 @@ async def test_the_runs_list_carries_each_runs_progress(client, owner, runtime):
     for run_id in (first["id"], second["id"]):
         run = await get(client, auth, run_id)
         progress = listed[run_id]["progress"]
-        assert progress == {"done": 1, "total": 5, "now": run["segments"][1]["title"]}
+        assert progress == {"done": 1, "total": 6, "now": run["segments"][1]["title"]}
         assert run["progress"] == progress
     run = await decide(client, auth, await get(client, auth, first["id"]))
     listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
@@ -1066,7 +1076,7 @@ async def test_the_runs_list_carries_progress_with_what_the_inbox_says_of_a_stuc
         await s.commit()
     listed = {r["id"]: r for r in (await client.get("/v1/runs", headers=auth)).json()}
     summary = listed[run["id"]]
-    assert summary["progress"] == {"done": 1, "total": 5, "now": run["segments"][1]["title"]}
+    assert summary["progress"] == {"done": 1, "total": 6, "now": run["segments"][1]["title"]}
     assert summary["stuck"].startswith("Submission seg-1-a2 was lost")
     assert summary["can_retry"] is True
     assert "DataError on 5 tries" in summary["import_failed"]

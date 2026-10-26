@@ -130,10 +130,10 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import and_, func, literal_column, or_, select
+from sqlalchemy import ColumnElement, and_, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
+from oracle import audit, autonomy, company_time, confidence, safe_yaml, webhooks, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -148,6 +148,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.engineering import check as eng_check
+from oracle.engineering import dates as eng_dates
 from oracle.jobs.models import LlmSuggestion
 from oracle.members.leads import (
     ENGINEERING_KINDS,
@@ -523,6 +524,31 @@ def flow_catalog() -> FlowCatalog:
     )
 
 
+def creator_only_visible(db: AsyncSession) -> ColumnElement[bool] | None:
+    """#624 review: the runs of a flow private to its creator (``FlowDef.creator_only``,
+    Oracle's read of an intake) that the session's principal may list, as a WHERE clause
+    on :class:`Run`; None for Oracle's own sessions, which see every run. Only the run's
+    creator sees one: a person, their personal token or MCP client, or a run they
+    started, unless that run reads as a member (its output is every member's)."""
+    principal = visibility.principal_of(db)
+    if principal is None:
+        return None
+    others = Run.flow.not_in(flows.CREATOR_ONLY_FLOWS)
+    user_id = getattr(principal, "user_id", None)
+    if user_id is None or getattr(principal, "as_member", False):
+        return others
+    return or_(others, Run.created_by == user_id)
+
+
+def creator_only_hidden(db: AsyncSession, run: Run) -> bool:
+    """:func:`creator_only_visible` on a loaded run."""
+    principal = visibility.principal_of(db)
+    if principal is None or run.flow not in flows.CREATOR_ONLY_FLOWS:
+        return False
+    user_id = getattr(principal, "user_id", None)
+    return user_id is None or getattr(principal, "as_member", False) or run.created_by != user_id
+
+
 async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -> Run:
     if lock:
         # Read again as it is now: the caller may have read it unlocked before.
@@ -535,9 +561,15 @@ async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -
         if run is not None and run.deleted_at is not None:
             run = None
     # H8: a run on a document the principal may not see (an update, for a commenter or a
-    # viewer) is as absent as its document, with its segments and files.
-    if run is None or (
-        run.document_id is not None and await visibility.hidden_document_ids(db, [run.document_id])
+    # viewer) is as absent as its document, with its segments and files; so is another
+    # member's run of a flow private to its creator (#624 review).
+    if (
+        run is None
+        or creator_only_hidden(db, run)
+        or (
+            run.document_id is not None
+            and await visibility.hidden_document_ids(db, [run.document_id])
+        )
     ):
         raise NotFound(f"run {run_id} not found")
     return run
@@ -1292,6 +1324,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
+        waiting_for=(awaiting.artifacts or {}).get("waiting_for")
+        if (awaiting := _awaiting_items(segments)) is not None
+        else None,
         open_proposals=await db.scalar(
             select(func.count())
             .select_from(Proposal)
@@ -1612,6 +1647,8 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     if hidden := await visibility.hidden_document_ids(db):
         # H8: no row for a run on a document the principal may not see.
         stmt = stmt.where(or_(Run.document_id.is_(None), Run.document_id.not_in(hidden)))
+    if (private := creator_only_visible(db)) is not None:
+        stmt = stmt.where(private)
     runs = list(await db.scalars(stmt))
     refs = await _refs(db, runs)
     ids = [r.id for r in runs]
@@ -1662,11 +1699,14 @@ async def _may_read_files(db: AsyncSession, run: Run, text: str) -> str:
     member (:func:`reads_as_member`) only when it names nothing hidden from them, as its
     importer and the read-time checks of #541 parts 3-5 check (``Hidden.names``: output
     written before part 4/5 may); a file of any other run, which read with its
-    starter's view, never. Refused: a 404, as a file that is not there."""
+    starter's view, never. A creator-only run's (#624 review: Oracle's read of an intake) is
+    read by its creator alone (:func:`creator_only_hidden`), with the same check. Refused: a
+    404, as a file that is not there."""
     hidden = await visibility.hidden_for_reader(db)
     if hidden is None:
         return text
-    if not await reads_as_member(db, run) or hidden.names(text):
+    readable = _flow(run).creator_only or await reads_as_member(db, run)
+    if not readable or hidden.names(text):
         raise NotFound(f"run {run.id} has no such file")
     return text
 
@@ -2299,9 +2339,11 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         await audit.record(
             db, principal, "run.awaiting_approval", "run", run.id, {"usd": str(run.estimate_usd)}
         )
+        await webhooks.capture(db, "run.awaiting_approval", principal, run_id=run.id)
         await db.commit()
         return
     await audit.record(db, principal, "run.started", "run", run.id, {})
+    await webhooks.capture(db, "run.started", principal, run_id=run.id)
     await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
@@ -2326,6 +2368,7 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
+    await webhooks.capture(db, "run.started", principal, run_id=run.id)
     await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
@@ -2765,6 +2808,7 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run, hidden),
         ],
         intake_id=run.knobs.get("intake_id"),
@@ -3578,11 +3622,7 @@ async def _submit_now(
     kind = await _target_kind(db, run)
     registered_again = False
     while True:
-        covered = (
-            [s for s in segments if s.seq >= segment.seq and s.status != "skipped"]
-            if mode.waits
-            else [segment]
-        )
+        covered = _workflow_segments(flow, segment, segments) if mode.waits else [segment]
         planned: list[tuple[int, str, list[str]]] = []
         contexts: list[tuple[int, flows.SegmentDef, flows.PromptContext]] = []
         for s in covered:
@@ -3825,6 +3865,10 @@ async def _submit(
     ``change_request`` is the person's note (the attempt's note, kept until a submission
     succeeds); ``review``, the structured review a send-back delivers (D4), is what the
     agents get instead when given."""
+    if _flow(run).segment(segment.name).waits_for_draft_items and not await _draft_items_ready(
+        db, run, segment, segments
+    ):
+        return
     art = _art(segment)
     if change_request or review:
         _keep_previous(art)
@@ -3839,6 +3883,69 @@ async def _submit(
     segment.status = "pending"
     segment.error = QUEUED
     run.status = "running"
+
+
+def _workflow_segments(
+    flow: flows.FlowDef, segment: RunSegment, segments: list[RunSegment]
+) -> list[RunSegment]:
+    """The segments one workflow covers from ``segment`` on: up to, not including, a later
+    segment that waits for the draft's roadmap items (F4 lane B: Oracle starts it once they
+    are ready, as a workflow of its own)."""
+    out: list[RunSegment] = []
+    for s in segments:
+        if s.seq < segment.seq or s.status == "skipped":
+            continue
+        if s.seq > segment.seq and flow.segment(s.name).waits_for_draft_items:
+            break
+        out.append(s)
+    return out
+
+
+async def _draft_items_ready(
+    db: AsyncSession, run: Run, segment: RunSegment, segments: list[RunSegment]
+) -> bool:
+    """F4 lane B: whether a segment that reads the approved PRD version's draft roadmap
+    items may be queued now. Otherwise the run waits for them (``waiting_for`` on the
+    segment, re-checked each tick, a Derive asked for when there are none) or the segment
+    is skipped with its note, and the run goes on (it ends)."""
+    user = await db.get(User, run.created_by) if run.created_by else None
+    token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
+    try:
+        creator: Principal | None = _creator(current_tenant(db), user, token)
+    except LookupError:
+        creator = None
+    state, n, note = await eng_dates.start_state(db, run, creator)
+    art = _art(segment)
+    waited = art.pop("waiting_for", None)
+    if state == "go":
+        if waited is not None:
+            _set_art(segment, art)
+        return True
+    if state == "wait":
+        art["waiting_for"] = {"kind": "draft_items", "version": n}
+        _set_art(segment, art)
+        segment.status = "pending"
+        segment.error = None
+        run.status = "running"
+        return False
+    art["note"] = note
+    _note_art(art, note or "")
+    _set_art(segment, art)
+    segment.status = "skipped"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.finished_at = _now()
+    segment.error = None
+    await _next(db, run, segment, segments)
+    return False
+
+
+def _awaiting_items(segments: list[RunSegment]) -> RunSegment | None:
+    """The segment waiting for the draft's roadmap items (F4 lane B), if any."""
+    return next(
+        (s for s in segments if s.status == "pending" and (s.artifacts or {}).get("waiting_for")),
+        None,
+    )
 
 
 def _keep_previous(art: dict[str, Any]) -> None:
@@ -4202,6 +4309,15 @@ async def _finish(
     await _detach(db, run, cancel=status != "succeeded", state=state, done=done)
     _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     await revoke_run_tokens(db, run.id)
+    # I1: every ending, from here only; a code on failure, never the error's text.
+    if status in ("succeeded", "failed", "cancelled"):
+        await webhooks.capture(
+            db,
+            f"run.{status}",
+            audit.ORACLE,
+            run_id=run.id,
+            error_kind="run_failed" if status == "failed" else None,
+        )
     if status in ("failed", "cancelled") and _flow(run).stores_draft_items:
         from oracle.roadmap import draft_items
 
@@ -4807,6 +4923,11 @@ async def _advance(
         payload[eng_check.PAYLOAD_KEY] = await eng_check.check_segment(
             db, run, art["files"].get(flows.BRIEFS_FILE)
         )
+    if sdef.checkpoint == eng_dates.KIND:
+        # F4 lane B: what the Engineering dates' screen and its gate read.
+        payload[eng_dates.PAYLOAD_KEY] = await eng_dates.summarize(
+            db, run, art["files"].get(eng_dates.FILE)
+        )
     if imported is not None:
         payload["import"] = imported
     if baseline_import is not None:
@@ -4869,6 +4990,9 @@ async def _advance(
         await _link_scope(db, scope_id, checkpoint_id)
         await _link_order(db, snapshot_id, checkpoint_id)
         run.status = "awaiting_checkpoint"
+        await webhooks.capture(
+            db, "run.checkpoint_waiting", audit.ORACLE, run_id=run.id, checkpoint_id=checkpoint_id
+        )
         return True
     db.add(
         Checkpoint(
@@ -5567,6 +5691,11 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         if any(_waiting(s) for s in segments):
             await db.commit()
             return
+        if (awaiting := _awaiting_items(segments)) is not None:
+            # F4 lane B: the draft's roadmap items, re-checked on every tick.
+            await _submit(db, run, awaiting, segments)
+            await db.commit()
+            return
         # Resumed after an overrun with a finished segment not yet advanced.
         done = [s for s in segments if s.status == "succeeded"]
         if done and await _advance(db, run, done[-1], segments):
@@ -5653,6 +5782,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             run.id,
             {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
         )
+        await webhooks.capture(db, "run.paused_overrun", audit.ORACLE, run_id=run.id)
         await db.commit()
         return
     advanced = False
@@ -5733,6 +5863,7 @@ async def _pause_overrun(
         run.id,
         {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
     )
+    await webhooks.capture(db, "run.paused_overrun", audit.ORACLE, run_id=run.id)
 
 
 # Run states the ceiling pauses (a run waiting on a checkpoint can spend too).
@@ -6848,6 +6979,18 @@ async def _take_answer(
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
     _set_wait(cp, wait)
+    if approved and cp.kind == eng_dates.KIND:
+        # F4 lane B: a counted console approval records the dates as Oracle's Approve does
+        # (decide_checkpoint), for the member who answered (or Oracle's own Inbox user).
+        decider = member or (await db.get(User, cp.decided_by) if cp.decided_by else None)
+        if decider is not None and decider.disabled_at is None:
+            staged = await db.scalars(
+                select(CheckpointAction)
+                .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+                .order_by(CheckpointAction.created_at, CheckpointAction.id)
+            )
+            principal = _creator(current_tenant(db), decider, None)
+            await eng_dates.on_approved(db, principal, run, cp, list(staged))
     # H1: a counted answer from the console (or Oracle's own lost post) is the stop's
     # decision: a checkpoint record, unless one was recorded when it was decided here.
     await decisions_capture.checkpoint(
@@ -7451,6 +7594,10 @@ async def decide_checkpoint(
     if via == "swarmcloud_console":
         data["via"] = via
     await audit.record(db, principal, f"checkpoint.{decision}", "checkpoint", cp.id, data)
+    await webhooks.capture(
+        db, "run.checkpoint_decided", principal, run_id=run.id, checkpoint_id=cp.id,
+        outcome=decision,
+    )  # fmt: skip
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
@@ -7466,6 +7613,14 @@ async def decide_checkpoint(
             )
         )
         await eng_check.on_approved(db, principal, run, cp, list(staged))
+    if decision == "approved" and cp.kind == eng_dates.KIND:
+        # F4 lane B: the lead's dates become verified bases, the draft's items re-checked.
+        staged = await db.scalars(
+            select(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+            .order_by(CheckpointAction.created_at, CheckpointAction.id)
+        )
+        await eng_dates.on_approved(db, principal, run, cp, list(staged))
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.
@@ -8038,6 +8193,9 @@ async def _void_owed(
         {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by),
          "reason": why, **via},
     )  # fmt: skip
+    await webhooks.capture(
+        db, "run.checkpoint_voided", principal, run_id=run.id, checkpoint_id=cp.id
+    )
 
 
 async def void_owed_decisions(
@@ -8184,6 +8342,8 @@ async def void_decision(
         db, principal, "checkpoint.decision_voided", "checkpoint", cp.id,
         {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by), **via},
     )  # fmt: skip
+    for event_type in ("run.checkpoint_voided", "run.checkpoint_waiting"):
+        await webhooks.capture(db, event_type, principal, run_id=run.id, checkpoint_id=cp.id)
 
 
 class _PostNotFound(Unavailable):
@@ -9510,6 +9670,25 @@ async def dismiss_overrun(db: AsyncSession, principal: Principal, run_id: uuid.U
     await db.commit()
 
 
+async def end_as_oracle(db: AsyncSession, run_id: uuid.UUID, reason: str) -> bool:
+    """Oracle ends a background run it started itself (INT2: a newer read of the same
+    intake replaces it, or a read that could not start falls back to the built-in job):
+    its live workflow is cancelled (one SwarmCloud does not confirm stays attached and the
+    tick cancels it again), its open segments are cancelled and its tokens revoked. The
+    caller commits. False when the run had already ended."""
+    run = await _get_run(db, run_id, lock=True)
+    if run.status in FINAL:
+        return False
+    for segment in await _segments(db, run.id):
+        if segment.status in ("pending", "running"):
+            unqueue(segment)
+            segment.status = "cancelled"
+            segment.finished_at = _now()
+    await _finish(db, run, "cancelled", reason)
+    await audit.record(db, audit.ORACLE, "run.cancelled", "run", run.id, {"reason": reason})
+    return True
+
+
 async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     """Cancel the run: its workflows are cancelled (a lost submission looked up first, and
     cancelled if it landed), its checkpoints skipped. SwarmCloud is called without the
@@ -9894,12 +10073,18 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     run.status = "running"
     await audit.record(db, principal, "run.resumed", "run", run.id, {"ceiling_usd": str(ceiling)})
+    await webhooks.capture(db, "run.resumed", principal, run_id=run.id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
     if any(c.status == "pending" or _owes(c) for c in checkpoints):
         # Paused while it waited on a checkpoint: it waits on it again, in the Inbox; or
         # on a decision recorded and not delivered yet, which the tick delivers now.
         run.status = "awaiting_checkpoint"
+        waiting = next((c for c in checkpoints if c.status == "pending"), None)
+        if waiting is not None:
+            await webhooks.capture(
+                db, "run.checkpoint_waiting", principal, run_id=run.id, checkpoint_id=waiting.id
+            )
     elif not any(s.status == "running" for s in segments):
         # A Resume voided before its segment was submitted left that segment unqueued
         # (marked): queue it again; otherwise advance past the last segment that ran.
@@ -10252,7 +10437,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     states: list[InboxFeedbackItem] = []
     counts = InboxCounts()
     staged: list[InboxStaged] = []
-    seen = await inbox_states.last_seen(db, principal.id)
+    from oracle.intake.read import inbox_due as intake_reads_due
+
+    # INT2's intake-read rows, read below only for a reader who has one.
+    seen, (has_intake_reads,) = await inbox_states.last_seen_and(
+        db, principal.id, intake_reads_due(principal)
+    )
     if has_role(principal.role, "approver"):
         states, counts = await inbox_states.feedback_states(db, seen)
         staged = await inbox_states.staged_rows(db)
@@ -10400,6 +10590,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     request_inbox = await request_rows(db, principal)
     counted += sum(1 for r in request_inbox if r.counts)
+    # INT2: intakes of mine Oracle couldn't read twice in a row.
+    from oracle.intake.read import inbox_rows as intake_read_rows
+
+    intake_reads = await intake_read_rows(db, principal) if has_intake_reads else []
+    counted += len(intake_reads)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -10461,6 +10656,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         last_seen_at=seen,
         discussions=discussions,
         requests=request_inbox,
+        intake_reads=intake_reads,
     )
 
 

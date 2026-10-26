@@ -7,7 +7,10 @@ never its title, link or text, unless the intake's author shared a finding citin
 full (S6, ``oracle.intake.sharing``). A run token never sees an item's content as its
 owner, even when it acts for the owner, and never reads raw any item an intake of its
 user read while a finding of that intake is below "shared in full" (:func:`run_withheld`,
-precomputed by :func:`record_reads`).
+precomputed by :func:`record_reads`). One exception (INT2, owner answer Q1): the token of
+an intake's own ``intake_analysis`` run, created by its author, reads that intake's
+analysis input, the built-in job's exact payload with its source excerpts
+(``oracle.intake.read.analysis_input``); nothing else, and only for that run.
 
 Everything read from a source is **untrusted data**: it is returned under
 ``data_excerpt`` with ``untrusted: true``, never placed in instructions, and every
@@ -294,7 +297,9 @@ def readable_shared(intake_id: uuid.UUID | None = None) -> Select:
 async def run_withheld(db: AsyncSession, principal: Principal | None) -> set[uuid.UUID] | None:
     """Source items a run token may not read raw (S6, owner 2026-10-19): everything an
     intake of its user read while any finding of that intake is below "shared in full"
-    (precomputed, one indexed query). None: not a run."""
+    (precomputed, one indexed query). None: not a run. The one exception, an intake's own
+    read run reading its analysis input, is ``oracle.intake.read.analysis_input``'s and
+    never goes through here."""
     if principal is None or not principal.is_run:
         return None
     if principal.user_id is None:

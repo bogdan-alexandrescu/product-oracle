@@ -45,6 +45,7 @@ from tests.test_intake_sharing_round5 import (
     OTHERS,
     _baseline_proposals,
     _blocker_gap,
+    _intake_read_on_the_job,  # noqa: F401 (autouse fixture: INT2's job path)
     finding_of,
     share,
     world,

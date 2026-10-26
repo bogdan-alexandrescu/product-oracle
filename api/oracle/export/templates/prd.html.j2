@@ -8,10 +8,13 @@
 <meta name="oracle-layer" content="{{ layer }}">
 <style>
 {{ css }}
+{{ brand_css }}
+{{ accent_css }}
 </style>
 </head>
 <body>
 <header class="version-banner status-{{ status }}" role="note" aria-label="Version">
+  {{ brand_header }}
   <span class="banner-doc">{{ title }}</span>
   <span class="banner-version">Version {{ number }}</span>
   {% if layer != "full" %}<span class="banner-layer">{{ layer_label }}: the full document has the detail</span>{% endif %}

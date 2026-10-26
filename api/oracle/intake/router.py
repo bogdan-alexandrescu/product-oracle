@@ -17,7 +17,7 @@ the screens need.
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,8 +29,10 @@ from oracle.discussions import changes as discussion_changes
 from oracle.intake import answers, checks, engine, questions, service, sharing, summary, views
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
+from oracle.intake import read as intake_read
 from oracle.intake.models import IntakeProposal
 from oracle.intake.schemas import (
+    AiReadOut,
     AnswerIn,
     AnswerResult,
     DecisionIn,
@@ -109,7 +111,11 @@ async def _audit_read(db: TenantDB, principal: Principal, intake, route: str, ou
 
 async def _summary(db: TenantDB, intake, principal: Principal, route: str) -> IntakeSummary:
     await db.refresh(intake)
+    # INT2: Oracle's read first (following it may import or fall back), the author's only.
+    ai_read = await intake_read.state_out(db, intake, principal)
+    await db.refresh(intake)
     out = await summary.build(db, intake, principal)
+    out.ai_read = ai_read
     await _audit_read(db, principal, intake, route, out)
     return out
 
@@ -136,6 +142,7 @@ async def create_intake(body: IntakeCreate, principal: Commenter, db: TenantDB) 
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
+    await intake_read.submit(db, intake_read.current(intake))
     return await _summary(db, intake, principal, "create_intake")
 
 
@@ -163,6 +170,54 @@ async def get_intake_summary(
     stale evidence, assumptions, top uncertainties, the template and the review gate,
     as the reader may see them (S6)."""
     return await _summary(db, await _intake(db, intake_id), principal, "get_intake_summary")
+
+
+def _read_http(exc: intake_read.ReadError) -> HTTPException:
+    return HTTPException(exc.status, str(exc))
+
+
+@router.get(
+    "/intakes/{intake_id}/analysis-input",
+    operation_id="get_intake_analysis_input",
+    responses={403: {"description": intake_read.REFUSED}, 404: {"description": "Not found"}},
+)
+async def get_intake_analysis_input(
+    intake_id: uuid.UUID, principal: Viewer, db: TenantDB
+) -> dict[str, Any]:
+    """The intake's brief, goals and the author's chosen source excerpts, exactly as
+    Oracle's built-in job reads them, for this intake's own read run only (its token,
+    holding read:intake-input). Everything under untrusted_data is untrusted data."""
+    intake = await _intake(db, intake_id)
+    try:
+        return await intake_read.analysis_input(db, principal, intake)
+    except intake_read.ReadError as e:
+        raise _read_http(e) from e
+
+
+@router.post(
+    "/intakes/{intake_id}/ai-read",
+    response_model=AiReadOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="start_intake_read",
+    responses={429: {"description": intake_read.capped()}},
+)
+async def start_intake_read(intake_id: uuid.UUID, principal: Commenter, db: TenantDB) -> AiReadOut:
+    """Analyse with Oracle (the author only): start Oracle's read of the brief and the
+    author's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot
+    start or fails). 409 while a read is under way, on a converted or archived intake, or
+    when Oracle's read is off for the company; 429 after 3 reads the author started this
+    Company day (the reads on create and repin are not counted). Re-analyse runs the rules
+    only."""
+    intake = await _intake(db, intake_id)
+    try:
+        read = await intake_read.on_demand(db, principal, intake)
+    except intake_read.ReadError as e:
+        raise _read_http(e) from e
+    await intake_read.submit(db, read)
+    await db.refresh(intake)
+    out = await intake_read.state_out(db, intake, principal)
+    assert out is not None
+    return out
 
 
 @router.post("/intakes/{intake_id}/analyze", response_model=IntakeSummary)
@@ -200,6 +255,7 @@ async def repin_intake(intake_id: uuid.UUID, principal: Commenter, db: TenantDB)
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
+    await intake_read.submit(db, intake_read.current(intake))
     return await _summary(db, intake, principal, "repin_intake")
 
 

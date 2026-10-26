@@ -68,6 +68,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/v1/:path*", destination: `${apiUrl}/v1/:path*` },
       { source: "/healthz", destination: `${apiUrl}/healthz` },
+      // O5 lane 4: the company's logos, served to members by the API.
+      { source: "/uploads/:path*", destination: `${apiUrl}/uploads/:path*` },
     ];
   },
 };

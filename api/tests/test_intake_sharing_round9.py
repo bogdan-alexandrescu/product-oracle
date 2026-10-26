@@ -23,7 +23,10 @@ from oracle.sources.base import ItemUpsert
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.tenancy import tenant_session
 from tests.test_intake_sharing import TITLE_A, share_all
-from tests.test_intake_sharing_round5 import world
+from tests.test_intake_sharing_round5 import (
+    _intake_read_on_the_job,  # noqa: F401 (autouse fixture: INT2's job path)
+    world,
+)
 from tests.test_intake_sharing_round6 import (
     RUNS,
     as_run_of,

@@ -92,6 +92,8 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (d.testId === SETTINGS.testId && pathname.startsWith("/sources")) return true;
   // A brief before drafting (C5) is on its way to a PRD.
   if (d.href === "/documents" && pathname.startsWith("/intakes/")) return true;
+  // A spec's flows and wireframes (v2 screen 4) belong with its tech brief, a document.
+  if (d.href === "/documents" && pathname.startsWith("/specs/")) return true;
   // The Plan's alignment reports (F6) belong with the Roadmap.
   if (d.href === "/roadmap" && (pathname === "/plan" || pathname.startsWith("/plan/"))) return true;
   return pathname === base || pathname.startsWith(`${base}/`);

@@ -29,6 +29,7 @@ Flow = Literal[
     "pricing_memo",
     "competitive_digest",
     "discussion_research",
+    "intake_analysis",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -49,6 +50,7 @@ CheckpointKind = Literal[
     "priority_order",
     "prd_review",
     "eng_review",
+    "eng_dates",
     "roadmap_items",
     "roadmap_review",
     "request_triage",
@@ -997,8 +999,17 @@ class RunNoteRefs(BaseModel):
     refs: dict[str, str | list[str]]
 
 
+class WaitingFor(BaseModel):
+    """F4 lane B: what the run waits for between two segments, outside any checkpoint (the
+    approved PRD version's draft roadmap items, before the Engineering dates)."""
+
+    kind: Literal["draft_items"]
+    version: int
+
+
 class RunOut(RunSummary):
     knobs: KnobsOut
+    waiting_for: WaitingFor | None = None
     snapshot_id: uuid.UUID | None = None
     snapshot_as_of: datetime | None = None
     approved_by: uuid.UUID | None = None
@@ -1392,6 +1403,16 @@ class InboxRequestReply(BaseModel):
     counts: bool
 
 
+class InboxIntakeRead(BaseModel):
+    """INT2: Oracle couldn't read an intake of mine twice or more in a row (the fallback
+    job failing too); counted until a read succeeds or the intake closes."""
+
+    intake_id: uuid.UUID
+    title: str
+    failures: int
+    at: datetime | None = None
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -1470,6 +1491,8 @@ class InboxOut(BaseModel):
     discussions: list[InboxDiscussionItem] = []
     # H10: replies to send, asked again, answers to my requests; counted ones in ``total``.
     requests: list[InboxRequestReply] = []
+    # INT2: intakes of mine Oracle couldn't read twice in a row; each counted in ``total``.
+    intake_reads: list[InboxIntakeRead] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

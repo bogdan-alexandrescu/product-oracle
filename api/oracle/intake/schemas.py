@@ -441,6 +441,47 @@ class IntakeProposalOut(ORM):
     updated_at: datetime
 
 
+class AiReadCount(BaseModel):
+    items: int
+    gaps: int
+
+
+class AiReadNote(BaseModel):
+    code: str
+    message: str
+
+
+class AiReadOut(BaseModel):
+    """INT2 Oracle's read of the intake, the author's only (``IntakeSummary.ai_read`` is
+    null for anyone else). ``path``: what produced or is producing the read, a SwarmCloud
+    run or Oracle's built-in job (the fallback, with ``fallback`` saying why, or the
+    rollback); ``off_reason``: ``company`` (the switch on Settings › Company is off) or
+    ``intake`` (no read was asked for this intake)."""
+
+    state: Literal["off", "queued", "running", "done", "failed"]
+    path: Literal["swarmcloud", "job"] | None = None
+    off_reason: Literal["company", "intake"] | None = None
+    run_id: uuid.UUID | None = None
+    job_id: uuid.UUID | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    # The author's pinned source excerpts the read was given.
+    sources: int = 0
+    added: AiReadCount | None = None
+    # Evidence refs the answer gave outside its input, dropped.
+    dropped_refs: int = 0
+    error: AiReadNote | None = None
+    fallback: AiReadNote | None = None
+    note: str | None = None
+    # Failed reads in a row (two or more: one Inbox row until a read succeeds).
+    failures: int = 0
+    # The reads the author started on the Company day now, of at most reads_per_day (the
+    # reads on create and repin are not counted); at the cap, why Read again waits.
+    reads_today: int = 0
+    reads_per_day: int = 3
+    read_again_refused: str | None = None
+
+
 class IntakeSummary(BaseModel):
     """The Opportunity and Gaps summary, as the reader may see it (S6)."""
 
@@ -477,6 +518,8 @@ class IntakeSummary(BaseModel):
     late_answers_as_feedback: int = 0
     draft_document: str | None = None
     draft_version: int | None = None
+    # INT2: Oracle's read, for the author only (null for anyone else).
+    ai_read: AiReadOut | None = None
 
 
 class QuestionCard(BaseModel):

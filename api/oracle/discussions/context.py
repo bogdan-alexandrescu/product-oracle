@@ -396,8 +396,12 @@ async def _runs(db: AsyncSession, ctx: Context) -> None:
     from oracle.runs import flows
     from oracle.runs.models import Run
 
+    # #624 review: a run private to its creator (an intake read) is no member's to read.
     runs = await db.scalars(
-        select(Run).where(Run.status.in_(OPEN_RUNS)).order_by(Run.created_at.desc()).limit(20)
+        select(Run)
+        .where(Run.status.in_(OPEN_RUNS), Run.flow.not_in(flows.CREATOR_ONLY_FLOWS))
+        .order_by(Run.created_at.desc())
+        .limit(20)
     )
     for run in runs:
         flow = flows.FLOWS.get(run.flow)
