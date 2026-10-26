@@ -21,8 +21,14 @@ author, who alone sees the read's state (:func:`state_out`; others get null).
 
 State lives on ``intake.analysis["extraction"]``: ``read`` (the current read: path,
 run_id or job_id, state, started_at, finished_at, added, dropped_refs, sources, error,
-fallback, note), ``last`` (the last read's result) and ``failures`` (failed reads in a row;
-two or more put one row in the author's Inbox until a read succeeds or the intake closes).
+fallback, note), ``last`` (the last read's result), ``failures`` (failed reads in a row;
+two or more put one row in the author's Inbox until a read succeeds or the intake closes)
+and ``on_demand`` (when the author last started reads, the newest last).
+
+Owner decision 2026-10-26 (#624's review): the author starts at most
+:data:`READS_PER_DAY` reads of an intake per Company day (:mod:`oracle.company_time`);
+the reads on create and repin are not counted. Over the cap Analyse with Oracle is 429
+in words (:func:`capped`), owners included.
 """
 
 import logging
@@ -33,7 +39,7 @@ from typing import Any
 from sqlalchemy import ColumnElement, Integer, exists, false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, safe_yaml
+from oracle import audit, company_time, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.config import get_settings
 from oracle.intake import job as intake_job
@@ -65,6 +71,11 @@ FALLBACKS = {
     "Oracle's built-in model read it instead.",
 }
 JOB_FAILED = "Oracle's read failed. The rules read stands."
+READS_PER_DAY = 3
+
+
+def capped() -> str:
+    return f"This intake was read {READS_PER_DAY} times today; read it again tomorrow"
 
 
 class ReadError(Exception):
@@ -248,9 +259,17 @@ async def submit(db: AsyncSession, read: dict[str, Any] | None) -> None:
         await db.rollback()
 
 
+def reads_today(intake: ProductIntake, zone: str) -> int:
+    """The reads the author started on the Company day now (create and repin not counted)."""
+    today = company_time.today(zone)
+    stamps = _extraction(intake).get("on_demand") or []
+    return sum(1 for at in stamps if company_time.day(at, zone) == today)
+
+
 async def on_demand(db: AsyncSession, principal: Principal, intake: ProductIntake):
     """Analyse with Oracle: the author only (403), 409 while a read is under way, on a
-    closed intake, or with the company switch off."""
+    closed intake, or with the company switch off; 429 after :data:`READS_PER_DAY` this
+    Company day."""
     if principal.is_run or principal.user_id is None or intake.author_id != principal.user_id:
         raise ReadError(403, "Only the intake's author can ask Oracle to read it")
     if _closed(intake):
@@ -261,7 +280,14 @@ async def on_demand(db: AsyncSession, principal: Principal, intake: ProductIntak
     read = current(intake)
     if read is not None and read.get("state") in LIVE:
         raise ReadError(409, "Oracle is already reading this intake")
+    if reads_today(intake, await company_time.company_time_zone(db)) >= READS_PER_DAY:
+        raise ReadError(429, capped())
+    at = company_time.now().isoformat()
     out = await start_read(db, principal, intake, on_demand=True)
+    if out is not None:
+        # Only the last few are kept: older ones are never on today's count.
+        stamps = [*(_extraction(intake).get("on_demand") or []), at]
+        _store(intake, on_demand=stamps[-READS_PER_DAY:])
     await db.commit()
     return out
 
@@ -545,9 +571,15 @@ async def state_out(db: AsyncSession, intake: ProductIntake, principal: Principa
         await db.commit()
     read = current(intake)
     failures = int(_extraction(intake).get("failures") or 0)
+    today = reads_today(intake, await company_time.company_time_zone(db))
+    cap = {
+        "reads_today": today,
+        "reads_per_day": READS_PER_DAY,
+        "read_again_refused": capped() if today >= READS_PER_DAY else None,
+    }
     if read is None or read.get("state") == "replaced":
         reason = "company" if not await company_on(db) else "intake"
-        return AiReadOut(state="off", off_reason=reason, failures=failures)
+        return AiReadOut(state="off", off_reason=reason, failures=failures, **cap)
     state = read.get("state")
     if state in LIVE:
         state = await _live_state(db, read)
@@ -567,6 +599,7 @@ async def state_out(db: AsyncSession, intake: ProductIntake, principal: Principa
         fallback=read.get("fallback"),
         note=read.get("note"),
         failures=failures,
+        **cap,
     )
 
 

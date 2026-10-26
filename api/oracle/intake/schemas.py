@@ -475,6 +475,11 @@ class AiReadOut(BaseModel):
     note: str | None = None
     # Failed reads in a row (two or more: one Inbox row until a read succeeds).
     failures: int = 0
+    # The reads the author started on the Company day now, of at most reads_per_day (the
+    # reads on create and repin are not counted); at the cap, why Read again waits.
+    reads_today: int = 0
+    reads_per_day: int = 3
+    read_again_refused: str | None = None
 
 
 class IntakeSummary(BaseModel):

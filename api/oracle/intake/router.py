@@ -199,12 +199,15 @@ async def get_intake_analysis_input(
     response_model=AiReadOut,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="start_intake_read",
+    responses={429: {"description": intake_read.capped()}},
 )
 async def start_intake_read(intake_id: uuid.UUID, principal: Commenter, db: TenantDB) -> AiReadOut:
     """Analyse with Oracle (the author only): start Oracle's read of the brief and the
     author's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot
     start or fails). 409 while a read is under way, on a converted or archived intake, or
-    when Oracle's read is off for the company. Re-analyse runs the rules only."""
+    when Oracle's read is off for the company; 429 after 3 reads the author started this
+    Company day (the reads on create and repin are not counted). Re-analyse runs the rules
+    only."""
     intake = await _intake(db, intake_id)
     try:
         read = await intake_read.on_demand(db, principal, intake)
