@@ -24,7 +24,12 @@ export type GoalInterviewContext = {
   isMember: (id: string) => boolean;
   uuid: () => string;
   now: () => string;
+  /** H11 Shape goals' level (Recommend when not given): Observe opens no interview, Draft keeps one version. */
+  goalsLevel?: () => "observe" | "draft" | "recommend" | "act";
 };
+
+/** The API's refusal at Observe (oracle.baseline.goal_interview.OBSERVING). */
+export const GOALS_OBSERVING = "Oracle is set to observe goals: it flags gaps and drafts nothing. An owner can change this in Settings › Autonomy.";
 
 /** A scripted Oracle reply: its text in the pieces it streams in, and its citations. */
 export type ReplyScript = { pieces: string[]; citations: Record<string, unknown>[] };
@@ -85,7 +90,7 @@ function openingTurn(goal: Entity, missing: string[], versions: number): ReplySc
   const lines = [`${said}\nMissing: ${missing.join(", ")}.`];
   if (versions > 0) {
     lines.push(`\nI propose ${versions === 1 ? "a measurable version" : `${versions} measurable versions`} below, from the support export [c:1] and the churn review [c:2].`);
-    lines.push("\nWhich version fits best?");
+    lines.push(versions === 1 ? "\nEdit it as you see fit, then propose it." : "\nWhich version fits best?");
   } else {
     lines.push(`\nWho should own “${goal.title}”?`);
   }
@@ -169,7 +174,9 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
     join(ctx.me.id, "started");
     const owner = goal.attrs.owner;
     if (typeof owner === "string" && owner !== ctx.me.id && ctx.isMember(owner)) join(owner, "added");
-    const versions = goal.key === "g.early-churn" ? churnVersions(goal.id) : [];
+    // H11: at Draft, one version for a named person to edit and own.
+    const level = ctx.goalsLevel?.() ?? "recommend";
+    const versions = (goal.key === "g.early-churn" ? churnVersions(goal.id) : []).slice(0, level === "draft" ? 1 : 3);
     for (const v of versions) {
       db.changes = db.changes ?? [];
       db.changes.push({
@@ -220,12 +227,14 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
     );
   }
   if (!at("commenter")) return refuse(403, "Requires the commenter role");
+  const observing = ctx.goalsLevel?.() === "observe";
 
   if (isStart) {
     const goal = s.entities.find((e) => e.id === id);
     if (!goal) return refuse(404, "Entity not found");
     if (goal.type !== "goal") return refuse(422, "Only goals can be interviewed");
     if (check(goal).measurable) return refuse(422, "This goal is already measurable");
+    if (observing) return refuse(409, GOALS_OBSERVING);
     const input = (await body<{ private?: boolean }>()) ?? {};
     const out = start(goal, !!input.private);
     return json(out.created ? 201 : 200, out);
@@ -233,6 +242,7 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
   if (isMany) {
     const input = (await body<{ entity_ids?: string[] | null }>()) ?? {};
     const goals = input.entity_ids ? vague().filter((g) => input.entity_ids!.includes(g.id)) : vague();
+    if (observing && goals.length > 0) return refuse(409, GOALS_OBSERVING);
     return json(200, { discussions: goals.map((g) => ({ entity_id: g.id, ...start(g, false) })) });
   }
 

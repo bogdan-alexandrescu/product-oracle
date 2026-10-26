@@ -7,6 +7,7 @@ import { Button, Chip, Icon } from "@/components/ds";
 import { InlineError } from "@/components/review/parts";
 import { api, unwrap, type EntityOut, type ProposalOut, type Schemas } from "@/lib/api/client";
 import { discussionChanges, dismissMeasure, proposeMeasure, type DiscussionChange, type GoalMeasure } from "@/lib/api/goal-interview";
+import { useGoalsLevel } from "@/lib/goals-autonomy";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -317,7 +318,18 @@ export function GoalDiscuss({
 }) {
   const changes = useQuery(`discussion-changes:${discussionId}`, () => discussionChanges(discussionId), { keepPrevious: true });
   const proposals = useQuery(`baseline-proposals-all:${discussionId}`, () => unwrap(api.GET("/v1/baseline/proposals")), { keepPrevious: true });
-  const ids = [...new Set((changes.data ?? []).flatMap((c) => [c.suggested_by?.user_id, (c.edited_payload ?? c.payload).owner_id]).filter((x): x is string => !!x))];
+  // H11 Shape goals at Draft: Oracle's one version is the named person's to edit and own (the
+  // goal's owner, else who started the interview), so no "Use version 1" default is offered.
+  const drafting = useGoalsLevel() === "draft";
+  const goalOwner = typeof goal.attrs?.owner === "string" ? goal.attrs.owner : null;
+  const ids = [
+    ...new Set(
+      (changes.data ?? [])
+        .flatMap((c) => [c.suggested_by?.user_id, (c.edited_payload ?? c.payload).owner_id])
+        .concat(drafting ? [goalOwner] : [])
+        .filter((x): x is string => !!x),
+    ),
+  ];
   const people = useQuery(`people-ids:${ids.sort().join(",")}`, () =>
     ids.length ? unwrap(api.GET("/v1/people", { params: { query: { ids } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
   );
@@ -365,9 +377,14 @@ export function GoalDiscuss({
             ))}
           </ol>
         )}
+        {first && drafting && versions.length > 0 && (
+          <p className="mt-2 text-sm text-text2" data-testid="goals-draft-note">
+            {`Oracle drafted one version for ${goalOwner ? (names.get(goalOwner) ?? "the goal's owner") : ctx.d.started_by.name} to edit and own.`}
+          </p>
+        )}
         {last && open && ctx.d.me.can_write && (
           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Quick replies" data-testid="quick-replies">
-            {v1 && v1.status === "proposed" && (
+            {v1 && v1.status === "proposed" && !drafting && (
               <li>
                 <QuickReply onClick={() => void pickVersion(v1)}>Use version 1</QuickReply>
               </li>

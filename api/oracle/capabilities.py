@@ -183,6 +183,8 @@ PER_ITEM: dict[str, Role | None] = {
     "estimate_regeneration": "approver",
     # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
     "explain_metric_variance": "approver",
+    # Filing a found item in the app for someone else is an owner's, as create_request.
+    "file_request_candidate": "owner",
     "get_checkpoint_draft": "owner",
     # Company coverage is owners' only (owner 2026-10-24): its handler reads the role.
     "get_company_source_coverage": "owner",
@@ -249,6 +251,8 @@ PER_ITEM: dict[str, Role | None] = {
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
     "withdraw_discussion_change": None,
+    # H11 questions: the intake's author or an approver, as asking them.
+    "withdraw_intake_questions": "approver",
 }
 
 

@@ -73,6 +73,8 @@ export type LlmContext = {
   startRun?: StartRun;
   /** #574 review: the agents' feedback-loop run under way on the document, with the ids it was sent. */
   agentsRun?: (docId: string) => AgentsRun | null;
+  /** H11 `next_drafts`: Oracle's level for next drafts and its staged-changes limit (default Draft, 5). */
+  nextDrafts?: () => { level: "observe" | "draft" | "recommend" | "act"; min_staged: number };
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */

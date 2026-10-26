@@ -54,6 +54,18 @@ type BatchOutput = {
 };
 
 export const KIND = "refinement_batch" as const;
+/** H11 `next_drafts` at Observe: the plan's refusal, and the 409 of Build and the agents' run. */
+export const OBSERVING =
+  "Oracle is set to observe next drafts: it counts staged changes and builds nothing. An owner can change this in Settings › Autonomy.";
+
+const observing = (ctx: LlmContext) => ctx.nextDrafts?.().level === "observe";
+
+/** H11 Recommend: the sentence saying the staged changes are worth a draft (the API's _worth_a_draft). */
+function worthADraft(ctx: LlmContext, waiting: number, next: number, job: Job | null): string | null {
+  const nd = ctx.nextDrafts?.();
+  if (!nd || nd.level !== "recommend" || job || waiting < nd.min_staged) return null;
+  return `${waiting} changes wait: worth building draft ${next}.`;
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -272,11 +284,14 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
   const freeItems = free(items, (i) => i.suggestion_id);
   const freeChanges = free(changes, (c) => c.id);
   const sections = new Set([...freeItems, ...freeChanges].filter((i) => !i.section_gone).map((i) => i.section_key));
+  // H11 Recommend: what still waits to be drafted (not what a run under way was sent).
+  const waiting = [...freeItems, ...freeChanges].filter((i) => !i.section_gone).length + free(agents, (x) => x.feedback_id).length;
+  const next = (latest?.number ?? 0) + 1;
   return {
     document_id: doc.id,
     slug: doc.slug,
     latest_version: latest?.number ?? null,
-    next_version: (latest?.number ?? 0) + 1,
+    next_version: next,
     items: freeItems,
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
@@ -284,6 +299,7 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     agent_items: free(agents, (a) => a.feedback_id),
     next_draft_changes: freeChanges,
     agents_run: agentsRun,
+    worth_a_draft: worthADraft(ctx, waiting, next, job),
   };
 }
 
@@ -481,8 +497,10 @@ export async function nextDraftRoute(
     const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
     const hit = [...c.texts, ...c.rows].filter((t) => locked.has(t.section_key));
     const run = ctx.agentsRun?.(doc.id) ?? null;
-    const refused = run
-      ? runRefusal(run)
+    const refused = observing(ctx)
+      ? OBSERVING
+      : run
+        ? runRefusal(run)
       : engine === "agents"
         ? null
         : !enabled(doc)
@@ -504,6 +522,7 @@ export async function nextDraftRoute(
   }
 
   if (p[4] === "run" && m === "POST") {
+    if (observing(ctx)) return fail(409, OBSERVING);
     const input = (await body<Schemas["NextDraftRunIn"]>()) ?? {};
     const run = ctx.agentsRun?.(doc.id) ?? null;
     if (run) return fail(409, runRefusal(run));
@@ -525,6 +544,7 @@ export async function nextDraftRoute(
   }
 
   if (!p[4] && m === "POST") {
+    if (observing(ctx)) return fail(409, OBSERVING);
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
     if (!enabled(doc)) return fail(409, turnedOff("refinement"));

@@ -318,10 +318,12 @@ const SIZES = ["3", "5", "10"] as const;
 /**
  * Next questions (the author or an approver): Oracle's next batch exactly as Ask these asks
  * it (GET .../next-batch), each with a person picker (the gap's owner, else the author).
+ * While Ask people questions is at Observe (H11) Oracle proposes nothing and the panel says
+ * why (`held`) instead of offering Ask these.
  */
 function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; me: Me; version: number; onAsked: () => void }) {
   const [size, setSize] = useState<(typeof SIZES)[number]>("5");
-  const [preview, setPreview] = useState<{ cards: Card[]; remaining: number } | null>(null);
+  const [preview, setPreview] = useState<{ cards: Card[]; remaining: number; held: string | null } | null>(null);
   const [writers, setWriters] = useState<Person[]>([]);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -337,7 +339,7 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
         const all = new Map(first.filter((p) => p.can_write).map((p) => [p.user_id, p]));
         for (const p of defaults.values()) all.set(p.user_id, p);
         setWriters([...all.values()].sort((a, b) => a.name.localeCompare(b.name)));
-        setPreview({ cards: out.questions, remaining: out.remaining });
+        setPreview({ cards: out.questions, remaining: out.remaining, held: out.held ?? null });
         setChosen({});
         setError(null);
       })
@@ -372,7 +374,12 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
             {n === 0 ? "Oracle has no more questions." : `Oracle has ${n} more question${n === 1 ? "" : "s"}`}
           </p>
         )}
-        {preview && preview.cards.length > 0 && (
+        {preview?.held && (
+          <p data-testid="questions-held" className="text-sm text-text2">
+            {preview.held}
+          </p>
+        )}
+        {preview && !preview.held && preview.cards.length > 0 && (
           <>
             <ol className="flex flex-col divide-y divide-line">
               {preview.cards.map((c) => (

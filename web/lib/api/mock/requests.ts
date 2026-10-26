@@ -148,6 +148,9 @@ export interface RequestsContext {
   zone?: () => string;
   /** C1 lane 2: a brief's title by its id; null when it is gone. */
   intakeTitle?: (id: string) => string | null;
+  /** H11 requests: Oracle's suggestions show (and are accepted) at Recommend and above only;
+   * shown when not given. */
+  suggestionsShown?: () => boolean;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -456,6 +459,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       document: doc ? { id: doc.id, slug: doc.slug, title: doc.title } : null,
       intake: r.intake_id && ctx.intakeTitle?.(r.intake_id) ? { id: r.intake_id, title: ctx.intakeTitle(r.intake_id)! } : null,
       mentions: 1 + descendants(r.id).length,
+      suggestion: ctx.suggestionsShown?.() === false ? null : shown.suggestion,
     };
   };
   const themeOut = (t: Theme): ThemeOut => ({
@@ -870,6 +874,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
           ctx.decisions!.reverse(row.decision_id!, `Request reopened${why ? `: ${why}` : ""}`);
           for (const x of rootReplies(row).filter((y) => y.status === "drafted")) Object.assign(x, { status: "withdrawn", job_at: null, lock_version: x.lock_version + 1 });
         }
+        // Its own drafted reply goes too (Asked again, when it was merged into a no), as the API.
+        for (const x of replies.filter((y) => y.request_id === row.id && y.status === "drafted")) Object.assign(x, { status: "withdrawn", job_at: null, lock_version: x.lock_version + 1 });
         Object.assign(row, { state: "new", merged_into_id: null, disqualify_reason: null, decision_note: null, decided_by: null, decided_at: null, basis_in: null, asked_again_since: null, loop_closed_on: null });
       } else if (verb === "suggestion/decline") {
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
@@ -881,7 +887,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         if (parts.length === 0) return fail(422, "parts: at least one");
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
         const s = row.suggestion;
-        if (!s || s.declined_at) return fail(422, "Oracle has no suggestion for this request");
+        if (!s || s.declined_at || ctx.suggestionsShown?.() === false) return fail(422, "Oracle has no suggestion for this request");
         // Every check first, as the API: a refused part changes nothing.
         if (parts.includes("theme") && !(s.theme_id ? liveTheme(s.theme_id) : s.theme_title?.trim())) return fail(422, "Oracle suggested no theme");
         if (parts.includes("goals") && (!s.goal_ids?.length || badGoals(s.goal_ids).length)) return fail(422, "Oracle suggested no confirmed goal");

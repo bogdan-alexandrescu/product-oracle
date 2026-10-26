@@ -327,6 +327,10 @@ class StagedChanges(BaseModel):
     # #574 review: the agents' run under way on the document, with what it was sent (left
     # out of the lists above).
     agents_run: NextDraftRun | None = None
+    # H11 Recommend (``next_drafts``): a plain sentence saying the staged changes are worth
+    # a draft, once as many wait as the owner's limit asks for and no build is pending;
+    # None at every other level.
+    worth_a_draft: str | None = None
 
 
 class NextDraftIn(BaseModel):

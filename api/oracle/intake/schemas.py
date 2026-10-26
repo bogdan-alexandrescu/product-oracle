@@ -497,6 +497,20 @@ class NextBatch(BaseModel):
     questions: list[QuestionCard]
     # Questions not asked yet, these included.
     remaining: int
+    # Why nothing is proposed, in plain words (H11 ``questions`` at Observe); else None.
+    held: str | None = None
+
+
+class QuestionsWithdraw(BaseModel):
+    """Withdraw these questions of an intake that are still waiting (the Undo of a
+    batch Oracle asked on its own)."""
+
+    question_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
+
+
+class QuestionsWithdrawn(BaseModel):
+    # The questions withdrawn now; ones already answered or settled are left out.
+    question_ids: list[uuid.UUID]
 
 
 class DraftGateClosedOut(BaseModel):

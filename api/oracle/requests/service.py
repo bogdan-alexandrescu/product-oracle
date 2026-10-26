@@ -4,8 +4,9 @@ suggestions, and the themes that group them.
 Rules (issue #150, behaviour rules 1-10): commenters add; approvers and owners decide.
 Qualifying needs a confirmed goal (decision F3b). A merge points at the root of the
 target's chain and never forms a cycle; mentions count every request merged in, through
-chains. Oracle's triage writes ``suggestion`` only (oracle.requests.triage):
-nothing changes until an approver accepts a part. A request filed from the filer's own
+chains. Oracle's triage writes ``suggestion`` (oracle.requests.triage): nothing changes
+until an approver accepts a part, except at H11 requests "Act within limits", where Oracle
+merges a sure duplicate or links sure goals itself. A request filed from the filer's own
 source item carries a copy of its title, link, kind and a 400-character excerpt
 (decided 2026-10-21, C1 "Found items"), audited as shared in full.
 """
@@ -16,7 +17,7 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ColumnElement, func, select, text
+from sqlalchemy import ColumnElement, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -277,12 +278,6 @@ def _suggestion(raw: dict[str, Any]) -> Suggestion | None:
         return None
 
 
-def _without_decline(s: Suggestion | None, show: bool) -> Suggestion | None:
-    if s is None or show or s.decline is None:
-        return s
-    return s.model_copy(update={"decline": None})
-
-
 async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOut]:
     """The rows as the API shows them, with themes, PRDs, sources and mentions."""
     if not rows:
@@ -330,8 +325,9 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
     counts = await replies.reply_counts(db, [r.id for r in rows])
     merged_at = await _merged_at(db, [d for r in declined for d in descendants(r, children)])
     basis_titles = await _basis_titles(db, rows)
-    # H11 requests: Oracle's decline suggestions show at Recommend and above.
-    show_decline = await autonomy.allows(db, "requests", "recommend")
+    # H11 requests: Oracle's suggestions (and their decline) show at Recommend and above;
+    # at Observe and Draft triage still records them, unseen, so nothing re-runs for them.
+    show_suggestion = await autonomy.allows(db, "requests", "recommend")
     # A triage run's suggestion naming a decision or document the reader may not see (one
     # written before #541 part 4, when the run read as its creator) is not shown to them.
     hidden = await visibility.hidden_for_reader(db)
@@ -397,8 +393,8 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 source=source,
                 mentions=1 + len(descendants(r.id, children)),
                 suggestion=None
-                if hidden is not None and hidden.names_in(r.suggestion)
-                else _without_decline(_suggestion(r.suggestion), show_decline),
+                if not show_suggestion or (hidden is not None and hidden.names_in(r.suggestion))
+                else _suggestion(r.suggestion),
                 filed_by=r.filed_by,
                 decided_by=r.decided_by,
                 decided_at=r.decided_at,
@@ -701,8 +697,9 @@ async def _apply_patch(
                 row.intake_id = None
 
 
-def _decided(row: ProductRequest, principal: Principal) -> None:
-    row.decided_by = principal.id
+def _decided(row: ProductRequest, principal: Principal | None) -> None:
+    """Who decided: the person, or None when Oracle did (H11 requests at Act)."""
+    row.decided_by = principal.id if principal is not None else None
     row.decided_at = _now()
 
 
@@ -729,9 +726,10 @@ async def qualify(
 
 
 async def _merge_into(
-    db: AsyncSession, principal: Principal, row: ProductRequest, into_id: uuid.UUID
+    db: AsyncSession, principal: Principal | None, row: ProductRequest, into_id: uuid.UUID
 ) -> uuid.UUID:
-    """Merges ``row`` into the root of ``into_id``'s chain; returns that root."""
+    """Merges ``row`` into the root of ``into_id``'s chain; returns that root. ``principal``
+    None: Oracle merges it (oracle.requests.triage, H11 requests at Act)."""
     if row.state not in ("new", "qualified"):
         raise _conflict("Only a New or Qualified request can be merged")
     # One merge at a time per company: two crossing merges cannot form a loop.
@@ -769,7 +767,7 @@ async def merge(
 
 
 async def _asked_again(
-    db: AsyncSession, principal: Principal, row: ProductRequest, root_id: uuid.UUID
+    db: AsyncSession, principal: Principal | None, row: ProductRequest, root_id: uuid.UUID
 ) -> dict[str, Any]:
     """H10 Asked again: a request merged into one said no to gets the same reasoned reply,
     under the same decision. The root stays disqualified; its ``asked_again`` counts it."""
@@ -875,10 +873,12 @@ async def _reopen(db: AsyncSession, row: ProductRequest) -> None:
     row.decided_at = None
     row.asked_again_since = None
     row.loop_closed_on = None
-    # Drafted replies go: nobody is told a no that no longer stands.
+    # Drafted replies go: nobody is told a no that no longer stands, its own (H10 Asked
+    # again, when it was merged into a no) included (#586 review).
     for reply in await db.scalars(
         select(RequestReply).where(
-            RequestReply.root_request_id == row.id, RequestReply.status == "drafted"
+            or_(RequestReply.root_request_id == row.id, RequestReply.request_id == row.id),
+            RequestReply.status == "drafted",
         )
     ):
         reply.status = "withdrawn"
@@ -926,7 +926,7 @@ async def accept_suggestion(
     if row.state != "new":
         raise _conflict("Only a New request takes Oracle's suggestions")
     s = _suggestion(row.suggestion)
-    if s is None or s.declined_at:
+    if s is None or s.declined_at or not await autonomy.allows(db, "requests", "recommend"):
         raise _invalid("Oracle has no suggestion for this request")
     parts = set(body.parts)
     with db.no_autoflush:

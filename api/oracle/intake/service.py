@@ -29,8 +29,8 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
+from oracle.intake import autoask, engine, sharing
 from oracle.intake import categories as cats
-from oracle.intake import engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.schemas import AnswerIn, IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
@@ -224,7 +224,9 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
             "request_ids": [str(i) for i in linked],
         },
     )
-    await ask(db, principal, intake, body.batch_size)
+    # H11 ``questions``: at Observe and Draft a new brief asks no one; a person sends.
+    if await autoask.asks_first_batch(db):
+        await ask(db, principal, intake, body.batch_size)
     if body.ai_extraction:
         await queue_extraction(db, principal, intake)
     return intake
@@ -345,7 +347,9 @@ async def ask(
         skip = {g.id for g in gaps if sharing.gap_view(g, reg, v) is None}
     if assign:
         await _check_assign(db, intake, gaps, skip, assign)
-    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign)
+    # H11 ``questions`` at Draft: the person the preview named, never the sender.
+    answers = await autoask.proposes_asker(db)
+    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign, answers)
     if asked:
         await audit.record(
             db,
@@ -544,7 +548,39 @@ async def ask_next(
     """Ask the next batch: the author or an approver."""
     if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
         raise IntakeError(403, "Only the intake's author or an approver asks the next batch")
+    held = await autoask.held(db)
+    if held:
+        raise IntakeError(409, held)
     return await ask(db, principal, intake, size, assign)
+
+
+async def withdraw_asked(
+    db: AsyncSession, principal: Principal, intake: ProductIntake, question_ids: list[uuid.UUID]
+) -> list[StakeholderQuestion]:
+    """Withdraw these questions of the intake that are still waiting on an answer (the
+    Undo of a batch Oracle asked on its own, H11 ``questions``): the author or an
+    approver. Answered or settled ones stay as they are."""
+    if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
+        raise IntakeError(403, "Only the intake's author or an approver withdraws these questions")
+    wanted = set(question_ids)
+    done = [
+        q
+        for q in await engine.intake_questions(db, intake.id)
+        if q.id in wanted and q.status in autoask.WAITING
+    ]
+    for q in done:
+        q.status = "withdrawn"
+    await db.flush()
+    if done:
+        await audit.record(
+            db,
+            principal,
+            "intake.questions_withdrawn",
+            "intake",
+            intake.id,
+            {"question_ids": [str(q.id) for q in done]},
+        )
+    return done
 
 
 # --- sharing (S6) ------------------------------------------------------------------------
