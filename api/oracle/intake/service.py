@@ -340,7 +340,9 @@ async def ask(
         skip = {g.id for g in gaps if sharing.gap_view(g, reg, v) is None}
     if assign:
         await _check_assign(db, intake, gaps, skip, assign)
-    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign)
+    # H11 ``questions`` at Draft: the person the preview named, never the sender.
+    answers = await autoask.proposes_asker(db)
+    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign, answers)
     if asked:
         await audit.record(
             db,
