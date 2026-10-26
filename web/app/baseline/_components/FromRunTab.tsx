@@ -8,6 +8,8 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap, type EntityOut, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 
+import { ACCEPT_LOCKS } from "./common";
+
 /**
  * B2 Baseline review from this run (/baseline?run=<id>): the band naming the run, the rows of
  * what it wrote to the baseline with the reasons each needs a person and its actions, and (for
@@ -201,11 +203,13 @@ export function RowActions({ view, row, entities, busy, act, onOpen, inDrawer = 
         const params = { params: { path: { proposal_id: pid } } };
         if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", params));
         else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
-        return accept ? `Accepted the change to “${e.title}”.` : `Rejected the change to “${e.title}”.`;
+        return accept
+          ? `Accepted the change to “${e.title}”: it is locked against Oracle's changes until a person unlocks it.`
+          : `Rejected the change to “${e.title}”.`;
       });
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="solid" disabled={busy} onClick={() => void decide(true)}>
+        <Button variant="solid" disabled={busy} title={ACCEPT_LOCKS} onClick={() => void decide(true)}>
           Accept
         </Button>
         <Button disabled={busy} onClick={() => void decide(false)}>
