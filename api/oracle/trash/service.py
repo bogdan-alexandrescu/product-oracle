@@ -285,6 +285,12 @@ async def delete_root(
     entry.created_at = at
     db.add(entry)
     await db.flush()
+    # O5: every share link on a trashed document ends at once; a restore brings none back.
+    from oracle.shares import service as shares
+
+    await shares.revoke_documents(
+        db, principal, {d.id for d in resolved.documents}, shares.DOCUMENT_TRASHED
+    )
     for row in rows:
         row.deleted_at = at
         row.deleted_by = principal.id

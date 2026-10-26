@@ -96,10 +96,12 @@ export type LlmContext = {
   nextDrafts?: () => { level: "observe" | "draft" | "recommend" | "act"; min_staged: number };
   /** CR-08: stores a quality_review job's answer as a model-output report (./quality.ts); returns its output. */
   runQualityReview?: (job: Job, versionId: string) => Record<string, unknown>;
+  /** O5: runs a queued public_text job (./shares.ts draftPublicTexts) and returns its output. */
+  publicText?: (job: Job) => Record<string, unknown>;
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
-const KINDS: (keyof Schemas["JobSettings"])[] = ["review_comments", "reporting", "refinement", "quality_review"];
+const KINDS: (keyof Schemas["JobSettings"])[] = ["review_comments", "reporting", "refinement", "quality_review", "public_text"];
 const SWITCH: Partial<Record<Job["kind"], keyof Schemas["JobSettings"]>> = { refinement_batch: "refinement" };
 const switchOf = (kind: Job["kind"]) => (SWITCH[kind] ?? kind) as keyof Schemas["JobSettings"];
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -353,6 +355,20 @@ export function onFeedback(ctx: LlmContext, documentId: string, number: number) 
   if (!queued) ctx.db.jobs.push(makeJob(ctx, doc, "review_comments", v, { requested_by: null }));
 }
 
+/**
+ * Queues a job for a person (oracle.jobs.service.enqueue with coalesce): refused while its
+ * switch is off, and a queued job of the same kind and version is reused.
+ */
+export function queueJob(ctx: LlmContext, documentId: string, kind: Job["kind"], number: number): Job | string {
+  const doc = ctx.documents.find((d) => d.id === documentId)!;
+  if ((ctx.db.disabled[doc.id] ?? []).includes(switchOf(kind))) return turnedOff(switchOf(kind));
+  const queued = ctx.db.jobs.find((j) => j.document_id === doc.id && j.kind === kind && j.status === "queued" && j.version_number === number);
+  if (queued) return queued;
+  const job = makeJob(ctx, doc, kind, versionsOf(ctx, doc).find((v) => v.number === number) ?? null);
+  ctx.db.jobs.push(job);
+  return job;
+}
+
 /** Runs every queued job (one per document, in order): the mock's `oracle tick`. */
 export function tick(ctx: LlmContext) {
   for (const job of ctx.db.jobs.filter((j) => j.status === "queued").sort((a, b) => a.created_at.localeCompare(b.created_at))) {
@@ -371,6 +387,8 @@ export function tick(ctx: LlmContext) {
     } else if (job.kind === BATCH) finish(ctx, job, runBatch(ctx, job, v));
     else if (job.kind === "quality_review") {
       if (ctx.runQualityReview) finish(ctx, job, ctx.runQualityReview(job, v.id));
+    } else if (job.kind === "public_text") {
+      if (ctx.publicText) finish(ctx, job, ctx.publicText(job));
     } else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
 }

@@ -50,7 +50,7 @@ import {
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { nudges } from "./learned";
@@ -132,7 +132,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -154,6 +154,22 @@ import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections,
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
+import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, type BoardItem } from "./audience";
+import {
+  draftPublicTexts,
+  emptyShares,
+  routePublicShares,
+  routeShares,
+  seedShares,
+  shareInboxRows,
+  SHARING_PUBLIC_SCENARIO,
+  SHARING_ROADMAP_SLUG,
+  SHARING_ROADMAP_TITLE,
+  SHARING_SCENARIO,
+  SHARING_SECTIONS,
+  type SharesContext,
+  type SharesDb,
+} from "./shares";
 
 /**
  * latest_version, approved_version, source and an update's period are read off the versions;
@@ -224,6 +240,8 @@ export interface Db {
   impact_runs?: Record<string, string>;
   /** I1: Settings › Webhooks, their events and delivery log (./webhooks.ts). */
   webhooks?: WebhooksDb;
+  /** O5: share links, view log, public texts and checks (./shares.ts). */
+  shares?: SharesDb;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
@@ -236,6 +254,8 @@ export interface Db {
   draft_roadmaps?: DraftRoadmapDb;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
+  sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
   plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
@@ -1530,7 +1550,123 @@ function seed(): Db {
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
   db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   seeded("updates", () => seedUpdates(db));
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO) seeded("sharing", () => seedSharingRoadmap(db, scenario === SHARING_PUBLIC_SCENARIO ? "public" : "team"));
   return db;
+}
+
+/** O5 "sharing": an approved roadmap (v1, published when the review state is seeded); "sharing-public" defaults it to Public. */
+function seedSharingRoadmap(db: Db, audience: "team" | "public") {
+  const created = "2026-10-12T09:00:00Z";
+  const doc: DocumentRow = {
+    id: uuid(), slug: SHARING_ROADMAP_SLUG, title: SHARING_ROADMAP_TITLE, status: "approved", kind: "roadmap", template: "now-next-later",
+    template_version: "1", theme: null, audience, created_at: created, updated_at: created,
+  };
+  db.documents.push(doc);
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: SHARING_SECTIONS, citations: [], brief: ["summary", "brief-items"] });
+  v.approved_at = "2026-10-13T09:00:00Z";
+  db.versions.push(v);
+  // Its roadmap items (one per card), each traced to a baseline feature: the confirmed goals G1 and G2 as the
+  // Goals section says, and Ops console cleanup's feature supporting no confirmed goal. Falcon alerts rework's feature
+  // reaches both: its best goal is G2 (the later title, at equal contribution), its group G1 (the first by title).
+  const goal = (key: string, title: string) => baselineEntity(db, "goal", key, title, created);
+  const g1 = goal("g.monthly-churn", "Cut monthly churn to 2%");
+  const g2 = goal("g.self-serve", "Grow self-serve sign-ups");
+  const serves: Record<string, BaselineEntity[]> = { "item-falcon": [g2, g1], "item-import": [g2], "item-ledger": [g1], "item-partner": [g2], "item-ops": [] };
+  const items = sectionItems(db, v).map((i) => {
+    const f = baselineEntity(db, "feature", `f.sharing-${i.item_key.replace(/^item-/, "")}`, i.title, created);
+    for (const dst of serves[i.item_key] ?? []) {
+      db.baseline.edges.push({
+        id: uuid(), src_id: f.id, dst_id: dst.id, type: "supports", attrs: {}, status: "confirmed", origin: "user", locked: false,
+        locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
+      });
+    }
+    return { ...i, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
+  });
+  db.sharing_items = { [v.id]: items };
+}
+
+type BaselineEntity = Db["baseline"]["entities"][number];
+
+/** A confirmed baseline entity the "sharing" scenario adds. */
+function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title: string, at: string): BaselineEntity {
+  const row: BaselineEntity = {
+    id: uuid(), type, key, title, body: null, attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null,
+    locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
+  };
+  db.baseline.entities.push(row);
+  return row;
+}
+
+/** The roadmap data, seeded on first use (./roadmap.ts), with the "sharing" roadmap's items (seedSharingRoadmap). */
+function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
+  if (!db.roadmap) {
+    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+    for (const [id, items] of Object.entries(db.sharing_items ?? {})) db.roadmap.items[id] ??= items;
+  }
+  return db.roadmap;
+}
+
+/** The v2 review state (publications among it), seeded on first use. */
+function ensureReviewV2(db: Db): ReviewV2Db {
+  if (db.review_v2) return db.review_v2;
+  const prd = db.documents.find((d) => d.kind === "prd");
+  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+  // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
+  const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+  const decider = db.members.find((x) => x.email === "approver@example.com");
+  // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
+  const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
+  if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
+    db.review_v2.policies.push({
+      document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+      section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+    });
+  }
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
+    db.review_v2.policies.push({
+      document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+      section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+    });
+  }
+  // O5 "sharing": the roadmap's v1 is publication 1.
+  const shared = db.documents.find((d) => d.slug === SHARING_ROADMAP_SLUG);
+  const sv = shared && docVersions(db, shared)[0];
+  if (shared && sv) {
+    db.review_v2.publications.push({
+      id: uuid(), document_id: shared.id, number: 1, version_id: sv.id, version_number: sv.number, content_hash: sv.content_hash,
+      manifest_hash: hash(`${sv.content_hash}:1`), published_by: db.user_id, created_at: "2026-10-13T10:00:00Z", has_brief: true,
+      manifest: { format: 1, document: { id: shared.id, slug: shared.slug, title: shared.title }, version: { id: sv.id, number: sv.number, content_hash: sv.content_hash }, approval: { approved_at: sv.approved_at ?? null, decider_id: db.user_id }, sections: [] },
+      markdown: "", html: exportHtml(shared, sv),
+    });
+  }
+  return db.review_v2;
+}
+
+/** O5: the share links' context (./shares.ts); `me` is null for a link holder. */
+function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
+  const publications = ensureReviewV2(db).publications;
+  const base = { documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now };
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
+    ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null, scenario === SHARING_SCENARIO))
+    : emptyShares();
+  const shares = db.shares;
+  return {
+    ...base,
+    db: shares,
+    me,
+    observesOutside: () => levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") === "observe",
+    queueDraft: (doc, v) => {
+      db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
+      return queueJob(llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"), doc.id, "public_text", v.number);
+    },
+    renderAudience: (doc, v, audience) => {
+      const row = db.documents.find((d) => d.id === doc.id)!;
+      const version = db.versions.find((x) => x.id === v.id)!;
+      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience, boardItems(db, version)) }, db.branding, audienceLabel(audience));
+    },
+  };
 }
 
 /**
@@ -1607,6 +1743,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
     },
     runQualityReview: (job, versionId) => storeModelReview(ensureV2(db), job, versionId),
+    // O5: the public_text job drafts into the share mock's texts.
+    publicText: (job) => draftPublicTexts(sharesContext(db, null), job.document_id!, job.version_number!),
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -2392,6 +2530,11 @@ function load(): Db {
     if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
   }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  // #711 "long-title": the saved-carts PRD under a title as long as real PRD titles are.
+  if (scenario === "long-title") {
+    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    if (carts) carts.title = "Saved carts for returning buyers PRD";
+  }
   if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
@@ -2705,6 +2848,8 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
     ...d,
     kind: d.kind ?? "prd",
     visibility: d.visibility ?? "company",
+    // O5: a roadmap without a default audience reads as "team"; other kinds have none.
+    audience: d.kind === "roadmap" ? (d.audience ?? "team") : null,
     period,
     latest_version: latest?.number ?? null,
     approved_version: vs.filter((v) => v.approved_at).pop()?.number ?? null,
@@ -2978,13 +3123,15 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
 }
 
-function banner(doc: DocumentRow, v: VersionRow) {
+/** `audience`: O5, the label of the audience the export renders for (as the API's banner). */
+function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
   const status = v.approved_at ? "approved" : doc.status;
-  return `${doc.title} · version ${v.number} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
+  const badge = audience ? ` · audience ${audience}` : "";
+  return `${doc.title} · version ${v.number}${badge} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
 }
 
 /** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
-function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding()): string {
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null): string {
   const sections = v.sections
     .map((s) => {
       const tag = `h${Math.min(s.level, 3)}`;
@@ -3006,13 +3153,13 @@ function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBr
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v, audience))} · mock export</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}${sections}<ol class="citations">${notes}</ol></body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
-function exportPdf(doc: DocumentRow, v: VersionRow): string {
+function exportPdf(doc: DocumentRow, v: VersionRow, audience?: string | null): string {
   const ascii = (s: string) => s.replace(/[^\x20-\x7e]/g, "-").replace(/([\\()])/g, "\\$1");
-  const lines = [banner(doc, v), "Mock export: the API renders the real PDF.", "", ...v.sections.map((s) => s.heading)];
+  const lines = [banner(doc, v, audience), "Mock export: the API renders the real PDF.", "", ...v.sections.map((s) => s.heading)];
   const text = lines.map((l, i) => `${i ? "T* " : ""}(${ascii(l)}) Tj`).join("\n");
   const stream = `BT /F1 11 Tf 16 TL 72 740 Td\n${text}\nET`;
   const objects = [
@@ -3953,6 +4100,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const out = await routePublicInterviews(ensureInterviews(db), interviewsContext(db, db.user_id, "viewer"), req, p);
     if (out) return out;
   }
+  // O5: a link holder's routes carry no member credential, only the token and its cookie.
+  if (p[1] === "public" && p[2] === "shares") {
+    const out = await routePublicShares(sharesContext(db, null), req, p);
+    if (out) return out;
+  }
   // A5: where a Google sign-in without membership stands (the access-* scenarios); /v1/me is then 401.
   const access = ACCESS_SCENARIOS[localStorage.getItem(MOCK_SCENARIO_KEY) ?? ""];
   if (p[1] === "auth" && p[2] === "access") {
@@ -4016,32 +4168,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (trashOut) return trashOut;
   // v2 review routes (./review-v2.ts) check roles themselves.
-  if (!db.review_v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
-    // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
-    const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
-    const decider = db.members.find((x) => x.email === "approver@example.com");
-    // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
-    const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
-    if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
-      db.review_v2.policies.push({
-        document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
-        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
-      });
-    }
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
-      db.review_v2.policies.push({
-        document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
-        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
-      });
-    }
-  }
+  ensureReviewV2(db);
   // I1: webhooks check roles themselves; seeded before the notifications they write are read.
   const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
   if (hooks) return hooks;
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
+  // O5: share links, the view log, public texts and the public check (./shares.ts).
+  const shares = await routeShares(sharesContext(db, me), req, p, q);
+  if (shares) return shares;
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
     const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
     for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
@@ -4161,7 +4296,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       proposeGoalMeasure: (c, d, payload) => proposeVersion(goalContext(db, me), c, d, payload),
       recordBasis: async (b) => {
         const ctx = roadmapContext(db, me);
-        db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+        db.roadmap = ensureRoadmap(db, ctx);
         const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
         return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
       },
@@ -4654,7 +4789,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
   const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
   if (draftRes) return draftRes;
-  db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
+  db.roadmap = ensureRoadmap(db, roadmapCtx);
   db.plan_edits ??= emptyPlanEdits();
   const editsRes = await routeChangeSets(planEditsContext(db, me), db.plan_edits, req, p, q);
   if (editsRes) return editsRes;
@@ -4674,6 +4809,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
   }
 
+  // O5: the roadmap audience registry (./audience.ts), every member.
+  if (p[1] === "roadmap-audiences" && p.length === 2 && m === "GET") return json(200, AUDIENCES);
   // H8: an update starts from its template with its period (owners only); other kinds as before.
   if (p[1] === "drafts" && p.length === 2 && m === "POST") {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
@@ -4789,8 +4926,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const discussing = discussions.filter((r) => r.state !== "done").length;
     // A5: pending access requests, for owners and approvers; each counts.
     const accessRequestRows = inboxAccessRequests(db, me);
+    // O5-Q10: links revoked with their creator or document, for owners.
+    const shareRevocations = shareInboxRows(sharesContext(db, me));
     return json(200, {
       ...inbox,
+      share_revocations: shareRevocations,
       access_requests: accessRequestRows,
       tracks: tracked.tracks,
       revoke_failures: failures,
@@ -4801,7 +4941,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       oracle_actions: did,
       dates,
       discussions,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length + shareRevocations.length,
     });
   }
   if (runs) return runs;
@@ -5057,6 +5197,45 @@ async function route(db: Db, req: Request): Promise<Response> {
     followRunReview(db, doc, v, true, me.id);
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
+  // O5: audience= renders a roadmap for Board, Team or Engineering (./audience.ts).
+  const audience = sub === "deck" || sub === "export" ? q.get("audience") : null;
+  const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
+  if (refused) return json(refused.status, refused.body);
+  return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience, boardItems(db, v)) } : v, sub, q, audience);
+}
+
+/**
+ * O5: a version's roadmap items as Board reads them (as the API's render.load_audience): the goal each
+ * item's feature serves by a confirmed supports edge to a confirmed goal; with no confirmed goal in the
+ * company nothing is measured, so no item is left out.
+ */
+function boardItems(db: Db, v: VersionRow): BoardItem[] {
+  const goals = new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+  return (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []).map((i) => {
+    const feature = i.feature?.id ?? db.baseline.entities.find((e) => e.type === "feature" && e.key === i.item_key)?.id;
+    const served = db.baseline.edges
+      .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
+      .map((e) => goals.get(e.dst_id)!);
+    const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
+    return {
+      key: i.item_key,
+      title: i.title,
+      outcome: i.outcome,
+      horizon: i.horizon,
+      position: i.position,
+      confidence: i.confidence ?? null,
+      rank: typeof rank === "number" ? rank : null,
+      goals: served.slice(0, 1),
+      no_goal: goals.size > 0 && !served.length,
+      // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
+      group: [...served].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))[0] ?? null,
+    };
+  });
+}
+
+/** A version's deck and export (O5: `v` already rendered for its audience, if any). */
+function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | undefined, q: URLSearchParams, audience: string | null): Response {
+  const badge = isAudience(audience) ? audienceLabel(audience) : null;
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
     if (!v.sections.some((s) => s.layer === "brief")) {
       return json(422, { detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead` });
@@ -5064,9 +5243,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (sub === "deck") {
     const versions = docVersions(db, doc);
-    return json(
-      200,
-      deckOut({
+    const deck = deckOut({
         document_id: doc.id,
         slug: doc.slug,
         title: doc.title,
@@ -5079,8 +5256,10 @@ async function route(db: Db, req: Request): Promise<Response> {
         citations: v.citations,
         // H8: a board update groups its brief sections into slides (front matter `slides`).
         slides: Array.isArray(v.front_matter.slides) ? (v.front_matter.slides as string[][]) : undefined,
-      }),
-    );
+    });
+    // As the API's deck banner: "Audience Board" after the version.
+    if (badge) deck.banner = deck.banner.replace(` · Version ${v.number}`, ` · Version ${v.number} · Audience ${badge}`);
+    return json(200, deck);
   }
   if (sub === "export") {
     const format = q.get("format") ?? "html";
@@ -5089,23 +5268,23 @@ async function route(db: Db, req: Request): Promise<Response> {
       return json(422, { detail: `the ${layer} layer exports as ${LAYER_FORMATS[layer]?.join(", ")}, not ${format}` });
     }
     if (layer === "deck") {
-      if (format === "pptx") return new Response(`PK mock deck: ${banner(doc, v)}`, { headers: { "content-type": PPTX_TYPE } });
-      return new Response(exportPdf(doc, { ...v, sections: v.sections.filter((s) => s.layer === "brief") }), {
+      if (format === "pptx") return new Response(`PK mock deck: ${banner(doc, v, badge)}`, { headers: { "content-type": PPTX_TYPE } });
+      return new Response(exportPdf(doc, { ...v, sections: v.sections.filter((s) => s.layer === "brief") }, badge), {
         headers: { "content-type": "application/pdf" },
       });
     }
     if (layer === "brief") {
       const brief = { ...v, sections: v.sections.filter((s) => s.layer === "brief") };
-      if (format === "pdf") return new Response(exportPdf(doc, brief), { headers: { "content-type": "application/pdf" } });
-      return new Response(exportHtml(doc, brief, db.branding), { headers: { "content-type": "text/html" } });
+      if (format === "pdf") return new Response(exportPdf(doc, brief, badge), { headers: { "content-type": "application/pdf" } });
+      return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
       return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
         headers: { "content-type": "text/markdown" },
       });
     }
-    if (format === "pdf") return new Response(exportPdf(doc, v), { headers: { "content-type": "application/pdf" } });
-    return new Response(exportHtml(doc, v, db.branding), { headers: { "content-type": "text/html" } });
+    if (format === "pdf") return new Response(exportPdf(doc, v, badge), { headers: { "content-type": "application/pdf" } });
+    return new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } });
   }
   return notFound("Route");
 }

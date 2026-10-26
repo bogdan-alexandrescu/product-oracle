@@ -23,8 +23,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from oracle.auth.deps import CurrentPrincipal, TenantDB
-from oracle.authz import require_role
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
+from oracle.authz import has_role, require_role
+from oracle.docs.schemas import Audience
 from oracle.export import offload, present
 from oracle.export.deck import build_deck, render_deck_html, theme_class
 from oracle.export.pdf import PdfUnavailable, html_to_pdf
@@ -32,20 +33,25 @@ from oracle.export.render import (
     ExportVersion,
     NoBrief,
     NotFound,
+    apply_audience,
     apply_layer,
+    check_audience,
     detached,
+    load_audience,
     load_export_version,
     render_html,
     render_markdown,
 )
 from oracle.export.schemas import (
     LAYER_FORMATS,
+    AudienceOut,
     DeckOut,
     ExpandOut,
     ExportFormat,
     ExportLayer,
     SlideOut,
 )
+from oracle.roadmap import variants
 
 router = APIRouter(prefix="/v1", tags=["export"], dependencies=[Depends(require_role("viewer"))])
 
@@ -58,15 +64,65 @@ MEDIA_TYPES = {
 }
 
 
-async def _load(db, doc: str, n: int, layer: str):
+def check_audience_role(principal: Principal, audience: str | None) -> None:
+    """O5: Board, Team and Engineering are open to every reader (they hide, never add).
+    The Public audience needs an approver or above, never a run (agents get no public
+    text), because before its check it names internal items."""
+    if audience != "public":
+        return
+    if principal.is_run or principal.run_token_id is not None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "A run's agents cannot read the Public audience"
+        )
+    if not has_role(principal.role, "approver"):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "The Public audience needs the approver role"
+        )
+
+
+async def with_audience(db, ev: ExportVersion, audience: str | None) -> ExportVersion:
+    """``ev`` (already layered) rendered for ``audience``: 422 for a document that is not
+    a roadmap, 409 ``public_not_ready`` for the Public audience (lane 2 builds it)."""
+    if audience is None:
+        return ev
+    try:
+        check_audience(ev, audience)
+    except variants.PublicNotReady as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": e.code, "message": str(e)}) from None
+    except variants.AudienceError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+    await load_audience(db, ev)
+    return apply_audience(ev, audience)
+
+
+async def _load(db, doc: str, n: int, layer: str, audience: str | None = None):
     try:
         ev = await load_export_version(db, doc, n)
     except NotFound as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from None
     try:
-        return apply_layer(ev, layer)
+        ev = apply_layer(ev, layer)
     except NoBrief as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
+    return await with_audience(db, ev, audience)
+
+
+@router.get("/roadmap-audiences", response_model=list[AudienceOut], tags=["roadmaps"])
+async def list_audiences() -> list[AudienceOut]:
+    """O5: the audience registry (oracle.roadmap.variants): what each audience hides,
+    which item fields it shows and how it groups them."""
+    return [
+        AudienceOut(
+            key=v.key,
+            label=v.label,
+            hidden_sections=sorted(v.hidden_sections),
+            item_fields=sorted(v.item_fields),
+            group_by=v.group_by,
+            max_items_per_horizon=v.max_items_per_horizon,
+            appendix=v.appendix,
+        )
+        for v in variants.VARIANTS.values()
+    ]
 
 
 def render_export(ev: ExportVersion, layer: str, fmt: str) -> str | bytes:
@@ -98,7 +154,12 @@ def render_export(ev: ExportVersion, layer: str, fmt: str) -> str | bytes:
                 PPTX: {"schema": {"type": "string", "format": "binary"}},
             },
         },
-        422: {"description": "Format not offered for the layer, or the version has no brief"},
+        403: {"description": "The Public audience below the approver role, or for a run"},
+        409: {"description": "public_not_ready: the Public audience needs a public check"},
+        422: {
+            "description": "Format not offered for the layer, the version has no brief, or "
+            "an audience for a document that is not a roadmap (or as markdown)"
+        },
     },
 )
 async def export_version(
@@ -108,17 +169,25 @@ async def export_version(
     principal: CurrentPrincipal,
     fmt: ExportFormat = Query("html", alias="format"),
     layer: ExportLayer = Query("full"),
+    audience: Audience | None = Query(None),
 ) -> Response:
     """Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable
-    slides)."""
+    slides). ``audience`` (roadmaps, O5): the rendering for Board, Team or Engineering;
+    markdown is the stored text and has none."""
     if fmt not in LAYER_FORMATS[layer]:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"the {layer} layer exports as {', '.join(LAYER_FORMATS[layer])}, not {fmt}",
         )
+    check_audience_role(principal, audience)
+    if audience is not None and fmt == "md":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "markdown is the stored text; export an audience as html, pdf or pptx",
+        )
     try:
         with offload.place(principal) as held:
-            ev = detached(await _load(db, doc, n, layer))
+            ev = detached(await _load(db, doc, n, layer, audience))
             await db.commit()  # no connection held while it waits for the pool
             content = await offload.run(held, render_export, ev, layer, fmt)
     except offload.Refused as e:
@@ -133,13 +202,20 @@ async def export_version(
 
 
 @router.get("/documents/{doc}/versions/{n}/deck", response_model=DeckOut)
-async def get_deck(doc: str, n: int, db: TenantDB, principal: CurrentPrincipal) -> Any:
+async def get_deck(
+    doc: str,
+    n: int,
+    db: TenantDB,
+    principal: CurrentPrincipal,
+    audience: Audience | None = Query(None),
+) -> Any:
     """The brief layer as slides in the document's theme (its slide variant), with
     presenter notes and the detail each slide can expand. 422 when the version has no
     brief sections."""
     # Present mode: kept, else built on the export pool in a Present place (owner decision
     # 2026-10-20).
-    ev = detached(await _load(db, doc, n, "deck"))
+    check_audience_role(principal, audience)
+    ev = detached(await _load(db, doc, n, "deck", audience))
     await db.commit()  # no connection held while it waits for the pool
     try:
         deck = await present.deck_for(principal, ev, build_deck)

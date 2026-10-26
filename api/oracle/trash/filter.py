@@ -5,8 +5,9 @@ Every ORM SELECT on a tenant session gets ``deleted_at IS NULL`` for
 :class:`~oracle.runs.models.Run` wherever they appear (joins and relationship loads
 included), and what hangs off a trashed one (every row pointing at a trashed document:
 its versions, feedback, discussions, notifications, campaigns, change sets, publications,
-draft roadmaps, plan rows, spec requests, a spec request whose own tech brief is trashed;
-a run's checkpoints and segments; an intake's gaps and questions) is left out with it, as
+draft roadmaps, plan rows, a roadmap's public texts and checks, spec requests, a spec
+request whose own tech brief is trashed; a run's checkpoints and segments; an intake's
+gaps and questions) is left out with it, as
 the tenant scope is added (oracle.tenancy). tests/test_trash.py walks the mapped models:
 a column pointing at documents is followed here or exempt there with its reason.
 Lists, direct reads (a 404), the Inbox, Home, Plan and the agents' MCP reads all go
@@ -55,11 +56,14 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         ProductTrack,
         RoadmapChangeSet,
         RoadmapItem,
+        RoadmapPublicCheck,
+        RoadmapPublicText,
         ScheduleBasis,
         TrackerRecord,
     )
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.scope_models import PrdScope
+    from oracle.shares.models import ShareLink
     from oracle.staging.models import NextDraftChange
     from oracle.v2.models import (
         ArtifactRequest,
@@ -89,8 +93,11 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         PrioritySnapshot: [("document_id", docs)],
         PrdScope: [("document_id", docs)],
         OutcomeRecord: [("document_id", docs)],
+        ShareLink: [("document_id", docs)],
         RoadmapChangeSet: [("roadmap_document_id", docs)],
         RoadmapItem: [("roadmap_document_id", docs)],
+        RoadmapPublicText: [("document_id", docs)],
+        RoadmapPublicCheck: [("document_id", docs)],
         DraftRoadmap: [("prd_document_id", docs)],
         ProductTrack: [("prd_document_id", docs)],
         ScheduleBasis: [("prd_document_id", docs)],
