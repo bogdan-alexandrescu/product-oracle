@@ -75,6 +75,7 @@ from oracle.runs.scope_router import router as scope_router
 from oracle.safe_yaml import ParseBusy
 from oracle.setup import router as setup_router
 from oracle.shares.public import router as public_shares_router
+from oracle.shares.public import short_router as share_address_router
 from oracle.shares.router import router as shares_router
 from oracle.slack.events import router as slack_events_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
@@ -275,6 +276,8 @@ def create_app() -> FastAPI:
     # passcode (no member credential, never MCP tools: oracle.mcp.tools.PUBLIC_OPERATIONS).
     app.include_router(shares_router)
     app.include_router(public_shares_router)
+    # /s/<token>: the address a creator copies, a redirect to the page above.
+    app.include_router(share_address_router)
     # F6: the weekly alignment report and the company's Slack install it posts through.
     app.include_router(reports_router)
     app.include_router(company_integrations_router)

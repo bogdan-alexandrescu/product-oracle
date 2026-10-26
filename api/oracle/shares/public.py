@@ -26,13 +26,20 @@ No member credential, and never MCP tools (``oracle.mcp.tools.PUBLIC_OPERATIONS`
    a burst of parallel guesses meets the same limits. Anyone with the address can keep a
    link locked by guessing once a window (accepted with the lock-out, O5-Q5). The
    in-memory windows drop an address or link once its window is empty.
-5. **Audit.** Refused requests on a known link at most :data:`REFUSED_AUDITS` a minute
+5. **The short address.** ``GET /s/{token}`` (:data:`short_router`, owner decision
+   2026-10-26) is what a creator copies: a 307 to ``/v1/public/shares/{token}`` with the
+   query string kept, never cached and with no referrer. It does not look the token up
+   (an unknown one reaches the page, which answers as above); a token outside the share
+   token's alphabet, or longer than :data:`TOKEN_MAX`, is 404 without a redirect. It
+   counts in the same per-address window, and is in neither OpenAPI nor MCP.
+6. **Audit.** Refused requests on a known link at most :data:`REFUSED_AUDITS` a minute
    (counted on its row); the first view and every lock-out, with the link id and never
    the token. Each view goes into ``share_link_views``, not the audit log.
 """
 
 import asyncio
 import hmac
+import re
 import secrets
 import time
 import uuid
@@ -54,6 +61,8 @@ from oracle.tenancy import tenant_session, unscoped_session
 from oracle.trash.filter import INCLUDE_TRASHED
 
 router = APIRouter(prefix="/v1/public/shares", tags=["shares"])
+#: ``/s/{token}``: the address a creator copies; a browser address, not an operation.
+short_router = APIRouter(include_in_schema=False)
 
 #: A link holder's routes; never MCP tools (oracle.mcp.tools).
 OPERATIONS = ("public_share", "unlock_public_share", "public_share_pdf", "public_share_status")
@@ -70,6 +79,10 @@ REFUSED_AUDITS = 20
 REFUSAL_WINDOW_SECONDS = 60
 TOKEN_MAX = 128
 PASSCODE_FORM_MAX = 256
+#: secrets.token_urlsafe's alphabet (service.new_token).
+TOKEN_SHAPE = re.compile(r"[A-Za-z0-9_-]+")
+#: The short address's headers: the token never leaves in a Referer or sits in a cache.
+REDIRECT_HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
 NOT_FOUND: dict[str, Any] = {"reason": "not_found"}
 FORM_TITLE = "Enter the passcode"
@@ -509,3 +522,15 @@ async def public_share_status(token: str, request: Request) -> JSONResponse:
     if link is None or claims is None:
         return _json({"state": "locked"}, 200)
     return _json({"state": "active" if service.state(link) == "active" else "ended"}, 200)
+
+
+@short_router.get("/s/{token}")
+async def short_share_address(token: str, request: Request) -> Response:
+    """307 to the link's public page, the query kept; the token is not looked up."""
+    if (busy := _client_allowed(request)) is not None:
+        return busy
+    if len(token) > TOKEN_MAX or not TOKEN_SHAPE.fullmatch(token):
+        return JSONResponse({"detail": "Not Found"}, 404, headers=REDIRECT_HEADERS)
+    query = request.url.query
+    target = f"{router.prefix}/{token}" + (f"?{query}" if query else "")
+    return RedirectResponse(target, 307, headers=REDIRECT_HEADERS)

@@ -13,20 +13,21 @@ An owner applies this runbook after the share-links change (lane 3, migration
 | Path | What it serves | Code |
 |---|---|---|
 | `/v1/public/shares/*` | The link holder's API: the passcode form and the page (`GET`, `POST /v1/public/shares/<token>`), the PDF (`…/pdf`) and the state (`…/status`) | `api/oracle/shares/public.py` |
-| `/s/*` | The address a link holder is sent: `https://$HOST/s/<token>` | the web page `web/app/s/[token]` (spec-O5 lane 5; see "Before you start") |
+| `/s/*` | The address a link holder is sent: `https://$HOST/s/<token>`. The API answers `307` to `/v1/public/shares/<token>` (query string kept, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`); it does not look the token up, and a token outside the share-token alphabet is `404` | `api/oracle/shares/public.py` (`short_router`) |
 
-Both entries are prefix wildcards on purpose: the token is part of the path. Nothing else
-under `/v1/public/` and nothing else at the root may be added: `/v1/public/interviews/*`
-is not part of this change.
+**Only these two paths skip IAP: `/s/*` and `/v1/public/shares/*`** (owner decision,
+2026-10-26). Both go to the public backend, which is the API service. Both entries are
+prefix wildcards on purpose: the token is part of the path. Nothing else under
+`/v1/public/` and nothing else at the root may be added: `/v1/public/interviews/*` is not
+part of this change. The web app's page `web/app/s/[token]` is for development and the
+mock suite only: in production `/s/*` never reaches the web service.
 
 ## Before you start
 
-- **Which service answers `/s/*`.** The public backend is the API service. The address a
-  creator copies is `/s/<token>`; lane 5 builds that page in the web app. Until the
-  owner settles where `/s/*` is served (an open owner question: which service answers
-  `/s/*`), add only the `/v1/public/shares/*` entry (section 2) and share links as
-  `https://$HOST/v1/public/shares/<token>`, which works on its own: the API serves the
-  passcode form and the page there, with no script.
+- **Which service answers `/s/*`.** The API (owner decision, 2026-10-26): `GET /s/<token>`
+  is a small route that redirects to `/v1/public/shares/<token>`, the API's script-free
+  page. Deploy the API change that adds it before adding `/s/*` to the URL map. Both
+  routes share one per-address limit (120 requests a minute, then `429`).
 - **The cookie.** After the right passcode the API sets `po_share` (HttpOnly, Secure,
   SameSite=Strict) on the path `/v1/public/shares/<token>` for 8 hours at most. The path
   rule must send `/v1/public/shares/<token>` and its sub-paths to the same backend, or the
@@ -52,7 +53,7 @@ Keep `url-map.backup.yaml` until the check in section 3 passes.
 
 ## 2. Add the entry and import
 
-In the path matcher for `$HOST`, add `/v1/public/shares/*` to the pathRule whose service is the
+In the path matcher for `$HOST`, add `/s/*` and `/v1/public/shares/*` to the pathRule whose service is the
 public (no-IAP) backend, beside `/mcp`, `/integrations/slack/events` and
 `/internal/scheduler/tick`:
 
@@ -61,11 +62,11 @@ public (no-IAP) backend, beside `/mcp`, `/integrations/slack/events` and
 paths:
 - /mcp
 # ... the existing entries stay as they are ...
+- /s/*
 - /v1/public/shares/*
 ```
 
-Do not add `/s/*` yet: the API answers it with 404, and which service serves it is the
-owner's open question ("Before you start"). Add it here once that is settled.
+Add no other path: these two are the only ones that skip IAP for share links.
 
 ```sh
 gcloud compute url-maps validate --project="$PROJECT" --source=url-map.yaml
@@ -79,6 +80,12 @@ The load balancer takes a few minutes to apply it everywhere.
 From a machine with no IAP session (a private browser window, or `curl`):
 
 ```sh
+# The copied address redirects, never IAP's sign-in page:
+curl -sI "https://$HOST/s/not-a-real-token?x=1" | grep -i -E '^(HTTP|location|cache-control|referrer-policy)'
+# HTTP/2 307 / location: /v1/public/shares/not-a-real-token?x=1 / no-store / no-referrer
+curl -s -o /dev/null -w '%{http_code}\n' "https://$HOST/s/not.a.token"
+# 404 (outside the token alphabet: no redirect)
+
 # Any token gets the passcode form, with 401, never IAP's sign-in page:
 curl -s -o /dev/null -w '%{http_code}\n' "https://$HOST/v1/public/shares/not-a-real-token"
 # 401
@@ -106,7 +113,8 @@ reload says "This link has ended. Ask the person who sent it for a new one."
 | What you see | Cause |
 |---|---|
 | IAP's sign-in page or an IAP 403 | The entry is missing or on the wrong pathRule: the request went to the IAP backend. |
-| 404 from the load balancer itself (not Oracle's form) | The public backend does not serve that path (see "Before you start" for `/s/*`). |
+| 404 from the load balancer itself (not Oracle's form) | The public backend does not serve that path: `/s/*` needs the API change that adds the redirect deployed first. |
+| `/s/<token>` shows IAP's sign-in page | `/s/*` is missing from the public backend's pathRule. |
 | The passcode is accepted but the page asks again | The cookie's path `/v1/public/shares/<token>` is not routed to the same backend. |
 | 429 on every request | Every client shares one address: `ORACLE_TRUSTED_PROXY_HOPS` does not match the proxies in front of the API. |
 
@@ -114,7 +122,7 @@ reload says "This link has ended. Ask the person who sent it for a new one."
 
 1. Restore the URL map: `gcloud compute url-maps import <URL_MAP> --project="$PROJECT"
    --source=url-map.backup.yaml` (or remove the entries). Every link stops working at
-   once, which is the safe failure: `/v1/public/shares/*` (and `/s/*`, once added) fall back to IAP.
+   once, which is the safe failure: `/v1/public/shares/*` and `/s/*` fall back to IAP.
 2. Only then revert the share-links change. Its down-migration (`0073_share_links`)
    drops `share_link_views` and `share_links`: every link and its view log are gone, and
    a revert cannot bring them back. Revoke links you want to end for good before it.
