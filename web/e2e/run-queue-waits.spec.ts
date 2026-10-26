@@ -10,8 +10,7 @@ import { login } from "./helpers";
  */
 
 const RUN_ID = "7a11c0de-0000-4000-8000-0000000000a1";
-const QUOTA =
-  "Waiting for a Claude account: the accounts lent to Oracle have no quota left";
+const QUOTA = "Waiting for a Claude account: the accounts lent to Oracle have no quota left";
 // MOCK_NOW (2026-10-22T12:00Z) less 45 minutes, in America/Los_Angeles.
 const SINCE_ISO = "2026-10-22T11:15:00Z";
 const SINCE_WORDS = "Thu Oct 22, 4:15 AM PDT";
@@ -22,21 +21,12 @@ const STUCK =
 async function seedQueuedRun(page: Page): Promise<void> {
   await page.evaluate(
     ({ id, since, stuck, text }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const write = (
-        globalThis as {
-          __poMockWrite?: (change: (db: any) => string) => Promise<string>;
-        }
-      ).__poMockWrite;
-      if (!write)
-        throw new Error("The mock API is not loaded: sign in before seeding");
+      type R = Record<string, unknown> & { id: string; document_slug: string; segments: Record<string, unknown>[] };
+      type Db = { runs: { runs: R[] } };
+      const write = (globalThis as { __poMockWrite?: (change: (db: Db) => string) => Promise<string> }).__poMockWrite;
+      if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
       return write((db) => {
-        type R = Record<string, unknown> & {
-          id: string;
-          document_slug: string;
-          segments: Record<string, unknown>[];
-        };
-        const runs: R[] = db.runs.runs;
+        const runs = db.runs.runs;
         const base = runs.find((r) => r.document_slug === "team-onboarding")!;
         const run: R = JSON.parse(JSON.stringify(base));
         const wait = { code: "PROVIDER_QUOTA_EXHAUSTED", text, since };
@@ -72,38 +62,23 @@ async function seedQueuedRun(page: Page): Promise<void> {
   );
 }
 
-test("a step SwarmCloud holds reads why and since when on the Runs row and the run page", async ({
-  page,
-}) => {
+test("a step SwarmCloud holds reads why and since when on the Runs row and the run page", async ({ page }) => {
   await login(page);
   await seedQueuedRun(page);
 
   await page.goto("/runs");
-  const row = page
-    .locator("tr[data-row]")
-    .filter({ hasText: "queued-onboarding" });
-  await expect(row.getByTestId("run-queue-wait")).toHaveText(
-    `${QUOTA} · since ${SINCE_WORDS}`,
-  );
-  // Another run SwarmCloud does not hold shows nothing of the kind.
-  await expect(
-    page
-      .locator("tr[data-row]")
-      .filter({ hasText: "team-onboarding" })
-      .getByTestId("run-queue-wait"),
-  ).toHaveCount(0);
+  const row = page.locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
+  await expect(row.getByTestId("run-queue-wait")).toHaveText(`${QUOTA} · since ${SINCE_WORDS}`);
+  // A run SwarmCloud does not hold shows nothing of the kind.
+  await expect(page.locator("tr[data-row]").filter({ hasText: "team-onboarding" }).getByTestId("run-queue-wait")).toHaveCount(0);
 
   await row.getByRole("link", { name: "queued-onboarding" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN_ID}$`));
-  await expect(page.getByTestId("segment-queue-wait")).toHaveText(
-    `${QUOTA} · since ${SINCE_WORDS}`,
-  );
   await expect(page.getByTestId("segment-queue-wait")).toHaveCount(1);
+  await expect(page.getByTestId("segment-queue-wait")).toHaveText(`${QUOTA} · since ${SINCE_WORDS}`);
 });
 
-test("a run not started after 30 minutes is an Inbox row with Open and Cancel, counted by the badge", async ({
-  page,
-}) => {
+test("a run not started after 30 minutes is an Inbox row with Open and Cancel, counted by the badge", async ({ page }) => {
   await login(page);
   await page.goto("/inbox");
   const badge = page.getByTestId("nav-inbox-badge");
@@ -113,16 +88,11 @@ test("a run not started after 30 minutes is an Inbox row with Open and Cancel, c
 
   await page.goto("/inbox");
   await expect(badge).toHaveText(String(before + 1));
-  const row = page
-    .getByTestId("inbox-lookups")
-    .locator("tr[data-row]")
-    .filter({ hasText: "queued-onboarding" });
+  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
   await expect(row).toContainText(QUOTA);
   await expect(row).toContainText(`since ${SINCE_WORDS}`);
   await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(0);
-  await expect(
-    row.getByRole("link", { name: "Open", exact: true }),
-  ).toHaveAttribute("href", `/runs/${RUN_ID}`);
+  await expect(row.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", `/runs/${RUN_ID}`);
 
   await row.getByRole("button", { name: "Cancel run" }).click();
   await expect(row).toHaveCount(0);
