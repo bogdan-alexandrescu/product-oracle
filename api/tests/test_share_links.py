@@ -762,8 +762,13 @@ async def test_a_link_holder_sees_no_other_document_status_or_version(client, ct
     page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
     assert page.status_code == 200, page.text
     body_text = _text(page.text)
-    assert "We grow activation" in body_text
-    assert "the PRD" in body_text  # the link's words stay, the link goes
+    if audience == "board":
+        # Board is the items' structured rows alone (owner decision o5-board-structured-rows,
+        # 2026-10-26): no written text, so no link words either.
+        assert "CSV parser" in body_text and "We grow activation" not in body_text
+    else:
+        assert "We grow activation" in body_text
+        assert "the PRD" in body_text  # the link's words stay, the link goes
     for leak in ("Example Labs PRD", "example-labs-prd", "/documents/", "Approved",
                  "Superseded", "Version 1", 'class="banner-source"',
                  'class="banner-status"', 'class="banner-version"'):  # fmt: skip

@@ -232,6 +232,16 @@ def _views(items: list[RoadmapItem]) -> list[variants.ItemView]:
     ]  # fmt: skip
 
 
+async def _no_goal(db: AsyncSession, items: list[RoadmapItem]) -> set[str]:
+    """The items that serve no confirmed goal, through their feature in the baseline
+    (oracle.launches.tiers.item_goals, as Board's rows): never read from a card's words.
+    None when the tenant has no confirmed goal."""
+    from oracle.launches import tiers
+
+    goal_of = await tiers.item_goals(db, items)
+    return {key for key, (goal, _title) in (goal_of or {}).items() if goal == "none"}
+
+
 async def _removed(db: AsyncSession, items: list[RoadmapItem], sections: list[Section]) -> dict:
     """What the Public page leaves out of this version, counted ("What is removed")."""
     tracks = {i.track_id for i in items if i.track_id is not None}
@@ -266,7 +276,7 @@ async def review(db: AsyncSession, document: Document, version: DocumentVersion)
     ctx = await leak_check.load_context(db)
     items = await _items(db, version)
     sections = await _sections(db, version)
-    no_goal = variants._no_goal_keys(sections, _views(items))
+    no_goal = await _no_goal(db, items)
     texts = {
         t.item_key: t
         for t in await db.scalars(
@@ -388,7 +398,7 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     if document is None or version is None:
         raise JobInputError("the roadmap version no longer exists")
     items = await _items(s, version)
-    no_goal = variants._no_goal_keys(await _sections(s, version), _views(items))
+    no_goal = await _no_goal(s, items)
     have = set(
         await s.scalars(
             select(RoadmapPublicText.item_key).where(RoadmapPublicText.document_id == document.id)

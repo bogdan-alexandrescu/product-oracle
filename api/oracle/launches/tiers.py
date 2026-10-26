@@ -149,6 +149,58 @@ def best_goal(goals: dict[Any, Entity], edges: Iterable[Edge]) -> tuple[str, str
     return "other", best[2].title
 
 
+async def item_goals(
+    db: AsyncSession, rows: list[RoadmapItem]
+) -> dict[str, tuple[str, str | None]] | None:
+    """Each roadmap item's best confirmed goal through its feature (the row's feature, else
+    the feature keyed as the item), by item key, graded as :func:`best_goal` grades it:
+    ``("none", None)`` for an item that serves none. ``None`` when the tenant has no
+    confirmed goal, so nothing is measured against one. Loaded once for all ``rows``; never
+    read from a card's words (O5: Board rows, the public check and the leak check)."""
+    goals = await confirmed_goals(db)
+    if not goals:
+        return None
+    features: dict[str, Entity] = {}
+    if rows:
+        by_id = {
+            e.id: e
+            for e in await db.scalars(
+                select(Entity).where(Entity.id.in_({r.feature_id for r in rows if r.feature_id}))
+            )
+        }
+        by_key = {
+            e.key: e
+            for e in await db.scalars(
+                select(Entity).where(
+                    Entity.type == "feature", Entity.key.in_({r.item_key for r in rows})
+                )
+            )
+        }
+        for r in rows:
+            found = by_id.get(r.feature_id) if r.feature_id is not None else None
+            if (found := found or by_key.get(r.item_key)) is not None:
+                features[r.item_key] = found
+    edges: dict[Any, list[Edge]] = {}
+    if features:
+        for edge in await db.scalars(
+            select(Edge).where(
+                Edge.src_id.in_({f.id for f in features.values()}),
+                Edge.type == "supports",
+                Edge.status == "confirmed",
+                Edge.dst_id.in_(goals),
+            )
+        ):
+            edges.setdefault(edge.src_id, []).append(edge)
+    return {
+        r.item_key: (
+            best_goal(goals, edges.get(features[r.item_key].id, []))
+            if r.item_key in features
+            else ("none", None)
+        )
+        for r in rows
+    }
+
+
 async def _goal(db: AsyncSession, feature: Entity | None) -> tuple[str, str | None]:
     goals = await confirmed_goals(db)
     if feature is None or not goals:
