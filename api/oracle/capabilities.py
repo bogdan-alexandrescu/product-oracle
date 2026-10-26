@@ -155,6 +155,9 @@ PER_ITEM: dict[str, Role | None] = {
     "answer_with_discussion_change": "approver",
     "apply_discussion_change": "approver",
     "approve_feasibility_scope": "owner",
+    # Simple S3b: an owner, else the roadmap's decider (with none, its owner); required
+    # reviewers approve too; the author or the decider resumes (oracle.simple.drafts).
+    "approve_simple_draft": "owner",
     "approve_version": "owner",
     "ask_discussion_change": "commenter",
     "ask_next_question_batch": "approver",
@@ -223,6 +226,7 @@ PER_ITEM: dict[str, Role | None] = {
     "reopen_track_alert": None,
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
+    "resume_simple_draft": None,
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",
     "retry_import_run": "owner",
@@ -243,6 +247,7 @@ PER_ITEM: dict[str, Role | None] = {
     "start_regeneration": "approver",
     "stop_cancelling_run": "owner",
     "stop_slack_mirror": "approver",
+    "submit_simple_draft": "owner",
     "suggest_discussion_change": None,
     "summarize_discussion": None,
     "take_team_turn": None,
