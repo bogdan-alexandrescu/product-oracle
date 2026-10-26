@@ -61,7 +61,7 @@ def test_chains_on_the_citation_source_head():
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0019_citation_confidence chains on it, the intake lane's 0014_intake on that and the
     # PRD review chain (0014_review ... 0014_member_follow_up_retry) on that.
-    assert script.get_heads() == ["0056_slack_pings"]
+    assert script.get_heads() == ["0057_discussion_decision_change"]
     assert script.get_revision("0019_citation_confidence").down_revision == REVISION
 
 

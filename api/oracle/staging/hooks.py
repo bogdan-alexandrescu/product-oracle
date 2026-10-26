@@ -68,7 +68,8 @@ async def decided(db: AsyncSession, cp: Checkpoint, decision: str) -> None:
     note = APPLIED_ON_APPROVAL if decision == "approved" else SENT
     for action in rows:
         change = await _change(db, action.discussion_change_id)
-        if change is None:
+        # A done change (Ask's question action) stays done.
+        if change is None or change.status == "done":
             continue
         if action.state == "staged":
             change.status = "done"

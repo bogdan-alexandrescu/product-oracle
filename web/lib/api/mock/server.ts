@@ -33,6 +33,7 @@ import {
   seedDiscussionReplies,
   seedDiscussions,
   seedDiscussionRecord,
+  seedDiscussionChangeKinds,
   seedRunDiscussions,
   type DiscussionRow,
   type DiscussionsContext,
@@ -59,7 +60,10 @@ import {
   seedFinishedBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
+  asksAtStop,
+  putDiscussionAction,
   routeRuns,
+  scopeStop,
   seedEngCheckRun,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -437,6 +441,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
  * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
+ * "discussion-change-kinds" as "feature-set" plus the approver's open discussion on that run's
+ * saved-carts item, with Oracle's priority move, ask and decision (G3, ./discussions.ts
+ * seedDiscussionChangeKinds);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
@@ -2056,7 +2063,7 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
-          : scenario === "feature-set" || scenario === "run-discussions"
+          : scenario === "feature-set" || scenario === "run-discussions" || scenario === "discussion-change-kinds"
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
@@ -2141,7 +2148,9 @@ function load(): Db {
             ? seedRunDiscussionsScenario(db)
             : scenario === "discussion-record"
               ? seedDiscussionRecordScenario(db)
-              : emptyDiscussions();
+              : scenario === "discussion-change-kinds"
+                ? seedDiscussionChangeKindsScenario(db)
+                : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   // #524: what Oracle did at Act within limits on a launch (H6) and a ritual (H2), each row
   // linking to its subject.
@@ -2251,6 +2260,22 @@ function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): Discus
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   const prd = findDocument(db, "checkout-redesign")!;
   return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
+}
+
+/** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
+function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
+  const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
+  const cp = run.checkpoints.find((c) => c.status === "pending")!;
+  const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
+  const feature = (key: string) => {
+    const e = db.baseline.entities.find((x) => x.type === "feature" && x.key === key)!;
+    return { id: e.id, title: e.title };
+  };
+  return seedDiscussionChangeKinds(
+    { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now },
+    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
+    { moved: feature("f.saved-carts"), above: feature("f.guided-setup") },
+  );
 }
 
 /** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
@@ -3727,6 +3752,32 @@ async function route(db: Db, req: Request): Promise<Response> {
         db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
         const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
         return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
+      },
+      // G3: the features and requirements a change names, the question Ask asks, and the decision Propose proposes.
+      entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      askQuestion: (x) => {
+        const at = now();
+        const qid = uuid();
+        ensureV2(db).questions.push({
+          id: qid, gap_id: null, intake_id: null, document_id: x.discussion.document_id, checkpoint_id: null, item_ref: null, entity_id: null,
+          module_key: null, category: x.category as V2Db["questions"][number]["category"], prompt: x.prompt, rationale: x.rationale, priority: 100,
+          batch: null, asked_to: x.asked_to, asked_by: me.id, section_key: null,
+          status: "asked", created_at: at, updated_at: at, discussion_id: x.discussion.id, discussion_title: x.discussion.title,
+        });
+        return qid;
+      },
+      // G4: a change's D8 action at a waiting stop, as the API's put_action with the discussion as its source.
+      stopAction: (at, action, source, mode) => putDiscussionAction({ ...runsContext(db), db: db.runs! }, at, action, source, mode),
+      asksAtStop: (at) => asksAtStop({ db: db.runs! }, at),
+      scopeStop: (named, own) =>
+        scopeStop({ db: db.runs! }, named, own, (id) => {
+          const key = db.baseline.entities.find((e) => e.id === id)?.key;
+          return key ? [key, key.replace(/^[a-z]+\./, "")] : [];
+        }),
+      proposeDecision: async (b) => {
+        const ctx = decisionsContext(db, me);
+        const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
+        return (await routeDecisions(ctx, ensureDecisions(db, ctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       },
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);

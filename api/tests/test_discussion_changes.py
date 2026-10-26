@@ -194,14 +194,17 @@ def test_action_and_why_not_per_role_and_kind():
 
 
 def test_only_kinds_whose_pick_landed_are_available():
-    """protects=Oracle is offered only available, allowed kinds; fails_when=scope, priority
-    or ask kinds are offered before C2/C6/C9; no_claim=the prompt's wording."""
+    """protects=Oracle is offered only the kinds allowed on the subject; fails_when=a kind
+    is offered on a subject it does not change; no_claim=the prompt's wording."""
     assert set(changes.kinds.available_for("checkpoint_item")) >= {"item_horizon", "answer"}
+    # C2, C6, C7, C8 and C9 landed: ask, scope and priority kinds are offered.
     for kind in ("scope_feature", "priority_move", "ask_person"):
-        assert kind not in changes.kinds.available_for("checkpoint_item")
+        assert kind in changes.kinds.available_for("checkpoint_item")
     # F3 Date bases landed (train F): Record is available.
     assert "basis_record" in changes.kinds.available_for("roadmap_item")
-    assert changes.kinds.available_for("section") == ["section_edit", "answer"]
+    assert changes.kinds.available_for("section") == [
+        "section_edit", "answer", "ask_person", "decision"]  # fmt: skip
+    assert "priority_move" not in changes.kinds.available_for("section")
 
 
 # --- extraction -------------------------------------------------------------------------------
@@ -248,7 +251,7 @@ async def test_invalid_entries_are_dropped_and_audited_without_text(client, monk
     ctx_ = context.Context()
     ctx_.add("finding", "f-shared", "Finding", "Shared line")
     entries = [
-        {"kind": "scope_feature", "target": {}, "payload": {"feature_id": str(uuid.uuid4()),
+        {"kind": "scope_later", "target": {}, "payload": {"feature_id": str(uuid.uuid4()),
          "decision": "defer", "reason": "SECRET-A"}, "rationale": "SECRET-A"},
         {"kind": "item_horizon", "target": {}, "payload": {"item_key": "x", "horizon": "next"},
          "rationale": "SECRET-B"},

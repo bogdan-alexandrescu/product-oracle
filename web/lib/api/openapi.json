@@ -4616,6 +4616,145 @@
         "x-per-item": "approver"
       }
     },
+    "/v1/discussion-changes/{change_id}/ask": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Ask Discussion Change",
+        "description": "``ask_person`` (commenters and up): asks that person the question through C2 (on a\ncheckpoint item whose stop is waiting, as the item's question action). ``result``:\n``{question_id}``.",
+        "operationId": "ask_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/apply": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Apply Discussion Change",
+        "description": "``priority_move``, ``priority_pin`` (approvers and up): C9's move or pin with its\nreason. Oracle checks it first as on the Priorities screen; when it pushes back the\nanswer is 409 with its messages and nothing is stored; ``confirm: true`` keeps it.\n``result``: ``{override_id}``.",
+        "operationId": "apply_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeApplyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Oracle disagrees (C9): nothing stored; send again with confirm to keep it. Also a stale lock_version, or already handled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushbackOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/discussion-changes/{change_id}/verify": {
       "post": {
         "tags": [
@@ -49316,6 +49455,36 @@
         ],
         "title": "ChangeAction",
         "description": "The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy."
+      },
+      "ChangeApplyIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ChangeApplyIn"
       },
       "ChangeCan": {
         "properties": {
