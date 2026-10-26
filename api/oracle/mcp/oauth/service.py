@@ -60,6 +60,11 @@ REFRESH_PREFIX = "por_"
 MAX_REDIRECT_URIS = 10
 MAX_URI_LENGTH = 2000
 MAX_NAME_LENGTH = 200
+# Registration needs no sign-in and adds a row (and an audit record) to the default
+# company: at most this many clients an hour, counted in the database so every replica
+# shares the cap. An MCP client registers once per install.
+REGISTER_LIMIT = 30
+REGISTER_WINDOW = timedelta(hours=1)
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 # RFC 7636: 43-128 characters of [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~".
 _VERIFIER = re.compile(r"^[A-Za-z0-9\-._~]{43,128}$")
@@ -191,6 +196,22 @@ def append_query(uri: str, params: dict[str, str | None]) -> str:
 async def default_tenant_id() -> uuid.UUID | None:
     """The tenant IAP sign-in lands in: registration happens before anyone signs in."""
     return await iap._default_tenant_id()
+
+
+async def register_wait(session: AsyncSession) -> int | None:
+    """Seconds until another client may register, None when one may now."""
+    since = datetime.now(UTC) - REGISTER_WINDOW
+    recent = (
+        await session.scalars(
+            select(OAuthClient.created_at)
+            .where(OAuthClient.created_at > since)
+            .order_by(OAuthClient.created_at)
+            .limit(REGISTER_LIMIT)
+        )
+    ).all()
+    if len(recent) < REGISTER_LIMIT:
+        return None
+    return max(1, int((recent[0] - since).total_seconds()) + 1)
 
 
 async def register_client(
