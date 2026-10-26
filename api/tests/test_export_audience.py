@@ -906,7 +906,8 @@ def test_a_short_goalless_title_does_not_drop_other_items_lines():
     contains the word; fails_when="- Bulk import …" is dropped, or the wrapped line of
     "- Import …" stays; no_claim=mentions under another name."""
     board = variants.VARIANTS["board"]
-    items = [_item("bulk", "Bulk import"), _item("imp", "Import", no_goal=True)]
+    items = [_item("bulk", "Bulk import"), _item("csv", "CSV parser")]
+    items.append(_item("imp", "Import", no_goal=True))
     text = (
         "- Bulk import: new accounts import on day one.\n"
         "- Import: a second importer\n"
