@@ -347,6 +347,28 @@ async def test_summarize_is_not_offered_and_the_estimate_leaves_it_out(client, c
     assert [r["title"] for r in est["estimate"]["rituals"]] == []
 
 
+async def test_summarize_answers_a_build_under_way_before_the_rebuild_refusal(
+    client, ctx, at, runtime
+):
+    """protects=Summarize with Oracle's 409 order on a rebuild occurrence, the order the
+    mock follows (web/lib/api/mock/rituals.ts): a build under way says so first, then the
+    rebuild refusal once it ended; fails_when=the rebuild refusal comes before the run
+    under way, or the run under way is not reported; no_claim=the button's absence on
+    screen (baseline-rebuild.spec.ts)."""
+    await resumed(client, ctx)
+    occ = await ready_occurrence(client, ctx, at, KIND)
+    (run,) = await baseline_runs(ctx.tenant_id)
+    path = f"/v1/ritual-occurrences/{occ['id']}/summary"
+    resp = await client.post(path, headers=ctx.as_("owner"))
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Oracle is already writing this summary"
+    resp = await client.post(f"/v1/runs/{run.id}/cancel", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(path, headers=ctx.as_("owner"))
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == "Start the baseline rebuild from the Baseline page"
+
+
 async def test_an_owner_who_cannot_start_runs_gets_a_note(client, ctx, at, runtime):
     """protects=the run is created as the ritual's owner; when they are disabled no run
     starts and the occurrence says why; fails_when=a run starts as someone else;
