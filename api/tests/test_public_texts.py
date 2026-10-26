@@ -1121,3 +1121,123 @@ def test_seeded_names_in_any_case_with_look_alikes_are_still_found():
             if code not in [f.code for f in leak_check.blocking(found)]:
                 missed.append((stored, variant))
     assert missed == [], [ascii(m) for m in missed[:10]]
+
+
+# --- #699 re-review: a name matches on any of its forms --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("ctx_over", "text", "code"),
+    [
+        ({"people": [PERSON, "Ivy Labs"]}, "Built with lvy Labs", "person_name"),
+        ({"people": [PERSON, "Ingrid"]}, "Thanks lngrid", "person_name"),
+        ({"people": [PERSON, "Ingrid"]}, "Thanks ǀngrid", "person_name"),
+        ({"alternatives": [RIVAL, "Ivy Labs"]}, "Faster than lvy Labs", "alternative_name"),
+        ({"slugs": [SLUG, "Inbox-plan"]}, "see lnbox-plan", "internal_code"),
+        (
+            {"notes": [NOTE, "Ingrid wants it before the Istanbul launch"]},
+            "lngrid wants it before the lstanbul launch",
+            "internal_note",
+        ),
+        # A stored capital I read as "i" in one place and "l" in another, and a written
+        # capital I standing for an "i" and an "l" in the same name.
+        ({"people": [PERSON, "INGRID"]}, "Thanks lngrid", "person_name"),
+        ({"people": [PERSON, "Lilian"]}, "Thanks LIIian", "person_name"),
+    ],
+)
+def test_a_small_l_in_place_of_a_stored_capital_i_is_found(ctx_over, text, code):
+    """protects=#699 re-review: a stored name is found when the written text matches it on
+    any of its forms (the folded skeleton, the strict skeleton as stored, the strict
+    skeleton after case folding), letter by letter; fails_when="lvy Labs", "lngrid" or
+    "lnbox-plan" passes the check."""
+    findings = leak_check.check(text, _ctx(**ctx_over))
+    assert code in [f.code for f in leak_check.blocking(findings)], findings
+
+
+def _glyph_partners() -> dict[str, list[str]]:
+    """ASCII letters drawn like another ASCII letter of the other case (capital I and small
+    l), both ways, read from the vendored confusables.txt."""
+    out: dict[str, list[str]] = {}
+    for target, sources in _look_alikes().items():
+        for source in sources:
+            if source.isascii():
+                out.setdefault(target, []).append(source)
+                out.setdefault(source, []).append(target)
+    return out
+
+
+def test_seeded_names_written_in_the_other_case_s_look_alikes_are_still_found():
+    """protects=#699 re-review (property): each letter of the stored name (in a random case)
+    is written in either case, or as a look-alike of either case, or as the ASCII letter of
+    the other case it is drawn like (a stored capital I as a small l, a stored small l as a
+    capital I), with random marks; every variant is still found; fails_when="Ingrid"
+    stored and "lngrid" written passes."""
+    import random
+
+    rng = random.Random(699)
+    alikes = _look_alikes()
+    partners = _glyph_partners()
+    seeded = [
+        ("Ingrid", "person_name", "people"),
+        ("Ivy Labs", "alternative_name", "alternatives"),
+        ("Lilian Quill", "person_name", "people"),
+        ("Mallory", "person_name", "people"),
+        ("Gold Mine", "alternative_name", "alternatives"),
+        ("Northwind", "customer_name", "customers"),
+    ]
+    missed = []
+    for name, code, field_name in seeded:
+        for _ in range(150):
+            stored = _recase(rng, name)
+            ctx = _ctx(**{field_name: [*getattr(_ctx(), field_name), stored]})
+            chars = []
+            for ch in stored:
+                cases = {ch, ch.lower(), ch.upper()}
+                # Only the stored letter's own partner: a small i is not drawn like an l.
+                pool = sorted(cases | set(partners.get(ch, [])))
+                pool += [a for c in pool for a in alikes.get(c, [])]
+                ch = rng.choice(pool) if rng.random() < 0.6 else ch
+                chars.append(ch)
+                if ch != " " and rng.random() < 0.2:
+                    chars.append(rng.choice(MARKS))
+            variant = "".join(chars)
+            found = leak_check.check(f"Built for {variant} soon", ctx)
+            if code not in [f.code for f in leak_check.blocking(found)]:
+                missed.append((stored, variant))
+    assert missed == [], [ascii(m) for m in missed[:10]]
+
+
+def test_ordinary_words_still_pass_against_names_with_a_capital_i():
+    """protects=#699 re-review: matching letter by letter on every form raises no finding
+    on ordinary words; fails_when="Ian", "Inbox", "Istanbul" or "API" is flagged against
+    a stored "Lan Co", "Ivy Labs", "Ingrid" or "Inbox-plan"."""
+    ctx = _ctx(
+        people=[PERSON, "Ingrid", "Alice"],
+        customers=[ACCOUNT, "Lan Co"],
+        alternatives=[RIVAL, "Ivy Labs"],
+        slugs=[SLUG, "Inbox-plan"],
+        pricing=[PLAN, "Gold Plan"],
+    )
+    for text in (
+        "A cafe for your resume, not a naive one",
+        "In Istanbul, the Inbox and the API import every account",
+        "IMPORT IN ONE GO: INBOX, API AND ISTANBUL",
+        "I plan to ship it; Ian and Ida said so",
+        "Ian wrote the inbox plan with ivy and labs",
+    ):
+        assert leak_check.check(text, ctx) == [], text
+
+
+def test_the_strict_skeleton_stops_changing_within_its_rounds():
+    """protects=#699 re-review (minor): every character's strict skeleton is a fixed point
+    in fewer rounds than _STRICT_ROUNDS, so the limit is never what stops the loop;
+    fails_when= a character still changes in the last round."""
+    rounds = leak_check._STRICT_ROUNDS
+    for cp in range(0x20, 0x30000):
+        char = chr(cp)
+        if 0xD800 <= cp < 0xE000:
+            continue
+        text = char
+        for _ in range(rounds - 1):
+            text = leak_check._strict_round(text)
+        assert leak_check._strict_round(text) == text, ascii(char)
