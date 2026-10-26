@@ -84,6 +84,11 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
             <p className="text-[15px] font-semibold" data-testid="import-create">
               {rows(check.created)} to create
             </p>
+            {check.unmatched_alternatives.length > 0 && (
+              <p className="text-sm text-text2" data-testid="import-unmatched">
+                Not one of your alternatives, kept as text in the note: {check.unmatched_alternatives.join(", ")}
+              </p>
+            )}
             {check.skipped.length > 0 && (
               <div>
                 <p className="text-[15px] font-semibold" data-testid="import-refused-count">

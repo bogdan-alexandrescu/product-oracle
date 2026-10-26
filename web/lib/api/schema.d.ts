@@ -10941,7 +10941,7 @@ export interface paths {
         /**
          * List Deal Outcomes
          * @description Win and loss records, newest ``decided_on`` first; ``from`` and ``to`` are
-         *     inclusive days.
+         *     inclusive days; ``competitor_id`` keeps the records linked to that alternative.
          */
         get: operations["list_deal_outcomes"];
         put?: never;
@@ -16741,6 +16741,8 @@ export interface components {
             reason_note: string | null;
             /** Competitor Id */
             competitor_id: string | null;
+            /** Competitor Name */
+            competitor_name?: string | null;
             /** Price Quoted */
             price_quoted: string | null;
             /** Source Item Id */
@@ -21107,6 +21109,11 @@ export interface components {
             created: number;
             /** Skipped */
             skipped: components["schemas"]["ImportSkipped"][];
+            /**
+             * Unmatched Alternatives
+             * @default []
+             */
+            unmatched_alternatives: string[];
         };
         /** ImportProblem */
         ImportProblem: {
@@ -58257,6 +58264,7 @@ export interface operations {
                 reason?: ("price" | "value" | "product_gap" | "alternative" | "timing" | "no_budget" | "champion" | "other") | null;
                 from?: string | null;
                 to?: string | null;
+                competitor_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -58294,7 +58302,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -58346,7 +58354,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -58394,7 +58402,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -58448,7 +58456,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, or another person's source item */
+            /** @description A result or reason outside its list, Other without a note, a future decided_on, a value without its currency, another person's source item, or an alternative that is not one of the company's active ones */
             422: {
                 headers: {
                     [name: string]: unknown;

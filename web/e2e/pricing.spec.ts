@@ -114,7 +114,7 @@ test("10b: Import CSV on Win and loss: the dry run lists 3 rows to create and 1 
   await expect(table).toContainText("Account 21");
   await expect(table).toContainText("Account 24");
   await expect(table).not.toContainText("Account 23");
-  // The alternative is kept as text until H7's alternatives land.
+  // Example Rival is none of the company's alternatives: kept as text.
   await expect(table.getByTestId("deal-row").filter({ hasText: "Account 24" })).toContainText("Example Rival");
 });
 

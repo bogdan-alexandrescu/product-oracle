@@ -9,7 +9,8 @@ in full (C1 "Found items").
 The CSV import takes the columns of :data:`COLUMNS` under a header row, at most
 :data:`MAX_ROWS` rows and :data:`MAX_BYTES` bytes (else 422 for the whole file). Each bad
 row is skipped with its line number (the header is line 1) and good rows still import.
-Until H7 lands an ``alternative`` is kept as text in ``reason_note``.
+An ``alternative`` links the company's active alternative (H7) whose name or alias it is,
+in any case and spacing; any other is kept as text in ``reason_note``.
 """
 
 import csv
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.decisions.service import company_today
+from oracle.market.models import Competitor
 from oracle.pricing.models import ACCOUNT_MAX, CURRENCIES, DealOutcome
 from oracle.pricing.schemas import (
     LABEL_MAX,
@@ -74,7 +76,8 @@ REASON_LABELS = {
     "other": "Other",
 }
 NOT_YOUR_ITEM = "source_item_id is not one of your own source items"
-NO_COMPETITORS = "competitor_id is not available yet: keep the alternative in reason_note"
+UNKNOWN_COMPETITOR = "competitor_id is not one of the company's alternatives"
+ARCHIVED_COMPETITOR = "competitor_id is an archived alternative"
 RUNS_READ_ONLY = "A run's agents only read win and loss records"
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -156,8 +159,23 @@ async def _own_item(db: AsyncSession, principal: Principal, item_id: uuid.UUID) 
         raise OutcomeError(422, NOT_YOUR_ITEM)
 
 
+async def _active_competitor(db: AsyncSession, competitor_id: uuid.UUID) -> None:
+    """422 unless ``competitor_id`` is one of this company's active alternatives."""
+    # The tenant session's row-level security hides another company's alternatives.
+    status = await db.scalar(select(Competitor.status).where(Competitor.id == competitor_id))
+    if status is None:
+        raise OutcomeError(422, UNKNOWN_COMPETITOR)
+    if status != "active":
+        raise OutcomeError(422, ARCHIVED_COMPETITOR)
+
+
 async def out(db: AsyncSession, row: DealOutcome) -> DealOutcomeOut:
     item = await _item(db, row.source_item_id) if row.source_item_id else None
+    name = (
+        await db.scalar(select(Competitor.name).where(Competitor.id == row.competitor_id))
+        if row.competitor_id
+        else None
+    )
     return DealOutcomeOut(
         id=row.id,
         result=row.result,  # type: ignore[arg-type]
@@ -170,6 +188,7 @@ async def out(db: AsyncSession, row: DealOutcome) -> DealOutcomeOut:
         reason=row.reason,  # type: ignore[arg-type]
         reason_note=row.reason_note,
         competitor_id=row.competitor_id,
+        competitor_name=name,
         price_quoted=row.price_quoted,
         source_item_id=row.source_item_id,
         source_item=item,
@@ -187,9 +206,12 @@ async def list_outcomes(
     reason: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    competitor_id: uuid.UUID | None = None,
 ) -> list[DealOutcomeOut]:
     """Newest ``decided_on`` first; ``date_from`` and ``date_to`` are inclusive."""
     query = select(DealOutcome)
+    if competitor_id is not None:
+        query = query.where(DealOutcome.competitor_id == competitor_id)
     if result is not None:
         query = query.where(DealOutcome.result == result)
     if reason is not None:
@@ -232,10 +254,10 @@ def _check(row: DealOutcome, today: date) -> None:
 async def create(db: AsyncSession, principal: Principal, body: DealOutcomeIn) -> DealOutcome:
     _writer(principal)
     if body.competitor_id is not None:
-        raise OutcomeError(422, NO_COMPETITORS)
+        await _active_competitor(db, body.competitor_id)
     if body.source_item_id is not None:
         await _own_item(db, principal, body.source_item_id)
-    fields = body.model_dump(exclude={"competitor_id"})
+    fields = body.model_dump()
     for name in ("segment", "plan", "reason_note", "price_quoted"):
         fields[name] = fields[name] or None
     row = DealOutcome(**fields, recorded_by=principal.id)
@@ -262,12 +284,14 @@ async def patch(
     for name in ("result", "account", "decided_on", "reason"):
         if name in fields and getattr(body, name) is None:
             raise OutcomeError(422, f"{name} cannot be empty")
-    if "competitor_id" in fields and body.competitor_id is not None:
-        raise OutcomeError(422, NO_COMPETITORS)
+    # A record keeps its link when its alternative is archived; a new link is to an
+    # active one.
+    if "competitor_id" in fields and body.competitor_id not in (None, row.competitor_id):
+        await _active_competitor(db, body.competitor_id)  # type: ignore[arg-type]
     shared = "source_item_id" in fields and body.source_item_id not in (None, row.source_item_id)
     if shared:
         await _own_item(db, principal, body.source_item_id)  # type: ignore[arg-type]
-    for name in sorted(fields - {"competitor_id"}):
+    for name in sorted(fields):
         value = getattr(body, name)
         setattr(row, name, value if value != "" else None)
     _check(row, today)
@@ -328,7 +352,26 @@ def _rows(raw: bytes) -> tuple[list[str], list[tuple[int, list[str]]]]:
     return header or [], rows
 
 
-def _row(values: dict[str, str], today: date) -> tuple[dict[str, Any] | None, str | None]:
+def _alternatives(rows: list[Competitor]) -> dict[str, uuid.UUID]:
+    """The active alternatives by their name and aliases, in :func:`_name` form. A name
+    wins over another alternative's alias; an alias two alternatives share matches
+    neither."""
+    names = {_name(c.name): c.id for c in rows}
+    aliases: dict[str, uuid.UUID | None] = {}
+    for c in rows:
+        for alias in c.aliases or []:
+            key = _name(alias)
+            aliases[key] = c.id if aliases.get(key, c.id) == c.id else None
+    return {k: v for k, v in aliases.items() if v is not None and k not in names} | names
+
+
+def _name(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
+def _row(
+    values: dict[str, str], today: date, alternatives: dict[str, uuid.UUID]
+) -> tuple[dict[str, Any] | None, str | None]:
     """One CSV row as DealOutcome fields, or the first problem in plain words."""
     result = _RESULTS.get(_key(values.get("result", "")))
     if result is None:
@@ -374,8 +417,9 @@ def _row(values: dict[str, str], today: date) -> tuple[dict[str, Any] | None, st
         return None, "reason must be one of: " + ", ".join(REASON_LABELS.values())
     alternative = values.get("alternative", "").strip()
     note = texts["reason_note"]
-    if alternative:
-        # H7's alternatives are not here yet: kept as text.
+    competitor_id = alternatives.get(_name(alternative)) if alternative else None
+    if alternative and competitor_id is None:
+        # Not one of the company's alternatives: kept as text.
         note = f"{note}\nAlternative: {alternative}" if note else f"Alternative: {alternative}"
         if len(note) > NOTE_MAX:
             return None, f"reason_note and alternative are longer than {NOTE_MAX} characters"
@@ -399,6 +443,7 @@ def _row(values: dict[str, str], today: date) -> tuple[dict[str, Any] | None, st
         "decided_on": decided_on,
         "reason": reason,
         "reason_note": note,
+        "competitor_id": competitor_id,
         "price_quoted": texts["price_quoted"],
     }, None
 
@@ -410,14 +455,21 @@ async def import_csv(
     _writer(principal)
     header, rows = _rows(raw)
     today = await company_today(db)
+    alternatives = _alternatives(
+        list(await db.scalars(select(Competitor).where(Competitor.status == "active")))
+    )
     created: list[DealOutcome] = []
     skipped: list[ImportSkipped] = []
+    unmatched: dict[str, str] = {}
     for line, cells in rows:
         values = {name: cell for name, cell in zip(header, cells, strict=False)}
-        fields, problem = _row(values, today)
+        fields, problem = _row(values, today, alternatives)
         if problem:
             skipped.append(ImportSkipped(line=line, message=problem))
             continue
+        alternative = values.get("alternative", "").strip()
+        if alternative and fields["competitor_id"] is None:  # type: ignore[index]
+            unmatched.setdefault(_name(alternative), alternative)
         created.append(DealOutcome(**fields, recorded_by=principal.id))
     if not dry_run and created:
         db.add_all(created)
@@ -430,4 +482,9 @@ async def import_csv(
             None,
             {"created": len(created), "skipped": len(skipped)},
         )
-    return ImportOut(dry_run=dry_run, created=len(created), skipped=skipped)
+    return ImportOut(
+        dry_run=dry_run,
+        created=len(created),
+        skipped=skipped,
+        unmatched_alternatives=sorted(unmatched.values(), key=_name),
+    )

@@ -117,7 +117,7 @@ def _asked_to(q: uuid.UUID):
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0054_reply_opened"]
+    assert script.get_heads() == ["0055_deal_competitor"]
 
 
 def test_upgrade_moves_asked_questions_to_the_author_and_adds_subjects(scratch_db):

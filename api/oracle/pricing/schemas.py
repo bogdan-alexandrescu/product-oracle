@@ -43,7 +43,7 @@ class DealOutcomeIn(BaseModel):
     decided_on: date
     reason: Reason
     reason_note: Note | None = None
-    # H7's alternative; null until H7 lands.
+    # One of the company's active alternatives (H7, Company › Market › Alternatives).
     competitor_id: uuid.UUID | None = None
     price_quoted: Label | None = None
     # One of the recorder's own source items (S6).
@@ -91,6 +91,8 @@ class DealOutcomeOut(BaseModel):
     reason: Reason
     reason_note: str | None
     competitor_id: uuid.UUID | None
+    # The linked alternative's name, archived or not.
+    competitor_name: str | None = None
     price_quoted: str | None
     source_item_id: uuid.UUID | None
     # None without one, or when the item is gone.
@@ -112,6 +114,9 @@ class ImportOut(BaseModel):
     # Rows created (with dry_run, rows that would be).
     created: int
     skipped: list[ImportSkipped]
+    # Each distinct alternative named in the file that is none of the company's active
+    # alternatives (by name or alias): kept as text in reason_note.
+    unmatched_alternatives: list[str] = []
 
 
 # --------------------------------------------------------------------------- Pricing memos
