@@ -7,6 +7,7 @@ called). Synthetic placeholders only.
 """
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
@@ -457,3 +458,68 @@ async def test_with_no_lead_named_an_approver_decides_the_dates_and_the_audit_sa
         assert event.data["engineering_lead_named"] is False
         b = await s.scalar(select(ScheduleBasis))
         assert b.verified_by == approver.user_id
+
+
+# --------------------------------------------------------------------------- cost gates
+
+
+async def test_the_default_runs_ceiling_counts_the_dates_and_only_spend_past_it_pauses(
+    client, owner, runtime
+):
+    # protects=#670 review: the overrun gate with the six segments; fails_when=the ceiling
+    # leaves out the dates segment's $5 (1.5x 31.50), a spend below 1.5x 36.50 pauses, a
+    # spend past it does not, or a Resume lands anywhere but the baseline's stop;
+    # no_claim=the dates stop off (tests/test_runs.py).
+    _, auth = owner
+    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
+    run = await started(client, auth)
+    assert run["estimate_usd"] == 36.5
+    assert run["overrun_ceiling_usd"] == pytest.approx(54.75)
+    await tick(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    # $50 was past the five-segment ceiling (47.25), not past this one.
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "baseline_confirm"
+
+    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(60), polls=1)]
+    run = await started(client, auth)
+    await tick(client, auth)
+    assert (await get(client, auth, run["id"]))["status"] == "running"
+    result = await tick(client, auth)
+    assert result["runs_paused"] == 1
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "paused_overrun" and run["checkpoints"] == []
+    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["overrun_ceiling_usd"] == pytest.approx(60 + 36.5 * 0.5)
+    assert resp.json()["status"] == "awaiting_checkpoint"
+    assert resp.json()["waiting_on"] == "baseline_confirm"
+
+
+async def test_an_overrun_in_the_dates_segment_pauses_before_its_stop(client, owner, runtime):
+    # protects=#670 review: the overrun and checkpoint gates on the sixth segment;
+    # fails_when=the dates segment's overspend opens its stop, ends the run, or a Resume
+    # does not land on the dates stop; no_claim=the dates check (above).
+    _, auth = owner
+    # Five segments at the fake's 90% (28.35) and $30 here: past the ceiling 54.75.
+    runtime.script["eng_dates"] = [
+        Outcome(cost_usd=Decimal(30), artifacts={flows.DATES_FILE: DATES})
+    ]
+    run = await _at_prd_review(client, auth)
+    run = await decide(client, auth, run)
+    for _ in range(6):
+        if run["status"] != "running":
+            break
+        await tick(client, auth)
+        run = await get(client, auth, run["id"])
+    assert run["status"] == "paused_overrun", (run["status"], run["waiting_on"])
+    assert run["spent_usd"] == pytest.approx(28.35 + 30)
+    assert [c["kind"] for c in run["checkpoints"] if c["status"] == "pending"] == []
+    seg = next(s for s in run["segments"] if s["name"] == "eng_dates")
+    assert seg["status"] == "succeeded"
+    resp = await client.post(f"/v1/runs/{run['id']}/resume", headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = resp.json()
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "eng_dates"
+    assert run["overrun_ceiling_usd"] == pytest.approx(28.35 + 30 + 36.5 * 0.5)
+    assert pending(run)["payload"]["dates_check"]["problems"] == []
