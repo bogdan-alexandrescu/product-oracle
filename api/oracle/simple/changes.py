@@ -840,24 +840,23 @@ async def inbox_rows(
     if me is None or principal.run_id is not None or principal.run_token_id is not None:
         return [], []
     since = company_time.now() - timedelta(days=DONE_DAYS)
-    waiting = list(
-        await db.scalars(
-            select(SimpleChange)
-            .where(SimpleChange.status == "proposed", SimpleChange.routed_to.any(me))
-            .order_by(SimpleChange.at.desc())
-        )
-    )
-    decided = list(
+    # One read: proposals routed to me, and decisions on mine.
+    rows = list(
         await db.scalars(
             select(SimpleChange)
             .where(
-                SimpleChange.by == me,
-                SimpleChange.status.in_(("accepted", "declined")),
-                SimpleChange.decided_at >= since,
+                ((SimpleChange.status == "proposed") & SimpleChange.routed_to.any(me))
+                | (
+                    (SimpleChange.by == me)
+                    & SimpleChange.status.in_(("accepted", "declined"))
+                    & (SimpleChange.decided_at >= since)
+                )
             )
-            .order_by(SimpleChange.decided_at.desc())
+            .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
         )
     )
+    waiting = [c for c in rows if c.status == "proposed"]
+    decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
         return [], []
     item_ids = set()
