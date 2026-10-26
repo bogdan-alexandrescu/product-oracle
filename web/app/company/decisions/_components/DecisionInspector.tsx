@@ -179,7 +179,7 @@ export function DecisionInspector({
               {d.outcome_status && d.outcome_id && (
                 <p data-testid="decision-outcome" className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-semibold text-text2">Outcome</span>
-                  <Chip kind={OUTCOME_KIND[d.outcome_status]}>{OUTCOME_LABEL[d.outcome_status]}</Chip>
+                  {d.outcome_check_due ? <Chip kind="warn">Check due</Chip> : <Chip kind={OUTCOME_KIND[d.outcome_status]}>{OUTCOME_LABEL[d.outcome_status]}</Chip>}
                   <Link href={`/plan/outcomes?outcome=${encodeURIComponent(d.outcome_id)}`} className="font-medium text-accent-ink hover:underline">
                     Open in Outcomes
                   </Link>

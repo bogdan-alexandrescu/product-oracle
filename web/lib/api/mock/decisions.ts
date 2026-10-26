@@ -23,7 +23,7 @@ type RunLike = {
 };
 
 /** A stored decision: the API's record without what is derived on the way out. */
-type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
+type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "outcome_check_due" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
 type ReviewRow = Schemas["DecisionReviewOut"] & { decision_id: string };
 
 export interface DecisionsDb {
@@ -46,12 +46,14 @@ export interface DecisionsContext {
   visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
-  /** A baseline item, for entity_ids (absent: unknown). */
+  /** A baseline item, for entity_ids (absent: unknown, or hidden from the reader). */
   entity?: (id: string) => Schemas["DecisionEntityRef"] | null;
-  /** A baseline evidence row, for evidence_ids (absent: unknown). */
+  /** A baseline evidence row, for evidence_ids (absent: unknown, or on an item hidden from the reader). */
   evidence?: (id: string) => Schemas["DecisionEvidenceRef"] | null;
   /** H3: an outcome record's status now. */
   outcomeStatus?: (id: string) => Schemas["DecisionOut"]["outcome_status"];
+  /** H3: a tracking outcome record with a proposed assessment (the Outcomes tab's "Check due"). */
+  outcomeCheckDue?: (id: string) => boolean;
   /** H3: deciding with a prediction creates its outcome record (tracking); returns its id. */
   addOutcome?: (d: { title: string; goal_id: string; prediction: Record<string, unknown>; evidence_ids: string[]; owner_id: string }) => string;
 }
@@ -393,6 +395,10 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
     ...summaryOf(ctx, d),
     decided_by_email: emailOf(ctx, d.decided_by),
     outcome_status: d.outcome_id ? (ctx.outcomeStatus?.(d.outcome_id) ?? null) : null,
+    outcome_check_due: d.outcome_id ? (ctx.outcomeCheckDue?.(d.outcome_id) ?? false) : false,
+    // As the API's _linked: what the reader resolves, ids too; the rest stays on the record.
+    entity_ids: d.entity_ids.filter((id) => ctx.entity?.(id)),
+    evidence_ids: d.evidence_ids.filter((id) => ctx.evidence?.(id)),
     entities: d.entity_ids.flatMap((id) => ctx.entity?.(id) ?? []),
     evidence: d.evidence_ids.flatMap((id) => ctx.evidence?.(id) ?? []),
     withdrawn_by_email: emailOf(ctx, d.withdrawn_by),
@@ -458,6 +464,17 @@ function unknownIds(ctx: DecisionsContext, b: { evidence_ids?: string[] | null; 
   return null;
 }
 const unique = (ids: string[] | null | undefined) => [...new Set(ids ?? [])];
+
+/**
+ * As the API's _keep_unseen: an edit's list is what was sent, then the stored ids the editor
+ * does not resolve (gone since, or hidden from them); a sent id already stored is not checked.
+ */
+function keepUnseen(sent: string[], stored: string[], known: (id: string) => boolean, what: string): string[] | string {
+  const ids = unique(sent);
+  const missing = ids.filter((id) => !known(id) && !stored.includes(id));
+  if (missing.length) return `unknown ${what}: ${missing.join(", ")}`;
+  return [...ids, ...stored.filter((id) => !known(id) && !ids.includes(id))];
+}
 
 function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
   const m = ctx.members.find((x) => x.id === id);
@@ -605,13 +622,15 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       const bad = checkReviewAt(b.review_at);
       if (bad) return fail(422, bad);
     }
-    const unknown = unknownIds(ctx, b);
-    if (unknown) return fail(422, unknown);
+    const evidenceIds = b.evidence_ids ? keepUnseen(b.evidence_ids, d.evidence_ids, (id) => !!ctx.evidence?.(id), "evidence_ids") : null;
+    if (typeof evidenceIds === "string") return fail(422, evidenceIds);
+    const entityIds = b.entity_ids ? keepUnseen(b.entity_ids, d.entity_ids, (id) => !!ctx.entity?.(id), "entity_ids") : null;
+    if (typeof entityIds === "string") return fail(422, entityIds);
     for (const k of ["title", "question", "context", "options", "reversibility", "contributor_ids", "informed_ids", "subjects"] as const) {
       if (b[k] !== undefined && b[k] !== null) Object.assign(d, { [k]: b[k] });
     }
-    if (b.evidence_ids) d.evidence_ids = unique(b.evidence_ids);
-    if (b.entity_ids) d.entity_ids = unique(b.entity_ids);
+    if (evidenceIds) d.evidence_ids = evidenceIds;
+    if (entityIds) d.entity_ids = entityIds;
     // Clearable: null empties them. The prediction waits for the decision to make its outcome record.
     if (b.expected_outcome !== undefined) d.expected_outcome = b.expected_outcome?.trim() || null;
     if (b.review_at !== undefined) d.review_at = b.review_at ?? null;

@@ -183,7 +183,7 @@ function SubjectsPicker({ subjects, entities, onChange }: { subjects: Subject[];
           {subjects.map((s) => (
             <li key={`${s.kind}:${s.id}`} className="flex items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-sm">
               <span>{subjectLabel(s)}</span>
-              <Button variant="ghost" aria-label={`Remove ${subjectLabel(s)}`} onClick={() => onChange(subjects.filter((x) => x !== s))}>
+              <Button variant="ghost" aria-label={`Remove ${subjectLabel(s)}`} onClick={() => onChange(subjects.filter((x) => `${x.kind}:${x.id}` !== `${s.kind}:${s.id}`))}>
                 Remove
               </Button>
             </li>

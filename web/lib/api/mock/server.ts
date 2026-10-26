@@ -10,7 +10,7 @@ import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -1533,15 +1533,22 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     },
     uuid,
     now,
+    // A hidden decision's baseline entity, and its evidence, are unknown to a reader who may not see it.
     entity: (id) => {
       const e = db.baseline.entities.find((x) => x.id === id);
-      return e ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null;
+      return e && !hiddenDecisionEntities(db, me).has(e.id) ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null;
     },
     evidence: (id) => {
       const e = db.baseline.evidence.find((x) => x.id === id);
-      return e ? { id: e.id, entity_id: e.entity_id ?? null, excerpt: e.excerpt ?? null, url: e.url ?? null, ref: e.ref ?? null } : null;
+      return e && !(e.entity_id && hiddenDecisionEntities(db, me).has(e.entity_id))
+        ? { id: e.id, entity_id: e.entity_id ?? null, excerpt: e.excerpt ?? null, url: e.url ?? null, ref: e.ref ?? null }
+        : null;
     },
     outcomeStatus: (id) => db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
+    outcomeCheckDue: (id) => {
+      const o = db.quality?.outcomes.find((x) => x.id === id);
+      return o?.status === "tracking" && !!o.proposed_assessment;
+    },
     addOutcome: (d) => addDecisionOutcome((db.quality ??= seedQuality()), d, me.id),
   };
 }
@@ -1695,6 +1702,19 @@ function seedPricingDecisions(db: Db, ctx: DecisionsContext, log: DecisionsDb) {
     owner.id,
   );
   decidePricing(ctx, log, row.number, "keep", "Small teams churn on budget, not on price.", "Starter churn stays under 3% a month.", "2026-10-09T17:00:00Z");
+  // Its baseline decision entity, hidden with it from commenters and viewers (docs/visibility).
+  const decided = log.decisions.find((d) => d.id === row.id);
+  if (decided) decided.entity_id = addDecisionEntity(db.baseline, decided, owner.id);
+}
+
+/**
+ * The baseline entities of the decisions hidden from `me` (docs/visibility._hidden_entities).
+ * The log is read as it is, not seeded: a decision entity only exists once it is.
+ */
+function hiddenDecisionEntities(db: Db, me: MemberRow): Set<string> {
+  if (atLeast(me.role, "approver") || !db.decisions) return new Set();
+  const visible = decisionsContext(db, me).visible;
+  return new Set(db.decisions.decisions.flatMap((d) => (d.entity_id && visible && !visible(d) ? [d.entity_id] : [])));
 }
 
 /** What the rituals mock reads: the signed-in member and the members. */
@@ -2294,7 +2314,15 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
     return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
   };
   const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-  return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id) }, req, p.slice(2), q);
+  const member = db.members.find((m) => m.id === me.id);
+  const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
+  return routeBaseline(
+    db.baseline,
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id) },
+    req,
+    p.slice(2),
+    q,
+  );
 }
 
 function save(db: Db) {
