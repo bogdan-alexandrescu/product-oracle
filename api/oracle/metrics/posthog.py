@@ -124,6 +124,15 @@ _TOKEN = re.compile(r"\s*(?:([A-Za-z_$][\w$]*)|(\d[\w.]*)|(\S))", re.ASCII)
 _CLAUSE_ENDS = frozenset(
     {"WHERE", "PREWHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "QUALIFY"}
 )
+# What may follow a table's alias but never starts a clause's body: a clause word followed
+# by one of these is an alias (``FROM events order, t``), so it does not end the FROM.
+_AFTER_ALIAS = frozenset(
+    {",", ")", "", "ON", "USING", "AS", "FINAL", "SAMPLE", "JOIN", "INNER", "LEFT", "RIGHT"}
+    | {"FULL", "CROSS", "OUTER", "ASOF", "SEMI", "ANTI", "ARRAY", "GLOBAL", "PASTE"}
+    | _CLAUSE_ENDS
+)
+# Bare words that are values, not names, inside IN ( ... ).
+_IN_VALUES = frozenset({"NULL", "TRUE", "FALSE"})
 
 
 def _blank_strings(text: str) -> str:
@@ -142,18 +151,23 @@ def _blank_strings(text: str) -> str:
 def _check_sources(text: str) -> None:
     """Walk the tokens: parentheses balance and never close the row-limit wrapper; each
     FROM or JOIN reads a bare allowed table or a ``(SELECT ...)``; no comma joins; IN
-    takes a list, never a table."""
+    takes a list, never a table or a bare name; a clause word is never an alias."""
     tokens = [m.group(1) or m.group(2) or m.group(3) for m in _TOKEN.finditer(text)]
     allowed = ", ".join(sorted(ALLOWED_TABLES))
     depth = 0
     from_at: set[int] = set()  # the depths inside a FROM clause
+    in_at: set[int] = set()  # the depths inside IN ( ... ) or in( ... )
     for i, tok in enumerate(tokens):
         word = tok.upper()
+        before = tokens[i - 1].upper() if i else ""
         after = tokens[i + 1] if i + 1 < len(tokens) else ""
         if tok == "(":
             depth += 1
+            if before == "IN":
+                in_at.add(depth)
         elif tok == ")":
             from_at.discard(depth)
+            in_at.discard(depth)
             depth -= 1
             if depth < 0:
                 raise QueryRefused("query: a ) has no matching (")
@@ -161,10 +175,20 @@ def _check_sources(text: str) -> None:
             if depth in from_at:
                 raise QueryRefused("query: join tables with JOIN, not a comma")
         elif word in _CLAUSE_ENDS:
+            if before == "AS":
+                raise QueryRefused(f"query: {word} cannot be an alias")
+            if word in ("GROUP", "ORDER") and after.upper() != "BY":
+                raise QueryRefused(f"query: {word} cannot be an alias")
+            if depth in from_at and after.upper() in _AFTER_ALIAS:
+                raise QueryRefused(f"query: {word} cannot be an alias")
             from_at.discard(depth)
         elif word == "IN":
             if after not in ("(", "["):
                 raise QueryRefused("query: IN takes a list in parentheses, not a table")
+        elif depth in in_at and before in ("(", ",") and after in (",", ")"):
+            if tok[0].isalpha() or tok[0] in "_$":
+                if word not in _IN_VALUES:
+                    raise QueryRefused(f"query: IN cannot take the bare name {tok}")
         elif word in ("FROM", "JOIN"):
             from_at.add(depth)
             nxt = tokens[i + 2] if i + 2 < len(tokens) else ""
