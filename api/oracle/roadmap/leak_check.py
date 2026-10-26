@@ -12,9 +12,14 @@ decisions, the items' internal notes, the app's own host and the company's email
 Text is normalised before matching (:func:`normalize`): NFKC (fullwidth letters), every
 invisible character stripped (Unicode's Default_Ignorable_Code_Point and category Cf:
 zero-width spaces, soft hyphens, word joiners, the combining grapheme joiner, variation
-selectors, Hangul fillers), look-alike letters (Unicode's confusables, via
-:mod:`oracle.specs.confusables`) and dashes mapped to their Latin and ASCII forms; names
-then match casefolded. A public text holding an invisible character is refused when saved
+selectors, Hangul fillers), nonspacing and enclosing marks dropped (an accent, a keycap's
+U+20E3), look-alike letters (Unicode's confusables, via :mod:`oracle.specs.confusables`)
+and dashes mapped to their Latin and ASCII forms. Names, notes, titles and slugs then match
+on their confusable skeleton (:func:`skeleton`, UTS #39 §4): NFD, every combining mark
+(Mn, Mc, Me) and Default_Ignorable dropped, casefolded and mapped through Unicode's own
+confusables.txt (vendored in ``unicode/`` for the Unicode version Python reports), so a
+mark on or inside a name ("Northwi\u0307nd", "N\u00f6rthwind", U+0130) and mixed-script
+look-alikes are found. A public text holding an invisible character is refused when saved
 (:func:`format_characters`), so what an approver reads is what was checked; only the
 joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, the
 England, Scotland or Wales flag) are kept. Any other tag run is refused, and the check
@@ -25,10 +30,12 @@ ideographic space) read as spaces.
 Every pattern reads untrusted text and stays linear (no nested quantifiers).
 """
 
+import functools
 import ipaddress
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from sqlalchemy import select
@@ -101,14 +108,10 @@ _LOOK_ALIKE = {
     for cp, prototype in CONFUSABLES.items()
     if prototype.isalpha()
 }
-_FOLD = str.maketrans(
-    {
-        **dict.fromkeys(map(ord, _DASHES), "-"),
-        **_LOOK_ALIKE,
-        ord("κ"): "k",
-        **dict.fromkeys(map(ord, _BLANKS), " "),
-    }
+_SPACES = str.maketrans(
+    {**dict.fromkeys(map(ord, _DASHES), "-"), **dict.fromkeys(map(ord, _BLANKS), " ")}
 )
+_FOLD = str.maketrans({**_LOOK_ALIKE, ord("κ"): "k"})
 # Default_Ignorable_Code_Point (DerivedCoreProperties.txt): what renders as nothing,
 # whatever its category (Cf, but also the marks U+034F, U+17B4/5 and the variation
 # selectors, and the Hangul fillers, which are letters).
@@ -131,6 +134,29 @@ _FLAG_TAGS = re.compile(
 # Any other run of tags, with the black flag before it and the cancel tag after it.
 _TAG_RUN = re.compile("\U0001f3f4?([\U000e0020-\U000e007e]+)\U000e007f?|\U000e007f")
 _KEYCAP = "\u20e3"
+
+# Unicode's confusables.txt (UTS #39) for the Unicode version Python's unicodedata reports,
+# vendored with its licence; a missing file fails at import.
+CONFUSABLES_FILE = Path(__file__).parent / "unicode" / "confusables.txt"
+
+
+def _load_skeleton_map(path: Path) -> dict[int, str]:
+    """Each source character of confusables.txt to its prototype ("0" -> "O", "m" -> "rn")."""
+    out: dict[int, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fields = line.split("#", 1)[0].split(";")
+        if len(fields) < 3:
+            continue
+        source = fields[0].split()
+        if len(source) == 1:
+            out[int(source[0], 16)] = "".join(chr(int(c, 16)) for c in fields[1].split())
+    return out
+
+
+# Letters newer than Python's Unicode (the look-alikes :mod:`oracle.specs.confusables` was
+# generated with) keep their mapping too.
+SKELETON_MAP = {**CONFUSABLES, **_load_skeleton_map(CONFUSABLES_FILE)}
+_MARKS = ("Mn", "Mc", "Me")
 # Words in a company's name that do not tell it apart ("Northwind Traders" is named by
 # "Northwind" alone; "Traders" is anyone's).
 GENERIC_COMPANY_WORDS = frozenset(
@@ -178,6 +204,43 @@ def _strip_invisible(text: str) -> str:
     return "".join(c for c in text if not _invisible(c))
 
 
+def _drop_marks(text: str, marks: tuple[str, ...]) -> str:
+    """``text`` decomposed (NFD), without the combining marks of the ``marks`` categories."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) not in marks
+    )
+
+
+@functools.lru_cache(maxsize=4096)
+def skeleton(text: str) -> str:
+    """``text``'s confusable skeleton (UTS #39 §4, casefolded): NFD, every combining mark and
+    Default_Ignorable dropped, casefolded, each character mapped through confusables.txt
+    (:func:`_prototype`); repeated until nothing changes, since a prototype may itself be
+    upper case ("0" -> "O") or decompose. Two strings a reader cannot tell apart have the
+    same skeleton."""
+    for _ in range(4):
+        before = text
+        text = "".join(map(_prototype, _strip_invisible(_drop_marks(text, _MARKS))))
+        if text == before:
+            break
+    return text
+
+
+def _prototype(char: str) -> str:
+    """A character's prototype in confusables.txt, casefolded. ASCII is casefolded first
+    ("I" is "i", not the "l" it is drawn like); any other letter keeps its own prototype,
+    as casefolding can change it (Greek capital Nu folds to nu, drawn like "v"; Cherokee
+    small letters fold to capitals). A capital drawn like "l" (Greek Iota, Cyrillic I)
+    reads as "I", as in :func:`_as_latin`."""
+    prototype = None if char.isascii() else SKELETON_MAP.get(ord(char))
+    if prototype is None:
+        return char.casefold().translate(SKELETON_MAP)
+    return "i" if prototype == "l" and char.isupper() else prototype
+
+
+_GENERIC_SKELETONS = frozenset(map(skeleton, GENERIC_COMPANY_WORDS))
+
+
 def _pictographic(char: str) -> bool:
     """An emoji or other symbol (a skin tone is Sk), never a letter or digit."""
     return ord(char) > 0x7F and unicodedata.category(char) in ("So", "Sk")
@@ -217,14 +280,23 @@ def _tag_letters(m: re.Match[str]) -> str:
 
 
 def normalize(text: str) -> str:
-    """``text`` as a reader sees it: NFKC, no invisible characters, look-alike letters,
-    dashes and blanks mapped. A real flag reads as a space; any other tag run is read as
-    the ASCII it spells, in place and without its flag, as a decoder would, so a name or
-    number split across two flags is found. Case is kept (tracker keys and "May" read it)."""
+    """``text`` as a reader sees it: NFKC, no invisible characters, nonspacing and enclosing
+    marks, look-alike letters, dashes and blanks mapped. A real flag reads as a space; any
+    other tag run is read as the ASCII it spells, in place and without its flag, as a
+    decoder would, so a name or number split across two flags is found. Case is kept
+    (tracker keys and "May" read it)."""
+    return _read(text).translate(_FOLD)
+
+
+def _read(text: str) -> str:
+    """:func:`normalize` before look-alike letters are mapped (:func:`skeleton` maps them
+    from confusables.txt itself, after casefolding)."""
     text = _FLAG_TAGS.sub(" ", text or "")
     text = _strip_invisible(_TAG_RUN.sub(_tag_letters, text))
     text = _strip_invisible(unicodedata.normalize("NFKC", text))
-    return text.translate(_FOLD)
+    # An accent or a keycap's U+20E3 does not change the letter or digit it sits on.
+    text = unicodedata.normalize("NFC", _drop_marks(text, ("Mn", "Me")))
+    return text.translate(_SPACES)
 
 
 def format_characters(text: str) -> list[str]:
@@ -242,11 +314,18 @@ def strip_format(text: str) -> str:
 
 
 def _norm(text: str) -> str:
-    return " ".join(_WORD.findall(normalize(text).casefold()))
+    """``text``'s words on their confusable skeleton, one space apart."""
+    return " ".join(_WORD.findall(skeleton(_read(text))))
+
+
+def _plain(text: str) -> str:
+    """``text`` without its combining marks, for splitting a name into its parts."""
+    return unicodedata.normalize("NFC", _drop_marks(_read(text), _MARKS))
 
 
 def _names(text: str, names: list[str]) -> list[str]:
-    """Each of ``names`` that ``text`` holds as whole words (case-insensitive)."""
+    """Each of ``names`` that ``text`` holds as whole words, both on their confusable
+    skeleton."""
     padded = f" {_norm(text)} "
     out: list[str] = []
     for name in names:
@@ -287,7 +366,7 @@ def _person_names(ctx: LeakContext) -> list[str]:
         if not name:
             continue
         out.append(name)
-        parts = _WORD.findall(name)
+        parts = _WORD.findall(_plain(name))
         if len(parts) > 1:
             out += [p for p in parts if len(p) >= 4]
     return out
@@ -301,9 +380,9 @@ def _customer_names(ctx: LeakContext) -> list[str]:
         if not name:
             continue
         out.append(name)
-        parts = _WORD.findall(normalize(name))
+        parts = _WORD.findall(_plain(name))
         if len(parts) > 1:
-            out += [p for p in parts if len(p) >= 4 and p.casefold() not in GENERIC_COMPANY_WORDS]
+            out += [p for p in parts if len(p) >= 4 and skeleton(p) not in _GENERIC_SKELETONS]
     return out
 
 
@@ -366,7 +445,8 @@ def check(
     internal_title: str | None = None,
 ) -> list[Finding]:
     """Every finding in ``text``: blocking ones first, then warnings."""
-    text = normalize((text or "")[:MAX_TEXT])
+    raw = (text or "")[:MAX_TEXT]
+    text = normalize(raw)
     out: list[Finding] = []
 
     def add(code: str, words: list[str]) -> None:
@@ -375,24 +455,24 @@ def check(
             out.append(Finding(code, severity, list(dict.fromkeys(words))))
 
     emails = [m.group(0) for m in _EMAIL.finditer(text)]
-    people = _names(text, _person_names(ctx))
+    people = _names(raw, _person_names(ctx))
     folded = text.casefold()
     people += [e for e in ctx.emails if e and _norm_email(e) in folded and e not in emails]
     add("person_name", people)
     phones = [m.group(0).strip() for m in _PHONE.finditer(text)]
     phones = [p for p in phones if sum(c.isdigit() for c in p) >= PHONE_DIGITS]
     add("email_or_phone", emails + phones)
-    add("customer_name", _names(text, _customer_names(ctx)))
-    add("alternative_name", _names(text, ctx.alternatives))
+    add("customer_name", _names(raw, _customer_names(ctx)))
+    add("alternative_name", _names(raw, ctx.alternatives))
     codes = [m.group(0) for p in (_TRACKER, _GOAL, _DECISION) for m in p.finditer(text)]
-    lowered = folded
-    codes += [s for s in ctx.slugs if _slug_in(normalize(s), lowered)]
+    skel = skeleton(_read(raw))
+    codes += [s for s in ctx.slugs if _slug_in(skeleton(_read(s)), skel)]
     add("internal_code", codes)
     add("internal_host", _hosts(text, ctx))
-    add("internal_document", _names(text, ctx.hidden_documents))
-    add("decision", _names(text, ctx.decisions))
-    add("pricing", _names(text, ctx.pricing))
-    add("internal_note", _note_copies(text, ctx.notes))
+    add("internal_document", _names(raw, ctx.hidden_documents))
+    add("decision", _names(raw, ctx.decisions))
+    add("pricing", _names(raw, ctx.pricing))
+    add("internal_note", _note_copies(raw, ctx.notes))
 
     add(
         "money_or_metric",
@@ -403,7 +483,7 @@ def check(
     # "may" is a word as well as a month: only "May" with a capital, followed by a day.
     dates = [d for d in dates if d.lower() != "may" or d == "May"]
     add("date", dates + [m.group(0) for m in _ISO_DATE.finditer(text)])
-    if internal_title and _norm(internal_title) and _norm(text) == _norm(internal_title):
+    if internal_title and _norm(internal_title) and _norm(raw) == _norm(internal_title):
         add("internal_title_copy", [internal_title])
     return out
 

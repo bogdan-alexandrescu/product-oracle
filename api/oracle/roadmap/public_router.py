@@ -372,16 +372,25 @@ async def put_public_page(
     doc: str, body: PublicPageIn, principal: Approver, db: TenantDB
 ) -> PublicPageOut:
     """The Public page's own title and intro (the internal title is never shown). A
-    blocking leak finding is 422 ``leak_blocking``, an invisible format character 422
-    ``format_characters``; a change lapses the public check. Both are re-checked at every
-    render and left out of the page once they leak."""
+    blocking leak finding in a text this save changes is 422 ``leak_blocking``, an
+    invisible format character 422 ``format_characters``; a change lapses the public
+    check. Both are re-checked at every render and left out of the page once they leak,
+    so an unchanged one that now leaks is reported, not refused."""
     document = await _roadmap(db, doc)
     sent = body.model_fields_set
     title = body.public_title if "public_title" in sent else document.public_title
     intro = body.public_intro if "public_intro" in sent else document.public_intro
-    _refuse_format_characters(title, intro)
-    found = public.page_text_findings(await leak_check.load_context(db), title, intro)
-    blocking = leak_check.blocking(found)
+    changed = [
+        new
+        for new, old in ((title, document.public_title), (intro, document.public_intro))
+        if (new or None) != old
+    ]
+    _refuse_format_characters(*changed)
+    leak_ctx = await leak_check.load_context(db)
+    found = public.page_text_findings(leak_ctx, title, intro)
+    blocking = [
+        f for text in changed for f in leak_check.blocking(leak_check.check(text or "", leak_ctx))
+    ]
     if blocking:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

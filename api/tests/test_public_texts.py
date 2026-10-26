@@ -889,8 +889,8 @@ def test_ordinary_accented_words_still_pass():
 
 
 def _look_alikes() -> dict[str, list[str]]:
-    """Each ASCII letter's look-alikes from the vendored confusables.txt, read here on its
-    own so the test does not share the code's parser."""
+    """Each ASCII letter's look-alikes from the vendored confusables.txt (by the letter its
+    prototype is), read here on its own so the test does not share the code's parser."""
     out: dict[str, list[str]] = {}
     for line in leak_check.CONFUSABLES_FILE.read_text(encoding="utf-8").splitlines():
         fields = [f.strip() for f in line.split("#", 1)[0].split(";")]
@@ -898,8 +898,12 @@ def _look_alikes() -> dict[str, list[str]]:
             continue
         source, target = chr(int(fields[0], 16)), chr(int(fields[1], 16))
         if target.isascii() and target.isalpha() and not source.isascii():
+            # A capital drawn like "l" (Greek Iota) reads as "I": only a capital stands
+            # in for a capital.
+            if source.isupper() and not target.isupper():
+                continue
             if source.isalpha() and unicodedata.normalize("NFKC", source) == source:
-                out.setdefault(target.lower(), []).append(source)
+                out.setdefault(target, []).append(source)
     return out
 
 
@@ -930,7 +934,7 @@ def test_seeded_names_with_random_marks_and_look_alikes_are_still_found():
         for _ in range(100):
             chars = []
             for ch in name:
-                pool = alikes.get(ch.lower(), [])
+                pool = alikes.get(ch, []) + (alikes.get(ch.lower(), []) if ch.isupper() else [])
                 if pool and rng.random() < 0.4:
                     ch = rng.choice(pool)
                 chars.append(ch)
