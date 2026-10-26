@@ -265,7 +265,10 @@ async def run_discussions(
     if run is None:
         raise RunNotFound(run_id)
     reader = None if principal.is_run else principal.user_id
-    kept, omitted = cap(await build(db, run, reader))
+    entries = await build(db, run, reader)
+    if reader is None:
+        entries = await for_member_run(db, run, entries)
+    kept, omitted = cap(entries)
     return RunDiscussionsOut(
         run_id=run.id,
         discussions=[RunDiscussion.model_validate(e) for e in kept],
@@ -276,5 +279,19 @@ async def run_discussions(
 
 async def for_prompt(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
     """The agents' view for the step prompt (``PromptContext.discussions``)."""
-    kept, _omitted = cap(await build(db, run, None))
+    kept, _omitted = cap(await for_member_run(db, run, await build(db, run, None)))
     return kept
+
+
+async def for_member_run(
+    db: AsyncSession, run: Run, entries: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """#562 review: the agents of a run that reads as a member (oracle.runs.service
+    ``reads_as_member``) get no discussion whose title, summary or staged change names
+    something a commenter may not see (oracle.docs.visibility ``Hidden.names``)."""
+    from oracle.runs.service import member_hidden
+
+    hidden = await member_hidden(db, run)
+    if hidden is None:
+        return entries
+    return [e for e in entries if not hidden.names_in(e)]

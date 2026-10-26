@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
+from oracle.jobs.service import JobError
 from oracle.staging import service
 from oracle.staging.schemas import NextDraftChangeOut, StagingList, UnstageIn
 
@@ -23,6 +24,8 @@ async def _call[T](op: Awaitable[T]) -> T:
         return await op
     except service.StagingError as e:
         raise HTTPException(e.status, e.detail) from e
+    except JobError as e:  # a document's lookup (oracle.jobs.next_draft): 404, 409, 422
+        raise HTTPException(e.status, str(e)) from e
 
 
 @router.get("/staging", response_model=StagingList)

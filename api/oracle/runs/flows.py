@@ -308,6 +308,11 @@ class FlowDef:
     # map): its run token reads every tool as a commenter would (oracle.auth.deps,
     # oracle.docs.visibility), and its importer checks refs the same way.
     member_output: bool = False
+    # #541 part 5 (owner, 2026-10-24): the run writes a draft of a document; it reads as
+    # member_output does exactly when its target document is company-wide (decided when
+    # the run starts, oracle.runs.service.MEMBER_VIEW); with an approvers-only target it
+    # keeps its starter's role.
+    company_draft: bool = False
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -474,6 +479,7 @@ FLOWS: dict[str, FlowDef] = {
     for f in (
         FlowDef(
             key="baseline_to_prd",
+            company_draft=True,
             title="Baseline to PRD",
             description="Baseline proposal, feature set and design, engineering check, priority "
             "order, PRD draft.",
@@ -594,6 +600,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="feedback_loop",
+            company_draft=True,
             title="Feedback loop",
             description="Pull open feedback on a PRD or roadmap, write the next draft, review it.",
             requires_document=True,
@@ -634,6 +641,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="prd_to_roadmap",
+            company_draft=True,
             title="Roadmap from an approved PRD",
             description="Roadmap items from an approved PRD version (horizon, milestone, "
             "dependencies, priority), then a roadmap draft in the chosen template.",
@@ -732,6 +740,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="prd_to_spec",
+            company_draft=True,
             title="Engineering spec from an approved PRD",
             description="A technical brief or full engineering spec for a feature's "
             "requirements, with SVG user flows and low-fidelity wireframes of 2-4 key screens, "
@@ -770,6 +779,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="strategy_draft",
+            company_draft=True,
             title="Vision or strategy draft",
             description="Oracle drafts the product vision or the product strategy from the "
             "confirmed goals, approved documents, decisions and outcomes; an owner reviews it.",
@@ -999,6 +1009,7 @@ FLOWS: dict[str, FlowDef] = {
         ),
         FlowDef(
             key="launch_kit",
+            member_output=True,
             title="Launch kit",
             description="For one launch: changelog entries, release notes, internal "
             "announcement, support notes, briefings, messages, a pre-mortem and a personal "
@@ -1210,7 +1221,9 @@ FLOWS: dict[str, FlowDef] = {
 
 
 def reads_as_member(flow: str | None) -> bool:
-    """Whether a run of ``flow`` reads as a commenter would (``FlowDef.member_output``)."""
+    """Whether every run of ``flow`` reads as a commenter would (``FlowDef.member_output``);
+    a ``company_draft`` run's view comes from its target (oracle.runs.service
+    ``reads_as_member``)."""
     f = FLOWS.get(flow or "")
     return f is not None and f.member_output
 

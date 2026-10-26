@@ -45,7 +45,9 @@ A new document's visibility comes from its kind (:func:`default_for`), on every 
 that creates one (a template start, an import).
 """
 
+import html
 import re
+import unicodedata
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -197,18 +199,81 @@ class Hidden:
 
     def names(self, text: str | None) -> bool:
         """Whether ``text`` names a hidden decision (``D-<n>``, its title, its id or its
-        entity's) or a hidden document (its title, slug or id). Paraphrase is not caught."""
+        entity's) or a hidden document (its title, slug or id), whatever the case; an id
+        also without its dashes. A title is found whatever its Unicode normalisation,
+        whitespace, typographic or ASCII quotes and dashes, and in JSON or HTML escapes
+        (#621 review: :func:`_fold`, :func:`_unescaped`). Paraphrase is not caught: a
+        decision described without its number, title or id, a title shorter than
+        ``_MIN_TITLE``, a one-word slug, a number written another way ("decision 7"), an
+        id cut up or re-encoded. Those need
+        the meaning of the text, which a read-time check does not have; a run that reads
+        as a member never reads them, so only output written before #541 part 4/5 or by
+        hand can hold them."""
         if not text:
             return False
-        if any(i in text for i in self.ids):
-            return True
-        folded = text.casefold()
-        if any(w in folded for w in self.words):
-            return True
-        return any(int(n) in self.numbers for n in _D_NUMBER.findall(text))
+        for folded in {_fold(t) for t in _unescaped(text)}:
+            if any(i in folded for i in self.ids):
+                return True
+            if any(w in folded for w in self.words):
+                return True
+            if any(int(n) in self.numbers for n in _D_NUMBER.findall(folded)):
+                return True
+        return False
+
+    def names_in(self, value: Any) -> bool:
+        """Whether any string in ``value`` (a row: dicts, lists, their keys and values)
+        :meth:`names` something hidden, each string checked as itself (#621 review: not
+        as ``json.dumps`` of the row, which escapes non-ASCII characters and quotes)."""
+        if isinstance(value, str):
+            return self.names(value)
+        if isinstance(value, dict):
+            return any(self.names_in(k) or self.names_in(v) for k, v in value.items())
+        if isinstance(value, list | tuple | set | frozenset):
+            return any(self.names_in(v) for v in value)
+        return value is not None and self.names(str(value))
 
 
 _D_NUMBER = re.compile(r"\bD-(\d+)\b", re.IGNORECASE)
+# #621 review: typographic quotes and dashes read as their ASCII forms, so a title is found
+# whichever the text uses.
+_TYPOGRAPHIC = str.maketrans(
+    dict.fromkeys("\u2018\u2019\u201a\u201b\u2032", "'")
+    | dict.fromkeys("\u201c\u201d\u201e\u201f\u2033", '"')
+    | dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-")
+)
+_SPACE = re.compile(r"\s+")
+_JSON_ESCAPE = re.compile(r"\\(u[0-9a-fA-F]{4}|.)", re.DOTALL)
+_JSON_CHARS = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f"}
+
+
+def _fold(text: str) -> str:
+    """``text`` as titles are compared (#621 review): case-folded, NFKC-normalised,
+    typographic quotes and dashes as ASCII, every run of whitespace one space."""
+    folded = unicodedata.normalize("NFKC", text.casefold()).translate(_TYPOGRAPHIC)
+    return _SPACE.sub(" ", folded).strip()
+
+
+def _json_unescaped(text: str) -> str:
+    """``text`` with JSON string escapes (``\\u2014``, ``\\"``, a surrogate pair) undone."""
+
+    def one(m: re.Match[str]) -> str:
+        e = m.group(1)
+        return chr(int(e[1:], 16)) if e[0] == "u" else _JSON_CHARS.get(e, e)
+
+    out = _JSON_ESCAPE.sub(one, text)
+    return out.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+
+
+def _unescaped(text: str) -> set[str]:
+    """``text`` and its readings with JSON and HTML escapes undone (#621 review: a raw
+    file, a JSON column or Markdown can carry a title escaped)."""
+    out = {text, html.unescape(text)}
+    if "\\" in text:
+        j = _json_unescaped(text)
+        out |= {j, html.unescape(j)}
+    return out
+
+
 # A title shorter than this is not looked for in text (it would match ordinary words).
 _MIN_TITLE = 12
 
@@ -217,10 +282,15 @@ def _words_of(*titles: str | None) -> set[str]:
     out = set()
     for title in titles:
         for t in (title or "", (title or "").partition(": ")[2]):
-            t = t.strip().casefold()
+            t = _fold(t)
             if len(t) >= _MIN_TITLE:
                 out.add(t)
     return out
+
+
+def _id_forms(*ids: uuid.UUID | None) -> set[str]:
+    """An id as text, lower case, with and without its dashes."""
+    return {f for i in ids if i is not None for f in (str(i).lower(), uuid.UUID(str(i)).hex)}
 
 
 async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -> Hidden | None:
@@ -251,10 +321,10 @@ async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -
     ids: set[str] = set()
     for _id, _n, title, entity_id in d_rows:
         words |= _words_of(title)
-        ids |= {str(_id), *([str(entity_id)] if entity_id else [])}
+        ids |= _id_forms(_id, entity_id)
     for _id, slug, title in doc_rows:
         words |= _words_of(title, slug if "-" in (slug or "") else None)
-        ids.add(str(_id))
+        ids |= _id_forms(_id)
     return Hidden(
         decision_ids=frozenset(r[0] for r in d_rows),
         document_ids=frozenset(r[0] for r in doc_rows),
@@ -381,6 +451,12 @@ def _attached_visible(cls: Any) -> ColumnElement[bool]:
         or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
         or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
     )
+
+
+def member_entity_visible(cls: Any) -> ColumnElement[bool]:
+    """A baseline entity a commenter may see, whoever reads (what Oracle puts in the
+    prompt of a run that reads as a member)."""
+    return _entity_visible(cls)
 
 
 def member_attached_visible(cls: Any) -> ColumnElement[bool]:

@@ -22,6 +22,10 @@ from tests.pricing_helpers import QUESTION, approved_memo, memo_md
 from tests.test_mcp import api_token, mcp_client, run_token, text_of
 from tests.update_helpers import import_md
 
+# A flow whose run reads with its creator's role (its output is approvers-only); a draft
+# of a company-wide document reads as a member (#541 part 5).
+CREATOR_VIEW = "pricing_memo"
+
 RATIONALE = "Teams ask for one price; a third of losses were on price."
 WORD = "per-seat"  # in the pricing memo only
 
@@ -114,7 +118,7 @@ async def test_over_mcp_read_baseline_follows_the_decision(client, ctx, who, see
     entity_id = await _decided(client, ctx)
     tokens = [
         await api_token(ctx.tenant_id, who),
-        await run_token(ctx.tenant_id, ["read:baseline"], ctx.users[who].id),
+        await run_token(ctx.tenant_id, ["read:baseline"], ctx.users[who].id, flow=CREATOR_VIEW),
     ]
     for raw in tokens:
         async with mcp_client(raw) as c:
@@ -131,7 +135,8 @@ async def test_a_run_token_reads_the_entity_only_for_an_approver_or_owner_creato
     commenter's; fails_when=a commenter's run reads it; no_claim=writes."""
     entity_id = await _decided(client, ctx)
     for who, sees in (("owner", True), ("commenter", False)):
-        raw = await run_token(ctx.tenant_id, ["read:baseline"], ctx.users[who].id)
+        uid = ctx.users[who].id
+        raw = await run_token(ctx.tenant_id, ["read:baseline"], uid, flow=CREATOR_VIEW)
         async with mcp_client(raw) as c:
             one = await c.call_tool("get_entity", {"entity_id": entity_id})
             revisions = await c.call_tool("list_entity_revisions", {"entity_id": entity_id})

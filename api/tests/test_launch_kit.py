@@ -78,7 +78,8 @@ def test_the_prompt_names_the_launch_and_treats_sources_as_data():
         (lambda t: t.replace("version: 1", "version: 2"), "version"),
         (lambda t: t.replace("category: added", "category: improved"), "category"),
         (lambda t: t.replace("audience: public", "audience: everyone"), "audience"),
-        (lambda t: t.replace("  sales_briefing:", "  press_release:"), "press_release"),
+        # #562 review: the refusal names the allowed tasks, not the file's unknown key.
+        (lambda t: t.replace("  sales_briefing:", "  press_release:"), "drafts no text for"),
         (lambda t: t.replace('tigers: ["Card vault outage"]', "tigers: 3"), "tigers"),
         (lambda t: t.replace('requester_ref: "member:', 'requester_ref: "who:'), "requester_ref"),
         (lambda t: "launch: [unclosed", "YAML"),

@@ -10,7 +10,6 @@ source item carries a copy of its title, link, kind and a 400-character excerpt
 (decided 2026-10-21, C1 "Found items"), audited as shared in full.
 """
 
-import json
 import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
@@ -376,7 +375,7 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 source=source,
                 mentions=1 + len(descendants(r.id, children)),
                 suggestion=None
-                if hidden is not None and hidden.names(json.dumps(r.suggestion or {}))
+                if hidden is not None and hidden.names_in(r.suggestion)
                 else _without_decline(_suggestion(r.suggestion), show_decline),
                 filed_by=r.filed_by,
                 decided_by=r.decided_by,
@@ -996,6 +995,9 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Reque
         if ids
         else {}
     )
+    # A triage run's problem suggestion naming a decision or document the reader may not
+    # see (one written before #541 part 4) is not shown to them, as request suggestions.
+    hidden = await visibility.hidden_for_reader(db)
     return [
         RequestThemeOut(
             id=t.id,
@@ -1011,7 +1013,9 @@ async def themes_out(db: AsyncSession, themes: list[RequestTheme]) -> list[Reque
             constraints=t.constraints,
             problem_state=t.problem_state,  # type: ignore[arg-type]
             problem_suggestion=SuggestedProblem(**t.problem_suggestion)
-            if t.problem_state == "suggested" and t.problem_suggestion
+            if t.problem_state == "suggested"
+            and t.problem_suggestion
+            and not (hidden is not None and hidden.names_in(t.problem_suggestion))
             else None,
             problem_confirmed_at=t.problem_confirmed_at,
             created_by=t.created_by,

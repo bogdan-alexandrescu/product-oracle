@@ -179,7 +179,8 @@ def test_the_member_flows():
     fails_when=a flow's output reaches every member without the mark; no_claim=flows a
     later lane adds (it must decide)."""
     marked = {k for k, f in flows.FLOWS.items() if f.member_output}
-    assert marked == set(MEMBER_FLOWS)
+    # #541 part 5: the launch kit too (tests.test_member_draft_runs_visibility).
+    assert marked == {*MEMBER_FLOWS, "launch_kit"}
 
 
 # ------------------------------------------------------------------- the importers
