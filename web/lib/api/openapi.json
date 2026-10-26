@@ -6552,7 +6552,8 @@
             "description": "Format not offered for the layer, no brief, or an audience for a document that is not a roadmap (or as markdown)"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/roadmap-audiences": {
@@ -6718,7 +6719,8 @@
             "description": "Format not offered for the layer, the version has no brief, or an audience for a document that is not a roadmap (or as markdown)"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/documents/{doc}/versions/{n}/deck": {
@@ -6801,7 +6803,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/documents/{doc}/llm-jobs": {

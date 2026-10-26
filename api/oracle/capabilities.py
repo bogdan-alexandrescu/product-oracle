@@ -180,9 +180,14 @@ PER_ITEM: dict[str, Role | None] = {
     "estimate_regeneration": "approver",
     # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
     "explain_metric_variance": "approver",
+    # O5: a roadmap's Public audience is an approver's (Board, Team and Engineering are
+    # every reader's: the audience query parameter decides).
+    "export_publication": "approver",
+    "export_version": "approver",
     "get_checkpoint_draft": "owner",
     # Company coverage is owners' only (owner 2026-10-24): its handler reads the role.
     "get_company_source_coverage": "owner",
+    "get_deck": "approver",
     "get_next_question_batch": "approver",
     "keep_request_no": None,
     "mark_metric_variance_unknown": "approver",
