@@ -66,6 +66,8 @@ export interface RoadmapContext {
   engineeringLead?: boolean;
   /** F3: some member carries the flag (an approver's basis then waits as proposed). */
   leadNamed?: boolean;
+  /** F2 Ask's pre-fill: the company's engineering lead when exactly one active member carries the flag. */
+  onlyLead?: Schemas["PersonOut"] | null;
   /** How the caller is named (F2: "Kept by <name>"). */
   userName?: string;
   documents: Doc[];
@@ -1534,7 +1536,10 @@ function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: str
   const prd = t && ctx.documents.find((d) => d.id === t.prd_id);
   const inbox: TrackAlertOut["inbox_state"] =
     seen === undefined ? null : a.state !== "open" ? "done" : seen === null || a.opened_at > seen ? "new" : "open";
-  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions: alertActions(ctx, db, a), inbox_state: inbox };
+  const actions = alertActions(ctx, db, a);
+  // As oracle.roadmap.alerts.out: the one lead, where the caller (not that lead) may Ask.
+  const lead = ctx.onlyLead && actions.includes("ask") && ctx.onlyLead.user_id !== ctx.userId ? ctx.onlyLead : null;
+  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions, inbox_state: inbox, suggested_assignee: lead };
 }
 
 function trackAlerts(

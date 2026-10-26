@@ -35475,7 +35475,11 @@ export interface components {
         /**
          * TrackAlertOut
          * @description One situation on one track. ``actions``: only what the caller may do now.
-         *     ``inbox_state``: in the Inbox only (new, open, done; C1e).
+         *     ``inbox_state``: in the Inbox only (new, open, done; C1e). ``suggested_assignee``: whom
+         *     Ask pre-fills (F2 §3, "a question to the engineering lead"; decided 2026-10-25): the
+         *     company's engineering lead when exactly one active member carries the flag and the
+         *     caller, not that lead, may Ask; else none. The server decides, so the flag itself never
+         *     reaches a picker (``GET /v1/people`` does not show it).
          */
         TrackAlertOut: {
             /**
@@ -35528,6 +35532,7 @@ export interface components {
             resolved_at: string | null;
             /** Actions */
             actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "ask" | "discuss" | "keep" | "reopen")[];
+            suggested_assignee?: components["schemas"]["PersonOut"] | null;
         };
         /** TrackAlertPrd */
         TrackAlertPrd: {

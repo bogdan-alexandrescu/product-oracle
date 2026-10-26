@@ -33,6 +33,8 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
 from oracle.members.leads import date_rights, engineering_leads
+from oracle.members.names import display_name
+from oracle.members.schemas import PersonOut
 from oracle.roadmap import schedule, staleness, tracker, tracks
 from oracle.roadmap.models import (
     ProductTrack,
@@ -350,6 +352,8 @@ class Lookups:
     titles: dict[tuple[uuid.UUID, str], str]
     names: dict[uuid.UUID, str]
     leads: frozenset[uuid.UUID]
+    # Ask's pre-fill: the one active engineering lead, when there is exactly one.
+    lead: PersonOut | None = None
 
 
 async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
@@ -382,7 +386,14 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
         u.id: u.email
         for u in (await db.scalars(select(User).where(User.id.in_(kept_by))) if kept_by else [])
     }
-    return Lookups(track_rows, prds, titles, names, await engineering_leads(db))
+    leads = await engineering_leads(db)
+    lead = None
+    if len(leads) == 1 and (user := await db.get(User, next(iter(leads)))) is not None:
+        lead = PersonOut(
+            user_id=user.id, name=display_name(user.email, user.name), email=user.email,
+            role=user.role, can_write=has_role(user.role, "commenter"),  # type: ignore[arg-type]
+        )  # fmt: skip
+    return Lookups(track_rows, prds, titles, names, leads, lead)
 
 
 def out(
@@ -390,6 +401,8 @@ def out(
 ) -> TrackAlertOut:
     track = lk.tracks[a.track_id]
     prd = lk.prds.get(track.prd_document_id)
+    may = actions(a, track, principal, lk.leads)
+    ask_lead = "ask" in may and lk.lead is not None and lk.lead.user_id != principal.user_id
     return TrackAlertOut(
         id=a.id,
         track_id=a.track_id,
@@ -407,7 +420,8 @@ def out(
         kept_at=a.kept_at,
         note=a.note,
         resolved_at=a.resolved_at,
-        actions=actions(a, track, principal, lk.leads),  # type: ignore[arg-type]
+        actions=may,  # type: ignore[arg-type]
+        suggested_assignee=lk.lead if ask_lead else None,
     )
 
 

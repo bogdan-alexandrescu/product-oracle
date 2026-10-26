@@ -404,7 +404,12 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
         )
       )}
       {asking && a.item_key && prdId && (
-        <AskTeammate subject={{ kind: "roadmap_item", document_id: prdId, item_key: item.key }} context={item.title} onClose={() => setAsking(false)} />
+        <AskTeammate
+          subject={{ kind: "roadmap_item", document_id: prdId, item_key: item.key }}
+          context={item.title}
+          person={a.suggested_assignee}
+          onClose={() => setAsking(false)}
+        />
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {/* Over the whole page, not inside the inspector's column (the rail would cover it). */}

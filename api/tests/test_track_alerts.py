@@ -212,9 +212,7 @@ async def test_ask_and_discuss_reach_commenters_on_the_kinds_they_fit(client, ow
     assert gone["actions"] == []
 
 
-async def test_ask_suggests_the_engineering_lead_when_there_is_exactly_one(
-    client, owner, runtime,  # noqa: F811
-):
+async def test_ask_suggests_the_only_engineering_lead(client, owner, runtime):  # noqa: F811
     """protects=F2 §3's Ask "a question to the engineering lead" (decided 2026-10-25, "Pre-fill
     the only lead"): with exactly one active lead, an alert the caller may Ask on names that
     lead as ``suggested_assignee``; with none or several, or for the lead themselves, none;

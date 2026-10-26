@@ -2195,6 +2195,7 @@ function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): 
     role: me.role,
     engineeringLead: engineeringLeads(db).includes(me.id),
     leadNamed: engineeringLeads(db).length > 0,
+    onlyLead: onlyLead(db),
     userName: me.email,
     documents: db.documents,
     versions: db.versions,
@@ -2711,6 +2712,13 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
 }
 
 /** A3, as oracle.members.leads: the active members carrying the engineering lead flag. */
+/** F2 Ask's pre-fill (oracle.roadmap.alerts.lookups): the one active engineering lead, as the people directory shows them. */
+function onlyLead(db: Db): Schemas["PersonOut"] | null {
+  const leads = engineeringLeads(db);
+  const m = leads.length === 1 ? db.members.find((x) => x.id === leads[0]) : undefined;
+  return m ? { user_id: m.id, name: displayName(m.email, m.name), email: m.email, role: m.role, can_write: atLeast(m.role, "commenter") } : null;
+}
+
 function engineeringLeads(db: Db): string[] {
   return db.members.filter((x) => x.engineering_lead && x.status !== "disabled").map((x) => x.id);
 }
