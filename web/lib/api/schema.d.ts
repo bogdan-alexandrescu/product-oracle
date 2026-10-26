@@ -1861,8 +1861,32 @@ export interface paths {
          *     from what was stored at publish time, so later edits, theme changes and source
          *     updates never change it. A PDF renders on the export pool in an export place, like an
          *     export (refused: 429 ``export_busy_you`` or 503 ``export_busy``).
+         *
+         *     ``audience`` (roadmaps, O5): the publication's pinned version rendered for Board, Team
+         *     or Engineering (oracle.roadmap.variants), on the export pool.
          */
         get: operations["export_publication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmap-audiences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audiences
+         * @description O5: the audience registry (oracle.roadmap.variants): what each audience hides,
+         *     which item fields it shows and how it groups them.
+         */
+        get: operations["list_audiences"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1881,7 +1905,8 @@ export interface paths {
         /**
          * Export Version
          * @description Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable
-         *     slides).
+         *     slides). ``audience`` (roadmaps, O5): the rendering for Board, Team or Engineering;
+         *     markdown is the stored text and has none.
          */
         get: operations["export_version"];
         put?: never;
@@ -13166,6 +13191,32 @@ export interface components {
                 [key: string]: string;
             }[];
         };
+        /**
+         * AudienceOut
+         * @description O5: one audience of the roadmap variant registry (oracle.roadmap.variants).
+         */
+        AudienceOut: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "board" | "team" | "engineering" | "public";
+            /** Label */
+            label: string;
+            /** Hidden Sections */
+            hidden_sections: string[];
+            /** Item Fields */
+            item_fields: string[];
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "goal" | "theme" | "team" | "stage";
+            /** Max Items Per Horizon */
+            max_items_per_horizon: number | null;
+            /** Appendix */
+            appendix: boolean;
+        };
         /** AuthorizationServerMetadata */
         AuthorizationServerMetadata: {
             /** Issuer */
@@ -18172,6 +18223,8 @@ export interface components {
              * @enum {string}
              */
             visibility: "company" | "approvers";
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
             /** Latest Version */
             latest_version?: number | null;
@@ -18317,6 +18370,8 @@ export interface components {
              * @enum {string}
              */
             visibility: "company" | "approvers";
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
             /** Latest Version */
             latest_version?: number | null;
@@ -33708,6 +33763,8 @@ export interface components {
             template_version?: number | null;
             /** Theme */
             theme?: string | null;
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
             /** Question */
             question?: string | null;
@@ -40960,6 +41017,7 @@ export interface operations {
             query?: {
                 format?: "html" | "pdf" | "md";
                 layer?: "full" | "brief" | "deck";
+                audience?: ("board" | "team" | "engineering" | "public") | null;
             };
             header?: never;
             path: {
@@ -40981,7 +41039,21 @@ export interface operations {
                     "text/markdown": string;
                 };
             };
-            /** @description Format not offered for the layer, or no brief */
+            /** @description The Public audience below the approver role, or for a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description public_not_ready: the Public audience needs a public check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Format not offered for the layer, no brief, or an audience for a document that is not a roadmap (or as markdown) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -40990,11 +41062,32 @@ export interface operations {
             };
         };
     };
+    list_audiences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudienceOut"][];
+                };
+            };
+        };
+    };
     export_version: {
         parameters: {
             query?: {
                 format?: "html" | "pdf" | "md" | "pptx";
                 layer?: "full" | "brief" | "deck";
+                audience?: ("board" | "team" | "engineering" | "public") | null;
             };
             header?: never;
             path: {
@@ -41017,7 +41110,21 @@ export interface operations {
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation": string;
                 };
             };
-            /** @description Format not offered for the layer, or the version has no brief */
+            /** @description The Public audience below the approver role, or for a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description public_not_ready: the Public audience needs a public check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Format not offered for the layer, the version has no brief, or an audience for a document that is not a roadmap (or as markdown) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -41028,7 +41135,9 @@ export interface operations {
     };
     get_deck: {
         parameters: {
-            query?: never;
+            query?: {
+                audience?: ("board" | "team" | "engineering" | "public") | null;
+            };
             header?: never;
             path: {
                 doc: string;

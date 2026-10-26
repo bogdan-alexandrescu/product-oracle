@@ -6438,7 +6438,7 @@
           "review"
         ],
         "summary": "Export Publication",
-        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it. A PDF renders on the export pool in an export place, like an\nexport (refused: 429 ``export_busy_you`` or 503 ``export_busy``).",
+        "description": "The published HTML (full, brief or deck), its PDF, or the full markdown. Served\nfrom what was stored at publish time, so later edits, theme changes and source\nupdates never change it. A PDF renders on the export pool in an export place, like an\nexport (refused: 429 ``export_busy_you`` or 503 ``export_busy``).\n\n``audience`` (roadmaps, O5): the publication's pinned version rendered for Board, Team\nor Engineering (oracle.roadmap.variants), on the export pool.",
         "operationId": "export_publication",
         "security": [
           {
@@ -6496,6 +6496,28 @@
               "default": "full",
               "title": "Layer"
             }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "board",
+                    "team",
+                    "engineering",
+                    "public"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audience"
+            }
           }
         ],
         "responses": {
@@ -6520,10 +6542,52 @@
               }
             }
           },
+          "403": {
+            "description": "The Public audience below the approver role, or for a run"
+          },
+          "409": {
+            "description": "public_not_ready: the Public audience needs a public check"
+          },
           "422": {
-            "description": "Format not offered for the layer, or no brief"
+            "description": "Format not offered for the layer, no brief, or an audience for a document that is not a roadmap (or as markdown)"
           }
         },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/roadmap-audiences": {
+      "get": {
+        "tags": [
+          "export",
+          "roadmaps"
+        ],
+        "summary": "List Audiences",
+        "description": "O5: the audience registry (oracle.roadmap.variants): what each audience hides,\nwhich item fields it shows and how it groups them.",
+        "operationId": "list_audiences",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AudienceOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Audiences"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "x-min-role": "viewer"
       }
     },
@@ -6533,7 +6597,7 @@
           "export"
         ],
         "summary": "Export Version",
-        "description": "Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable\nslides).",
+        "description": "Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable\nslides). ``audience`` (roadmaps, O5): the rendering for Board, Team or Engineering;\nmarkdown is the stored text and has none.",
         "operationId": "export_version",
         "security": [
           {
@@ -6592,6 +6656,28 @@
               "default": "full",
               "title": "Layer"
             }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "board",
+                    "team",
+                    "engineering",
+                    "public"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audience"
+            }
           }
         ],
         "responses": {
@@ -6622,8 +6708,14 @@
               }
             }
           },
+          "403": {
+            "description": "The Public audience below the approver role, or for a run"
+          },
+          "409": {
+            "description": "public_not_ready: the Public audience needs a public check"
+          },
           "422": {
-            "description": "Format not offered for the layer, or the version has no brief"
+            "description": "Format not offered for the layer, the version has no brief, or an audience for a document that is not a roadmap (or as markdown)"
           }
         },
         "x-min-role": "viewer"
@@ -6662,6 +6754,28 @@
             "schema": {
               "type": "integer",
               "title": "N"
+            }
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "board",
+                    "team",
+                    "engineering",
+                    "public"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audience"
             }
           }
         ],
@@ -45266,6 +45380,75 @@
         ],
         "title": "AtRiskItem"
       },
+      "AudienceOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "board",
+              "team",
+              "engineering",
+              "public"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "hidden_sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hidden Sections"
+          },
+          "item_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Item Fields"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "theme",
+              "team",
+              "stage"
+            ],
+            "title": "Group By"
+          },
+          "max_items_per_horizon": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Items Per Horizon"
+          },
+          "appendix": {
+            "type": "boolean",
+            "title": "Appendix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "hidden_sections",
+          "item_fields",
+          "group_by",
+          "max_items_per_horizon",
+          "appendix"
+        ],
+        "title": "AudienceOut",
+        "description": "O5: one audience of the roadmap variant registry (oracle.roadmap.variants)."
+      },
       "AuthorizationServerMetadata": {
         "properties": {
           "issuer": {
@@ -59464,6 +59647,23 @@
             "title": "Visibility",
             "default": "company"
           },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
           "period": {
             "anyOf": [
               {
@@ -59870,6 +60070,23 @@
             ],
             "title": "Visibility",
             "default": "company"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
           },
           "period": {
             "anyOf": [
@@ -102631,6 +102848,23 @@
               }
             ],
             "title": "Theme"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "board",
+                  "team",
+                  "engineering",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
           },
           "period": {
             "anyOf": [
