@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, wording
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.jobs.schemas import SuggestionOut
 from oracle.review import publish_gate
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
@@ -202,7 +201,7 @@ async def feedback_out(
             select(SectionReview.id, SectionReview.verdict).where(SectionReview.id.in_(review_ids))
         )
         verdicts = {k: v for k, v in rows}
-    from oracle.jobs.service import latest_suggestions
+    from oracle.jobs.service import latest_suggestions, shown_note, suggestion_out
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
     latest = await latest_numbers(session, {i.document_id for i in items})
@@ -236,11 +235,13 @@ async def feedback_out(
                 verdict=verdicts.get(item.section_review_id) if item.section_review_id else None,
                 status=item.status,
                 addressed_in_version=item.addressed_in_version,
-                resolution_note=item.resolution_note,
+                resolution_note=shown_note(item, suggestion),
                 severity=item.severity,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
-                suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
+                suggestion=suggestion_out(suggestion, item.withheld_at is not None)
+                if suggestion
+                else None,
                 state=state,
                 staged_for_version=(latest.get(item.document_id) or 0) + 1
                 if state == "staged"

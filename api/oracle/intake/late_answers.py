@@ -14,7 +14,12 @@ intake page still counts it. The item follows the finding's level (:func:`on_sha
 withdrawn when the finding goes back to private or to counts (deleted when nobody acted on
 it; kept with its quote withheld when someone did: triaged it, or decided a suggestion on
 it), raised or read in full again when it is shared from summary up, also for an answer
-given while it was private. Nothing here commits.
+given while it was private. While an item is withheld (``withheld_at``, #636 re-review)
+its suggestions' text, edited text, rationale and pushback reason are withheld too, in
+every output (:func:`oracle.jobs.service.suggestions_out`), and so is a resolution note
+Accept wrote from them. What people wrote themselves on it (a resolution note, a reason
+for keeping their call over a pushback) is shown as written and may quote the answer:
+they wrote it while they could read it. Nothing here commits.
 """
 
 import uuid
@@ -79,8 +84,8 @@ async def _raise(
         return None
     kept = await db.scalar(select(FeedbackItem).where(FeedbackItem.intake_answer_id == answer.id))
     if kept is not None:
-        if kept.summary == WITHHELD:
-            kept.summary = summary_of(question, answer)
+        if kept.withheld_at is not None:
+            kept.summary, kept.withheld_at = summary_of(question, answer), None
             await audit.record(
                 db, audit.ORACLE, "feedback.unwithhold", "feedback_item", kept.id,
                 {"intake_id": str(intake.id), "reason": "finding_shared"},
@@ -199,10 +204,10 @@ async def on_sharing(db: AsyncSession, intake: ProductIntake, gaps: list[Knowled
                 or item.staged_for_agents_at
                 or item.id in decided
             )
-            if acted and item.summary == WITHHELD:
+            if acted and item.withheld_at is not None:
                 continue
             if acted:
-                item.summary = WITHHELD
+                item.summary, item.withheld_at = WITHHELD, datetime.now(UTC)
                 action = "feedback.withhold"
             else:
                 await db.delete(item)
@@ -243,7 +248,7 @@ async def counted(db: AsyncSession, intake: ProductIntake) -> int:
         await db.scalar(
             select(func.count(FeedbackItem.id))
             .join(StakeholderQuestion, StakeholderQuestion.id == FeedbackItem.intake_question_id)
-            .where(StakeholderQuestion.intake_id == intake.id, FeedbackItem.summary != WITHHELD)
+            .where(StakeholderQuestion.intake_id == intake.id, FeedbackItem.withheld_at.is_(None))
         )
         or 0
     )

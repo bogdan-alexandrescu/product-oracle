@@ -9,11 +9,12 @@ decide suggestions and refine sections; owners turn job kinds on or off per docu
 """
 
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import yaml
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -361,6 +362,58 @@ async def latest_suggestions(
     return {r.feedback_item_id: r for r in rows}
 
 
+#: A withheld item's suggestion: what its pushback says instead of its reason (#636 re-review).
+WITHHELD_REASON = "Withheld while its finding is not shared in full"
+
+
+async def withheld_items(db: AsyncSession, feedback_ids: Iterable[uuid.UUID]) -> set[uuid.UUID]:
+    """The items among ``feedback_ids`` withholding their quote (``withheld_at``)."""
+    ids = set(feedback_ids)
+    if not ids:
+        return set()
+    return set(
+        await db.scalars(
+            select(FeedbackItem.id).where(
+                FeedbackItem.id.in_(ids), FeedbackItem.withheld_at.is_not(None)
+            )
+        )
+    )
+
+
+def suggestion_out(row: LlmSuggestion, withheld: bool) -> SuggestionOut:
+    """A suggestion as every output serves it. On a withheld item (a late answer whose
+    finding is not shared in full) the model wrote its text and rationale from the summary
+    that quoted the answer, and an approver's edit may restate it: they are left out, and
+    its pushback keeps its sources but not its reason (#636 re-review)."""
+    out = SuggestionOut.model_validate(row)
+    if not withheld:
+        return out
+    pushback = out.pushback.model_copy(update={"reason": WITHHELD_REASON}) if out.pushback else None
+    return out.model_copy(
+        update={"text": None, "edited_text": None, "rationale": None, "pushback": pushback}
+    )
+
+
+async def suggestions_out(db: AsyncSession, rows: Iterable[LlmSuggestion]) -> list[SuggestionOut]:
+    rows = list(rows)
+    withheld = await withheld_items(db, {r.feedback_item_id for r in rows})
+    return [suggestion_out(r, r.feedback_item_id in withheld) for r in rows]
+
+
+def shown_note(item: FeedbackItem, suggestion: LlmSuggestion | None) -> str | None:
+    """The item's resolution note as outputs serve it: on a withheld item, a note Accept
+    wrote from its suggestion (an answer's text, a "nothing to change" rationale) is
+    withheld with it. A note a person wrote is shown as written: they wrote it while they
+    could read the answer, and it may quote it (#636 re-review)."""
+    note = item.resolution_note
+    if item.withheld_at is None or note is None or suggestion is None:
+        return note
+    final = suggestion.edited_text or suggestion.text
+    if note == f"Answered: {final}" or (suggestion.rationale and note == suggestion.rationale):
+        return WITHHELD_REASON
+    return note
+
+
 async def list_suggestions(
     db: AsyncSession, doc: str, status: str | None = None, section_key: str | None = None
 ) -> list[SuggestionOut]:
@@ -371,7 +424,7 @@ async def list_suggestions(
     if section_key:
         stmt = stmt.where(LlmSuggestion.section_key == section_key)
     rows = await db.scalars(stmt.order_by(LlmSuggestion.created_at, LlmSuggestion.id))
-    return [SuggestionOut.model_validate(r) for r in rows]
+    return await suggestions_out(db, rows)
 
 
 async def _suggestion(db: AsyncSession, suggestion_id: uuid.UUID) -> LlmSuggestion:
@@ -785,7 +838,8 @@ async def apply_refinement(
         .where(
             LlmJob.document_id == job.document_id,
             LlmJob.kind == "refinement",
-            LlmJob.section_key == job.section_key,
+            # As _in_use: a refinement with no section key is the section "".
+            func.coalesce(LlmJob.section_key, "") == (job.section_key or ""),
             LlmJob.status.in_(("queued", "running", "succeeded")),
             tuple_(LlmJob.created_at, LlmJob.id) > tuple_(job.created_at, job.id),
         )
@@ -934,6 +988,14 @@ async def version_reports(db: AsyncSession, doc: str, n: int) -> VersionReports:
         out.report_job_id = done.id
         out.generated_at = done.finished_at
         out.resolution = ResolutionNarrative.model_validate(done.output["resolution"])
+        # The report was written when the item read in full: while it is withheld its line
+        # reads the withheld summary, without the note and explanation (#636 re-review).
+        from oracle.intake.late_answers import WITHHELD
+
+        withheld = await withheld_items(db, [i.feedback_id for i in out.resolution.items])
+        for line in out.resolution.items:
+            if line.feedback_id in withheld:
+                line.summary, line.resolution_note, line.explanation = WITHHELD, None, ""
         out.changes = ChangesReport.model_validate(done.output["changes"])
     return out
 

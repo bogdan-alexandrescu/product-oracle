@@ -296,7 +296,7 @@ async def edit_suggestion(
     row = await _call(service.edit_suggestion(db, principal, suggestion_id, body.text))
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 @router.post("/suggestions/{suggestion_id}/accept", response_model=SuggestionOut)
@@ -310,7 +310,7 @@ async def accept_suggestion(
     )
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 @router.post("/suggestions/{suggestion_id}/undo-accept", response_model=SuggestionOut)
@@ -323,7 +323,7 @@ async def undo_accept_suggestion(
     row = await _call(service.undo_accept(db, principal, suggestion_id))
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 @router.post("/suggestions/{suggestion_id}/dismiss", response_model=SuggestionOut)
@@ -335,7 +335,7 @@ async def dismiss_suggestion(
     )
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 # --- reports --------------------------------------------------------------------------
