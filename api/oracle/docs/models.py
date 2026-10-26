@@ -34,6 +34,8 @@ DOCUMENT_KINDS = ("prd", "roadmap", "spec", "vision", "strategy", "update", "pri
 # H8: who sees a document. "company": every member (S3); "approvers": owners and approvers
 # only (oracle.docs.visibility), the default of an update.
 DOCUMENT_VISIBILITIES = ("company", "approvers")
+# O5: who a roadmap is read by first (oracle.roadmap.variants.AUDIENCES).
+DOCUMENT_AUDIENCES = ("board", "team", "engineering", "public")
 # O1f: a section belongs to the brief layer or is detail (oracle.docs.layers).
 SECTION_LAYERS = ("brief", "detail")
 BRIEF_SOURCES = ("draft", "template", "full_heading", "none")
@@ -53,6 +55,7 @@ class Document(Trashable, TenantScoped, Base):
         CheckConstraint(_in("status", DOCUMENT_STATUSES), name="status"),
         CheckConstraint(_in("kind", DOCUMENT_KINDS), name="kind"),
         CheckConstraint(_in("visibility", DOCUMENT_VISIBILITIES), name="visibility"),
+        CheckConstraint(_in("audience", DOCUMENT_AUDIENCES), name="audience"),
         trashed_index("documents"),
         # The few documents that are not company-wide (oracle.docs.visibility).
         Index(
@@ -74,6 +77,9 @@ class Document(Trashable, TenantScoped, Base):
     # H8: "approvers" hides the document from commenters and viewers on every read path
     # (oracle.docs.visibility).
     visibility: Mapped[str] = mapped_column(Text, nullable=False, server_default="company")
+    # O5: a roadmap's default audience, the picker's variant (oracle.roadmap.variants).
+    # None reads as "team"; it only preselects, every reader may switch.
+    audience: Mapped[str | None] = mapped_column(Text)
     # Built-in model jobs (oracle.jobs) an owner turned off for this document; all on
     # by default.
     disabled_llm_jobs: Mapped[list[str]] = mapped_column(

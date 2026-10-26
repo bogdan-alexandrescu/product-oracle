@@ -969,6 +969,11 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
             f"template '{template.key}' is a {template.kind} template, not {data.kind}",
             [Problem(code="kind_mismatch", message=f"template kind is {template.kind}")],
         )
+    if data.audience is not None and data.kind != "roadmap":
+        raise InvalidError(
+            f"audience is for roadmaps only, not {data.kind}",
+            [Problem(code="audience_not_roadmap", message="audience is for roadmaps only")],
+        )
     if template.archived_at is not None:
         raise InvalidError(
             f"template '{template.key}' is archived; restore it to start new drafts",
@@ -1014,6 +1019,7 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         template_version=str(version.version),
         theme=theme_key,
         visibility=default_visibility(data.kind),
+        audience=data.audience,
     )
     db.add(document)
     try:
@@ -1046,7 +1052,12 @@ async def start_draft(db: AsyncSession, data: StartDraftIn, principal: Principal
         "document.draft_started",
         "document",
         document.id,
-        {"template": template.key, "template_version": version.version, "theme": theme_key},
+        {
+            "template": template.key,
+            "template_version": version.version,
+            "theme": theme_key,
+            **({"audience": data.audience} if data.audience else {}),
+        },
     )
     try:
         # The skeleton's sections are the company template's: only the title the person

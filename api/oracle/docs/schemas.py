@@ -46,6 +46,8 @@ Layer = Literal["brief", "detail"]
 BriefSource = Literal["draft", "template", "full_heading", "none"]
 DocumentKind = Literal["prd", "roadmap", "spec", "vision", "strategy", "update", "pricing"]
 DocumentVisibility = Literal["company", "approvers"]
+# O5: who a roadmap rendering is for (oracle.roadmap.variants).
+Audience = Literal["board", "team", "engineering", "public"]
 
 
 class ORM(BaseModel):
@@ -123,6 +125,9 @@ class DocumentSummary(ORM):
     theme: str | None = None
     # H8: "approvers": owners and approvers only (an update, unless an owner opened it).
     visibility: DocumentVisibility = "company"
+    # O5: a roadmap's default audience (the picker's variant); a roadmap without one
+    # reads as "team". None for every other kind.
+    audience: Audience | None = None
     # H8: an update's period, from its latest version's front matter.
     period: UpdatePeriod | None = None
     latest_version: int | None = None
@@ -132,6 +137,14 @@ class DocumentSummary(ORM):
     source: VersionSource | None = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def _default_audience(self) -> "DocumentSummary":
+        if self.kind != "roadmap":
+            self.audience = None
+        elif self.audience is None:
+            self.audience = "team"
+        return self
 
 
 class VersionSummary(ORM):

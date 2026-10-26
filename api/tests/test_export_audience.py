@@ -312,7 +312,7 @@ async def test_the_markdown_banner_names_the_audience(client, ctx):
         headers=ctx.as_("viewer"),
     )  # fmt: skip
     assert resp.status_code == 200, resp.text
-    assert "audience Board" in resp.text
+    assert "Audience Board" in resp.text
 
 
 async def test_no_audience_renders_as_before(client, ctx):

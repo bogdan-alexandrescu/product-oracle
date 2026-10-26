@@ -99,6 +99,11 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
         RENDERER,
         (theme.id, theme.updated_at) if theme is not None else None,
         marks,
+        # O5: the audience, and the items its rebuilt rows came from.
+        ev.audience,
+        hashlib.sha256(repr([i.__dict__ for i in ev.items]).encode()).hexdigest()
+        if ev.audience
+        else "",
         (
             ev.title,
             ev.document.slug,
@@ -107,6 +112,7 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
             ev.version.approved_at,
             ev.source_label,
         ),
+        tuple(sorted(ev.template_hides.get(ev.audience or "", ()))),
     )
 
 
