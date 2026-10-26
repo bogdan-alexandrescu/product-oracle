@@ -14,6 +14,13 @@ those items and the accepted text) when any of them was staged for the agents or
 text change's section is gone; otherwise Oracle's own refinement batch builds them.
 :func:`plan` says which and why, for the web, the Inbox and MCP clients alike.
 
+H11 Autonomy (``next_drafts``): at Observe Oracle counts staged changes and builds
+nothing (:func:`plan` says so, :func:`build` and :func:`start_run` refuse); at Draft (the
+default) an approver clicks Build next draft; at Recommend the staged list says when the
+staged changes are worth a draft (``worth_a_draft``); at Act within limits
+:func:`oracle_builds_due` (the ticker) builds it itself once enough changes wait, with
+the built-in engine only, and never applies it.
+
 Service functions flush but never commit, except :func:`apply`, which imports a
 version through the document importer (it commits) and then records what was applied,
 and :func:`start_run`, which creates, estimates and starts a run (each step commits).
@@ -69,6 +76,12 @@ if TYPE_CHECKING:
     from oracle.auth.deps import Principal
 
 KIND = "refinement_batch"
+#: H11: the responsibility that says how far Oracle goes with next drafts.
+AUTONOMY_KEY = "next_drafts"
+OBSERVING = (
+    "Oracle is set to observe next drafts: it counts staged changes and builds nothing. "
+    "An owner can change this in Settings › Autonomy."
+)
 #: The run the agents write a next draft in.
 AGENT_FLOW = "feedback_loop"
 #: Earlier refinements a cost estimate is drawn from.
@@ -293,11 +306,14 @@ async def staged_changes(
         )
     )
     stagers = await names(db, {f.staged_for_agents_by for f in agent_rows})
+    discussed = await _discussion_changes(db, principal, document, headings, locked, include_gone)
+    waiting = len([c for c in [*out, *discussed] if not c.section_gone]) + len(agent_rows)
+    next_version = (latest.number if latest else 0) + 1
     return StagedChanges(
         document_id=document.id,
         slug=document.slug,
         latest_version=latest.number if latest else None,
-        next_version=(latest.number if latest else 0) + 1,
+        next_version=next_version,
         items=out,
         gone_count=gone,
         estimate_usd=await _estimate(db, len(buildable)),
@@ -312,10 +328,39 @@ async def staged_changes(
             )
             for f in agent_rows
         ],
-        next_draft_changes=await _discussion_changes(
-            db, principal, document, headings, locked, include_gone
-        ),
+        next_draft_changes=discussed,
+        worth_a_draft=await _worth_a_draft(db, waiting, next_version, job),
     )
+
+
+async def _waiting_enough(db: AsyncSession, waiting: int) -> bool:
+    """H11: as many staged changes wait as the ``next_drafts`` limit asks for."""
+    from oracle import autonomy
+
+    lim = await autonomy.limits(db, AUTONOMY_KEY)
+    return waiting >= getattr(lim, "min_staged", 5)
+
+
+async def _worth_a_draft(
+    db: AsyncSession, waiting: int, next_version: int, job: LlmJob | None
+) -> str | None:
+    """H11 Recommend: the sentence saying the staged changes are worth a draft, once as
+    many wait as the limit asks for and no build is pending; None at any other level
+    (at Act within limits Oracle builds it itself)."""
+    from oracle import autonomy
+
+    if job is not None or await autonomy.level(db, AUTONOMY_KEY) != "recommend":
+        return None
+    if not await _waiting_enough(db, waiting):
+        return None
+    return f"{waiting} changes wait: worth building draft {next_version}."
+
+
+async def observing(db: AsyncSession) -> bool:
+    """H11: Oracle is set to observe next drafts (it builds nothing, on anyone's click)."""
+    from oracle import autonomy
+
+    return not await autonomy.allows(db, AUTONOMY_KEY, "draft")
 
 
 # --- the engine (D12) ---------------------------------------------------------------------
@@ -467,6 +512,8 @@ async def plan(
         out.refused = "Refinement is turned off for this document"
     else:
         out.refused = _locked_refusal([*changes, *rows])
+    if await observing(db):
+        out.refused = OBSERVING
     return out
 
 
@@ -491,6 +538,8 @@ async def start_run(
     from oracle.runs import service as runs
     from oracle.runs.schemas import KnobsIn, RunCreate
 
+    if await observing(db):
+        raise JobError(409, OBSERVING)
     staged, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
     document = await get_document(db, doc)
     if choose_engine(changes, items, document).engine == "oracle":
@@ -514,12 +563,16 @@ async def start_run(
 
 async def build(
     db: AsyncSession,
-    principal: "Principal",
+    principal: "Principal | None",
     doc: str,
     suggestion_ids: list[uuid.UUID] | None,
     feedback_ids: list[uuid.UUID] | None = None,
     next_draft_change_ids: list[uuid.UUID] | None = None,
 ) -> LlmJob:
+    """Queue the built-in build. ``principal`` None: Oracle starts it on its own
+    (:func:`oracle_builds_due`); the job then has no requester and says ``by: oracle``."""
+    if await observing(db):
+        raise JobError(409, OBSERVING)
     document = await get_document(db, doc)
     # Serialise builds per document: the row lock is held until the request commits, so a
     # double click or two approvers cannot both pass the pending check below.
@@ -568,7 +621,7 @@ async def build(
     if hit:
         named = ", ".join(f"{s.heading} ({s.section_key})" for s in hit)
         raise JobError(409, f"approved and locked, never changed: {named}; untick them")
-    return await enqueue(
+    job = await enqueue(
         db,
         document,
         KIND,
@@ -576,9 +629,159 @@ async def build(
         input={
             "suggestion_ids": [str(r.id) for r in rows],
             "next_draft_change_ids": [str(c.id) for c in nd_rows],
+            **({} if principal else {"by": audit.ORACLE}),
         },
         principal=principal,
     )
+    if principal is None:
+        await audit.record(
+            db,
+            audit.ORACLE,
+            "llm_job.queue",
+            "llm_job",
+            job.id,
+            {"kind": KIND, "document_id": str(document.id), "version": latest.number},
+        )
+    return job
+
+
+# --- Oracle builds it (H11 Act within limits) ---------------------------------------------
+
+
+async def _last_oracle_build(db: AsyncSession, document_id: uuid.UUID) -> LlmJob | None:
+    """The latest next-draft build Oracle started on its own for a document."""
+    for job in await db.scalars(
+        select(LlmJob)
+        .where(
+            LlmJob.document_id == document_id,
+            LlmJob.kind == KIND,
+            LlmJob.requested_by.is_(None),
+        )
+        .order_by(LlmJob.created_at.desc(), LlmJob.id.desc())
+    ):
+        if (job.input or {}).get("by") == audit.ORACLE:
+            return job
+    return None
+
+
+async def _tell(
+    db: AsyncSession, changes: Sequence[StagedChange], rows: Sequence[StagedDiscussionChange]
+) -> list[uuid.UUID]:
+    """Who hears that Oracle started a draft: the people who staged its changes (each
+    accepted suggestion's decider, each discussion change's stager; a person's API token
+    counts as the person), while they are still approvers; else the company's owners."""
+    from oracle.authz import has_role
+    from oracle.staging.models import NextDraftChange
+
+    ids = [c.accepted_by for c in changes if c.accepted_by]
+    if rows:
+        ids += list(
+            await db.scalars(
+                select(NextDraftChange.staged_by).where(
+                    NextDraftChange.id.in_([r.id for r in rows])
+                )
+            )
+        )
+    by_token = dict(
+        (await db.execute(select(ApiToken.id, ApiToken.user_id).where(ApiToken.id.in_(ids)))).all()
+    )
+    people = list(dict.fromkeys(by_token.get(i) or i for i in ids))
+    users = {
+        u.id: u
+        for u in await db.scalars(select(User).where(User.id.in_(people)))
+        if u.disabled_at is None and has_role(u.role, "approver")
+    }
+    told = [i for i in people if i in users]
+    if told:
+        return told
+    return list(
+        await db.scalars(
+            select(User.id)
+            .where(User.role == "owner", User.disabled_at.is_(None))
+            .order_by(User.created_at, User.id)
+        )
+    )
+
+
+async def oracle_builds_due(db: AsyncSession) -> int:
+    """H11 ``next_drafts`` at Act within limits: for each document where at least
+    ``min_staged`` staged changes wait (text changes, items for the agents and the
+    discussions' changes, whose section exists), with no build pending, Oracle queues the
+    built-in build of every staged change itself and tells the people who staged them
+    ("Oracle did", Undo discards the build). Only the built-in engine: Oracle never starts
+    the agents' paid run on its own, so changes that need the agents stay a person's
+    click. A document is built again only once a change Oracle's last build did not take
+    is staged (a discarded build is not rebuilt every tick). Oracle never applies the
+    draft: a person opens the preview and Applies it. Flushes; the caller commits.
+    Returns how many builds it started."""
+    from oracle import autonomy
+    from oracle.staging.models import NextDraftChange
+
+    if not await autonomy.allows(db, AUTONOMY_KEY, "act"):
+        return 0
+    with_text = select(LlmSuggestion.document_id).where(
+        LlmSuggestion.kind == "section_text",
+        LlmSuggestion.status == "accepted",
+        LlmSuggestion.applied_in_version.is_(None),
+    )
+    with_rows = select(NextDraftChange.document_id).where(NextDraftChange.status == "staged")
+    docs = list(
+        await db.scalars(
+            select(Document)
+            .where(Document.id.in_(with_text.union(with_rows)))
+            .order_by(Document.slug)
+        )
+    )
+    started = 0
+    for document in docs:
+        if document.deleted_at is not None:
+            continue
+        try:
+            staged = await staged_changes(db, document.slug)
+            waiting = len(staged.items) + len(staged.agent_items) + len(staged.next_draft_changes)
+            if staged.draft_job is not None or not await _waiting_enough(db, waiting):
+                continue
+            chosen = await plan(db, document.slug, None, None)
+            if chosen.engine != "oracle" or chosen.refused:
+                continue
+            last = await _last_oracle_build(db, document.id)
+            if last is not None:
+                taken = {
+                    *((last.input or {}).get("suggestion_ids") or []),
+                    *((last.input or {}).get("next_draft_change_ids") or []),
+                }
+                waiting_ids = {str(c.suggestion_id) for c in staged.items} | {
+                    str(r.id) for r in staged.next_draft_changes
+                }
+                if waiting_ids <= taken:
+                    continue
+            job = await build(db, None, document.slug, None)
+        except JobError:
+            continue
+        await autonomy.acted(
+            db,
+            AUTONOMY_KEY,
+            summary=(
+                f"Started draft {staged.next_version} of '{document.title}' "
+                f"from {waiting} staged changes"
+            ),
+            subject={
+                "kind": "document",
+                "key": document.slug,
+                # A document with no version yet opens on its own page (#586 review).
+                "href": f"/documents/{document.slug}/v/{staged.latest_version}?build=1"
+                if staged.latest_version is not None
+                else f"/documents/{document.slug}",
+            },
+            undo={
+                "method": "POST",
+                "path": f"/v1/documents/{document.slug}/next-draft/{job.id}/discard",
+                "body": None,
+            },
+            notify=await _tell(db, staged.items, staged.next_draft_changes),
+        )
+        started += 1
+    return started
 
 
 # --- preview ------------------------------------------------------------------------------

@@ -41,7 +41,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.authz import has_role
 from oracle.discussions import changes, context
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
@@ -358,14 +358,18 @@ async def _produce(
         name, system = prompting.current(JOB)
         # B6: on a goal, the goals interview's instructions follow the house rules.
         goal = await goal_interview.goal_of(db, d)
+        offer = ""
         if goal is not None:
             extra, more = prompting.current(GOAL_JOB)
             name, system = f"{name}+{extra}", f"{system}\n\n{more}"
             live.visible = goal_interview.visible
+            # H11 Shape goals: ask for as many versions as the level keeps (#586 review).
+            offer = goal_interview.offer_line(await autonomy.level(db, "goals"))
         reply.prompt = name
         await db.commit()
         notes = await changes.prompt_notes(db, d)
     asked = "Open the interview." if ctx.opening else "Reply to the last person's message."
+    asked = f"{offer} {asked}" if offer else asked
     user = (
         f"{ctx.text()}\n\n{notes}\n\nThe pushback threshold is {ctx.pushback:.2f}; the "
         f"low-confidence threshold is {ctx.low:.2f}. {asked}"

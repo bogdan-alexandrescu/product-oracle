@@ -68,6 +68,8 @@ export type LlmContext = {
   runEstimateUsd?: () => number | null;
   /** D12: starts the agents' feedback-loop run for Build next draft. */
   startRun?: StartRun;
+  /** H11 `next_drafts`: Oracle's level for next drafts and its staged-changes limit (default Draft, 5). */
+  nextDrafts?: () => { level: "observe" | "draft" | "recommend" | "act"; min_staged: number };
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
