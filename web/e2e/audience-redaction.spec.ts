@@ -25,10 +25,9 @@ const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/te
 for (const c of CASES) {
   test(`the mock redacts as the API: ${c.name}`, () => {
     const refs = c.items.flatMap((i) => i.tracker ?? []);
-    const titles = c.items.map((i) => i.title);
     const dropped = c.items.filter((i) => i.no_goal).map((i) => i.title);
-    expect(redact(c.text, "board", refs, dropped, titles)).toBe(c.board);
-    expect(redact(c.text, "team", refs, [], titles)).toBe(c.team);
-    expect(redact(c.text, "engineering", refs, [], titles)).toBe(c.engineering);
+    expect(redact(c.text, "board", refs, dropped)).toBe(c.board);
+    expect(redact(c.text, "team", refs, [])).toBe(c.team);
+    expect(redact(c.text, "engineering", refs, [])).toBe(c.engineering);
   });
 }

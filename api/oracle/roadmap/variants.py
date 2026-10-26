@@ -19,14 +19,17 @@ it never changes the text. The registry below is the source of truth: the API se
   timeline lanes, key milestones, cycle bets, pitches and raw ideas) keep their written
   text without what the audience hides: labelled owner (Board), tracker, estimate or
   effort and dependency parts in their common written forms (``Owner: …``, ``Lead:``,
-  ``DRI:``, ``Owner (PM):``, ``Owned by …``, ``Owner — …``, ``Story points:``, ``Est.:``,
-  ``Jira:``, ``Tracker: …``; a name runs on past an initial's or a title's full stop),
-  table columns so headed (``Owner(s)``, ``Est.``), sentences naming an item's tracker
-  issue, and revenue framing (Engineering). A table keeps its header and separator rows;
+  ``DRI:``, ``Owner (PM):``, ``Owned by …``, ``Owner — …``, ``Tech lead:``, ``PM:``,
+  ``Owner / PM:``, ``Who:``, ``*Owner*:``, ``Story points:``, ``Est.:``, ``Jira:``,
+  ``Tracker: …``; a name runs on past an initial's or a title's full stop; the sentence
+  keeps its spacing, punctuation and HTML tags), table columns so headed (``Owner(s)``,
+  ``Est.``, ``Tech lead``), sentences naming an item's tracker issue, and revenue
+  framing (Engineering). Tables are read as GFM reads them (one-dash separators, rows
+  with or without outer pipes); a table keeps its header and delimiter rows;
 - items that serve no confirmed goal (their feature has no confirmed ``supports`` edge
   to a confirmed goal, oracle.launches.tiers) are left out of Board, their cards and
-  the lines about them (a line starting with the item's title, or naming it and not
-  starting with another item's, and a dropped bullet's wrapped lines) included, with
+  their entries (a bullet, line or table row keyed by the item's whole title, never a
+  line that merely contains the word, and a dropped bullet's wrapped lines) included, with
   the line "N items serve no confirmed goal and are left out", and flagged ⚑ in Team
   and Engineering. A tenant with no confirmed goal has nothing to serve: no item is left
   out or flagged.
@@ -468,23 +471,22 @@ def _strip_parts(text: str, hidden: set[str]) -> str:
             out.append(text[pos : m.start()].rstrip(" \t")[:-1].rstrip(" \t"))
             pos = end + 1
             continue
-        else:
-            head = text[pos : m.start()]
-            stop = end < len(text) and text[end] in ".;"
-            if stop:
-                end += 1
-            while end < len(text) and text[end] in " \t":
-                end += 1
-            rest = text[end:]
-            if not rest.strip() or rest.startswith(("|", "<")):
-                # The part ended the line, cell or element: no dangling space or dash
-                # ("CSV parser — Owner: Dana." reads "CSV parser.").
-                trimmed = re.sub(r"[ \t]*(?:[—–:,]|\s-)?[ \t]*$", "", head)
-                if trimmed != head.rstrip(" \t") and stop and text[end - 1 : end] != ";":
-                    trimmed += "."
-                head = trimmed if rest.startswith("<") or trimmed != head.rstrip(" \t") else head
-            out.append(head)
-            pos = end
+        head = text[pos : m.start()]
+        stop = text[end] if end < len(text) and text[end] in ".;" else ""
+        if stop:
+            end += 1
+        while end < len(text) and text[end] in " \t":
+            end += 1
+        rest = text[end:]
+        if not rest.strip() or rest.startswith(("|", "<")):
+            # The part ended the line, cell or element: no dangling space or dash
+            # ("CSV parser — Owner: Dana." reads "CSV parser.").
+            trimmed = re.sub(r"[ \t]*(?:[—–:,]|\s-)?[ \t]*$", "", head)
+            if trimmed != head.rstrip(" \t") and stop == ".":
+                trimmed += "."
+            head = trimmed if rest.startswith("<") or trimmed != head.rstrip(" \t") else head
+        out.append(head)
+        pos = end
     out.append(text[pos:])
     return "".join(out)
 
