@@ -372,10 +372,12 @@ async def put_public_page(
     doc: str, body: PublicPageIn, principal: Approver, db: TenantDB
 ) -> PublicPageOut:
     """The Public page's own title and intro (the internal title is never shown). A
-    blocking leak finding in a text this save changes is 422 ``leak_blocking``, an
-    invisible format character 422 ``format_characters``; a change lapses the public
-    check. Both are re-checked at every render and left out of the page once they leak,
-    so an unchanged one that now leaks is reported, not refused."""
+    blocking leak finding in a text this save changes is 422 ``leak_blocking`` (an
+    approvers-only document, a decision, a plan or price and an internal note's words
+    block here, though an item text's approver ticks them), an invisible format
+    character 422 ``format_characters``; a change lapses the public check. Both are
+    re-checked at every render and left out of the page once they leak, so an unchanged
+    one that now leaks is reported, not refused."""
     document = await _roadmap(db, doc)
     sent = body.model_fields_set
     title = body.public_title if "public_title" in sent else document.public_title
@@ -389,7 +391,7 @@ async def put_public_page(
     leak_ctx = await leak_check.load_context(db)
     found = public.page_text_findings(leak_ctx, title, intro)
     blocking = [
-        f for text in changed for f in leak_check.blocking(leak_check.check(text or "", leak_ctx))
+        f for text in changed for f in leak_check.blocking(public.page_check(text, leak_ctx))
     ]
     if blocking:
         raise HTTPException(

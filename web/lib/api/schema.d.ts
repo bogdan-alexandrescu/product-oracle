@@ -9936,10 +9936,12 @@ export interface paths {
         /**
          * Put Public Page
          * @description The Public page's own title and intro (the internal title is never shown). A
-         *     blocking leak finding in a text this save changes is 422 ``leak_blocking``, an
-         *     invisible format character 422 ``format_characters``; a change lapses the public
-         *     check. Both are re-checked at every render and left out of the page once they leak,
-         *     so an unchanged one that now leaks is reported, not refused.
+         *     blocking leak finding in a text this save changes is 422 ``leak_blocking`` (an
+         *     approvers-only document, a decision, a plan or price and an internal note's words
+         *     block here, though an item text's approver ticks them), an invisible format
+         *     character 422 ``format_characters``; a change lapses the public check. Both are
+         *     re-checked at every render and left out of the page once they leak, so an unchanged
+         *     one that now leaks is reported, not refused.
          */
         put: operations["put_public_page"];
         post?: never;

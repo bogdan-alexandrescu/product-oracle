@@ -10,8 +10,10 @@ than an announced quarter, or item without an approved text.
 
 An item is shown when its public text is approved, was written for the item as it is now
 (``source_hash``), has no blocking leak finding (re-checked at every render, since the
-company's records move), and the item serves a confirmed goal. The page's public title and
-intro are re-checked at every render the same way and left out once they leak.
+company's records move), and no warning the approver has not ticked, and the item serves a
+confirmed goal. The page's public title and intro are re-checked at every render the same way
+and left out once they leak; nobody ticks them, so the four kinds an item text's approver
+ticks (:data:`PAGE_BLOCKING`) block them.
 
 A **public check** records a person's look at the exact page of one publication. It holds
 while the page's content hash matches; any change lapses it ("Changed since checked").
@@ -53,6 +55,9 @@ STAGE_LABELS = {
 COLUMN_ORDER = ("shipped", "in_progress", "planned", "exploring")
 HORIZON_STAGE = {"now": "in_progress", "next": "planned", "later": "exploring"}
 TITLE_MAX, DESCRIPTION_MAX = 80, 280
+# Warnings on an item's text (its approver ticks them) that block the page's own title and
+# intro, which nobody ticks (owner decision, 2026-10-26).
+PAGE_BLOCKING = ("internal_document", "decision", "pricing", "internal_note")
 # The headers of every Public page response (spec-O5 §3, "What the page sends").
 PAGE_HEADERS = {
     "Content-Security-Policy": (
@@ -165,8 +170,19 @@ def text_findings(
     return sorted(merged.values(), key=lambda f: order.index(f.code))
 
 
+def page_check(text: str | None, ctx: leak_check.LeakContext) -> list[leak_check.Finding]:
+    """Leak findings of the page's own title or intro: the kinds an item text's approver
+    ticks are blocking here, since nobody ticks a title or intro (owner decision,
+    2026-10-26)."""
+    found = [
+        leak_check.Finding(f.code, "blocking", f.words) if f.code in PAGE_BLOCKING else f
+        for f in leak_check.check(text or "", ctx)
+    ]
+    return sorted(found, key=lambda f: f.severity != "blocking")
+
+
 def page_text_findings(ctx: leak_check.LeakContext, title: str | None, intro: str | None):
-    return leak_check.check(title or "", ctx) + leak_check.check(intro or "", ctx)
+    return page_check(title, ctx) + page_check(intro, ctx)
 
 
 def check_state(check: RoadmapPublicCheck | None, content_hash: str | None = None) -> str:
@@ -305,8 +321,8 @@ async def review(db: AsyncSession, document: Document, version: DocumentVersion)
     # The page's own title and intro are re-checked like the items' texts: one that now
     # names something internal is left out (the default title shows), which changes the
     # content hash, so a public check no longer holds.
-    title_findings = leak_check.check(document.public_title or "", ctx)
-    intro_findings = leak_check.check(document.public_intro or "", ctx)
+    title_findings = page_check(document.public_title, ctx)
+    intro_findings = page_check(document.public_intro, ctx)
     title = None if leak_check.blocking(title_findings) else document.public_title
     intro = None if leak_check.blocking(intro_findings) else document.public_intro
     page = PublicPage(
