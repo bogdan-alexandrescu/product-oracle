@@ -184,8 +184,9 @@ export function ConfirmStep({
               <li key={`${o.section_id}-${i}`} className={`flex flex-wrap items-center gap-x-2 rounded px-1.5 py-0.5 ${isNew ? "bg-accent-soft text-accent-ink" : ""}`}>
                 {isNew && <span aria-label="new">+</span>}
                 <span className="font-medium">{o.heading}</span>
-                <span className={`${MONO} text-text2`}>{o.section_id}</span>
-                <span className={`${MONO} ml-auto text-text2`}>{o.module ?? "template"}</span>
+                <span className={`${MONO} basis-full text-text2 [overflow-wrap:anywhere]`}>
+                  {o.section_id} · {o.module ?? "template"}
+                </span>
               </li>
             );
           })}

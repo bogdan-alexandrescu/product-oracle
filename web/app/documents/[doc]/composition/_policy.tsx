@@ -146,9 +146,9 @@ export function PolicyTab({ phone, prdModules, prdTitle }: { phone: boolean; prd
         title={selected.title}
         chips={
           <>
-            <Chip kind="line">v{selected.version}</Chip>
-            <Chip kind="line">Pack: {selected.policy}</Chip>
-            {lane !== was && <Chip kind="warn">Unsaved</Chip>}
+            <Chip kind="line" hero>v{selected.version}</Chip>
+            <Chip kind="line" hero>Pack: {selected.policy}</Chip>
+            {lane !== was && <Chip kind="warn" hero>Unsaved</Chip>}
           </>
         }
       >

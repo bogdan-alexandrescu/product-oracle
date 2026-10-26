@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /*
  * v2 screen 1 (picks.md 1): the Composition inspector of a PRD. A's module table and 380 px
@@ -134,7 +134,7 @@ test("an owner-review module: an approver cannot add it, an owner can", async ({
   await expect(inspector(page).getByRole("button", { name: "Remove from draft" })).toBeDisabled();
   await expect(inspector(page)).toContainText("Requires the owner role");
 
-  await page.context().clearCookies();
+  await signOut(page);
   await openComposition(page, "owner");
   await row(page, "agents.tool-policies").click();
   await expect(inspector(page).getByRole("button", { name: "Remove from draft" })).toBeEnabled();
@@ -184,13 +184,9 @@ test("the filter can match nothing, and Show all brings the modules back", async
 
 test("a failed load shows the error and Retry reads it again", async ({ page }) => {
   await login(page, EMAILS.viewer);
-  let fail = true;
-  await page.route("**/v1/documents/checkout-redesign/composition", (route) =>
-    fail ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ detail: "Composition store unavailable" }) }) : route.fallback(),
-  );
+  await page.evaluate(() => localStorage.setItem("po-mock-fail-once", "GET /v1/documents/checkout-redesign/composition"));
   await page.goto("/documents/checkout-redesign/composition");
-  await expect(page.getByRole("alert")).toBeVisible();
-  fail = false;
+  await expect(page.getByRole("alert").filter({ hasText: "Mock failure" })).toBeVisible();
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(row(page, "decision.executive")).toBeVisible();
 });

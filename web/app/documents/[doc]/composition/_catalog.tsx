@@ -19,7 +19,7 @@ export const COMPANY_POLICY: Record<NonNullable<Entry["company_policy"]>, string
 };
 
 export function CatalogFacts({ e }: { e: Entry }) {
-  const list = (xs: string[]) => (xs.length ? <span className={MONO}>{xs.join(" ")}</span> : "—");
+  const list = (xs: string[]) => (xs.length ? <span className={`${MONO} font-normal [overflow-wrap:anywhere] whitespace-normal`}>{xs.join(" ")}</span> : "—");
   return (
     <>
       <InspectorSection label="Catalog facts">
@@ -77,10 +77,10 @@ function CatalogDetail({ entryKey, bare }: { entryKey: string; bare: boolean }) 
       title={e.title}
       chips={
         <>
-          <Chip kind="line">v{e.version}</Chip>
-          <Chip kind="line">Pack: {e.policy}</Chip>
-          {e.company_policy && <Chip kind="acc">Company: {COMPANY_POLICY[e.company_policy]}</Chip>}
-          {e.archived && <Chip kind="na">Archived</Chip>}
+          <Chip kind="line" hero>v{e.version}</Chip>
+          <Chip kind="line" hero>Pack: {e.policy}</Chip>
+          {e.company_policy && <Chip kind="acc" hero>Company: {COMPANY_POLICY[e.company_policy]}</Chip>}
+          {e.archived && <Chip kind="na" hero>Archived</Chip>}
         </>
       }
       stats={[
