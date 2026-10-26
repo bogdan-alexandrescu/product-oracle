@@ -12,8 +12,10 @@ import { login, openSection } from "./helpers";
  * fails_when=the strip is missing, overlaps content or scrolls; no_claim=visual taste.
  * Privacy of panel chats: protects=only you, until shared; fails_when=the chat offers Make
  * open or Share as discussion leaves it open; no_claim=G1 access internals (API tests).
- * Changes card: protects=AUD-1, the panel never changes a locked section; fails_when=Stage is
- * enabled on a locked section, or shown to a commenter; no_claim=staging itself (G3, G4).
+ * Changes card (G3's own card under the panel's thread, #187 g7-minimal-changes-card):
+ * protects=AUD-1, the panel never changes a locked section, and c6, commenters suggest and
+ * approvers stage; fails_when=Stage is enabled on a locked section or for a commenter, a second
+ * card shows, or Stage does nothing; no_claim=the staging list itself (G4).
  */
 
 const DOC = "/documents/checkout-redesign/v/2";
@@ -25,6 +27,7 @@ const ANSWER_START = "Yes, if caps";
 
 const panel = (page: Page) => page.getByTestId("hop-panel").filter({ visible: true });
 const strip = (page: Page) => page.getByTestId("hop-strip");
+const changeRow = (page: Page) => panel(page).getByTestId("changes-card").getByTestId("change-row");
 
 async function noSidewaysScroll(page: Page, where?: string) {
   const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
@@ -102,7 +105,8 @@ test("the diff and publish pages are about their document, and a chat started th
   await expect(panel(page).getByTestId("hop-about")).toHaveText("About: Checkout redesign PRD");
 });
 
-// Criterion 6: a section_edit Oracle proposes on a locked section cannot be staged.
+// Criterion 6: a section_edit Oracle proposes on a locked section cannot be staged, in G3's
+// card (the panel draws no card of its own).
 test("a change Oracle proposes on a locked section shows Stage disabled with the locked reason", async ({ page }) => {
   await login(page, APPROVER);
   await page.goto(LOCKED_DOC);
@@ -111,29 +115,59 @@ test("a change Oracle proposes on a locked section shows Stage disabled with the
   await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the alert threshold.");
   await panel(page).getByRole("button", { name: "Send" }).click();
   await expect(panel(page).getByTestId("oracle-reply").last()).toContainText(ANSWER_START);
-  const card = panel(page).getByTestId("hop-changes");
-  await expect(card).toBeVisible();
-  const change = card.getByTestId("hop-change");
+  await expect(panel(page).getByTestId("changes-card")).toHaveCount(1);
+  await expect(panel(page).getByTestId("hop-changes")).toHaveCount(0);
+  const change = changeRow(page);
   await expect(change).toHaveCount(1);
-  await expect(change).toContainText("Change behaviour");
-  await expect(change).toContainText("Proposed");
+  await expect(change.getByTestId("change-label")).toContainText("Change behaviour");
+  await expect(change.getByTestId("change-by")).toHaveText("Proposed by Oracle");
   const stage = change.getByRole("button", { name: "Stage" });
   await expect(stage).toBeDisabled();
   await expect(stage).toHaveAttribute("title", "Section 1. Behaviour is approved and locked");
-  await expect(change.getByTestId("hop-change-blocked")).toHaveText("Section 1. Behaviour is approved and locked");
 });
 
-// Criterion 6, c6 and the owner's rule: a commenter never stages, so Stage is hidden for them.
-test("a commenter sees the proposed change without a Stage button", async ({ page }) => {
+// c6 through G3's card: a commenter cannot stage, sees why, and suggests the change instead.
+test("a commenter cannot stage in the panel, sees why, and suggests the change", async ({ page }) => {
   await login(page, COMMENTER);
-  await page.goto(LOCKED_DOC);
-  await openSection(page, "behaviour");
+  await page.goto(DOC);
+  await openSection(page, "problem");
   await strip(page).click();
-  await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the alert threshold.");
+  await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the drop-off measure.");
   await panel(page).getByRole("button", { name: "Send" }).click();
-  const change = panel(page).getByTestId("hop-change");
-  await expect(change).toContainText("Change behaviour");
-  await expect(change.getByRole("button", { name: "Stage" })).toHaveCount(0);
+  await expect(panel(page).getByTestId("oracle-reply").last()).toHaveAttribute("data-status", "complete");
+  const change = changeRow(page);
+  await expect(change.getByTestId("change-label")).toContainText("Change problem");
+  const stage = change.getByRole("button", { name: "Stage" });
+  await expect(stage).toBeDisabled();
+  await expect(stage).toHaveAttribute("title", "Approvers stage changes. You can suggest it.");
+  await change.getByRole("button", { name: "Suggest" }).click();
+  await expect(change.getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await expect(change.getByRole("button", { name: "Suggest" })).toHaveCount(0);
+});
+
+// G3's Stage from the panel: a panel chat is private, so an approver's Stage asks for the reason
+// everyone will see first; then the change is handled and the thread says who staged it.
+test("an approver stages a panel change with the reason everyone will see", async ({ page }) => {
+  await login(page, APPROVER);
+  await page.goto(DOC);
+  await openSection(page, "problem");
+  await strip(page).click();
+  await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the drop-off measure.");
+  await panel(page).getByRole("button", { name: "Send" }).click();
+  await expect(panel(page).getByTestId("oracle-reply").last()).toHaveAttribute("data-status", "complete");
+  const change = changeRow(page);
+  await expect(change.getByTestId("change-label")).toContainText("Change problem");
+  await change.getByRole("button", { name: "Stage" }).click();
+  const form = change.getByTestId("stage-form");
+  await expect(form.getByTestId("stage-shares")).toContainText("The discussion stays private.");
+  const reason = form.getByRole("textbox", { name: "The reason everyone will see" });
+  await reason.fill("");
+  await expect(form.getByRole("button", { name: "Stage" })).toBeDisabled();
+  await reason.fill("Name the drop-off measure the section promises.");
+  await form.getByRole("button", { name: "Stage" }).click();
+  const card = panel(page).getByTestId("changes-card");
+  await expect(card.getByTestId("changes-handled").locator("summary")).toHaveText("1 handled");
+  await expect(panel(page).getByTestId("discussion-system-line")).toContainText("Approver staged: Change problem");
 });
 
 // Privacy card: criteria 3 and 5.

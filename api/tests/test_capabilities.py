@@ -196,12 +196,10 @@ NOT_PER_ITEM = {
     "create_discussion",
     # G7 Share as discussion starts one the same way; the panel chat is its starter's alone.
     "share_discussion",
-    # B6 Goals interview starts one the same way, and a version is acted on by whoever
-    # writes in its discussion; only a run's token and a viewer are refused, as the routes do.
+    # B6 Goals interview starts one the same way; only a run's token and a viewer are
+    # refused, as the routes do.
     "start_goal_interview",
     "start_goal_interviews",
-    "propose_goal_measure",
-    "dismiss_goal_measure",
     # The 403 refuses a run's token; the role check picks whom the daily run acts as.
     "set_request_triage_daily",
     # F3: the route's own date rights (min_role and lead_role), re-read at write time.

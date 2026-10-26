@@ -4417,7 +4417,7 @@
           "discussions"
         ],
         "summary": "Propose Discussion Change",
-        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion and links its page; approvers accept it in Baseline.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override.",
+        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion and links its page; approvers accept it in Baseline.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override. ``payload``: the person's\nEdit, proposed instead and saved only when it is used.",
         "operationId": "propose_discussion_change",
         "security": [
           {
@@ -4444,7 +4444,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChangeActIn"
+                "$ref": "#/components/schemas/ChangeProposeIn"
               }
             }
           }
@@ -16104,148 +16104,6 @@
           }
         ],
         "x-min-role": "viewer"
-      }
-    },
-    "/v1/baseline/goal-measures/{change_id}/propose": {
-      "post": {
-        "tags": [
-          "baseline"
-        ],
-        "summary": "Propose Goal Measure",
-        "description": "Propose a measurable version of the goal: a baseline proposal (\"From discussion\n<title>\") an approver accepts. ``payload``: the person's Edit (it may set owner_id and\nweight). Its fields pass B5's checks first (422, nothing created). A target the start\nor current value already meets gets Oracle's pushback once (409); sending it again,\nor with ``keep``, proposes it and records the override in the summary.",
-        "operationId": "propose_goal_measure",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "change_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Change Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/GoalMeasureAct"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscussionChangeOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Change not found"
-          },
-          "409": {
-            "description": "Oracle's pushback (once), closed, or the version was acted on",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GoalMeasurePushback"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Goal fields rejected (B5), every problem",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/YamlImportError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
-      }
-    },
-    "/v1/baseline/goal-measures/{change_id}/dismiss": {
-      "post": {
-        "tags": [
-          "baseline"
-        ],
-        "summary": "Dismiss Goal Measure",
-        "description": "Dismiss one of Oracle's versions (approvers).",
-        "operationId": "dismiss_goal_measure",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "change_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Change Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscussionChangeOut"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Change not found"
-          },
-          "409": {
-            "description": "Not proposed"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "approver"
       }
     },
     "/v1/priorities": {
@@ -50005,6 +49863,31 @@
         ],
         "title": "ChangeOut"
       },
+      "ChangeProposeIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ChangeProposeIn"
+      },
       "ChangeResult": {
         "properties": {
           "change": {
@@ -66217,29 +66100,6 @@
           "matched_on"
         ],
         "title": "GoalLink"
-      },
-      "GoalMeasureAct": {
-        "properties": {
-          "payload": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payload"
-          },
-          "keep": {
-            "type": "boolean",
-            "title": "Keep",
-            "default": false
-          }
-        },
-        "type": "object",
-        "title": "GoalMeasureAct"
       },
       "GoalMeasurePushback": {
         "properties": {

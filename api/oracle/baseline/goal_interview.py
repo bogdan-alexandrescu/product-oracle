@@ -7,9 +7,10 @@ versions (``goal_measure`` changes) and asks for what is missing, until a person
   ``GET /v1/baseline/goals/vague`` lists the goals to interview.
 - Oracle's versions come from its reply's change block (:func:`take_changes`,
   :func:`keep_versions`), cut down to what it may propose (no owner, no weight).
-- Propose makes a baseline proposal of a version once B5's checks pass, after one pushback
-  when its target is already met; :func:`on_proposal_accepted` closes the discussion once
-  the accepted proposal leaves the goal measurable.
+- G3's generic Propose makes a baseline proposal of a version once B5's checks pass, after
+  one pushback when its target is already met (:func:`propose_version`);
+  :func:`on_proposal_accepted` closes the discussion once the accepted proposal leaves the
+  goal measurable.
 
 A person starts every interview (B6 "Interviews", 2026-10-21): nothing here runs on its own.
 Run tokens reach none of the writes (no run-token scope names them, oracle.mcp.scopes) nor
@@ -31,11 +32,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
-from oracle.authz import recheck_caller, require_role
+from oracle.authz import require_role
 from oracle.baseline import goals, service
 from oracle.baseline.models import Entity, Proposal
-from oracle.baseline.schemas import EntityOut, YamlImportError
-from oracle.discussions import access, kinds, replies
+from oracle.baseline.schemas import EntityOut
+from oracle.discussions import kinds, replies
 from oracle.discussions import service as discussions
 from oracle.discussions.models import (
     MAX_RATIONALE,
@@ -45,7 +46,7 @@ from oracle.discussions.models import (
     DiscussionChange,
     DiscussionMessage,
 )
-from oracle.discussions.schemas import DiscussionChangeOut, DiscussionCreate
+from oracle.discussions.schemas import DiscussionCreate
 from oracle.tenancy import tenant_session
 
 log = logging.getLogger(__name__)
@@ -57,7 +58,6 @@ Approver = Annotated[Principal, Depends(require_role("approver"))]
 
 ONLY_GOALS = "Only goals can be interviewed"
 MEASURABLE = "This goal is already measurable"
-NO_CHANGE = "Change not found"
 # The goals an interview is offered on (B6 3.1 (2)).
 OFFERED = ("confirmed", "proposed")
 MAX_VERSIONS = 3
@@ -339,28 +339,6 @@ async def _oracle_line(
     return line
 
 
-async def _actable(
-    db: AsyncSession, principal: Principal, change_id: uuid.UUID
-) -> tuple[DiscussionChange, Discussion]:
-    """The version and its discussion, for a caller who writes in it; still proposed."""
-    c = await db.get(DiscussionChange, change_id, with_for_update=True)
-    if c is None or c.kind != "goal_measure":
-        raise HTTPException(404, NO_CHANGE)
-    try:
-        d, _parts, seat = await discussions.readable(db, principal, c.discussion_id, lock=True)
-    except discussions.DiscussionError as exc:
-        raise HTTPException(exc.status, exc.detail) from exc
-    if principal.user_id is None:
-        raise HTTPException(403, "Only a person can act on a change")
-    if not access.can_write(seat):
-        raise HTTPException(403, discussions.VIEWERS_READ)
-    if d.status == "closed":
-        raise HTTPException(409, discussions.CLOSED)
-    if c.status != "proposed":
-        raise HTTPException(409, f"This version is already {c.status}")
-    return c, d
-
-
 def _met(attrs: dict[str, Any]) -> tuple[str, float] | None:
     """The start or current value that already meets the target, if one does."""
     target, comparison = attrs.get("target"), attrs.get("comparison")
@@ -380,16 +358,6 @@ def _note_in_summary(d: Discussion, line: str) -> None:
     d.summary_status, d.summary_at = "draft", _now()
 
 
-async def propose(
-    db: AsyncSession, principal: Principal, change_id: uuid.UUID, body: GoalMeasureAct
-) -> DiscussionChange | GoalMeasurePushback:
-    """A baseline proposal of the version (a person's Edit when ``body.payload``), or
-    Oracle's pushback once when its target is already met."""
-    await recheck_caller(db, principal, "commenter")
-    c, d = await _actable(db, principal, change_id)
-    return await propose_version(db, principal, c, d, body)
-
-
 async def propose_version(
     db: AsyncSession,
     principal: Principal,
@@ -398,10 +366,11 @@ async def propose_version(
     body: GoalMeasureAct,
     reason: str | None = None,
 ) -> DiscussionChange | GoalMeasurePushback:
-    """The one path a goal version takes to a baseline proposal, from B6's route and from
-    G3's Propose (``oracle.discussions.changes.propose``), the caller having checked who may
-    act on ``c``: B5's checks, Oracle's pushback once when the target is already met (the
-    kept target logged as the override), and the typed values clearing their ``*_text``.
+    """The one path a goal version takes to a baseline proposal, from G3's Propose
+    (``oracle.discussions.changes.propose``; B6's own route is gone), the caller having
+    checked who may act on ``c``: B5's checks, Oracle's pushback once when the target is
+    already met (the kept target logged as the override), and the typed values clearing
+    their ``*_text``.
     The goal is the change's target. ``reason``: the proposal's, "From discussion <title>"
     when None."""
     goal_id = (c.target or {}).get("entity_id")
@@ -455,18 +424,6 @@ async def propose_version(
     await audit.record(
         db, principal, "discussion.change_propose", discussions.ENTITY, d.id,
         {"change_id": str(c.id), "proposal_id": str(proposal.id)},
-    )  # fmt: skip
-    await db.flush()
-    return c
-
-
-async def dismiss(db: AsyncSession, principal: Principal, change_id: uuid.UUID) -> DiscussionChange:
-    await recheck_caller(db, principal, "approver")
-    c, d = await _actable(db, principal, change_id)
-    c.status, c.decided_by, c.decided_at = "dismissed", principal.user_id, _now()
-    await audit.record(
-        db, principal, "discussion.change_dismiss", discussions.ENTITY, d.id,
-        {"change_id": str(c.id)},
     )  # fmt: skip
     await db.flush()
     return c
@@ -564,50 +521,16 @@ async def list_vague_goals(principal: Reader, db: TenantDB) -> list[VagueGoalOut
     return out
 
 
-@router.post(
-    "/goal-measures/{change_id}/propose",
-    response_model=DiscussionChangeOut,
-    responses={
-        404: {"description": "Change not found"},
-        409: {
-            "model": GoalMeasurePushback,
-            "description": "Oracle's pushback (once), closed, or the version was acted on",
-        },
-        422: {"model": YamlImportError, "description": "Goal fields rejected (B5), every problem"},
-    },
+# #187 b6-goal-only-slice: Propose and Dismiss on a goal version are G3's generic change
+# actions. B6's own routes answer 410 with the pointer for one release, outside the OpenAPI
+# document (so no MCP tool lists them), and then go.
+GONE = (
+    "This route is gone. Use POST /v1/discussion-changes/{{change_id}}/{verb} with the "
+    "change's lock_version."
 )
-async def propose_goal_measure(
-    change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: GoalMeasureAct | None = None
-) -> DiscussionChangeOut | JSONResponse:
-    """Propose a measurable version of the goal: a baseline proposal ("From discussion
-    <title>") an approver accepts. ``payload``: the person's Edit (it may set owner_id and
-    weight). Its fields pass B5's checks first (422, nothing created). A target the start
-    or current value already meets gets Oracle's pushback once (409); sending it again,
-    or with ``keep``, proposes it and records the override in the summary."""
-    try:
-        out = await propose(db, principal, change_id, body or GoalMeasureAct())
-    except service.BaselineError as exc:
-        await db.rollback()
-        if isinstance(exc, service.GoalFieldsInvalid):
-            raise
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    await db.commit()
-    if isinstance(out, GoalMeasurePushback):
-        return JSONResponse(out.model_dump(), status.HTTP_409_CONFLICT)
-    await db.refresh(out)
-    return await discussions.change_out(db, principal, out)
 
 
-@router.post(
-    "/goal-measures/{change_id}/dismiss",
-    response_model=DiscussionChangeOut,
-    responses={404: {"description": "Change not found"}, 409: {"description": "Not proposed"}},
-)
-async def dismiss_goal_measure(
-    change_id: uuid.UUID, principal: Approver, db: TenantDB
-) -> DiscussionChangeOut:
-    """Dismiss one of Oracle's versions (approvers)."""
-    c = await dismiss(db, principal, change_id)
-    await db.commit()
-    await db.refresh(c)
-    return await discussions.change_out(db, principal, c)
+@router.post("/goal-measures/{change_id}/{verb}", include_in_schema=False)
+async def goal_measure_gone(change_id: uuid.UUID, verb: Literal["propose", "dismiss"]) -> None:
+    """Gone: ``POST /v1/discussion-changes/{change_id}/propose`` or ``…/dismiss``."""
+    raise HTTPException(status.HTTP_410_GONE, GONE.format(verb=verb))
