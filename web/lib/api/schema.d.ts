@@ -11540,8 +11540,9 @@ export interface paths {
         put?: never;
         /**
          * Test Metric Query
-         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. The
-         *     provider's error, when it refuses, is in ``error``.
+         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. 422 when
+         *     the query is not one read-only SELECT over the allowed tables; a failure is a fixed
+         *     sentence in ``error`` (PostHog's own text is in the server log).
          */
         post: operations["test_metric_query"];
         delete?: never;
@@ -11627,7 +11628,8 @@ export interface paths {
         /**
          * Pull Metric
          * @description Pull now: read the last complete week from PostHog again and replace its value
-         *     (409 unless the metric's source is PostHog; 502 with the provider's message).
+         *     (409 unless the metric's source is PostHog; 502 with a fixed message, PostHog's
+         *     own text in the server log).
          */
         post: operations["pull_metric"];
         delete?: never;
@@ -11876,7 +11878,9 @@ export interface paths {
         put?: never;
         /**
          * Check Competitor Page
-         * @description Check now: read the page at once (409 when its robots.txt disallows it).
+         * @description Check now: read the page at once (409 when its robots.txt disallows it; 429, with
+         *     when in words and a Retry-After, past once per page per 10 minutes or 20 per company
+         *     an hour).
          */
         post: operations["check_competitor_page"];
         delete?: never;
@@ -60139,6 +60143,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_competitor: {
@@ -60184,6 +60195,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60243,6 +60261,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     archive_competitor: {
@@ -60293,6 +60318,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     restore_competitor: {
@@ -60338,6 +60370,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60397,6 +60436,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     delete_competitor_page: {
@@ -60440,6 +60486,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60499,6 +60552,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     check_competitor_page: {
@@ -60544,6 +60604,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60629,6 +60696,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60722,6 +60796,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     dismiss_web_finding: {
@@ -60771,6 +60852,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60848,6 +60936,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     accept_positioning_suggestion: {
@@ -60898,6 +60993,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     dismiss_positioning_suggestion: {
@@ -60943,6 +61045,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

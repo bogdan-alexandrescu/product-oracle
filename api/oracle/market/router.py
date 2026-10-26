@@ -7,6 +7,7 @@ operation id; run tokens read with ``read:baseline`` and never write
 (oracle.mcp.scopes).
 """
 
+import math
 import uuid
 from datetime import date
 from typing import Annotated
@@ -46,10 +47,14 @@ ERRORS = {
     404: {"description": "No such alternative, page, change, finding or suggestion"},
     409: {"description": "Stale lock_version, blocked by robots.txt, or already decided"},
     422: {"description": "Invalid URL, over the limits, a duplicate, or a field too long"},
+    429: {"description": "Check now was used too often; the message says when it works again"},
 }
 
 
 def _raise(e: service.MarketError) -> HTTPException:
+    if e.retry_after is not None:
+        seconds = max(1, math.ceil(e.retry_after.total_seconds()))
+        return HTTPException(e.status, e.message, headers={"Retry-After": str(seconds)})
     return HTTPException(e.status, e.message)
 
 
@@ -158,7 +163,9 @@ async def delete_competitor_page(
 async def check_competitor_page(
     page_id: uuid.UUID, db: TenantDB, principal: ApproverNow, fetch: Fetcher
 ) -> PageOut:
-    """Check now: read the page at once (409 when its robots.txt disallows it)."""
+    """Check now: read the page at once (409 when its robots.txt disallows it; 429, with
+    when in words and a Retry-After, past once per page per 10 minutes or 20 per company
+    an hour)."""
     try:
         return await service.check_now(db, principal, page_id, fetch)
     except service.MarketError as e:
