@@ -38,6 +38,14 @@ def _only_test_checks():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _unthrottled(monkeypatch):
+    """Most tests send to one webhook several times in a row; the throttle has its own."""
+    from oracle.webhooks import router
+
+    monkeypatch.setattr(router, "SEND_EVERY", timedelta(0), raising=False)
+
+
 class Receiver:
     """A fake receiver: answers by host from ``answers`` (a status, a Response, or a
     callable), and keeps every request it got."""
@@ -600,6 +608,144 @@ async def test_test_and_redeliver_roles_across_every_credential(
         assert "whsec_" not in text_of(got)
 
 
+async def test_a_redelivery_withheld_from_an_approver_is_absent_as_in_the_log(
+    client, tenant_id, approver, receiver
+):
+    """protects=the log's rule that withheld rows are owners' only (review of #637: the
+    redeliver answer handed an approver a withheld row); fails_when=the answer shows it."""
+    hid = (await hook(client, approver.headers, ["draft.in_review"]))["webhook"]["id"]
+    sub = await subjects(tenant_id)
+    await capture(tenant_id, "draft.in_review", None, document_id=sub["document_id"])
+    await outbox.tick(tenant_id)
+    (row,) = await deliveries(tenant_id, hid)
+    assert row.status == "succeeded"
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(Document)
+            .where(Document.id == uuid.UUID(sub["document_id"]))
+            .values(visibility="approvers")
+            .execution_options(oracle_all_documents=True)
+        )
+        await s.commit()
+    resp = await client.post(
+        f"/v1/webhooks/{hid}/deliveries/{row.id}/redeliver", headers=approver.headers
+    )
+    assert resp.status_code == 404, resp.text
+    assert "withheld" not in resp.text and len(receiver.got) == 1
+    assert [d.status for d in await deliveries(tenant_id, hid)] == ["succeeded", "withheld"]
+
+
+# --- a send holds no database connection, and is throttled ---------------------------------
+
+
+async def test_test_and_redeliver_hold_no_database_connection_during_the_call(
+    client, tenant_id, owner, receiver
+):
+    """protects=the API's connection pool (review of #637, major: a receiver holding calls
+    open for 10 s pinned one pooled connection per send, so ~15 concurrent sends starved
+    every company); fails_when=a connection is checked out while the receiver answers."""
+    from oracle.db import get_engine
+
+    seen: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(get_engine().pool.checkedout())
+        return httpx.Response(500, text="no")
+
+    receiver.answers["hooks.example.test"] = answer
+    hid = (await hook(client, owner.headers))["webhook"]["id"]
+    sent = await client.post(f"/v1/webhooks/{hid}/test", headers=owner.headers)
+    assert sent.status_code == 200, sent.text
+    again = await client.post(
+        f"/v1/webhooks/{hid}/deliveries/{sent.json()['id']}/redeliver", headers=owner.headers
+    )
+    assert again.status_code == 200, again.text
+    assert seen == [0, 0]
+    rows = await deliveries(tenant_id, hid)
+    assert [(d.http_status, d.attempts) for d in rows] == [(500, 1), (500, 1)]
+
+
+async def test_test_and_redeliver_are_throttled_to_one_send_per_webhook_every_5_seconds(
+    client, tenant_id, owner, receiver, monkeypatch
+):
+    """protects=the receiver and the pool from a loop of test or redeliver calls (review of
+    #637); fails_when=a second send to the same webhook within 5 s is made, concurrent
+    calls all send, another webhook is held up, or a send after 5 s is refused."""
+    from oracle.webhooks import router
+
+    monkeypatch.setattr(router, "SEND_EVERY", timedelta(seconds=5))
+    hid = (await hook(client, owner.headers))["webhook"]["id"]
+    other = (await hook(client, owner.headers, url=OTHER))["webhook"]["id"]
+    first = await client.post(f"/v1/webhooks/{hid}/test", headers=owner.headers)
+    assert first.status_code == 200, first.text
+    for path in (
+        f"/v1/webhooks/{hid}/test",
+        f"/v1/webhooks/{hid}/deliveries/{first.json()['id']}/redeliver",
+    ):
+        refused = await client.post(path, headers=owner.headers)
+        assert refused.status_code == 429, refused.text
+        assert int(refused.headers["retry-after"]) >= 1
+    assert (await client.post(f"/v1/webhooks/{other}/test", headers=owner.headers)).is_success
+    assert len(receiver.to("hooks.example.test")) == 1
+
+    async with tenant_session(tenant_id) as s:  # five seconds pass
+        await s.execute(
+            update(WebhookDelivery).values(created_at=datetime.now(UTC) - timedelta(seconds=6))
+        )
+        await s.commit()
+    burst = await asyncio.gather(
+        *(client.post(f"/v1/webhooks/{hid}/test", headers=owner.headers) for _ in range(5))
+    )
+    assert sorted(r.status_code for r in burst) == [200, 429, 429, 429, 429]
+    assert len(receiver.to("hooks.example.test")) == 2
+
+
+# --- the log keeps where each delivery went and what it sent --------------------------------
+
+
+async def test_the_log_keeps_each_deliverys_host_and_headers_signature_truncated(
+    client, tenant_id, owner, receiver
+):
+    """protects=spec Delivery log (the host and the headers sent, the signature shown as
+    ``v1,…`` truncated; review of #637); fails_when=a row loses where it went after the URL
+    changes, or the full signature is kept or shown."""
+    hid = (await hook(client, owner.headers))["webhook"]["id"]
+    out = (await client.post(f"/v1/webhooks/{hid}/test", headers=owner.headers)).json()
+    (req,) = receiver.got
+    assert out["host"] == "hooks.example.test"
+    sent = out["headers"]
+    assert sent["webhook-id"] == req.headers["webhook-id"]
+    assert sent["webhook-timestamp"] == req.headers["webhook-timestamp"]
+    assert sent["user-agent"] == "ProductOracle-Webhooks/1"
+    full = req.headers["webhook-signature"]
+    assert sent["webhook-signature"].startswith("v1,") and sent["webhook-signature"].endswith("…")
+    assert full not in json.dumps(out) and full.split(",", 1)[1] not in json.dumps(out)
+    resp = await client.patch(f"/v1/webhooks/{hid}", json={"url": OTHER}, headers=owner.headers)
+    assert resp.status_code == 200, resp.text
+    await client.post(f"/v1/webhooks/{hid}/test", headers=owner.headers)
+    log = (await client.get(f"/v1/webhooks/{hid}/deliveries", headers=owner.headers)).json()
+    assert [d["host"] for d in log["items"]] == ["other.example.test", "hooks.example.test"]
+    async with tenant_session(tenant_id) as s:
+        stored = list(await s.scalars(select(WebhookDelivery.headers)))
+    assert all(full not in json.dumps(h) for h in stored)
+
+
+async def test_an_actor_without_a_name_is_never_sent_as_an_email(client, tenant_id, receiver):
+    """protects=Q3 (no emails in a payload; review of #637: display_name falls back to the
+    email when its local part has no name); fails_when=the actor's name is the email."""
+    owner = await make_person(tenant_id, "__@example.com", "owner")
+    await hook(client, owner.headers, ["draft.in_review"])
+    sub = await subjects(tenant_id)
+    await capture(
+        tenant_id, "draft.in_review", f"user:{owner.user.id}", document_id=sub["document_id"]
+    )
+    await outbox.tick(tenant_id)
+    (req,) = receiver.to("hooks.example.test")
+    actor = json.loads(req.content)["data"]["actor"]
+    assert actor["kind"] == "person" and "@" not in json.dumps(actor), actor
+    assert "example.com" not in req.content.decode()
+
+
 # --- retention ------------------------------------------------------------------------------
 
 
@@ -647,6 +793,18 @@ def test_the_loopback_switch_is_refused_in_a_real_deployment():
     assert Settings(webhooks_allow_loopback_for_tests=True).webhooks_allow_loopback_for_tests
     with pytest.raises(ValueError):
         Settings(webhooks_allow_loopback_for_tests=True, cookie_secure=True)
+
+
+def test_the_loopback_switch_is_refused_when_oracle_env_is_production():
+    """protects=spec AC17 note as written (refused when ORACLE_ENV=production, with or
+    without the cookie and IAP settings; review of #637); fails_when=a production
+    deployment with neither set starts with the switch on."""
+    from oracle.config import Settings
+
+    with pytest.raises(ValueError, match="ORACLE_ENV"):
+        Settings(env="production", webhooks_allow_loopback_for_tests=True)
+    assert Settings(env="production").env == "production"
+    assert Settings(webhooks_allow_loopback_for_tests=True).env != "production"
 
 
 # --- the tick -------------------------------------------------------------------------------
