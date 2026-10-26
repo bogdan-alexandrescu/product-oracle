@@ -27,6 +27,9 @@ async function draftWithTwoWarnings(page: Page) {
   await row.getByLabel("Public title").fill("Faster import");
   await row.getByLabel("Public description").fill(`Imports finish 40% sooner, as we chose to ${DECISION.toLowerCase()}.`);
   await row.getByRole("button", { name: "Save draft" }).click();
+  // Saved: the editor closes and the row shows the new text with its findings.
+  await expect(row.getByRole("button", { name: "Save draft" })).toHaveCount(0);
+  await expect(row.getByText("Faster import", { exact: true })).toBeVisible();
   await expect(row.getByTestId("public-state")).toHaveText("Draft");
   await row.getByRole("button", { name: "Edit" }).click();
   return row;
@@ -68,6 +71,7 @@ test("approving with one warning unticked is refused with the sentence", async (
   const warnings = row.getByRole("group", { name: "Warnings to check" });
   await warnings.getByRole("checkbox", { name: /Money or metric.*I checked this/ }).check();
   await row.getByRole("button", { name: "Save draft" }).click();
+  await expect(row.getByRole("button", { name: "Save draft" })).toHaveCount(0);
   await expect(row.getByTestId("public-state")).toHaveText("Draft");
 
   // The row's own Approve sends the saved ticks; the API refuses the unticked decision.
