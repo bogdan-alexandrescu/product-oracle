@@ -103,7 +103,8 @@ def upgrade() -> None:
         sa.CheckConstraint("state <> 'approved' OR approved_at IS NOT NULL",
                            name=op.f(f"ck_{TEXTS}_approved")),
         _fk(TEXTS, "document_id", "documents", "CASCADE"),
-        sa.UniqueConstraint("document_id", "item_key", name=op.f(f"uq_{TEXTS}_document_id_item_key")),
+        sa.UniqueConstraint("document_id", "item_key",
+                            name=op.f(f"uq_{TEXTS}_document_id_item_key")),
     )  # fmt: skip
     op.create_index(op.f(f"ix_{TEXTS}_tenant_id"), TEXTS, ["tenant_id"])
     op.create_table(

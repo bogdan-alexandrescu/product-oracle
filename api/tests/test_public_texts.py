@@ -583,15 +583,15 @@ def test_source_hash_is_title_and_outcome():
 @pytest.mark.parametrize(
     ("text", "code"),
     [
-        ("Built with Pri​ya Quill​feather", "person_name"),  # zero-width spaces
-        ("Built with Ｐｒｉｙａ Quillfeather", "person_name"),  # fullwidth
-        ("As North­wind Traders asked", "customer_name"),  # soft hyphen
-        ("As Nοrthwind Traders asked", "customer_name"),  # Greek omicron
-        ("As Нorthwind Traders asked", "customer_name"),  # Cyrillic En
-        ("Faster than Rival⁠Co", "alternative_name"),  # word joiner
-        ("Closes ENG‑412", "internal_code"),  # non-breaking hyphen
-        ("Closes ENG−412", "internal_code"),  # minus sign
-        ("Write to priya＠example.com", "email_or_phone"),  # fullwidth at
+        ("Built with Pri\u200bya Quill\u200bfeather", "person_name"),  # zero-width spaces
+        ("Built with \uff30\uff52\uff49\uff59\uff41 Quillfeather", "person_name"),  # fullwidth
+        ("As North\u00adwind Traders asked", "customer_name"),  # soft hyphen
+        ("As N\u03bfrthwind Traders asked", "customer_name"),  # Greek omicron
+        ("As N\u043erthwind Tr\u0430ders asked", "customer_name"),  # Cyrillic o and a
+        ("Faster than Rival\u2060Co", "alternative_name"),  # word joiner
+        ("Closes ENG\u2011412", "internal_code"),  # non-breaking hyphen
+        ("Closes ENG\u2212412", "internal_code"),  # minus sign
+        ("Write to priya\uff20example.com", "email_or_phone"),  # fullwidth at
     ],
 )
 def test_look_alike_and_invisible_characters_are_still_found(text, code):
@@ -614,8 +614,8 @@ def test_a_customer_is_found_by_its_distinctive_part():
 
 
 def test_format_characters_are_told():
-    assert leak_check.format_characters("Plain text, with a dash - and émigré") == []
-    assert leak_check.format_characters("Ja​ne­") == ["U+200B", "U+00AD"]
+    assert leak_check.format_characters("Plain text, with a dash - and \u00e9migr\u00e9") == []
+    assert leak_check.format_characters("Ja\u200bne\u00ad") == ["U+200B", "U+00AD"]
 
 
 async def test_a_text_holding_format_characters_is_not_saved(client, ctx):
@@ -623,11 +623,11 @@ async def test_a_text_holding_format_characters_is_not_saved(client, ctx):
     characters is refused (422 format_characters) whatever its state; fails_when=it is
     saved; no_claim=look-alike letters (the check normalises them)."""
     await seed(ctx)
-    for over in ({"title": "Import​ fast"}, {"description": "Day­one", "state": "draft"}):
+    for over in ({"title": "Import\u200b fast"}, {"description": "Day\u00adone", "state": "draft"}):
         resp = await put_text(client, ctx, "bulk-import", **over)
         assert resp.status_code == 422, resp.text
         assert resp.json()["detail"]["code"] == "format_characters"
-    resp = await client.put(PAGE, json={"public_intro": "Our⁠plans"},
+    resp = await client.put(PAGE, json={"public_intro": "Our\u2060plans"},
                             headers=ctx.as_("approver"))  # fmt: skip
     assert resp.status_code == 422 and resp.json()["detail"]["code"] == "format_characters"
 

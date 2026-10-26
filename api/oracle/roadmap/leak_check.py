@@ -9,11 +9,18 @@ members' names and emails, win/loss accounts and plans, request askers' and inte
 companies, H7 alternatives and their aliases, document slugs, approvers-only documents,
 decisions, the items' internal notes, the app's own host and the company's email domains.
 
+Text is normalised before matching (:func:`normalize`): NFKC (fullwidth letters), format
+characters stripped (zero-width spaces, soft hyphens, word joiners), look-alike Greek and
+Cyrillic letters and dashes mapped to their Latin and ASCII forms; names then match
+casefolded. A public text holding a format character is refused when saved
+(:func:`format_characters`), so what an approver reads is what was checked.
+
 Every pattern reads untrusted text and stays linear (no nested quantifiers).
 """
 
 import ipaddress
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
@@ -63,6 +70,30 @@ _MONTH = re.compile(
 _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b")
 _WORD = re.compile(r"\w+")
 
+# Dashes and minus signs that read as "-" (NFKC keeps them apart).
+_DASHES = "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2043\ufe58\ufe63\uff0d"
+# Greek and Cyrillic letters drawn like a Latin one (a subset of Unicode's confusables).
+_LOOK_ALIKE = "ΑΒΕΖΗΙΚΜΝΟΡΤΥΧαοιρνκАВЕКМНОРСТХУаеорсухіѕјԁԛԝЅІЈ"
+_AS_LATIN = "ABEZHIKMNOPTYXaoipvkABEKMHOPCTXYaeopcyxisjdqwSIJ"
+_FOLD = str.maketrans(
+    {**dict.fromkeys(_DASHES, "-"), **dict(zip(_LOOK_ALIKE, _AS_LATIN, strict=True))}
+)
+# Words in a company's name that do not tell it apart ("Northwind Traders" is named by
+# "Northwind" alone; "Traders" is anyone's).
+GENERIC_COMPANY_WORDS = frozenset(
+    """
+    inc incorporated ltd limited llc llp plc gmbh corp corporation company companies group
+    holding holdings international global worldwide partners partnership associates
+    services service solutions systems software technologies technology tech labs
+    industries enterprises enterprise traders trading consulting consultants capital
+    ventures digital media health healthcare care medical bank banking financial finance
+    insurance foods food logistics energy retail stores store shop online cloud data
+    analytics networks network agency studio studios brands foundation university school
+    products manufacturing motors airlines hotels resorts pharma pharmaceuticals north
+    south east west american european national united first new
+    """.split()
+)
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -86,8 +117,26 @@ class LeakContext:
     company_domains: list[str] = field(default_factory=list)
 
 
+def normalize(text: str) -> str:
+    """``text`` as a reader sees it: NFKC, no format characters, look-alike letters and
+    dashes mapped. Case is kept (tracker keys and "May" read it)."""
+    text = unicodedata.normalize("NFKC", text or "")
+    text = "".join(c for c in text if unicodedata.category(c) != "Cf")
+    return text.translate(_FOLD)
+
+
+def format_characters(text: str) -> list[str]:
+    """The invisible format characters ``text`` holds ("U+200B", ...), each once."""
+    found = (f"U+{ord(c):04X}" for c in text or "" if unicodedata.category(c) == "Cf")
+    return list(dict.fromkeys(found))
+
+
+def strip_format(text: str) -> str:
+    return "".join(c for c in text or "" if unicodedata.category(c) != "Cf")
+
+
 def _norm(text: str) -> str:
-    return " ".join(_WORD.findall(text.lower()))
+    return " ".join(_WORD.findall(normalize(text).casefold()))
 
 
 def _names(text: str, names: list[str]) -> list[str]:
@@ -103,10 +152,14 @@ def _names(text: str, names: list[str]) -> list[str]:
     return out
 
 
+def _norm_email(email: str) -> str:
+    return normalize(email).casefold()
+
+
 def _slug_in(slug: str, lowered: str) -> bool:
     """A document slug as a whole token. Only hyphenated slugs count: a one-word slug
     ("import") is an ordinary word."""
-    slug = (slug or "").lower()
+    slug = (slug or "").casefold()
     if "-" not in slug or len(slug) < MIN_NAME:
         return False
     start = lowered.find(slug)
@@ -131,6 +184,20 @@ def _person_names(ctx: LeakContext) -> list[str]:
         parts = _WORD.findall(name)
         if len(parts) > 1:
             out += [p for p in parts if len(p) >= 4]
+    return out
+
+
+def _customer_names(ctx: LeakContext) -> list[str]:
+    """Full labels, and each distinctive part of 4 letters or more ("Northwind" names
+    "Northwind Traders"; a generic word such as "Traders" does not)."""
+    out: list[str] = []
+    for name in ctx.customers:
+        if not name:
+            continue
+        out.append(name)
+        parts = _WORD.findall(normalize(name))
+        if len(parts) > 1:
+            out += [p for p in parts if len(p) >= 4 and p.casefold() not in GENERIC_COMPANY_WORDS]
     return out
 
 
@@ -193,7 +260,7 @@ def check(
     internal_title: str | None = None,
 ) -> list[Finding]:
     """Every finding in ``text``: blocking ones first, then warnings."""
-    text = (text or "")[:MAX_TEXT]
+    text = normalize((text or "")[:MAX_TEXT])
     out: list[Finding] = []
 
     def add(code: str, words: list[str]) -> None:
@@ -203,16 +270,17 @@ def check(
 
     emails = [m.group(0) for m in _EMAIL.finditer(text)]
     people = _names(text, _person_names(ctx))
-    people += [e for e in ctx.emails if e and e.lower() in text.lower() and e not in emails]
+    folded = text.casefold()
+    people += [e for e in ctx.emails if e and _norm_email(e) in folded and e not in emails]
     add("person_name", people)
     phones = [m.group(0).strip() for m in _PHONE.finditer(text)]
     phones = [p for p in phones if sum(c.isdigit() for c in p) >= PHONE_DIGITS]
     add("email_or_phone", emails + phones)
-    add("customer_name", _names(text, ctx.customers))
+    add("customer_name", _names(text, _customer_names(ctx)))
     add("alternative_name", _names(text, ctx.alternatives))
     codes = [m.group(0) for p in (_TRACKER, _GOAL, _DECISION) for m in p.finditer(text)]
-    lowered = text.lower()
-    codes += [s for s in ctx.slugs if _slug_in(s, lowered)]
+    lowered = folded
+    codes += [s for s in ctx.slugs if _slug_in(normalize(s), lowered)]
     add("internal_code", codes)
     add("internal_host", _hosts(text, ctx))
     add("internal_document", _names(text, ctx.hidden_documents))

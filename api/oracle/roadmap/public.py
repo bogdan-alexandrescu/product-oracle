@@ -10,7 +10,8 @@ than an announced quarter, or item without an approved text.
 
 An item is shown when its public text is approved, was written for the item as it is now
 (``source_hash``), has no blocking leak finding (re-checked at every render, since the
-company's records move), and the item serves a confirmed goal.
+company's records move), and the item serves a confirmed goal. The page's public title and
+intro are re-checked at every render the same way and left out once they leak.
 
 A **public check** records a person's look at the exact page of one publication. It holds
 while the page's content hash matches; any change lapses it ("Changed since checked").
@@ -295,16 +296,22 @@ async def review(db: AsyncSession, document: Document, version: DocumentVersion)
                 PublicCard(text.title, text.description, text.stage, text.announced_quarter, url)
             )
     company = await company_name(db)
+    # The page's own title and intro are re-checked like the items' texts: one that now
+    # names something internal is left out (the default title shows), which changes the
+    # content hash, so a public check no longer holds.
+    title_findings = leak_check.check(document.public_title or "", ctx)
+    intro_findings = leak_check.check(document.public_intro or "", ctx)
+    title = None if leak_check.blocking(title_findings) else document.public_title
+    intro = None if leak_check.blocking(intro_findings) else document.public_intro
     page = PublicPage(
         company=company,
-        title=document.public_title or f"{company} roadmap",
-        intro=document.public_intro or None,
+        title=title or f"{company} roadmap",
+        intro=intro or None,
         disclaimer=DEFAULT_DISCLAIMER,
         columns=tuple((s, tuple(cards[s])) for s in COLUMN_ORDER),
         oracle_mark=True,
     )
-    page_findings = page_text_findings(ctx, document.public_title, document.public_intro)
-    return Review(document, version, rows, page, page_findings,
+    return Review(document, version, rows, page, title_findings + intro_findings,
                   await _removed(db, items, sections))  # fmt: skip
 
 
@@ -389,13 +396,16 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             continue
         key = str(entry.get("item_key") or "")
         item = needed.get(key)
-        title = " ".join(str(entry.get("title") or "").split())[:TITLE_MAX].strip()
+        # A model's draft is saved without invisible format characters (a person's text
+        # holding one is refused).
+        title = " ".join(leak_check.strip_format(str(entry.get("title") or "")).split())
+        title = title[:TITLE_MAX].strip()
         if item is None or key in have or key in drafted or not title:
             continue
         stage = entry.get("stage")
         if stage not in PUBLIC_STAGES:
             stage = HORIZON_STAGE.get(item.horizon, "exploring")
-        description = " ".join(str(entry.get("description") or "").split())
+        description = " ".join(leak_check.strip_format(str(entry.get("description") or "")).split())
         s.add(
             RoadmapPublicText(
                 id=uuid.uuid4(),
