@@ -292,6 +292,9 @@ export const NO_GOAL_GROUP = "No goal";
 const NO_GOAL_FLAG = "\u2691 Serves no confirmed goal.";
 const byTitle = (a: string, b: string) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0);
 
+/** The goal a Board row's Goal column and a Team card name: the group's goal (owner answer 2026-10-26, as the API's variants.goal_names). */
+const groupGoal = (i: BoardItem): string[] => (i.group !== null ? [i.group] : i.goals);
+
 /** `items` by goal group, their order kept: the goals by title, then "No goal" (as the API's variants.goal_groups). */
 export function goalGroups(items: BoardItem[]): [string, BoardItem[]][] {
   const by = new Map<string | null, BoardItem[]>();
@@ -331,7 +334,7 @@ function boardSections<S extends Section>(sections: S[], items: BoardItem[]): S[
     out.push(section(horizon, heading, ""));
     goalGroups(rows).forEach(([title, group], n) => {
       const lines = [joinRow(BOARD_COLUMNS), "|" + "---|".repeat(BOARD_COLUMNS.length)];
-      for (const i of group) lines.push(joinRow([i.title, i.outcome, i.confidence, i.goals.join(", ")].map(cell)));
+      for (const i of group) lines.push(joinRow([i.title, i.outcome, i.confidence, groupGoal(i).join(", ")].map(cell)));
       out.push({ ...section(`${horizon}-group-${n + 1}`, title, lines.join("\n")), level: 3 });
     });
   }
@@ -370,7 +373,7 @@ export function audienceSections<S extends Section>(sections: S[], audience: Aud
           const why = written ? redact(written.body_md, audience) : "";
           const lines = [
             i.outcome && !why.includes(i.outcome) ? i.outcome : "",
-            i.goals.length ? `Goal: ${i.goals.join(", ")}` : "",
+            groupGoal(i).length ? `Goal: ${groupGoal(i).join(", ")}` : "",
             i.confidence ? `Confidence: ${i.confidence}` : "",
             why,
             i.no_goal && !why.toLowerCase().includes("serves no confirmed goal") ? NO_GOAL_FLAG : "",
