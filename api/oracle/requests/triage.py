@@ -34,11 +34,12 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, safe_yaml
+from oracle import audit, company_time, safe_yaml
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.claude_accounts.pool import readable_refusal
 from oracle.company_time import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.members.names import display_name
 from oracle.models import AuditEvent
@@ -709,7 +710,12 @@ async def status(db: AsyncSession, principal: Principal) -> TriageStatus:
         finished_at=run.finished_at,
         suggestions=suggestions or 0,
         found=found or 0,
-        error=run.error,
+        # Read as the run page reads it: then, not now, in the company's zone (#633 re-review).
+        error=readable_refusal(
+            run.error,
+            await company_time.company_time_zone(db) if run.error else COMPANY_ZONE,
+            past=run.status == "failed",
+        ),
         daily_skipped=skipped,
         **daily,
     )
