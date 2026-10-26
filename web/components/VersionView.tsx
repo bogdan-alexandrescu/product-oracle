@@ -29,6 +29,7 @@ import { RunReviewBar } from "@/components/review/RunReviewBar";
 import { useDateRights } from "@/components/DateBasisDialog";
 import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
+import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
 import { SpecStaleness } from "@/components/SpecStaleness";
@@ -1193,6 +1194,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               </p>
             )}
           </div>
+        )}
+
+        {/* S4: what synced into the author's sources since this draft, with Refresh. */}
+        {onDocument && version && document_?.kind === "prd" && latest != null && n === latest && (
+          <DraftNewItems doc={doc} slug={document_.slug} n={n} />
         )}
 
         {heldOpen && (
