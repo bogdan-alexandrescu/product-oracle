@@ -12,6 +12,7 @@ type View = { kind: "loading" } | { kind: "locked"; note: string | null } | { ki
 type Status = { state?: string; allow_download?: boolean };
 
 const path = (token: string) => ({ params: { path: { token } } });
+const status = async (token: string) => (await api.GET("/v1/public/shares/{token}/status", path(token))).data as Status | undefined;
 
 /**
  * The link holder's page (spec-O5 §3, owner answer O5-Q5): the passcode form until the
@@ -26,8 +27,6 @@ export function SharedRoadmap({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [download, setDownload] = useState<string | null>(null);
   const id = useId();
-
-  const status = async () => (await api.GET("/v1/public/shares/{token}/status", path(token))).data as Status | undefined;
 
   const show = async (res: Response, html: string | undefined, download: boolean) => {
     if (res.ok && html) return setView({ kind: "open", html, download });
@@ -44,7 +43,7 @@ export function SharedRoadmap({ token }: { token: string }) {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const now = await status();
+      const now = await status(token);
       if (!alive) return;
       if (now?.state === "ended") return setView({ kind: "ended" });
       if (now?.state !== "active") return setView({ kind: "locked", note: null });
@@ -63,7 +62,7 @@ export function SharedRoadmap({ token }: { token: string }) {
       // The right passcode sets this link's cookie; the API then answers with the page.
       const out = await api.POST("/v1/public/shares/{token}", { ...path(token), body: { passcode } as never, parseAs: "text" });
       // The cookie now opens the link: its status says whether it allows downloads.
-      const download = out.response.ok ? (await status())?.allow_download === true : false;
+      const download = out.response.ok ? (await status(token))?.allow_download === true : false;
       await show(out.response, out.data as string | undefined, download);
       if (out.response.ok) setPasscode("");
     } catch {
