@@ -396,7 +396,7 @@ async def put_analytics_integration(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
     except posthog.PostHogError as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, f"PostHog refused the key: {exc.message}"
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"PostHog refused the key: {exc.detail}"
         ) from None
     row = await metrics_pull.integration(db)
     if row is None:
