@@ -68,6 +68,8 @@ from oracle.sources import background as source_sync
 from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
+from oracle.webhooks import outbox as webhooks_outbox
+from oracle.webhooks.outbox import WebhooksTick
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +79,8 @@ router = APIRouter(tags=["internal"])
 ADVISORY_LOCK_KEY = int.from_bytes(b"oracletk", "big")
 # No company is started after this many seconds (the next minute's tick goes on).
 BUDGET_SECONDS = 45.0
+# I1: the webhooks outbox's share of one company's tick.
+WEBHOOKS_BUDGET_SECONDS = 15.0
 # The whole tick is cancelled after this (below Cloud Run's 300 s request timeout).
 HARD_LIMIT_SECONDS = 240.0
 
@@ -136,6 +140,8 @@ class TickerOut(BaseModel):
     discussion_replies: RepliesTick = Field(default_factory=RepliesTick)
     # G8: mirrored discussions' new messages queued, and the Slack outbox delivered.
     slack_outbox: OutboxTick = Field(default_factory=OutboxTick)
+    # I1: webhook events fanned out, deliveries sent, and the delivery log's retention.
+    webhooks: WebhooksTick = Field(default_factory=WebhooksTick)
     # Calls a member's disable or a run's cancel still owed (a provider revoke, a runtime
     # cancel), made.
     member_follow_ups: int = 0
@@ -270,6 +276,18 @@ async def _tick_company(
             await db.commit()
     except Exception:
         log.exception("run ticker: watched pages failed for company %s", tenant_id)
+        failures.add(tenant_id)
+    try:
+        # Webhooks (I1): new events fanned out, due deliveries sent side by side (each
+        # webhook with its own client and 10 s cap), the 30-day retention once a day. A
+        # share of what the tick has left, so slow receivers never take it all.
+        budget = min(WEBHOOKS_BUDGET_SECONDS, deadline - time.monotonic())
+        if budget >= webhooks_outbox.call_seconds():
+            sent = await webhooks_outbox.tick(tenant_id, budget_seconds=budget)
+            for name in WebhooksTick.model_fields:
+                setattr(out.webhooks, name, getattr(out.webhooks, name) + getattr(sent, name))
+    except Exception:
+        log.exception("run ticker: webhooks failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Strategy drift (H4): a daily deterministic check, no model call.

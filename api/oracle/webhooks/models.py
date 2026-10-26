@@ -129,6 +129,10 @@ class WebhookDelivery(TenantScoped, Base):
     error: Mapped[str | None] = mapped_column(Text)
     response_excerpt: Mapped[str | None] = mapped_column(Text)
     body: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # 0056: where it went (the URL may change later) and the headers sent, the signature
+    # truncated (oracle.webhooks.sign.shown).
+    host: Mapped[str | None] = mapped_column(Text)
+    headers: Mapped[dict[str, str] | None] = mapped_column(JSONB)
     redelivery_of: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("webhook_deliveries.id", ondelete="SET NULL")
     )

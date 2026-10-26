@@ -204,6 +204,23 @@ class WebhookCreated(BaseModel):
     secret: str
 
 
+def loopback_allowed(host: str | None) -> bool:
+    """A loopback host while ORACLE_WEBHOOKS_ALLOW_LOOPBACK_FOR_TESTS is on (the stub
+    receiver of the Playwright fixture); never in a real deployment."""
+    import ipaddress
+
+    from oracle.config import get_settings
+
+    if not host or not get_settings().webhooks_allow_loopback_for_tests:
+        return False
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def _check_url(v: str) -> str:
     v = v.strip()
     if len(v) > MAX_URL:
@@ -214,7 +231,8 @@ def _check_url(v: str) -> str:
     except ValueError:
         raise ValueError("Not a URL") from None
     del port
-    if parts.scheme != "https" or not parts.hostname:
+    test_stub = parts.scheme == "http" and loopback_allowed(parts.hostname)
+    if not parts.hostname or (parts.scheme != "https" and not test_stub):
         raise ValueError("Webhooks send to https:// addresses only")
     if parts.username is not None or parts.password is not None or "@" in parts.netloc:
         raise ValueError("The URL may not hold a user name or password")
@@ -289,6 +307,8 @@ class DeliveryOut(BaseModel):
     error: str | None
     response_excerpt: str | None
     body: dict[str, Any] | None
+    host: str | None
+    headers: dict[str, str] | None
     redelivery_of: uuid.UUID | None
     created_at: datetime
 
