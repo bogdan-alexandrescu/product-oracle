@@ -172,7 +172,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
               <AffectedList report={report} selected={selected} onPick={pick} />
             </Split>
           ) : (
-            <Split inspector={selected && <OutputInspector report={report} output={selected} {...rowProps(selected)} />}>
+            <Split inspector={selected && <OutputInspector report={report} {...rowProps(selected)} />}>
               <OutputTable report={report} selected={selected} onPick={pick} />
               <PlanList report={report} />
               {report.affected_entities.length > 0 && <EntitiesPanel report={report} />}
@@ -182,7 +182,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       )}
       {report && selected && (
         <Sheet open={sheet && phone} title={outputTitle(selected)} onClose={() => setSheet(false)}>
-          <OutputDetail report={report} output={selected} {...rowProps(selected)} />
+          <OutputDetail report={report} {...rowProps(selected)} />
         </Sheet>
       )}
     </Page>
@@ -758,7 +758,7 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
                   {u.deleted && u.deletedAt && <span>Removed {formatDate(u.deletedAt)}</span>}
                   {d.stale_since && <span>Stale since {formatDate(d.stale_since)}</span>}
                   {d.reconciled_at && <span>Reconciled {formatDate(d.reconciled_at)}</span>}
-                  {d.composition_revision != null && !d.stale_since && <span>Composition revision {d.composition_revision}</span>}
+                  {d.upstream.composition_revision != null && !d.stale_since && <span>Composition revision {d.upstream.composition_revision}</span>}
                   {d.caused_by_change_id && (
                     <Link href={`/impact/changes/${d.caused_by_change_id}`} className="font-medium text-accent-ink hover:underline">
                       Recorded change
