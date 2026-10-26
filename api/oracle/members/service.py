@@ -1467,6 +1467,12 @@ async def revoke_api_token(
         token.id,
         {"name": token.name, "user_id": str(token.user_id) if token.user_id else None, **lapsed},
     )
+    if token.user_id is None:
+        # I1: a user-less token's webhooks pause, as a disabled member's do. A personal
+        # token's webhooks are its member's, and pause only with the member.
+        from oracle.webhooks import service as webhooks_service
+
+        await webhooks_service.token_revoked(session, principal, token.id)
     return token
 
 

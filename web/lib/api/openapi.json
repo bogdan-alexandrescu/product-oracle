@@ -114858,6 +114858,15 @@
           "created_by": {
             "$ref": "#/components/schemas/PersonName"
           },
+          "created_by_kind": {
+            "type": "string",
+            "enum": [
+              "member",
+              "api_token"
+            ],
+            "title": "Created By Kind",
+            "default": "member"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",

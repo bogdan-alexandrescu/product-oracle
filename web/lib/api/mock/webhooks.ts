@@ -15,6 +15,8 @@
  *
  * The "webhooks" scenario seeds an approver's webhook paused for failing (with its 500s),
  * an approver's webhook an owner paused, and their Inbox rows (review-v2 notifications).
+ * The "webhooks-token" scenario seeds one active webhook a user-less API token made: revoking
+ * the token pauses it (tokenRevoked, as oracle.webhooks.service.token_revoked).
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -24,6 +26,7 @@ type DeliveryOut = Schemas["DeliveryOut"];
 type Notification = Schemas["NotificationOut"] & { user_id: string };
 
 export const WEBHOOKS_SCENARIO = "webhooks";
+export const WEBHOOKS_TOKEN_SCENARIO = "webhooks-token";
 /** The window function the Playwright fixture's stub receiver is exposed as. */
 export const WEBHOOK_RECEIVER = "__poWebhookReceiver";
 export type ReceivedCall = { url: string; headers: Record<string, string>; body: string };
@@ -53,7 +56,7 @@ export const EVENT_TYPES: Schemas["EventTypeOut"][] = [
   ["approval.version_published", "approvals", "A version was published"],
 ].map(([type, group, label]) => ({ type, group: group as Schemas["EventTypeOut"]["group"], label, can_be_approvers_only: true }));
 
-type HookRow = Omit<WebhookOut, "created_by" | "last_delivery" | "failing_since" | "can_take_over"> & {
+type HookRow = Omit<WebhookOut, "created_by" | "created_by_kind" | "last_delivery" | "failing_since" | "can_take_over"> & {
   created_by: string;
   secret: string;
   previous_secret: string | null;
@@ -70,6 +73,8 @@ export type WebhooksContext = {
   db: WebhooksDb;
   me: { id: string; role: Role };
   members: { id: string; name: string; role: Role }[];
+  /** The user-less API tokens (Settings › API tokens), revoked ones too: a webhook's creator may be one. */
+  tokens: { id: string; name: string }[];
   notifications: Notification[];
   company: { id: string; name: string };
   uuid: () => string;
@@ -143,7 +148,7 @@ function typesProblem(types: unknown): string | null {
 const ordered = (types: string[]) => EVENT_TYPES.map((e) => e.type).filter((t) => types.includes(t));
 
 function nameOf(ctx: WebhooksContext, id: string) {
-  return ctx.members.find((m) => m.id === id)?.name ?? "Someone";
+  return ctx.members.find((m) => m.id === id)?.name ?? ctx.tokens.find((t) => t.id === id)?.name ?? "Someone";
 }
 
 function notify(ctx: WebhooksContext, to: string[], kind: Notification["kind"], title: string, hook: HookRow, actor: string, reason?: HookRow["paused_reason"]) {
@@ -181,6 +186,7 @@ function hookOut(ctx: WebhooksContext, h: HookRow): WebhookOut {
   return {
     ...(rest as Omit<HookRow, "secret" | "previous_secret" | "previous_expires_at" | "created_by" | "resumed_at">),
     created_by: { name: nameOf(ctx, created_by) },
+    created_by_kind: ctx.tokens.some((t) => t.id === created_by) ? "api_token" : "member",
     last_delivery: last ? { status: last.status, at: last.last_at, http_status: last.http_status } : null,
     failing_since: failingSince(ctx.db, h),
     can_take_over: ctx.me.role === "owner" && h.status === "paused" && created_by !== ctx.me.id,
@@ -242,9 +248,39 @@ async function sendNow(ctx: WebhooksContext, hook: HookRow, d: DeliveryRow): Pro
   });
 }
 
-/** Seeds for the "webhooks" scenario; the empty db otherwise. */
+/**
+ * A user-less API token revoked: its active webhooks pause (creator_disabled), and every
+ * owner, the one who revoked included, gets one Inbox row naming each, with Resume and Take
+ * over (oracle.webhooks.service.token_revoked). One already paused does not pause again.
+ */
+export function tokenRevoked(ctx: WebhooksContext, tokenId: string) {
+  for (const hook of ctx.db.hooks.filter((h) => h.created_by === tokenId && h.status === "active")) {
+    hook.status = "paused";
+    hook.paused_reason = "creator_disabled";
+    hook.include_approvers_content = false;
+    for (const user_id of owners(ctx)) {
+      ctx.notifications.push({
+        id: ctx.uuid(), user_id, kind: "webhook_paused", title: `Webhook ${hook.name} paused: its API token was revoked`, document_id: null,
+        version_number: null, section_key: null, comment_id: null, campaign_id: null, actor: "system",
+        data: { webhook_id: hook.id, href: "/settings/webhooks", reason: "creator_disabled", actions: ["resume", "take_over"] }, read_at: null, created_at: ctx.now(),
+      });
+    }
+  }
+}
+
+/** Seeds for the "webhooks" and "webhooks-token" scenarios; the empty db otherwise. */
 export function seedWebhooks(ctx: Omit<WebhooksContext, "db">, scenario: string | null): WebhooksDb {
   const db: WebhooksDb = { hooks: [], events: [], deliveries: [] };
+  if (scenario === WEBHOOKS_TOKEN_SCENARIO && ctx.tokens[0]) {
+    const secret = newSecret();
+    db.hooks.push({
+      id: ctx.uuid(), name: "CI export hook", url: "https://hooks.example.test/ci", host: "hooks.example.test",
+      event_types: ["run.succeeded", "run.failed"], api_version: API_VERSION, include_approvers_content: false,
+      status: "active", paused_reason: null, secret_hint: secret.slice(-4), secret_rotated_at: ctx.now(), created_at: ctx.now(),
+      created_by: ctx.tokens[0].id, secret, previous_secret: null, previous_expires_at: null,
+    });
+    return db;
+  }
   if (scenario !== WEBHOOKS_SCENARIO) return db;
   const approver = ctx.members.find((m) => m.role === "approver");
   const owner = ctx.members.find((m) => m.role === "owner");

@@ -191,6 +191,9 @@ class WebhookOut(BaseModel):
     secret_hint: str
     secret_rotated_at: datetime
     created_by: PersonName
+    # Whether a member or a user-less API token made it: a revoked token's pause reads
+    # "API token revoked", a disabled member's "creator removed".
+    created_by_kind: Literal["member", "api_token"] = "member"
     created_at: datetime
     last_delivery: LastDelivery | None = None
     failing_since: datetime | None = None
