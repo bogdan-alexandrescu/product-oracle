@@ -46,7 +46,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from oracle import wording
-from oracle.docs.schemas import ImportProblem, citation_contract
+from oracle.docs.schemas import ImportProblem
 from oracle.runs import flows, rejection
 from oracle.runtokens import SCOPES
 from oracle.swarm.runtime import AWAIT_PROFILE, NOT_YET, StepSpec
@@ -159,76 +159,12 @@ def revise_note(round_: int) -> str:
 
 
 # A refused draft goes back to the writer before a person is asked (owner, 2026-10-20):
-# the import's problems as review findings, grouped in plain words, each group with what
-# a valid draft does. (label, problem codes, what to do).
-FINDING_GROUPS: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    (
-        "Citations",
-        ("invalid_citation", "duplicate_citation", "unknown_citation"),
-        citation_contract(),
-    ),
-    (
-        "Front matter",
-        (
-            "missing_front_matter",
-            "invalid_front_matter",
-            "invalid_document",
-            "document_mismatch",
-            "kind_mismatch",
-            "missing_title",
-        ),
-        "The file starts with YAML front matter between --- lines: the document's title "
-        "and the fields the task names, for this run's document.",
-    ),
-    (
-        "Headings and section ids",
-        (
-            "missing_section_id",
-            "duplicate_section_id",
-            "content_before_heading",
-            "no_sections",
-            "sources_not_last",
-        ),
-        "A heading follows the front matter, every heading of levels 1 to 3 ends with a "
-        "{#id} used once, and Sources and data points is the last section.",
-    ),
-    (
-        "Feedback resolutions",
-        ("invalid_resolution", "unknown_feedback_item"),
-        "The resolutions list names each open feedback item by its feedback_id, with status "
-        "addressed or declined and a note.",
-    ),
-    (
-        "The file",
-        ("missing_draft", "draft_too_large", "invalid_encoding"),
-        "Write the whole draft as one UTF-8 markdown file.",
-    ),
-)
-
-
-def import_findings(name: str, problems: list[dict[str, Any]]) -> list[str]:
-    """The review findings for a draft the import refused: a lead line, then one finding
-    per group of problems (every problem's message, then what a valid draft does)."""
-    out = [
-        f"Oracle could not import {name} as the document's next version, so it sent the "
-        "draft back before a person reviews it. Fix every problem below and write the whole "
-        "file again; keep the rest as it is."
-    ]
-    groups: dict[str, list[str]] = {}
-    hints: dict[str, str] = {}
-    for p in problems:
-        code = str(p.get("code") or "")
-        label, hint = next(
-            ((g, h) for g, codes, h in FINDING_GROUPS if code in codes), ("Other problems", "")
-        )
-        message = str(p.get("message") or code)
-        groups.setdefault(label, []).append(message.removesuffix("."))
-        hints[label] = hint
-    order = [g for g, _, _ in FINDING_GROUPS] + ["Other problems"]
-    for label in sorted(groups, key=order.index):
-        text = f"{label}: {'; '.join(groups[label])}."
-        out.append(f"{text} {hints[label]}" if hints[label] else text)
-    return out
+# the findings are the agents' rendering of the refusal's summary (oracle.runs.rejection).
+def import_findings(
+    name: str, problems: list[dict[str, Any]], total: int | None = None
+) -> list[str]:
+    """The review findings for a draft the import refused (:func:`rejection.findings`)."""
+    return rejection.findings(name, problems, total)
 
 
 def check_problems(

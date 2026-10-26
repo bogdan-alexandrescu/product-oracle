@@ -17,7 +17,14 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+)
 
 from oracle import parse_budget, safe_yaml
 from oracle.config import get_settings
@@ -136,6 +143,20 @@ class DraftError(ValueError):
 CITATION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$"
 
 
+# A ref's URL scheme, read as a browser reads an href: with the ASCII whitespace and
+# control characters it drops ("java\tscript:") removed first.
+_REF_SCHEME_RE = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*):")
+_URL_IGNORED_RE = re.compile(r"[\x00-\x20\x7f]")
+LINK_SCHEMES = ("http", "https")
+
+
+def ref_scheme(ref: str) -> str | None:
+    """The URL scheme ``ref`` has (lower case), or None for a ref with none (a file name,
+    an item's id)."""
+    m = _REF_SCHEME_RE.match(_URL_IGNORED_RE.sub("", ref))
+    return m[1].lower() if m else None
+
+
 class CitationIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -158,6 +179,20 @@ class CitationIn(BaseModel):
     @classmethod
     def _item_as_text(cls, value: Any) -> str | None:
         return _optional_str(value)
+
+    @field_validator("ref")
+    @classmethod
+    def _ref_is_a_link(cls, value: str, info: ValidationInfo) -> str:
+        # The web opens a ref but an oracle one as a link (web/lib/format.ts): a URL other
+        # than http(s) (javascript:, data:, ...) never gets in; a ref with no scheme (an
+        # upload's name, an item's id) does, and shows as text. An oracle ref names a
+        # baseline item (checked at import, oracle.docs.service). Not checked when the
+        # source itself is refused.
+        source = info.data.get("source")
+        scheme = ref_scheme(value) if source not in (None, "oracle") else None
+        if scheme is not None and scheme not in LINK_SCHEMES:
+            raise ValueError(f"ref's scheme '{scheme}:' isn't accepted (only http or https)")
+        return value
 
 
 @dataclass
@@ -405,6 +440,8 @@ def _citation_field(error: Any) -> str:
         return f"source '{error['input']}' isn't accepted"
     if tuple(error["loc"]) == ("confidence",):
         return f"confidence must be {CONFIDENCE_RANGE}"
+    if tuple(error["loc"]) == ("ref",) and error["type"] == "value_error":
+        return str(error["ctx"]["error"])
     return ".".join(map(str, error["loc"]))
 
 

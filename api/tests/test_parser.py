@@ -274,27 +274,38 @@ def test_citation_item_that_is_not_a_uuid_still_parses():
 
 
 @pytest.mark.parametrize(
-    "ref", ["javascript:alert(1)", "ftp://example.com/x", "example.com/x", "data:text/html,x"]
+    ("ref", "scheme"),
+    [
+        ("javascript:alert(1)", "javascript"),
+        ("JavaScript:alert(1)", "javascript"),
+        ("java\tscript:alert(1)", "javascript"),
+        (" data:text/html,x", "data"),
+        ("ftp://example.com/x", "ftp"),
+    ],
 )
-def test_a_non_oracle_ref_must_be_an_http_or_https_url(ref):
-    # The web opens a citation's ref as a link: nothing but http(s) gets in.
+def test_a_non_oracle_ref_with_a_scheme_other_than_http_is_refused(ref, scheme):
+    # The web opens a citation's ref as a link: no URL but http(s) gets in.
     text = _draft(
         "# T {#t}\n\nA claim [c:c1].\n",
-        citations=f"citations:\n  - id: c1\n    source: slack\n    ref: '{ref}'\n",
+        citations=f'citations:\n  - id: c1\n    source: slack\n    ref: "{ref}"\n',
     )
     with pytest.raises(DraftError) as info:
         parse_draft(text)
-    (problem,) = info.value.problems
+    (problem,) = [p for p in info.value.problems if p.code != "unknown_citation"]
     assert (problem.code, problem.cite_key) == ("invalid_citation", "c1")
-    assert problem.message == "citation #1 (c1) is invalid: ref must be an http or https URL"
+    assert problem.message == (
+        f"citation #1 (c1) is invalid: ref's scheme '{scheme}:' isn't accepted (only http or https)"
+    )
 
 
-def test_http_https_and_oracle_refs_parse():
+def test_http_https_schemeless_and_oracle_refs_parse():
+    # A ref with no scheme (an upload's name, an item's id) is kept and shown as text.
     text = _draft(
-        "# T {#t}\n\n[c:a] [c:b] [c:o]\n",
+        "# T {#t}\n\n[c:a] [c:b] [c:u] [c:o]\n",
         citations="citations:\n"
         "  - {id: a, source: web, ref: 'HTTPS://example.com/a'}\n"
         "  - {id: b, source: github, ref: 'http://example.com/b'}\n"
+        "  - {id: u, source: upload, ref: 'buyer-interviews.md'}\n"
         "  - {id: o, source: oracle, ref: 'baseline goal g1'}\n",
     )
-    assert [c.id for c in parse_draft(text).citations] == ["a", "b", "o"]
+    assert [c.id for c in parse_draft(text).citations] == ["a", "b", "u", "o"]

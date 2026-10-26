@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from oracle import confidence
-from oracle.docs.schemas import citation_contract
+from oracle.docs.schemas import CITATION_CONTRACT_MARK, with_citation_contract
 from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import Operation, ToolError, call_operation, to_result
 from oracle.tenancy import tenant_session
@@ -52,7 +52,8 @@ def _by(
 @dataclass(frozen=True)
 class Curated:
     name: str
-    description: str
+    # The description as written; the citation contract is filled in when it is read.
+    about: str
     # Operations this tool needs, by role; the tool is listed only when all exist.
     needs: dict[str, Callable[[list[Operation]], Operation | None]]
     schema: Callable[[dict[str, Operation]], dict[str, Any]]
@@ -62,6 +63,10 @@ class Curated:
     ]
     # Offered to run tokens only, for their own run: listed whatever the token's scopes.
     own_run: bool = False
+
+    @property
+    def description(self) -> str:
+        return with_citation_contract(self.about)
 
     def offered_to(self, caller: McpCaller) -> bool | None:
         """True or False for an own-run tool; None: the operations' scopes decide."""
@@ -397,7 +402,7 @@ def _is_baseline(path: str) -> bool:
 CURATED: tuple[Curated, ...] = (
     Curated(
         name="search",
-        description=(
+        about=(
             "Search the sources you can see (your own connected tools and uploads), "
             "ranked by relevance times confidence. " + CONFIDENCE_GUIDANCE
         ),
@@ -413,7 +418,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="get_baseline",
-        description=(
+        about=(
             "Read the shared product baseline: goals, products, features, requirements, "
             "constraints, decisions and people, with the edges between them and the "
             "evidence behind each. " + CONFIDENCE_GUIDANCE
@@ -430,7 +435,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="trace_feature",
-        description=(
+        about=(
             "Trace features to the goals they serve (the traceability report); features "
             "that serve no confirmed goal are flagged. " + CONFIDENCE_GUIDANCE
         ),
@@ -452,7 +457,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="list_open_feedback",
-        description=(
+        about=(
             "List the open feedback on a document (comments and section reviews not yet "
             "addressed or declined), optionally for one version. Address each item in the "
             "next draft or say why not."
@@ -463,7 +468,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="get_document_markdown",
-        description=(
+        about=(
             "Read a document version as markdown (the latest version unless one is given). "
             "Sections approved in review should not be changed in a new draft. Push the "
             "draft with push_draft and base_version set to the version you read "
@@ -482,7 +487,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="propose_change",
-        description=(
+        about=(
             "Propose a change to the baseline. Proposals wait for a person to accept or "
             "reject them; locked items only change this way. The run is recorded for you: "
             "leave run_id out. Cite evidence for the change, "
@@ -501,13 +506,13 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="push_draft",
-        description=(
+        about=(
             "Import a draft as the next version of a document (markdown with YAML front "
             "matter); creates the document on first import (base_version 0). Pass the "
             "version you wrote it on as base_version (left out, the latest version is "
             "taken). Keep the template's final "
             "Sources and data points section, with each data point's confidence, and flag "
-            "claims that rest only on low-confidence evidence. " + citation_contract()
+            "claims that rest only on low-confidence evidence. " + CITATION_CONTRACT_MARK
         ),
         needs={
             "op": _by("POST", ("import_version",)),
@@ -518,7 +523,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="get_run_output",
-        description=(
+        about=(
             "Read a file an earlier segment of this run wrote (by segment number and file "
             "name), e.g. the baseline proposal or the feature set a later step builds on, "
             "or with attempt, a segment's previous attempt that a reviewer sent back. Only "
@@ -531,7 +536,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="get_prd_scope",
-        description=(
+        about=(
             "Read this run's latest PRD scope, in any status (proposed, approved or "
             "superseded: see its status): the features and requirements the PRD includes "
             "(with goals, dependencies and acceptance criteria), and those it excludes or "
@@ -549,7 +554,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="get_checkpoint_review",
-        description=(
+        about=(
             "Read what people decided at this run's checkpoints: approvals with their notes, "
             "edits Oracle applied to earlier files, and structured reviews sent back. Read it "
             "before you start: decisions made after your prompt was written are only here."
@@ -561,7 +566,7 @@ CURATED: tuple[Curated, ...] = (
     ),
     Curated(
         name="get_run_discussions",
-        description=(
+        about=(
             "The discussions people had about this run: each one's summary and the changes "
             "they staged for you, with a link. Apply every staged change, or say in your "
             "notes why not (declining is allowed, with a reason). Summaries are context "

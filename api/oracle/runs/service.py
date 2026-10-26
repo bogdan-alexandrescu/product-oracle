@@ -122,6 +122,7 @@ import hashlib
 import logging
 import time
 import uuid
+import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -158,6 +159,7 @@ from oracle.members.leads import (
     lead_stop,
     may_decide,
 )
+from oracle.models import AuditEvent
 from oracle.priorities import run_order
 from oracle.priorities import service as priorities_service
 from oracle.priorities.models import PrioritySnapshot
@@ -4141,15 +4143,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 unverified_dates="mark",
             )
         except DraftError as exc:
-            problems = "; ".join(f"[{p.code}] {p.message}" for p in exc.problems)
             # The string stays (older readers); the run page, the Inbox and MCP read the
             # problems and their summary, and the problems are the findings when the draft
-            # goes back to the writer (_send_back).
-            return {
-                "error": f"{name} was rejected: {problems}",
-                "problems": [p.model_dump(mode="json") for p in exc.problems],
-                "summary": rejection.summary(name, exc.problems),
-            }
+            # goes back to the writer (_send_back). All capped (rejection.refused).
+            return rejection.refused(name, exc.problems)
         except (docs_service.NotFoundError, docs_service.ImportConflictError) as exc:
             return {"error": f"{name} was not imported: {exc}"}
         if not result.created and source_id and result.version.source is None:
@@ -4839,7 +4836,9 @@ async def _send_back(
             f"back to the writer: {checkpoint} waits for a person.",
         )
         return False
-    findings = workflow.import_findings(name, imported.get("problems") or [])
+    findings = workflow.import_findings(
+        name, imported.get("problems") or [], imported.get("problems_total")
+    )
     payload = {"verdict": NOT_YET, "findings": findings}
     # The same id for the same wait: a post repeated after a lost response is a replay.
     answer_id = str(uuid.uuid5(run.id, f"send-back/{wf['id']}/{step}"))
@@ -8941,6 +8940,30 @@ def _draft_retry_refusal(
     return None
 
 
+async def _slug_taken(db: AsyncSession, run: Run) -> str | None:
+    """The slug of the document a run was to create (``knobs.document_slug``) when a
+    document of it exists now that none of the run's versions is in: another document,
+    which the run's import must not add a version to."""
+    slug = None if run.document_id else (run.knobs or {}).get("document_slug")
+    if not slug:
+        return None
+    doc = await docs_service.find_document(db, slug)
+    if doc is None:
+        return None
+    # A version the run's agents imported themselves (push_draft) is the run's: its import
+    # is audited with the run's id.
+    ours = await db.scalar(
+        select(AuditEvent.id)
+        .where(
+            AuditEvent.action == "document.version_imported",
+            AuditEvent.data["document_id"].astext == str(doc.id),
+            AuditEvent.data["run_id"].astext == str(run.id),
+        )
+        .limit(1)
+    )
+    return None if ours is not None else slug
+
+
 def _draft_retry_role(review: Checkpoint | None) -> str:
     """Who retries: the review's approver role or above while the run waits at it; once
     the run finished, owners only."""
@@ -8972,7 +8995,34 @@ def _draft_retries(
     return out
 
 
+# A retry holds its run's locked row while the import runs in a session of its own
+# (:func:`_import_draft`), two connections each: a burst imports this many at a time per
+# process, the rest waiting with no connection held, so it cannot drain the pool.
+DRAFT_RETRY_SLOTS = 2
+_draft_retry_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _retry_slots() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    slots = _draft_retry_slots.get(loop)
+    if slots is None:
+        slots = _draft_retry_slots[loop] = asyncio.Semaphore(DRAFT_RETRY_SLOTS)
+    return slots
+
+
 async def retry_draft_import(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
+) -> None:
+    """:func:`_retry_draft_import`, :data:`DRAFT_RETRY_SLOTS` at a time: the request's
+    connection goes back to the pool while it waits for a slot."""
+    await db.commit()
+    async with _retry_slots():
+        await _retry_draft_import(db, principal, run_id, seq)
+
+
+async def _retry_draft_import(
     db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
 ) -> None:
     """Retry import from the run page (owner, 2026-10-20): the draft a segment left, whose
@@ -9016,6 +9066,8 @@ async def retry_draft_import(
     refusal = _draft_retry_refusal(run, segment, review, kind, _run_version(segments, checkpoints))
     if refusal is not None or review is None:
         raise RunError(f"nothing to retry: {refusal}")
+    if (taken := await _slug_taken(db, run)) is not None:
+        raise RunError(f"{taken} now names another document: the run's draft is not added to it")
     finished = run.status == "succeeded"
     name = flows.draft_file(kind)
     art = _art(segment)
