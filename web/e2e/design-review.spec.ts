@@ -1,3 +1,5 @@
+import { MOCK_SLOW_KEY } from "../lib/api/mock/server";
+
 import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
@@ -163,6 +165,17 @@ test("approving v2 supersedes v1: v1 links to v2, names who approved it, and sti
 
   await panel.getByRole("link", { name: "Open v2" }).click();
   await expect(page).toHaveURL(new RegExp(`/specs/${SPEC_ID}/design/${WIRE}$`));
+});
+
+test("on a slow network, the review waits for the role's capabilities: it never shows an owner a viewer's review", async ({ page }) => {
+  await login(page);
+  // The role's capabilities answer late.
+  await page.evaluate(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/me/capabilities"]);
+  await page.goto(`/specs/${SPEC_ID}/design/${WIRE}`);
+  // What the inspector says the moment it shows, not once it has settled.
+  await inspector(page).waitFor();
+  expect(await inspector(page).textContent()).toContain("viewing as owner");
+  await expect(inspector(page).getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
 test("an approver who is not named sees who the spec's engineering approvers are", async ({ page }) => {
