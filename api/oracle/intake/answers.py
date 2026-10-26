@@ -581,7 +581,10 @@ async def _propose_baseline(
     if gap.category not in BASELINE_TYPES or not row.body:
         return None
     fields, reason = _baseline_fields(intake, gap, question, row, mode)
-    writer = baseline_service.Writer(principal, "agent", reason=reason)
+    # The only writer of an intake's marks (baseline.MANAGED_ATTRS).
+    writer = baseline_service.Writer(
+        principal, "agent", reason=reason, manages=baseline_service.INTAKE_ATTRS
+    )
     proposal = await baseline_service.propose(db, writer, op="create", kind="entity", fields=fields)
     _remember(intake, gap, row, proposal.id)
     return proposal.id

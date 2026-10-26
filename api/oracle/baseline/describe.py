@@ -335,16 +335,12 @@ def run_label(run: ProposalRun, zone: str) -> str:
     return f"{run.flow_title} · {company_time.day_in_words(run.created_at, zone)}"
 
 
-def _from_intake(payload: Mapping[str, Any]) -> bool:
-    attrs = (payload.get("fields") or {}).get("attrs") or {}
-    return isinstance(attrs, dict) and ("gap_id" in attrs or "proposed_blocker" in attrs)
-
-
 async def proposers(
     db: AsyncSession, proposals: list[Proposal], runs: Mapping[uuid.UUID, ProposalRun]
 ) -> dict[uuid.UUID, ProposalProposer]:
     """{proposal id: who made it}: member emails and token names in one query each."""
     from oracle.auth.models import ApiToken, User
+    from oracle.baseline.service import intake_made
     from oracle.members.names import display_name
 
     def actor_id(p: Proposal, kind: str) -> uuid.UUID | None:
@@ -365,6 +361,7 @@ async def proposers(
         )
         names = {r.id: r.name for r in rows}
     zone = await company_time.company_time_zone(db) if runs else company_time.DEFAULT_ZONE
+    from_intake = await intake_made(db, proposals)
     out: dict[uuid.UUID, ProposalProposer] = {}
     for p in proposals:
         run = runs.get(p.run_id) if p.run_id else None
@@ -372,8 +369,10 @@ async def proposers(
             out[p.id] = ProposalProposer(kind="run", label=run_label(run, zone), run_id=run.id)
         elif p.run_id or (p.actor or "").startswith("run:"):
             out[p.id] = ProposalProposer(kind="run", label="A run that was removed")
-        elif _from_intake(p.payload or {}):
-            # Never the person: which answer made it is the finding author's (S6).
+        elif p.id in from_intake:
+            # Never the person: which answer made it is the finding author's (S6). Only
+            # an intake answer's own proposal: anyone else's carrying its marks is
+            # labelled by its sender (baseline.service.intake_made).
             out[p.id] = ProposalProposer(kind="intake", label=INTAKE_LABEL)
         elif (uid := actor_id(p, "user")) is not None:
             email = emails.get(uid)
