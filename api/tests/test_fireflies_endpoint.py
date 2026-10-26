@@ -36,6 +36,10 @@ from tests.fireflies_fake import API_KEY, SAMPLE, FakeFireflies
 CUSTOM = "https://ff.example.com/graphql"
 PUBLIC_IP = "93.184.216.34"
 NEW_KEY = "ff-new-key-2"
+ANOTHER_ACCOUNT = (
+    "That key belongs to another Fireflies account than this connection's; "
+    "connect it as a new connection"
+)
 
 
 # --- the URL rule ---------------------------------------------------------------------
@@ -61,6 +65,16 @@ NEW_KEY = "ff-new-key-2"
         ("https://100.64.0.1/graphql", "private"),
         ("not a url", "https://"),
         ("https://[nope/graphql", "valid"),
+        # Octal, hex and short IPv4 forms: resolvers read them as 127.0.0.1.
+        ("https://0177.0.0.1/graphql", "private"),
+        ("https://0x7f000001/graphql", "private"),
+        ("https://127.1/graphql", "private"),
+        ("https://2130706433/graphql", "private"),
+        ("https://0x7f.0.0.1/graphql", "private"),
+        # A public address in such a form is refused too, and an invalid one.
+        ("https://0x5db8d822/graphql", "four decimal numbers"),
+        ("https://93.184.216.034/graphql", "four decimal numbers"),
+        ("https://1.2.3.08/graphql", "valid"),
     ],
 )
 def test_the_endpoint_rule_refuses(url, words):
@@ -206,7 +220,7 @@ async def test_a_redirect_elsewhere_is_refused_and_the_key_stays_home(location):
     assert API_KEY not in str(refused.value)
 
 
-async def test_a_same_host_redirect_is_rechecked_and_followed():
+async def test_a_same_host_redirect_is_followed():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/graphql":
             return httpx.Response(308, headers={"Location": "/v2/graphql"})
@@ -481,6 +495,9 @@ async def test_an_endpoint_of_another_account_is_refused(client, tenant_id, iden
         headers=owner.headers,
     )
     assert resp.status_code == 400, resp.text
+    # The account's name comes from the endpoint's server: it is not echoed back.
+    assert resp.json()["detail"] == ANOTHER_ACCOUNT
+    assert "a@b.c" not in resp.text
     async with tenant_session(tenant_id) as s:
         assert (await s.get(Connection, conn)).endpoint_url is None
 
@@ -650,3 +667,100 @@ async def test_connecting_again_keeps_an_owner_set_endpoint_from_others(
             await s.scalars(select(AuditEvent).where(AuditEvent.action == "connection.endpoint"))
         )
     assert [(e.data["from"], e.data["to"]) for e in events] == [(CUSTOM, DEFAULT_ENDPOINT)]
+
+
+# --- #602 review ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url", ["https://0177.0.0.1/graphql", "https://1.2.3.08/graphql", "https://127.1/graphql"]
+)
+async def test_an_odd_ip_form_is_refused_in_words_not_a_500(client, tenant_id, identify, url):
+    owner = await make_person(tenant_id, "owner@example.com", "owner")
+    resp = await client.post(
+        "/v1/connections/fireflies/token",
+        json={"token": API_KEY, "endpoint_url": url},
+        headers=owner.headers,
+    )
+    assert resp.status_code == 422, resp.text
+    assert "Product Oracle" in resp.json()["detail"] or "valid" in resp.json()["detail"]
+    assert API_KEY not in resp.text
+    assert identify == []
+    async with tenant_session(tenant_id) as s:
+        assert await s.scalar(select(Connection)) is None
+
+
+async def test_the_transport_refuses_a_url_httpx_cannot_read_in_words():
+    """Behind check_endpoint: a URL httpx cannot parse is an EndpointRefused, never an
+    uncaught httpx.InvalidURL."""
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: _user_answer())) as c:
+        with pytest.raises(EndpointRefused) as refused:
+            await fireflies.post(c, "https://0177.0.0.1/graphql", API_KEY, {"query": "q"})
+    assert "valid" in str(refused.value)
+    assert API_KEY not in str(refused.value)
+
+
+async def test_the_endpoint_routes_are_per_item_checks(client, tenant_id):
+    """Connect takes an endpoint from an owner only (below, the input decides); the PUT is
+    an owner's. /v1/me/capabilities says so, and the web's can() reads it."""
+    import oracle.capabilities as caps
+
+    assert caps.PER_ITEM["connect_with_token"] == "owner"
+    assert caps.PER_ITEM["set_connection_endpoint"] == "owner"
+    approver = await make_person(tenant_id, "pm@example.com", "approver")
+    body = (await client.get("/v1/me/capabilities", headers=approver.headers)).json()
+    assert body["operations"]["connect_with_token"] is True
+    assert body["operations"]["set_connection_endpoint"] is False
+    assert body["per_item"]["connect_with_token"] == "owner"
+    assert body["per_item"]["set_connection_endpoint"] == "owner"
+
+
+async def test_the_endpoint_change_rechecks_the_caller_at_write_time(
+    client, tenant_id, identify, monkeypatch
+):
+    """As other owner-only writes (require_role_now): an owner disabled or demoted while
+    the request was in flight is refused before the key goes anywhere."""
+    from fastapi import HTTPException
+
+    from oracle import authz
+
+    async def refuse(session, principal, min_role, **kwargs):
+        raise HTTPException(403, "You are no longer an owner")
+
+    monkeypatch.setattr(authz, "recheck_caller", refuse)
+    owner = await make_person(tenant_id, "owner@example.com", "owner")
+    conn = await _fireflies_connection(tenant_id, owner.id, None)
+    resp = await client.put(
+        f"/v1/connections/{conn}/endpoint",
+        json={"endpoint_url": CUSTOM, "token": NEW_KEY},
+        headers=owner.headers,
+    )
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["detail"] == "You are no longer an owner"
+    assert identify == []
+
+
+async def test_a_run_token_cannot_change_an_endpoint_over_rest(client, tenant_id, identify):
+    """The MCP server's in-process REST call for a run carries the creator's credential and
+    the run's header: the route refuses it (``not_for_runs``), whatever the creator's role."""
+    from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+    from oracle.auth.service import sign_run_binding
+    from tests.test_mcp import run_token
+
+    owner = await make_person(tenant_id, "owner@example.com", "owner")
+    conn = await _fireflies_connection(tenant_id, owner.id, None)
+    run = await run_token(tenant_id, ["read:sources", "write:proposals"], owner.id)
+    for headers in (
+        {**owner.headers, RUN_TOKEN_HEADER: run},
+        {**owner.headers, RUN_HEADER: sign_run_binding(owner.id, uuid.uuid4())},
+    ):
+        resp = await client.put(
+            f"/v1/connections/{conn}/endpoint",
+            json={"endpoint_url": CUSTOM, "token": NEW_KEY},
+            headers=headers,
+        )
+        assert resp.status_code == 403, resp.text
+        assert "run" in resp.json()["detail"]
+    assert identify == []
+    async with tenant_session(tenant_id) as s:
+        assert (await s.get(Connection, conn)).endpoint_url is None
