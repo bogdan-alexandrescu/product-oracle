@@ -46,11 +46,14 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from oracle.modules.evaluator import ConditionError, Evaluation, evaluate
+from oracle.quality.learned import Nudge
 from oracle.v2.contract import ALWAYS, FieldDefinition, ModuleContract
 from oracle.v2.schemas import CompositionModule
 
 Selection = Literal["mandatory", "suggested", "optional"]
-DecidedBy = Literal["policy", "template", "condition", "dependency", "user", "conflict", "none"]
+DecidedBy = Literal[
+    "policy", "template", "condition", "learning", "dependency", "user", "conflict", "none"
+]
 PolicySource = Literal["company", "pack", "template", "catalog"]
 KnowledgeState = Literal["verified_fact", "user_decision", "ai_inference", "hypothesis", "unknown"]
 
@@ -129,6 +132,8 @@ class Context:
     provenance: dict[str, Provenance] = field(default_factory=dict)
     advisory: dict[str, Advisory] = field(default_factory=dict)
     field_values: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Kept learnings about modules (oracle.quality.learned): they tune the suggestion.
+    learned: dict[str, Nudge] = field(default_factory=dict)
     # Earlier decisions of people (the previous revision's), and their order if a person
     # set it: decisions are cumulative across revisions.
     prior_decisions: tuple[Decision, ...] = ()
@@ -587,6 +592,7 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
             else:
                 mod.decided_by = "none" if policy == "optional" else "condition"
                 mod.reason = f"Not suggested: {why}."
+        _apply_learned(ctx, mod, policy, contract.condition == ALWAYS or bool(ev and ev.value))
         mod.questions = _questions(contract, ctx) if contract.question_prompts else []
         values = ctx.field_values.get(key)
         if values is not None:
@@ -628,6 +634,23 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
     )
     out.outline = outline(ctx, out)
     return out
+
+
+def _apply_learned(ctx: Context, mod: ComposedModule, policy: str, held: bool) -> None:
+    """Kept learnings explain themselves and move the advisory score, by at most the cap.
+    A module they recommend that nothing else brings in is suggested only if it is
+    unconditional or its condition held (``held``): a conditional module whose condition
+    failed, or could not be evaluated, stays out. They never drop a module, nor override
+    company policy, a condition, the template or (later) a person's decision."""
+    nudge = ctx.learned.get(mod.key)
+    if nudge is None or policy == "disabled":
+        return
+    mod.explanation.append(nudge.reason())
+    if mod.score is not None:
+        mod.score = round(min(1.0, max(0.0, mod.score + nudge.factor)), 3)
+    if held and nudge.net > 0 and mod.selection == "optional" and not mod.included:
+        mod.selection, mod.included, mod.decided_by = "suggested", True, "learning"
+        mod.reason = nudge.reason()
 
 
 def _apply_prior(ctx: Context, st: _State) -> None:

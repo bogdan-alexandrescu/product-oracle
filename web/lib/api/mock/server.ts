@@ -46,6 +46,7 @@ import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-
 import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { nudges } from "./learned";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -3898,6 +3899,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       },
       approvedVersion: (documentId, n) =>
         db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
+      learned: () => nudges(db.quality?.learnings, "module"),
     },
     req,
     p,
@@ -3980,7 +3982,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, learned: () => nudges(db.quality?.learnings, "question_category") }, req, p, q);
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.

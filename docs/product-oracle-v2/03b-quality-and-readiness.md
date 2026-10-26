@@ -150,6 +150,29 @@ learnings per target (+weight, -weight, 0 for notes): the input future module an
 recommendations read. Nothing here writes to documents, versions, sections or
 compositions; `test_tracking_never_changes_a_published_document` pins it.
 
+Later recommendations read the active learnings (`oracle/quality/learned.py`; retired ones
+never count). Each point of net signal moves a question's rank score by 10% of itself and
+a module's 0-1 advisory score by 0.1, capped at 20% (0.2) either way, so one signal never
+outweighs a gap's importance:
+
+- **Module recommendations** (the composer): every module a learning names says so in its
+  explanation ("Recommended because of a learning from past outcomes: ..."), and its
+  advisory score moves by at most the cap. A recommend_more learning suggests an optional
+  module nothing else brings in (`decided_by: learning`) only if the module is
+  unconditional or its condition held for this PRD; a conditional module whose condition
+  did not hold (or could not be evaluated) stays out, its reason the condition's, and the
+  learning only explains itself (decided 2026-10-25). Learnings never drop a module and
+  never override company policy, a condition, the template or a person's decision.
+  Recomputed each revision, like a condition.
+- **Intake questions**: a question category's learnings move its rank score (the order of
+  questions not asked yet, at the next sync) and its rationale says why. Each sync keeps
+  the nudges it ranked with on the intake (`analysis["learned"]`, by gap): a gap whose
+  question was asked keeps the one it was last ranked with. Every reader (the author,
+  anyone else, a run) ranks with those, so asked questions are never re-ranked and a
+  learning added or retired since moves no one's order until the next sync. A rationale
+  reworded for others keeps the "Recommended because ...". The gap list's own
+  expected-effect ranking is unchanged. `tests/test_learnings_tune.py` pins both.
+
 ## 6. Routes (all `/v1`, all MCP tools by operation id)
 
 | Route | Role | Audit | What |

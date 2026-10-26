@@ -23,6 +23,7 @@ from oracle import audit
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.quality import criteria
+from oracle.quality.learned import SIGN
 from oracle.quality.models import ASSESSED, OutcomeRecord, QualityLearning
 from oracle.quality.schemas import (
     Assessment,
@@ -511,9 +512,6 @@ async def retire_learning(
         )
     await db.refresh(row)
     return LearningOut.model_validate(row)
-
-
-SIGN = {"recommend_more": 1, "recommend_less": -1, "note": 0}
 
 
 async def signals(db: AsyncSession, applies_to: str | None = None) -> list[LearningSignal]:
