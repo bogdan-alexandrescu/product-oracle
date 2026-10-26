@@ -185,7 +185,10 @@ test("Record a decision on a Plan item opens Propose decision about the item", a
   await inspector(page).getByRole("link", { name: "Record a decision" }).click();
   await expect(page).toHaveURL(/\/company\/decisions\?subject=roadmap_item/);
   const dialog = page.getByRole("dialog", { name: "Propose decision" });
-  await expect(dialog).toContainText(`About: Roadmap item ${SLIP}`);
+  // The dialog lists what the decision is about in its About picker (#628's links pickers).
+  const about = dialog.getByRole("group", { name: "About" }).getByRole("listitem");
+  await expect(about).toHaveCount(1);
+  await expect(about).toContainText(`Roadmap item ${SLIP}`);
   await dialog.getByLabel("Decision", { exact: true }).fill("Ship the digest after Beta");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Move Beta to Dec 9");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Ship Beta without the digest");

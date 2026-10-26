@@ -2205,8 +2205,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   // C1 lane 2: the PRD a brief's run imports links the requests behind the brief (the API's
   // runs._link_requests, at segment end and on retry-draft-import).
   const importDraft = ctx.importDraft;
-  ctx.importDraft = (slug, run) => {
-    const imp = importDraft(slug, run);
+  ctx.importDraft = (slug, run, again) => {
+    const imp = importDraft(slug, run, again);
     const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === run.id) ?? [];
     if (intakeId && imp.document_id && db.requests) linkIntakeDocument(db.requests, intakeId, imp.document_id);
     return imp;
