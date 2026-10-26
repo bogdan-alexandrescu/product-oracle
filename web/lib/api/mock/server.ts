@@ -132,7 +132,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -254,6 +254,8 @@ export interface Db {
   draft_roadmaps?: DraftRoadmapDb;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
+  sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
   plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
@@ -1564,6 +1566,45 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
   const v = buildVersion(doc, { number: 1, created_at: created, sections: SHARING_SECTIONS, citations: [], brief: ["summary", "brief-items"] });
   v.approved_at = "2026-10-13T09:00:00Z";
   db.versions.push(v);
+  // Its roadmap items (one per card), each traced to a baseline feature: the confirmed goals G1 and G2 as the
+  // Goals section says, and Ops console cleanup's feature supporting no confirmed goal. Falcon alerts rework's feature
+  // reaches both: its best goal is G2 (the later title, at equal contribution), its group G1 (the first by title).
+  const goal = (key: string, title: string) => baselineEntity(db, "goal", key, title, created);
+  const g1 = goal("g.monthly-churn", "Cut monthly churn to 2%");
+  const g2 = goal("g.self-serve", "Grow self-serve sign-ups");
+  const serves: Record<string, BaselineEntity[]> = { "item-falcon": [g2, g1], "item-import": [g2], "item-ledger": [g1], "item-partner": [g2], "item-ops": [] };
+  const items = sectionItems(db, v).map((i) => {
+    const f = baselineEntity(db, "feature", `f.sharing-${i.item_key.replace(/^item-/, "")}`, i.title, created);
+    for (const dst of serves[i.item_key] ?? []) {
+      db.baseline.edges.push({
+        id: uuid(), src_id: f.id, dst_id: dst.id, type: "supports", attrs: {}, status: "confirmed", origin: "user", locked: false,
+        locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
+      });
+    }
+    return { ...i, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
+  });
+  db.sharing_items = { [v.id]: items };
+}
+
+type BaselineEntity = Db["baseline"]["entities"][number];
+
+/** A confirmed baseline entity the "sharing" scenario adds. */
+function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title: string, at: string): BaselineEntity {
+  const row: BaselineEntity = {
+    id: uuid(), type, key, title, body: null, attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null,
+    locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
+  };
+  db.baseline.entities.push(row);
+  return row;
+}
+
+/** The roadmap data, seeded on first use (./roadmap.ts), with the "sharing" roadmap's items (seedSharingRoadmap). */
+function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
+  if (!db.roadmap) {
+    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+    for (const [id, items] of Object.entries(db.sharing_items ?? {})) db.roadmap.items[id] ??= items;
+  }
+  return db.roadmap;
 }
 
 /** The v2 review state (publications among it), seeded on first use. */
@@ -1623,7 +1664,7 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
     renderAudience: (doc, v, audience) => {
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
-      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience) }, db.branding, audienceLabel(audience));
+      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience, boardItems(db, version)) }, db.branding, audienceLabel(audience));
     },
   };
 }
@@ -4250,7 +4291,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       proposeGoalMeasure: (c, d, payload) => proposeVersion(goalContext(db, me), c, d, payload),
       recordBasis: async (b) => {
         const ctx = roadmapContext(db, me);
-        db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+        db.roadmap = ensureRoadmap(db, ctx);
         const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
         return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
       },
@@ -4743,7 +4784,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
   const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
   if (draftRes) return draftRes;
-  db.roadmap ??= seedRoadmap(roadmapCtx, localStorage.getItem(MOCK_SCENARIO_KEY));
+  db.roadmap = ensureRoadmap(db, roadmapCtx);
   db.plan_edits ??= emptyPlanEdits();
   const editsRes = await routeChangeSets(planEditsContext(db, me), db.plan_edits, req, p, q);
   if (editsRes) return editsRes;
@@ -5165,7 +5206,7 @@ async function route(db: Db, req: Request): Promise<Response> {
  */
 function boardItems(db: Db, v: VersionRow): BoardItem[] {
   const goals = new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
-  return (db.roadmap?.items[v.id] ?? []).map((i) => {
+  return (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []).map((i) => {
     const feature = i.feature?.id ?? db.baseline.entities.find((e) => e.type === "feature" && e.key === i.item_key)?.id;
     const served = db.baseline.edges
       .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
@@ -5181,6 +5222,8 @@ function boardItems(db: Db, v: VersionRow): BoardItem[] {
       rank: typeof rank === "number" ? rank : null,
       goals: served.slice(0, 1),
       no_goal: goals.size > 0 && !served.length,
+      // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
+      group: [...served].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))[0] ?? null,
     };
   });
 }

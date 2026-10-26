@@ -55,6 +55,7 @@ const boardItems = (items: Case["items"]): BoardItem[] =>
     rank: null,
     goals: i.no_goal ? [] : [`Goal ${n}`],
     no_goal: !!i.no_goal,
+    group: i.no_goal ? null : `Goal ${n}`,
   }));
 
 const board = (text: string, items: BoardItem[]) =>

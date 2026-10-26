@@ -10,6 +10,11 @@
  * "Jira:", "Estimate: …", "Story points:", "Est.:"; revenue for Engineering) and so-headed table columns,
  * reading tables as GFM does. `redact` is the API's variants.redact case for case
  * (api/tests/fixtures/audience_redaction.json).
+ *
+ * Board and Team group each horizon's items by goal (owner decision 2026-10-26, as the API's variants.goal_groups):
+ * a sub-heading per confirmed goal the item's feature reaches in the baseline at render time (the first by title
+ * when it reaches two), goals by title, then "No goal". Team's horizons are rebuilt from the items so (a card per
+ * item: its outcome, goal, confidence, then the written card's text); the mock's Engineering keeps its written cards.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -279,7 +284,26 @@ export type BoardItem = {
   rank: number | null;
   goals: string[];
   no_goal: boolean;
+  /** The goal it is grouped under: the first by title of the confirmed goals its feature reaches; null for "No goal". */
+  group: string | null;
 };
+
+export const NO_GOAL_GROUP = "No goal";
+const NO_GOAL_FLAG = "\u2691 Serves no confirmed goal.";
+const byTitle = (a: string, b: string) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0);
+
+/** The goal a Board row's Goal column and a Team card name: the group's goal (owner answer 2026-10-26, as the API's variants.goal_names). */
+const groupGoal = (i: BoardItem): string[] => (i.group !== null ? [i.group] : i.goals);
+
+/** `items` by goal group, their order kept: the goals by title, then "No goal" (as the API's variants.goal_groups). */
+export function goalGroups(items: BoardItem[]): [string, BoardItem[]][] {
+  const by = new Map<string | null, BoardItem[]>();
+  for (const i of items) by.set(i.group, [...(by.get(i.group) ?? []), i]);
+  const titles = [...by.keys()].filter((t): t is string => t !== null).sort(byTitle);
+  const out: [string, BoardItem[]][] = titles.map((t) => [t, by.get(t)!]);
+  if (by.has(null)) out.push([NO_GOAL_GROUP, by.get(null)!]);
+  return out;
+}
 
 const HORIZONS = { now: "Now", next: "Next", later: "Later" } as const;
 const BOARD_COLUMNS = ["Item", "Outcome", "Confidence", "Goal"];
@@ -307,13 +331,16 @@ function boardSections<S extends Section>(sections: S[], items: BoardItem[]): S[
       .sort((a, b) => (a.rank === null ? 1 : 0) - (b.rank === null ? 1 : 0) || (a.rank ?? 0) - (b.rank ?? 0) || a.position - b.position)
       .slice(0, 7);
     if (!rows.length) continue;
-    const lines = [joinRow(BOARD_COLUMNS), "|" + "---|".repeat(BOARD_COLUMNS.length)];
-    for (const i of rows) lines.push(joinRow([i.title, i.outcome, i.confidence, i.goals.join(", ")].map(cell)));
-    out.push(section(horizon, heading, lines.join("\n")));
+    out.push(section(horizon, heading, ""));
+    goalGroups(rows).forEach(([title, group], n) => {
+      const lines = [joinRow(BOARD_COLUMNS), "|" + "---|".repeat(BOARD_COLUMNS.length)];
+      for (const i of group) lines.push(joinRow([i.title, i.outcome, i.confidence, groupGoal(i).join(", ")].map(cell)));
+      out.push({ ...section(`${horizon}-group-${n + 1}`, title, lines.join("\n")), level: 3 });
+    });
   }
   if (leftOut) {
     const note = leftOutLine(leftOut);
-    if (out.length) out[0] = { ...out[0], body_md: `${note}\n\n${out[0].body_md}`, body_text: `${note}\n\n${out[0].body_text}` };
+    if (out.length) out[0] = { ...out[0], body_md: note, body_text: note };
     else out.push(section("brief-items", "Roadmap items", note));
   }
   return out;
@@ -326,12 +353,38 @@ export function audienceSections<S extends Section>(sections: S[], audience: Aud
   const out: S[] = [];
   let skip: number | null = null;
   let area: number | null = null;
+  const sorted = [...items].sort((a, b) => a.position - b.position);
   for (const s of sections) {
     if (skip !== null) {
       if (s.level > skip) continue;
       skip = null;
     }
     if (area !== null && s.level <= area) area = null;
+    if (audience === "team" && items.length && s.section_key in HORIZONS && !hidden.has(s.section_key)) {
+      // Team's horizon, rebuilt from the items (as the API's variants._layout): a card per item under its goal group.
+      const horizon = s.section_key;
+      const body_md = redact(s.body_md, audience);
+      out.push(body_md === s.body_md ? s : { ...s, body_md, body_text: body_md });
+      const cards = sections.filter((x) => x.level >= 3);
+      goalGroups(sorted.filter((i) => i.horizon === horizon)).forEach(([title, group], n) => {
+        out.push({ ...s, section_key: `${horizon}-group-${n + 1}`, level: s.level + 1, heading: title, body_md: "", body_text: "" });
+        for (const i of group) {
+          const written = cards.find((x) => x.section_key === `${horizon}-${i.key}`) ?? cards.find((x) => x.heading.trim().toLowerCase() === i.title.trim().toLowerCase());
+          const why = written ? redact(written.body_md, audience) : "";
+          const lines = [
+            i.outcome && !why.includes(i.outcome) ? i.outcome : "",
+            groupGoal(i).length ? `Goal: ${groupGoal(i).join(", ")}` : "",
+            i.confidence ? `Confidence: ${i.confidence}` : "",
+            why,
+            i.no_goal && !why.toLowerCase().includes("serves no confirmed goal") ? NO_GOAL_FLAG : "",
+          ].filter(Boolean);
+          const body = lines.join("\n\n");
+          out.push({ ...s, section_key: `${horizon}-${i.key}`, level: s.level + 2, heading: i.title, body_md: body, body_text: body });
+        }
+      });
+      skip = s.level;
+      continue;
+    }
     if (area === null && ITEM_AREAS.has(s.section_key)) area = s.level;
     if (hidden.has(s.section_key)) {
       skip = s.level;

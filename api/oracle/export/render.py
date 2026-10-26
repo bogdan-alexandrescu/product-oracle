@@ -293,7 +293,9 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     # loaded once for the version: serving no confirmed goal is never read from the
     # card's words. With no confirmed goal in the tenant nothing is measured against one,
     # so no item is left out or flagged.
-    goal_of = await tiers.item_goals(db, rows)
+    # Each item's goal group too (O5 owner decision 2026-10-26): Board and Team group by
+    # the goal derived at render time, so a goal renamed or unconfirmed regroups them.
+    goal_of, group_of = await tiers.item_goal_links(db, rows)
     ev.items = []
     for r in rows:
         goal, goal_title = (goal_of or {}).get(r.item_key, ("none", None))
@@ -313,6 +315,7 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 tracker=issues.get((r.track_id, r.item_key), []),
                 goals=[goal_title] if goal_title else [],
                 no_goal=goal_of is not None and goal == "none",
+                group=group_of.get(r.item_key),
             )
         )
 

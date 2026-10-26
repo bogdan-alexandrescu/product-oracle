@@ -17,6 +17,16 @@ it never changes the text. The registry below is the source of truth: the API se
   to a confirmed goal, oracle.launches.tiers) are left out, with the line "N items
   serve no confirmed goal and are left out"; a tenant with no confirmed goal has nothing
   to serve, so none is. A version without items says so (:data:`BOARD_NO_ITEMS`);
+- Board and Team group each horizon's items by goal (owner decision 2026-10-26): under
+  a sub-heading per confirmed goal, the one each item's feature reaches through
+  confirmed ``supports`` edges at render time (:attr:`ItemView.group`; an item reaching
+  two goals sits under the first by title, once), ordered by title, then "No goal"
+  (:data:`NO_GOAL_GROUP`) for the items reaching none. Board leaves goal-less items out
+  as above, so its "No goal" group holds items only when the tenant has no confirmed
+  goal. Each row's Goal column and card's "Goal:" line name the group's goal
+  (:func:`goal_names`; owner answer 2026-10-26). Engineering keeps its cards ungrouped,
+  naming the best goal. :func:`render_key` changes with the grouping, so a cached
+  render follows a goal renamed or unconfirmed;
 - for Team and Engineering, when the version has structured roadmap items, it rebuilds
   the brief's item table (``brief-items``) from them: the template's own columns
   (Horizon, Release, Quarter or Cycle; Item or Bet; Goal; Outcome), each written row's
@@ -72,6 +82,8 @@ HORIZON_HOMES = {
 CARD_PREFIXES = ("bet", "pitch")
 NO_GOAL_PHRASE = "serves no confirmed goal"
 NO_GOAL_FLAG = "\u2691 Serves no confirmed goal."
+# The group, after every goal's, of the items whose feature reaches no confirmed goal.
+NO_GOAL_GROUP = "No goal"
 # Board's own words: its row columns, and what it says when a version has no items.
 BOARD_COLUMNS = ("Item", "Outcome", "Confidence", "Goal")
 BOARD_ITEMS_HEADING = "Roadmap items"
@@ -183,6 +195,38 @@ class ItemView:
     # best, or none.
     goals: list[str] = field(default_factory=list)
     no_goal: bool = False
+    # The goal it is grouped under (Board, Team): the first by title of the confirmed
+    # goals its feature reaches, or None ("No goal").
+    group: str | None = None
+
+
+def render_key(items: list[ItemView]) -> tuple:
+    """What of the items a rendering reads from the baseline at render time (each one's
+    group, goal and flag): part of a cached render's key, so a goal renamed or
+    unconfirmed after the roadmap was written changes the next render."""
+    return tuple((i.key, i.group, tuple(i.goals), i.no_goal) for i in items)
+
+
+def goal_names(item: ItemView, variant: Variant) -> list[str]:
+    """The goal an item's Goal column and card name: in Board and Team (grouped by goal)
+    its group's goal (owner answer 2026-10-26, "Match the group"), elsewhere its best
+    goal (:attr:`ItemView.goals`, which launch tiers keep too)."""
+    if variant.group_by == "goal" and item.group is not None:
+        return [item.group]
+    return item.goals
+
+
+def goal_groups(items: list[ItemView]) -> list[tuple[str, list[ItemView]]]:
+    """``items`` grouped by goal (their order kept within a group): the goals by title,
+    then :data:`NO_GOAL_GROUP`; an item is named once."""
+    by: dict[str | None, list[ItemView]] = {}
+    for item in items:
+        by.setdefault(item.group, []).append(item)
+    titles = sorted((t for t in by if t is not None), key=lambda t: (t.casefold(), t))
+    out: list[tuple[str, list[ItemView]]] = [(t, by[t]) for t in titles]
+    if None in by:
+        out.append((NO_GOAL_GROUP, by[None]))
+    return out
 
 
 def label(audience: str) -> str:
@@ -532,8 +576,8 @@ def _card(item: ItemView, variant: Variant, by_key: dict[str, ItemView], why: st
     lines: list[str] = []
     if item.outcome and item.outcome not in why:
         lines.append(item.outcome)
-    if item.goals:
-        lines.append(f"Goal: {', '.join(item.goals)}")
+    if goals := goal_names(item, variant):
+        lines.append(f"Goal: {', '.join(goals)}")
     if "confidence" in fields and item.confidence:
         lines.append(f"Confidence: {item.confidence}")
     deps = _titles(item, by_key)
@@ -646,18 +690,23 @@ def _layout(
                     redact(s.body_md, variant, items),
                 )
             )
-            for item in shown[horizon]:
-                written = _written_card(horizon, item, cards)
-                why = redact(written.body_md, variant, items) if written else ""
-                out.append(
-                    _section(
-                        s,
-                        f"{horizon}-{item.key}",
-                        s.level + 1,
-                        item.title,
-                        _card(item, variant, by_key, why),
+            grouped = variant.group_by == "goal"
+            groups = goal_groups(shown[horizon]) if grouped else [("", shown[horizon])]
+            for n, (title, group) in enumerate(groups, 1):
+                if grouped:
+                    out.append(_section(s, f"{horizon}-group-{n}", s.level + 1, title, ""))
+                for item in group:
+                    written = _written_card(horizon, item, cards)
+                    why = redact(written.body_md, variant, items) if written else ""
+                    out.append(
+                        _section(
+                            s,
+                            f"{horizon}-{item.key}",
+                            s.level + 1 + grouped,
+                            item.title,
+                            _card(item, variant, by_key, why),
+                        )
                     )
-                )
             skip = s.level
             continue
         in_area = area is not None or s.section_key in ITEM_AREAS
@@ -780,7 +829,8 @@ def _table(
                 title = _keep_links(row[1], known) if row is not None else own(item)
                 cells.append(f"\u2691 {title}" if item.no_goal and "\u2691" not in title else title)
             elif n == goal_col:
-                cells.append(_keep_links(row[n], known) if row else _cell(", ".join(item.goals)))
+                named = ", ".join(goal_names(item, variant))
+                cells.append(_keep_links(row[n], known) if row else _cell(named))
             elif n == outcome_col:
                 cells.append(_cell(item.outcome))
             else:
@@ -805,9 +855,10 @@ def _table(
 
 
 def _board(sections: list[Section], items: list[ItemView], every: list[Section]) -> list[Section]:
-    """Board's sections, from the items alone: a section per horizon holding a row per
-    shown item (title, outcome, confidence, goal), the left-out line before the first;
-    a version without items says so. Nothing of the written text is read."""
+    """Board's sections, from the items alone: a section per horizon, and under it one
+    per goal group (:func:`goal_groups`) holding a row per shown item (title, outcome,
+    confidence, goal); the left-out line opens the first; a version without items says
+    so. Nothing of the written text is read."""
     like = next(iter(sections or every), None)
     if like is None:
         return []
@@ -818,18 +869,19 @@ def _board(sections: list[Section], items: list[ItemView], every: list[Section])
     for horizon, heading in HORIZON_SECTIONS.items():
         if not shown[horizon]:
             continue
-        lines = [_join_row(list(BOARD_COLUMNS)), "|" + "---|" * len(BOARD_COLUMNS)]
-        for i in shown[horizon]:
-            cells = [i.title, i.outcome, i.confidence, ", ".join(i.goals)]
-            lines.append(_join_row([_cell(c) for c in cells]))
-        out.append(_section(like, horizon, 2, heading, "\n".join(lines)))
+        out.append(_section(like, horizon, 2, heading, ""))
+        for n, (title, group) in enumerate(goal_groups(shown[horizon]), 1):
+            lines = [_join_row(list(BOARD_COLUMNS)), "|" + "---|" * len(BOARD_COLUMNS)]
+            for i in group:
+                goal = ", ".join(goal_names(i, VARIANTS["board"]))
+                cells = [i.title, i.outcome, i.confidence, goal]
+                lines.append(_join_row([_cell(c) for c in cells]))
+            out.append(_section(like, f"{horizon}-group-{n}", 3, title, "\n".join(lines)))
     if left_out:
         note = _left_out_line(left_out)
         if out:
             first = out[0]
-            out[0] = _section(
-                like, first.section_key, 2, first.heading, f"{note}\n\n{first.body_md}"
-            )
+            out[0] = _section(like, first.section_key, 2, first.heading, note)
         else:
             out.append(_section(like, ITEMS_SECTION, 2, BOARD_ITEMS_HEADING, note))
     return out
