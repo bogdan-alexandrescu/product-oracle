@@ -117,7 +117,7 @@ test("already behind a brief or a PRD: such requests are not offered in the queu
   await pick(page, "Share a board read-only");
   await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
   await inspector(page).getByRole("button", { name: "Save links" }).click();
-  const prd = inspector(page).getByTestId("request-prd-link");
+  const prd = inspector(page).locator('a[href^="/documents/"]');
   await expect(prd).toBeVisible();
 
   // Neither can be ticked or started from again.
@@ -147,13 +147,13 @@ test("the inspector shows a request's PRD once", async ({ page }) => {
   await pick(page, "Weekly summary email");
   await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
   await inspector(page).getByRole("button", { name: "Save links" }).click();
-  await expect(inspector(page).getByTestId("request-prd-link")).toBeVisible();
+  await expect(inspector(page).locator('a[href^="/documents/"]')).toBeVisible();
   await signOut(page);
   await login(page, "viewer@example.com");
   await openRequests(page);
   await pick(page, "Weekly summary email");
   // The PRD shows once, as a link, not again as a "PRD" row under Links.
-  await expect(inspector(page).getByTestId("request-prd-link")).toHaveCount(1);
+  await expect(inspector(page).locator('a[href^="/documents/"]')).toHaveCount(1);
   await expect(inspector(page).locator("dt", { hasText: /^PRD$/ })).toHaveCount(1);
 });
 

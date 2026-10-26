@@ -278,7 +278,7 @@ function PrdLink({ request, canStart }: { request: Request; canStart: boolean })
           )}
           {request.document && (
             <Row label="PRD">
-              <Link href={`/documents/${request.document.slug}`} className={link} data-testid="request-prd-link">
+              <Link href={`/documents/${request.document.slug}`} className={link}>
                 {request.document.title}
               </Link>
             </Row>
