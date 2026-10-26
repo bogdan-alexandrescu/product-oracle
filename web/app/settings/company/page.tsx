@@ -407,16 +407,19 @@ function PricingOwnerPanel() {
 /**
  * INT2: whether Oracle reads each new or repinned intake ($1.50 a read on SwarmCloud; Oracle's
  * built-in model when that cannot start or fails). On by default (owner answer Q2); owners
- * change it, others see it.
+ * only, as every company setting. Unticked, it shows unticked at once and saves.
  */
 function IntakeReadPanel({ canChange }: { canChange: boolean }) {
   const settingQ = useQuery("settings|intake_ai_read", () => unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "intake_ai_read" } } })));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const on = settingQ.data ? settingQ.data.value !== false : undefined;
+  // What the owner just chose, shown while it saves.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const on = chosen ?? (settingQ.data ? settingQ.data.value !== false : undefined);
 
   async function set(value: boolean) {
+    setChosen(value);
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -427,6 +430,7 @@ function IntakeReadPanel({ canChange }: { canChange: boolean }) {
     } catch (e) {
       setError(errorMessage(e));
     } finally {
+      setChosen(null);
       setBusy(false);
     }
   }

@@ -26,8 +26,9 @@ import { login, signOut } from "./helpers";
  *   intake, and of one never read; fails_when=the button is missing or no read starts;
  *   no_claim=Re-analyse (rules only, unchanged).
  * - "company switch" (10d): protects=Settings › Company's "Oracle reads new intakes" turns
- *   reads off; fails_when=the switch is missing for the owner, does not persist, or a new
- *   intake still reads; no_claim=the API's 409 on ai-read (test_intake_read*.py).
+ *   reads off, an owner's switch (the company settings are read by owners only);
+ *   fails_when=the switch is missing for the owner, does not persist, a new intake still
+ *   reads, or an approver sees it; no_claim=the API's 409 on ai-read (test_intake_read*.py).
  * - "another member" (10e): protects=the read is the author's only; fails_when=another
  *   member sees the line or Analyse with Oracle; no_claim=findings sharing (S6).
  * - "phone" (10f): protects=the line on a 390 px screen; fails_when=the page scrolls
@@ -38,9 +39,14 @@ import { login, signOut } from "./helpers";
 
 const BRIEF = "Team leads re-enter the same delivery notes for every bulk order. Let them save notes as presets.";
 
-async function newIntake(page: Page, title: string): Promise<void> {
-  await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+async function newIntake(page: Page, title: string, phone = false): Promise<void> {
+  // On a phone the rail is folded away: the PRDs page is opened by its address.
+  if (phone) await page.goto("/documents");
+  else await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await expect(page.getByRole("heading", { level: 1, name: "PRDs" })).toBeVisible();
   await page.getByRole("link", { name: "New PRD" }).click();
+  await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(BRIEF);
@@ -130,10 +136,11 @@ test("company switch: an owner turns Oracle's read off on Settings › Company",
   await expect(page.getByRole("button", { name: "Analyse with Oracle" })).toHaveCount(0);
 });
 
-test("company switch: a member who is not an owner sees it but cannot change it", async ({ page }) => {
+test("company switch: an approver does not see it (the company settings are owners')", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.goto("/settings/company");
-  await expect(page.getByRole("checkbox", { name: "Oracle reads new intakes ($1.50 each)" })).toBeDisabled();
+  await expect(page.getByRole("heading", { level: 1, name: "Company" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Oracle reads new intakes ($1.50 each)" })).toHaveCount(0);
 });
 
 test("another member: no read line and no Analyse with Oracle on someone else's brief", async ({ page }) => {
@@ -159,7 +166,7 @@ test("phone: the read line wraps at 390 px with no sideways scroll", async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await scenario(page, "intake-read-fallback");
   await login(page);
-  await newIntake(page, "Delivery note presets for every bulk order across all regions");
+  await newIntake(page, "Delivery note presets for every bulk order across all regions", true);
   await page.clock.runFor(160_000);
   await expect(line(page)).toContainText("Oracle's built-in model read it instead.");
   const box = await line(page).boundingBox();
