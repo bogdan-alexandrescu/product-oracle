@@ -2530,6 +2530,11 @@ function load(): Db {
     if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
   }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  // #711 "long-title": the saved-carts PRD under a title as long as real PRD titles are.
+  if (scenario === "long-title") {
+    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    if (carts) carts.title = "Saved carts for returning buyers PRD";
+  }
   if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {

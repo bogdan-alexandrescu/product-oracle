@@ -22,10 +22,19 @@ export type Column<T> = {
   phoneLabel?: string;
   /** Lets a long value wrap onto a second line instead of truncating. */
   wrap?: boolean;
+  /**
+   * "hide" drops the column when the table itself is under 760 px wide above phone width (the
+   * docked Ask panel or an inspector beside it), so the other columns keep their room and the
+   * last one is never cut off. A container query: the window's width does not tell.
+   */
+  narrow?: "hide";
   className?: string;
 };
 
 type PhoneRole = NonNullable<Column<unknown>["phone"]>;
+
+/** A `narrow: "hide"` column's cells and <col> in a table under 760 px wide; a phone keeps its own layout. */
+const NARROW_HIDE = "min-[601px]:@max-[760px]:hidden";
 
 /** Phone-only classes per role; the row itself becomes a wrapping flex block. */
 const PHONE_CELL: Record<PhoneRole, string> = {
@@ -134,12 +143,13 @@ export function DataTable<T>({
 
   const align = (c: Column<T>) => (c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left");
   const role = (c: Column<T>, i: number): PhoneRole => (c.hideOnPhone ? "hide" : (c.phone ?? (i === 0 ? "title" : "meta")));
-  const phone = (c: Column<T>) => (c.hideOnPhone || c.phone === "hide" ? "max-[600px]:hidden" : "");
+  const phone = (c: Column<T>) =>
+    `${c.hideOnPhone || c.phone === "hide" ? "max-[600px]:hidden" : ""} ${c.narrow === "hide" ? NARROW_HIDE : ""}`.trim();
   const visibleCols = columns.length;
 
   const groups = group ? list.map(group) : [];
   return (
-    <div className="min-w-0 overflow-clip" data-testid={testId}>
+    <div className={`min-w-0 overflow-clip ${columns.some((c) => c.narrow) ? "@container" : ""}`} data-testid={testId}>
       <table
         // Roles are explicit because the phone layout changes the rows' CSS display.
         role={selectable ? "grid" : "table"}
@@ -149,7 +159,7 @@ export function DataTable<T>({
       >
         <colgroup>
           {columns.map((c) => (
-            <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c) ? "max-[600px]:hidden" : ""} />
+            <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c)} />
           ))}
         </colgroup>
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
@@ -226,7 +236,7 @@ export function DataTable<T>({
                           key={c.key}
                           role={selectable ? "gridcell" : "cell"}
                           data-phone={r}
-                          className={`${c.wrap ? "break-words whitespace-normal" : "truncate"} px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-0 max-[600px]:last:pr-0 ${align(c)} ${PHONE_CELL[r]} ${PHONE_WRAP} ${r === "meta" || r === "title" ? "max-[600px]:text-left" : ""} ${c.className ?? ""}`}
+                          className={`${c.wrap ? "break-words whitespace-normal" : "truncate"} px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-0 max-[600px]:last:pr-0 ${align(c)} ${PHONE_CELL[r]} ${PHONE_WRAP} ${r === "meta" || r === "title" ? "max-[600px]:text-left" : ""} ${c.narrow === "hide" ? NARROW_HIDE : ""} ${c.className ?? ""}`}
                         >
                           {c.phoneLabel && r === "meta" && (
                             <span className="hidden font-semibold max-[600px]:inline">{c.phoneLabel}</span>

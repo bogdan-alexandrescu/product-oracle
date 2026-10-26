@@ -37,7 +37,7 @@ import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
 /** A template or theme key beside the title: small mono, hairline pill. */
-const META = "inline-flex h-[26px] items-center rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
+const META = "inline-flex h-[26px] shrink-0 items-center whitespace-nowrap rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
 
 function versionColumns(doc: string, kind: string | null | undefined, latest: number | null | undefined): Column<VersionSummary>[] {
   return [

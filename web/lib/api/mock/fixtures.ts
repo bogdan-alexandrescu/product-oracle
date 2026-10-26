@@ -698,6 +698,7 @@ export const DOCUMENTS: DocumentSeed[] = [
     title: "Saved carts PRD",
     template: "oracle-default",
     template_version: "2",
+    theme: "clean-document",
     versions: [
       { number: 1, created_at: "2026-10-17T11:00:00Z", sections: CARTS_V1, citations: CARTS_CITATIONS, brief: CARTS_BRIEF },
       { number: 2, created_at: "2026-10-18T08:30:00Z", sections: CARTS_V2, citations: CARTS_CITATIONS, brief: CARTS_BRIEF },
