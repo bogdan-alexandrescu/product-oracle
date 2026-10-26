@@ -33,6 +33,7 @@ from oracle.swarm.learned import DatabaseLearnedStore, LearnedFeature
 from oracle.swarm.settings import RuntimeSettings, get_runtime_settings
 from oracle.swarm.swarmcloud import NO_MCP_NOTE
 from oracle.tenancy import unscoped_session
+from tests import swarmcloud_fake
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import FakeSwarmCloud
 from tests.test_runs import create
@@ -275,3 +276,34 @@ async def test_a_database_failure_keeps_this_process_s_learning(caplog, monkeypa
     assert "database unreachable" in caplog.text
     async with unscoped_session() as s:
         assert await s.scalar(select(func.count()).select_from(LearnedFeature)) == 0
+
+
+async def test_reading_caller_mcp_off_again_writes_nothing_more():
+    """protects=hardening 2026-10-20: a reading that finds caller MCP off (503
+    mcp_unavailable, or no /v1/mcp-servers) teaches it once; reading it off again, as every
+    refresh of the runtime status does, writes nothing to the database; fails_when=each
+    reading saves "off" again; no_claim=what a submission or an answer teaches."""
+
+    class Saves(DatabaseLearnedStore):
+        def __init__(self) -> None:
+            self.saved: list[str] = []
+
+        async def sync(self, save, forget):
+            self.saved.extend(save)
+            return await super().sync(save, forget)
+
+    class McpOff(FakeSwarmCloud):
+        def _servers(self, method, path, body):
+            return swarmcloud_fake._err(503, "mcp_unavailable", "caller MCP is switched off")
+
+    store = Saves()
+    runtime = McpOff().runtime(learned_store=store)
+    for _ in range(3):
+        feats = await runtime.features(refresh=True)
+        assert feats.mcp == "off" and "mcp_unavailable" in feats.reasons["mcp"]
+    assert store.saved == ["mcp"]
+    assert (await rows())["mcp"].state == "off"
+    # Another instance, over the same database, finds it learned already.
+    other = Saves()
+    assert (await McpOff().runtime(learned_store=other).features()).mcp == "off"
+    assert other.saved == []

@@ -202,15 +202,18 @@ async def feedback_out(
             select(SectionReview.id, SectionReview.verdict).where(SectionReview.id.in_(review_ids))
         )
         verdicts = {k: v for k, v in rows}
-    from oracle.jobs.service import latest_suggestions
+    from oracle.jobs.service import latest_suggestions, staged_suggestions
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
+    staged = await staged_suggestions(session, [i.id for i in items])
     latest = await latest_numbers(session, {i.document_id for i in items})
     out = []
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
         suggestion = suggestions.get(item.id)
-        state = feedback_state(item.status, suggestion, item.staged_for_agents_at)
+        state = feedback_state(
+            item.status, staged.get(item.id, suggestion), item.staged_for_agents_at
+        )
         out.append(
             FeedbackItemOut(
                 id=item.id,

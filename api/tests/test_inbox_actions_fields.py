@@ -6,10 +6,15 @@ pushed back; every other item has nulls. The action routes themselves are tested
 document view (test_llm_jobs, test_next_draft).
 """
 
+import uuid
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
+from oracle.jobs.models import LlmSuggestion
 from oracle.llm import gateway
 from oracle.seed import seed
+from oracle.tenancy import tenant_session
 from tests.claude_account_helpers import add_account, window
 from tests.test_llm_jobs import (
     FakeClaude,
@@ -169,3 +174,59 @@ async def test_pushback_flag(client, ctx, pool, fake):
     assert items[drop]["suggestion_pushback"] is True
     assert items[taste]["suggestion_pushback"] is False
     assert items[drop]["suggestion_text"] == "No checklist."
+
+
+async def test_a_staged_change_keeps_its_item_staged_under_a_newer_suggestion(
+    client, ctx, pool, fake
+):
+    """protects=hardening 2026-10-20 (C1e Inbox states): an item listed because of its
+    accepted, unapplied change takes its state from that change, not from a newer
+    suggestion on the same item; fails_when=the row reads open (or done) and is counted
+    so while its change still waits for the next draft; no_claim=what the newer
+    suggestion offers to act on (its own fields)."""
+    await import_draft(client, ctx)
+    fid = await comment(client, ctx, "goal-trace", "Name the activation metric.")
+    fake.script["review_comments"].append(
+        review_answer(
+            [
+                {
+                    "feedback_id": fid,
+                    "classification": "change_request",
+                    "suggestion": {
+                        "kind": "section_text",
+                        "section_key": "goal-trace",
+                        "text": "Serves activation.",
+                    },
+                }
+            ]
+        )
+    )
+    await tick(client, ctx)
+    sid = (await feedback(client, ctx))[fid]["suggestion"]["id"]
+    resp = await client.post(f"/v1/suggestions/{sid}/accept", json={}, headers=ctx["headers"])
+    assert resp.status_code == 200, resp.text
+    resp = await client.get("/v1/inbox", headers=ctx["headers"])
+    staged_count = resp.json()["counts"]["staged"]
+    assert (await inbox_items(client, ctx))[fid]["state"] == "staged"
+    # A later suggestion on the same item, dismissed: the accepted change still waits.
+    async with tenant_session(ctx["tenant_id"]) as s:
+        staged = await s.get(LlmSuggestion, uuid.UUID(sid))
+        s.add(
+            LlmSuggestion(
+                document_id=staged.document_id,
+                feedback_item_id=staged.feedback_item_id,
+                version_number=staged.version_number,
+                classification="question",
+                kind="answer",
+                text="It is activated accounts.",
+                status="dismissed",
+                created_at=datetime.now(UTC) + timedelta(seconds=1),
+            )
+        )
+        await s.commit()
+
+    resp = await client.get("/v1/inbox", headers=ctx["headers"])
+    assert resp.status_code == 200, resp.text
+    row = next(i for i in resp.json()["items"] if i["id"] == fid)
+    assert row["state"] == "staged" and row["staged_for_version"] is not None
+    assert resp.json()["counts"]["staged"] == staged_count

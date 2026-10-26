@@ -369,6 +369,9 @@ class SwarmCloudRuntime:
         # SwarmCloud accepted a registration write or a submission with the run token:
         # caller MCP is known to work (reads alone do not show it).
         self._mcp_works = False
+        # Caller MCP's latest learning, expired or not (the store's row): a reading that
+        # finds it off again has nothing new to write.
+        self._mcp_learned: Learned | None = None
         # Oracle's own principal in SwarmCloud (who a service answer is recorded as):
         # ORACLE_SWARMCLOUD_PRINCIPAL, else resolved from the token (an ID token's or JWT
         # bearer's email claim, an access token's service account).
@@ -448,6 +451,7 @@ class SwarmCloudRuntime:
             self._over.pop(feature, None)
         if feature == "mcp":
             self._mcp_works = state == "on"
+            self._mcp_learned = learned
 
     async def load_learned(self) -> None:
         """Write what this process learned to the learned store, then read what every
@@ -474,6 +478,7 @@ class SwarmCloudRuntime:
         if mcp is not None:
             # Confirmed until something shows it off, as within one process.
             self._mcp_works = mcp.state == "on"
+            self._mcp_learned = mcp
 
     async def _save_learned(self) -> None:
         if self._unsaved or self._over:
@@ -532,8 +537,11 @@ class SwarmCloudRuntime:
                     if exc.code == "mcp_unavailable"
                     else "SwarmCloud has no /v1/mcp-servers yet"
                 )
-                # No longer confirmed, for every instance.
-                self.learn("mcp", "off", reasons["mcp"])
+                # No longer confirmed, for every instance; once: learned off already,
+                # every reading would write the same row again.
+                learned = self._mcp_learned
+                if learned is None or learned.state != "off":
+                    self.learn("mcp", "off", reasons["mcp"])
             else:
                 reasons["mcp"] = str(exc)
             return
