@@ -356,10 +356,3 @@ async def test_a_disabled_member_does_not_own_a_new_blocker(client, ctx):
             "owner_id": str(gone.id)}  # fmt: skip
     resp = await client.post("/v1/blockers", json=body, headers=ctx.as_("approver"))
     assert resp.status_code == 422, resp.text
-
-
-async def test_only_an_owner_lists_the_claude_accounts(client, ctx):
-    for role in ("viewer", "commenter", "approver"):
-        resp = await client.get("/v1/claude-accounts", headers=ctx.as_(role))
-        assert resp.status_code == 403, role
-    assert (await client.get("/v1/claude-accounts", headers=ctx.as_("owner"))).status_code == 200

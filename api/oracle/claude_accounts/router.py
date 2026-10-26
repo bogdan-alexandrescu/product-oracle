@@ -349,9 +349,8 @@ def _unprocessable(message: str) -> HTTPException:
 
 
 @router.get("", response_model=AccountsPage)
-async def list_claude_accounts(principal: Owner, db: TenantDB) -> AccountsPage:
-    """Every account in the company's pool, with the sweep's liveness and the fallback
-    (owners only: it names each account's email and organisation)."""
+async def list_claude_accounts(principal: Member, db: TenantDB) -> AccountsPage:
+    """Every account in the company's pool, with the sweep's liveness and the fallback."""
     listing = await store.list_reporting(db)
     now = datetime.now(UTC)
     spare = await fallback.describe(db)
