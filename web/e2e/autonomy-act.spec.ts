@@ -130,8 +130,11 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
 
   // No stop: the order is saved and the PRD draft runs.
   await expect(page.getByTestId("segment-prd_draft").getByTestId("segment-state")).toHaveText("Running");
-  const stop = page.getByTestId("checkpoint-priority_order").getByRole("generic").filter({ hasText: "Skipped" });
-  await expect(stop).toHaveAttribute("title", /Oracle saved this order: Order priorities is set to Act within limits\./);
+  await expect(page.getByTestId("checkpoint-priority_order")).toContainText("Skipped");
+  const decisions = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decision");
+  await expect(decisions.filter({ hasText: "Priority order" })).toHaveText(
+    "Priority order · skipped · note: Oracle saved this order: Order priorities is set to Act within limits.",
+  );
   await expect(page.getByRole("button", { name: "Check agents now" })).toBeVisible();
 
   await rail(page).getByRole("link", { name: "Inbox" }).click();
