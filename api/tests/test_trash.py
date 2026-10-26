@@ -24,7 +24,7 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.tenancy import tenant_session
 from oracle.trash import filter as trash_filter
 from oracle.trash import service as trash_service
-from oracle.v2.models import ProductIntake
+from oracle.v2.models import ProductIntake, StakeholderAnswer, StakeholderQuestion
 from tests.fixtures import seed_auth
 from tests.test_mcp import api_token, mcp_client
 from tests.test_roadmap import (
@@ -188,6 +188,30 @@ async def test_inbox_drops_the_checkpoints_of_a_trashed_run(client, owner, runti
     back = await client.post(f"/v1/runs/{run_id}/restore", headers=auth)
     assert back.status_code == 200, back.text
     assert (await client.get(f"/v1/runs/{run_id}", headers=auth)).status_code == 200
+
+
+async def test_a_trashed_intakes_answers_leave_the_answer_list(client, owner):
+    """protects: GET /v1/answers leaves out the answers to a trashed intake's questions.
+    fails_when: an answer whose question the trash hides is still listed."""
+    tenant_id, auth = owner
+    async with tenant_session(tenant_id) as s:
+        intake = ProductIntake(title="Faster checkout", brief="Buyers abandon at shipping.")
+        s.add(intake)
+        await s.flush()
+        q = StakeholderQuestion(intake_id=intake.id, category="general", prompt="Who buys?")
+        s.add(q)
+        await s.flush()
+        answer = StakeholderAnswer(question_id=q.id, kind="answer", body="Small shops.")
+        s.add(answer)
+        await s.commit()
+        intake_id, answer_id = intake.id, str(answer.id)
+    listed = await client.get("/v1/answers", headers=auth)
+    assert answer_id in {a["id"] for a in listed.json()}, listed.text
+    resp = await client.request("DELETE", f"/v1/intakes/{intake_id}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    listed = await client.get("/v1/answers", headers=auth)
+    assert listed.status_code == 200, listed.text
+    assert answer_id not in {a["id"] for a in listed.json()}
 
 
 async def test_delete_and_restore_an_intake(client, owner):
