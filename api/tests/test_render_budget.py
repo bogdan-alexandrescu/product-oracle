@@ -16,6 +16,7 @@ most two date jobs at once."""
 
 import asyncio
 import contextlib
+import gc
 import hashlib
 import threading
 import time
@@ -145,6 +146,23 @@ async def until_ready(client, url: str, auth: dict):
         await asyncio.sleep(0.2)
         resp = await client.get(url, headers=auth)
     return resp
+
+
+async def test_the_heartbeat_does_not_count_collecting_what_earlier_tests_left():
+    """A full garbage collection on the loop's thread scans every object the worker holds,
+    most of them left by the tests it ran before (in CI about 0.9 s, #635's red ``api``
+    job). That is not work kept off the loop; only collecting what the window made is."""
+    left = [[] for _ in range(2_000_000)]
+    start = time.thread_time()
+    gc.collect()
+    full = time.thread_time() - start
+
+    async with heartbeat() as stall:
+        await asyncio.sleep(0.02)
+        gc.collect()
+        await asyncio.sleep(0.05)
+    assert len(left) == 2_000_000
+    assert stall[0] < full / 4, f"the heartbeat counted {stall[0]:.3f} s of a {full:.3f} s scan"
 
 
 # --------------------------------------------------------------------------- roadmap reads
