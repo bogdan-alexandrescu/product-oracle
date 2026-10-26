@@ -5,9 +5,6 @@ answers Q2 and Q3). Invented data only."""
 import uuid
 
 import pytest
-from oracle.webhooks import service as webhooks
-from oracle.webhooks.events import EVENT_TYPES, approvers_only
-from oracle.webhooks.models import Webhook, WebhookEvent
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -15,6 +12,9 @@ from oracle import readiness
 from oracle.docs.models import Document
 from oracle.runs.models import Checkpoint, Run
 from oracle.tenancy import tenant_session
+from oracle.webhooks import service as webhooks
+from oracle.webhooks.events import EVENT_TYPES, approvers_only
+from oracle.webhooks.models import Webhook, WebhookEvent
 from tests.connection_helpers import make_person
 from tests.fixtures import seed_auth
 from tests.review_v2_helpers import DOC, DRAFT, import_md, replace
@@ -298,3 +298,45 @@ def test_openapi_documents_every_type_as_a_webhook_with_its_schema():
         assert f"WebhookEvent_{name}" in schemas, name
         body = doc["webhooks"][name]["post"]["requestBody"]["content"]["application/json"]
         assert body["schema"] == {"$ref": f"#/components/schemas/WebhookEvent_{name}"}
+
+
+# --- a run's life (AC3) -----------------------------------------------------------------------
+
+
+async def test_a_run_through_one_checkpoint_is_captured_once_per_change(client):
+    """protects=AC3: running -> awaiting_checkpoint -> (approve) -> succeeded produces
+    run.started, run.checkpoint_waiting, run.checkpoint_decided (approved) and run.succeeded,
+    once each; an unsubscribed type is not captured; fails_when=one is missing, doubled, or
+    carries the checkpoint note."""
+    from oracle.runs import flows
+    from oracle.swarm import FakeRuntime, set_runtime
+    from tests.test_runs import decide, get, started, tick
+
+    set_runtime(FakeRuntime())
+    try:
+        tenant_id, auth = await seed_auth()
+        wanted = ["run.started", "run.checkpoint_waiting", "run.checkpoint_decided"]
+        await _hook(client, auth, [*wanted, "run.succeeded"])
+        keys = list(flows.FLOWS["baseline_to_prd"].checkpoints)
+        knobs = {**dict.fromkeys(keys, False), keys[-1]: True}
+        run = await started(client, auth, checkpoints=knobs)
+        for _ in range(6):
+            if run["status"] != "running":
+                break
+            await tick(client, auth)
+            run = await get(client, auth, run["id"])
+        assert run["status"] == "awaiting_checkpoint", run["status"]
+        run = await decide(client, auth, run, note="Private note text")
+        for _ in range(3):
+            if run["status"] == "succeeded":
+                break
+            await tick(client, auth)
+            run = await get(client, auth, run["id"])
+        assert run["status"] == "succeeded"
+    finally:
+        set_runtime(None)
+    got = await _events(tenant_id)
+    assert [e.type for e in got] == [*wanted, "run.succeeded"]
+    decided = got[2]
+    assert decided.subject["outcome"] == "approved" and decided.subject["run_id"] == run["id"]
+    assert all("Private note" not in str(e.subject) for e in got)
