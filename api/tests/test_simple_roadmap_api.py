@@ -429,6 +429,7 @@ async def test_500_items_answer_under_300_ms(client):
         r = await client.get(URL, headers=headers)
         times.append(time.perf_counter() - t0)
         assert r.status_code == 200
+    print(f"500 items: best of 3 in {min(times) * 1000:.0f} ms")
     assert min(times) < 0.3, times
 
 
