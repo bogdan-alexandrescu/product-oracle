@@ -9,6 +9,7 @@ import { onJobSettingsChanged, usePolling } from "@/components/JobsPanel";
 import { Button, Chip, Icon, InfoTip, Notice } from "@/components/ds";
 import { JobStatusChip } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { useCompanyZone, zoneDay } from "@/lib/dates";
 import { formatDateTime, NO_ACCOUNT_REASON, turnedOff } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
@@ -21,6 +22,7 @@ type Preview = Schemas["NextDraftPreview"];
 type PreviewSection = Schemas["NextDraftSection"];
 type AgentItem = Schemas["AgentItem"];
 type Plan = Schemas["NextDraftPlan"];
+type AgentsRun = Schemas["NextDraftRun"];
 /** What Build sends: the ticked text changes and items for the agents, and the engine the plan chose. */
 type Choice = { engine: Plan["engine"]; suggestion_ids: string[]; feedback_ids: string[]; next_draft_change_ids: string[] };
 
@@ -67,7 +69,8 @@ export function BuildDraftButton({ doc }: { doc: string }) {
   if (!canBuild || !data) return null;
   const job = data.draft_job;
   const count = data.items.length + data.agent_items.length + (data.next_draft_changes ?? []).length;
-  if (!count && !job) return null;
+  // #574 review: while the agents' run is under way, the sheet shows what it was sent.
+  if (!count && !job && !data.agents_run) return null;
   const label = building(job?.status)
     ? `Building draft ${data.next_version}`
     : job?.status === "succeeded"
@@ -435,6 +438,8 @@ function PickStep({
   const agents: AgentItem[] = all.data?.agent_items ?? staged.agent_items;
   // G4: the discussions' section changes, ticked by default like the text changes.
   const discussed = all.data?.next_draft_changes ?? staged.next_draft_changes ?? [];
+  // #574 review: the agents' run under way, with what it was sent: listed as in that run; no build starts until it ends.
+  const agentsRun = all.data ? (all.data.agents_run ?? null) : (staged.agents_run ?? null);
   // Ids the approver changed from their default (ticked, or unticked for a gone section).
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const flip = (id: string) => {
@@ -497,7 +502,7 @@ function PickStep({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={busy || !plan || !!plan.refused}
+            disabled={busy || !plan || !!plan.refused || !!agentsRun}
             onClick={() =>
               plan &&
               onBuild({
@@ -611,10 +616,47 @@ function PickStep({
           })}
         </Group>
       )}
-      {plan?.refused && <Notice tone="error">{plan.refused}</Notice>}
+      {agentsRun && <InRun run={agentsRun} />}
+      {plan?.refused && !agentsRun && <Notice tone="error">{plan.refused}</Notice>}
       {live.error && <Notice tone="error">{live.error}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
     </Sheet>
+  );
+}
+
+/** #574 review: what the agents' run under way was sent, each "In run · Feedback loop · Oct 26" (as the run chips read), and why nothing builds now. */
+function InRun({ run }: { run: AgentsRun }) {
+  const zone = useCompanyZone();
+  const label = `In run · ${run.flow_title} · ${zoneDay(run.created_at, zone)}`;
+  const rows = [
+    ...run.items.map((i) => ({ id: i.suggestion_id, where: `Section ${i.section_heading}`, what: i.feedback_summary })),
+    ...run.next_draft_changes.map((d) => ({ id: d.id, where: `Section ${d.section_heading}`, what: d.instruction })),
+    ...run.agent_items.map((a) => ({ id: a.feedback_id, where: a.section_key ? `Section ${a.section_key}` : "General", what: a.summary })),
+  ];
+  return (
+    <>
+      <Notice testId="agents-run-notice">
+        The agents&apos; run on this document is under way: build the next draft once it ends.{" "}
+        <Link href={`/runs/${run.id}`} className="font-semibold underline underline-offset-2">
+          Open the run
+        </Link>
+      </Notice>
+      {rows.length > 0 && (
+        <Group label="In the agents' run" testId="in-run-list">
+          {rows.map((r) => (
+            <li key={r.id} className="flex flex-col gap-1 border-b border-line py-2.5 last:border-b-0" data-testid="in-run-item">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-text2">{r.where}</span>
+                <Link href={`/runs/${run.id}`} data-testid="in-run-chip" className="hover:underline">
+                  <Chip kind="acc">{label}</Chip>
+                </Link>
+              </span>
+              <span className="text-[15px] leading-[22px] text-text2">{r.what}</span>
+            </li>
+          ))}
+        </Group>
+      )}
+    </>
   );
 }
 

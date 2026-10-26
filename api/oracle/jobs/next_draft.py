@@ -43,6 +43,7 @@ from oracle.jobs.schemas import (
     NextDraftPlan,
     NextDraftPreview,
     NextDraftReason,
+    NextDraftRun,
     NextDraftSection,
     SkippedSection,
     StagedChange,
@@ -67,6 +68,7 @@ from oracle.runs import flows
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
+    from oracle.runs.models import Run
 
 KIND = "refinement_batch"
 #: The run the agents write a next draft in.
@@ -136,6 +138,43 @@ async def current_job(db: AsyncSession, document_id: uuid.UUID) -> LlmJob | None
     if job is None or job.status == "cancelled" or _applied(job) or _discarded(job):
         return None
     return job
+
+
+async def agents_run(db: AsyncSession, document_id: uuid.UUID) -> "Run | None":
+    """#574 review: the agents' feedback-loop run under way on the document (awaiting an
+    owner's approval, running, at its review or paused), if any. While it is, what it was
+    sent is not staged for another build, and no other build of the document starts:
+    its draft (and any later attempt's) is written from what it was sent."""
+    from oracle.runs.models import Run
+    from oracle.runs.service import BUILD_UNDER_WAY
+
+    return await db.scalar(
+        select(Run)
+        .where(
+            Run.flow == AGENT_FLOW,
+            Run.document_id == document_id,
+            Run.status.in_(BUILD_UNDER_WAY),
+        )
+        .order_by(Run.created_at.desc(), Run.id.desc())
+        .limit(1)
+    )
+
+
+def _run_refusal(run: "Run") -> str:
+    from oracle.export.render import app_url
+
+    return (
+        f"the agents' run {run.id} is writing this document's next draft; build again "
+        f"once it ends: {app_url(f'/runs/{run.id}')}"
+    )
+
+
+async def _refuse_while_agents_run(db: AsyncSession, document_id: uuid.UUID) -> None:
+    """409 while the agents' run is under way on the document: a second build would make
+    the changes it was sent again (#574 review)."""
+    run = await agents_run(db, document_id)
+    if run is not None:
+        raise JobError(409, _run_refusal(run))
 
 
 async def _estimate(db: AsyncSession, sections: int) -> float | None:
@@ -280,7 +319,6 @@ async def staged_changes(
             )
         )
     job = await current_job(db, document.id)
-    buildable = {c.section_key for c in out if not c.section_gone}
     agent_rows = list(
         await db.scalars(
             select(FeedbackItem)
@@ -293,6 +331,39 @@ async def staged_changes(
         )
     )
     stagers = await names(db, {f.staged_for_agents_by for f in agent_rows})
+    agent_items = [
+        AgentItem(
+            feedback_id=f.id,
+            summary=f.summary,
+            section_key=f.section_key,
+            staged_by_name=stagers.get(f.staged_for_agents_by),
+            staged_at=f.staged_for_agents_at,
+        )
+        for f in agent_rows
+    ]
+    discussed = await _discussion_changes(db, principal, document, headings, locked, include_gone)
+    # #574 review: what the agents' run under way was sent is in that run, not staged.
+    run = await agents_run(db, document.id)
+    in_run = None
+    if run is not None:
+        from oracle.runs.service import SENT_KNOBS
+
+        knobs = run.knobs or {}
+        sent = {str(i) for k in SENT_KNOBS for i in knobs.get(k) or []}
+        in_run = NextDraftRun(
+            id=run.id,
+            flow=run.flow,
+            flow_title=flows.FLOWS[run.flow].title,
+            status=run.status,
+            created_at=run.created_at,
+            items=[c for c in out if str(c.suggestion_id) in sent],
+            agent_items=[a for a in agent_items if str(a.feedback_id) in sent],
+            next_draft_changes=[c for c in discussed if str(c.id) in sent],
+        )
+        out = [c for c in out if str(c.suggestion_id) not in sent]
+        agent_items = [a for a in agent_items if str(a.feedback_id) not in sent]
+        discussed = [c for c in discussed if str(c.id) not in sent]
+    buildable = {c.section_key for c in out if not c.section_gone}
     return StagedChanges(
         document_id=document.id,
         slug=document.slug,
@@ -302,19 +373,9 @@ async def staged_changes(
         gone_count=gone,
         estimate_usd=await _estimate(db, len(buildable)),
         draft_job=await job_out(db, job) if job else None,
-        agent_items=[
-            AgentItem(
-                feedback_id=f.id,
-                summary=f.summary,
-                section_key=f.section_key,
-                staged_by_name=stagers.get(f.staged_for_agents_by),
-                staged_at=f.staged_for_agents_at,
-            )
-            for f in agent_rows
-        ],
-        next_draft_changes=await _discussion_changes(
-            db, principal, document, headings, locked, include_gone
-        ),
+        agent_items=agent_items,
+        next_draft_changes=discussed,
+        agents_run=in_run,
     )
 
 
@@ -467,6 +528,9 @@ async def plan(
         out.refused = "Refinement is turned off for this document"
     else:
         out.refused = _locked_refusal([*changes, *rows])
+    run = await agents_run(db, staged.document_id)
+    if run is not None:
+        out.refused = _run_refusal(run)
     return out
 
 
@@ -485,16 +549,32 @@ async def start_run(
     suggestion_ids: list[uuid.UUID] | None,
     feedback_ids: list[uuid.UUID] | None,
     depth: str = "standard",
+    next_draft_change_ids: list[uuid.UUID] | None = None,
 ) -> uuid.UUID:
     """Start the agents' feedback-loop run with exactly the chosen items: created,
-    estimated and started (or left awaiting an owner's approval over the threshold)."""
+    estimated and started (or left awaiting an owner's approval over the threshold).
+    G4: the discussions' chosen section changes go with them, for the agents to make."""
     from oracle.runs import service as runs
     from oracle.runs.schemas import KnobsIn, RunCreate
 
-    staged, changes, items = await _chosen(db, doc, suggestion_ids, feedback_ids)
     document = await get_document(db, doc)
+    # One build of a document at a time (#574 review): the row lock serialises two
+    # approvers' clicks until the run is created (its first commit).
+    await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
+    await _refuse_while_agents_run(db, document.id)
+    staged, changes, items = await _chosen(
+        db, doc, suggestion_ids, feedback_ids, next_draft_change_ids
+    )
+    rows = _chosen_rows(staged, next_draft_change_ids)
     if choose_engine(changes, items, document).engine == "oracle":
         raise JobError(409, "these changes need no agents; build them with Oracle")
+    pending = await current_job(db, document.id)
+    if pending is not None:
+        raise JobError(
+            409,
+            f"Oracle's build of the next draft is pending (job {pending.id}); apply or "
+            "discard it first",
+        )
     run_id = await runs.create_run(
         db,
         principal,
@@ -502,6 +582,7 @@ async def start_run(
         oracle_knobs={
             "feedback_ids": [str(i.feedback_id) for i in items],
             "suggestion_ids": [str(c.suggestion_id) for c in changes],
+            "next_draft_change_ids": [str(r.id) for r in rows],
         },
     )
     await runs.estimate(db, principal, run_id)
@@ -527,6 +608,7 @@ async def build(
     latest = await _latest(db, document)
     if latest is None:
         raise JobError(409, f"'{document.slug}' has no version yet")
+    await _refuse_while_agents_run(db, document.id)
     pending = await current_job(db, document.id)
     if pending is not None and pending.status in ("queued", "running"):
         raise JobError(

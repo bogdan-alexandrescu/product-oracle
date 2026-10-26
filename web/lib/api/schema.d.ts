@@ -25530,6 +25530,45 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * NextDraftRun
+         * @description #574 review: the agents' run under way on a document (Build next draft sent it the
+         *     items below): what it was sent is not staged for another build until it ends, and no
+         *     other build of the document starts meanwhile.
+         */
+        NextDraftRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow */
+            flow: string;
+            /** Flow Title */
+            flow_title: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["StagedChange"][];
+            /**
+             * Agent Items
+             * @default []
+             */
+            agent_items: components["schemas"]["AgentItem"][];
+            /**
+             * Next Draft Changes
+             * @default []
+             */
+            next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
+        };
         /** NextDraftRunIn */
         NextDraftRunIn: {
             /** Suggestion Ids */
@@ -33423,6 +33462,7 @@ export interface components {
              * @default []
              */
             next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
+            agents_run?: components["schemas"]["NextDraftRun"] | null;
         };
         /**
          * StagedDiscussionChange

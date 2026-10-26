@@ -129,7 +129,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
@@ -285,9 +285,11 @@ ORACLE_KNOBS = (
     # C5: the intake's answers that existed when the run started (the ones it reads).
     "intake_answer_ids",
     # D12: a feedback loop started from Build next draft: exactly the items staged for
-    # it, the agent-staged feedback and the accepted section-text suggestions.
+    # it, the agent-staged feedback and the accepted section-text suggestions; G4: the
+    # section changes staged from discussions (next_draft_changes).
     "feedback_ids",
     "suggestion_ids",
+    "next_draft_change_ids",
     # A launch_kit run (oracle.launches): the launch it drafts for.
     "launch_id",
     # strategy_draft (oracle.strategy.brief): the owner's brief from Company › Strategy.
@@ -2498,6 +2500,16 @@ async def _low_threshold(db: AsyncSession) -> float:
     return float(confidence.merged(overrides)["low"])
 
 
+# D12: the knobs that name what Build next draft sent a feedback loop.
+SENT_KNOBS = ("feedback_ids", "suggestion_ids", "next_draft_change_ids")
+
+
+def sent_items(run: Run) -> bool:
+    """D12: the run was started from Build next draft, so it was given exactly the items
+    in its knobs (one missing names none), not every open item."""
+    return any(k in (run.knobs or {}) for k in SENT_KNOBS)
+
+
 async def _loop_feedback(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
     """D12: the items a feedback loop started from Build next draft was given: the
     feedback staged for the agents and each accepted section-text change, with its text."""
@@ -2527,6 +2539,57 @@ async def _loop_feedback(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
             **({"accepted_text": texts[f.id]} if f.id in texts else {}),
         }
         for f in items
+    ]
+
+
+async def _imported_numbers(db: AsyncSession, run: Run) -> set[int]:
+    """The version numbers this run's drafts were imported as, any attempt (each attempt's
+    import is on its checkpoint's payload, the current one on its segment)."""
+    segments = await db.scalars(select(RunSegment).where(RunSegment.run_id == run.id))
+    checkpoints = await db.scalars(select(Checkpoint).where(Checkpoint.run_id == run.id))
+    imports = [(s.artifacts or {}).get("import") for s in segments]
+    imports += [(c.payload or {}).get("import") for c in checkpoints]
+    return {
+        int(imp["version"])
+        for imp in imports
+        if isinstance(imp, dict) and imp.get("version") is not None and not imp.get("error")
+    }
+
+
+async def _loop_section_changes(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
+    """G4: the section changes staged from discussions that a feedback loop started from
+    Build next draft was given, oldest first: still staged, or applied in a draft this run
+    imported (a later attempt keeps them); never one another build applied."""
+    from oracle.staging.models import NextDraftChange
+
+    ids = [uuid.UUID(str(i)) for i in (run.knobs or {}).get("next_draft_change_ids") or []]
+    if not ids:
+        return []
+    mine = await _imported_numbers(db, run)
+    rows = await db.scalars(
+        select(NextDraftChange)
+        .where(
+            NextDraftChange.id.in_(ids),
+            NextDraftChange.document_id == run.document_id,
+            or_(
+                NextDraftChange.status == "staged",
+                and_(
+                    NextDraftChange.status == "applied",
+                    NextDraftChange.applied_in_version.in_(mine),
+                ),
+            ),
+        )
+        .order_by(NextDraftChange.created_at, NextDraftChange.id)
+    )
+    return [
+        {
+            "id": str(r.id),
+            "section_key": r.section_key,
+            "instruction": r.instruction,
+            "reason": r.reason,
+            **({"text": r.text} if r.text else {}),
+        }
+        for r in rows
     ]
 
 
@@ -2606,9 +2669,11 @@ async def _prompt_context(
         change_request = WITHHELD_NOTE
     feedback: list[dict[str, Any]] = []
     locked: list[str] = []
-    chosen = "feedback_ids" in (run.knobs or {}) or "suggestion_ids" in (run.knobs or {})
+    section_changes: list[dict[str, Any]] = []
+    chosen = sent_items(run)
     if run.flow == "feedback_loop" and run.document_id:
         feedback = await _loop_feedback(db, run) if chosen else []
+        section_changes = await _loop_section_changes(db, run) if chosen else []
         if not chosen:
             items = await db.scalars(
                 select(FeedbackItem)
@@ -2646,6 +2711,7 @@ async def _prompt_context(
         reviewer_notes=notes,
         feedback=feedback,
         staged=chosen,
+        section_changes=section_changes,
         locked_sections=locked,
         attempt=attempt,
         change_request=change_request,
@@ -4260,9 +4326,7 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 # Without its date markers (the import checked its dates; none of the
                 # markers is read here): never a wait for dates in the middle of a tick.
                 result.version = await docs_service.read_version(s, row, require_dates=False)
-        if run.flow == "feedback_loop" and (
-            knobs.get("suggestion_ids") or knobs.get("feedback_ids")
-        ):
+        if run.flow == "feedback_loop" and any(knobs.get(k) for k in SENT_KNOBS):
             await _settle_sent_items(s, run, result.version.number, result.resolutions)
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
@@ -4302,10 +4366,11 @@ async def _settle_sent_items(
     s: AsyncSession, run: Run, number: int, resolutions: list[Resolution]
 ) -> None:
     """D12: what a feedback loop started from Build next draft was sent, once its draft
-    is version ``number``: the accepted section-text changes are applied in it (as the
-    built-in path's apply records them), and the items staged for the agents that the
-    draft's resolutions answer leave Staged. Their status is the import's: an agent never
-    closes a whole-draft item itself, so a person confirms it in the version's review.
+    is version ``number``: the accepted section-text changes and the discussions' section
+    changes are applied in it (as the built-in path's apply records them), and the items
+    staged for the agents that the draft's resolutions answer leave Staged. Their status
+    is the import's: an agent never closes a whole-draft item itself, so a person confirms
+    it in the version's review.
     ``resolutions`` are the import's own parse of the draft: it is not parsed again."""
     knobs = run.knobs or {}
     answered = {str(r.feedback_id) for r in resolutions}
@@ -4333,8 +4398,43 @@ async def _settle_sent_items(
     for row in rows:
         row.status = "applied"
         row.applied_in_version = number
-    if rows or items:
+    changes = await _apply_section_changes(s, run, number)
+    if rows or items or changes:
         await s.commit()
+
+
+async def _apply_section_changes(s: AsyncSession, run: Run, number: int) -> int:
+    """G4: the section changes staged from discussions that the run was sent are applied
+    in its draft, version ``number``, and their discussion changes done, as Oracle's own
+    apply (``next_draft.apply``) records them. A run that writes no draft (failed,
+    cancelled) never gets here: its rows stay staged for the next draft."""
+    from oracle.discussions.models import DiscussionChange
+    from oracle.staging.models import NextDraftChange
+
+    ids = [uuid.UUID(str(i)) for i in (run.knobs or {}).get("next_draft_change_ids") or []]
+    if not ids:
+        return 0
+    rows = list(
+        await s.scalars(
+            select(NextDraftChange).where(
+                NextDraftChange.id.in_(ids),
+                NextDraftChange.document_id == run.document_id,
+                NextDraftChange.status == "staged",
+            )
+        )
+    )
+    for r in rows:
+        r.status = "applied"
+        r.applied_in_version = number
+        change = (
+            await s.get(DiscussionChange, r.discussion_change_id)
+            if r.discussion_change_id
+            else None
+        )
+        if change is not None and change.status == "staged":
+            change.status = "done"
+            change.decision_note = f"Applied in draft {number}"
+    return len(rows)
 
 
 async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, Any]:
