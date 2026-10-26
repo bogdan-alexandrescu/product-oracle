@@ -160,7 +160,32 @@ export type DiscussionsContext = {
   askQuestion?: (q: { asked_to: string; prompt: string; rationale: string | null; category: string; discussion: DiscussionRow }) => string;
   /** G3 Propose of a decision: the decision log's POST /v1/decisions (./decisions.ts), as the caller. */
   proposeDecision?: (body: Schemas["DecisionCreate"]) => Promise<Response>;
+  /** G4: a change's D8 action at a waiting stop (./runs.ts putDiscussionAction): its id and question. */
+  stopAction?: (
+    at: { run_id: string; checkpoint_id: string },
+    action: Schemas["ActionIn"],
+    source: { discussion_id: string; change_id: string; from_private: boolean },
+    mode: "stage" | "suggest" | "auto",
+  ) => { id: string; question_id: string | null } | Response;
+  /** Whether Ask at this stop is its D8 question action (./runs.ts asksAtStop). */
+  asksAtStop?: (at: { run_id: string; checkpoint_id: string }) => boolean;
+  /** C6/C7: the waiting feature-set stop holding the named feature or requirement (./runs.ts scopeStop). */
+  scopeStop?: (
+    named: string | null,
+    own: { run_id: string | null; checkpoint_id?: string | null; item_key?: string | null },
+  ) => { run_id: string; checkpoint_id: string; item_key: string } | null;
 };
+
+/** As oracle.staging.mapping.to_action for the scope kinds, on the stop's row key. */
+function scopeAction(kind: string, p: Record<string, unknown>, key: string): Schemas["ActionIn"] {
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  if (kind === "scope_feature") return { item_key: key, kind: "edit", field: "decision", value: p.decision, note: s(p.reason) || null, answers: [] };
+  if (p.op === "add") return { item_key: key, kind: "add", value: { parent: key, text: p.text ?? null, acceptance: null }, answers: [] };
+  if (p.op === "cut") return { item_key: key, kind: "edit", field: "decision", value: "cut", answers: [] };
+  return { item_key: key, kind: "edit", field: "text", value: p.text ?? null, answers: [] };
+}
+/** oracle.staging.service: a scope change named in no waiting feature set. */
+export const NO_FEATURE_SET = "No feature set waiting for approval has this feature";
 
 /** A section of the document a discussion is on, as Oracle reads it (markers stripped). */
 export type DocumentSection = { document_id: string; key: string; heading: string; text: string; url: string };
@@ -1103,11 +1128,27 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     } else if (verb === "Stage") {
       if (c.pushback && !str(input.override_reason)) return refuse(422, "Oracle pushed back on this. Give a reason to stage it anyway.");
       if (d.visibility === "private" && !str(input.reason)) return refuse(422, "Write the reason everyone will see");
+      let ref = { kind: c.target.run_id ? "checkpoint_action" : "next_draft_change", id: ctx.uuid() };
+      if (c.kind === "scope_feature" || c.kind === "scope_requirement") {
+        // As the API: the waiting feature-set stop holding the feature, wherever the discussion is; 409 when none.
+        const p = c.edited_payload ?? c.payload;
+        const named = str(p.feature_id) || str(p.requirement_id) || null;
+        const sub = d.subject as { checkpoint_id?: string; item_key?: string };
+        if (!named && d.subject_kind !== "checkpoint_item") return refuse(422, "Name the feature the requirement belongs to");
+        const stop = ctx.scopeStop?.(named, { run_id: d.run_id, checkpoint_id: sub.checkpoint_id ?? null, item_key: sub.item_key ?? null }) ?? null;
+        if (!stop) return refuse(409, NO_FEATURE_SET);
+        const action = scopeAction(c.kind, p, stop.item_key);
+        const why = str(input.reason) || str(input.override_reason);
+        if (why) action.note = why;
+        const put = ctx.stopAction?.(stop, action, { discussion_id: d.id, change_id: c.id, from_private: d.visibility === "private" }, "stage");
+        if (put instanceof Response) return put;
+        ref = { kind: "checkpoint_action", id: put?.id ?? ctx.uuid() };
+      }
       Object.assign(c, {
         status: "staged",
         override_reason: str(input.override_reason) || null,
         reason: d.visibility === "private" ? str(input.reason) : null,
-        result_ref: { kind: c.target.run_id ? "checkpoint_action" : "next_draft_change", id: ctx.uuid() },
+        result_ref: ref,
       });
       line(`${name} staged: ${c.label}`);
     } else if (verb === "Record") {
@@ -1126,13 +1167,25 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       return json(200, { change: changeOut(c, d), result: { basis_id: basis.id, status: basis.status } });
     } else if (verb === "Ask") {
       // A question asked of that person (their Inbox), from this discussion.
+      // As the API: on a checkpoint item whose stop waits and takes questions, the item's D8 question action (G4).
       const p = c.edited_payload ?? c.payload;
-      const question_id =
-        ctx.askQuestion?.({ asked_to: str(p.asked_to), prompt: str(p.prompt), rationale: str(p.rationale) || null, category: str(p.category) || "general", discussion: d }) ?? ctx.uuid();
-      Object.assign(c, { status: "done", result_ref: { question_id } });
+      const sub = d.subject as { checkpoint_id?: string; item_key?: string };
+      const at = d.subject_kind === "checkpoint_item" && d.run_id && sub.checkpoint_id ? { run_id: d.run_id, checkpoint_id: sub.checkpoint_id } : null;
+      let result: { question_id: string; action_id?: string };
+      if (at && ctx.stopAction && ctx.asksAtStop?.(at)) {
+        const action = { item_key: str(sub.item_key), kind: "question", value: { asked_to: str(p.asked_to), text: str(p.prompt) }, answers: [] } as Schemas["ActionIn"];
+        const put = ctx.stopAction(at, action, { discussion_id: d.id, change_id: c.id, from_private: d.visibility === "private" }, "auto");
+        if (put instanceof Response) return put;
+        result = { question_id: put.question_id ?? ctx.uuid(), action_id: put.id };
+      } else {
+        const question_id =
+          ctx.askQuestion?.({ asked_to: str(p.asked_to), prompt: str(p.prompt), rationale: str(p.rationale) || null, category: str(p.category) || "general", discussion: d }) ?? ctx.uuid();
+        result = { question_id };
+      }
+      Object.assign(c, { status: "done", result_ref: result });
       line(`${name} asked: ${c.label}`);
       c.lock_version += 1;
-      return json(200, { change: changeOut(c, d), result: { question_id } });
+      return json(200, { change: changeOut(c, d), result });
     } else if (verb === "Apply") {
       const p = c.edited_payload ?? c.payload;
       const reason = str(input.reason) || str(p.reason);

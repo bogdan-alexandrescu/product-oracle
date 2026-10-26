@@ -58,7 +58,10 @@ import {
   lastBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
+  asksAtStop,
+  putDiscussionAction,
   routeRuns,
+  scopeStop,
   seedEngCheckRun,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -3634,6 +3637,14 @@ async function route(db: Db, req: Request): Promise<Response> {
         });
         return qid;
       },
+      // G4: a change's D8 action at a waiting stop, as the API's put_action with the discussion as its source.
+      stopAction: (at, action, source, mode) => putDiscussionAction({ ...runsContext(db), db: db.runs! }, at, action, source, mode),
+      asksAtStop: (at) => asksAtStop({ db: db.runs! }, at),
+      scopeStop: (named, own) =>
+        scopeStop({ db: db.runs! }, named, own, (id) => {
+          const key = db.baseline.entities.find((e) => e.id === id)?.key;
+          return key ? [key, key.replace(/^[a-z]+\./, "")] : [];
+        }),
       proposeDecision: async (b) => {
         const ctx = decisionsContext(db, me);
         const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
