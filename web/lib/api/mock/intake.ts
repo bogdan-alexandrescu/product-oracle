@@ -77,8 +77,12 @@ export interface IntakeContext {
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
   /** C1 lane 2, "Requests behind it": why these requests cannot be behind a brief (null when
-   * they can), and linking them to the new brief. */
-  requests?: { refusal: (ids: string[]) => { status: number; detail: string } | null; link: (intakeId: string, ids: string[]) => void };
+   * they can), linking them to the new brief, and releasing them when it is archived. */
+  requests?: {
+    refusal: (ids: string[]) => { status: number; detail: string } | null;
+    link: (intakeId: string, ids: string[]) => void;
+    release: (intakeId: string) => void;
+  };
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -531,6 +535,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (patch.status && patch.status !== intake.status) {
         intake.status = patch.status;
         retireQuestions(db, intake);
+        // An archived brief that made no PRD releases the requests behind it.
+        if (intake.status === "archived") ctx.requests?.release(intake.id);
       }
       intake.lock_version += 1;
       intake.updated_at = now();

@@ -85,6 +85,7 @@ import {
   behindBriefRefusal,
   linkIntakeDocument,
   putBehindBrief,
+  releaseBrief,
   requestInboxRows,
   routeRequests,
   seedRequests,
@@ -3890,6 +3891,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
         }),
       link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
+      release: (intakeId: string) => releaseBrief(ensureRequests(db), intakeId),
     };
     const intake = await routeIntake(
       v2db,

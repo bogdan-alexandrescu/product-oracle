@@ -1481,6 +1481,34 @@ async def _not_taken(db: AsyncSession, rows: list[ProductRequest]) -> None:
             )
 
 
+async def release_brief(db: AsyncSession, principal: Principal, intake_id: uuid.UUID) -> int:
+    """Archiving a brief that made no PRD releases the requests behind it (#599 re-review,
+    decided "Release on archive" 2026-10-25): their brief link is cleared, so another brief
+    may take them. A request whose brief made a PRD keeps both links. Returns how many."""
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.intake_id == intake_id, ProductRequest.document_id.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        row.intake_id = None
+        row.updated_at = _now()
+    await db.flush()
+    for row in rows:
+        await audit.record(
+            db,
+            principal,
+            "request.updated",
+            "request",
+            row.id,
+            {"intake_id": None, "released_from": str(intake_id)},
+        )
+    return len(rows)
+
+
 async def link_intake_document(
     db: AsyncSession, intake_id: uuid.UUID, document_id: uuid.UUID
 ) -> int:

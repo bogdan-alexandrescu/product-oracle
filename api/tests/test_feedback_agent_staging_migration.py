@@ -71,7 +71,7 @@ def test_the_chain_after_feedback_authors():
     # C9 Move and pin's 0022_priority_overrides, 0022_code_maps (F5-2),
     # 0022_checkpoint_actions (D8), 0022_updates (H8), 0023_source_partial_sync (#249),
     # 0023_intake_brief_fields (C4) and 0024_segment_skipped; one head.
-    assert script.get_heads() == ["0054_reply_opened"]
+    assert script.get_heads() == ["0055_release_archived_briefs"]
     assert script.get_revision("0022_invite_delivery").down_revision == REVISION
     assert script.get_revision("0022_baseline_flow").down_revision == "0022_invite_delivery"
     assert script.get_revision("0022_engineering_lead").down_revision == "0022_baseline_flow"

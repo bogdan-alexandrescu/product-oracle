@@ -12,7 +12,8 @@ rules are checked here:
 - only the author sets what others see of a finding (``set_sharing``), audited;
 - archiving an intake retires its open questions (they leave the Inbox and stay on the
   brief as history); restoring it asks them again, a delegated one of its delegate
-  (``retire_questions``, #307).
+  (``retire_questions``, #307); it also releases the requests behind it that no PRD
+  links (``requests_service.release_brief``), and restoring it does not take them back.
 """
 
 import re
@@ -412,6 +413,9 @@ async def patch(
         changes["status"] = [intake.status, body.status]
         intake.status = body.status
         await retire_questions(db, intake)
+        if intake.status == "archived":
+            # A converted brief cannot be archived, so this one made no PRD.
+            await requests_service.release_brief(db, principal, intake.id)
     reanswer = await _patch_brief_fields(db, intake, body, changes)
     await flush_or_conflict(db)
     if reanswer:

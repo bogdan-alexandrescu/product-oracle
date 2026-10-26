@@ -1098,6 +1098,16 @@ export function putBehindBrief(db: RequestsDb, intakeId: string, ids: string[]) 
   }
 }
 
+/** Archiving a brief that made no PRD releases the requests behind it; one a PRD links keeps
+ * both links (the API's release_brief, decided "Release on archive" 2026-10-25). */
+export function releaseBrief(db: RequestsDb, intakeId: string) {
+  for (const r of db.requests.filter((x) => x.intake_id === intakeId && !x.document_id)) {
+    r.intake_id = null;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+}
+
 /** The PRD made for a brief links the requests behind it; one already linked keeps its PRD. */
 export function linkIntakeDocument(db: RequestsDb, intakeId: string, documentId: string) {
   for (const r of db.requests.filter((x) => x.intake_id === intakeId && !x.document_id)) {
