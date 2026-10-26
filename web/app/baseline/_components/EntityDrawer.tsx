@@ -675,6 +675,13 @@ export function EntityDrawer({
               )}
             </InspectorSection>
 
+            {/* v2 screen 2: the outputs built on this item, as a what-if (a preview; nothing is marked). */}
+            <InspectorSection label="Impact">
+              <Link href={`/impact/entities/${entity.id}`} className="text-sm font-medium text-accent-ink hover:underline">
+                What if it changed?
+              </Link>
+            </InspectorSection>
+
             {/* Only a role that can decide sees these controls (#370); busy disables them for the moment. */}
             {canWrite && !editing && !(promoting && suggestion) && (
               <InspectorSection>

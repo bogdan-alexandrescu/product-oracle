@@ -56,6 +56,8 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   /** The spec requests: a tech brief's link to its PRD (its versions name no source). */
   specRequests: () => { source_document_id: string; document_slug?: string | null }[];
   me: { id: string; email: string; role: Role };
+  /** The document's designated decider (its review policy), who regenerates it whatever their role. */
+  deciderOf?: (documentId: string) => string | null;
   uuid: () => string;
   now: () => string;
 }
@@ -156,9 +158,12 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const leaf = p.slice(3).join("/");
 
   if (type === "document" && m === "POST" && (leaf === "regenerate/estimate" || leaf === "regenerate")) {
-    if (!atLeast(ctx.me.role, "approver")) return json(403, { detail: "Requires the approver role" });
     const doc = ctx.documents.find((d) => d.slug === p[2] || d.id === p[2]);
-    if (!doc) return json(404, { detail: "Document not found" });
+    if (!doc) return json(404, { detail: `document '${p[2]}' not found` });
+    // As oracle.trash.regenerate: the document's decider (whatever their role) or any approver.
+    if (!atLeast(ctx.me.role, "approver") && ctx.deciderOf?.(doc.id) !== ctx.me.id) {
+      return json(403, { detail: "Only the document's decider or an approver can regenerate it" });
+    }
     const flow = FLOWS[doc.kind];
     if (!flow) return json(422, { detail: `no flow regenerates a ${doc.kind}: edit it instead` });
     const body = (JSON.parse((await req.text()) || "{}") ?? {}) as { note?: string | null; run_id?: string };

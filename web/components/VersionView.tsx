@@ -1079,6 +1079,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               Compare with v{n - 1}
             </LinkButton>
           )}
+          {/* v2 screen 2: what this version changes for the outputs built on earlier ones. */}
+          {document_?.kind === "prd" && (
+            <LinkButton variant="ghost" href={`/documents/${doc}/v/${n}/impact`}>
+              Impact
+            </LinkButton>
+          )}
           {version?.source && (
             <span className="text-sm text-text2">
               <SourceLink source={version.source} />

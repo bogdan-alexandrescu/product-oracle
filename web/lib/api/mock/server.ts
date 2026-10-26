@@ -131,6 +131,7 @@ import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftR
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
+import { seedImpact } from "./impact";
 import { routeTrace } from "./trace";
 import {
   DRAFT_OPTIONS,
@@ -214,6 +215,8 @@ export interface Db {
   trash?: TrashDb;
   /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
   review_v2?: ReviewV2Db;
+  /** The draft run proposed per v2 artifact request from the Impact plan, by request id. */
+  impact_runs?: Record<string, string>;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
@@ -3565,6 +3568,17 @@ function ensureV2(db: Db): V2Db {
     db.v2 = seeded("v2", () => {
       const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
       v2.section_links.push(...goalLinks(db));
+      const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+      if (version && (scenario === "impact" || scenario === "impact-large")) {
+        const roadmap = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+        seedImpact(v2, {
+          versionId: version.id,
+          roadmapVersionId: db.versions.find((v) => v.document_id === roadmap?.id)?.id ?? null,
+          entity: db.baseline.entities.find((e) => e.key === "f.guided-setup") ?? db.baseline.entities.find((e) => e.type !== "goal") ?? null,
+          userId: db.user_id,
+          uuid,
+        }, scenario === "impact-large");
+      }
       return v2;
     });
   }
@@ -3858,6 +3872,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       intakes: () => ensureV2(db).intakes,
       specRequests: () => (db.specs ??= seedSpecs()).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
+      deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
       uuid,
       now,
     },
@@ -3873,6 +3888,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
     const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
     const decider = db.members.find((x) => x.email === "approver@example.com");
+    // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
+    const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
+    if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
+      db.review_v2.policies.push({
+        document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+      });
+    }
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
       db.review_v2.policies.push({
         document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
@@ -4184,6 +4207,23 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
   if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
     db.specs ??= seedSpecs();
+    // An artifact request of the v2 rows (the Impact plan's outputs) that the specs mock does
+    // not hold: Propose regeneration as the API's (a draft run, nothing settled or started).
+    const v2req = p[3] === "regenerate" && m === "POST" && !db.specs.specs.some((x) => x.request.id === p[2])
+      ? ensureV2(db).artifact_requests.find((x) => x.id === p[2])
+      : undefined;
+    if (v2req) {
+      if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+      const proposed = (db.impact_runs ??= {});
+      if (proposed[v2req.id]) return json(409, { detail: "this spec's run has not ended (it is draft): let it finish, or cancel it on its run page, first" });
+      const prd = db.documents.find((d) => d.id === v2req.source_document_id);
+      const out: Schemas["RegenerationOut"] = {
+        request_id: v2req.id, run_id: uuid(), prd_version: prd ? (docVersions(db, prd).pop()?.number ?? 1) : 1,
+        section_keys: v2req.section_keys, dropped_section_keys: [], reasons: [],
+      };
+      proposed[v2req.id] = out.run_id;
+      return json(201, out);
+    }
     const specs = await routeSpecs(
       {
         db: db.specs,
