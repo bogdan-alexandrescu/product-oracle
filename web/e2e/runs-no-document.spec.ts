@@ -86,6 +86,21 @@ async function noDocumentScenario(page: Page) {
   await login(page);
 }
 
+/**
+ * No No document row in the Inbox: in New, nor in Open, where a row seen on an earlier visit
+ * moves (the Inbox's own data loaded first, so an empty list is not one still loading).
+ */
+async function noRowInTheInbox(page: Page) {
+  await page.getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  const tabs = page.getByTestId("inbox-state-tabs").filter({ visible: true });
+  for (const tab of [/^New/, /^Open/]) {
+    await tabs.getByRole("tab", { name: tab }).click();
+    await expect(tabs.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);
+  }
+}
+
 test("a run that finished with no document: an Inbox row says why and what to do, and the run reads no Draft rejected", async ({ page }) => {
   await noDocumentScenario(page);
   await page.goto("/inbox");
@@ -109,8 +124,7 @@ test("a run that finished with no document: an Inbox row says why and what to do
   const prd = page.getByTestId("segment-prd_draft");
   await prd.getByRole("button", { name: "Retry import" }).click();
   await expect(prd).toContainText("Imported as guest-checkout v");
-  await page.getByTestId("nav-inbox").click();
-  await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);
+  await noRowInTheInbox(page);
   await page.goto("/documents/guest-checkout");
   const again = page.getByTestId("version-inspector").getByTestId("version-imported-again");
   await expect(again).toHaveText(/^imported again by .+ on \d{4}-\d{2}-\d{2} \d{2}:\d{2} \S+$/);
@@ -118,37 +132,52 @@ test("a run that finished with no document: an Inbox row says why and what to do
 
 test("the No document row clears itself once a later run imports the document", async ({ page }) => {
   await noDocumentScenario(page);
+  // In-app navigation keeps the pages left behind in the DOM, hidden (cacheComponents): Home's
+  // Needs you draws the same row, and the finished run's page the same segment. Only what is
+  // shown counts.
   await page.getByTestId("nav-inbox").click();
-  const row = page.getByTestId("inbox-no-document");
+  await expect(page).toHaveURL(/\/inbox$/);
+  const row = page.getByTestId("inbox-no-document").filter({ visible: true });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("or start a new run");
 
   // The owner follows the advice: a new run of the same document, from the finished run.
   await page.getByRole("row").filter({ has: row }).getByRole("link", { name: "Open" }).click();
-  await page.getByTestId("segment-prd_draft").getByRole("button", { name: "Start a new run" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${NO_DOCUMENT_RUN}$`));
+  await page.getByTestId("segment-prd_draft").filter({ visible: true }).getByRole("button", { name: "Start a new run" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("PRD document")).toHaveValue("guest-checkout");
   await dialog.getByRole("button", { name: "Estimate" }).click();
   await dialog.getByRole("button", { name: "Start run" }).click();
   await expect(page).not.toHaveURL(new RegExp(NO_DOCUMENT_RUN));
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  const runUrl = page.url();
 
-  // Its stops approved, its PRD draft imports a version of guest-checkout.
-  const prd = page.getByTestId("segment-prd_draft");
-  for (let i = 0; i < 8 && !(await prd.getByText("Imported as guest-checkout v1").count()); i++) {
+  // Its stops approved up to the PRD review, which is decided in the version its draft made.
+  const prd = page.getByTestId("segment-prd_draft").filter({ visible: true });
+  const review = prd.getByTestId("checkpoint-prd_review").filter({ hasText: "Waiting" });
+  for (let i = 0; i < 8 && !(await review.count()); i++) {
     await page.getByRole("button", { name: "Check agents now" }).click();
-    const approve = page.getByTestId(/^checkpoint-/).filter({ hasText: "Waiting" }).getByRole("button", { name: "Approve and continue" });
+    const approve = page
+      .getByTestId(/^checkpoint-/)
+      .filter({ visible: true, hasText: "Waiting" })
+      .getByRole("button", { name: "Approve and continue" });
     if (await approve.count()) {
       await approve.first().click();
       await expect(approve).toHaveCount(0);
     }
   }
-  await expect(prd).toContainText("Imported as guest-checkout v1");
+  await review.getByRole("link", { name: "Open review" }).click();
+  await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1\?run_review=/);
+  const bar = page.getByTestId("run-review-bar").filter({ visible: true });
+  await bar.getByRole("button", { name: "Approve draft" }).click();
+  await bar.getByRole("group", { name: "Confirm Approve draft" }).getByRole("button", { name: "Approve draft" }).click();
+  await expect(bar).toContainText("Approved");
+  await page.goto(runUrl);
+  await expect(page.getByTestId("segment-prd_draft")).toContainText("Imported as guest-checkout v1");
 
   // The finished run's row is gone, with nobody dismissing it.
-  await page.getByTestId("nav-inbox").click();
-  await expect(page).toHaveURL(/\/inbox$/);
-  await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);
+  await noRowInTheInbox(page);
 });
 
 test("once another segment imported a version, the refused one says why in plain words and offers a new run", async ({ page }) => {

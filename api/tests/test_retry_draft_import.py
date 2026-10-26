@@ -12,6 +12,7 @@ a run whose review was approved before that finished without a document, and an 
 retries its import after the run finished.
 """
 
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -553,3 +554,44 @@ async def test_a_retry_by_oracle_or_the_system_reads_so(client, owner, runtime, 
             await s.commit()
         (v1,) = (await client.get("/v1/documents/example-prd/versions", headers=auth)).json()
         assert v1["imported_again"].startswith(f"imported again by {who} on ")
+
+
+async def test_the_no_document_rows_never_read_the_drafts(client, owner, runtime, monkeypatch):
+    """protects=the Inbox's No document rows read only the refused import and the kept
+    files' names; fails_when=its reads select a run segment's whole artifacts (the drafts'
+    text) again; no_claim=the Inbox's other rows (Sent back by Oracle reads active runs'
+    segments) or the run page, which reads the drafts it shows."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+    from oracle.runs import service as runs_service
+
+    tenant_id, auth = owner
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    statements: list[str] = []
+    reading = False
+    no_documents = runs_service._no_documents
+
+    async def watched(db):
+        nonlocal reading
+        reading = True
+        try:
+            return await no_documents(db)
+        finally:
+            reading = False
+
+    def seen(conn, cursor, statement, *args):
+        if reading:
+            statements.append(statement)
+
+    monkeypatch.setattr(runs_service, "_no_documents", watched)
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        inbox = await _inbox(client, auth)
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+    assert len(_rows(inbox, run)) == 1 and statements
+    # A whole artifacts column, not one of its keys (artifacts['import'], artifacts -> 'import').
+    whole = re.compile(r"run_segments\.artifacts(?!\s*(->|#>|\[))")
+    assert not [s for s in statements if whole.search(s)]
