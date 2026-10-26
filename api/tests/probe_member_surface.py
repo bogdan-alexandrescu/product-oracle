@@ -523,8 +523,13 @@ async def _fetch_files(client, ctx, s: dict, who: str, sec: Secrets, out: Out) -
                 except TimeoutError:
                     body, status = "", "timeout"
                 out.counts["files_fetched"] += 1
-                _record(out, caller, f"{tool} {json.dumps(args)}", sec.find(body, _sent(args)),
-                        status)  # fmt: skip
+                found = sec.find(body, _sent(args))
+                # #621 review: an owner reads every file; the control, as over REST.
+                if caller.startswith("owner"):
+                    out.counts["owner_responses_with_a_secret"] += bool(found)
+                    out.statuses[str(status)] += 1
+                    continue
+                _record(out, caller, f"{tool} {json.dumps(args)}", found, status)
 
     role, _, how = who.partition("-")
     if role == "member" and how == "run":
