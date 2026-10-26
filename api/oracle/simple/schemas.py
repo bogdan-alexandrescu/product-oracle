@@ -1,5 +1,5 @@
 """Simple S2 (#723): the company-wide roadmap read and the date suggestions; S3a: the
-change engine's sessions and changes."""
+change engine's sessions and changes; S3b: working drafts."""
 
 import datetime as dt
 import uuid
@@ -152,6 +152,11 @@ class SimpleRoadmapOut(BaseModel):
     groups: list[SimpleGroup]
     items: list[SimpleRoadmapItem]
     milestones: list[SimpleMilestone]
+    # S3b: changes waiting in working drafts and proposals of roadmaps whose drafts the
+    # reader may not see (the banner's count, no details: they read the published version).
+    changes_in_review: int = 0
+    # S3b: the open drafts the reader sees (their items read as the draft has them).
+    drafts: list["SimpleDraftBrief"] = []
 
 
 class DateSuggestionEdit(BaseModel):
@@ -240,6 +245,9 @@ class SimpleChangeOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID | None
     document_id: uuid.UUID | None
+    # S3b: the working drafts an applied change wrote (empty: a proposal, a non-versioned
+    # target).
+    draft_ids: list[uuid.UUID] = []
     op: ChangeOp
     target: dict[str, Any]
     before: dict[str, Any]
@@ -301,3 +309,63 @@ class InboxSimpleChange(BaseModel):
     reason: str | None
     decision_reason: str | None
     state: Literal["new", "open", "done"]
+
+
+DraftStatus = Literal["working", "submitted", "approved", "discarded"]
+
+
+class SimpleDraftBrief(BaseModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    status: DraftStatus
+    changes: int
+
+
+class SimpleDraftOut(BaseModel):
+    """A working draft of one roadmap (S3b): its changes until submitted, then the version
+    in review and who it waits on."""
+
+    id: uuid.UUID
+    document: SimpleDocRef
+    status: DraftStatus
+    # The version it was opened on, and the one submitting it imported.
+    base_version: int | None
+    version: int | None
+    created_by: uuid.UUID
+    created_at: dt.datetime
+    participant_ids: list[uuid.UUID]
+    # Applied changes in it, not undone.
+    changes: int
+    submitted_at: dt.datetime | None
+    submitted_by: uuid.UUID | None
+    # The decider approved (in a meeting or not); the version publishes when no required
+    # reviewer is left in ``waiting_on``.
+    decider_approved: bool
+    waiting_on: list[uuid.UUID]
+    approved_at: dt.datetime | None
+    # What else holds the version back (the review policy's blockers), on approve.
+    blocked_by: list[str] = []
+    can_submit: bool
+    can_resume: bool
+    can_approve: bool
+
+
+class SimpleResumeOut(BaseModel):
+    session: SimpleSessionOut
+    draft: SimpleDraftOut
+
+
+class InboxSimpleApproval(BaseModel):
+    """A roadmap version from a Simple draft waiting for my approval as a required
+    reviewer (``simple_approvals``, counted in ``total``)."""
+
+    draft_id: uuid.UUID
+    document: SimpleDocRef
+    version: int | None
+    submitted_by: uuid.UUID | None
+    submitted_at: dt.datetime | None
+    decider_approved: bool
+    state: Literal["new", "open"]
+
+
+SimpleRoadmapOut.model_rebuild()

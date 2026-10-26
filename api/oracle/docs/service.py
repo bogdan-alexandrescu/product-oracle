@@ -415,6 +415,8 @@ async def imported_again(
 
 
 async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
+    from oracle.simple import drafts as simple_drafts
+
     document = await get_document_or_404(db, doc)
     versions = await list_versions(db, document)
     latest = versions[-1] if versions else None
@@ -428,6 +430,7 @@ async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
             (await _update_periods(db, [document])).get(document.id),
         ),
         versions=versions,
+        changes_in_review=await simple_drafts.changes_in_review(db, document.id),
     )
 
 

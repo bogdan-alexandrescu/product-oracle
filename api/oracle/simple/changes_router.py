@@ -8,6 +8,16 @@ run's token is refused (the ``simple`` area is in no run-token scope, oracle.mcp
 - ``POST /v1/simple/changes/{id}/undo``: its author, in its open session.
 - ``POST /v1/simple/changes/{id}/accept|decline``: those who decide the proposal.
 - ``GET /v1/simple/changes``: viewer and up; the changes the caller may see.
+
+S3b, working drafts (oracle.simple.drafts):
+
+- ``GET /v1/simple/drafts``: viewer and up; the open drafts the caller may see.
+- ``GET /v1/simple/drafts/{id}``: one of them.
+- ``POST /v1/simple/drafts/{id}/submit``: an owner or the roadmap's decider (with none, its
+  owner): the draft becomes the next version, in review.
+- ``POST /v1/simple/drafts/{id}/approve``: the decider (held until the required reviewers
+  have approved) or a required reviewer.
+- ``POST /v1/simple/drafts/{id}/resume``: its author or the decider: a new session on it.
 """
 
 import uuid
@@ -16,7 +26,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.simple import changes
+from oracle.simple import changes, drafts
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
     ChangeStatus,
@@ -25,6 +35,8 @@ from oracle.simple.schemas import (
     SimpleChangeOut,
     SimpleChangeResult,
     SimpleDecisionIn,
+    SimpleDraftOut,
+    SimpleResumeOut,
     SimpleSessionIn,
     SimpleSessionOut,
 )
@@ -41,7 +53,7 @@ CONFLICT = {
 async def _run(db, coro):
     try:
         return await coro
-    except changes.ChangeError as e:
+    except (changes.ChangeError, drafts.DraftError) as e:
         await db.rollback()
         raise HTTPException(e.status, e.detail) from e
 
@@ -132,3 +144,54 @@ async def list_simple_changes(
     """Changes newest first: those the caller made, decides or reviews, or whose session
     they started (owners: all); everyone else sees none (the published version only)."""
     return await _run(db, changes.listing(db, principal, session, document, status_, mine))
+
+
+@router.get("/drafts", response_model=list[SimpleDraftOut], name="list_simple_drafts")
+async def list_simple_drafts(principal: Reader, db: TenantDB) -> list[SimpleDraftOut]:
+    """The open working and submitted drafts the caller may see: their participants, the
+    company's owners, the roadmap's decider, required reviewers and owners."""
+    return await _run(db, drafts.listing(db, principal))
+
+
+@router.get("/drafts/{draft_id}", response_model=SimpleDraftOut, name="get_simple_draft")
+async def get_simple_draft(draft_id: uuid.UUID, principal: Reader, db: TenantDB) -> SimpleDraftOut:
+    """One draft the caller may see (404 otherwise)."""
+    return await _run(db, drafts.one(db, principal, draft_id))
+
+
+async def _commit(db, coro):
+    out = await _run(db, coro)
+    await db.commit()
+    return out
+
+
+@router.post("/drafts/{draft_id}/submit", response_model=SimpleDraftOut,
+             name="submit_simple_draft")  # fmt: skip
+async def submit_simple_draft(
+    draft_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleDraftOut:
+    """Submit the draft: it is imported as the roadmap's next version and goes through the
+    document's review policy; readers keep the published version until it is approved."""
+    return await _commit(db, drafts.submit(db, principal, draft_id))
+
+
+@router.post("/drafts/{draft_id}/approve", response_model=SimpleDraftOut,
+             name="approve_simple_draft")  # fmt: skip
+async def approve_simple_draft(
+    draft_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleDraftOut:
+    """Approve a submitted draft: the decider's approval waits for every required
+    reviewer's; a required reviewer's approves every section of the version. The version
+    is approved (published to readers) when all are in."""
+    return await _commit(db, drafts.approve(db, principal, draft_id))
+
+
+@router.post("/drafts/{draft_id}/resume", response_model=SimpleResumeOut,
+             name="resume_simple_draft")  # fmt: skip
+async def resume_simple_draft(
+    draft_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleResumeOut:
+    """Open a session on a working draft whose session closed: its author or the decider."""
+    s, d = await _run(db, drafts.resume(db, principal, draft_id))
+    await db.commit()
+    return SimpleResumeOut(session=changes.session_out(s), draft=d)

@@ -178,9 +178,11 @@ async def test_submit_goes_through_the_review_policy(client):
     w = await world(reviewers=("approver",))
     change = (await edit_title(client, w, "decider")).json()["change"]
     d = await the_draft(client, w)
-    for who in ("commenter", "approver"):
+    # A commenter does not see the draft (404); the required reviewer sees it, but does
+    # not change the roadmap (403).
+    for who, code in (("commenter", 404), ("approver", 403)):
         r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_(who))
-        assert r.status_code == 403, (who, r.text)
+        assert r.status_code == code, (who, r.text)
     r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     out = r.json()
@@ -212,7 +214,7 @@ async def test_submit_goes_through_the_review_policy(client):
     assert r.json()["status"] == "submitted" and r.json()["decider_approved"]
     assert title_in(await roadmap(client, w, "viewer"), "edit_title-a") == TITLE
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("commenter"))
-    assert r.status_code == 403
+    assert r.status_code == 404
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("approver"))
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "approved" and r.json()["waiting_on"] == []
@@ -232,7 +234,7 @@ async def test_approve_in_meeting_present_and_absent(client):
                               headers=w.ctx.as_("decider"))).status_code == 200  # fmt: skip
     async with tenant_session(w.ctx.tenant_id) as s:
         session = await s.get(SimpleSession, uuid.UUID(sid))
-        out = await drafts.approve_in_meeting(
+        [out] = await drafts.approve_in_meeting(
             s, session, w.ctx.users["decider"].id, [w.ctx.users["approver"].id]
         )
         await s.commit()
@@ -274,9 +276,9 @@ async def test_resume_rules(client, clock):
     assert d["status"] == "working" and d["changes"] == 1
     r = await client.post(f"{CHANGES}/{change['id']}/undo", headers=w.ctx.as_("decider"))
     assert r.status_code == 409
-    for who in ("commenter", "approver", "owner"):
+    for who, code in (("commenter", 404), ("approver", 404), ("owner", 403)):
         r = await client.post(f"{DRAFTS}/{d['id']}/resume", headers=w.ctx.as_(who))
-        assert r.status_code == 403, (who, r.text)
+        assert r.status_code == code, (who, r.text)
     r = await client.post(f"{DRAFTS}/{d['id']}/resume", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     session = r.json()["session"]

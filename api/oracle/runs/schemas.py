@@ -11,7 +11,7 @@ from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 from oracle.roadmap.schemas import InboxDateBasis
-from oracle.simple.schemas import InboxSimpleChange
+from oracle.simple.schemas import InboxSimpleApproval, InboxSimpleChange
 
 Flow = Literal[
     "baseline_to_prd",
@@ -1498,6 +1498,9 @@ class InboxOut(BaseModel):
     # decisions on my proposals of the last 30 days.
     simple_proposals: list[InboxSimpleChange] = []
     simple_decisions: list[InboxSimpleChange] = []
+    # Simple S3b: versions from Simple drafts waiting for my approval as a required
+    # reviewer (in ``total``).
+    simple_approvals: list[InboxSimpleApproval] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

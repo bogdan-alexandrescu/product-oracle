@@ -8,6 +8,11 @@ date suggestion (oracle.simple.suggestions), its milestone, dependencies both wa
 (the first confirmed goal its feature supports, in goal key order), track, PRD, status and
 constraint flags (oracle.simple.constraints).
 
+S3b: a roadmap's working draft (oracle.simple.drafts) is read in place of its published
+items by those who may see it (``overlays``); everyone else gets the published version and
+``changes_in_review``. A version submitted from a draft is never shown before it is
+approved.
+
 It reads in bulk, a fixed number of statements whatever the company's size, and writes
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
@@ -109,11 +114,13 @@ def can_decide(principal: Any, entry: Entry, deciders: dict[uuid.UUID, uuid.UUID
     return entry.track is not None and entry.track.owner_id == user_id
 
 
-def _versions(rows: list[Any], with_items: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+def _versions(
+    rows: list[Any], with_items: set[uuid.UUID], hidden: set[uuid.UUID] | None = None
+) -> dict[uuid.UUID, uuid.UUID]:
     """Roadmap document id -> the version whose items are shown."""
     by_doc: dict[uuid.UUID, list[Any]] = defaultdict(list)
     for v in rows:
-        if v.id in with_items:
+        if v.id in with_items and v.id not in (hidden or set()):
             by_doc[v.document_id].append(v)
     out = {}
     for doc_id, vs in by_doc.items():
@@ -123,8 +130,11 @@ def _versions(rows: list[Any], with_items: set[uuid.UUID]) -> dict[uuid.UUID, uu
     return out
 
 
-async def load(db: AsyncSession) -> Read:
-    """Everything the read needs, as the session's principal may see it."""
+async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | None = None) -> Read:
+    """Everything the read needs, as the session's principal may see it; ``overlays``
+    (roadmap document id -> {item id -> fields}): the working drafts the reader sees."""
+    from oracle.simple import drafts
+
     today = await company_time.company_today(db)
     windows = dates.windows(await company_horizons(db), today)
     docs = {
@@ -152,7 +162,7 @@ async def load(db: AsyncSession) -> Read:
             .distinct()
         )
     )
-    shown = _versions(versions, with_items)
+    shown = _versions(versions, with_items, await drafts.submitted_versions(db))
     rows: list[RoadmapItem] = []
     if shown:
         rows = list(
@@ -162,6 +172,11 @@ async def load(db: AsyncSession) -> Read:
                 .order_by(RoadmapItem.position, RoadmapItem.item_key)
             )
         )
+    if overlays:
+        rows = [
+            drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id))) for r in rows
+        ]
+        rows.sort(key=lambda r: (r.position, r.item_key))
     tracks = {t.id: t for t in await db.scalars(select(ProductTrack))}
     track_of_prd = {t.prd_document_id: t for t in tracks.values()}
     milestones = list(
@@ -505,7 +520,10 @@ async def build(
     start: date | None = None,
     end: date | None = None,
 ) -> SimpleRoadmapOut:
-    read = await load(db)
+    from oracle.simple import drafts
+
+    seen = await drafts.reader(db, principal)
+    read = await load(db, seen.overlays)
     shown = [
         e
         for e in read.entries
@@ -547,4 +565,6 @@ async def build(
             )
             for m in read.milestones
         ],
+        changes_in_review=seen.changes_in_review,
+        drafts=seen.visible,
     )

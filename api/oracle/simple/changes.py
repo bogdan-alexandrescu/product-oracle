@@ -6,8 +6,9 @@ roadmap names no decider, its owner (the item's track owner) applies a change di
 (oracle.simple.service.can_decide, the rule that decides date suggestions); approvers and
 commenters propose it, routed to the decider, else the roadmap's owner, else the
 company's owners, any one of whom accepts or declines it; viewers and runs are refused.
-S3b routes applied changes of versioned documents into the session's working draft; here
-they write the items.
+S3b: applied changes of a roadmap's items go into the roadmap's working draft
+(oracle.simple.drafts), never into the published version's rows; readers who may see the
+draft read the items as it has them, everyone else the published version.
 
 **Concurrency**: ``before`` holds the fields the change writes as the caller saw them. When
 the stored values differ, nothing is written: 409 with the current values and who changed
@@ -52,8 +53,8 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import HORIZONS, RoadmapItem
-from oracle.simple import service
-from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleSession
+from oracle.simple import drafts, service
+from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleDraft, SimpleSession
 from oracle.simple.schemas import (
     InboxSimpleChange,
     SimpleChangeIn,
@@ -504,21 +505,16 @@ async def _plan(
 
 
 async def _apply(
-    db: AsyncSession, c: SimpleChange, values: dict[str, Any], principal: Any, undo: bool = False
+    db: AsyncSession,
+    c: SimpleChange,
+    values: dict[str, Any],
+    principal: Any,
+    session: SimpleSession,
+    undo: bool = False,
 ) -> None:
-    """Write ``values`` (a change's after, or its before for an undo) to the items."""
-    if c.op in FIXES:
-        rows = {
-            str(r.id): r
-            for r in await db.scalars(
-                select(RoadmapItem).where(RoadmapItem.id.in_([uuid.UUID(k) for k in values]))
-            )
-        }
-        for k, v in values.items():
-            write(rows[k], v, c.target)
-    else:
-        row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
-        write(row, values, c.target)
+    """Write ``values`` (a change's after, or its before for an undo) into the working
+    drafts of the items' roadmaps (S3b), and the change's own side effects."""
+    c.draft_ids = await drafts.write_items(db, c, values, session, FIXES, write, undo=undo)
     if c.op == "accept_date_suggestion":
         s = await db.get(RoadmapDateSuggestion, uuid.UUID(c.target["suggestion_id"]))
         if s is not None and not undo and s.status == "open":
@@ -536,19 +532,22 @@ async def _apply(
 
 
 async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> dict[str, Any]:
-    """The stored values of the fields ``like`` names (keyed as it is)."""
+    """The stored values of the fields ``like`` names (keyed as it is), as the items'
+    open drafts have them."""
     if c.op in FIXES:
-        rows = {
-            str(r.id): r
-            for r in await db.scalars(
-                select(RoadmapItem).where(RoadmapItem.id.in_([uuid.UUID(k) for k in like]))
-            )
-        }
+        rows = await drafts.effective(
+            db,
+            list(
+                await db.scalars(
+                    select(RoadmapItem).where(RoadmapItem.id.in_([uuid.UUID(k) for k in like]))
+                )
+            ),
+        )
         return {k: read(rows[k], list(v), c.target) for k, v in like.items() if k in rows}
     row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
     if row is None:
         raise ChangeError(404, "The item is gone")
-    return read(row, list(like), c.target)
+    return read(await drafts.effective_row(db, row), list(like), c.target)
 
 
 async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
@@ -559,8 +558,10 @@ async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
         await db.refresh(r)
 
 
-async def _flags(db: AsyncSession, c: SimpleChange) -> list[SimpleItemFlags]:
-    read_ = await service.load(db)
+async def _flags(
+    db: AsyncSession, c: SimpleChange, overlays: dict[uuid.UUID, dict[str, Any]]
+) -> list[SimpleItemFlags]:
+    read_ = await service.load(db, overlays)
     by_id = read_.by_id()
     ids: list[uuid.UUID] = []
     for k in sorted(_touched(c)):
@@ -602,7 +603,8 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     if body.op in FIXES and body.target.get("subject"):
         ids.append(_uuid(body.target["subject"], "subject"))
     await _lock(db, ids)
-    read_ = await service.load(db)
+    seen = await drafts.overlays_for(db, principal)
+    read_ = await service.load(db, seen)
     entry = read_.by_id().get(ids[0])
     if entry is None:
         raise ChangeError(404, "No such roadmap item")
@@ -623,14 +625,13 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
         routed_to=[] if applies else await routed_to(db, entry, read_),
     )
     if applies:
-        await _apply(db, c, after, principal)
-        flags = await _flags(db, c)
+        await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
+        flags = await _flags(db, c, await drafts.overlays_for(db, principal))
         session.last_change_at = now  # type: ignore[union-attr]
     else:
-        nested = await db.begin_nested()
-        await _apply(db, c, after, principal)
-        flags = await _flags(db, c)
-        await nested.rollback()
+        # As if applied, on what the proposer reads; nothing is written.
+        rows = {str(e.row.id): e.row for e in read_.entries}
+        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, FIXES, write))
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
@@ -657,7 +658,7 @@ async def decide(
     c = await _get(db, change_id)
     if c.op in targets.OPS:
         return await targets.decide(db, principal, c, action, reason)
-    read_ = await service.load(db)
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
         raise ChangeError(404, "No such change")
@@ -673,11 +674,14 @@ async def decide(
         current = await _current(db, c, c.before)
         if current != c.before:
             raise await _conflict(db, current, _touched(c), "outdated")
-        await _apply(db, c, c.after, principal)
+        # Into the decider's working draft (their editing session's).
+        session = await _session_for_change(db, me, None, True, now)
+        await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
+        session.last_change_at = now  # type: ignore[union-attr]
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await _flags(db, c)
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
@@ -706,14 +710,14 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
     current = await _current(db, c, c.after)
     if current != c.after:
         raise await _conflict(db, current, _touched(c), "Changed since")
-    await _apply(db, c, c.before, principal, undo=True)
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
                      before=c.after, after=c.before, status="undone", by=me, at=now,
-                     undoes_id=c.id, routed_to=[])  # fmt: skip
+                     undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip
+    await _apply(db, u, c.before, principal, session, undo=True)
     db.add(u)
     session.last_change_at = now
     await db.flush()
-    flags = await _flags(db, c)
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
     await audit.record(db, principal, "simple_change.undone", "simple_change", u.id,
                        data={"op": c.op, "target": c.target, "undoes_id": str(c.id)})  # fmt: skip
     await db.commit()
@@ -736,7 +740,9 @@ async def _reviewers(db: AsyncSession) -> dict[uuid.UUID, set[uuid.UUID]]:
 class _View:
     """What one reader may see and do over a set of changes."""
 
-    def __init__(self, principal: Any, read_: service.Read, reviewers, sessions, undone) -> None:
+    def __init__(
+        self, principal: Any, read_: service.Read, reviewers, sessions, undone, people=None
+    ) -> None:
         self.principal = principal
         self.me = getattr(principal, "user_id", None)
         self.by_id = read_.by_id()
@@ -745,6 +751,9 @@ class _View:
         self.reviewers = reviewers
         self.sessions: dict[uuid.UUID, SimpleSession] = sessions
         self.undone: set[uuid.UUID] = undone
+        # S3b: each draft's participants and each roadmap's owners (its tracks' owners).
+        self.participants: dict[uuid.UUID, set[uuid.UUID]] = (people or {}).get("drafts", {})
+        self.owners: dict[uuid.UUID, set[uuid.UUID]] = (people or {}).get("owners", {})
         self.now = company_time.now()
 
     def entry(self, c: SimpleChange) -> service.Entry | None:
@@ -775,6 +784,10 @@ class _View:
             return True
         if c.document_id is not None and self.me in self.reviewers.get(c.document_id, set()):
             return True
+        if any(self.me in self.participants.get(d, set()) for d in c.draft_ids or []):
+            return True
+        if c.document_id is not None and self.me in self.owners.get(c.document_id, set()):
+            return True
         return self.may_decide(c)
 
     def can_undo(self, c: SimpleChange) -> bool:
@@ -792,6 +805,7 @@ class _View:
 def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChangeOut:
     return SimpleChangeOut(
         id=c.id, session_id=c.session_id, document_id=c.document_id, op=c.op,  # type: ignore[arg-type]
+        draft_ids=list(c.draft_ids or []),
         target=c.target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
         by=c.by, by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
@@ -816,7 +830,18 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
         if cids
         else set()
     )
-    return _View(principal, read_, await _reviewers(db), sessions, undone)
+    dids = {d for c in changes for d in c.draft_ids or []}
+    participants = (
+        {
+            d.id: {d.created_by, *(d.participant_ids or [])}
+            for d in await db.scalars(select(SimpleDraft).where(SimpleDraft.id.in_(dids)))
+        }
+        if dids
+        else {}
+    )
+    owners = (await drafts.who(db, {c.document_id for c in changes if c.document_id})).owners
+    people = {"drafts": participants, "owners": owners}
+    return _View(principal, read_, await _reviewers(db), sessions, undone, people)
 
 
 async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:

@@ -12,7 +12,7 @@ Test cards (protects / fails_when / no_claim):
   roadmap's decider apply every op (the item changes); approvers and commenters propose
   (nothing changes; routed to the decider, else the company's owners); viewers get 403;
   fails_when=a role applies that may only propose, a proposal writes, or a viewer is let
-  in; no_claim=S3b's working drafts of versioned documents.
+  in; no_claim=that the published rows stay (S3b, tests/test_simple_drafts_api.py).
 - test_proposal_routes_to_the_track_owner_without_a_decider: protects=with no decider a
   proposal goes to the roadmap's owner (its track's owner), who applies directly;
   fails_when=it goes to the company's owners instead; no_claim=the web.
@@ -59,7 +59,7 @@ from oracle import company_time
 from oracle.auth.models import User
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import suggestions
+from oracle.simple import drafts, suggestions
 from oracle.simple.models import RoadmapDateSuggestion
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
@@ -145,8 +145,9 @@ class World:
         return self
 
     async def item(self, key: str) -> RoadmapItem:
+        """The item as its roadmap's open draft has it (S3b: applied changes go there)."""
         async with tenant_session(self.ctx.tenant_id) as s:
-            return await s.get(RoadmapItem, self.ids[key])
+            return await drafts.effective_row(s, await s.get(RoadmapItem, self.ids[key]))
 
     def body(self, op: str, **over: Any) -> dict[str, Any]:
         a, b, u = (self.ids[f"{op}-{x}"] for x in "abu")
@@ -215,10 +216,11 @@ async def changed(w: World, op: str) -> bool:
 async def test_permission_matrix(client, role, with_decider):
     ctx = await make_people()
     w = await World(ctx).build(decider=with_decider)
-    # restore needs a cut item first: the owner cuts it.
-    r = await w.post(client, "owner", "cut", target={"item_id": w.ids["restore-a"]},
-                     before={"cut": False}, after={"cut": True})  # fmt: skip
-    assert r.status_code == 201, r.text
+    # restore needs a cut item first: cut in the published version (S3b: an owner's cut
+    # through Simple waits in a draft that proposers may not see).
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, w.ids["restore-a"])).cut = True
+        await s.commit()
     applies = role == "owner" or (role == "decider" and with_decider)
     routed = [str(ctx.users["decider"].id)] if with_decider else [str(ctx.users["owner"].id)]
     for op in OPS:
