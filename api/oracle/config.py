@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     # #710: live reads of a person's own sources (/v1/live/*). "off" (ORACLE_LIVE_READS,
     # the rollback without a deploy) answers 503 there.
     live_reads: Literal["on", "off"] = "on"
+    # #723 Simple: the [Simple | Detailed] switch and Simple's pages (GET /v1/me/capabilities
+    # simple_mode). Off (the default, and the rollback): no switch, everyone lands in Detailed.
+    simple_mode: bool = False
 
     @model_validator(mode="after")
     def _no_reserved_domains_in_production(self) -> "Settings":

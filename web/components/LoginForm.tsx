@@ -8,6 +8,7 @@ import { Button, Chip, InfoTip, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { MOCK_LOGIN } from "@/lib/api/mock/fixtures";
+import { loadLanding } from "@/lib/experience";
 import { safeNextPath } from "@/lib/safe-next";
 
 export function LoginForm() {
@@ -18,7 +19,8 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // Only follow same-site paths (nothing is rendered from it, so the server pass may say /home).
-  const target = typeof window === "undefined" ? "/home" : safeNextPath(next, window.location.origin);
+  // Without one, the person's home: their saved mode's, else their role's (#723, D13).
+  const target = !next ? null : typeof window === "undefined" ? "/home" : safeNextPath(next, window.location.origin);
 
   // Already signed in (e.g. by Google IAP in front of the app): skip the form. A5: a Google
   // sign-in that is not (yet) a member goes to /access, which says where it stands.
@@ -36,7 +38,11 @@ export function LoginForm() {
       })
       .catch(() => true)
       .then((ask) => (ask ? api.GET("/v1/me") : null))
-      .then((res) => live && res?.response.ok && router.replace(target))
+      .then(async (res) => {
+        if (!live || !res?.response.ok) return;
+        const to = target ?? (await loadLanding());
+        if (live) router.replace(to);
+      })
       .catch(() => undefined);
     return () => {
       live = false;
@@ -53,7 +59,7 @@ export function LoginForm() {
         setError(response.status === 401 ? "Invalid email or password." : "Login failed.");
         return;
       }
-      router.push(target);
+      router.push(target ?? (await loadLanding()));
     } catch {
       setError("Cannot reach the API.");
     } finally {

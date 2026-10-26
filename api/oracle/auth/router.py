@@ -7,6 +7,7 @@ from oracle.auth import iap, service
 from oracle.auth.deps import CurrentPrincipal, TenantDB, iap_claims, same_origin
 from oracle.auth.models import ApiToken, User
 from oracle.auth.schemas import AccessNote, AccessStateOut, Capabilities, LoginRequest, Me
+from oracle.authz import has_role
 from oracle.capabilities import PER_ITEM
 from oracle.capabilities import capabilities as role_capabilities
 from oracle.config import get_settings
@@ -145,4 +146,6 @@ async def capabilities(request: Request, principal: CurrentPrincipal, db: Tenant
         operations=role_capabilities(request.app, principal.role, lead),
         decide_engineering_stops=decides(principal.role, principal.user_id, stop, "", leads),
         per_item=PER_ITEM,
+        simple_mode=get_settings().simple_mode,
+        default_experience="detailed" if has_role(principal.role, "approver") else "simple",
     )
