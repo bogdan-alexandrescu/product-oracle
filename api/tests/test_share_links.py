@@ -321,7 +321,7 @@ async def test_the_right_passcode_opens_the_page_with_a_cookie_on_the_links_path
     assert "<!--" not in page.text
     assert "expires" in body_text.lower()
     status = await client.get(f"{PUBLIC}/{token}/status", headers={"Cookie": cookie_of(resp)})
-    assert status.json() == {"state": "active"}
+    assert status.json() == {"state": "active", "allow_download": True}
     # Another link's cookie opens nothing here.
     other = token_of((await create(client, ctx, "owner", passcode="other-passcode-9")).json())
     resp = await client.get(f"{PUBLIC}/{other}", headers={"Cookie": cookie_of(resp)})
@@ -392,7 +392,7 @@ async def test_unknown_expired_and_revoked_answer_the_same_before_the_passcode(c
     assert "This link has ended. Ask the person who sent it for a new one." in ended.text
     assert "Example Labs" not in ended.text
     status = await client.get(f"{PUBLIC}/{token}/status", headers=cookie)
-    assert status.json() == {"state": "ended"}
+    assert status.json() == {"state": "ended", "allow_download": True}
     guess = await unlock(client, "z" * 43, PASSCODE)
     right_on_revoked = await unlock(client, token, PASSCODE)
     assert (right_on_revoked.status_code, right_on_revoked.text) == (guess.status_code, guess.text)
@@ -774,7 +774,9 @@ async def test_a_link_holder_sees_no_other_document_status_or_version(client, ct
                  'class="banner-status"', 'class="banner-version"'):  # fmt: skip
         assert leak not in page.text, leak
     hrefs = re.findall(r'href="([^"]*)"', page.text)
-    assert all(h.startswith("#") for h in hrefs), hrefs
+    # The one link that is not an anchor is the link's own PDF (owner decision 2026-10-26:
+    # Download PDF on a link that allows downloads), on the link's path.
+    assert all(h.startswith("#") or h == f"{token}/pdf" for h in hrefs), hrefs
 
 
 def test_the_per_address_tables_drop_old_entries(monkeypatch):

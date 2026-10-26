@@ -10464,8 +10464,10 @@ export interface paths {
         };
         /**
          * Public Share Status
-         * @description For the web page's server render: ``locked`` until the passcode opened the link
-         *     in this browser (for every token, known or not), then ``active`` or ``ended``.
+         * @description For the web page: ``locked`` until the passcode opened the link in this browser
+         *     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
+         *     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
+         *     only when it is on).
          */
         get: operations["public_share_status"];
         put?: never;
@@ -60417,7 +60419,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description locked (no open cookie), active or ended */
+            /** @description locked (no open cookie), or active or ended with allow_download */
             200: {
                 headers: {
                     [name: string]: unknown;

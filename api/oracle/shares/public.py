@@ -319,7 +319,16 @@ async def public_share(token: str, request: Request) -> Response:
         return _html(render.page("Busy", "<p>Try again in a moment.</p>"), 503,
                      **{"Retry-After": "5"})  # fmt: skip
     await _record_view(link, request, claims, "page")
-    return _html(str(content), 200)
+    page = str(content)
+    if link.allow_download and _navigation(request):
+        page = render.with_download(page, token)
+    return _html(page, 200)
+
+
+def _navigation(request: Request) -> bool:
+    """The browser opened this address itself (no ``Sec-Fetch-Dest``, or ``document``),
+    not the web page's fetch: the web page shows its own Download PDF beside its frame."""
+    return request.headers.get("sec-fetch-dest", "document") == "document"
 
 
 async def _passcode_of(request: Request) -> str:
@@ -510,18 +519,25 @@ async def public_share_pdf(token: str, request: Request) -> Response:
 
 @router.get(
     "/{token}/status",
-    responses={200: {"description": "locked (no open cookie), active or ended"}, 429: {}},
+    responses={
+        200: {"description": "locked (no open cookie), or active or ended with allow_download"},
+        429: {},
+    },
     name="public_share_status",
 )
 async def public_share_status(token: str, request: Request) -> JSONResponse:
-    """For the web page's server render: ``locked`` until the passcode opened the link
-    in this browser (for every token, known or not), then ``active`` or ``ended``."""
+    """For the web page: ``locked`` until the passcode opened the link in this browser
+    (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
+    the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
+    only when it is on)."""
     if (busy := _client_allowed(request)) is not None:
         return busy  # type: ignore[return-value]
     link, claims = await _opened(token, request)
     if link is None or claims is None:
         return _json({"state": "locked"}, 200)
-    return _json({"state": "active" if service.state(link) == "active" else "ended"}, 200)
+    state = "active" if service.state(link) == "active" else "ended"
+    return _json({"state": state, "allow_download": link.allow_download}, 200)
+
 
 
 @short_router.get("/s/{token}")

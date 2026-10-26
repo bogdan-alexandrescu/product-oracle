@@ -7,14 +7,18 @@ import { INPUT } from "@/components/ui";
 import { api } from "@/lib/api/client";
 
 const ENDED = "This link has ended. Ask the person who sent it for a new one.";
-type View = { kind: "loading" } | { kind: "locked"; note: string | null } | { kind: "open"; html: string } | { kind: "ended" } | { kind: "error"; note: string };
+type View = { kind: "loading" } | { kind: "locked"; note: string | null } | { kind: "open"; html: string; download: boolean } | { kind: "ended" } | { kind: "error"; note: string };
+/** The status once the passcode opened the link: allow_download comes only then (never while locked). */
+type Status = { state?: string; allow_download?: boolean };
 
 const path = (token: string) => ({ params: { path: { token } } });
+const status = async (token: string) => (await api.GET("/v1/public/shares/{token}/status", path(token))).data as Status | undefined;
 
 /**
  * The link holder's page (spec-O5 §3, owner answer O5-Q5): the passcode form until the
  * passcode opened the link in this browser, then the page the API rendered for the link's
- * audience, in a sandboxed frame (no script runs in it), with Download PDF. Nothing names
+ * audience, in a sandboxed frame (no script runs in it), with Download PDF when the link
+ * allows downloads (its status's allow_download, owner decision 2026-10-26). Nothing names
  * the company before the passcode, and an ended link says only that it ended.
  */
 export function SharedRoadmap({ token }: { token: string }) {
@@ -24,8 +28,8 @@ export function SharedRoadmap({ token }: { token: string }) {
   const [download, setDownload] = useState<string | null>(null);
   const id = useId();
 
-  const show = async (res: Response, html: string | undefined) => {
-    if (res.ok && html) return setView({ kind: "open", html });
+  const show = async (res: Response, html: string | undefined, download: boolean) => {
+    if (res.ok && html) return setView({ kind: "open", html, download });
     if (res.status === 410) return setView({ kind: "ended" });
     if (res.status === 404) return setView({ kind: "locked", note: "That passcode did not open a link. Check it and the address, or ask the person who sent it." });
     if (res.status === 429) {
@@ -39,13 +43,12 @@ export function SharedRoadmap({ token }: { token: string }) {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const status = await api.GET("/v1/public/shares/{token}/status", path(token));
+      const now = await status(token);
       if (!alive) return;
-      const state = (status.data as { state?: string } | undefined)?.state;
-      if (state === "ended") return setView({ kind: "ended" });
-      if (state !== "active") return setView({ kind: "locked", note: null });
+      if (now?.state === "ended") return setView({ kind: "ended" });
+      if (now?.state !== "active") return setView({ kind: "locked", note: null });
       const page = await api.GET("/v1/public/shares/{token}", { ...path(token), parseAs: "text" });
-      if (alive) await show(page.response, page.data as string | undefined);
+      if (alive) await show(page.response, page.data as string | undefined, now.allow_download === true);
     })().catch(() => alive && setView({ kind: "error", note: "Try again in a moment." }));
     return () => {
       alive = false;
@@ -58,7 +61,9 @@ export function SharedRoadmap({ token }: { token: string }) {
     try {
       // The right passcode sets this link's cookie; the API then answers with the page.
       const out = await api.POST("/v1/public/shares/{token}", { ...path(token), body: { passcode } as never, parseAs: "text" });
-      await show(out.response, out.data as string | undefined);
+      // The cookie now opens the link: its status says whether it allows downloads.
+      const download = out.response.ok ? (await status(token))?.allow_download === true : false;
+      await show(out.response, out.data as string | undefined, download);
       if (out.response.ok) setPasscode("");
     } catch {
       setView({ kind: "error", note: "Try again in a moment." });
@@ -91,7 +96,7 @@ export function SharedRoadmap({ token }: { token: string }) {
               {download}
             </span>
           )}
-          <Button onClick={pdf}>Download PDF</Button>
+          {view.download && <Button onClick={pdf}>Download PDF</Button>}
         </div>
         <iframe title="Shared roadmap" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={view.html} className="w-full flex-1 border-0 bg-white" style={{ minHeight: "80dvh" }} />
       </main>

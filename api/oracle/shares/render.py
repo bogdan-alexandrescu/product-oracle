@@ -22,6 +22,7 @@ does not take export places. The footer is the link's own and is added after the
 
 import html as html_lib
 import re
+import urllib.parse
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, replace
@@ -106,6 +107,16 @@ def _footer(company: str, ctx: ShareContext, zone: str) -> str:
         f"Shared with you by {html_lib.escape(company)} on {html_lib.escape(shared)} · "
         f"link expires {html_lib.escape(expires)}</footer>"
     )
+
+
+def with_download(html: str, token: str) -> str:
+    """The page with a plain Download PDF link (no script) to the link's PDF, for a link
+    that allows downloads; relative, so it stays on the link's path (and its cookie)."""
+    href = html_lib.escape(urllib.parse.quote(token, safe="") + "/pdf")
+    return _with_footer(html, (
+        '<p class="share-download" style="margin-top:1rem">'
+        f'<a href="{href}" download="roadmap.pdf">Download PDF</a></p>'
+    ))  # fmt: skip
 
 
 def _with_footer(html: str, footer: str) -> str:
