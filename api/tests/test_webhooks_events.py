@@ -284,6 +284,55 @@ async def test_disabling_or_demoting_the_creator_pauses_their_webhooks(client, t
         assert (hb.status, hb.paused_reason) == ("paused", "creator_demoted")
 
 
+async def _paused_rows(client, headers) -> list[dict]:
+    inbox = (await client.get("/v1/me/notifications", headers=headers)).json()
+    return [n for n in inbox if n["kind"] == "webhook_paused"]
+
+
+async def test_a_member_change_pausing_a_webhook_puts_a_row_on_every_owners_inbox(
+    client, tenant_id
+):
+    """protects=lane 1 scope ("Inbox rows for member changes"; #625 review major 2): a
+    disable or a demotion that pauses a webhook gives each owner, the one who made the
+    change included, one Inbox row naming the webhook, with Resume and Take over;
+    fails_when=the pause is only in the audit, or an owner gets none or two."""
+    owner = await make_person(tenant_id, "owner@example.com", "owner")
+    second = await make_person(tenant_id, "second.owner@example.com", "owner")
+    approver = await make_person(tenant_id, "approver@example.com", "approver")
+    other = await make_person(tenant_id, "other.approver@example.com", "approver")
+    a = await _hook(client, approver.headers, ["run.started"])
+    b = await _hook(client, other.headers, ["run.started"])
+    resp = await client.post(
+        f"/v1/members/{approver.user.id}/disable", json={}, headers=owner.headers
+    )
+    assert resp.status_code == 200, resp.text
+    for person in (owner, second):
+        (row,) = await _paused_rows(client, person.headers)
+        assert row["title"] == "Webhook Bot paused: Approver was disabled"
+        assert row["data"]["webhook_id"] == a
+        assert row["data"]["reason"] == "creator_disabled"
+        assert row["data"]["actions"] == ["resume", "take_over"]
+        assert row["data"]["href"] == "/settings/webhooks"
+    resp = await client.patch(
+        f"/v1/members/{other.user.id}", json={"role": "commenter"}, headers=owner.headers
+    )
+    assert resp.status_code == 200, resp.text
+    for person in (owner, second):
+        rows = [
+            n for n in await _paused_rows(client, person.headers) if n["data"]["webhook_id"] == b
+        ]
+        (row,) = rows
+        assert row["title"] == "Webhook Bot paused: Other Approver is no longer an approver"
+        assert row["data"]["reason"] == "creator_demoted"
+        assert row["data"]["actions"] == ["resume", "take_over"]
+    # A paused webhook does not pause again: a later change writes no second row.
+    resp = await client.patch(
+        f"/v1/members/{other.user.id}", json={"role": "viewer"}, headers=owner.headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(await _paused_rows(client, owner.headers)) == 2
+
+
 # --- OpenAPI ----------------------------------------------------------------------------------
 
 
