@@ -80,7 +80,7 @@ test("a step SwarmCloud holds reads why and since when on the Runs row and the r
 
 test("a run not started after 30 minutes is an Inbox row with Open and Cancel, counted by the badge", async ({ page }) => {
   await login(page);
-  await page.goto("/inbox");
+  // Read on Home: visiting the Inbox first would file the seeded row under Open.
   const badge = page.getByTestId("nav-inbox-badge");
   await expect(badge).toHaveText(/\d+/);
   const before = Number(await badge.textContent());
