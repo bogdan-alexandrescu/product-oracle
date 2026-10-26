@@ -135,8 +135,10 @@ async def section_keys(w: World, n: int) -> list[str]:
 
 
 async def unlocked(client, w: World) -> None:
-    """The roadmap takes a new Simple change again."""
-    r = await w.post(client, "decider", "move_dates")
+    """The roadmap takes a new Simple change again (on the item as the shown version has
+    it: an approved version's rows are new)."""
+    item = by_key(await roadmap(client, w, "decider"))["move_dates-a"]
+    r = await w.post(client, "decider", "move_dates", target={"item_id": item["id"]})
     assert r.status_code == 201, r.text
     assert r.json()["change"]["status"] == "applied"
 

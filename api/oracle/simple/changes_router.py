@@ -17,6 +17,8 @@ S3b, working drafts (oracle.simple.drafts):
   owner): the draft becomes the next version, in review.
 - ``POST /v1/simple/drafts/{id}/approve``: the decider (held until the required reviewers
   have approved) or a required reviewer.
+- ``POST /v1/simple/drafts/{id}/withdraw``: its author or the decider: a submitted draft
+  returns to working (its changes kept); the version is marked withdrawn.
 - ``POST /v1/simple/drafts/{id}/resume``: its author or the decider: a new session on it.
 """
 
@@ -184,6 +186,17 @@ async def approve_simple_draft(
     reviewer's; a required reviewer's approves every section of the version. The version
     is approved (published to readers) when all are in."""
     return await _commit(db, drafts.approve(db, principal, draft_id))
+
+
+@router.post("/drafts/{draft_id}/withdraw", response_model=SimpleDraftOut,
+             name="withdraw_simple_draft")  # fmt: skip
+async def withdraw_simple_draft(
+    draft_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleDraftOut:
+    """Withdraw a submitted draft from review: it is a working draft again, its changes
+    kept and undoable in their session; the version it imported is marked withdrawn and
+    can't be approved. Its author or the roadmap's decider."""
+    return await _commit(db, drafts.withdraw(db, principal, draft_id))
 
 
 @router.post("/drafts/{draft_id}/resume", response_model=SimpleResumeOut,

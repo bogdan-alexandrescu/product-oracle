@@ -6,8 +6,12 @@ a run's token is refused (the ``simple`` area is in no run-token scope, oracle.m
 - ``GET /v1/simple/roadmap/date-suggestions``: viewer and up, the suggestions of the items
   the reader sees, each with ``can_decide``.
 - ``POST .../date-suggestions/refresh``: approver and up, regenerates them now.
-- ``POST .../date-suggestions/{id}/accept|edit|dismiss``: an owner or the roadmap's decider
-  (with no decider, the roadmap's owner): oracle.simple.service.can_decide.
+- ``POST .../date-suggestions/{id}/accept|edit``: through the change engine (D-b,
+  oracle.simple.changes ``accept_date_suggestion``): who decides (oracle.simple.service.
+  can_decide) applies it into the roadmap's working draft, approvers and commenters
+  propose it; never the published version's dates. 409 ``outdated`` when the item has
+  dates now.
+- ``POST .../date-suggestions/{id}/dismiss``: who decides (can_decide).
 """
 
 import uuid
@@ -18,12 +22,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
-from oracle.simple import service, suggestions
+from oracle.simple import changes, drafts, service, suggestions
 from oracle.simple.schemas import (
     DateSuggestionEdit,
     DateSuggestionOut,
     RefreshOut,
     RoadmapGroup,
+    SimpleChangeResult,
     SimpleRoadmapOut,
 )
 
@@ -40,6 +45,7 @@ def _people(role: str):
 
 
 Reader = Annotated[Principal, Depends(_people("viewer"))]
+Commenter = Annotated[Principal, Depends(_people("commenter"))]
 Approver = Annotated[Principal, Depends(_people("approver"))]
 Text = Annotated[str | None, Query(max_length=200)]
 
@@ -87,31 +93,43 @@ async def refresh_date_suggestions(principal: Approver, db: TenantDB) -> Refresh
     return RefreshOut(open=count)
 
 
-async def _decide(db, principal, suggestion_id, action, body=None) -> DateSuggestionOut:
+async def _decide(db, principal, suggestion_id, action) -> DateSuggestionOut:
     try:
-        s, item, may = await suggestions.decide(
-            db, principal, suggestion_id, action,
-            body.start_date if body else None, body.end_date if body else None,
-        )  # fmt: skip
+        s, item, may = await suggestions.decide(db, principal, suggestion_id, action)
     except suggestions.SuggestionError as e:
         raise HTTPException(e.status, str(e)) from e
     return service.suggestion_out(s, item, may)
 
 
-@router.post("/date-suggestions/{suggestion_id}/accept", response_model=DateSuggestionOut)
+async def _accept(db, principal, suggestion_id, body=None) -> SimpleChangeResult:
+    try:
+        return await suggestions.accept(
+            db, principal, suggestion_id,
+            body.start_date if body else None, body.end_date if body else None,
+        )  # fmt: skip
+    except suggestions.SuggestionError as e:
+        raise HTTPException(e.status, str(e)) from e
+    except (changes.ChangeError, drafts.DraftError) as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+
+
+@router.post("/date-suggestions/{suggestion_id}/accept", response_model=SimpleChangeResult)
 async def accept_date_suggestion(
-    suggestion_id: uuid.UUID, principal: Reader, db: TenantDB
-) -> DateSuggestionOut:
-    """Accept: the item takes the suggested dates (``date_source`` accepted)."""
-    return await _decide(db, principal, suggestion_id, "accept")
+    suggestion_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleChangeResult:
+    """Accept: an ``accept_date_suggestion`` change (D-b). Who decides puts the suggested
+    dates into the roadmap's working draft (``date_source`` accepted, undoable); others
+    propose it. 409 ``outdated`` when the item has dates now."""
+    return await _accept(db, principal, suggestion_id)
 
 
-@router.post("/date-suggestions/{suggestion_id}/edit", response_model=DateSuggestionOut)
+@router.post("/date-suggestions/{suggestion_id}/edit", response_model=SimpleChangeResult)
 async def edit_date_suggestion(
-    suggestion_id: uuid.UUID, body: DateSuggestionEdit, principal: Reader, db: TenantDB
-) -> DateSuggestionOut:
-    """Edit: the item takes these dates instead (``date_source`` accepted)."""
-    return await _decide(db, principal, suggestion_id, "edit", body)
+    suggestion_id: uuid.UUID, body: DateSuggestionEdit, principal: Commenter, db: TenantDB
+) -> SimpleChangeResult:
+    """Edit: the same change with these dates instead (the suggestion becomes edited)."""
+    return await _accept(db, principal, suggestion_id, body)
 
 
 @router.post("/date-suggestions/{suggestion_id}/dismiss", response_model=DateSuggestionOut)

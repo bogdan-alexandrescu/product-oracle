@@ -27,8 +27,10 @@ as if applied, inside a savepoint that is rolled back.
 Ops and the fields they write (``before`` must name the key fields):
 
 - ``move_dates``: start_date, end_date (``date_source`` becomes typed).
-- ``accept_date_suggestion``: the open suggestion's dates (``date_source`` accepted; the
-  suggestion is accepted, reopened by an undo).
+- ``accept_date_suggestion``: the open suggestion's dates, or with ``after`` start_date
+  and end_date the person's (the edit variant, D-b); ``date_source`` accepted; the
+  suggestion is accepted (edited), reopened by an undo. 409 ``outdated`` when the item has
+  dates now (``before`` names the undated item the suggestion was made for).
 - ``change_horizon``: horizon. ``reorder``: position. ``cut`` / ``restore``: cut.
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
@@ -45,7 +47,7 @@ from collections import deque
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -136,6 +138,12 @@ async def close_idle(db: AsyncSession) -> int:
 
 
 async def _open_editing(db: AsyncSession, me: uuid.UUID, now: datetime) -> SimpleSession | None:
+    # One person's session starts one at a time: two crossing calls reuse one session
+    # instead of meeting on the open-editing unique index (a 500).
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+        {"k": f"simple_sessions.editing:{me}"},
+    )
     s = await db.scalar(
         select(SimpleSession)
         .where(
@@ -290,14 +298,29 @@ async def _company_owners(db: AsyncSession) -> list[uuid.UUID]:
 
 
 async def routed_to(db: AsyncSession, entry: service.Entry, read_: service.Read) -> list:
-    """Who decides a proposal on this item: the roadmap's decider, else its owner (the
-    item's track owner), else the company's owners."""
-    decider = read_.deciders.get(entry.roadmap.id)
-    if decider is not None:
-        return [decider]
-    if entry.track is not None and entry.track.owner_id is not None:
-        return [entry.track.owner_id]
-    return await _company_owners(db)
+    """Who decides a proposal on this item (D-a): the roadmap's decider, else its track
+    owner when an approver or owner, else the company's owners. Stored on the proposal as
+    made; an open proposal is shown routed to whoever decides now (:meth:`_View.route`)."""
+    return service.decider_ids(entry, read_.deciders) or await _company_owners(db)
+
+
+def current_route(
+    c: SimpleChange, by_id: dict[uuid.UUID, service.Entry], deciders: dict, owners: list
+) -> list[uuid.UUID]:
+    """An open proposal's decider now (S3a-minor: the decider may have changed since it
+    was made); its stored route when its item is not read."""
+    if c.status != "proposed":
+        return list(c.routed_to or [])
+    item_id = c.target.get("item_id")
+    if not item_id:
+        return list(owners)
+    try:
+        e = by_id.get(uuid.UUID(str(item_id)))
+    except ValueError:
+        e = None
+    if e is None:
+        return list(c.routed_to or [])
+    return service.decider_ids(e, deciders) or list(owners)
 
 
 async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
@@ -441,8 +464,10 @@ async def _plan(
     if missing:
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
     current = read(row, fields, target)
+    # A suggestion accepted after the item got dates is "outdated" (S2-minor).
+    lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
     if _normal(fields, body.before) != current:
-        raise await _conflict(db, current, {str(row.id)}, "Changed since you saw it")
+        raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
     after: dict[str, Any]
     stored = fields
@@ -460,8 +485,22 @@ async def _plan(
             raise ChangeError(404, "No such date suggestion on this item")
         if s.status != "open":
             raise ChangeError(409, f"This suggestion is {s.status} already")
-        after = {"start_date": _iso(s.start_date), "end_date": _iso(s.end_date),
-                 "date_source": "accepted"}  # fmt: skip
+        if not entry.resolved.undated:
+            # Engineering or tracker dates arrived after the suggestion was made.
+            raise await _conflict(db, current, {str(row.id)}, lead)
+        start, end = s.start_date, s.end_date
+        if a.get("start_date") is not None or a.get("end_date") is not None:
+            # The edit variant (D-b): the person's dates instead of the suggestion's.
+            start, end = (
+                _day(a.get("start_date"), "start_date"),
+                _day(a.get("end_date"), "end_date"),
+            )
+            if start is None or end is None or end < start:
+                raise ChangeError(
+                    422, "after: start_date and end_date, the end not before the start"
+                )
+            target["edited"] = True
+        after = {"start_date": _iso(start), "end_date": _iso(end), "date_source": "accepted"}
         stored = (*DATES, "date_source")
     elif op == "change_horizon":
         if a.get("horizon") not in HORIZONS:
@@ -518,8 +557,9 @@ async def _apply(
     if c.op == "accept_date_suggestion":
         s = await db.get(RoadmapDateSuggestion, uuid.UUID(c.target["suggestion_id"]))
         if s is not None and not undo and s.status == "open":
-            s.status, s.decided_by, s.decided_at = "accepted", _me(principal), company_time.now()
-        elif s is not None and undo and s.status == "accepted":
+            s.status = "edited" if c.target.get("edited") else "accepted"
+            s.decided_by, s.decided_at = _me(principal), company_time.now()
+        elif s is not None and undo and s.status in ("accepted", "edited"):
             other = await db.scalar(
                 select(RoadmapDateSuggestion.id).where(
                     RoadmapDateSuggestion.item_id == s.item_id,
@@ -602,6 +642,19 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
         ids.append(_uuid(body.target["subject"], "subject"))
+    if body.op in FIXES:
+        # A fix may move any item of the version (dependents, transitively): every one is
+        # locked before service.load reads them.
+        version = await db.scalar(
+            select(RoadmapItem.roadmap_version_id).where(RoadmapItem.id == ids[0])
+        )
+        ids += [
+            i
+            for i in await db.scalars(
+                select(RoadmapItem.id).where(RoadmapItem.roadmap_version_id == version)
+            )
+            if i not in ids
+        ]
     await _lock(db, ids)
     seen = await drafts.overlays_for(db, principal)
     read_ = await service.load(db, seen)
@@ -741,7 +794,14 @@ class _View:
     """What one reader may see and do over a set of changes."""
 
     def __init__(
-        self, principal: Any, read_: service.Read, reviewers, sessions, undone, people=None
+        self,
+        principal: Any,
+        read_: service.Read,
+        reviewers,
+        sessions,
+        undone,
+        people=None,
+        company_owners: list | None = None,
     ) -> None:
         self.principal = principal
         self.me = getattr(principal, "user_id", None)
@@ -754,7 +814,11 @@ class _View:
         # S3b: each draft's participants and each roadmap's owners (its tracks' owners).
         self.participants: dict[uuid.UUID, set[uuid.UUID]] = (people or {}).get("drafts", {})
         self.owners: dict[uuid.UUID, set[uuid.UUID]] = (people or {}).get("owners", {})
+        self.company_owners = company_owners or []
         self.now = company_time.now()
+
+    def route(self, c: SimpleChange) -> list[uuid.UUID]:
+        return current_route(c, self.by_id, self.deciders, self.company_owners)
 
     def entry(self, c: SimpleChange) -> service.Entry | None:
         try:
@@ -777,7 +841,7 @@ class _View:
             return False
         if self.me is None:
             return False
-        if has_role(self.principal.role, "owner") or c.by == self.me or self.me in c.routed_to:
+        if has_role(self.principal.role, "owner") or c.by == self.me or self.me in self.route(c):
             return True
         s = self.sessions.get(c.session_id) if c.session_id else None
         if s is not None and s.started_by == self.me:
@@ -809,7 +873,7 @@ def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChange
         target=c.target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
         by=c.by, by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
-        routed_to=list(c.routed_to or []), undoes_id=c.undoes_id, undone=c.id in v.undone,
+        routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
     )  # fmt: skip
 
@@ -841,7 +905,8 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     )
     owners = (await drafts.who(db, {c.document_id for c in changes if c.document_id})).owners
     people = {"drafts": participants, "owners": owners}
-    return _View(principal, read_, await _reviewers(db), sessions, undone, people)
+    company = await _company_owners(db) if any(c.status == "proposed" for c in changes) else []
+    return _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
 
 
 async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:
@@ -881,12 +946,12 @@ async def inbox_rows(
     if me is None or principal.run_id is not None or principal.run_token_id is not None:
         return [], []
     since = company_time.now() - timedelta(days=DONE_DAYS)
-    # One read: proposals routed to me, and decisions on mine.
+    # One read: open proposals (routed to whoever decides now), and decisions on mine.
     rows = list(
         await db.scalars(
             select(SimpleChange)
             .where(
-                ((SimpleChange.status == "proposed") & SimpleChange.routed_to.any(me))
+                (SimpleChange.status == "proposed")
                 | (
                     (SimpleChange.by == me)
                     & SimpleChange.status.in_(("accepted", "declined"))
@@ -897,6 +962,11 @@ async def inbox_rows(
         )
     )
     waiting = [c for c in rows if c.status == "proposed"]
+    if waiting:
+        read_ = await service.load(db)
+        owners = await _company_owners(db)
+        by_id = read_.by_id()
+        waiting = [c for c in waiting if me in current_route(c, by_id, read_.deciders, owners)]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
         return [], []

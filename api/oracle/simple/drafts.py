@@ -31,6 +31,19 @@ its participants, the roadmap's decider, its required reviewers and its owners (
 owners of its tracks); everyone else reads the published version and a count,
 ``changes_in_review`` (the draft's changes and the roadmap's open proposals).
 
+**Every submitted draft settles** (#730 review, S3b-1): approving its version in the
+Detailed view (``approve_version``) approves the draft (:func:`on_version_approved`); a
+required reviewer's section approvals there settle it once nothing blocks; a verdict other
+than approved on any of its sections returns it to working (:func:`on_section_verdict`), and
+so does its author's or the decider's :func:`withdraw`. A returned draft keeps its changes
+(undoable again in their open session); its version is marked withdrawn in its notes
+(:data:`WITHDRAWN`), never shown in Simple and refused by ``approve_version``, the way a
+superseded change set's version is.
+
+**One shared draft per roadmap** (D-d): every session editing the roadmap adds to it and
+approving it publishes all its changes; the draft lists each change's author, time and
+whether it was made in a meeting (``change_log``).
+
 **Sessions**: a session closed for idleness leaves its draft working; its author or the
 decider resumes it in a new session (:func:`resume`).
 """
@@ -55,7 +68,10 @@ from oracle.simple.schemas import (
     InboxSimpleApproval,
     SimpleDocRef,
     SimpleDraftBrief,
+    SimpleDraftChange,
     SimpleDraftOut,
+    SimpleMeetingApproval,
+    SimpleNotApproved,
 )
 
 OPEN = ("working", "submitted")
@@ -76,6 +92,8 @@ DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
 APPROVAL_CODES = ("version_not_approved", "mandatory_reviewer_pending")
 SECTION_NOTE = "Approved in Simple"
+# The note on a version withdrawn from review (DocumentVersion.notes).
+WITHDRAWN = "simple_draft_withdrawn"
 
 
 class DraftError(Exception):
@@ -150,7 +168,7 @@ def _me(principal: Any) -> uuid.UUID | None:
 
 def can_edit(principal: Any, doc_id: uuid.UUID, w: Who) -> bool:
     """Who changes the roadmap directly (S3a's rule, oracle.simple.service.can_decide):
-    an owner; its decider; with no decider, its owner."""
+    an owner; its decider; with no decider, its owner while an approver or owner (D-a)."""
     me = _me(principal)
     if me is None:
         return False
@@ -159,7 +177,7 @@ def can_edit(principal: Any, doc_id: uuid.UUID, w: Who) -> bool:
     decider = w.deciders.get(doc_id)
     if decider is not None:
         return decider == me
-    return me in w.owners.get(doc_id, set())
+    return me in w.owners.get(doc_id, set()) and has_role(principal.role, "approver")
 
 
 def sees(principal: Any, d: SimpleDraft, w: Who) -> bool:
@@ -309,12 +327,21 @@ async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict
     return (await reader(db, principal)).overlays
 
 
+def _withdrawn():
+    return DocumentVersion.notes.contains([{"code": WITHDRAWN}])
+
+
 async def submitted_versions(db: AsyncSession) -> set[uuid.UUID]:
-    """Versions submitted from drafts and not approved yet: never what readers are shown."""
+    """Versions submitted from drafts and not approved yet, and versions withdrawn from
+    review: never what readers are shown."""
     return set(
         await db.scalars(
-            select(SimpleDraft.version_id).where(
-                SimpleDraft.status == "submitted", SimpleDraft.version_id.is_not(None)
+            select(SimpleDraft.version_id)
+            .where(SimpleDraft.status == "submitted", SimpleDraft.version_id.is_not(None))
+            .union(
+                select(DocumentVersion.id).where(
+                    DocumentVersion.approved_at.is_(None), _withdrawn()
+                )
             )
         )
     )
@@ -505,12 +532,67 @@ async def _refs(db: AsyncSession, ds: list[SimpleDraft]) -> tuple[dict, dict]:
     return docs, numbers
 
 
+async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list]:
+    """D-d: each draft's applied changes, not undone, oldest first: who, when, and whether
+    in a meeting."""
+    ids = [d.id for d in ds]
+    out: dict[uuid.UUID, list] = {i: [] for i in ids}
+    if not ids:
+        return out
+    rows = list(
+        await db.scalars(
+            select(SimpleChange)
+            .where(SimpleChange.draft_ids.overlap(ids), SimpleChange.status.in_(COUNTED))
+            .order_by(SimpleChange.at, SimpleChange.id)
+        )
+    )
+    if not rows:
+        return out
+    undone = set(
+        await db.scalars(
+            select(SimpleChange.undoes_id).where(SimpleChange.undoes_id.in_([c.id for c in rows]))
+        )
+    )
+    rows = [c for c in rows if c.id not in undone]
+    sids = {c.session_id for c in rows if c.session_id}
+    kinds = (
+        dict(
+            (
+                await db.execute(
+                    select(SimpleSession.id, SimpleSession.kind).where(SimpleSession.id.in_(sids))
+                )
+            ).all()
+        )
+        if sids
+        else {}
+    )
+    people = {c.by for c in rows}
+    names = {
+        u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(people)))
+    }
+    for c in rows:
+        kind = kinds.get(c.session_id) if c.session_id else None
+        try:
+            item_id = uuid.UUID(str(c.target.get("item_id"))) if c.target.get("item_id") else None
+        except ValueError:
+            item_id = None
+        entry = SimpleDraftChange(
+            id=c.id, op=c.op, item_id=item_id, by=c.by, by_name=names.get(c.by, "someone"),
+            at=c.at, session_kind=kind, in_meeting=kind == "meeting",  # type: ignore[arg-type]
+        )  # fmt: skip
+        for i in c.draft_ids:
+            if i in out:
+                out[i].append(entry)
+    return out
+
+
 async def outs(
     db: AsyncSession, principal: Any, ds: list[SimpleDraft], blocked: list[str] | None = None
 ) -> list[SimpleDraftOut]:
     w = await who(db, {d.document_id for d in ds})
     docs, numbers = await _refs(db, ds)
     n = await counts(db, ds)
+    logs = await _logs(db, ds)
     me = _me(principal)
     out = []
     for d in ds:
@@ -539,6 +621,10 @@ async def outs(
                 and me in (d.created_by, w.deciders.get(d.document_id)),
                 can_approve=d.status == "submitted"
                 and (_approver_of(principal, d, w) or (reviewer and me in (d.waiting_on or []))),
+                change_log=logs.get(d.id, []),
+                can_withdraw=d.status == "submitted"
+                and me is not None
+                and (me == d.created_by or _approver_of(principal, d, w)),
             )
         )
     return out
@@ -628,7 +714,13 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
-    if base is None or (approved.id != base.id if approved else latest != base.number):
+    # Versions withdrawn from review are not the roadmap's: the draft's base is still its own.
+    newest = await db.scalar(
+        select(func.max(DocumentVersion.number)).where(
+            DocumentVersion.document_id == document.id, ~_withdrawn()
+        )
+    )
+    if base is None or (approved.id != base.id if approved else newest != base.number):
         raise DraftError(
             409,
             "The published roadmap changed since this draft was opened: its changes were made "
@@ -762,6 +854,9 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
     from oracle.review.service import approve_version
     from oracle.review.state import section_states
 
+    if d.status != "submitted":
+        # Settled already (approved in the Detailed view, or returned to working).
+        return []
     document = await db.get(Document, d.document_id)
     version = await db.get(DocumentVersion, d.version_id)
     states = await section_states(db, document, version)
@@ -773,6 +868,10 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
     if d.decider_approval is not None and not d.waiting_on and not other:
         dp = await principal_for(db, tenant_id, uuid.UUID(d.decider_approval["by"]))
         await _review_error(approve_version(db, dp, document.slug, version.number))
+        if d.status != "submitted":
+            # approve_version settled it (on_version_approved).
+            await db.flush()
+            return other
         d.status, d.approved_at = "approved", company_time.now()
         await audit.record(
             db,
@@ -843,12 +942,13 @@ async def approve_in_meeting(
     session: SimpleSession,
     decider: uuid.UUID,
     present_reviewer_ids: list[uuid.UUID],
-) -> list[SimpleDraftOut]:
+) -> SimpleMeetingApproval:
     """S8: the decider's Approve in a meeting, for every draft the meeting's session
     worked on (a working one is submitted first): records the decider's approval and the
     approvals of the required reviewers present; every absent required reviewer gets an
     Inbox request, and the version is approved only once they all have (owner answer).
-    The caller commits."""
+    A roadmap the caller does not decide is left for its own decider and reported in
+    ``not_approved`` (#730 review), never a 403 for the whole call. The caller commits."""
     dp = await principal_for(db, session.tenant_id, decider)
     ds = list(
         await db.scalars(
@@ -859,18 +959,122 @@ async def approve_in_meeting(
             .with_for_update(of=SimpleDraft)
         )
     )
-    out = []
+    out, skipped = [], []
+    docs, _ = await _refs(db, ds)
     for d in ds:
         w = await who(db, {d.document_id})
         if not _approver_of(dp, d, w):
-            raise DraftError(403, "Only the roadmap's decider approves in the meeting")
+            doc = docs[d.document_id]
+            skipped.append(
+                SimpleNotApproved(
+                    draft_id=d.id,
+                    document=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
+                    reason="Only the roadmap's decider approves it",
+                )
+            )
+            continue
         if d.status == "working":
             await submit(db, dp, d.id)
         other = await _approve(
             db, session.tenant_id, d, w, dp, list(present_reviewer_ids), session.id
         )
         out.extend(await outs(db, dp, [d], other))
-    return out
+    return SimpleMeetingApproval(drafts=out, not_approved=skipped)
+
+
+# --------------------------------------------------------------------------- settling
+
+
+async def _return_to_working(
+    db: AsyncSession, d: SimpleDraft, actor: Any, why: str, event: str
+) -> None:
+    """A submitted draft goes back to working (S3b-1): its overlay and changes stay (undo
+    works again in their open sessions); its version is marked withdrawn."""
+    version = await db.get(DocumentVersion, d.version_id) if d.version_id else None
+    if version is not None:
+        version.notes = [
+            *(version.notes or []),
+            {
+                "code": WITHDRAWN,
+                "message": f"Withdrawn from review in Simple: {why}",
+                "draft_id": str(d.id),
+                "at": company_time.now().isoformat(),
+            },
+        ]
+    number = version.number if version is not None else None
+    d.status, d.version_id, d.submitted_at, d.submitted_by = "working", None, None, None
+    d.decider_approval, d.waiting_on = None, []
+    for sd in await db.scalars(
+        select(SimpleSessionDraft).where(SimpleSessionDraft.draft_id == d.id)
+    ):
+        sd.draft_version_id = None
+    await db.flush()
+    await audit.record(db, actor, event, "simple_draft", d.id,
+                       data={"version": number, "why": why})  # fmt: skip
+
+
+async def _submitted_for(db: AsyncSession, version_id: uuid.UUID) -> SimpleDraft | None:
+    return await db.scalar(
+        select(SimpleDraft)
+        .where(SimpleDraft.version_id == version_id, SimpleDraft.status == "submitted")
+        .with_for_update()
+    )
+
+
+async def withdraw(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -> SimpleDraftOut:
+    """Its author or the decider takes a submitted draft back to working (the caller
+    commits)."""
+    d, w = await _get(db, principal, draft_id)
+    if principal.user_id != d.created_by and not _approver_of(principal, d, w):
+        raise DraftError(403, "Only the draft's author or the roadmap's decider withdraws it")
+    if d.status != "submitted":
+        raise DraftError(409, f"This draft is {d.status}: only a submitted draft is withdrawn")
+    await _return_to_working(db, d, principal, "withdrawn by its author or decider",
+                             "simple_draft.withdrawn")  # fmt: skip
+    return (await outs(db, principal, [d]))[0]
+
+
+async def on_version_approved(db: AsyncSession, principal: Any, version: DocumentVersion) -> None:
+    """``approve_version`` approved a roadmap version: the Simple draft it came from is
+    approved too (the ordinary approval path settles it, S3b-1)."""
+    d = await _submitted_for(db, version.id)
+    if d is None:
+        return
+    d.status, d.approved_at, d.waiting_on = "approved", company_time.now(), []
+    await db.flush()
+    await audit.record(db, principal, "simple_draft.approved", "simple_draft", d.id,
+                       data={"version": version.number, "via": "approve_version",
+                             "decider_approval": d.decider_approval})  # fmt: skip
+
+
+async def on_section_verdict(
+    db: AsyncSession, principal: Any, version: DocumentVersion, verdict: str
+) -> None:
+    """A section verdict on a version submitted from a Simple draft (S3b-1): a verdict
+    other than approved (changes requested, a rejection) returns the draft to working; an
+    approval settles it once nothing blocks (the decider approved in Simple)."""
+    d = await _submitted_for(db, version.id)
+    if d is None:
+        return
+    if verdict != "approved":
+        await _return_to_working(
+            db, d, principal, f"a reviewer's verdict: {verdict.replace('_', ' ')}",
+            "simple_draft.returned",
+        )  # fmt: skip
+        return
+    await _settle(db, d, principal.tenant_id)
+
+
+async def withdrawn_message(db: AsyncSession, version: DocumentVersion) -> str | None:
+    """Why ``version`` can't be approved when it was withdrawn from review, else None."""
+    if version.approved_at is not None or not any(
+        isinstance(n, dict) and n.get("code") == WITHDRAWN for n in version.notes or []
+    ):
+        return None
+    return (
+        f"Version {version.number} was withdrawn from review in Simple: it can't be approved. "
+        "Its changes are back in the roadmap's working draft; submit it again."
+    )
 
 
 # --------------------------------------------------------------------------- resume

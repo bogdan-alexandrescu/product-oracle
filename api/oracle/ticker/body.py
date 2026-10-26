@@ -100,6 +100,13 @@ async def tick_company(
         log.exception("tick: roadmap date suggestions failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
+        try:
+            # Back off: the next try in an hour, then the next day (S2-minor).
+            await date_suggestions.failed(db)
+            await db.commit()
+        except Exception:
+            log.exception("tick: recording the failed suggestions run failed for %s", tenant_id)
+            await db.rollback()
     try:
         # Simple S3a (#723): sessions idle 30 minutes close.
         from oracle.simple import changes as simple_changes

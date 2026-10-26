@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
+from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
@@ -82,6 +83,8 @@ class Entry:
     blockers: list[constraints.Blocker] = field(default_factory=list)
     suggestion: RoadmapDateSuggestion | None = None
     flags: list[constraints.Flag] = field(default_factory=list)
+    # The track owner's role now (None: no owner, or a disabled one): D-a.
+    owner_role: str | None = None
 
 
 @dataclass
@@ -97,10 +100,29 @@ class Read:
         return {e.row.id: e for e in self.entries}
 
 
+def owner_decides(entry: Entry) -> uuid.UUID | None:
+    """D-a: the item's track owner, when the roadmap names no decider is theirs to act as
+    decider only while their role is approver or owner; None otherwise."""
+    if entry.track is None or entry.track.owner_id is None or entry.owner_role is None:
+        return None
+    return entry.track.owner_id if has_role(entry.owner_role, "approver") else None  # type: ignore[arg-type]
+
+
+def decider_ids(entry: Entry, deciders: dict[uuid.UUID, uuid.UUID | None]) -> list[uuid.UUID]:
+    """Who decides on this item, the company's owners apart (D-a): the roadmap's decider,
+    else its deciding track owner; [] when the company's owners decide."""
+    decider = deciders.get(entry.roadmap.id)
+    if decider is not None:
+        return [decider]
+    owner = owner_decides(entry)
+    return [owner] if owner is not None else []
+
+
 def can_decide(principal: Any, entry: Entry, deciders: dict[uuid.UUID, uuid.UUID | None]) -> bool:
-    """Who accepts, edits or dismisses a date suggestion (#723 owner answer): an owner; the
-    roadmap's decider; with no decider, the roadmap's owner (its track's owner), else the
-    company's owners."""
+    """Who accepts, edits or dismisses a date suggestion and applies a change (#723 owner
+    answer, D-a): an owner; the roadmap's decider; with no decider, the item's track owner
+    when their role is approver or owner, else the company's owners. A viewer or commenter
+    who owns a track decides nothing."""
     if principal is None:
         return False
     if has_role(principal.role, "owner"):
@@ -111,7 +133,11 @@ def can_decide(principal: Any, entry: Entry, deciders: dict[uuid.UUID, uuid.UUID
     decider = deciders.get(entry.roadmap.id)
     if decider is not None:
         return decider == user_id
-    return entry.track is not None and entry.track.owner_id == user_id
+    return (
+        entry.track is not None
+        and entry.track.owner_id == user_id
+        and has_role(principal.role, "approver")
+    )
 
 
 def _versions(
@@ -177,7 +203,18 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id))) for r in rows
         ]
         rows.sort(key=lambda r: (r.position, r.item_key))
-    tracks = {t.id: t for t in await db.scalars(select(ProductTrack))}
+    tracks: dict[uuid.UUID, ProductTrack] = {}
+    owner_roles: dict[uuid.UUID, str] = {}
+    for t, role in (
+        await db.execute(
+            select(ProductTrack, User.role).outerjoin(
+                User, (User.id == ProductTrack.owner_id) & User.disabled_at.is_(None)
+            )
+        )
+    ).all():
+        tracks[t.id] = t
+        if role is not None:
+            owner_roles[t.id] = role
     track_of_prd = {t.prd_document_id: t for t in tracks.values()}
     milestones = list(
         await db.scalars(
@@ -256,6 +293,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 milestone=milestone,
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
                 suggestion=suggestions.get(row.id),
+                owner_role=owner_roles.get(track.id) if track is not None else None,
             )
         )
     # Dependencies within each roadmap version, by item key.

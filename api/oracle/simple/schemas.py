@@ -321,6 +321,20 @@ class SimpleDraftBrief(BaseModel):
     changes: int
 
 
+class SimpleDraftChange(BaseModel):
+    """One change a draft holds (D-d): what an approval covers, by whom, when, and whether
+    it was made in a meeting."""
+
+    id: uuid.UUID
+    op: str
+    item_id: uuid.UUID | None
+    by: uuid.UUID
+    by_name: str
+    at: dt.datetime
+    session_kind: Literal["editing", "meeting"] | None
+    in_meeting: bool
+
+
 class SimpleDraftOut(BaseModel):
     """A working draft of one roadmap (S3b): its changes until submitted, then the version
     in review and who it waits on."""
@@ -348,6 +362,27 @@ class SimpleDraftOut(BaseModel):
     can_submit: bool
     can_resume: bool
     can_approve: bool
+    # D-d: every applied change it holds, not undone, oldest first (one shared draft per
+    # roadmap: approving it publishes them all).
+    change_log: list[SimpleDraftChange] = []
+    # The draft's author or the decider withdraws a submitted draft back to working.
+    can_withdraw: bool = False
+
+
+class SimpleNotApproved(BaseModel):
+    """A roadmap a meeting's session worked on that the caller does not approve."""
+
+    draft_id: uuid.UUID
+    document: SimpleDocRef
+    reason: str
+
+
+class SimpleMeetingApproval(BaseModel):
+    """approve_in_meeting's answer (S8): the drafts approved, and those left for their own
+    decider."""
+
+    drafts: list[SimpleDraftOut]
+    not_approved: list[SimpleNotApproved] = []
 
 
 class SimpleResumeOut(BaseModel):

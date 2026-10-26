@@ -8,9 +8,12 @@ model call (oracle.simple.dates.suggest has the rule).
 - :func:`daily`: :func:`regenerate` once a company day, from the minute tick
   (oracle.ticker.body); the last day it ran is the internal company setting
   :data:`DAY_SETTING`.
-- :func:`decide`: accept (the item takes the suggestion's dates, ``date_source``
-  ``accepted``), edit (the item takes the person's dates, also ``accepted``) or dismiss.
-  Who may: oracle.simple.service.can_decide.
+- :func:`accept`: accept or edit (D-b) through the change engine
+  (oracle.simple.changes, op ``accept_date_suggestion``): a change row, the ``before``
+  check (the undated item the suggestion was made for: 409 ``outdated`` otherwise), undo,
+  and the review policy (a non-decider's is a proposal); the dates go into the roadmap's
+  working draft, never the published version.
+- :func:`decide`: dismiss. Who may: oracle.simple.service.can_decide.
 """
 
 import uuid
@@ -18,7 +21,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -26,6 +29,7 @@ from oracle.docs import visibility
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import dates, service
 from oracle.simple.models import RoadmapDateSuggestion
+from oracle.tenancy import current_tenant
 from oracle.tenant_settings import TenantSetting
 
 # ``{"day": "YYYY-MM-DD"}``: the company day the suggestions were last regenerated on.
@@ -33,6 +37,8 @@ DAY_SETTING = "simple_date_suggestions"
 # A dismissed suggestion's item is offered nothing new for this long (and never the same
 # dates again).
 DISMISSED_QUIET = timedelta(days=30)
+# A failed daily run's next try.
+RETRY_AFTER = timedelta(hours=1)
 
 
 class SuggestionError(Exception):
@@ -42,7 +48,13 @@ class SuggestionError(Exception):
 
 
 async def regenerate(db: AsyncSession) -> int:
-    """Regenerate the open suggestions (the caller commits); how many are open after."""
+    """Regenerate the open suggestions (the caller commits); how many are open after.
+    One regeneration at a time per company: two crossing refreshes never meet on the open
+    suggestion's unique index (the second reads what the first committed)."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+        {"k": f"simple_date_suggestions:{current_tenant(db)}"},
+    )
     principal = visibility.principal_of(db)
     visibility.bind(db, None)
     try:
@@ -98,10 +110,15 @@ async def regenerate(db: AsyncSession) -> int:
 
 
 async def daily(db: AsyncSession) -> bool:
-    """Regenerate once a company day (the caller commits); whether it ran."""
+    """Regenerate once a company day (the caller commits); whether it ran. After a failed
+    run (:func:`failed`) the next try waits for ``retry_at``."""
     today = (await company_time.company_today(db)).isoformat()
     row = await db.scalar(select(TenantSetting).where(TenantSetting.key == DAY_SETTING))
-    if row is not None and isinstance(row.value, dict) and row.value.get("day") == today:
+    value = row.value if row is not None and isinstance(row.value, dict) else {}
+    if value.get("day") == today:
+        return False
+    retry = value.get("retry_at")
+    if retry and company_time.now() < datetime.fromisoformat(retry):
         return False
     await regenerate(db)
     if row is None:
@@ -110,6 +127,26 @@ async def daily(db: AsyncSession) -> bool:
         row.value = {"day": today}
     await db.flush()
     return True
+
+
+async def failed(db: AsyncSession) -> None:
+    """A daily run failed (S2-minor: never a retry every minute tick, each reloading the
+    whole roadmap): the next try is an hour later; a second failure that day waits for the
+    next day's run (the caller commits)."""
+    today = (await company_time.company_today(db)).isoformat()
+    row = await db.scalar(select(TenantSetting).where(TenantSetting.key == DAY_SETTING))
+    value = dict(row.value) if row is not None and isinstance(row.value, dict) else {}
+    if value.get("failed_day") == today:
+        value.pop("retry_at", None)
+        value["day"] = today
+    else:
+        value["failed_day"] = today
+        value["retry_at"] = (company_time.now() + RETRY_AFTER).isoformat()
+    if row is None:
+        db.add(TenantSetting(key=DAY_SETTING, value=value))
+    else:
+        row.value = value
+    await db.flush()
 
 
 async def visible(
@@ -129,15 +166,34 @@ async def visible(
     return out
 
 
+async def accept(
+    db: AsyncSession, principal: Any, suggestion_id: uuid.UUID, start: Any = None, end: Any = None
+) -> Any:
+    """Accept (or, with dates, edit) one suggestion as a change (commits)."""
+    from oracle.simple import changes
+    from oracle.simple.schemas import SimpleChangeIn
+
+    s = await db.get(RoadmapDateSuggestion, suggestion_id)
+    if s is None:
+        raise SuggestionError(404, "No such date suggestion")
+    after = (
+        {"start_date": _iso(start), "end_date": _iso(end)}
+        if start is not None or end is not None
+        else {}
+    )
+    body = SimpleChangeIn(
+        op="accept_date_suggestion",
+        target={"item_id": str(s.item_id), "suggestion_id": str(s.id)},
+        before={"start_date": None, "end_date": None},
+        after=after,
+    )
+    return await changes.create(db, principal, body)
+
+
 async def decide(
-    db: AsyncSession,
-    principal: Any,
-    suggestion_id: uuid.UUID,
-    action: str,
-    start: Any = None,
-    end: Any = None,
+    db: AsyncSession, principal: Any, suggestion_id: uuid.UUID, action: str
 ) -> tuple[RoadmapDateSuggestion, RoadmapItem, bool]:
-    """Accept, edit or dismiss one suggestion (commits)."""
+    """Dismiss one suggestion (commits); accept and edit are :func:`accept`'s."""
     read = await service.load(db)
     s = await db.get(RoadmapDateSuggestion, suggestion_id, with_for_update=True)
     entry = read.by_id().get(s.item_id) if s is not None else None
@@ -151,21 +207,16 @@ async def decide(
         )
     if s.status != "open":
         raise SuggestionError(409, f"This suggestion is {s.status} already")
+    if action != "dismiss":
+        raise SuggestionError(422, "Accept and edit go through the change engine")
     item = entry.row
-    before = {"start_date": _iso(item.start_date), "end_date": _iso(item.end_date),
-              "date_source": item.date_source}  # fmt: skip
-    if action in ("accept", "edit"):
-        item.start_date = start if action == "edit" else s.start_date
-        item.end_date = end if action == "edit" else s.end_date
-        item.date_source = "accepted"
-    s.status = {"accept": "accepted", "edit": "edited", "dismiss": "dismissed"}[action]
+    s.status = "dismissed"
     s.decided_by = getattr(principal, "user_id", None) or getattr(principal, "id", None)
     s.decided_at = company_time.now()
     await audit.record(
-        db, principal, f"roadmap_date_suggestion.{action}", "roadmap_date_suggestion", s.id,
-        data={"item_id": str(item.id), "before": before,
-              "after": {"start_date": _iso(item.start_date), "end_date": _iso(item.end_date),
-                        "date_source": item.date_source}},
+        db, principal, "roadmap_date_suggestion.dismiss", "roadmap_date_suggestion", s.id,
+        data={"item_id": str(item.id), "start_date": _iso(s.start_date),
+              "end_date": _iso(s.end_date)},
     )  # fmt: skip
     await db.commit()
     await db.refresh(s)

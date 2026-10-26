@@ -578,6 +578,13 @@ COPIED = (
     "reconciled_at",
     "reconciled_version_id",
     "reconciled_section_hash",
+    # Simple's (#730 review, S2-M1): accepted dates and risks and a draft item stay on the
+    # next version.
+    "start_date",
+    "end_date",
+    "date_source",
+    "accepted_risks",
+    "draft",
 )
 
 

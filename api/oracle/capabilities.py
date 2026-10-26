@@ -141,9 +141,11 @@ DECIDED_PER_ITEM = frozenset(
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
-# Simple (#723): a date suggestion and a proposal are decided by an owner, the roadmap's
-# decider or (with none) its owner; a change is undone by its author alone; the changes'
-# list shows owners all, others those they made, decide or review.
+# Simple (#723): a date suggestion's dismissal and a proposal are decided by an owner, the
+# roadmap's decider or (with none) the item's track owner when an approver or owner (D-a);
+# accepting or editing a suggestion is a change (others' a proposal, D-b); a change is
+# undone by its author alone; the changes' list shows owners all, others those they made,
+# decide or review; a submitted draft is withdrawn by its author or the decider.
 # A share link (O5) is an owner's to make for the Public audience and an approver's for the
 # others; its creator's or an owner's to extend, move or give a new passcode; and its
 # creator's or an owner's to revoke when Public (any approver's otherwise).
@@ -153,7 +155,6 @@ DECIDED_PER_ITEM = frozenset(
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
     "accept_blocker_risk": "owner",
-    "accept_date_suggestion": "owner",
     "accept_intake_proposal": "approver",
     "accept_scope_enhancement": "approver",
     "accept_simple_change": "owner",
@@ -199,7 +200,6 @@ PER_ITEM: dict[str, Role | None] = {
     "dismiss_overrun_run": "owner",
     # H10: a request's replies are its filer's, an approver's or an owner's.
     "draft_request_replies": "approver",
-    "edit_date_suggestion": "owner",
     "edit_document_section": "approver",
     "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
@@ -288,6 +288,7 @@ PER_ITEM: dict[str, Role | None] = {
     "withdraw_discussion_change": None,
     # H11 questions: the intake's author or an approver, as asking them.
     "withdraw_intake_questions": "approver",
+    "withdraw_simple_draft": None,
 }
 
 
