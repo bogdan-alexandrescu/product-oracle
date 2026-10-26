@@ -13,9 +13,12 @@ from oracle.roadmap.models import DraftRoadmap
 from oracle.runs.models import Run, RunSegment
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import DEFAULTS
+from tests.baseline_helpers import make_ctx
 from tests.test_draft_roadmaps import new_version, person
 from tests.test_draft_roadmaps import read as read_items
 from tests.test_draft_roadmaps import rows as draft_rows
+from tests.test_interviews import create as create_interview
+from tests.test_interviews import get as get_interview
 from tests.test_llm_jobs import SLUG, V, ctx, import_draft, jobs  # noqa: F401
 from tests.test_runs import create, owner, runtime  # noqa: F401
 
@@ -199,3 +202,38 @@ async def test_failed_roadmap_items_read_the_refusal_in_the_past(client, owner, 
         await s.commit()
     body = await read_items(client, headers, 1)
     assert body["status"] == "failed" and body["error"] == PAST
+
+
+def test_a_refusal_after_a_lead_in_reads_in_the_past_too():
+    # As runs.service writes a draft's failure: "{segment}: {error}" (#604 re-review).
+    assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles", past=True) == (f"Draft: {PAST}")
+    assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles") == f"Draft: {NOW}"
+
+
+@pytest.fixture
+async def members():
+    return await make_ctx()
+
+
+async def test_a_failed_interview_guide_says_when_it_failed_the_refusal_in_the_past(
+    client, members
+):
+    iv = await create_interview(client, members)
+    async with tenant_session(members.tenant_id) as s:
+        job = await s.get(LlmJob, uuid.UUID(iv["guide_job"]["id"]))
+        job.status, job.error, job.finished_at = "failed", OLD, FAILED_AT
+        await s.commit()
+    guide = (await get_interview(client, members, iv["id"]))["guide_job"]
+    assert guide["status"] == "failed" and guide["error"] == PAST
+    assert datetime.fromisoformat(guide["finished_at"]) == FAILED_AT
+
+
+async def test_a_queued_interview_guides_wait_stays_in_the_present(client, members):
+    iv = await create_interview(client, members)
+    async with tenant_session(members.tenant_id) as s:
+        job = await s.get(LlmJob, uuid.UUID(iv["guide_job"]["id"]))
+        job.error = OLD
+        await s.commit()
+    guide = (await get_interview(client, members, iv["id"]))["guide_job"]
+    assert guide["status"] == "queued" and guide["error"] == NOW
+    assert guide["finished_at"] is None

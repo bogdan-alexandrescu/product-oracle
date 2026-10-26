@@ -70,3 +70,24 @@ test("a refinement the pool refused says when it failed, the refusal in the past
   await expect(status).toContainText(`${THEN} Every Claude account was out of quota when this ran.`);
   await expect(status).not.toContainText("is spent");
 });
+
+test("an interview guide the pool refused says when it failed, the refusal in the past", async ({ page }) => {
+  // #604 re-review (MAJOR 1, the last surface): the guide's failure notice reads its stored
+  // refusal through the same rewrite as the other surfaces.
+  await page.goto("/requests");
+  await page.getByRole("button", { name: "Interview a customer" }).click();
+  const dialog = page.getByRole("dialog", { name: "Interview a customer" });
+  await dialog.getByLabel("Customer name").fill("Sam Okafor");
+  await dialog.getByRole("button", { name: "A topic" }).click();
+  await dialog.getByLabel("Topic in your words").fill("Paying suppliers");
+  await dialog.getByRole("button", { name: "Next" }).click();
+
+  const guide = page.getByRole("dialog", { name: "Draft questions" });
+  const failed = guide.getByTestId("guide-failed");
+  await expect(failed.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.$/);
+  await expect(failed).toContainText(`Oracle could not draft the questions: ${THEN}`);
+  await expect(guide.getByRole("button", { name: "Draft again" })).toBeVisible();
+  await expect(guide).not.toContainText("is spent");
+  await expect(guide).not.toContainText("can take this call");
+  await expect(guide).not.toContainText("2026-10-25T");
+});
