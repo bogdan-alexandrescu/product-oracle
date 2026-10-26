@@ -282,6 +282,52 @@ const VERDICT_WORDS: Record<string, string> = { held: "held", partially_held: "p
 const shown = (v: number | null | undefined, unit?: string | null) => (v == null ? "no value" : `${v}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`);
 
 /** The outcome rows of my Inbox, as GET /v1/inbox returns them. */
+// The verdicts Oracle read but, below Recommend, does not propose (shown again once the level allows).
+const unproposed = new WeakMap<Outcome, NonNullable<Outcome["proposed_assessment"]>["verdict"]>();
+
+/**
+ * The ticker's pass at H11 Check outcomes' level (the API's shipping.propose, run here before
+ * each read): at Observe or Draft a due outcome keeps its actual with no verdict; from Recommend
+ * the verdict is proposed; at Act Oracle records a verdict read from data and tells the owner
+ * (the company's owners when it has none).
+ */
+export function outcomesPass(
+  db: QualityDb | undefined,
+  level: "observe" | "draft" | "recommend" | "act",
+  owners: string[],
+  acted: (a: { summary: string; subject: Record<string, unknown>; undo: null; notify: string[] }) => void,
+) {
+  for (const o of db?.outcomes ?? []) {
+    const prop = o.proposed_assessment;
+    if (o.status !== "tracking" || !prop) continue;
+    if (level === "observe" || level === "draft") {
+      if (prop.verdict != null) {
+        unproposed.set(o, prop.verdict);
+        prop.verdict = null;
+      }
+      continue;
+    }
+    if (prop.verdict == null && unproposed.has(o)) prop.verdict = unproposed.get(o)!;
+    const v = prop.verdict;
+    if (level !== "act" || !v || v === "inconclusive" || prop.actual_value == null) continue;
+    const at = new Date().toISOString();
+    o.assessments = [...o.assessments, {
+      verdict: v, observed: prop.observed ?? "no value", note: null, evidence_ids: [], assessed_by: null, assessed_at: at,
+      actual_value: prop.actual_value, measured_at: prop.measured_at ?? null, actor: "oracle", learnings: draftLearnings(o, v),
+    }];
+    Object.assign(o, { status: v, observed: prop.observed ?? "no value", assessed_at: at, updated_at: at, lock_version: o.lock_version + 1 });
+    const notify = o.owner_id ? [o.owner_id] : owners;
+    if (notify.length) {
+      acted({
+        summary: `Recorded ${VERDICT_WORDS[v]} for ${o.title}: the goal read ${prop.observed}`,
+        subject: { kind: "outcome", key: o.id, href: `/plan/outcomes?outcome=${o.id}` },
+        undo: null,
+        notify,
+      });
+    }
+  }
+}
+
 export function outcomeInboxRows(db: QualityDb | undefined, me: string, roadmapTitle: string): Schemas["InboxOutcome"][] {
   const mine = (db?.outcomes ?? []).filter((o) => o.owner_id === me);
   const out: Schemas["InboxOutcome"][] = [];

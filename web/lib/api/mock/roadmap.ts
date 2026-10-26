@@ -76,6 +76,8 @@ export interface RoadmapContext {
   approverId?: string;
   /** E3b: the PRD drafts' items-only roadmaps (./draft-roadmap.ts), for draft refs. */
   drafts?: () => readonly DraftItems[];
+  /** H11 Watch the roadmap, read per request: Re-plan from Draft, Accept new date at Recommend. */
+  roadmapWatch?: () => "observe" | "draft" | "recommend" | "act";
 }
 
 /** A PRD version's draft roadmap as the diff reads it (./draft-roadmap.ts DraftRow). */
@@ -1542,8 +1544,12 @@ function alertActions(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert): Track
   // oracle.members.leads.date_rights (verify or propose) and may_accept (verify only).
   const verifies = ctx.role === "owner" || lead || (approver && !ctx.leadNamed);
   const out: TrackAlertAction[] = [];
-  if (a.kind === "date_slip" && a.state === "open" && verifies) out.push("accept_date");
-  if (approver && REPLAN_KINDS.includes(a.kind)) out.push("replan");
+  // H11 Watch the roadmap, as the API: Accept new date at Recommend, Re-plan from Draft; at Observe an alert only flags.
+  const level = ctx.roadmapWatch?.() ?? "recommend";
+  const proposes = level === "recommend";
+  const drafts = level === "draft" || level === "recommend";
+  if (proposes && a.kind === "date_slip" && a.state === "open" && verifies) out.push("accept_date");
+  if (drafts && approver && REPLAN_KINDS.includes(a.kind)) out.push("replan");
   if (approver && a.kind === "stale") out.push("review", "reconcile");
   if (a.kind === "blocked") out.push("open_blocker");
   if (a.kind === "unplanned" && (verifies || approver)) out.push("link");

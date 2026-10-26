@@ -45,8 +45,8 @@ test("autonomy: an owner sees the five groups and the vision locked at Draft", a
 });
 
 // protects=10b: an owner sets "Order priorities" to Act with a 2-place limit and a reason, and the row
-// shows the new limit and the "Takes effect when ..." chip; fails_when=the sheet saves without a reason,
-// the limit is not kept, or the chip is missing; no_claim=C9's own reordering.
+// shows the new limit, in effect now (C9 shipped: no "Takes effect when ..." chip); fails_when=the sheet
+// saves without a reason, the limit is not kept, or the row still waits on C9; no_claim=C9's own reordering.
 test("autonomy: an owner sets Order priorities to Act within 2 places, with a reason", async ({ page }) => {
   await openAutonomy(page);
   const priorities = row(page, "priorities");
@@ -66,7 +66,7 @@ test("autonomy: an owner sets Order priorities to Act within 2 places, with a re
   await expect(sheet).toBeHidden();
   await expect(step(page, "priorities", "Act")).toHaveAttribute("aria-pressed", "true");
   await expect(priorities.getByTestId("autonomy-limits")).toHaveText("within one goal, up to 2 places");
-  await expect(priorities.getByTestId("autonomy-pending")).toHaveText("Takes effect when C9 Priorities move and pin ships");
+  await expect(priorities.getByTestId("autonomy-pending")).toHaveCount(0);
   // Kept across a reload.
   await page.reload();
   await expect(row(page, "priorities").getByTestId("autonomy-limits")).toHaveText("within one goal, up to 2 places");

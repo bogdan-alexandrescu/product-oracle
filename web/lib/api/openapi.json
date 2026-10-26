@@ -85482,12 +85482,19 @@
       "ProposedAssessment": {
         "properties": {
           "verdict": {
-            "type": "string",
-            "enum": [
-              "held",
-              "partially_held",
-              "not_held",
-              "inconclusive"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "held",
+                  "partially_held",
+                  "not_held",
+                  "inconclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Verdict"
           },
@@ -85558,7 +85565,7 @@
           "verdict"
         ],
         "title": "ProposedAssessment",
-        "description": "Oracle's reading on the due date; a person confirms, edits or marks it inconclusive."
+        "description": "Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.\n``verdict`` is None at H11 ``outcomes`` Observe or Draft: the actual only."
       },
       "ProtectedResourceMetadata": {
         "properties": {

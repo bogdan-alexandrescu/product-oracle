@@ -420,6 +420,29 @@ async def propose(
     return snapshot
 
 
+def _goals(row: dict[str, Any]) -> set[str]:
+    return {str(g.get("goal")) for g in (row.get("explanation") or {}).get("goals") or []}
+
+
+def outside_limits(rows: list[dict[str, Any]], *, max_rank_move: int) -> str | None:
+    """Why a run's order is outside H11 ``priorities`` limits, or None: compared with the
+    live ranking of the same features, a feature moves more than ``max_rank_move`` places,
+    or passes a feature that shares no goal with it (C9: within one goal). Features the
+    live ranking does not hold are not moves."""
+    ranked = sorted((r for r in rows if r.get("live_rank") is not None), key=lambda r: r["rank"])
+    for position, r in enumerate(ranked, start=1):
+        moved = abs(position - int(r["live_rank"]))
+        if moved > max_rank_move:
+            places = "1 place" if moved == 1 else f"{moved} places"
+            return f"{r['key']} moves {places}, more than {max_rank_move}"
+    for i, a in enumerate(ranked):
+        for b in ranked[i + 1 :]:
+            # a is now above b; it was below: a passed b.
+            if a["live_rank"] > b["live_rank"] and not _goals(a) & _goals(b):
+                return f"{a['key']} passes {b['key']}, which serves another goal"
+    return None
+
+
 async def snapshot_for(db: AsyncSession, cp: Any) -> PrioritySnapshot | None:
     """The snapshot a priority-order checkpoint decides, if it has one."""
     if cp.kind != "priority_order":
