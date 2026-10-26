@@ -226,6 +226,11 @@ async def set_role(
         via = {"via": "member.role", "member_id": str(user.id)}
         tokens = set(await session.scalars(select(ApiToken.id).where(ApiToken.user_id == user.id)))
         acted_as = {user.id, *tokens}
+        if has_role(before, "approver") and not has_role(role, "approver"):
+            # O5-Q10: the share links they made end; owners re-share from the Inbox.
+            from oracle.shares import service as shares
+
+            await shares.revoke_created_by(session, principal, acted_as, shares.CREATOR_DEMOTED)
         if has_role(before, "owner"):
             await _void_spend_approvals(session, principal, acted_as, None, via)
         await _void_checkpoint_decisions(session, principal, acted_as, via, keep_role=role)
@@ -453,6 +458,10 @@ async def disable_member(
     lapsed = await lapse_approvals(
         session, principal, reviewer_id=user.id, reason="member was removed (disabled)"
     )
+    # O5-Q10: the share links they made end; owners re-share from the Inbox.
+    from oracle.shares import service as shares
+
+    await shares.revoke_created_by(session, principal, acted_as, shares.CREATOR_REMOVED)
 
     # G1: their discussions pass to an approver in each (audited).
     await hand_over_discussions(session, principal, user.id)

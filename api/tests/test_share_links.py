@@ -82,9 +82,9 @@ def token_of(created: dict) -> str:
 
 
 async def unlock(client, token: str, passcode: str = PASSCODE, **headers):
-    return await client.post(
-        f"{PUBLIC}/{token}/unlock", data={"passcode": passcode}, headers=headers
-    )
+    # The passcode form posts to the page's own address: the form is the same for
+    # every token, known or not.
+    return await client.post(f"{PUBLIC}/{token}", data={"passcode": passcode}, headers=headers)
 
 
 def cookie_of(resp) -> str:
@@ -201,9 +201,7 @@ async def test_refusals_on_create(client, ctx):
     assert resp.status_code == 422, resp.text
     resp = await create(client, ctx, "owner", passcode="short")
     assert resp.status_code == 422, resp.text
-    resp = await client.post(
-        LINKS, json=body(str(uuid.uuid4())), headers=ctx.as_("owner")
-    )
+    resp = await client.post(LINKS, json=body(str(uuid.uuid4())), headers=ctx.as_("owner"))
     assert resp.status_code == 409 and resp.json()["detail"]["code"] == "not_published"
     async with tenant_session(ctx.tenant_id) as s:
         doc = await s.scalar(select(Document).where(Document.slug == SLUG))
@@ -362,9 +360,9 @@ async def test_guessing_is_locked_out_per_link_and_per_client(client, ctx):
     assert resp.status_code == 429 and int(resp.headers["retry-after"]) > 0
     async with tenant_session(ctx.tenant_id) as s:
         refused = await s.scalar(
-            select(func.count()).select_from(AuditEvent).where(
-                AuditEvent.action == "share_link.passcode_locked"
-            )
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "share_link.passcode_locked")
         )
     assert refused >= 1
     share_public.reset_limits()
@@ -429,9 +427,9 @@ async def test_the_page_rate_limit_and_capped_refusal_audits(client, ctx):
         assert resp.status_code == 429 and int(resp.headers["retry-after"]) > 0
     async with tenant_session(ctx.tenant_id) as s:
         refused = await s.scalar(
-            select(func.count()).select_from(AuditEvent).where(
-                AuditEvent.action == "share_link.refused"
-            )
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "share_link.refused")
         )
     assert refused == share_public.REFUSED_AUDITS == 20
 
@@ -485,9 +483,9 @@ async def test_the_view_log_counts_browsers_never_people(client, ctx):
         rows = list(await s.scalars(select(ShareLinkView)))
         columns = set(ShareLinkView.__table__.columns.keys())
         firsts = await s.scalar(
-            select(func.count()).select_from(AuditEvent).where(
-                AuditEvent.action == "share_link.viewed_first"
-            )
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "share_link.viewed_first")
         )
         link = await s.get(ShareLink, uuid.UUID(link_id))
     assert len(rows) == 3 and firsts == 1 and link.views == 3
@@ -660,7 +658,9 @@ async def test_revoke_all_is_owners_only_and_counts(client, ctx):
     await seed_roadmap(ctx, publish=True)
     await create(client, ctx, "owner")
     await create(client, ctx, "approver", label="Team weekly")
-    resp = await client.post(f"{LINKS}/revoke-all", json={"reason": "x"}, headers=ctx.as_("approver"))
+    resp = await client.post(
+        f"{LINKS}/revoke-all", json={"reason": "x"}, headers=ctx.as_("approver")
+    )
     assert resp.status_code == 403
     resp = await client.post(f"{LINKS}/revoke-all", json={"reason": "plan changed"},
                              headers=ctx.as_("owner"))  # fmt: skip

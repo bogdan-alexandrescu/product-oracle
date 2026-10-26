@@ -119,6 +119,7 @@ from oracle.roadmap.models import (  # noqa: E402
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
+from oracle.shares.models import ShareLink, ShareLinkView  # noqa: E402
 from oracle.slack.models import (  # noqa: E402
     DiscussionSlackLink,
     SlackEventSeen,
@@ -163,6 +164,8 @@ from oracle.v2.models import (  # noqa: E402
 from oracle.web.models import WebResult, WebSearch  # noqa: E402
 
 __all__ = [
+    "ShareLink",
+    "ShareLinkView",
     "NextDraftChange",
     "AlignmentReport",
     "Ritual",

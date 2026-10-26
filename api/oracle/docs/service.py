@@ -371,6 +371,11 @@ async def set_visibility(
     before = document.visibility
     if before != visibility:
         document.visibility = visibility
+        if visibility != "company":
+            # O5: a document limited to owners and approvers is shared by no link.
+            from oracle.shares import service as shares
+
+            await shares.revoke_documents(db, principal, {document.id}, shares.DOCUMENT_LIMITED)
         await audit.record(
             db,
             principal,

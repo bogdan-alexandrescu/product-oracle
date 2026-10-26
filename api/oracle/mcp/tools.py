@@ -39,6 +39,11 @@ PUBLIC_OPERATIONS = {
     "public_interview_message",
     "public_interview_skip",
     "public_interview_finish",
+    # O5: a share link's holder, behind the link and its passcode (oracle.shares.public).
+    "public_share",
+    "unlock_public_share",
+    "public_share_pdf",
+    "public_share_status",
 }
 INTERNAL_BASE_URL = "http://oracle.internal"
 
