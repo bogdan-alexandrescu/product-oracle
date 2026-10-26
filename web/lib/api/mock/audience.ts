@@ -9,8 +9,11 @@
  * confirmed goal" from each item's feature-to-goal link; the mock keeps the cards as
  * written and reads it from their words. As the API, it takes out of the item areas
  * (horizons, releases, lanes, milestones, bets, pitches, ideas) the labelled parts the
- * audience hides ("Owner: …" on Board; "Tracker: …", "Estimate: …", "Effort: …" where
- * the audience does not show them; revenue for Engineering) and so-headed table columns.
+ * audience hides in their common written forms ("Owner: …", "Lead:", "DRI:", "Owner (PM):",
+ * "Owned by …", "Owner — …" on Board, a name whole past its initials and titles;
+ * "Tracker: …", "Jira:", "Estimate: …", "Story points:", "Est.:" where the audience does
+ * not show them; revenue for Engineering) and so-headed table columns ("Owner(s)",
+ * "Est."). A table keeps its header and separator rows.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -87,14 +90,28 @@ export function audienceRefusal(
 
 const ITEM_AREAS = new Set(["now", "next", "later", "releases", "timeline", "milestones", "current", "candidates", "ideas"]);
 const LABELS: Record<string, string> = {
-  owner: "owner", owners: "owner", tracker: "tracker", "tracker key": "tracker", "tracker keys": "tracker",
-  issue: "tracker", issues: "tracker", epic: "tracker", epics: "tracker", estimate: "effort",
-  estimates: "effort", effort: "effort", "depends on": "depends_on", dependencies: "depends_on",
+  owner: "owner", owners: "owner", "owned by": "owner", lead: "owner", leads: "owner", dri: "owner",
+  assignee: "owner", assignees: "owner", "assigned to": "owner",
+  tracker: "tracker", "tracker key": "tracker", "tracker keys": "tracker", issue: "tracker", issues: "tracker",
+  epic: "tracker", epics: "tracker", jira: "tracker", ticket: "tracker", tickets: "tracker",
+  estimate: "effort", estimates: "effort", est: "effort", effort: "effort", "story points": "effort",
+  points: "effort", size: "effort", "depends on": "depends_on", dependencies: "depends_on",
 };
-const LABELLED = /(?<![\w-])(?:\*\*)?([A-Za-z][A-Za-z ]{1,20}?)(?:\*\*)?\s*:(?:\*\*)?(?:[^.;|\n]|\.(?=\S))*[.;]?[ \t]*/g;
+const BARE_LABELS = ["owned by", "assigned to"];
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const PART = new RegExp(
+  "(?<![\\w-])(?:\\*\\*|__)?(?:(?<label>" +
+    Object.keys(LABELS).filter((k) => !BARE_LABELS.includes(k)).sort((a, b) => b.length - a.length).map(escape).join("|") +
+    "|revenue[\\w ]{0,20}?)(?!\\w)(?:\\(s\\))?\\.?(?:\\s*\\([^()\\n]{1,24}\\))?(?:\\*\\*|__)?\\s*(?::|—|–|\\s-\\s)(?:\\*\\*|__)?" +
+    "|(?<bare>" + BARE_LABELS.join("|") + ")\\s+)[ \\t]*",
+  "gi",
+);
+// A full stop inside a name: an initial ("Dana M. Markerson") or a title ("Dr. Markerson").
+const NAME_STOPS = new Set(["dr", "mr", "mrs", "ms", "mx", "prof", "jr", "sr", "st"]);
+const TABLE_SEP = /^\s*\|?\s*:?-{2,}/;
 
 function labelField(label: string): string | undefined {
-  const l = label.trim().toLowerCase();
+  const l = label.replace(/\(s\)|\([^()]*\)\s*$|[*_]/g, "").replace(/^[\s.:]+|[\s.:]+$/g, "").toLowerCase().replace(/\s+/g, " ");
   return l.startsWith("revenue") ? "revenue" : LABELS[l];
 }
 
@@ -110,23 +127,69 @@ function splitRow(line: string): string[] {
   return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 }
 
-/** Written item text without the labelled parts and table columns `hidden` names. */
+/** Where a labelled value starting at `i` ends: `;`, `|`, `closer` or a sentence's full stop (a name runs past an initial or a title). */
+function valueEnd(text: string, i: number, field: string, closer: string | null): number {
+  for (; i < text.length; i++) {
+    const c = text[i];
+    if (c === ";" || c === "|" || c === "\n" || c === closer) return i;
+    if (c === "." && (i + 1 === text.length || /\s/.test(text[i + 1]))) {
+      const w = /([A-Za-z]+)$/.exec(text.slice(0, i))?.[1] ?? "";
+      const nameStop = (w.length === 1 && w === w.toUpperCase()) || NAME_STOPS.has(w.toLowerCase());
+      if (!(field === "owner" && nameStop && i + 1 < text.length)) return i;
+    }
+  }
+  return text.length;
+}
+
+/** `text` without its labelled parts whose field is hidden; a label counts only where a part starts. */
+function stripParts(text: string, hidden: Set<string>): string {
+  let out = "";
+  let pos = 0;
+  PART.lastIndex = 0;
+  for (let m = PART.exec(text); m; m = PART.exec(text)) {
+    const field = labelField(m.groups!.label ?? m.groups!.bare) ?? "";
+    const before = text.slice(0, m.index).replace(/[ \t]+$/, "");
+    const end0 = m.index + m[0].length;
+    if (!hidden.has(field) || /[A-Za-z0-9]$/.test(before)) {
+      out += text.slice(pos, end0);
+      pos = end0;
+      PART.lastIndex = pos;
+      continue;
+    }
+    const closer = before.endsWith("(") ? ")" : null;
+    let end = valueEnd(text, end0, field, closer);
+    if (closer && text[end] === ")") {
+      out += text.slice(pos, m.index).replace(/[ \t]+$/, "").slice(0, -1).replace(/[ \t]+$/, "");
+      end++;
+    } else {
+      out += text.slice(pos, m.index);
+      if (text[end] === "." || text[end] === ";") end++;
+    }
+    while (text[end] === " " || text[end] === "\t") end++;
+    pos = end;
+    PART.lastIndex = pos;
+  }
+  return out + text.slice(pos);
+}
+
+/** Written item text without the labelled parts and table columns `hidden` names; tables keep their header and separator rows. */
 function redact(body: string, hidden: Set<string>): string {
   const lines = body.split("\n");
   const out: string[] = [];
   let drop: Set<number> | null = null;
   lines.forEach((line, i) => {
     if (line.trimStart().startsWith("|")) {
-      if (drop === null && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1] ?? "")) {
-        drop = new Set(splitRow(line).flatMap((h, n) => (hidden.has(labelField(h.replace(/\*/g, "")) ?? "") ? [n] : [])));
-      }
-      if (drop?.size) line = `| ${splitRow(line).filter((_, n) => !drop!.has(n)).join(" | ")} |`;
-      out.push(line);
+      const head = drop === null && TABLE_SEP.test(lines[i + 1] ?? "");
+      if (head) drop = new Set(splitRow(line).flatMap((h, n) => (hidden.has(labelField(h) ?? "") ? [n] : [])));
+      let cells = splitRow(line);
+      if (drop?.size) cells = cells.filter((_, n) => !drop!.has(n));
+      if (!head && !TABLE_SEP.test(line)) cells = cells.map((c) => stripParts(c, hidden).trimEnd());
+      out.push(drop?.size || cells.join("|") !== splitRow(line).join("|") ? `| ${cells.join(" | ")} |` : line);
       return;
     }
     drop = null;
-    const kept = line.replace(LABELLED, (m, label: string) => (hidden.has(labelField(label) ?? "") ? "" : m));
-    if (kept !== line && !kept.replace(/[\s\-*+|]/g, "")) return;
+    const kept = stripParts(line, hidden);
+    if (kept !== line && !kept.replace(/[\s\-*+]/g, "")) return;
     out.push(kept === line ? line : kept.trimEnd());
   });
   return out.join("\n");
