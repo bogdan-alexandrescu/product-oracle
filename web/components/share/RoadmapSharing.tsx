@@ -136,8 +136,31 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
           api.GET("/v1/documents/{doc}/versions/{n}/export", { params: { path: { doc, n }, query: { format: "html", audience } }, parseAs: "text" }),
         ),
   );
+  const [failed, setFailed] = useState<string | null>(null);
+  // The export in this audience (the API's audience= on the version export, O5 §1).
+  const pdf = async () => {
+    setFailed(null);
+    try {
+      const blob = await unwrap<Blob>(
+        api.GET("/v1/documents/{doc}/versions/{n}/export", { params: { path: { doc, n }, query: { format: "pdf", audience } }, parseAs: "blob" }),
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${doc}-v${n}-${audience}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setFailed(errorMessage(e));
+    }
+  };
   return (
-    <Panel title={`Audience view · ${audienceLabel(audience)}`} testId="audience-view">
+    <Panel
+      title={`Audience view · ${audienceLabel(audience)}`}
+      testId="audience-view"
+      tools={audience !== "public" ? <Button onClick={pdf}>Export PDF for {audienceLabel(audience)}</Button> : undefined}
+    >
+      {failed && <ErrorNote>{failed}</ErrorNote>}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {q.data && (

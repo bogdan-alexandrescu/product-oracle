@@ -48,6 +48,11 @@ test("an owner switches the audience: Board hides its sections and goal-less ite
   await expect(board.getByRole("heading", { name: "Ops console cleanup" })).toHaveCount(0);
   await expect(board.getByText("1 item serves no confirmed goal and is left out.")).toBeVisible();
 
+  // The export follows the audience.
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export PDF for Board" }).click();
+  expect((await download).suggestedFilename()).toBe("example-labs-roadmap-v1-board.pdf");
+
   // The URL holds the audience: a reload keeps it.
   await page.reload();
   await expect(page.getByRole("radiogroup", { name: "Audience" }).getByRole("radio", { name: "Board" })).toHaveAttribute("aria-checked", "true");
