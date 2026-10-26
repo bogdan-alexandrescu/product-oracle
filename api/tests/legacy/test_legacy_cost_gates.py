@@ -12,15 +12,20 @@ from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from tests.fixtures import seed_auth
 from tests.legacy.helpers import DOC, fixture, import_md, user_cookie
 
-# Base role costs summing to 25 with the Engineering check (on by default), doubled by
-# deep depth: exactly $50.
+# Base role costs summing to 25 with the Engineering check and the Engineering dates
+# (both on by default), doubled by deep depth: exactly $50.
 ROLES_AT_50 = {
-    "baseline": ["researcher"],
-    "feature_set": ["researcher"],
+    "baseline": ["analyst"],
+    "feature_set": ["analyst"],
     "eng_review": ["architect"],
+    "eng_dates": ["architect"],
     "priority": ["analyst"],
-    "prd_draft": ["writer", "critic"],
+    "prd_draft": ["writer"],
 }
+
+# The baseline segment's spend in the overrun tests: past 1.5x the default run's estimate
+# (standard depth, every stop on), which keeps the ceiling below it.
+OVERSPEND = Decimal(60)
 
 
 @pytest.fixture
@@ -105,12 +110,12 @@ async def test_the_budget_gates_the_estimate(client, runtime):
 async def test_overrun_pauses_after_the_segment_and_only_an_owner_resumes(client, runtime):
     tenant_id, owner = await seed_auth()
     approver = await user_cookie(tenant_id, "approver")
-    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
+    runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND, polls=1)]
     run = await _create(client, owner)
     estimate = (await _estimate(client, owner, run))["total_usd"]
     started = await client.post(f"/v1/runs/{run['id']}/start", headers=owner)
     ceiling = started.json()["overrun_ceiling_usd"]
-    assert ceiling == pytest.approx(estimate * 1.5) and ceiling < 50
+    assert ceiling == pytest.approx(estimate * 1.5) and ceiling < OVERSPEND
 
     await _tick(client, owner)  # half the segment's cost so far: below the ceiling
     assert (await _get(client, owner, run))["status"] == "running"
@@ -127,13 +132,13 @@ async def test_overrun_pauses_after_the_segment_and_only_an_owner_resumes(client
     assert (await client.post(f"/v1/runs/{run['id']}/resume", headers=approver)).status_code == 403
     resumed = await client.post(f"/v1/runs/{run['id']}/resume", headers=owner)
     assert resumed.status_code == 200, resumed.text
-    assert resumed.json()["overrun_ceiling_usd"] == pytest.approx(50 + estimate * 0.5)
+    assert resumed.json()["overrun_ceiling_usd"] == pytest.approx(float(OVERSPEND) + estimate * 0.5)
     assert resumed.json()["status"] == "awaiting_checkpoint"
 
 
 async def test_an_owner_cancels_a_paused_run(client, runtime):
     _, owner = await seed_auth()
-    runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
+    runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND, polls=1)]
     run = await _create(client, owner)
     await _estimate(client, owner, run)
     await client.post(f"/v1/runs/{run['id']}/start", headers=owner)
