@@ -91,3 +91,27 @@ test("an interview guide the pool refused says when it failed, the refusal in th
   await expect(guide).not.toContainText("can take this call");
   await expect(guide).not.toContainText("2026-10-25T");
 });
+
+test("a triage the pool refused says when it failed, the refusal in the past", async ({ page }) => {
+  // #633 re-review (MAJOR 1 a): the Requests header's status line reads the run's stored
+  // refusal as the run page does, with when it failed.
+  await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  const status = page.getByTestId("triage-status");
+  await expect(status.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.\s*$/, { timeout: 15_000 });
+  await expect(status).toContainText(`Oracle's last triage did not finish. Failed`);
+  await expect(status).toContainText(`triage: ${THEN}`);
+  await noCurrentRefusal(page);
+});
+
+test("a code map the pool refused says when it failed, the refusal in the past", async ({ page }) => {
+  // #633 re-review (MAJOR 1 b): Settings › Sources' code map line reads the stored
+  // "The code map run failed: …" through the same rewrite, with when it failed.
+  await page.goto("/settings/sources");
+  const line = page.getByRole("listitem", { name: "Example repo" }).getByTestId("code-map-example-org/example-app");
+  await line.getByRole("button", { name: "Map the code" }).click();
+  await expect(line.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.\s*$/, { timeout: 15_000 });
+  await expect(line).toContainText(`The code map run failed: index: ${THEN}`);
+  await expect(line.getByRole("button", { name: "Map the code" })).toBeVisible();
+  await noCurrentRefusal(page);
+});

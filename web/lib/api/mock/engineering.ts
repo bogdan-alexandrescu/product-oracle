@@ -14,6 +14,8 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { stableUuid } from "./ids";
+import { SPENT } from "./llm-jobs";
+import { readableRefusal } from "./refusal";
 import { sourceRepos } from "./sources";
 
 type TechBrief = Schemas["TechBriefOut"];
@@ -29,6 +31,8 @@ export interface EngineeringContext {
   me: { id: string; email: string; canWrite: boolean };
   now: () => string;
   uuid: () => string;
+  /** #633 re-review, the "stored-refusals" scenario: the Claude pool refuses every code map run. */
+  refuse?: boolean;
 }
 
 const PRD = "checkout-redesign";
@@ -121,7 +125,8 @@ function docsOnlyMap(repo: string, at: string): Record<string, unknown> {
 function mapOut(m: CodeMapRow, me: EngineeringContext["me"], detail: boolean): Schemas["CodeMapOut"] | CodeMap {
   const { owner_email, reads, content, ...out } = m;
   void reads;
-  const view = { ...out, mine: owner_email === me.email };
+  // As the API: how its run ended read through the refusal rewrite, in the past once it failed.
+  const view = { ...out, error: readableRefusal(out.error, out.status === "failed"), mine: owner_email === me.email };
   return detail ? { ...view, content } : view;
 }
 
@@ -131,6 +136,11 @@ function advance(m: CodeMapRow, ctx: EngineeringContext) {
   m.reads = (m.reads ?? 0) + 1;
   if (m.reads < 2) return;
   const at = ctx.now();
+  if (ctx.refuse) {
+    // As codemaps.end_builds stores it: "The code map run failed: {run.error}".
+    Object.assign(m, { status: "failed", run_status: "failed", failed_at: at, error: `The code map run failed: index: ${SPENT}` });
+    return;
+  }
   m.status = "ready";
   m.run_status = "succeeded";
   m.content = docsOnlyMap(m.repo, at);
@@ -182,6 +192,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
       run_id: ctx.uuid(),
       run_status: "running",
       error: null,
+      failed_at: null,
       stale_at: null,
       mine: true,
       created_at: ctx.now(),
