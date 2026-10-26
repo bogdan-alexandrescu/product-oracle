@@ -4,14 +4,16 @@
 categories) and gives each target its net signal, the words of the learnings behind it
 and the reason a person reads ("Recommended because ..."). Retired learnings never count.
 
-The effect is capped: each point of net signal moves a score by ``LEARNING_STEP``, never
-more than ``LEARNING_CAP`` either way. The cap sits below one importance step (high is
+The effect is capped: each point of net signal moves a question's rank score by
+``LEARNING_STEP`` of itself (``apply``) and a module's 0-1 advisory score by
+``LEARNING_STEP`` (the composer), never more than ``LEARNING_CAP`` either way. The cap sits below one importance step (high is
 3/4 of critical, medium 2/3 of high), so among gaps of like impact learnings reorder
 questions of the same importance but one signal never outweighs a gap's importance. In a
 module composition a learning never overrides company policy, a condition or a person's
 decision.
 """
 
+import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -49,11 +51,26 @@ class Nudge:
         return f"{how} because of {which} from past outcomes: {said}"
 
     def as_json(self) -> dict:
-        return {"net": self.net, "count": self.count, "statements": list(self.statements)}
+        return {
+            "target": self.target,
+            "net": self.net,
+            "count": self.count,
+            "statements": list(self.statements),
+        }
 
     @classmethod
-    def from_json(cls, target: str, data: dict) -> "Nudge":
-        return cls(target, int(data["net"]), int(data["count"]), tuple(data["statements"]))
+    def from_json(cls, data: dict) -> "Nudge":
+        return cls(
+            str(data["target"]), int(data["net"]), int(data["count"]), tuple(data["statements"])
+        )
+
+
+def stored(analysis: dict | None) -> dict[uuid.UUID, Nudge]:
+    """The nudges an intake's last question sync ranked its gaps with, by gap id
+    (``analysis["learned"]``): what every reader ranks its questions with until the next
+    sync, so a learning added or retired since moves nobody's order."""
+    raw = (analysis or {}).get("learned") or {}
+    return {uuid.UUID(k): Nudge.from_json(v) for k, v in raw.items()}
 
 
 def apply(score: float, nudge: "Nudge | None") -> float:

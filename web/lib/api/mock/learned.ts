@@ -1,7 +1,8 @@
 /**
  * Mock of oracle.quality.learned: what kept learnings tell later module and question
- * recommendations. Each target's net signal (+weight, -weight, 0 for notes) moves a score
- * by 10% a point, never more than 20% either way; retired learnings never count.
+ * recommendations. Each target's net signal (+weight, -weight, 0 for notes) moves a question's
+ * rank score by 10% of itself a point and a module's 0-1 score by 0.1 a point, never more than
+ * 20% (0.2) either way; retired learnings never count.
  */
 import type { Schemas } from "@/lib/api/client";
 

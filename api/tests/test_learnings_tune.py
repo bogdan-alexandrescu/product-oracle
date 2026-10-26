@@ -12,7 +12,7 @@ import uuid
 from sqlalchemy import select
 
 from oracle.intake import categories as cats
-from oracle.quality import outcomes
+from oracle.quality.learned import LEARNING_CAP
 from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 from tests.intake_helpers import create_intake
@@ -111,7 +111,7 @@ async def test_a_learning_never_overrides_policy_or_a_condition(client):
     tools = after[TOOLS]
     assert tools["selection"] == "suggested" and tools["included"]
     assert any(line.startswith("Recommended less because") for line in tools["explanation"])
-    assert before[TOOLS]["score"] - tools["score"] <= outcomes.LEARNING_CAP + 1e-9
+    assert before[TOOLS]["score"] - tools["score"] <= LEARNING_CAP + 1e-9
     assert after[mandatory]["selection"] == "mandatory" and after[mandatory]["included"]
 
 
@@ -184,7 +184,7 @@ async def test_one_signal_never_outweighs_importance(client):
     later = await create_intake(client, ctx, ai_extraction=False)
     tuned = [q.category for q in await _drafts(ctx, later["intake"]["id"])]
     # The furthest any two gaps' scores can move apart: one up by the cap, one down.
-    spread = (1 + outcomes.LEARNING_CAP) / (1 - outcomes.LEARNING_CAP)
+    spread = (1 + LEARNING_CAP) / (1 - LEARNING_CAP)
     for other, score in scores.items():
         if score > scores[up] * spread:
             assert tuned.index(other) < tuned.index(up), other
@@ -256,6 +256,8 @@ async def test_asked_questions_keep_one_order_for_every_reader(client):
         asked, drafts = await _read_order(client, ctx, iid, who)
         assert asked == stored, (who, asked)
         assert drafts == drafts_before, (who, drafts)
+    waiting = next(q for q in await _drafts(ctx, iid) if q.category == drafts_before[-1])
+    assert "Recommended" not in waiting.rationale
 
     for lid in ids[:2]:
         await _retire(client, ctx, lid)
@@ -270,4 +272,5 @@ async def test_asked_questions_keep_one_order_for_every_reader(client):
     for who, (asked, drafts) in orders.items():
         assert asked == stored, (who, asked)
         assert drafts == orders["author"][1], (who, drafts)
-    assert orders["author"][1].index(drafts_before[-1]) < len(drafts_before) - 1
+    lifted = next(q for q in await _drafts(ctx, iid) if q.category == drafts_before[-1])
+    assert "Recommended because" in lifted.rationale

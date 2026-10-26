@@ -23,7 +23,7 @@ from oracle import audit
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.quality import criteria
-from oracle.quality.learned import LEARNING_CAP, LEARNING_STEP, SIGN, nudges  # noqa: F401
+from oracle.quality.learned import SIGN
 from oracle.quality.models import ASSESSED, OutcomeRecord, QualityLearning
 from oracle.quality.schemas import (
     Assessment,

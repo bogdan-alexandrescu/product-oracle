@@ -86,7 +86,7 @@ class Readers:
                 else engine.priorities(
                     intake,
                     await engine.intake_gaps(self.db, intake.id),
-                    await engine.learned(self.db),
+                    engine.synced_learned(intake),
                 )
             )
         return self.priorities[intake.id]
@@ -98,7 +98,8 @@ class Readers:
         views = {gap.id: view} if view is not None else {}
         intake = await self.intake(gap.intake_id)
         priorities = await self.public_priorities(intake) if intake is not None else None
-        return sharing.question_view(q, {gap.id: gap}, views, priorities)
+        learned = engine.synced_learned(intake) if intake is not None else None
+        return sharing.question_view(q, {gap.id: gap}, views, priorities, learned)
 
 
 async def intakes(db: AsyncSession, principal: Principal, rows: list[Any]) -> list[Any]:
