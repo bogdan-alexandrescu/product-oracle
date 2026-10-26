@@ -1861,6 +1861,12 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
+    // H11 Order priorities: Oracle saves a run's order within the limits at Act.
+    autonomy: {
+      level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),
+      limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "priorities"),
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "priorities", a),
+    },
     feedback: db.feedback,
     documents: db.documents,
     confirmedGoals: () =>
