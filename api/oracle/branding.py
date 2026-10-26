@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from markupsafe import Markup, escape
 from pydantic import BaseModel
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -94,16 +95,17 @@ def reencode_logo(data: bytes) -> tuple[bytes, int, int]:
             if img.width > MAX_LOGO_SIDE or img.height > MAX_LOGO_SIDE:
                 raise InvalidLogo(TOO_LARGE)
             img.load()
+            if img.mode not in ("RGB", "RGBA", "L", "LA"):
+                alpha = "A" in img.getbands() or "transparency" in img.info
+                img = img.convert("RGBA" if alpha else "RGB")
+            out = io.BytesIO()
+            img.save(out, format="PNG", optimize=True)
     except InvalidLogo:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise InvalidLogo(TOO_LARGE) from None
     except Exception:  # noqa: BLE001 - any decoder failure is "not an image we take"
         raise InvalidLogo(NOT_AN_IMAGE) from None
-    if img.mode not in ("RGB", "RGBA", "L", "LA"):
-        img = img.convert("RGBA" if "A" in img.getbands() or "transparency" in img.info else "RGB")
-    out = io.BytesIO()
-    img.save(out, format="PNG", optimize=True)
     return out.getvalue(), img.width, img.height
 
 
@@ -153,6 +155,23 @@ async def _drop_unused(db: AsyncSession, value: dict[str, Any]) -> None:
     await db.execute(delete(BrandAsset).where(BrandAsset.sha256.not_in([k for k in keep if k])))
 
 
+async def reset(db: AsyncSession, principal: Principal, previous: Any) -> None:
+    """The generic reset (``PUT /v1/settings/branding`` with a null value): every default
+    back, the revision still counting up (render caches never see an old number again) and
+    every stored logo deleted (no URL serves one after)."""
+    from oracle.tenant_settings import TenantSetting
+
+    revision = int((previous or {}).get("revision") or 0) + 1
+    value = {**copy.deepcopy(DEFAULT), "revision": revision}
+    row = await db.scalar(select(TenantSetting).where(TenantSetting.key == SETTING))
+    if row is None:
+        db.add(TenantSetting(key=SETTING, value=value, updated_by=principal.id))
+    else:
+        row.value = value
+        row.updated_by = principal.id
+    await db.execute(delete(BrandAsset))
+
+
 async def company_name(db: AsyncSession) -> str:
     from oracle.models import Tenant
 
@@ -187,12 +206,18 @@ class Brand:
 
     @property
     def key(self) -> tuple:
-        """What a kept render of this brand depends on: what it shows, not the revision
-        (a reset of the setting starts the revision again)."""
+        """What a kept render of this brand depends on: everything it shows."""
         digest = hashlib.sha256()
         for part in (self.logo_png, self.logo_dark_png):
             digest.update(hashlib.sha256(part or b"").digest())
-        return (self.tenant_id, self.display_name, self.accent, digest.hexdigest())
+        return (
+            self.tenant_id,
+            self.display_name,
+            self.accent,
+            self.public_disclaimer,
+            self.oracle_mark,
+            digest.hexdigest(),
+        )
 
     def apply_accent(self, tokens: dict | None) -> dict:
         """Theme tokens with the brand's accent in place of the theme's."""
@@ -414,16 +439,20 @@ async def upload_brand_logo(
         raise _invalid(str(e)) from None
     sha = hashlib.sha256(png).hexdigest()
     if await db.scalar(select(BrandAsset.id).where(BrandAsset.sha256 == sha)) is None:
-        db.add(
-            BrandAsset(
-                sha256=sha,
-                content_type="image/png",
-                bytes=png,
-                width=width,
-                height=height,
-                created_by=principal.id,
-            )
-        )
+        try:
+            async with db.begin_nested():
+                db.add(
+                    BrandAsset(
+                        sha256=sha,
+                        content_type="image/png",
+                        bytes=png,
+                        width=width,
+                        height=height,
+                        created_by=principal.id,
+                    )
+                )
+        except IntegrityError:
+            pass  # the same image, stored by an upload alongside: its row serves
     value = await stored(db)
     value["logo" if variant == "light" else "logo_dark"] = {
         "sha256": sha,

@@ -51,9 +51,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_brand_assets")),
     )
     op.create_index(op.f("ix_brand_assets_tenant_id"), "brand_assets", ["tenant_id"])
-    op.create_index(
-        "uq_brand_assets_sha256", "brand_assets", ["tenant_id", "sha256"], unique=True
-    )
+    op.create_index("uq_brand_assets_sha256", "brand_assets", ["tenant_id", "sha256"], unique=True)
 
 
 def downgrade() -> None:

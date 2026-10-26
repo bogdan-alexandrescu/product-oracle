@@ -70,7 +70,8 @@ from every member's Google Docs sources in the same request, with no Drive call
 
 - ``branding`` (O5): display name, logo, accent, public disclaimer and the "Made with
   Product Oracle" switch (``oracle.branding``); written only through ``PUT /v1/branding``
-  and the logo routes, so its revision bumps on every change.
+  and the logo routes, so its revision bumps on every change. A reset here bumps it too
+  and deletes the stored logos (``oracle.branding.reset``).
 
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
@@ -561,7 +562,12 @@ async def put_setting(key: str, body: SettingIn, principal: Owner, db: TenantDB)
     before = await company_scope(db, principal.tenant_id) if key in COMPANY_KEYS else None
     previous = await get_setting(db, key)
     if body.value is None:
-        await clear_setting(db, key)
+        if key == "branding":
+            from oracle.branding import reset as reset_branding
+
+            await reset_branding(db, principal, previous)
+        else:
+            await clear_setting(db, key)
         await _follow(db, key, previous)
         extra = await _company_narrowing(db, principal, before)
         await audit.record(
