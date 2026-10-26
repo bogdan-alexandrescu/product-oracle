@@ -254,3 +254,76 @@ async def test_unlinking_the_prd_takes_the_request_off_its_brief(client, ctx, ru
     assert (await get(client, ctx, r["id"]))["document"] is None
     b = (await create_intake(client, ctx, title="Brief B", request_ids=[r["id"]]))["intake"]
     assert (await get(client, ctx, r["id"]))["intake_id"] == b["id"]
+
+
+async def _archive(client, ctx: Ctx, intake_id: str) -> None:
+    from tests.intake_helpers import summary
+
+    lock = (await summary(client, ctx, intake_id))["intake"]["lock_version"]
+    resp = await client.patch(
+        f"/v1/intakes/{intake_id}",
+        json={"status": "archived", "lock_version": lock},
+        headers=ctx.as_("commenter"),
+    )
+    assert resp.status_code == 200, resp.text
+
+
+async def test_archiving_a_brief_with_no_prd_releases_its_requests(client, ctx):
+    """protects=#599 re-review MAJOR 1, decided "Release on archive" (BGD 2026-10-25):
+    archiving a brief that made no PRD clears the brief link of the requests behind it, so
+    a new brief can take them; fails_when=a request keeps the archived brief, a new brief
+    gets 409 for it, or a request outside the brief changes; no_claim=a brief that made a
+    PRD (test_archiving_a_brief_that_made_a_prd_keeps_its_links)."""
+    g = await goal(client, ctx)
+    a = await qualified(client, ctx, "Keep the address", g["id"])
+    b = await qualified(client, ctx, "Saved cards", g["id"])
+    other = await qualified(client, ctx, "Dark mode", g["id"])
+    first = (await create_intake(client, ctx, request_ids=[a["id"], b["id"]]))["intake"]
+    second = (await create_intake(client, ctx, title="Brief C", request_ids=[other["id"]]))[
+        "intake"
+    ]
+    await _archive(client, ctx, first["id"])
+    for r in (a, b):
+        seen = await get(client, ctx, r["id"])
+        assert (seen["intake_id"], seen["intake"], seen["document"]) == (None, None, None)
+    assert (await get(client, ctx, other["id"]))["intake_id"] == second["id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        events = [
+            e
+            for e in await s.scalars(
+                select(AuditEvent).where(AuditEvent.action == "request.updated")
+            )
+            if e.data.get("released_from") == first["id"]
+        ]
+    assert sorted(str(e.entity_id) for e in events) == sorted([a["id"], b["id"]])
+    b2 = (await create_intake(client, ctx, title="Brief B", request_ids=[a["id"]]))["intake"]
+    assert (await get(client, ctx, a["id"]))["intake_id"] == b2["id"]
+
+
+async def test_archiving_a_brief_that_made_a_prd_keeps_its_links(client, ctx):
+    """protects=the decided rule's other half: a request whose brief made a PRD keeps its
+    brief and its PRD when the brief is archived, and stays out of new briefs (409);
+    fails_when=archiving clears either link, or a new brief takes it; no_claim=unlinking
+    the PRD by hand (test_unlinking_the_prd_takes_the_request_off_its_brief)."""
+    from tests.v2_helpers import seed_v2
+
+    seeded = await seed_v2(ctx.tenant_id)
+    g = await goal(client, ctx)
+    r = await qualified(client, ctx, "Keep the address", g["id"])
+    a = (await create_intake(client, ctx, request_ids=[r["id"]]))["intake"]
+    async with tenant_session(ctx.tenant_id) as s:
+        run = Run(
+            flow="baseline_to_prd",
+            status="running",
+            knobs={"intake_id": a["id"]},
+            document_id=seeded.document_id,
+        )
+        s.add(run)
+        await s.flush()
+        assert await requests_service.link_run_document(s, run) == 1
+        await s.commit()
+    await _archive(client, ctx, a["id"])
+    seen = await get(client, ctx, r["id"])
+    assert seen["intake_id"] == a["id"]
+    assert seen["document"]["id"] == str(seeded.document_id)
+    await create_intake(client, ctx, title="Brief B", request_ids=[r["id"]], expect=409)

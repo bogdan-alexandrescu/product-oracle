@@ -23,6 +23,12 @@ import { login, signOut } from "./helpers";
  *   PRD in the inspector, not listed under "Requests behind it"), and the inspector shows the
  *   PRD once; fails_when=such a request can be ticked or started from, or a second brief
  *   could take it over; no_claim=the API's 409 (api/tests/test_requests_brief.py).
+ * - "archiving a brief that made no PRD" (#599 re-review MAJOR 1, decided "Release on
+ *   archive", 2026-10-25): protects=archiving such a brief releases the requests behind it,
+ *   so the queue, the inspector and the next brief offer them again and a new brief takes
+ *   them; fails_when=a released request stays hidden, still names the archived brief, or the
+ *   new brief cannot take it; no_claim=a brief that made a PRD (it cannot be archived once
+ *   converted; api/tests/test_requests_brief.py keeps its links).
  * - "viewers": protects=Start a PRD only for those who can write a brief; fails_when=a viewer
  *   sees the button or the selection boxes; no_claim=the API's role check.
  */
@@ -139,6 +145,42 @@ test("already behind a brief or a PRD: such requests are not offered in the queu
   await expect(behind(page).getByRole("checkbox", { name: "Invite a whole team at once" })).toHaveCount(0);
   await expect(behind(page).getByRole("checkbox", { name: "Share a board read-only" })).toHaveCount(0);
   await expect(behind(page).getByRole("checkbox")).toHaveCount(2);
+});
+
+test("archiving a brief that made no PRD releases its requests to the next brief", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await openRequests(page);
+  await row(page, "Invite a whole team at once").getByRole("checkbox", { name: "Select Invite a whole team at once" }).check();
+  await page.getByRole("button", { name: "Start a PRD from 1 request" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill("Team invites");
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
+
+  // The brief is archived before it made a PRD.
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await page.getByRole("alertdialog", { name: "Archive" }).getByRole("button", { name: "Archive" }).click();
+  await expect(page.getByTestId("intake-status")).toHaveText("Archived");
+
+  // The request is free again: selectable in the queue, Start a PRD in the inspector, no brief.
+  await openRequests(page);
+  await expect(row(page, "Invite a whole team at once").getByRole("checkbox")).toHaveCount(1);
+  await pick(page, "Invite a whole team at once");
+  await expect(inspector(page).getByRole("link", { name: "Team invites" })).toHaveCount(0);
+  await inspector(page).getByRole("button", { name: "Start a PRD" }).click();
+  await expect(behind(page).getByRole("checkbox", { name: "Invite a whole team at once" })).toBeChecked();
+
+  // A new brief takes it.
+  await page.getByRole("textbox", { name: "Title" }).fill("Team invites, again");
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
+  await openRequests(page);
+  await pick(page, "Invite a whole team at once");
+  await expect(inspector(page).getByRole("link", { name: "Team invites, again" })).toBeVisible();
 });
 
 test("the inspector shows a request's PRD once", async ({ page }) => {
