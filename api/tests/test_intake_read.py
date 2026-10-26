@@ -362,3 +362,48 @@ async def test_a_run_that_cannot_be_created_keeps_the_intake_and_queues_the_job(
     read = (await summary(client, ctx, intake_id, who="commenter"))["ai_read"]
     assert read["path"] == "job" and read["fallback"]["code"] == "agent_unavailable"
     assert await _runs(ctx) == []
+
+
+# protects=#689 review: the Inbox of a reader with no intake Oracle failed to read twice
+# runs no query of its own for the intake-read rows (the check rides on the Inbox's
+# last-seen read), so the Inbox stays within MAX_INBOX_READS; and the author with such an
+# intake still gets the row; fails_when=a reader with no such intake pays a query for
+# them, or the row is lost; no_claim=the Inbox screen.
+async def test_the_inbox_reads_intake_rows_only_for_a_reader_who_has_one(client):
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    ctx = await company()
+    set_runtime(FakeRuntime({"read": [Outcome(state="failed", error="boom")] * 10}))
+    intake_id = await _new(client, ctx)
+    await _tick(client, ctx, times=4)
+    resp = await client.post(f"/v1/intakes/{intake_id}/ai-read", headers=ctx.as_("commenter"))
+    assert resp.status_code == 202, resp.text
+    await _tick(client, ctx, times=4)
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    def intake_row_queries() -> list[str]:
+        return [
+            st
+            for st in statements
+            if st.lstrip().startswith("SELECT product_intakes.")
+            and "product_intakes.author_id =" in st
+            and "AS INTEGER) >=" in st
+        ]
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        owner = await client.get("/v1/inbox", headers=ctx.as_("owner"))
+        assert owner.status_code == 200 and owner.json()["intake_reads"] == []
+        assert intake_row_queries() == []
+        author = await client.get("/v1/inbox", headers=ctx.as_("commenter"))
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    [row] = author.json()["intake_reads"]
+    assert row["intake_id"] == intake_id and row["failures"] == 2
+    assert len(intake_row_queries()) == 1

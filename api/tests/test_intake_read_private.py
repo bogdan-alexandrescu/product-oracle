@@ -147,3 +147,62 @@ async def test_the_runs_screen_context_leaves_out_the_intake_read(client):
     built = await screen_context(client, ctx, "/runs")
     assert str(run.id) not in {e["ref"] for e in built.entries.values()}
     assert "Oracle's read" not in "\n".join(built.lines)
+
+
+# protects=#689 review: Trash finds a run as the run routes do, so an owner who is not the
+# author gets 404 deleting the author's read run, restoring it, or restoring its Trash entry,
+# and no Trash row names it; fails_when=another member trashes, restores or lists the
+# author's private run; no_claim=the author's own Trash (only owners use Trash).
+async def test_another_member_never_trashes_restores_or_lists_the_read_run(client):
+    from oracle.trash import service as trash_service
+
+    ctx = await company()
+    run = await _finished_read(client, ctx)
+    owner = ctx.as_("owner")
+    gone = await client.request("DELETE", f"/v1/runs/{run.id}", headers=owner)
+    assert gone.status_code == 404, gone.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Run, run.id)).deleted_at is None
+        # The author's own delete (Oracle's view finds it), to try the restore paths.
+        author = ctx.users["commenter"]
+        principal = Principal(
+            tenant_id=ctx.tenant_id, kind="user", role=author.role, user_id=author.id
+        )
+        entry = await trash_service.delete_root(s, principal, "run", str(run.id))
+        await s.commit()
+    listed = await client.get("/v1/trash", headers=owner)
+    assert listed.status_code == 200 and str(run.id) not in listed.text
+    back = await client.post(f"/v1/runs/{run.id}/restore", headers=owner)
+    assert back.status_code == 404, back.text
+    back = await client.post(f"/v1/trash/{entry.id}/restore", headers=owner)
+    assert back.status_code == 404, back.text
+    async with tenant_session(ctx.tenant_id) as s:
+        # Still in Trash: neither restore brought it back.
+        assert await s.scalar(
+            select(Run.deleted_at).where(Run.id == run.id).execution_options(**trash_service.ALL)
+        )
+
+
+# protects=#689 review: a ritual's Needs a decision block (built once, read by every
+# attendee) never lists an intake read awaiting cost approval, not even in its author's
+# own ritual; fails_when=the block names the run; no_claim=other runs' cost approvals.
+async def test_the_ritual_cost_approval_block_leaves_out_the_intake_read(client):
+    from datetime import UTC, datetime, timedelta
+
+    from oracle.rituals import blocks as ritual_blocks
+
+    ctx = await company()
+    run = await _finished_read(client, ctx)
+    now = datetime.now(UTC)
+    for who in ("commenter", "owner"):
+        async with tenant_session(ctx.tenant_id) as s:
+            (await s.get(Run, run.id)).status = "awaiting_approval"
+            await s.flush()
+            bctx = ritual_blocks.BlockCtx(
+                ritual_owner_id=ctx.users[who].id,
+                period_from=now - timedelta(days=7),
+                period_to=now + timedelta(minutes=1),
+                now=now,
+            )
+            rows = await ritual_blocks.needs_decision(s, bctx)
+        assert str(run.id) not in {r["id"] for r in rows}, who
