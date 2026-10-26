@@ -45,6 +45,11 @@ test("inbox and accept: the lead's row counts the Now items and dates to decide,
   await expect(row(page, "cart-review").getByTestId("date-proposed")).toContainText("No date proposed");
   await expect(row(page, "cart-review").getByTestId("date-reasons")).toHaveText("");
   await expect(row(page, "shipping-step").getByTestId("date-decision")).toHaveText("Decide");
+  // The row's More is an icon, never a text glyph: without a font that has the glyph,
+  // Chromium crashed the lead's screen before it drew (#590 review, blocker 1).
+  const more = row(page, "shipping-step").getByRole("button", { name: "More for Shipping step" });
+  await expect(more.locator("svg")).toHaveCount(1);
+  await expect(more).toHaveText("");
   await accept(page, "shipping-step");
   await expect(row(page, "shipping-step").getByTestId("date-decision")).toHaveText("Accepted");
   await expect(row(page, "shipping-step").getByTestId("date-reasons")).toHaveText("");

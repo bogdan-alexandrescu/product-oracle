@@ -399,3 +399,61 @@ async def test_a_draft_with_no_now_item_skips_the_dates(client, owner):
         assert "eng_dates" not in [s.labels["segment"] for s in fake.submitted]
     finally:
         set_runtime(None)
+
+
+async def test_a_version_saved_after_the_prd_review_is_not_the_one_dated(client, owner, runtime):
+    # protects=#590 review MAJOR 2: the stop dates the PRD version its review approved (the
+    # PRD draft's import), not the document's newest; fails_when=a v2 saved while the run
+    # waits for v1's items makes the stop wait for, summarize or date v2; no_claim=a run
+    # whose PRD review approved v2 (the same lookup, by the import's number).
+    from oracle.docs.models import DocumentVersion
+
+    tenant_id, auth = owner
+    run = await _at_prd_review(client, auth)
+    run = await decide(client, auth, run)
+    assert run["waiting_for"] == {"kind": "draft_items", "version": 1}
+    async with tenant_session(tenant_id) as s:
+        v1 = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == uuid.UUID(run["document_id"])
+            )
+        )
+        s.add(DocumentVersion(document_id=v1.document_id, number=2,
+                              markdown=v1.markdown + "\nA later save.\n",
+                              content_hash=f"{v1.content_hash}-2"))  # fmt: skip
+        await s.commit()
+    run = await _at_dates(client, auth)
+    check = pending(run)["payload"]["dates_check"]
+    assert check["prd"]["version"] == 1
+    assert [i["key"] for i in check["items"]] == ["price-early"]
+    await _act(client, auth, run, {"item_key": "price-early", "kind": "accept", "value": None})
+    assert (await _approve(client, auth, run)).status_code == 200
+    async with tenant_session(tenant_id) as s:
+        item = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "price-early"))
+        assert item.milestone["date_source"] == "est-price-early"
+
+
+async def test_with_no_lead_named_an_approver_decides_the_dates_and_the_audit_says_so(
+    client, owner, runtime
+):
+    # protects=#590 review minor: the no-lead fallback (A3) at the dates stop; fails_when=
+    # an approver cannot decide with no lead named, or the decision's audit does not record
+    # engineering_lead_named: false; no_claim=the lead-named case (above).
+    tenant_id, auth = owner
+    run = await _at_dates(client, auth)
+    cp_id = uuid.UUID(pending(run)["id"])
+    approver = await person(tenant_id, "approver")
+    resp = await _act(client, approver.headers, run, {"item_key": "price-early",
+                                                      "kind": "accept", "value": None})  # fmt: skip
+    assert resp.status_code in (200, 201), resp.text
+    assert (await _approve(client, approver.headers, run)).status_code == 200
+    async with tenant_session(tenant_id) as s:
+        event = await s.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "checkpoint.approved", AuditEvent.entity_id == cp_id
+            )
+        )
+        assert event.data["kind"] == "eng_dates"
+        assert event.data["engineering_lead_named"] is False
+        b = await s.scalar(select(ScheduleBasis))
+        assert b.verified_by == approver.user_id

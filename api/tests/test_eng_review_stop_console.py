@@ -208,3 +208,55 @@ async def test_workflow_mode_runs_the_check_and_a_prd_review_send_back_revises_t
         assert seg["workflow_id"] == "wf_1" and seg["status"] == "succeeded"
     finally:
         set_runtime(None)
+
+
+async def test_a_counted_console_approval_at_the_dates_records_the_verified_bases(
+    client,
+    owner,  # noqa: F811
+    monkeypatch,
+):
+    # protects=#590 review MAJOR 1: the lead stages Accept in Oracle, then approves the
+    # Engineering dates in the SwarmCloud console; the counted answer records the dates as
+    # Oracle's Approve does; fails_when=the stop is approved but no verified basis is made,
+    # the choices are not on the checkpoint, or the draft item keeps its unverified date;
+    # no_claim=a held console approval (the gate's own test above).
+    from sqlalchemy import select
+
+    from oracle.config import get_settings
+    from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+
+    monkeypatch.setattr(get_settings(), "draft_roadmaps_start", True)
+    tenant_id, auth = owner
+    swarm = _swarm()
+    try:
+        run = await started(client, auth)
+        for _ in range(16):
+            await tick(client, auth)
+            run = await get(client, auth, run["id"])
+            if run["waiting_on"] == "eng_dates":
+                break
+            if run["status"] == "awaiting_checkpoint":
+                run = await decide(client, auth, run)
+        assert run["waiting_on"] == "eng_dates", (run["status"], run.get("waiting_for"))
+        cp = pending(run)
+        lead, lead_email = await _lead(client, auth, tenant_id)
+        url = f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/actions"
+        body = {"item_key": "price-early", "kind": "accept", "value": None}
+        resp = await client.post(url, json=body, headers=lead.headers)
+        assert resp.status_code in (200, 201), resp.text
+        wf = cp["payload"]["wait"]["workflow_id"]
+        swarm.console_answer(wf, "eng_dates-review1", "MERGE", by=lead_email)
+        run = await _read(client, auth, run, monkeypatch)
+        cp = next(c for c in run["checkpoints"] if c["id"] == cp["id"])
+        assert cp["status"] == "approved"
+        assert cp["payload"]["dates"]["price-early"]["decision"] == "accepted"
+        async with tenant_session(tenant_id) as s:
+            b = await s.scalar(select(ScheduleBasis))
+            assert b is not None and b.status == "verified"
+            assert (b.reference, b.item_key, b.verified_by) == (
+                "est-price-early", "price-early", lead.user_id,
+            )  # fmt: skip
+            item = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "price-early"))
+            assert item.milestone["date_source"] == "est-price-early"
+    finally:
+        set_runtime(None)
