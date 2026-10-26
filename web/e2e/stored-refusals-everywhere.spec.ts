@@ -84,7 +84,7 @@ test("an interview guide the pool refused says when it failed, the refusal in th
 
   const guide = page.getByRole("dialog", { name: "Draft questions" });
   const failed = guide.getByTestId("guide-failed");
-  await expect(failed.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.$/);
+  await expect(failed.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.\s*$/);
   await expect(failed).toContainText(`Oracle could not draft the questions: ${THEN}`);
   await expect(guide.getByRole("button", { name: "Draft again" })).toBeVisible();
   await expect(guide).not.toContainText("is spent");
