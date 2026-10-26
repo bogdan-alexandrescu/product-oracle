@@ -375,6 +375,14 @@ function ensureLaunches(db: Db): LaunchesDb {
 }
 
 const STORAGE_KEY = "po-mock-db-v2";
+/** Slack pings a member gets until they choose (api oracle.slack.pings.DEFAULTS). */
+const SLACK_PINGS: Schemas["SlackPings"] = {
+  draft_ready: true,
+  review_requested: true,
+  comments: false,
+  feedback_wanted: false,
+  published: false,
+};
 /** Tests set this localStorage key (viewer, commenter, approver) to act with another role. */
 export const MOCK_ROLE_KEY = "po-mock-role";
 /**
@@ -3638,13 +3646,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
-    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false, welcome_dismissed: false });
+    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false, welcome_dismissed: false, slack_pings: { ...SLACK_PINGS } });
+    mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
+      const pings = patch.slack_pings ?? {};
+      if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
+      for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
     }
     mine.setup_hidden ??= false; // saved before A1
     mine.welcome_dismissed ??= false; // saved before the A1 welcome

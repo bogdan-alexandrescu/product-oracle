@@ -611,7 +611,10 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
         "setup_hidden": False,
         # A1: Home's welcome for invited members is shown until they dismiss it.
         "welcome_dismissed": False,
-    }
+        # Slack pings: review requested and draft ready until they choose (oracle.slack.pings).
+        "slack_pings": {"draft_ready": True, "review_requested": True, "comments": False,
+                        "feedback_wanted": False, "published": False},
+    }  # fmt: skip
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"
     assert (await client.get("/v1/me/preferences", headers=viewer)).json()[

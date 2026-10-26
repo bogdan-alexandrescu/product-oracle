@@ -69,7 +69,7 @@ def _columns() -> list[str]:
 def test_the_chain_after_updates():
     script = ScriptDirectory.from_config(_cfg())
     # 0023_intake_brief_fields (C4) chains on it, then 0024_segment_skipped; one head.
-    assert script.get_heads() == ["0055_deal_competitor"]
+    assert script.get_heads() == ["0056_slack_pings"]
     assert script.get_revision("0023_intake_brief_fields").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 

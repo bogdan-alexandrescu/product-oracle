@@ -65,7 +65,8 @@ async def notify(
     data: dict[str, Any] | None = None,
 ) -> int:
     """One notification per distinct recipient who is a user of this company, except
-    whoever caused it. Returns how many were written."""
+    whoever caused it, and its Slack ping for whoever chose that ping. Returns how many
+    notifications were written."""
     ids = list(dict.fromkeys(r for r in recipients if r is not None))
     if not ids:
         return 0
@@ -81,7 +82,7 @@ async def notify(
         if visible is not None and visible != visibility.COMPANY:
             stmt = stmt.where(User.role.in_(("approver", "owner")))
     users = set(await db.scalars(stmt))
-    written = 0
+    written: list[uuid.UUID] = []
     for uid in ids:
         if uid not in users or actor == f"user:{uid}":
             continue
@@ -99,9 +100,17 @@ async def notify(
                 data=data or {},
             )
         )
-        written += 1
+        written.append(uid)
     await db.flush()
-    return written
+    if written:
+        # The Slack ping of the same notification, for whoever chose it (oracle.slack.pings).
+        from oracle.slack import pings
+
+        await pings.notification(
+            db, kind, written, title=title, actor=actor, document_id=document_id,
+            version_number=version_number, section_key=section_key,
+        )  # fmt: skip
+    return len(written)
 
 
 async def on_comment(
