@@ -12,7 +12,11 @@ cached CACHE_SECONDS per (connection, tool, arguments) in this process, and a ca
 answer costs nothing and keeps its original ``read_at``. ``ORACLE_LIVE_READS=off``
 answers 503 on every route here.
 
-Without a live token (lane 2) a cite's ref is numbered per request: always ``l:1``.
+With an Ask reply's live token (oracle.live.tokens, the ``olt_`` MCP caller's
+``x-oracle-live-token``) every call first re-checks the reply and the discussion and
+records itself (amendment C3), counts toward the reply's 8, and a success's cite is
+numbered per reply (``l:1``, ``l:2``, ...); without one it is numbered per request:
+always ``l:1``.
 """
 
 import hashlib
@@ -24,7 +28,7 @@ from collections.abc import Awaitable, Callable, Hashable
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel
 
 from oracle.auth.deps import TenantDB
@@ -32,7 +36,7 @@ from oracle.config import get_settings
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import FirefliesHttp, UserPrincipal
-from oracle.live import budget
+from oracle.live import budget, tokens
 from oracle.live import fireflies as live
 from oracle.live.models import LiveRead
 from oracle.sources.connectors.fireflies import MAX_MEETING_ID
@@ -175,11 +179,12 @@ def _no_connection(provider: str = "fireflies") -> HTTPException:
     )
 
 
-async def _own_fireflies(db: TenantDB, connection_id: uuid.UUID, principal) -> Connection:
-    conn = await connections.get_own(db, connection_id, principal.user_id)
-    if conn is None or conn.provider != "fireflies":
-        raise _no_connection()
-    return conn
+async def _bound(request: Request, principal: UserPrincipal, db: TenantDB):
+    """The Ask reply's live token this call was made with, if any."""
+    return await tokens.bound(db, request, principal.user_id)
+
+
+LiveTokenOf = Annotated[tokens.LiveToken | None, Depends(_bound)]
 
 
 def _error(e: live.LiveError, label: str, meeting_id: str | None) -> HTTPException:
@@ -226,8 +231,14 @@ async def _record(
     label: str,
     item_id: str | None,
     outcome: str,
-    ref_n: int | None,
-) -> None:
+    reserved: tuple[tokens.LiveToken, uuid.UUID] | None,
+) -> int | None:
+    """The call's live_reads row (a reply's call settles the row it reserved); a
+    success's ref number."""
+    if reserved is not None:
+        return await tokens.settle(db, *reserved, outcome)
+    # Per request without a live token: always 1.
+    ref_n = None if outcome == "error" else 1
     db.add(
         LiveRead(
             user_id=principal.user_id,
@@ -240,11 +251,7 @@ async def _record(
         )
     )
     await db.commit()
-
-
-def _ref_n() -> int:
-    """The cite's number: per request (always 1) without a live token."""
-    return 1
+    return ref_n
 
 
 async def _read(
@@ -256,10 +263,22 @@ async def _read(
     args: dict[str, Any],
     run: Callable[[Any], Awaitable[dict[str, Any]]],
     item_id: str | None = None,
+    token: tokens.LiveToken | None = None,
 ) -> dict[str, Any]:
     """One live call: the caller's connection, the cache or the source (on budget), its
-    live_reads row and its cite. Failures answer the errors table's status and words."""
-    conn = await _own_fireflies(db, connection_id, principal)
+    live_reads row and its cite. Failures answer the errors table's status and words.
+    With a reply's live token the call is re-checked and recorded first (C3)."""
+    conn = await connections.get_own(db, connection_id, principal.user_id)
+    if conn is not None and conn.provider != "fireflies":
+        conn = None
+    reserved = None
+    if token is not None:
+        # Before the 404 too: every call of a reply counts toward its 8 (C1).
+        label = _label(conn) if conn is not None else PROVIDER_NAMES["fireflies"]
+        read_id = await tokens.reserve(db, token, conn.id if conn else None, call, label, item_id)
+        reserved = (token, read_id)
+    if conn is None:
+        raise _no_connection()
     label = _label(conn)
     zone = await company_timezone(db)
     kind, _ = live.backend_of(conn.endpoint_url)
@@ -287,7 +306,7 @@ async def _read(
     except live.Unsupported as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, e.detail) from None
     except _Spent as e:
-        await _record(db, principal, conn, call, label, item_id, "error", None)
+        await _record(db, principal, conn, call, label, item_id, "error", reserved)
         raise _spent(e.refusal, label) from None
     except live.LiveError as e:
         if isinstance(e, live.SourceRefused) and not isinstance(e, _Inactive):
@@ -296,10 +315,9 @@ async def _read(
                 db, conn, "expired", f"{label} refused the key during a live read"
             )
         log.info("a live %s read of a %s connection failed: %s", call, kind, type(e).__name__)
-        await _record(db, principal, conn, call, label, item_id, "error", None)
+        await _record(db, principal, conn, call, label, item_id, "error", reserved)
         raise _error(e, label, item_id) from None
-    ref_n = _ref_n()
-    await _record(db, principal, conn, call, label, item_id, outcome, ref_n)
+    ref_n = await _record(db, principal, conn, call, label, item_id, outcome, reserved)
     cite = Cite(
         ref=f"l:{ref_n}",
         source=label,
@@ -386,6 +404,7 @@ async def live_fireflies_list_meetings(
     principal: UserPrincipal,
     db: TenantDB,
     http: FirefliesHttp,
+    token: LiveTokenOf,
     date_from: DateFrom = None,
     date_to: DateTo = None,
     series: Annotated[str | None, Query(min_length=1, max_length=500)] = None,
@@ -410,6 +429,7 @@ async def live_fireflies_list_meetings(
         "list_meetings",
         args,
         lambda b: b.list_meetings(args),
+        token=token,
     )
 
 
@@ -424,6 +444,7 @@ async def live_fireflies_search(
     principal: UserPrincipal,
     db: TenantDB,
     http: FirefliesHttp,
+    token: LiveTokenOf,
     q: Annotated[str, Query(min_length=1, max_length=200)],
     people: Annotated[list[str], Query(max_length=20)] = [],  # noqa: B006 - FastAPI copies it
     date_from: DateFrom = None,
@@ -441,7 +462,9 @@ async def live_fireflies_search(
         "limit": limit,
         "offset": offset,
     }
-    return await _read(db, principal, http, connection_id, "search", args, lambda b: b.search(args))
+    return await _read(
+        db, principal, http, connection_id, "search", args, lambda b: b.search(args), token=token
+    )
 
 
 @router.get(
@@ -456,6 +479,7 @@ async def live_fireflies_get_meeting(
     principal: UserPrincipal,
     db: TenantDB,
     http: FirefliesHttp,
+    token: LiveTokenOf,
     part: Literal["summary", "all"] = "summary",
     max_lines: Annotated[int, Query(ge=1, le=2000)] = 400,
 ) -> dict[str, Any]:
@@ -470,6 +494,7 @@ async def live_fireflies_get_meeting(
         args,
         lambda b: b.get_meeting(args),
         item_id=meeting_id,
+        token=token,
     )
 
 
@@ -485,6 +510,7 @@ async def live_fireflies_get_lines(
     principal: UserPrincipal,
     db: TenantDB,
     http: FirefliesHttp,
+    token: LiveTokenOf,
     offset: Annotated[int | None, Query(ge=0, le=1_000_000)] = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     start_ms: Annotated[int | None, Query(ge=0)] = None,
@@ -511,4 +537,5 @@ async def live_fireflies_get_lines(
         args,
         lambda b: b.get_lines(args),
         item_id=meeting_id,
+        token=token,
     )

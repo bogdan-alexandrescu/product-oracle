@@ -85,6 +85,20 @@ class LlmRateLimited(LlmUnavailable):
         self.readings = readings or {}
 
 
+#: The MCP server's name in Claude Code's config; its tools are ``mcp__oracle__<tool>``.
+MCP_SERVER_NAME = "oracle"
+
+
+@dataclass(frozen=True)
+class McpServer:
+    """One MCP server a Claude Code run may call (#710: Oracle's own ``/mcp`` with an Ask
+    reply's live token), and the tools it may call there."""
+
+    url: str
+    token: str = field(repr=False)
+    allowed_tools: str = f"mcp__{MCP_SERVER_NAME}__live_*"
+
+
 @dataclass(frozen=True)
 class LlmRequest:
     system: str
@@ -92,6 +106,9 @@ class LlmRequest:
     messages: list[dict[str, Any]]
     max_tokens: int
     model: str
+    # Claude Code only (``ClaudeCodeTransport.takes_mcp``); the gateway gives no other
+    # transport one.
+    mcp: McpServer | None = None
 
 
 @dataclass(frozen=True)
@@ -167,7 +184,15 @@ def reading_of(event: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
 
 
 class ClaudeCodeTransport:
-    """``claude -p`` with tools, settings, MCP, slash commands and sessions all off."""
+    """``claude -p`` with tools, settings, MCP, slash commands and sessions all off.
+
+    A request with ``mcp`` (#710) gets that one server, from a config file in the run's
+    temporary HOME (``--mcp-config``; ``--strict-mcp-config`` still ignores any other),
+    and may call only its ``allowed_tools`` (``--allowedTools``); built-in tools stay off.
+    """
+
+    # The gateway passes a request's MCP server to this transport only.
+    takes_mcp = True
 
     def __init__(self, claude_bin: str | None = None, timeout: float | None = None):
         settings = get_llm_settings()
@@ -189,6 +214,27 @@ class ClaudeCodeTransport:
             "--no-session-persistence",
         ]  # fmt: skip
 
+    @staticmethod
+    def mcp_arguments(request: LlmRequest, home: str) -> tuple[str, ...]:
+        """For a request with an MCP server: its config file, written in ``home`` (the
+        bearer is the run's own short-lived token, readable by its owner only)."""
+        if request.mcp is None:
+            return ()
+        path = os.path.join(home, "mcp.json")
+        config = {
+            "mcpServers": {
+                MCP_SERVER_NAME: {
+                    "type": "http",
+                    "url": request.mcp.url,
+                    "headers": {"Authorization": f"Bearer {request.mcp.token}"},
+                }
+            }
+        }
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(config, f)
+        return ("--mcp-config", path, "--allowedTools", request.mcp.allowed_tools)
+
     def environment(self, token: str, request: LlmRequest, home: str) -> dict[str, str]:
         # Built from scratch: no ANTHROPIC_API_KEY or other credential from the server's
         # environment can leak in or take precedence over this call's token.
@@ -207,6 +253,7 @@ class ClaudeCodeTransport:
         try:
             return await asyncio.create_subprocess_exec(
                 *self.command(request),
+                *self.mcp_arguments(request, home),
                 *extra,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -261,6 +308,7 @@ class ClaudeCodeTransport:
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *self.command(request),
+                    *self.mcp_arguments(request, home),
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,

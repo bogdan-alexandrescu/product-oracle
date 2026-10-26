@@ -20,6 +20,13 @@ A reply is a ``discussion_messages`` row (``author_kind`` ``oracle``) that goes
 - Stop sets ``cancel_requested_at``; the running call checks it every 500 ms, is cancelled
   (Claude Code's process group is killed first) and the reply ends ``cancelled`` with its
   partial text. Retry puts a failed or cancelled reply back to ``pending``.
+
+Live reads (#710): in a private chat that only its asker is in, an asker with a live
+connection (v1: Fireflies) gets a run that may read it: an ``olt_`` token for this reply
+(oracle.live.tokens), Oracle's ``/mcp`` as the run's one MCP server (Claude Code only),
+and a "Live sources" block in the prompt; ``[l:n]`` markers cite the reads
+(``live_reads``). The token is revoked when the reply ends. With others in it the
+prompt says live reads are off; an asker with no live connection gets one line (C6).
 """
 
 import asyncio
@@ -45,18 +52,24 @@ from oracle import audit, autonomy
 from oracle.authz import has_role
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.company_time import DEFAULT_ZONE
+from oracle.config import get_settings
+from oracle.connections import service as connections
 from oracle.discussions import changes, context
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.docs import visibility
 from oracle.jobs import prompting
 from oracle.jobs.worker import _cost, _tokens
+from oracle.live import tokens
+from oracle.live.models import LiveRead
 from oracle.llm import gateway
 from oracle.llm.transports import (
     LlmRateLimited,
+    McpServer,
     NoClaudeAccount,
     get_llm_settings,
 )
 from oracle.models import AuditEvent
+from oracle.swarm.settings import get_runtime_settings
 from oracle.tenancy import tenant_session
 
 if TYPE_CHECKING:
@@ -84,6 +97,20 @@ FINAL = ("complete", "failed", "cancelled")
 
 _ORACLE = re.compile(r"(?<![\w@])@oracle\b", re.I)
 _MARKER = re.compile(r"\[c:(\d{1,4})\]")
+_LIVE_MARKER = re.compile(r"\[l:(\d{1,4})\]")
+
+# #710: the providers with live tools, and their names.
+LIVE_PROVIDERS = {"fireflies": "Fireflies"}
+# Not live because others can read the discussion (section 2.4; the panel says the same).
+OFF_HERE = (
+    "Live reads are off: others can read this discussion. If a question needs a live read "
+    "of the asker's sources, say so."
+)
+# C6: the one line for an asker with no live connection.
+NO_LIVE_CONNECTION = (
+    'If you are asked about a source such as Fireflies meetings, say: "You have no '
+    'Fireflies connection. Connect one in Settings > Connections."'
+)
 
 
 class ReplyLimits(BaseModel):
@@ -221,6 +248,102 @@ async def opening(
     return reply
 
 
+# --- live reads (#710) -------------------------------------------------------------------
+
+
+@dataclass
+class LivePlan:
+    """What a reply gets of its asker's live sources."""
+
+    # The reply's live token: the run may read live (Claude Code only).
+    token: str | None = None
+    # The prompt's "Live sources" block, with the token.
+    block: str = ""
+    # Without one: the one prompt line saying why not (others read it; no connection).
+    line: str = ""
+
+
+async def asker_of(db: AsyncSession, d: Discussion, reply: DiscussionMessage) -> uuid.UUID | None:
+    asked = await db.get(DiscussionMessage, reply.reply_to) if reply.reply_to else None
+    # An opening turn (B6) answers nobody: it is its starter's.
+    return asked.author_id if asked is not None else d.started_by
+
+
+def live_block(sources: list[Any]) -> str:
+    lines = [
+        "Live sources: you can read the asker's own connected sources at this moment with "
+        f"the live_* tools, at most {tokens.MAX_READS} calls in this answer. The asker's "
+        "connections:",
+        *(
+            f"- {s.account_label or LIVE_PROVIDERS[s.provider]} "
+            f"({LIVE_PROVIDERS[s.provider]}, connection_id {s.id})"
+            for s in sources
+        ),
+        "Every tool result carries cite.ref (l:1, l:2, ...). Cite every fact you take from "
+        "a tool result with its ref as [l:n], for example [l:1]. Never state a count, a "
+        "meeting or any detail of one that did not come from a tool result in this answer; "
+        "when a tool answers with an error, say what it said.",
+    ]
+    return "\n".join(lines)
+
+
+async def live_plan(db: AsyncSession, d: Discussion, reply: DiscussionMessage) -> LivePlan:
+    """Section 2.1: live when only the asker is in the (private) discussion, the asker has
+    an active live connection and ``ORACLE_LIVE_READS`` is not off; the token is minted
+    with the discussion row ``FOR SHARE`` (C3), so a join either came first (and is seen
+    here) or comes after the token (and is refused). The caller commits."""
+    if get_settings().live_reads == "off":
+        return LivePlan()
+    asker = await asker_of(db, d, reply)
+    if asker is None:
+        return LivePlan()
+    sources = [
+        c
+        for c in await connections.list_for_user(db, asker)
+        if c.provider in LIVE_PROVIDERS and c.status == "active"
+    ]
+    if not sources:
+        return LivePlan(line=NO_LIVE_CONNECTION)
+    visibility_now = await db.scalar(
+        select(Discussion.visibility).where(Discussion.id == d.id).with_for_update(read=True)
+    )
+    if visibility_now != "private" or await people_in(db, d) != {asker}:
+        return LivePlan(line=OFF_HERE)
+    raw = await tokens.mint(db, asker, reply.id)
+    return LivePlan(token=raw, block=live_block(sources))
+
+
+async def live_citations(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> dict[int, dict[str, Any]]:
+    """The reply's successful live reads by ref number, as citations (section 4)."""
+    async with tenant_session(tenant_id) as db:
+        rows = await db.scalars(
+            select(LiveRead).where(LiveRead.message_id == reply_id, LiveRead.ref_n.is_not(None))
+        )
+        return {
+            r.ref_n: {
+                "kind": "live",
+                "ref": f"l:{r.ref_n}",
+                "source": r.source_label,
+                "call": r.tool,
+                "read_at": r.read_at.isoformat(),
+                "item_id": r.item_id,
+            }
+            for r in rows
+            if r.ref_n is not None
+        }
+
+
+async def _revoke(tenant_id: uuid.UUID, reply_ids: list[uuid.UUID]) -> None:
+    try:
+        async with tenant_session(tenant_id) as db:
+            for reply_id in reply_ids:
+                await tokens.revoke(db, reply_id)
+            await db.commit()
+    except Exception:
+        # It expires in 10 minutes anyway, and every call re-checks the reply.
+        log.exception("could not revoke the live tokens of replies %s", reply_ids)
+
+
 # --- in-process listeners ---------------------------------------------------------------
 
 
@@ -280,9 +403,13 @@ async def claim(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
     return got is not None
 
 
-def citations_of(body: str, ctx: context.Context) -> tuple[str, list[dict[str, Any]]]:
-    """The body without markers that point at nothing, and each used marker's citation."""
+def citations_of(
+    body: str, ctx: context.Context, live: dict[int, dict[str, Any]] | None = None
+) -> tuple[str, list[dict[str, Any]]]:
+    """The body without markers that point at nothing, and each used marker's citation:
+    ``[c:n]`` from the context, then ``[l:n]`` from the reply's live reads (``live``)."""
     used: dict[int, dict[str, Any]] = {}
+    read: dict[int, dict[str, Any]] = {}
 
     def keep(m: re.Match) -> str:
         n = int(m.group(1))
@@ -291,8 +418,15 @@ def citations_of(body: str, ctx: context.Context) -> tuple[str, list[dict[str, A
         used.setdefault(n, ctx.entries[n])
         return m.group(0)
 
-    cleaned = _MARKER.sub(keep, body)
-    return cleaned, [used[n] for n in sorted(used)]
+    def keep_live(m: re.Match) -> str:
+        n = int(m.group(1))
+        if not live or n not in live:
+            return ""
+        read.setdefault(n, live[n])
+        return m.group(0)
+
+    cleaned = _LIVE_MARKER.sub(keep_live, _MARKER.sub(keep, body))
+    return cleaned, [used[n] for n in sorted(used)] + [read[n] for n in sorted(read)]
 
 
 def pushback_of(body: str) -> dict[str, Any] | None:
@@ -338,6 +472,8 @@ async def produce(
     try:
         return await _produce(tenant_id, reply_id, live, transports, timeout)
     finally:
+        # Complete, failed or cancelled: the reply's live token reads no more (#710).
+        await _revoke(tenant_id, [reply_id])
         live.publish(("end", ""))
         _live.pop(reply_id, None)
 
@@ -373,8 +509,15 @@ async def _produce(
             # H11 Shape goals: ask for as many versions as the level keeps (#586 review).
             offer = goal_interview.offer_line(await autonomy.level(db, "goals"))
         reply.prompt = name
+        plan = await live_plan(db, d, reply)
         await db.commit()
         notes = await changes.prompt_notes(db, d)
+    if plan.line:
+        system = f"{system.rstrip()}\n\n{plan.line}"
+    mcp = None
+    if plan.token is not None:
+        url = get_runtime_settings().public_url.rstrip("/") + "/mcp"
+        mcp = McpServer(url=url, token=plan.token)
     asked = "Open the interview." if ctx.opening else "Reply to the last person's message."
     asked = f"{offer} {asked}" if offer else asked
     user = (
@@ -406,7 +549,8 @@ async def _produce(
         if delta:
             live.publish(("delta", delta))
         if "]" in text:
-            cites = citations_of(live.text, ctx)[1]
+            reads = await live_citations(tenant_id, reply_id) if "[l:" in live.text else None
+            cites = citations_of(live.text, ctx, reads)[1]
             if len(cites) > len(live.citations):
                 live.citations = cites
                 live.publish(("citations", cites))
@@ -418,7 +562,8 @@ async def _produce(
             return await gateway.stream(
                 s, system, [{"role": "user", "content": user}], MAX_TOKENS,
                 job=JOB, on_text=on_text, model=settings.chat_model or None,
-                transports=transports,
+                transports=transports, mcp=mcp,
+                mcp_system=f"{system.rstrip()}\n\n{plan.block}" if mcp else None,
             )  # fmt: skip
 
     call = asyncio.ensure_future(asyncio.wait_for(run(), timeout or settings.chat_timeout_seconds))
@@ -466,7 +611,8 @@ async def _produce(
     if goal is not None and tail is not None:
         text, tail = changes.split_goal_reply(f"{text}{changes.DELIMITER}{tail}")
     text, versions = goal_interview.take_changes(text) if goal is not None else (text, [])
-    body, cites = citations_of(text, ctx)
+    reads = await live_citations(tenant_id, reply_id) if "[l:" in text else None
+    body, cites = citations_of(text, ctx, reads)
     inp, out = _tokens(done.usage)
     await _save(
         tenant_id, reply_id, body=body[:8000], status="complete", citations=cites,
@@ -778,7 +924,8 @@ async def run_pending(
             .returning(DiscussionMessage.id)
             .execution_options(synchronize_session=False)
         )
-        out.interrupted = len(list(gone))
+        gone = list(gone)
+        out.interrupted = len(gone)
         due = list(
             await db.scalars(
                 select(DiscussionMessage.id)
@@ -792,6 +939,8 @@ async def run_pending(
             )
         )
         await db.commit()
+    if gone:
+        await _revoke(tenant_id, gone)
     for reply_id in due:
         if deadline is not None and deadline - time.monotonic() < reply_seconds():
             break

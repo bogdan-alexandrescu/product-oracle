@@ -169,7 +169,9 @@ async def test_token_refused_after_the_reply_and_after_a_join(client, sources, m
     async with tenant_session(ctx.tenant_id) as s:
         s.add(
             DiscussionParticipant(
-                discussion_id=uuid.UUID(d["id"]), user_id=ctx.users["approver"].id
+                discussion_id=uuid.UUID(d["id"]),
+                user_id=ctx.users["approver"].id,
+                added_via="added",
             )
         )
         await s.commit()
@@ -394,7 +396,9 @@ async def test_join_and_live_read_race(client, sources, model):
         assert not going.done(), "going live did not wait for the join's lock"
         s.add(
             DiscussionParticipant(
-                discussion_id=uuid.UUID(d["id"]), user_id=ctx.users["approver"].id
+                discussion_id=uuid.UUID(d["id"]),
+                user_id=ctx.users["approver"].id,
+                added_via="added",
             )
         )
         await s.commit()

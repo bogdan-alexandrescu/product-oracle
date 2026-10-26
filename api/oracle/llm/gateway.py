@@ -29,6 +29,7 @@ Agent workflows do not run here: they run in SwarmCloud on SwarmCloud's accounts
 """
 
 import asyncio
+import dataclasses
 import logging
 import time
 import uuid
@@ -53,6 +54,7 @@ from oracle.llm.transports import (
     LlmOutOfTime,
     LlmRateLimited,
     LlmRequest,
+    McpServer,
     MessagesApiTransport,
     NoClaudeAccount,
     OnText,
@@ -205,13 +207,24 @@ async def stream(
     transports: Transports | None = None,
     deadline: float | None = None,
     on_call: Callable[[str | None, str], None] | None = None,
+    mcp: McpServer | None = None,
+    mcp_system: str | None = None,
 ) -> Completion:
     """As :func:`complete`, telling ``on_text`` each piece of the answer as it arrives.
 
     The same assignment, hold, swap and release. A swap happens only before the first
     piece of text: once text was sent, a rate limit or a refused credential ends the
-    call (:class:`LlmRateLimited`, :class:`LlmAuthError`), so no answer repeats text."""
+    call (:class:`LlmRateLimited`, :class:`LlmAuthError`), so no answer repeats text.
+
+    ``mcp`` (#710): an MCP server for a transport that takes one (Claude Code), whose
+    system prompt is then ``mcp_system``; any other transport (the Messages API) gets
+    neither, and ``system`` as it is."""
     request = _request(system, messages, max_tokens, job, model)
+    with_mcp = (
+        dataclasses.replace(request, mcp=mcp, system=mcp_system or system)
+        if mcp is not None
+        else request
+    )
     sent = False
 
     async def told(text: str) -> None:
@@ -220,7 +233,8 @@ async def stream(
         await on_text(text)
 
     async def call(transport: Transport, token: str) -> TransportResult:
-        return await transport.stream(token, request, told)
+        takes = getattr(transport, "takes_mcp", False)
+        return await transport.stream(token, with_mcp if takes else request, told)
 
     return await _run(session, job, call, transports, deadline, on_call, lambda: sent)
 

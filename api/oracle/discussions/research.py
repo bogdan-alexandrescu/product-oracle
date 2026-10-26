@@ -363,9 +363,10 @@ async def for_reader(db: AsyncSession, rows: list[DiscussionMessage], outs: list
         if hidden.names(out.body) or hidden.names(str(out.pushback or "")):
             out.body, out.citations, out.pushback = WITHHELD, [], None
             continue
-        gone = {int(c["n"]) for c in out.citations if _hides(hidden, c)}
+        # A live read's citation (#710) names no document or decision: it has no "n".
+        gone = {int(c["n"]) for c in out.citations if "n" in c and _hides(hidden, c)}
         if gone:
-            out.citations = [c for c in out.citations if int(c["n"]) not in gone]
+            out.citations = [c for c in out.citations if "n" not in c or int(c["n"]) not in gone]
             out.body = _GAP.sub("", _without(out.body, gone)).strip()
 
 

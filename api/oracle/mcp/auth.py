@@ -4,7 +4,8 @@ A verifier takes the raw bearer token and returns an :class:`McpCaller`, or ``No
 when the token is not one it knows (or is expired or revoked). Verifiers are tried in
 registration order; the first caller wins. Built in: API tokens (``po_...``, act with
 the token's role) and run tokens (``ort_...``, act for the run's creator, limited by
-the token's scopes). Another credential plugs in with one line::
+the token's scopes), and an Ask reply's live tokens (``olt_...``, act for the asker
+with ``live:sources`` only). Another credential plugs in with one line::
 
     from oracle.mcp.auth import register_verifier
     register_verifier(verify_oauth_access_token)
@@ -178,6 +179,17 @@ async def verify_run_token_caller(raw: str) -> McpCaller | None:
     )
 
 
+async def verify_live_token_caller(raw: str) -> McpCaller | None:
+    """An Ask reply's live token (``olt_...``, #710): acts for the asker with the
+    ``live:sources`` scope only, while its reply streams (oracle.live.tokens)."""
+    from oracle.live.tokens import PREFIX, verify_live_token
+
+    if not raw.startswith(PREFIX):
+        return None
+    return await verify_live_token(raw)
+
+
 register_verifier(verify_api_token)
 register_verifier(verify_run_token_caller)
 register_verifier(verify_oauth_access_token)
+register_verifier(verify_live_token_caller)
