@@ -109,24 +109,94 @@ async def check_host(host: str) -> None:
         raise HostError(f"The host {parts.hostname} is not a public address") from exc
 
 
-_STRING = re.compile(r"'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"|`[^`]*`")
+# Single-quoted strings only: a backtick or double quote names a table or column in
+# HogQL, so any left once strings are blanked refuses the query.
+_STRING = re.compile(r"'(?:[^'\\]|\\.)*'")
+_PLACEHOLDER = re.compile(r"\{period_(?:start|end)\}")
 _FORBIDDEN = re.compile(
     r"\b(INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE|GRANT|REVOKE|ATTACH|DETACH|RENAME|"
-    r"OPTIMIZE|SYSTEM|KILL|SETTINGS|INTO|OUTFILE|FORMAT|SHOW|DESCRIBE|EXPLAIN|USE)\b",
+    r"OPTIMIZE|SYSTEM|KILL|SETTINGS|INTO|OUTFILE|FORMAT|SHOW|DESCRIBE|EXPLAIN|USE|"
+    r"UNION|INTERSECT|EXCEPT)\b",
     re.IGNORECASE,
 )
-_SOURCE = re.compile(r"\b(?:FROM|JOIN)\s+(\(|[A-Za-z_][\w.$]*)(\s*\()?", re.IGNORECASE)
+_TOKEN = re.compile(r"\s*(?:([A-Za-z_$][\w$]*)|(\d[\w.]*)|(\S))", re.ASCII)
+# The words that end a FROM clause at its own depth (a comma after them is not a join).
+_CLAUSE_ENDS = frozenset(
+    {"WHERE", "PREWHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "QUALIFY"}
+)
+
+
+def _blank_strings(text: str) -> str:
+    """``text`` with each single-quoted string as ``0``; QueryRefused for a string glued
+    to a name (an f-string or other prefix the checker cannot read)."""
+
+    def blank(m: re.Match[str]) -> str:
+        before = text[m.start() - 1] if m.start() else " "
+        if before.isalnum() or before in "_$":
+            raise QueryRefused("query: only plain 'strings' are allowed")
+        return "0"
+
+    return _STRING.sub(blank, text)
+
+
+def _check_sources(text: str) -> None:
+    """Walk the tokens: parentheses balance and never close the row-limit wrapper; each
+    FROM or JOIN reads a bare allowed table or a ``(SELECT ...)``; no comma joins; IN
+    takes a list, never a table."""
+    tokens = [m.group(1) or m.group(2) or m.group(3) for m in _TOKEN.finditer(text)]
+    allowed = ", ".join(sorted(ALLOWED_TABLES))
+    depth = 0
+    from_at: set[int] = set()  # the depths inside a FROM clause
+    for i, tok in enumerate(tokens):
+        word = tok.upper()
+        after = tokens[i + 1] if i + 1 < len(tokens) else ""
+        if tok == "(":
+            depth += 1
+        elif tok == ")":
+            from_at.discard(depth)
+            depth -= 1
+            if depth < 0:
+                raise QueryRefused("query: a ) has no matching (")
+        elif tok == ",":
+            if depth in from_at:
+                raise QueryRefused("query: join tables with JOIN, not a comma")
+        elif word in _CLAUSE_ENDS:
+            from_at.discard(depth)
+        elif word == "IN":
+            if after not in ("(", "["):
+                raise QueryRefused("query: IN takes a list in parentheses, not a table")
+        elif word in ("FROM", "JOIN"):
+            from_at.add(depth)
+            nxt = tokens[i + 2] if i + 2 < len(tokens) else ""
+            if after == "(":
+                if nxt.upper() != "SELECT":
+                    raise QueryRefused(f"query: {word} ( must be followed by SELECT")
+                continue
+            if nxt == "(":
+                raise QueryRefused(f"query: the table function {after} is not allowed")
+            if after.lower() not in ALLOWED_TABLES or nxt == ".":
+                name = after + ("." if nxt == "." else "")
+                raise QueryRefused(f"query: {name} cannot be read (only {allowed})")
+    if depth:
+        raise QueryRefused("query: a ( is never closed")
 
 
 def check_query(hogql: str) -> None:
     """One read-only SELECT over :data:`ALLOWED_TABLES` (subqueries and joins of them
     allowed, a trailing semicolon too); QueryRefused naming why otherwise. Words inside
-    string literals do not count."""
-    text = _STRING.sub("''", (hogql or "").strip())
+    string literals do not count. Anything the checker cannot read with certainty is
+    refused: quoted names, comma joins, unbalanced parentheses, set operators."""
+    text = _PLACEHOLDER.sub("0", _blank_strings((hogql or "").strip()))
     if text.endswith(";"):
         text = text[:-1].rstrip()
     if not text:
         raise QueryRefused("query: write one SELECT")
+    if any(q in text for q in "'\"`"):
+        raise QueryRefused("query: close every 'string', and write names bare (no ` or \")")
+    if not text.isascii():
+        raise QueryRefused("query: only ASCII outside strings")
+    if "{" in text or "}" in text:
+        raise QueryRefused("query: only {period_start} and {period_end} may be filled in")
     if ";" in text:
         raise QueryRefused("query: one statement only")
     if "--" in text or "/*" in text or "#" in text:
@@ -135,14 +205,7 @@ def check_query(hogql: str) -> None:
         raise QueryRefused("query: only a SELECT can be run")
     if m := _FORBIDDEN.search(text):
         raise QueryRefused(f"query: {m.group(1).upper()} is not allowed")
-    for name, call in _SOURCE.findall(text):
-        if name == "(":
-            continue
-        if call:
-            raise QueryRefused(f"query: the table function {name} is not allowed")
-        if name.lower() not in ALLOWED_TABLES:
-            allowed = ", ".join(sorted(ALLOWED_TABLES))
-            raise QueryRefused(f"query: {name} cannot be read (only {allowed})")
+    _check_sources(text)
 
 
 def limited(hogql: str) -> str:

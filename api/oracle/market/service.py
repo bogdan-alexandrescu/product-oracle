@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +50,7 @@ from oracle.market.schemas import (
 from oracle.models import AuditEvent
 from oracle.rituals import clock
 from oracle.rituals.models import Ritual
+from oracle.tenancy import current_tenant
 
 MAX_ALIASES = 5
 PAGES_PER_COMPETITOR = 10
@@ -58,6 +59,8 @@ PAGES_PER_COMPANY = 60
 CHECKS_PER_PAGE_WINDOW = timedelta(minutes=10)
 CHECKS_PER_COMPANY_HOUR = 20
 CHECKED = "competitor_page.checked"
+# A newly watched page is read at once; so many of those per company an hour, too.
+WATCHED = "competitor_page.watched"
 ITEM_CHARS = 300
 ITEMS_PER_FIELD = 10
 # Promoted and dismissed URLs are not shown again for this long.
@@ -330,10 +333,19 @@ async def watch_page(
     page = CompetitorPage(competitor_id=c.id, url=url, label=body.label, created_by=principal.id)
     db.add(page)
     await db.flush()
-    await audit.record(db, principal, "competitor_page.watched", "competitor_page", page.id,
-                       {"url": url})  # fmt: skip
+    now = _now()
+    await _lock_checks(db)
+    watched = await db.scalar(
+        select(func.count())
+        .select_from(AuditEvent)
+        .where(AuditEvent.action == WATCHED, AuditEvent.created_at > now - timedelta(hours=1))
+    )
+    event = await audit.record(db, principal, WATCHED, "competitor_page", page.id, {"url": url})
+    event.created_at = now
     await resume_digest_once(db)
-    await watch.check_page(db, page, fetch, _now())
+    # Past the hourly number the page is still watched; the next scheduled tick reads it.
+    if (watched or 0) < CHECKS_PER_COMPANY_HOUR:
+        await watch.check_page(db, page, fetch, now)
     await db.commit()
     return page_out(page)
 
@@ -370,6 +382,15 @@ async def delete_page(db: AsyncSession, principal: Principal, pid: uuid.UUID) ->
                        {"url": p.url})  # fmt: skip
     await db.delete(p)
     await db.commit()
+
+
+async def _lock_checks(db: AsyncSession) -> None:
+    """The company's on-demand reads are counted one at a time (held until commit), so
+    parallel calls on different pages cannot all pass the hourly number."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext('market.check_now:' || :t))"),
+        {"t": str(current_tenant(db))},
+    )
 
 
 async def _check_now_allowed(db: AsyncSession, p: CompetitorPage, now: datetime) -> None:
@@ -411,6 +432,7 @@ async def check_now(
     (409 when it disallows the page)."""
     p = await get_page(db, pid, lock=True)
     now = _now()
+    await _lock_checks(db)
     await _check_now_allowed(db, p, now)
     event = await audit.record(db, principal, CHECKED, "competitor_page", p.id, {})
     event.created_at = now
