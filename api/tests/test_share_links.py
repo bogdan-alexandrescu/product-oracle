@@ -774,7 +774,9 @@ async def test_a_link_holder_sees_no_other_document_status_or_version(client, ct
                  'class="banner-status"', 'class="banner-version"'):  # fmt: skip
         assert leak not in page.text, leak
     hrefs = re.findall(r'href="([^"]*)"', page.text)
-    assert all(h.startswith("#") for h in hrefs), hrefs
+    # The one link that is not an anchor is the link's own PDF (owner decision 2026-10-26:
+    # Download PDF on a link that allows downloads), on the link's path.
+    assert all(h.startswith("#") or h == f"{token}/pdf" for h in hrefs), hrefs
 
 
 def test_the_per_address_tables_drop_old_entries(monkeypatch):
