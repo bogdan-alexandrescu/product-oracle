@@ -167,6 +167,7 @@ export function BlockerInspector({
   const s = q.data;
   const b = s?.blocker;
   // #370: what the role may do comes from can(); lowering a gating blocker takes an owner, the API says so.
+  // Set status asks the blocker too: reopening one resolved while it gated, lowered or narrowed since, takes an owner (B4).
   const may: May = {
     status: can("set_blocker_status", true),
     edit: can("update_blocker", true),
@@ -239,7 +240,13 @@ export function BlockerInspector({
         )}
         {s && b && (
           <>
-            <StatusSection blocker={b} busy={busy} may={may.status} act={act} />
+            <StatusSection
+              blocker={b}
+              busy={busy}
+              may={may.status}
+              denied={can("set_blocker_status", s.can_set_status) ? null : (s.set_status_why_not ?? null)}
+              act={act}
+            />
             <Details blocker={b} people={people} name={name} busy={busy} may={may.edit} act={act} />
             <Options strategy={s} busy={busy} may={may} act={act} />
             <Scope
@@ -339,7 +346,7 @@ function Actions({ children }: { children: ReactNode }) {
 
 // --- sections -------------------------------------------------------------------------------
 
-function StatusSection({ blocker: b, busy, may, act }: { blocker: Blocker; busy: boolean; may: boolean; act: Act }) {
+function StatusSection({ blocker: b, busy, may, denied, act }: { blocker: Blocker; busy: boolean; may: boolean; denied: Denied; act: Act }) {
   const [status, setStatus] = useState<Plain>(PLAIN.find(([v]) => v === b.status)?.[0] ?? "open");
   const [reason, setReason] = useState("");
   const { error, submit } = useSubmit(act);
@@ -369,13 +376,14 @@ function StatusSection({ blocker: b, busy, may, act }: { blocker: Blocker; busy:
       <p className={may ? "mb-3 text-sm text-text2" : "text-sm text-text2"}>{b.gate.rationale}</p>
       {may && (
         <form onSubmit={save} aria-label="Change status" className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+          <fieldset disabled={!!denied} className="m-0 grid min-w-0 grid-cols-2 gap-3 border-0 p-0 max-[600px]:grid-cols-1">
             <Select name="Status" value={status} options={PLAIN} onChange={setStatus} />
             <Text name="Reason" value={reason} onChange={setReason} />
-          </div>
+          </fieldset>
+          {denied && <p className="text-sm font-medium">{denied}</p>}
           {error && <Notice tone="error">{error}</Notice>}
           <Actions>
-            <Button type="submit" variant="solid" disabled={busy}>
+            <Button type="submit" variant="solid" disabled={busy || !!denied} title={denied ?? undefined}>
               Set status
             </Button>
             <InfoTip label="status" align="start">

@@ -31,7 +31,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import changes
+from oracle import changes, company_time
 from oracle.baseline.models import Edge, Entity, EntityRevision, Evidence
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap.models import ProductTrack, RoadmapItem
@@ -272,7 +272,7 @@ def _review_due(kind: str, approved: Approved | None, today: date) -> list[Found
 
 async def evaluate(db: AsyncSession, g: Graph | None = None) -> list[Found]:
     g = g or await load(db)
-    today = datetime.now(UTC).date()
+    today = await company_time.company_today(db)
     found = _review_due("vision_review_due", g.vision, today)
     if g.strategy is None:
         return [*found, Found("no_strategy", "info", "document", None, "strategy")]

@@ -50,6 +50,7 @@ from oracle.intake.service import (
 from oracle.review.models import FeedbackItem
 from oracle.review.service import locked_section_keys
 from oracle.sources import items as source_items
+from oracle.tenant_settings_api import get_setting
 from oracle.v2.models import (
     AssumptionDecision,
     KnowledgeGap,
@@ -58,8 +59,6 @@ from oracle.v2.models import (
     StakeholderQuestion,
 )
 
-# B4: the longest an accepted critical gap goes before its review.
-MAX_REVIEW_DAYS = 90
 DELEGATE_TO = "Delegate to a person of this company who can answer"
 ANSWERABLE = frozenset({"draft", "asked", "delegated", "deferred", "researching"})
 # Answer kind -> (question status, gap status or None to keep).
@@ -702,14 +701,14 @@ async def decide(
     if review_at is not None and review_at.tzinfo is None:
         review_at = review_at.replace(tzinfo=UTC)
     if importance == "critical" and body.decision in ("accept_risk", "accept_assumption"):
-        # B4: an acceptance of a critical gap is reviewed within at most 90 days.
-        latest = _now() + timedelta(days=MAX_REVIEW_DAYS)
+        # B4: an acceptance of a critical gap is reviewed within the company's
+        # blocker_risk_review_max_days, as a blocker's accepted risk is.
+        max_days = await get_setting(db, "blocker_risk_review_max_days")
+        latest = _now() + timedelta(days=max_days)
         if review_at is None:
             review_at = latest
         elif review_at > latest:
-            raise IntakeError(
-                422, f"Accepting a critical gap is reviewed within {MAX_REVIEW_DAYS} days"
-            )
+            raise IntakeError(422, f"Accepting a critical gap is reviewed within {max_days} days")
     decision = AssumptionDecision(
         gap_id=gap.id,
         document_id=gap.document_id,

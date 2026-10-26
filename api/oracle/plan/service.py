@@ -402,7 +402,7 @@ def _engineering(
 
 async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all") -> PlanOut:
     """The Plan as ``principal`` sees it (F1 §11)."""
-    now = views.today()
+    now = await views.today(db)
     viewer_role, viewer_id = principal.role, principal.user_id
     # The company's engineering lead (A3 Engineering lead role); none can be named yet,
     # so engineering decisions fall to the approvers.

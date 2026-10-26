@@ -314,9 +314,9 @@ async def test_an_import_keeps_its_dates_for_the_version(client, monkeypatch):
 async def test_template_dates_are_found_once_per_template_body(monkeypatch):
     body = "---\ntitle: T\n---\n\n# Plan {#plan}\n\nKickoff 2026-11-30.\n"
     calls = count_calls(monkeypatch, doc_dates, "template_dates")
-    first = await doc_dates.template_dates_async(body)
+    first = await doc_dates.template_dates_async(body, date(2026, 10, 20))
     assert first == {("plan", "2026-11-30")}
-    assert await doc_dates.template_dates_async(body) == first
+    assert await doc_dates.template_dates_async(body, date(2026, 10, 20)) == first
     assert calls[0] == 1
 
 

@@ -30,7 +30,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy
+from oracle import audit, autonomy, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -827,7 +827,9 @@ async def update_note(
         if not channel:
             raise LaunchError("Say how the note was sent (channel)")
         note.channel = channel
-        note.sent_on = fields.get("sent_on") or now().date()
+        note.sent_on = fields.get("sent_on") or company_time.day(
+            now(), await company_time.company_time_zone(db)
+        )
         note.sent_by = principal.id
         note.skip_reason = None
     elif status == "skipped":

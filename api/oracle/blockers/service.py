@@ -922,6 +922,32 @@ async def _reopen_or_confirm(
     )
 
 
+async def status_refusal(
+    db: AsyncSession,
+    principal: Principal,
+    entity: Entity,
+    spec: BlockerSpec,
+    role: str | None = None,
+) -> str | None:
+    """Why ``principal`` may not change this blocker's status, or None when they may.
+    Resolved, then lowered or narrowed by someone below the B4 role: reopening it as it is
+    now would leave it open without the gate it had, so only the B4 role reopens it (and a
+    resolved blocker's only change is a reopen). The strategy view reads the same answer,
+    so the web shows Set status disabled with this reason. ``role``: the B4 role when the
+    caller has read it already (a list of blockers reads it once)."""
+    if spec.status != "resolved":
+        return None
+    if not _weakens(await _resolve_floor(db, entity.id), gate_snapshot(spec)):
+        return None
+    role = role or await decider_role(db)
+    if has_role(principal.role, role):
+        return None
+    return (
+        "This blocker gated publishing when it was resolved and was lowered or "
+        f"narrowed since. Only an {role} can reopen it."
+    )
+
+
 async def set_status(
     db: AsyncSession, principal: Principal, entity_id: uuid.UUID, body: BlockerStatusIn
 ) -> Entity:
@@ -930,17 +956,9 @@ async def set_status(
         raise InvalidError("Say why the blocker is resolved")
     if body.status == spec.status:
         return entity
-    if spec.status == "resolved" and _weakens(
-        await _resolve_floor(db, entity.id), gate_snapshot(spec)
-    ):
-        # Resolved, then lowered or narrowed by someone below the B4 role: reopening it
-        # as it is now would leave it open without the gate it had.
-        if not await is_decider(db, principal):
-            role = await decider_role(db)
-            raise ForbiddenError(
-                "This blocker gated publishing when it was resolved and was lowered or "
-                f"narrowed since. Only an {role} can reopen it."
-            )
+    refusal = await status_refusal(db, principal, entity, spec)
+    if refusal is not None:
+        raise ForbiddenError(refusal)
     kind = (
         "reopened" if body.status == "open" and spec.status not in UNRESOLVED else "status_changed"
     )
