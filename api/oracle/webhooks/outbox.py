@@ -477,7 +477,8 @@ async def _send_hook(
     url: str, items: list[Prepared], deadline: float | None
 ) -> list[tuple[Prepared, Answer]]:
     """One webhook's deliveries in order, with its own client; it stops at its first
-    timeout or connection failure (the rest wait), or when no call fits in the budget."""
+    timeout, connection failure or 410 (the rest wait), or when no call fits in the
+    budget."""
     out: list[tuple[Prepared, Answer]] = []
     async with _client(url) as http:
         for item in items:
@@ -487,6 +488,8 @@ async def _send_hook(
             out.append((item, answer))
             if answer.error in ("timeout", "connect", "tls", "not_public"):
                 break
+            if answer.http_status == 410:
+                break  # Gone: the webhook pauses; nothing more is sent to it
     return out
 
 

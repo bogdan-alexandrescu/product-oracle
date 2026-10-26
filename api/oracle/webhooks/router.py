@@ -10,7 +10,7 @@ the outbox's 10 s cap, and are logged as any delivery (oracle.webhooks.outbox).
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -272,6 +272,23 @@ async def get_webhook_delivery(
     return _delivery_out(*row)
 
 
+def _fallback(now: datetime) -> datetime:
+    """When the tick picks the delivery up should this request never finish sending it."""
+    return now + timedelta(minutes=1)
+
+
+async def _send(db, delivery: WebhookDelivery, event: WebhookEvent) -> DeliveryOut:
+    """Commit the queued delivery first (the review gate is not held over the call), then
+    send it at once and commit its outcome."""
+    await db.commit()
+    await db.refresh(delivery)
+    await db.refresh(event)
+    await outbox.send_now(db, delivery)
+    out = _delivery_out(delivery, event)
+    await db.commit()
+    return out
+
+
 @router.post(
     "/webhooks/{webhook_id}/test",
     response_model=DeliveryOut,
@@ -291,14 +308,13 @@ async def test_webhook(webhook_id: uuid.UUID, principal: Approver, db: TenantDB)
     )
     db.add(event)
     await db.flush()
-    delivery = WebhookDelivery(webhook_id=hook.id, event_id=event.id, status="pending")
+    delivery = WebhookDelivery(
+        webhook_id=hook.id, event_id=event.id, status="pending", next_at=_fallback(now)
+    )
     db.add(delivery)
     await db.flush()
     await audit.record(db, principal, "webhook.test", "webhook", hook.id, {"name": hook.name})
-    await outbox.send_now(db, delivery, now)
-    out = _delivery_out(delivery, event)
-    await db.commit()
-    return out
+    return await _send(db, delivery, event)
 
 
 @router.post(
@@ -319,7 +335,11 @@ async def redeliver_webhook_delivery(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     _, event = row
     again = WebhookDelivery(
-        webhook_id=hook.id, event_id=event.id, status="pending", redelivery_of=delivery_id
+        webhook_id=hook.id,
+        event_id=event.id,
+        status="pending",
+        next_at=_fallback(datetime.now(UTC)),
+        redelivery_of=delivery_id,
     )
     db.add(again)
     await db.flush()
@@ -331,7 +351,4 @@ async def redeliver_webhook_delivery(
         hook.id,
         {"name": hook.name, "event_id": event.public_id, "delivery_id": str(delivery_id)},
     )
-    await outbox.send_now(db, again)
-    out = _delivery_out(again, event)
-    await db.commit()
-    return out
+    return await _send(db, again, event)
