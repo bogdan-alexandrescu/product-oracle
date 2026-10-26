@@ -325,8 +325,8 @@ async def test_refused_when_the_slug_now_names_another_document(
 
 
 async def test_a_burst_of_retries_imports_a_few_at_a_time(client, owner, runtime, monkeypatch):
-    """Each retry holds the run's locked row while it imports in a session of its own: a
-    burst is bounded (DRAFT_RETRY_SLOTS at a time per process), so it cannot take every
+    """Each retry imports in a session of its own (two connections, no lock held): a burst
+    is bounded (DRAFT_RETRY_SLOTS at a time per process), so it cannot take every
     connection of the pool."""
     tenant_id, auth = owner
     runs = []
