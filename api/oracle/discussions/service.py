@@ -828,17 +828,23 @@ def message_out(
         )
         if m.author_kind == "oracle" and role == "owner"
         else None,
-        research=_research_out(m, research)
+        research=_research_out(m, research, role)
         if m.run_id is not None and research is not None
         else None,
     )
 
 
-def _research_out(m: DiscussionMessage, states: dict[uuid.UUID, str]) -> MessageResearch:
+def _research_out(
+    m: DiscussionMessage, states: dict[uuid.UUID, str], role: str | None = None
+) -> MessageResearch:
     assert m.run_id is not None
     state = states.get(m.run_id, "running")
-    # A line whose run could not start keeps why, in words (#584 review).
+    # A line whose run could not start keeps why, in words (#584 review): the runs' own
+    # words (which can name another run) for approvers and owners, who start research;
+    # a plain sentence for everyone else (#606 re-review).
     why = m.error if m.author_kind == "system" and state == "failed" else None
+    if why is not None and not (role and has_role(role, "approver")):
+        why = research.START_FAILED
     return MessageResearch(run_id=m.run_id, status=state, error=why)  # type: ignore[arg-type]
 
 

@@ -23,6 +23,7 @@ from oracle.authz import require_role, require_role_now
 from oracle.claude_accounts.sweep import summarise_sweep
 from oracle.connections.router import ProviderHttp
 from oracle.discussions import replies as discussion_replies
+from oracle.discussions import research as discussion_research
 from oracle.jobs.worker import run_pending as run_llm_jobs
 from oracle.runs import actions, service
 from oracle.runs.schemas import (
@@ -52,7 +53,11 @@ from oracle.swarm.settings import get_runtime_settings
 from oracle.ticker import body as tick_body
 from oracle.ticker import router as scheduler_tick
 
-router = APIRouter(prefix="/v1", tags=["runs"])
+# A discussion's research run is absent to whoever may not read the discussion (BGD,
+# 2026-10-25): on every route with a run in its path, and the runs list below.
+router = APIRouter(
+    prefix="/v1", tags=["runs"], dependencies=[Depends(discussion_research.run_reader)]
+)
 
 Owner = Annotated[Principal, Depends(require_role("owner"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
@@ -127,9 +132,12 @@ async def list_flows(principal: CurrentPrincipal) -> FlowCatalog:
 
 @router.get("/runs", response_model=list[RunSummary])
 async def list_runs(
-    db: TenantDB, status_: Annotated[RunStatus | None, Query(alias="status")] = None
+    principal: CurrentPrincipal,
+    db: TenantDB,
+    status_: Annotated[RunStatus | None, Query(alias="status")] = None,
 ) -> list[RunSummary]:
-    return await service.list_runs(db, status_)
+    hidden = await discussion_research.hidden_runs(db, principal)
+    return [r for r in await service.list_runs(db, status_) if r.id not in hidden]
 
 
 @router.post("/runs", response_model=RunOut, status_code=status.HTTP_201_CREATED)

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import not_for_runs, require_role_now
+from oracle.discussions import research
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
 from oracle.trash import regenerate, service
@@ -33,6 +34,8 @@ OwnerNow = Annotated[Principal, Depends(require_role_now("owner"))]
 # Regenerate is checked per document (its decider, or an approver): any member here.
 MemberNow = Annotated[Principal, Depends(require_role_now("viewer"))]
 SAME_ORIGIN = [Depends(same_origin)]
+# A discussion's research run is absent to whoever may not read the discussion (BGD).
+RUN_READER = [*SAME_ORIGIN, Depends(research.run_reader)]
 Reason = Annotated[str | None, Query(max_length=2000)]
 
 
@@ -148,7 +151,7 @@ async def restore_intake(intake_id: uuid.UUID, db: TenantDB, principal: OwnerNow
 # --- runs -----------------------------------------------------------------------------
 
 
-@router.delete("/runs/{run_id}", response_model=TrashEntryOut, dependencies=SAME_ORIGIN)
+@router.delete("/runs/{run_id}", response_model=TrashEntryOut, dependencies=RUN_READER)
 async def delete_run(
     run_id: uuid.UUID, db: TenantDB, principal: OwnerNow, reason: Reason = None
 ) -> TrashEntryOut:
@@ -156,7 +159,7 @@ async def delete_run(
     return await _delete(db, principal, "run", str(run_id), reason, False)
 
 
-@router.post("/runs/{run_id}/restore", response_model=TrashEntryOut, dependencies=SAME_ORIGIN)
+@router.post("/runs/{run_id}/restore", response_model=TrashEntryOut, dependencies=RUN_READER)
 async def restore_run(run_id: uuid.UUID, db: TenantDB, principal: OwnerNow) -> TrashEntryOut:
     return await _restore(db, principal, "run", str(run_id))
 

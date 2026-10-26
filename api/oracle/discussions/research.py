@@ -34,12 +34,13 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
+from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
-from oracle.auth.deps import Principal
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
 from oracle.discussions import access, context, replies
@@ -59,6 +60,8 @@ PEOPLE_ONLY = "Only a person's message can be researched"
 NOT_FOUND = "Message not found"
 # What a reader sees in place of an answer that names something they may not see.
 WITHHELD = "This answer is withheld: it names something you can't see."
+# What a commenter or a viewer reads of a start the runs refused (approvers read why).
+START_FAILED = "Oracle couldn't start this research."
 # The space a removed marker leaves before punctuation, or doubled.
 _GAP = re.compile(r"[ \t]+(?=[.,;:!?])|(?<=[ \t])[ \t]+")
 # A web result or page the run read, as the answer cites it (oracle.web: ``w-<n>``).
@@ -364,6 +367,57 @@ async def for_reader(db: AsyncSession, rows: list[DiscussionMessage], outs: list
         if gone:
             out.citations = [c for c in out.citations if int(c["n"]) not in gone]
             out.body = _GAP.sub("", _without(out.body, gone)).strip()
+
+
+# --- who sees the run --------------------------------------------------------------------
+
+
+async def unreadable_runs(db: AsyncSession, principal: Principal, runs: Any) -> set[uuid.UUID]:
+    """The ``discussion_research`` runs among ``runs`` (each with ``id``, ``flow`` and
+    ``knobs``) that ``principal`` may not see: those of a discussion they may not read
+    (DECIDED, BGD 2026-10-25, "Gate run to discussion readers": a private discussion's
+    research is for its readers, owners as the discussion rules say). A run's own token
+    reads its run. Its own check, whatever else limits what a run's files show."""
+    from oracle.discussions import service
+
+    out: set[uuid.UUID] = set()
+    readable: dict[str, bool] = {}
+    for run in runs:
+        if run.flow != FLOW or (principal.run_id is not None and principal.run_id == run.id):
+            continue
+        key = str((run.knobs or {}).get("discussion_id") or "")
+        if key not in readable:
+            try:
+                await service.readable(db, principal, uuid.UUID(key))
+                readable[key] = True
+            except (ValueError, service.DiscussionError):
+                readable[key] = False
+        if not readable[key]:
+            out.add(run.id)
+    return out
+
+
+async def hidden_runs(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
+    """Every research run ``principal`` may not see (:func:`unreadable_runs`)."""
+    rows = (await db.execute(select(Run.id, Run.flow, Run.knobs).where(Run.flow == FLOW))).all()
+    return await unreadable_runs(db, principal, rows)
+
+
+async def may_see_run(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> bool:
+    row = (await db.execute(select(Run.id, Run.flow, Run.knobs).where(Run.id == run_id))).first()
+    return row is None or not await unreadable_runs(db, principal, [row])
+
+
+async def run_reader(request: Request, principal: CurrentPrincipal, db: TenantDB) -> None:
+    """A route dependency: the ``run_id`` in its path is absent (404) to someone who may
+    not see the run (:func:`unreadable_runs`); a route without one passes."""
+    raw = request.path_params.get("run_id")
+    try:
+        run_id = uuid.UUID(str(raw))
+    except ValueError:
+        return
+    if raw is not None and not await may_see_run(db, principal, run_id):
+        raise HTTPException(404, f"run {run_id} not found")
 
 
 extensions.register_prompt_lines(FLOW, prompt_lines)

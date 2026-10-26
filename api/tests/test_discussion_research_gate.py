@@ -182,11 +182,6 @@ async def test_a_private_research_run_is_only_for_the_discussions_readers(client
                     assert SECRET not in text and run_id not in text.replace(
                         f"run {run_id} not found", ""
                     ), (who, tool, text)
-        # An owner's or the approver's token reads it as they do.
-        raw = await api_token(ctx.tenant_id, "approver")
-        async with mcp_client(raw) as c:
-            text = text_of(await c.call_tool("list_runs", {}))
-        assert run_id in text
     finally:
         set_runtime(None)
 

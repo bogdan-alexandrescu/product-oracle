@@ -135,6 +135,7 @@ async def list_discussions(
 @router.get(
     "/runs/{run_id}/discussions",
     response_model=RunDiscussionsOut,
+    dependencies=[Depends(research.run_reader)],
     responses={404: {"description": "No such run (a run's token reads its own run only)"}},
 )
 async def list_run_discussions(

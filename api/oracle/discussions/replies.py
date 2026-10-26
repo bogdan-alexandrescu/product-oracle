@@ -509,6 +509,49 @@ def sse(event: str, data: Any) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
 
+@dataclass
+class _Guard:
+    """What one reader is sent of an Oracle message as it streams (#606 re-review): as the
+    message list shows it (``research.for_reader``). For a reader to whom something is
+    hidden (``hidden``), the text that names it is never sent (the rest of the message is
+    withheld, and ``done`` says so), its tail is held back until no hidden name can still
+    be in the making, and a citation naming it is dropped. Owners and approvers
+    (``hidden`` None) get every delta as it comes."""
+
+    hidden: visibility.Hidden | None
+    text: str = ""
+    sent: int = 0
+    withheld: bool = False
+    hold: int = field(init=False, default=0)
+
+    def __post_init__(self) -> None:
+        if self.hidden is not None:
+            # The longest hidden name, and a ``D-<n>`` with its digits.
+            names = (*self.hidden.words, *self.hidden.ids)
+            self.hold = max((len(n) for n in names), default=0) + 8
+
+    def take(self, more: str, final: bool = False) -> str:
+        """``more`` text of the message; what may be sent of it now."""
+        self.text += more
+        if self.withheld:
+            return ""
+        if self.hidden is not None and self.hidden.names(self.text):
+            self.withheld = True
+            return ""
+        upto = len(self.text) if final else max(self.sent, len(self.text) - self.hold)
+        out, self.sent = self.text[self.sent : upto], upto
+        return out
+
+    def citations(self, cites: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        from oracle.discussions import research
+
+        if self.hidden is None:
+            return cites
+        if self.withheld:
+            return []
+        return [c for c in cites if not research._hides(self.hidden, c)]
+
+
 def error_copy(row: DiscussionMessage, role: str | None) -> str | None:
     """What a failed reply says to this reader (3.7)."""
     if row.status != "failed":
@@ -532,6 +575,11 @@ async def stream(
     """The reply's events: claim it and run it, or tail it; then its end."""
     from oracle.discussions import service
 
+    # The reader's view, as the message list reads it (#606 re-review: the stream withheld
+    # nothing, and its sessions were Oracle's own, which sees everything).
+    async with tenant_session(tenant_id) as db:
+        visibility.bind(db, principal)
+        guard = _Guard(await visibility.hidden_for_reader(db))
     if await claim(tenant_id, reply_id):
         listening = _listen(reply_id)
         start(tenant_id, reply_id, transports)
@@ -541,8 +589,8 @@ async def stream(
     last_ping = last_check = time.monotonic()
     if listening is not None:
         q, so_far = listening
-        if so_far:
-            yield sse("delta", {"text": so_far})
+        if text := guard.take(so_far):
+            yield sse("delta", {"text": text})
         sent = len(so_far)
     while True:
         if time.monotonic() - last_ping >= PING_SECONDS:
@@ -557,9 +605,10 @@ async def stream(
                 break
             if kind == "delta":
                 sent += len(data)
-                yield sse("delta", {"text": data})
-            if kind == "citations":
-                yield sse("citations", data)
+                if text := guard.take(data):
+                    yield sse("delta", {"text": text})
+            if kind == "citations" and (cites := guard.citations(data)):
+                yield sse("citations", cites)
             if time.monotonic() - last_check < CHECK_SECONDS:
                 continue
         last_check = time.monotonic()
@@ -575,7 +624,8 @@ async def stream(
         if listening is not None:
             continue
         if len(row.body) > sent:
-            yield sse("delta", {"text": row.body[sent:]})
+            if text := guard.take(row.body[sent:]):
+                yield sse("delta", {"text": text})
             sent = len(row.body)
         if row.status in FINAL:
             break
@@ -588,17 +638,20 @@ async def stream(
             continue
         await asyncio.sleep(CHECK_SECONDS)
     async with tenant_session(tenant_id) as db:
+        visibility.bind(db, principal)
         row = await db.get(DiscussionMessage, reply_id)
         assert row is not None
         if len(row.body) > sent and row.status != "complete":
-            yield sse("delta", {"text": row.body[sent:]})
-        if row.citations:
-            yield sse("citations", row.citations)
+            if text := guard.take(row.body[sent:], final=True):
+                yield sse("delta", {"text": text})
+        # ``done`` and the citations as the list shows them (research.for_reader).
+        [out] = await service.messages_out(db, [row], principal)
+        if cites := guard.citations(out.citations):
+            yield sse("citations", cites)
         if row.status == "complete":
             made = await _changes_of(db, principal, row)
             if made:
                 yield sse("changes", [c.model_dump(mode="json") for c in made])
-        [out] = await service.messages_out(db, [row], principal)
         if row.status == "failed":
             yield sse(
                 "error",
