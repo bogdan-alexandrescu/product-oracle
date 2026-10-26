@@ -387,7 +387,7 @@ export function tick(ctx: LlmContext) {
     } else if (job.kind === BATCH) finish(ctx, job, runBatch(ctx, job, v));
     else if (job.kind === "quality_review") {
       if (ctx.runQualityReview) finish(ctx, job, ctx.runQualityReview(job, v.id));
-    else if (job.kind === "public_text") {
+    } else if (job.kind === "public_text") {
       if (ctx.publicText) finish(ctx, job, ctx.publicText(job));
     } else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
