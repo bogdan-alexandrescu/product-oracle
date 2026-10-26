@@ -108,13 +108,20 @@ accepting a refinement once a newer version exists.
 
 ## Intake analysis
 
-`intake_analysis` (v2 lane `v2-intake`, migration `0014_intake`) runs light extraction
-for a product intake: it reads the brief and the author's pinned source items, and adds
-model inferences (users, outcomes, scope, ...) and open gaps to the intake. An intake has
-no document, so these jobs carry `intake_id` instead of `document_id`, run one at a time
-per intake, and are turned off per intake (`ai_extraction: false` on `POST
-/v1/intakes`). The brief and the source excerpts reach the model only as
-`untrusted_data`; what comes back is validated and labelled an AI inference. See
+Moved (INT2, migration `0055_intake_read`): Oracle's read of a new intake is a SwarmCloud
+`intake_analysis` run now; see [intake-read.md](intake-read.md). The `intake_analysis` job
+kind stays, for three things only:
+
+- the **fallback**: when the SwarmCloud read cannot start, fails or returns nothing
+  usable, Oracle queues this job for that intake (owner answer INT2 Q3), and the intake
+  says which path produced its read;
+- the **rollback**: `ORACLE_INTAKE_READ_RUNTIME=job` queues it instead of a run, as before;
+- past jobs stay readable (the kind stays in the jobs' check).
+
+What the job does is unchanged: it reads the brief and the author's pinned source items
+(as `untrusted_data`) and adds model inferences and open gaps, private findings of the
+author (S6). Jobs still queued at the migration were cancelled as `moved_to_swarmcloud`,
+and the tick starts a SwarmCloud read for their intakes. See
 [product-oracle-v2/03-discovery-and-quality.md](product-oracle-v2/03-discovery-and-quality.md).
 
 ## Override reason check

@@ -100,6 +100,9 @@ PEOPLE_READS = {("baseline", "review-status"), ("baseline", "goals", "vague")}
 # H7: Oracle's web tools (POST /v1/web/search, /v1/web/fetch) are for run tokens holding
 # read:web only (the competitive digest's): people's MCP clients are not offered them.
 RUN_ONLY_AREAS = {"web": "read:web"}
+# INT2: GET /v1/intakes/{id}/analysis-input, the job's payload for that intake's own read
+# run only (owner answer Q1): never read:baseline or read:sources.
+RUN_ONLY_READS = {("intakes", "analysis-input"): "read:intake-input"}
 # Creating a proposal or a piece of evidence; deciding one stays with people.
 PROPOSAL_WRITES = {"proposals", "evidence"}
 
@@ -118,6 +121,8 @@ def required_scope(method: str, path: str) -> str | None:
         return None
     area = parts[0]
     if method == "GET":
+        if len(parts) == 3 and (area, parts[-1]) in RUN_ONLY_READS:
+            return RUN_ONLY_READS[(area, parts[-1])]
         if tuple(parts) in PEOPLE_READS:
             return None
         if (area, parts[-1]) in SOURCE_READS and len(parts) == 3:

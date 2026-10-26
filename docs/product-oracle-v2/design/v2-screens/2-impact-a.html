@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Impact · Checkout redesign v3 · Product Oracle mockup</title>
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t;})();</script>
+<style>/* Product Oracle mockup base: tokens copied from web/app/globals.css (I3 "Open sky"),
+   component classes transcribed from web/components/ds/*. Static, no external requests. */
+:root{--bg:#f3f6f9;--surface:#fff;--surface2:#eef4fa;--line:#d6e0ea;--line-strong:#7d8ea3;--text:#0d1724;--text2:#4f5d6e;--text-faint:#606a77;--accent:#0369a1;--on-accent:#fff;--accent-ink:#075985;--accent-soft:#e5f3fc;--accent-mid:#b6daf2;--hero:#0c1a2e;--hero-2:#173052;--hero-text:#eef4fa;--hero-text2:#b4c3d4;--hero-line:#2a4568;--hero-accent:#7cc8f8;--brand:#38bdf8;--on-brand:#06101e;--pass:#0a7a55;--pass-bg:#e3f5ee;--warn:#8a5a00;--warn-bg:#fdf3dc;--crit:#b42318;--crit-bg:#fdecea;--na:#5b6878;--na-bg:#eef1f5;--tip:#0d1724;--tip-text:#eef4fa;--spark-fill:rgba(3,105,161,.1);--shadow:0 1px 2px rgba(13,23,36,.06);--tip-shadow:0 12px 32px rgba(13,23,36,.28);--rail:linear-gradient(180deg,#0b3a7a,#06101e);--rail-top:#0b3a7a;--rail-foot:#06101e;--rail-text:#bcd6ee;--rail-hover:#194b89;--rail-active:#225693;--rail-active-text:#fff;--rail-bar:#7cc8f8;--rail-badge:#f5c451;--on-rail-badge:#06101e;--rail-sep:rgba(255,255,255,.16);--rail-avatar:#0369a1;--sans:"Inter Tight","Liberation Sans",ui-sans-serif,system-ui,sans-serif;--mono:"DM Mono","Liberation Mono",ui-monospace,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#06101e;--surface:#0c1a2e;--surface2:#11233b;--line:#1e3350;--line-strong:#5f7087;--text:#eef4fa;--text2:#9fb0c4;--text-faint:#828d9b;--accent:#7cc8f8;--on-accent:#06101e;--accent-ink:#b9e3fc;--accent-soft:#10294a;--accent-mid:#1f4a7a;--hero:#11233b;--hero-2:#1a3352;--hero-text:#eef4fa;--hero-text2:#9fb0c4;--hero-line:#2e4c72;--pass:#4cd9a0;--pass-bg:#0d2e25;--warn:#f5c451;--warn-bg:#3a2a0c;--crit:#ff8a80;--crit-bg:#3a1512;--na:#9aa8b8;--na-bg:#16263b;--tip:#eef4fa;--tip-text:#0d1724;--spark-fill:rgba(124,200,248,.14);--shadow:none;--tip-shadow:0 12px 32px rgba(0,0,0,.5);color-scheme:dark}}
+:root[data-theme=dark]{--bg:#06101e;--surface:#0c1a2e;--surface2:#11233b;--line:#1e3350;--line-strong:#5f7087;--text:#eef4fa;--text2:#9fb0c4;--text-faint:#828d9b;--accent:#7cc8f8;--on-accent:#06101e;--accent-ink:#b9e3fc;--accent-soft:#10294a;--accent-mid:#1f4a7a;--hero:#11233b;--hero-2:#1a3352;--hero-text:#eef4fa;--hero-text2:#9fb0c4;--hero-line:#2e4c72;--pass:#4cd9a0;--pass-bg:#0d2e25;--warn:#f5c451;--warn-bg:#3a2a0c;--crit:#ff8a80;--crit-bg:#3a1512;--na:#9aa8b8;--na-bg:#16263b;--tip:#eef4fa;--tip-text:#0d1724;--spark-fill:rgba(124,200,248,.14);--shadow:none;--tip-shadow:0 12px 32px rgba(0,0,0,.5);color-scheme:dark}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg)}
+body{color:var(--text);font:400 15px/22px var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4,p,dl,dd,ul,ol{margin:0;padding:0}
+ul,ol{list-style:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+a{color:inherit;text-decoration:none}
+svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.i16{width:16px;height:16px}
+.tnum{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:13px}
+.muted{color:var(--text2)}
+.faint{color:var(--text-faint)}
+.b{font-weight:600}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.wrap{flex-wrap:wrap}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.grow{flex:1;min-width:0}
+.ml-auto{margin-left:auto}
+.gap4{gap:4px}.gap12{gap:12px}.gap16{gap:16px}
+.sm{font-size:14px;line-height:20px}.xs{font-size:13px;line-height:18px}
+
+/* Shell: rail 88 px, main, Ask dock 45 px (AppShell.tsx) */
+.shell{display:grid;grid-template-columns:88px minmax(0,1fr) 45px;min-height:100vh}
+.rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--rail);padding:14px 0}
+.rail .logo{margin-bottom:12px}
+.rail a{position:relative;width:70px;display:flex;flex-direction:column;align-items:center;gap:2px;border-radius:10px;padding:7px 0 6px;font-size:13px;line-height:16px;font-weight:500;color:var(--rail-text)}
+.rail a[aria-current=page]{background:var(--rail-active);color:var(--rail-active-text);font-weight:600}
+.rail a[aria-current=page]::before{content:"";position:absolute;top:10px;bottom:10px;left:-9px;width:3px;border-radius:2px;background:var(--rail-bar)}
+.rail .badge{position:absolute;top:4px;right:6px;height:16px;min-width:16px;border-radius:8px;background:var(--rail-badge);color:var(--on-rail-badge);font:600 13px/16px var(--mono);padding:0 4px;text-align:center}
+.rail .spacer{flex:1}
+.rail .sep{height:1px;width:40px;background:var(--rail-sep);margin-bottom:6px}
+.avatar{display:grid;place-items:center;border-radius:999px;background:var(--rail-avatar);color:#fff;font-weight:600;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.rail .avatar{width:38px;height:38px;font-size:14px;margin-top:8px}
+.dock{border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:10px;color:var(--text2)}
+.dock span{writing-mode:vertical-rl;font-size:15px;font-weight:600}
+.phead,.tabbar{display:none}
+main.page{min-width:0;padding:0 24px 24px}
+
+/* Page header (Layout.tsx) */
+.ph{display:flex;min-height:64px;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 0}
+.ph .back{flex-basis:100%;font-size:14px;color:var(--text2)}
+.ph .back a{color:var(--accent-ink);font-weight:600}
+.ph h1{min-width:0;font:700 28px/32px var(--sans);letter-spacing:-.015em}
+.ph h1 small{margin-left:6px;font-size:18px;font-weight:600;letter-spacing:0;color:var(--text2)}
+.ph .chips{display:flex;min-width:0;flex:1 1 auto;flex-wrap:wrap;align-items:center;gap:8px}
+.ph .actions{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px}
+.ph .tabs{order:4;flex-basis:100%;min-width:0}
+.strip{border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:6px 8px;box-shadow:var(--shadow);display:flex;gap:4px;overflow:hidden}
+.strip a{display:flex;align-items:center;height:32px;flex:none;border-radius:8px;padding:0 12px;font-size:15px;font-weight:500;white-space:nowrap}
+.strip a[aria-current=page]{background:var(--accent);color:var(--on-accent)}
+
+/* Layout */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;align-items:start;gap:16px}
+.split.wide-insp{grid-template-columns:minmax(0,1fr) 440px}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+
+/* Panel */
+.panel{min-width:0;border-radius:12px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.panel-h{display:flex;min-height:48px;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:8px 16px}
+.panel-h h2{font:700 18px/24px var(--sans);letter-spacing:-.015em}
+.panel-h .count{font:700 18px/24px var(--sans);letter-spacing:-.015em;color:var(--accent-ink)}
+.panel-h .tools{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.panel-b{padding:12px 16px}
+.panel-f{border-top:1px solid var(--line);padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filters{display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);padding:12px 16px}
+.label{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--text2)}
+.input{width:100%;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);padding:6px 10px;font-size:15px;color:var(--text)}
+textarea.input{min-height:72px;resize:none;line-height:22px}
+.input::placeholder{color:var(--text-faint)}
+
+/* DataTable */
+table.dt{width:100%;table-layout:fixed;border-collapse:collapse;font-size:15px;line-height:22px}
+.dt th{height:36px;background:var(--surface2);padding:0 8px;font-size:13px;line-height:16px;font-weight:600;white-space:nowrap;color:var(--text2);text-align:left}
+.dt th:first-child,.dt td:first-child{padding-left:16px}
+.dt th:last-child,.dt td:last-child{padding-right:16px}
+.dt tr.grp th{border-top:1px solid var(--line);background:var(--surface2);height:36px;padding:0 16px;font-size:15px;font-weight:700;letter-spacing:-.015em;color:var(--text)}
+.dt tr.grp th .n{color:var(--accent-ink);margin-left:6px}
+.dt tbody tr{height:44px;border-top:1px solid var(--line)}
+.dt td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px}
+.dt tr.sel{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent)}
+.dt td.wrapc{white-space:normal}
+.dt .ref{font-family:var(--mono);font-size:14px;color:var(--accent-ink)}
+.rowbtn{display:inline-flex;align-items:center;height:28px;border-radius:8px;border:1px solid var(--line-strong);padding:0 8px;font-size:14px;font-weight:600;background:var(--surface)}
+
+/* Inspector */
+.insp{min-width:0;overflow:hidden;border-radius:16px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.insp-h{background:var(--hero);padding:16px 20px 18px;color:var(--hero-text)}
+.insp-h .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.insp-h .eyebrow{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--hero-text2)}
+.insp-h h2{margin:6px 0 10px;font:700 22px/27px var(--sans);letter-spacing:-.015em;overflow-wrap:anywhere}
+.insp-h .chips{display:flex;flex-wrap:wrap;gap:8px}
+.insp-h .chip.hero{background:var(--hero-2);color:var(--hero-text)}
+.insp-h .sub{color:var(--hero-text2);font-size:14px;line-height:20px}
+.stats{display:grid;border-bottom:1px solid var(--line)}
+.stats>div{display:flex;flex-direction:column-reverse;justify-content:flex-end;padding:14px 8px 12px 20px;min-width:0}
+.stats>div+div{border-left:1px solid var(--line)}
+.stats dt{margin-top:2px;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--text2)}
+.stats dd{font:700 34px/36px var(--sans);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stats dd small{font-size:18px;font-weight:600;letter-spacing:0;color:var(--text2)}
+.isec{border-bottom:1px solid var(--line);padding:14px 20px}
+.isec:last-child{border-bottom:0}
+.isec>.label{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.irow{display:flex;min-height:32px;align-items:center;gap:10px}
+.irow .k{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.irow .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.note{border-radius:8px;border:1px solid var(--line);background:var(--surface2);padding:8px 12px;font-size:15px}
+.quote{border-left:3px solid var(--accent-mid);padding-left:10px;color:var(--text2);font-size:14px;line-height:20px}
+
+/* Chip */
+.chip{display:inline-flex;max-width:100%;align-items:center;gap:6px;padding:0 10px;font-size:13px;font-weight:600;height:26px;border-radius:999px;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip .dot{width:8px;height:8px;flex:none;border-radius:999px;background:currentColor}
+.chip.pass{background:var(--pass-bg);color:var(--pass)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.crit{background:var(--crit-bg);color:var(--crit)}
+.chip.na{background:var(--na-bg);color:var(--na)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.chip.line{border:1px solid var(--line-strong);background:transparent;color:var(--text)}
+.chip.dash{border:1px dashed currentColor}
+.tag{display:inline-grid;height:24px;flex:none;place-items:center;border-radius:6px;padding:0 7px;font:500 13px/1 var(--mono);background:var(--accent-soft);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.na{background:var(--na-bg);color:var(--na)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-weight:600;height:32px;border-radius:8px;padding:0 12px;font-size:14px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text)}
+.btn.primary{height:40px;border-radius:10px;padding:0 16px;font-size:15px;background:var(--accent);color:var(--on-accent);border:0}
+.btn.primary[disabled]{background:var(--accent-mid);color:var(--accent-ink);cursor:not-allowed}
+.btn[disabled]{color:var(--text2);opacity:.7;cursor:not-allowed}
+.btn.solid{background:var(--accent-soft);color:var(--accent-ink);border:0}
+.btn.ghost{border:0;background:transparent;padding:0 10px;font-weight:500;color:var(--text2)}
+.btn.danger{border-color:var(--crit);color:var(--crit)}
+.btn.danger[disabled]{color:var(--text2);border-color:var(--line-strong)}
+.btn.hero{border-color:var(--hero-text2);background:transparent;color:var(--hero-text)}
+.seg{display:inline-flex;max-width:100%;flex:none;overflow:hidden;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface)}
+.seg>*{height:32px;padding:0 12px;font-size:14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--line);font-weight:500;white-space:nowrap}
+.seg>*:last-child{border-right:0}
+.seg>[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.seg b{font-weight:600;color:var(--text2)}
+.seg>[aria-pressed=true] b{color:var(--on-accent)}
+.fchips{display:flex;min-width:0;flex-wrap:wrap;gap:4px}
+.fchip{display:flex;height:32px;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);padding:0 8px;font-size:14px;font-weight:500;white-space:nowrap}
+.fchip[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.fchip b{font-weight:600;color:var(--text2)}
+.fchip[aria-pressed=true] b{color:var(--on-accent)}
+
+/* Notices, empty, loading */
+.notice{border-radius:10px;padding:8px 12px;font-size:14px;line-height:20px;font-weight:500;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.notice.err{background:var(--crit-bg);color:var(--crit)}
+.notice.ok{background:var(--pass-bg);color:var(--pass)}
+.notice.warn{background:var(--warn-bg);color:var(--warn)}
+.notice.info{background:var(--accent-soft);color:var(--accent-ink)}
+.notice .btn{margin-left:auto}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 16px;text-align:center}
+.empty .ic{display:grid;width:48px;height:48px;place-items:center;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink)}
+.empty p{font-size:15px;font-weight:600;color:var(--text2)}
+.empty.small{padding:24px 16px}
+.skel{display:block;height:12px;border-radius:4px;background:var(--surface2)}
+.state-tag{display:inline-block;font:500 13px/18px var(--mono);color:var(--text-faint);border:1px dashed var(--line-strong);border-radius:6px;padding:1px 6px}
+
+/* StatusMark (16 px) */
+.sm-mark{width:16px;height:16px;flex:none}
+
+/* Sheet (phone) */
+.sheet{border-radius:16px 16px 0 0;border-top:1px solid var(--line);background:var(--surface);box-shadow:var(--tip-shadow)}
+.sheet .handle{display:flex;height:24px;align-items:center;justify-content:center}
+.sheet .handle i{height:4px;width:40px;border-radius:999px;background:var(--line-strong)}
+.sheet .st{display:flex;min-height:44px;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:0 4px 0 16px}
+.sheet .st h2{flex:1;font:700 18px/24px var(--sans);letter-spacing:-.015em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Only-phone / only-desktop helpers */
+.phone-only{display:none}
+
+@media (max-width:600px){
+  .shell{display:block;padding-bottom:68px}
+  .rail,.dock{display:none}
+  .phead{position:sticky;top:0;z-index:30;display:flex;height:44px;align-items:center;gap:10px;background:var(--rail-top);padding:0 10px 0 12px}
+  .phead .t{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 17px/24px var(--sans);color:#fff}
+  .phead .ask{display:flex;height:36px;align-items:center;gap:4px;border-radius:8px;padding:0 8px;font-size:15px;font-weight:600;color:#fff}
+  .phead .avatar{width:32px;height:32px;font-size:13px}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:grid;grid-template-columns:repeat(5,1fr);height:68px;background:var(--rail-foot);padding:6px 6px 8px}
+  .tabbar a{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:10px;font-size:13px;line-height:16px;font-weight:500;color:var(--rail-text)}
+  .tabbar a[aria-current=page]{background:var(--rail-active);font-weight:600;color:#fff}
+  .tabbar a[aria-current=page]::before{content:"";position:absolute;left:10px;right:10px;top:-6px;height:3px;border-radius:2px;background:var(--rail-bar)}
+  main.page{padding:0 10px 24px}
+  .strip{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+  .ph{min-height:0;padding:12px 0}
+  .ph h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .split,.split.wide-insp,.grid2,.grid3{grid-template-columns:1fr;gap:12px}
+  .stack{gap:12px}
+  .panel-h{padding:8px 12px}
+  .panel-b,.filters,.panel-f{padding-left:12px;padding-right:12px}
+  .dt thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .dt,.dt tbody{display:block}
+  .dt tbody tr{display:flex;flex-wrap:wrap;min-height:48px;height:auto!important;gap:4px 12px;padding:10px 12px}
+  .dt td{padding:0!important;white-space:normal}
+  .dt td.meta{font-size:14px;color:var(--text2)}
+  .dt td.first{flex-basis:100%;font-weight:500}
+  .dt tr.grp{display:flex;padding:0}
+  .dt tr.grp th{display:flex;align-items:center;flex:1;padding:0 12px}
+  .insp{border-radius:14px}
+  .insp-h{padding:16px}
+  .isec{padding:12px 16px}
+  .stats>div{padding-left:16px}
+  .fchip{height:44px;padding:0 14px}
+  .desk-only{display:none!important}
+  .phone-only{display:block}
+}
+</style></head>
+<body><div class="shell">
+<nav class="rail" aria-label="Main"><a class="logo" href="#" style="width:auto;padding:0;background:none"><svg viewBox="0 0 32 32" width="44" height="44" aria-hidden="true"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g1)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g1)"/></svg></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>Requests</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Baseline</a><a href="#" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h9M5 18h5"/></svg>Priorities</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Plan</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 9l5 3-5 3z"/></svg>Runs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox<span class=badge>3</span></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V5l7-2v18M12 8h7v13M3 21h18"/><path d="M8 8h1M8 12h1M8 16h1M15 12h1M15 16h1"/></svg>Company</a><span class="spacer"></span><span class="sep"></span><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</a><span class="avatar">MO</span></nav>
+<header class="phead"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g2)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g2)"/></svg><span class="t">Impact · v3</span><span class="ask"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9.5a2.3 2.3 0 114 1.6c-.8.6-1.8 1.1-1.8 2.4M12 16.5v.5"/></svg>Ask</span><span class="avatar">MO</span></header>
+<main class="page">
+
+<style>
+.mk-board{margin-top:32px;border:1px dashed var(--line-strong);border-radius:12px;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}.mk-h{grid-column:1/-1;font:700 18px/24px var(--sans);color:var(--text2)}.mk-card{min-width:0}.mk-cap{font:500 13px/18px var(--mono);color:var(--text-faint);margin-bottom:6px}
+.ia-title{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ia-title .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.ia-title .r{font-size:14px;line-height:20px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt tbody tr.tall{height:60px}
+.dt tr.off td{color:var(--text2)}
+.dep{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px solid var(--line)}
+.dep:first-child{border-top:0;padding-top:0}
+.dep .h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dep .s{font-size:14px;line-height:20px;color:var(--text2)}
+.plan-li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:4px 12px;padding:12px 16px;border-top:1px solid var(--line);align-items:start}
+.plan-li:first-child{border-top:0}
+.plan-li .n{display:grid;place-items:center;width:28px;height:28px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);font:600 13px/1 var(--mono)}
+.plan-li .how{grid-column:2/4;font-size:14px;line-height:20px;color:var(--text2)}
+.plan-li.sel{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent)}
+.plan-li.skip .n{background:var(--na-bg);color:var(--na)}
+.form{display:flex;flex-direction:column;gap:8px}
+.ent td .tag{margin-right:6px}
+@media (max-width:600px){.plan-li{grid-template-columns:28px minmax(0,1fr);padding:12px}.plan-li .act{grid-column:2}.plan-li .how{grid-column:2}}
+</style>
+
+<div class="ph">
+  <div class="back"><a href="#">← Checkout redesign</a> · <span class="mono">checkout-redesign@3</span></div>
+  <h1>Impact<small>Checkout redesign v3</small></h1>
+  <div class="chips">
+    <span class="chip acc">Viewing as owner</span>
+    <span class="chip line">Preview</span>
+    <span class="chip warn"><span class="dot"></span>6 affected</span>
+    <span class="chip na">2 approved</span>
+    <span class="chip acc">5 in plan</span>
+  </div>
+  <div class="actions"><button class="btn">Open v3</button></div>
+</div>
+
+<div class="stack">
+  <div class="notice info">Preview: nothing has been marked stale yet. This is what v3 changes for outputs built on earlier versions of Checkout redesign. Approved versions stay as they are until a reviewer approves their replacement.</div>
+
+  <div class="split">
+    <div class="stack">
+      <div class="panel">
+        <div class="panel-h"><h2>Affected outputs</h2><span class="count">6</span>
+          <div class="tools"><div class="fchips"><button class="fchip" aria-pressed="true">All <b>6</b></button><button class="fchip">Potentially stale <b>4</b></button><button class="fchip">Approved <b>2</b></button></div></div>
+        </div>
+        <table class="dt">
+          <thead><tr><th>Output</th><th style="width:150px">Freshness</th><th style="width:110px">Approval</th><th style="width:120px">Plan</th></tr></thead>
+          <tbody>
+            <tr class="grp"><th colspan="4">Engineering spec<span class="n">1</span></th></tr>
+            <tr class="tall sel"><td class="first"><div class="ia-title"><span class="t">Early shipping cost — tech brief v2</span><span class="r">section goals changed in checkout-redesign</span></div></td><td class="meta"><span class="chip warn"><span class="dot"></span>Potentially stale</span></td><td class="meta"><span class="chip pass">Approved</span></td><td class="meta"><span class="chip acc">Regenerate</span></td></tr>
+            <tr class="grp"><th colspan="4">Wireframe<span class="n">2</span></th></tr>
+            <tr class="tall"><td class="first"><div class="ia-title"><span class="t">Checkout flow (user flow) v1</span><span class="r">section flows changed in checkout-redesign</span></div></td><td class="meta"><span class="chip warn"><span class="dot"></span>Potentially stale</span></td><td class="meta"><span class="faint">Draft</span></td><td class="meta"><span class="chip acc">Regenerate</span></td></tr>
+            <tr class="tall"><td class="first"><div class="ia-title"><span class="t">Cart wireframes v1</span><span class="r">section flows changed in checkout-redesign</span></div></td><td class="meta"><span class="chip na">Under review</span></td><td class="meta"><span class="faint">Draft</span></td><td class="meta"><span class="chip acc">Regenerate</span></td></tr>
+            <tr class="grp"><th colspan="4">Acceptance tests<span class="n">1</span></th></tr>
+            <tr class="tall"><td class="first"><div class="ia-title"><span class="t">Acceptance tests v1</span><span class="r">section guest-checkout was deleted in checkout-redesign</span></div></td><td class="meta"><span class="chip warn"><span class="dot"></span>Potentially stale</span></td><td class="meta"><span class="faint">Draft</span></td><td class="meta"><span class="chip acc">Regenerate</span></td></tr>
+            <tr class="grp"><th colspan="4">Roadmap<span class="n">1</span></th></tr>
+            <tr class="tall"><td class="first"><div class="ia-title"><span class="t">Q1 roadmap v4</span><span class="r">section scope changed in checkout-redesign</span></div></td><td class="meta"><span class="chip warn"><span class="dot"></span>Potentially stale</span></td><td class="meta"><span class="chip pass">Approved</span></td><td class="meta"><span class="chip acc">Regenerate</span></td></tr>
+            <tr class="grp"><th colspan="4">Prototype<span class="n">1</span></th></tr>
+            <tr class="tall off"><td class="first"><div class="ia-title"><span class="t">Checkout prototype v1</span><span class="r">Superseded · no proposal</span></div></td><td class="meta"><span class="chip pass">Reconciled</span></td><td class="meta"><span class="faint">Superseded</span></td><td class="meta"><span class="faint">—</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><h2>Regeneration plan</h2><span class="count">5</span><div class="tools"><span class="faint sm">Act on each row; nothing runs the whole plan at once</span></div></div>
+        <ol>
+          <li class="plan-li sel"><span class="n">1</span><div class="b trunc">Early shipping cost — tech brief v2</div><div class="row act"><span class="chip acc">Regenerate</span><span class="tag">goals</span><span class="tag">scope</span></div><p class="how">Propose a new version of this tech brief covering only sections goals, scope, from the current upstream; the current version (v2, approved) stays as it is until a reviewer approves the new one.</p></li>
+          <li class="plan-li"><span class="n">2</span><div class="b trunc">Checkout flow (user flow) v1</div><div class="row act"><span class="chip acc">Regenerate</span><span class="tag">flows</span><span class="tag na">1 baseline item</span></div><p class="how">Propose a new version of this user flow covering only sections flows and 1 baseline item(s), from the current upstream; the current version (v1) stays as it is until a reviewer approves the new one.</p></li>
+          <li class="plan-li"><span class="n">3</span><div class="b trunc">Cart wireframes v1</div><div class="row act"><span class="chip acc">Regenerate</span><span class="tag">flows</span></div><p class="how">Propose a new version of this wireframe covering only sections flows, from the current upstream; the current version (v1) stays as it is until a reviewer approves the new one.</p></li>
+          <li class="plan-li"><span class="n">4</span><div class="b trunc">Acceptance tests v1</div><div class="row act"><span class="chip acc">Regenerate</span><span class="tag">guest-checkout</span></div><p class="how">Propose a new version of this acceptance tests covering only sections guest-checkout and 1 baseline item(s), from the current upstream; the current version (v1) stays as it is until a reviewer approves the new one.</p></li>
+          <li class="plan-li"><span class="n">5</span><div class="b trunc">Q1 roadmap v4</div><div class="row act"><span class="chip acc">Regenerate</span><span class="tag">scope</span></div><p class="how">Start a roadmap run from the approved PRD version (flow prd_to_roadmap), focused on sections scope; it imports a new version for review, and the current version (v4, approved) stays as it is until a reviewer approves the new one.</p></li>
+          <li class="plan-li skip"><span class="n">–</span><div class="faint trunc">Checkout prototype v1</div><div class="row act"><span class="chip na">No proposal</span></div><p class="how">Superseded outputs get no proposal.</p></li>
+        </ol>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><h2>Baseline items reached</h2><span class="count">2</span></div>
+        <table class="dt ent">
+          <thead><tr><th>Item</th><th style="width:200px">Type · status</th><th style="width:100px">Confidence</th><th style="width:90px">Locked</th></tr></thead>
+          <tbody>
+            <tr><td class="first"><span class="tag">R-12</span>Guest checkout keeps the cart</td><td class="meta">requirement · active</td><td class="meta tnum">0.82</td><td class="meta">—</td></tr>
+            <tr><td class="first"><span class="tag">D-4</span>Ship flat-rate shipping first</td><td class="meta">decision · accepted</td><td class="meta tnum">0.95</td><td class="meta"><span class="chip line">Locked</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <aside class="insp desk-only">
+      <div class="insp-h">
+        <div class="top"><span class="eyebrow">Tech brief · engineering spec · v2</span><button class="btn hero">Open</button></div>
+        <h2>Early shipping cost — tech brief v2</h2>
+        <div class="chips"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="chip hero">Approved</span><span class="chip hero">Keeps the approved version</span></div>
+      </div>
+      <dl class="stats" style="grid-template-columns:1fr 1fr"><div><dd>2<small>/3</small></dd><dt>Dependencies stale</dt></div><div><dd class="tnum">Oct 24</dd><dt>Stale since</dt></div></dl>
+      <div class="isec"><div class="label">Why it's affected</div>
+        <ul class="col gap4 sm"><li>section goals changed in checkout-redesign</li><li>section scope changed in checkout-redesign</li></ul>
+      </div>
+      <div class="isec"><div class="label">Dependencies</div>
+        <div class="dep"><div class="h"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="mono">checkout-redesign v2 · goals</span></div><span class="s">Stale since Oct 24, 2026 · caused by change <span class="mono">ce_7f2a</span></span></div>
+        <div class="dep"><div class="h"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="mono">checkout-redesign v2 · scope</span></div><span class="s">Stale since Oct 24, 2026</span></div>
+        <div class="dep"><div class="h"><span class="chip pass">Fresh</span><span class="mono">checkout-redesign v2 · metrics</span></div><span class="s">Composition revision 7</span></div>
+      </div>
+      <div class="isec"><div class="label">Proposal</div>
+        <p class="quote">Propose a new version of this tech brief covering only sections goals, scope, from the current upstream; the current version (v2, approved) stays as it is until a reviewer approves the new one.</p>
+      </div>
+      <div class="isec"><div class="label">Settle the staleness</div>
+        <div class="row wrap"><button class="btn">Mark reviewed</button><button class="btn">Accept regeneration</button><button class="btn ghost">Reconcile…</button></div>
+      </div>
+      <div class="isec"><div class="label">Then</div>
+        <div class="col"><button class="btn primary">Propose regeneration</button><span class="faint sm">Creates a draft run for the spec request; nothing is rewritten until someone estimates and starts it.</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <p class="mk-cap phone-only">Phone: tapping a row opens this sheet</p>
+  <div class="sheet phone-only">
+    <div class="handle"><i></i></div>
+    <div class="st"><h2>Early shipping cost — tech brief v2</h2><button class="btn ghost">Close</button></div>
+    <div class="isec"><div class="row wrap"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="chip pass">Approved</span><span class="chip na">Keeps the approved version</span></div></div>
+    <div class="isec"><div class="label">Why it's affected</div><ul class="col gap4 sm"><li>section goals changed in checkout-redesign</li><li>section scope changed in checkout-redesign</li></ul></div>
+    <div class="isec"><div class="label">Dependencies</div>
+      <div class="dep"><div class="h"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="mono">checkout-redesign v2 · goals</span></div></div>
+      <div class="dep"><div class="h"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="mono">checkout-redesign v2 · scope</span></div></div>
+      <div class="dep"><div class="h"><span class="chip pass">Fresh</span><span class="mono">checkout-redesign v2 · metrics</span></div></div>
+    </div>
+    <div class="isec"><div class="label">Proposal</div><p class="quote">Propose a new version of this tech brief covering only sections goals, scope; the current version (v2, approved) stays as it is until a reviewer approves the new one.</p></div>
+    <div class="isec"><div class="row wrap"><button class="btn">Mark reviewed</button><button class="btn">Accept regeneration</button><button class="btn ghost">Reconcile…</button></div><div style="margin-top:8px"><button class="btn primary" style="width:100%">Propose regeneration</button></div></div>
+  </div>
+</div>
+
+<section class="mk-board"><h2 class="mk-h">States &amp; roles · mockup board</h2>
+
+  <div class="mk-card"><div class="mk-cap">empty: counts.total 0</div>
+    <div class="panel"><div class="panel-h"><h2>Affected outputs</h2><span class="count">0</span></div>
+      <div class="empty small"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><p>Nothing built on earlier versions is affected by v3.</p></div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">loading</div>
+    <div class="panel"><div class="panel-h"><h2>Affected outputs</h2></div><div class="panel-b col gap12"><span class="skel" style="width:70%"></span><span class="skel" style="width:55%"></span><span class="skel" style="width:62%"></span><span class="skel" style="width:40%"></span></div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">error 404</div>
+    <div class="notice err">Document version not found<button class="btn">Back to Checkout redesign</button></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">recorded: /trace/changes/{id}/impact (preview false)</div>
+    <div class="col">
+      <div class="notice warn">Recorded change: these outputs were marked Potentially stale by this change.</div>
+      <div class="panel"><div class="panel-b col gap4 sm"><div class="row"><span class="tag">document_section</span><span class="mono">checkout-redesign@3#goals</span></div><span class="muted">Section edited by Mara Osei · Oct 24, 2026 14:12 · handled by <span class="mono">trace.mark_stale</span></span></div></div>
+    </div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">what-if: /baseline/entities/{id}/impact</div>
+    <div class="col">
+      <div class="ph" style="padding:0;min-height:0"><h1 style="font-size:22px;line-height:27px">Impact<small class="mono">requirement:R-12</small></h1></div>
+      <div class="notice info">What if Guest checkout keeps the cart changed? Preview only, nothing is marked stale.</div>
+    </div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">partial: truncated true</div>
+    <div class="notice warn">The walk stopped at its limit (depth 8, 2000 nodes or 500 roots). More outputs may be affected than are listed here.</div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">deleted upstream dependency</div>
+    <div class="panel"><div class="panel-b"><div class="dep"><div class="h"><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="mono">checkout-redesign v2 · guest-checkout</span><span class="chip crit">Deleted</span></div><span class="s">Section removed Oct 22, 2026; this test case has nothing upstream to follow.</span></div></div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">freshness values</div>
+    <div class="row wrap"><span class="chip pass">Fresh</span><span class="chip warn"><span class="dot"></span>Potentially stale</span><span class="chip na">Under review</span><span class="chip pass">Reconciled</span></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">action "review" row (source_permission change)</div>
+    <div class="panel"><ol><li class="plan-li"><span class="n">1</span><div class="b trunc">Early shipping cost — tech brief v2</div><div class="row act"><span class="chip warn">Review</span></div><p class="how">Check the claims that relied on the changed source (sections goals); regenerate only if they no longer hold. Nothing changes until you decide; the current version (v2, approved) stays as it is.</p></li></ol></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">reconcile form · error 422</div>
+    <div class="panel"><div class="panel-b form"><label class="col gap4 label">Reason<textarea class="input"></textarea></label><div class="notice err">reconciling needs a reason</div><div class="row"><button class="btn primary">Reconcile</button><button class="btn ghost">Cancel</button></div></div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">error 409 accept regeneration</div>
+    <div class="notice err">nothing to accept regeneration: fresh, reconciled</div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">proposed: spec regenerate result</div>
+    <div class="notice ok"><span>Draft run <span class="mono">run_4c19</span> from PRD v3 covers sections goals, scope; dropped <span class="mono">metrics</span> (no longer in the PRD).</span><button class="btn">Open run</button></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">roadmap row: estimate (as approver, over threshold)</div>
+    <div class="panel"><div class="panel-b col gap12"><div class="irow"><span class="k">Estimate</span><span class="v">$62.40</span></div><div class="irow"><span class="k">Approval threshold</span><span class="v">$50.00</span></div><div class="notice warn">Runs over $50 wait for an owner's approval.</div><button class="btn primary">Start, ask owner to approve</button></div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">as owner</div>
+    <div class="panel"><div class="panel-b col gap12"><div class="irow"><span class="k">Q1 roadmap · run <span class="mono">run_51ab</span></span><span class="v">$62.40</span></div><button class="btn primary">Approve and start run</button></div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">error 403 regenerate</div>
+    <div class="notice err">Only the document's decider or an approver can regenerate it</div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">as viewer</div>
+    <div class="insp"><div class="insp-h"><div class="top"><span class="eyebrow">Viewing as viewer</span></div><h2>Early shipping cost — tech brief v2</h2><div class="chips"><span class="chip warn"><span class="dot"></span>Potentially stale</span></div></div><div class="isec"><p class="quote">Propose a new version of this tech brief covering only sections goals, scope…</p></div><div class="isec faint sm">Approvers act on staleness and propose regenerations.</div></div>
+  </div>
+
+  <div class="mk-card"><div class="mk-cap">as commenter who is the roadmap's decider</div>
+    <div class="panel"><div class="panel-b col gap12"><div class="b">Q1 roadmap v4</div><span class="faint sm">You decide on this roadmap, so you can regenerate it. Staleness actions need an approver.</span><button class="btn primary">Estimate roadmap run</button></div></div>
+  </div>
+</section>
+
+</main>
+<aside class="dock desk-only"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc8f8"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g3)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g3)"/></svg><span>Ask Oracle</span></aside>
+<nav class="tabbar" aria-label="Tabs"><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Plan</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</a></nav>
+</div></body></html>

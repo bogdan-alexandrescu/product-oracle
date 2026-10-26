@@ -817,3 +817,12 @@ async def test_an_api_token_asks_by_its_name_not_as_a_person(client):
     assert q["asked_by"] is None
     [row] = await inbox(client, ctx, "approver")
     assert row["asked_by"] == {"kind": "api_client", "name": "agent-track"}
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")

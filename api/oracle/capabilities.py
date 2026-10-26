@@ -97,7 +97,7 @@ EVERY_MEMBER = frozenset(
 
 # Run tokens only (H7: the web tools need read:web, which only the competitive digest's
 # run holds): a person's role never reaches them, whatever the route's role check says.
-RUN_ONLY = frozenset({"fetch_web_page", "search_web"})
+RUN_ONLY = frozenset({"fetch_web_page", "search_web", "get_intake_analysis_input"})
 
 # Decided in the handler against the item: a checkpoint's approver role, the author, the
 # role Oracle acted with. Any role may hold the item, so the page reads the item's own

@@ -76,6 +76,11 @@ export interface IntakeContext {
   /** The approved (locked) section keys of a document's latest version, by its id or slug; a
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
+  /** INT2: the company switch intake_ai_read (Settings › Company); on unless given. */
+  readOn?: () => boolean;
+  /** INT2: how the mock's reads end: "ok" on SwarmCloud (the default), "fallback" (SwarmCloud
+   * fails, Oracle's built-in model reads it) or "fails" (both fail). */
+  readMode?: ReadMode;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -232,7 +237,7 @@ function briefFields(ctx: IntakeContext, input: Partial<BriefFields>): Partial<B
   return out;
 }
 
-function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSummary"] {
+function summary(db: V2Db, intake: Intake, userId: string, ctx?: IntakeContext): Schemas["IntakeSummary"] {
   const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
   const questions = db.questions.filter((q) => q.intake_id === intake.id);
   const out = rankedOut(gaps);
@@ -307,6 +312,8 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     shared_counts: [],
     is_author: intake.author_id === userId,
     ...drafting(db, intake),
+    // INT2: Oracle's read, the author's only (null for anyone else, and where no reader is known).
+    ai_read: ctx ? aiRead(db, ctx, intake) : null,
   };
 }
 
@@ -494,7 +501,10 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     Object.assign(intake, fields);
     applyBriefFields(db, ctx, intake);
     askBatch(db, ctx, intake, input.batch_size ?? 5);
-    return json(201, summary(db, intake, ctx.userId));
+    // INT2: Oracle's read starts with the intake when its author left ai_extraction on.
+    db.intake_reads = { ...db.intake_reads, [intake.id]: { ai: input.ai_extraction !== false, read: null, failures: 0 } };
+    if (input.ai_extraction !== false) startRead(db, ctx, intake);
+    return json(201, summary(db, intake, ctx.userId, ctx));
   }
 
   if (p[1] === "intakes" && p[2] && p.length >= 3 && !(p.length === 3 && m === "GET")) {
@@ -523,8 +533,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       intake.updated_at = now();
       return json(200, intakeOut(intake, db));
     }
-    if (leaf === "summary" && m === "GET") return json(200, summary(db, intake, ctx.userId));
-    if (leaf === "new-evidence" && m === "GET") return json(200, summary(db, intake, ctx.userId).new_evidence);
+    if (leaf === "summary" && m === "GET") return json(200, summary(db, intake, ctx.userId, ctx));
+    if (leaf === "new-evidence" && m === "GET") return json(200, summary(db, intake, ctx.userId, ctx).new_evidence);
     if (leaf === "evidence" && m === "GET") {
       if (!q.get("q")) return fail(422, "q is required");
       return json(200, { intake_id: intake.id, q: q.get("q"), pinned_version: intake.source_snapshot_ids.length, as_of: intake.created_at, hits: [] });
@@ -575,12 +585,24 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (leaf === "analyze" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can re-run its analysis");
       syncQuestions(db, intake);
-      return json(200, summary(db, intake, ctx.userId));
+      return json(200, summary(db, intake, ctx.userId, ctx));
+    }
+    if (leaf === "ai-read" && m === "POST") {
+      if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can ask Oracle to read it");
+      if (CLOSED.has(intake.status)) return fail(409, `The intake is ${intake.status}`);
+      if (!(ctx.readOn?.() ?? true)) return fail(409, "Oracle's read is off for this company");
+      advanceRead(db, intake.id);
+      const live = db.intake_reads?.[intake.id]?.read;
+      if (live?.state === "running") return fail(409, "Oracle is already reading this intake");
+      startRead(db, ctx, intake);
+      return json(202, aiRead(db, ctx, intake));
     }
     if (leaf === "repin" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can repin it");
       intake.source_snapshot_ids = [...intake.source_snapshot_ids, uuid()];
-      return json(200, summary(db, intake, ctx.userId));
+      // INT2: a repin ends the read under way and reads the new snapshot.
+      if (db.intake_reads?.[intake.id]?.ai) startRead(db, ctx, intake);
+      return json(200, summary(db, intake, ctx.userId, ctx));
     }
     if (leaf === "question-batches" && m === "POST") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
@@ -1034,4 +1056,130 @@ export function seedBriefGoalRejected(db: V2Db, authorId: string, goalIds: strin
     [], "2026-10-19T09:00:00Z", BRIEF_GOAL_REJECTED.intakeId,
   );
   intake.goal_ids = goalIds;
+}
+
+// --- INT2 Oracle's read of an intake ------------------------------------------------------
+
+type ReadMode = "ok" | "fallback" | "fails";
+type AiRead = Schemas["AiReadOut"];
+
+/** A read as the mock keeps it: the API's ai_read plus how and when it moves on. */
+export interface MockIntakeRead {
+  /** The intake's ai_extraction: automatic reads (create, repin) start only when on. */
+  ai: boolean;
+  read: (Omit<AiRead, "state" | "failures" | "off_reason"> & { state: "running" | "done" | "failed"; mode: ReadMode; job_started_at?: string | null }) | null;
+  failures: number;
+}
+
+const CLOSED = new Set<Intake["status"]>(["converted", "archived"]);
+/** The author's pinned sources the mock's read is given (the mock has no source items). */
+export const READ_SOURCES = 3;
+/** SwarmCloud's task start, then its read; then the built-in job's read (fallback). */
+const READ_QUEUED_MS = 20_000;
+const READ_RUN_MS = 90_000;
+const READ_JOB_MS = 30_000;
+const READ_FALLBACK = "Oracle's read on the agent service failed, so Oracle's built-in model read it instead.";
+const READ_FAILED = "Oracle's read failed. The rules read stands.";
+const INBOX_AFTER = 2;
+/** Made-up inferences and a gap the mock's read adds (4 items, 1 gap). */
+const READ_ADDS: [Schemas["FindingOut"]["kind"], Category, string][] = [
+  ["item", "customer_user", "Team leads placing bulk orders for several sites are the first users."],
+  ["item", "pain_evidence", "The same delivery notes are typed again on most repeat orders."],
+  ["item", "success_metric", "Time to place a repeat bulk order is the likely measure."],
+  ["item", "non_goals", "Sharing presets between companies is not asked for."],
+  ["gap", "ownership", "Nobody is named to own presets once they are saved."],
+];
+
+const plus = (iso: string, ms: number) => new Date(new Date(iso).getTime() + ms).toISOString();
+
+/** Starts a read of `intake` (ending the one before), on SwarmCloud, as start_read does. */
+function startRead(db: V2Db, ctx: IntakeContext, intake: Intake) {
+  const row = (db.intake_reads ??= {})[intake.id] ?? { ai: false, read: null, failures: 0 };
+  db.intake_reads[intake.id] = row;
+  if (CLOSED.has(intake.status) || !(ctx.readOn?.() ?? true)) return;
+  row.read = {
+    state: "running", mode: ctx.readMode ?? "ok", path: "swarmcloud", run_id: uuid(), job_id: null,
+    started_at: now(), finished_at: null, sources: READ_SOURCES, added: null, dropped_refs: 0,
+    error: null, fallback: null, note: null, job_started_at: null,
+  };
+}
+
+/** Moves a running read on by the clock: SwarmCloud finishes, or falls back to the job, which finishes. */
+function advanceRead(db: V2Db, intakeId: string) {
+  const row = db.intake_reads?.[intakeId];
+  const read = row?.read;
+  if (!row || !read || read.state !== "running" || !read.started_at) return;
+  const at = Date.now();
+  const finish = (when: string, ok: boolean) => {
+    read.finished_at = when;
+    if (!ok) {
+      Object.assign(read, { state: "failed", error: { code: "job_failed", message: READ_FAILED } });
+      row.failures += 1;
+      return;
+    }
+    Object.assign(read, { state: "done", added: { items: 4, gaps: 1 }, error: null });
+    row.failures = 0;
+    const findings = READ_ADDS.map(([kind, category, text]) => ({
+      id: uuid(), kind, origin: "model" as const, category, sharing: "private" as const, summary: null, summary_confirmed: false,
+      draft_summary: text, gap_id: null, source_item_ids: [], unshared_item_ids: [],
+    }));
+    db.intake_findings = { ...db.intake_findings, [intakeId]: [...(db.intake_findings?.[intakeId] ?? []), ...findings] };
+  };
+  if (read.path === "swarmcloud") {
+    const ends = plus(read.started_at, READ_RUN_MS);
+    if (at < new Date(ends).getTime()) return;
+    if (read.mode === "ok") return finish(ends, true);
+    // Q3 (owner, changed): Oracle falls back to its built-in job for this intake.
+    Object.assign(read, { path: "job", job_id: uuid(), job_started_at: ends, fallback: { code: "agent_failed", message: READ_FALLBACK } });
+  }
+  const jobEnds = plus(read.job_started_at ?? read.started_at, READ_JOB_MS);
+  if (at >= new Date(jobEnds).getTime()) finish(jobEnds, read.mode !== "fails");
+}
+
+/** IntakeSummary.ai_read: the author's only (null for anyone else), as read.state_out. */
+function aiRead(db: V2Db, ctx: IntakeContext, intake: Intake): AiRead | null {
+  if (intake.author_id !== ctx.userId) return null;
+  advanceRead(db, intake.id);
+  const row = db.intake_reads?.[intake.id];
+  const failures = row?.failures ?? 0;
+  if (!row?.read) return { state: "off", off_reason: (ctx.readOn?.() ?? true) ? "intake" : "company", failures, sources: 0, dropped_refs: 0 };
+  const read: AiRead = { ...row.read, failures };
+  delete (read as Partial<MockIntakeRead["read"]>)!.mode;
+  delete (read as Partial<MockIntakeRead["read"]>)!.job_started_at;
+  // Queued until SwarmCloud takes the task.
+  if (read.state === "running" && read.path === "swarmcloud" && Date.now() < new Date(read.started_at!).getTime() + READ_QUEUED_MS) read.state = "queued";
+  return read;
+}
+
+/** InboxOut.intake_reads: my open intakes whose last two reads or more failed, as read.inbox_rows. */
+export function intakeReadInbox(db: V2Db, userId: string): Schemas["InboxIntakeRead"][] {
+  return db.intakes
+    .filter((i) => i.author_id === userId && !CLOSED.has(i.status))
+    .map((i) => (advanceRead(db, i.id), { intake: i, row: db.intake_reads?.[i.id] }))
+    .filter(({ row }) => (row?.failures ?? 0) >= INBOX_AFTER)
+    .map(({ intake, row }) => ({ intake_id: intake.id, title: intake.title, failures: row!.failures, at: row!.read?.finished_at ?? null }));
+}
+
+/** The "intake-read-fails" scenario's brief: its last two reads failed (one Inbox row). */
+export const READ_FAILED_TWICE = { intakeId: "c2700000-0000-4000-8000-000000000001", title: "Bulk order invoices" } as const;
+
+export function seedReadFailedTwice(db: V2Db, authorId: string) {
+  const at = "2026-10-22T10:00:00Z";
+  const intake = addIntake(
+    db, authorId, READ_FAILED_TWICE.title,
+    "Finance teams ask for one invoice per bulk order instead of one per site. Group invoices by bulk order.",
+    [], at, READ_FAILED_TWICE.intakeId,
+  );
+  db.intake_reads = {
+    ...db.intake_reads,
+    [intake.id]: {
+      ai: true,
+      failures: 2,
+      read: {
+        state: "failed", mode: "fails", path: "job", run_id: uuid(), job_id: uuid(), started_at: "2026-10-22T10:55:00Z",
+        job_started_at: "2026-10-22T10:57:00Z", finished_at: "2026-10-22T11:00:00Z", sources: READ_SOURCES, added: null,
+        dropped_refs: 0, error: { code: "job_failed", message: READ_FAILED }, fallback: { code: "agent_failed", message: READ_FALLBACK }, note: null,
+      },
+    },
+  };
 }
