@@ -203,6 +203,8 @@ export const MOCK_SHARED_DRIVES = [
 export const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
 const PRIVATE_ENDPOINT = "The endpoint points to a private, local or internal network address, which Product Oracle does not call.";
 const OWNER_ONLY = "Only an Oracle owner can set or change a Fireflies endpoint";
+const ANOTHER_ACCOUNT = "That key belongs to another Fireflies account than this connection's; connect it as a new connection";
+const ODD_IPV4 = "The endpoint writes an IP address in an octal, hex or shortened form; write it as four decimal numbers, or use the host name.";
 
 function privateIp(host: string): boolean {
   let h = host.replace(/^\[|\]$/g, "").toLowerCase();
@@ -237,6 +239,14 @@ export function checkEndpoint(raw: string | null | undefined): { url: string | n
   const port = /^https:\/\/(?:\[[^\]]*\]|[^/:?#]*):(\d*)/i.exec(text)?.[1];
   if (port !== undefined && port !== "443") return { error: "The endpoint must use the standard https port (443)." };
   if (u.search || u.hash || /[?#]/.test(text)) return { error: "The endpoint cannot have a query or a fragment." };
+  // As the API: a host whose last label is a number reads as an IPv4 address (0177.0.0.1,
+  // 0x7f000001, 127.1); unless written as four decimal numbers it is refused. (The browser
+  // has already read it as the address it means, or refused it as not a valid URL.)
+  const host = (/^https:\/\/([^/?#]*)/i.exec(text)?.[1] ?? "").replace(/:\d*$/, "").replace(/\.$/, "").toLowerCase();
+  const plainV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+  if (!host.startsWith("[") && /^(0x[0-9a-f]*|\d+)$/.test(host.split(".").pop() ?? "") && !plainV4.test(host)) {
+    return { error: privateIp(u.hostname) ? PRIVATE_ENDPOINT : ODD_IPV4 };
+  }
   if (privateIp(u.hostname)) return { error: PRIVATE_ENDPOINT };
   const url = `https://${u.hostname.toLowerCase()}${u.pathname || "/"}`;
   return { url: url === FIREFLIES_DEFAULT_ENDPOINT ? null : url };
@@ -476,14 +486,17 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string): Prom
     }
     if (p[3] === "endpoint" && m === "PUT") {
       if (role !== "owner") return json(403, { detail: "Requires the owner role" });
-      const { endpoint_url, token } = (await body<Partial<Schemas["EndpointIn"]> | null>()) ?? {};
-      if (!token || !token.trim()) return json(422, { detail: "Enter the API key again: a key is never carried over to another endpoint" });
+      const sent = (await body<Partial<Schemas["EndpointIn"]> | null>()) ?? {};
+      const { endpoint_url, token } = sent;
+      // FastAPI's own validation answer, as the API gives it (EndpointIn.token: required, 1+).
+      if (token === undefined || token === null) return json(422, { detail: [{ type: "missing", loc: ["body", "token"], msg: "Field required", input: sent }] });
+      if (token === "") return json(422, { detail: [{ type: "string_too_short", loc: ["body", "token"], msg: "String should have at least 1 character", input: token, ctx: { min_length: 1 } }] });
       if (row.provider !== "fireflies") return json(422, { detail: "Only a Fireflies connection takes an endpoint" });
       const checked = checkEndpoint(endpoint_url);
       if ("error" in checked) return json(422, { detail: checked.error });
       const who = identity(row.provider, token.trim());
       if (typeof who === "string") return json(400, { detail: who });
-      if (who.account_id !== row.account_id) return json(400, { detail: "That key belongs to another account" });
+      if (who.account_id !== row.account_id) return json(400, { detail: ANOTHER_ACCOUNT });
       Object.assign(row, { endpoint_url: checked.url, status: "active", last_error: null, updated_at: now() });
       return json(200, out(db, row));
     }

@@ -263,6 +263,7 @@ export function CoverageInspector({
   onSync,
   onLoadMore,
   loadingMore,
+  endpoint,
 }: {
   detail: CoverageDetail | undefined;
   summary: Coverage;
@@ -270,6 +271,8 @@ export function CoverageInspector({
   onSync: () => void;
   onLoadMore: () => void;
   loadingMore: boolean;
+  /** Fireflies: the GraphQL endpoint the source's connection reads. */
+  endpoint?: string | null;
 }) {
   const c = detail ?? summary;
   return (
@@ -290,6 +293,13 @@ export function CoverageInspector({
         { label: "Used", value: n(usedTotal(c)) },
       ]}
     >
+      {c.kind === "fireflies" && endpoint && (
+        <InspectorSection label="Reads" testId="coverage-endpoint">
+          <p className="min-w-0 truncate font-mono text-sm" title={endpoint}>
+            {endpoint}
+          </p>
+        </InspectorSection>
+      )}
       <InspectorSection label="Items" testId="coverage-kinds">
         {(detail?.by_kind ?? []).map((k) => (
           <InspectorRow

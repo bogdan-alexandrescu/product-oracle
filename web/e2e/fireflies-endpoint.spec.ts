@@ -40,6 +40,12 @@ test("fireflies endpoint: an owner sets it and sees it on the source; an approve
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-sources").click();
   await expect(page.getByRole("listitem", { name: "Customer calls" })).toContainText("Reads https://ff.example.com/v2/graphql");
 
+  // So does the source's coverage on the Sources page (#602 review).
+  await page.goto("/sources");
+  await page.getByTestId("coverage-table").locator("tr[data-row]").filter({ hasText: "Customer calls" }).click();
+  await expect(page.getByTestId("coverage-inspector").getByTestId("coverage-endpoint")).toHaveText("https://ff.example.com/v2/graphql");
+  await page.goto("/settings/sources");
+
   // An approver sees it, with no way to change it or to set one.
   await page.evaluate(([k, r]) => localStorage.setItem(k, r), [MOCK_ROLE_KEY, "approver"] as const);
   await page.reload();
@@ -60,5 +66,12 @@ test("fireflies endpoint: an http:// or private-address URL shows the API's refu
   await form.getByLabel("GraphQL endpoint (optional)").fill("https://10.0.0.5/graphql");
   await form.getByRole("button", { name: "Connect" }).click();
   await expect(form).toContainText("private, local or internal network address");
+  // An octal, hex or shortened IP address is refused in words too (#602 review).
+  await form.getByLabel("GraphQL endpoint (optional)").fill("https://0177.0.0.1/graphql");
+  await form.getByRole("button", { name: "Connect" }).click();
+  await expect(form).toContainText("private, local or internal network address");
+  await form.getByLabel("GraphQL endpoint (optional)").fill("https://0x5db8d822/graphql");
+  await form.getByRole("button", { name: "Connect" }).click();
+  await expect(form).toContainText("write it as four decimal numbers");
   await expect(card.getByText("Not connected")).toBeVisible();
 });
