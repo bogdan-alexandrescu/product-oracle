@@ -6,7 +6,8 @@ import made the version, ``oracle.runs.review_link.checkpoint_for``), or, for a 
 imported by hand, the moment of the import. The author is the person the run acted for
 (``runs.created_by``) or who imported it; an API token stands for the member it belongs
 to. Their items new, changed or deleted since then are counted as an intake counts them
-since its pin (``oracle.intake.evidence.changed_since``). Only the author sees the number:
+since its pin (``oracle.intake.evidence.changed_since``), within the sources the run's
+intake chose when it chose some (``runs.knobs.intake_id``). Only the author sees the number:
 a source is visible to its owner only (S5), and a run token never does (S6)."""
 
 import uuid
@@ -17,10 +18,11 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken
 from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.schemas import DraftNewItems
-from oracle.intake.evidence import changed_since
+from oracle.intake.evidence import changed_since, source_ids_of
 from oracle.runs import review_link
 from oracle.runs.models import Run
 from oracle.sources.models import Snapshot
+from oracle.v2.models import ProductIntake
 
 
 async def _person(db: AsyncSession, actor: uuid.UUID | None) -> uuid.UUID | None:
@@ -29,6 +31,16 @@ async def _person(db: AsyncSession, actor: uuid.UUID | None) -> uuid.UUID | None
         return None
     token = await db.get(ApiToken, actor)
     return token.user_id if token is not None else actor
+
+
+async def _sources_read(db: AsyncSession, run: Run | None) -> list[uuid.UUID]:
+    """The sources a run read: those its intake chose, or ``[]`` for all of the author's."""
+    raw = (run.knobs or {}).get("intake_id") if run is not None else None
+    try:
+        intake = await db.get(ProductIntake, uuid.UUID(str(raw))) if raw else None
+    except ValueError:
+        return []
+    return source_ids_of(intake) if intake is not None else []
 
 
 async def new_items(
@@ -50,5 +62,5 @@ async def new_items(
         as_of, txn = snapshot.as_of, snapshot.txn_snapshot
     else:
         as_of, txn = version.created_at, None
-    found = await changed_since(db, author, [], as_of, txn)
+    found = await changed_since(db, author, await _sources_read(db, run), as_of, txn)
     return DraftNewItems(version=version.number, as_of=as_of, count=len(found), visible=True)

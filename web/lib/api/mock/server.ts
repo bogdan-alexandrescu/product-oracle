@@ -4235,7 +4235,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const author = found ? found.run.created_by : v.imported_by;
     if (!author || author !== me.id) return json(200, { version: v.number, as_of: null, count: null, visible: false });
     const as_of = found?.run.snapshot_as_of ?? v.created_at;
-    return json(200, { version: v.number, as_of, count: itemsChangedSince(as_of), visible: true });
+    return json(200, { version: v.number, as_of, count: itemsChangedSince(as_of, db.members.find((x) => x.id === author)?.email ?? "", me.email), visible: true });
   }
   if (sub === "run-review" && m === "GET") {
     const found = runReviewOf(db, doc.id, v.number);
