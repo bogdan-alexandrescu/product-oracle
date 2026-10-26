@@ -6,11 +6,12 @@ and the reason a person reads ("Recommended because ..."). Retired learnings nev
 
 The effect is capped: each point of net signal moves a question's rank score by
 ``LEARNING_STEP`` of itself (``apply``) and a module's 0-1 advisory score by
-``LEARNING_STEP`` (the composer), never more than ``LEARNING_CAP`` either way. The cap sits below one importance step (high is
-3/4 of critical, medium 2/3 of high), so among gaps of like impact learnings reorder
-questions of the same importance but one signal never outweighs a gap's importance. In a
-module composition a learning never overrides company policy, a condition or a person's
-decision.
+``LEARNING_STEP`` (the composer), never more than ``LEARNING_CAP`` either way. The cap
+sits below one importance step (high is 3/4 of critical, medium 2/3 of high), so among
+gaps of like impact learnings reorder questions of the same importance but one signal
+never outweighs a gap's importance. In a module composition a learning only suggests a
+module that is unconditional or whose condition held, and never overrides company
+policy, a condition or a person's decision.
 """
 
 import uuid

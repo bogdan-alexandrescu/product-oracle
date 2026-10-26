@@ -158,9 +158,12 @@ outweighs a gap's importance:
 - **Module recommendations** (the composer): every module a learning names says so in its
   explanation ("Recommended because of a learning from past outcomes: ..."), and its
   advisory score moves by at most the cap. A recommend_more learning suggests an optional
-  module nothing else brings in (`decided_by: learning`); learnings never drop a module
-  and never override company policy, a condition that held, the template or a person's
-  decision. Recomputed each revision, like a condition.
+  module nothing else brings in (`decided_by: learning`) only if the module is
+  unconditional or its condition held for this PRD; a conditional module whose condition
+  did not hold (or could not be evaluated) stays out, its reason the condition's, and the
+  learning only explains itself (decided 2026-10-25). Learnings never drop a module and
+  never override company policy, a condition, the template or a person's decision.
+  Recomputed each revision, like a condition.
 - **Intake questions**: a question category's learnings move its rank score (the order of
   questions not asked yet, at the next sync) and its rationale says why. Each sync keeps
   the nudges it ranked with on the intake (`analysis["learned"]`, by gap): a gap whose

@@ -141,7 +141,7 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
     title: c.title,
     origin: c.origin,
     selection,
-    decided_by: selection === "mandatory" ? "policy" : included ? "condition" : "none",
+    decided_by: selection === "mandatory" ? "policy" : included || c.policy === "conditional" ? "condition" : "none",
     policy_source: "pack",
     explanation: [],
     basis: [],
@@ -166,12 +166,14 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
 }
 
 /** As oracle.modules.composer._apply_learned: explained, the score moved by at most the cap,
- * and suggested only when nothing else brings it in; never dropped. */
+ * and suggested only when nothing else brings it in and it is unconditional or its condition
+ * held (a conditional module whose condition failed stays out); never dropped. */
 function tuned(m: Composed, n: Nudge | undefined, order: number): Composed {
   if (!n) return m;
   const out = { ...m, explanation: [...m.explanation, nudgeReason(n)] };
   if (out.score != null) out.score = Math.round(Math.min(1, Math.max(0, out.score + factor(n))) * 1000) / 1000;
-  if (n.net > 0 && out.selection === "optional" && !out.included) {
+  const held = m.policy !== "conditional" || m.included;
+  if (held && n.net > 0 && out.selection === "optional" && !out.included) {
     Object.assign(out, { selection: "suggested", included: true, decided_by: "learning", reason: nudgeReason(n), order });
   }
   return out;
@@ -222,7 +224,7 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
       const held = caps.includes(hints[c.key] ?? "");
       return held
         ? composed(c, true, "suggested", `Suggested: scope.capabilities contains '${hints[c.key]}'`, (i + 1) * 10)
-        : composed(c, false, "optional", "Not suggested: its condition did not hold.", 0);
+        : composed(c, false, "optional", c.policy === "conditional" ? "Not suggested: its condition did not hold." : "Not suggested: it is optional.", 0);
     })
     .map((m, i) => tuned(m, learned[m.key], (i + 1) * 10));
   return {
