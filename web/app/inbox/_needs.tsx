@@ -299,6 +299,7 @@ export type NeedGroup =
   | "rituals"
   | "metrics"
   | "outcomes"
+  | "webhooks"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 

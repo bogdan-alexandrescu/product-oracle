@@ -248,17 +248,22 @@ async def _owners(db: AsyncSession) -> list[uuid.UUID]:
     )
 
 
-async def _notify(db: AsyncSession, principal: Any, recipients, kind: str, title: str, hook):
+async def _notify(
+    db: AsyncSession,
+    principal: Any,
+    recipients,
+    kind: str,
+    title: str,
+    hook,
+    reason: str | None = None,
+):
+    """An Inbox row about a webhook; a pause's row names its reason (``paused_reason``)."""
     from oracle.review import collab
 
-    await collab.notify(
-        db,
-        recipients,
-        kind=kind,
-        title=title,
-        actor=_actor(principal),
-        data={"webhook_id": str(hook.id), "href": "/settings/webhooks"},
-    )
+    data = {"webhook_id": str(hook.id), "href": "/settings/webhooks"}
+    if reason is not None:
+        data["reason"] = reason
+    await collab.notify(db, recipients, kind=kind, title=title, actor=_actor(principal), data=data)
 
 
 async def _approvers_content(
@@ -366,6 +371,8 @@ async def update(
     if body.status is not None and body.status != hook.status:
         hook.status = body.status
         hook.paused_reason = "manual" if body.status == "paused" else None
+        if body.status == "active":
+            hook.resumed_at = _now()
         action = "webhook.pause" if body.status == "paused" else "webhook.resume"
         await audit.record(db, principal, action, "webhook", hook.id, {"name": hook.name})
         if body.status == "paused" and hook.created_by != principal.id:
@@ -377,6 +384,7 @@ async def update(
                 "webhook_paused",
                 f"{who} paused your webhook {hook.name}",
                 hook,
+                reason="manual",
             )
     hook.updated_at = _now()
     await db.flush()

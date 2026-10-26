@@ -21,6 +21,8 @@ from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
 REVISION = "0055_webhooks"
 PREVIOUS = "0054_reply_opened"
+# #642 review: webhooks.resumed_at, chained on this revision.
+RESUMED = "0056_webhook_resumed_at"
 TABLES = {"webhooks", "webhook_events", "webhook_deliveries"}
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -73,7 +75,8 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_revision(RESUMED).down_revision == REVISION
+    assert script.get_heads() == [RESUMED]
 
 
 def test_upgrade_and_downgrade(scratch_db):
@@ -88,3 +91,20 @@ def test_upgrade_and_downgrade(scratch_db):
     command.upgrade(_cfg(), REVISION)
     assert _tables() == TABLES
     assert "webhook_paused" in _kinds()
+
+
+def _columns() -> set[str]:
+    rows = _run("SELECT column_name FROM information_schema.columns WHERE table_name = 'webhooks'")
+    return {name for (name,) in rows}
+
+
+def test_resumed_at_comes_and_goes(scratch_db):
+    # protects=webhooks.resumed_at comes and goes with 0056_webhook_resumed_at and the
+    # webhooks table stays; fails_when=the upgrade misses the column or the downgrade
+    # leaves it.
+    command.upgrade(_cfg(), RESUMED)
+    assert "resumed_at" in _columns()
+    command.downgrade(_cfg(), REVISION)
+    assert "resumed_at" not in _columns() and "status" in _columns()
+    command.upgrade(_cfg(), RESUMED)
+    assert "resumed_at" in _columns()

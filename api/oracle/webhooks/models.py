@@ -61,6 +61,8 @@ class Webhook(TenantScoped, Base):
         Text, nullable=False, default="active", server_default="active"
     )
     paused_reason: Mapped[str | None] = mapped_column(Text)
+    # When a person last resumed it: its failing count starts again there (#642 review).
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     key_version: Mapped[int] = mapped_column(Integer, nullable=False)
     secret_hint: Mapped[str] = mapped_column(Text, nullable=False)
