@@ -366,8 +366,10 @@ async def test_a_run_through_one_checkpoint_is_captured_once_per_change(client):
         tenant_id, auth = await seed_auth()
         wanted = ["run.started", "run.checkpoint_waiting", "run.checkpoint_decided"]
         await _hook(client, auth, [*wanted, "run.succeeded"])
+        # The PRD review alone: every other stop off (the Engineering dates segment, off,
+        # is skipped).
         keys = list(flows.FLOWS["baseline_to_prd"].checkpoints)
-        knobs = {**dict.fromkeys(keys, False), keys[-1]: True}
+        knobs = {**dict.fromkeys(keys, False), "prd_review": True}
         run = await started(client, auth, checkpoints=knobs)
         for _ in range(6):
             if run["status"] != "running":

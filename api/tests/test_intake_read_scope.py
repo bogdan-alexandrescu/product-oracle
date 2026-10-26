@@ -12,7 +12,8 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+from oracle.auth.service import sign_run_binding
 from oracle.config import get_settings
 from oracle.intake import job as intake_job
 from oracle.mcp.scopes import required_scope
@@ -47,15 +48,22 @@ async def _intake_with_run(client, ctx) -> tuple[str, Run]:
     return intake_id, run
 
 
+# The run each minted token is for: Oracle's MCP server sends its run binding beside it.
+_RUN_OF: dict[str, uuid.UUID] = {}
+
+
 async def _token(ctx, run_id, scopes=(SCOPE,)) -> str:
     async with tenant_session(ctx.tenant_id) as s:
         raw = await mint_run_token(s, run_id, list(scopes), ttl_seconds=600)
         await s.commit()
+    _RUN_OF[raw] = run_id
     return raw
 
 
 def _as_run(ctx, who: str, raw: str) -> dict:
-    return {**ctx.as_(who), RUN_TOKEN_HEADER: raw}
+    """What Oracle's MCP server sends for a run token: the token and the run binding (#614)."""
+    binding = sign_run_binding(ctx.users[who].id, _RUN_OF[raw])
+    return {**ctx.as_(who), RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
 
 
 # protects=the scope mapping: the route needs read:intake-input (not read:baseline, which

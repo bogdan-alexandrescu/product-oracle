@@ -1699,11 +1699,14 @@ async def _may_read_files(db: AsyncSession, run: Run, text: str) -> str:
     member (:func:`reads_as_member`) only when it names nothing hidden from them, as its
     importer and the read-time checks of #541 parts 3-5 check (``Hidden.names``: output
     written before part 4/5 may); a file of any other run, which read with its
-    starter's view, never. Refused: a 404, as a file that is not there."""
+    starter's view, never. A creator-only run's (#624 review: Oracle's read of an intake) is
+    read by its creator alone (:func:`creator_only_hidden`), with the same check. Refused: a
+    404, as a file that is not there."""
     hidden = await visibility.hidden_for_reader(db)
     if hidden is None:
         return text
-    if not await reads_as_member(db, run) or hidden.names(text):
+    readable = _flow(run).creator_only or await reads_as_member(db, run)
+    if not readable or hidden.names(text):
         raise NotFound(f"run {run.id} has no such file")
     return text
 
