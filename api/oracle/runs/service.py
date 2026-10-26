@@ -146,6 +146,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
 from oracle.engineering import check as eng_check
+from oracle.engineering import dates as eng_dates
 from oracle.jobs.models import LlmSuggestion
 from oracle.members.leads import (
     ENGINEERING_KINDS,
@@ -1207,6 +1208,9 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             for c in checkpoints
         ],
         token_read_only=await token_hold(db, run.id, live=False) is not None,
+        waiting_for=(awaiting.artifacts or {}).get("waiting_for")
+        if (awaiting := _awaiting_items(segments)) is not None
+        else None,
         open_proposals=await db.scalar(
             select(func.count())
             .select_from(Proposal)
@@ -2577,6 +2581,7 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run),
         ],
         intake_id=run.knobs.get("intake_id"),
@@ -3379,11 +3384,7 @@ async def _submit_now(
     kind = await _target_kind(db, run)
     registered_again = False
     while True:
-        covered = (
-            [s for s in segments if s.seq >= segment.seq and s.status != "skipped"]
-            if mode.waits
-            else [segment]
-        )
+        covered = _workflow_segments(flow, segment, segments) if mode.waits else [segment]
         planned: list[tuple[int, str, list[str]]] = []
         contexts: list[tuple[int, flows.SegmentDef, flows.PromptContext]] = []
         for s in covered:
@@ -3626,6 +3627,10 @@ async def _submit(
     ``change_request`` is the person's note (the attempt's note, kept until a submission
     succeeds); ``review``, the structured review a send-back delivers (D4), is what the
     agents get instead when given."""
+    if _flow(run).segment(segment.name).waits_for_draft_items and not await _draft_items_ready(
+        db, run, segment, segments
+    ):
+        return
     art = _art(segment)
     if change_request or review:
         _keep_previous(art)
@@ -3640,6 +3645,69 @@ async def _submit(
     segment.status = "pending"
     segment.error = QUEUED
     run.status = "running"
+
+
+def _workflow_segments(
+    flow: flows.FlowDef, segment: RunSegment, segments: list[RunSegment]
+) -> list[RunSegment]:
+    """The segments one workflow covers from ``segment`` on: up to, not including, a later
+    segment that waits for the draft's roadmap items (F4 lane B: Oracle starts it once they
+    are ready, as a workflow of its own)."""
+    out: list[RunSegment] = []
+    for s in segments:
+        if s.seq < segment.seq or s.status == "skipped":
+            continue
+        if s.seq > segment.seq and flow.segment(s.name).waits_for_draft_items:
+            break
+        out.append(s)
+    return out
+
+
+async def _draft_items_ready(
+    db: AsyncSession, run: Run, segment: RunSegment, segments: list[RunSegment]
+) -> bool:
+    """F4 lane B: whether a segment that reads the approved PRD version's draft roadmap
+    items may be queued now. Otherwise the run waits for them (``waiting_for`` on the
+    segment, re-checked each tick, a Derive asked for when there are none) or the segment
+    is skipped with its note, and the run goes on (it ends)."""
+    user = await db.get(User, run.created_by) if run.created_by else None
+    token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
+    try:
+        creator: Principal | None = _creator(current_tenant(db), user, token)
+    except LookupError:
+        creator = None
+    state, n, note = await eng_dates.start_state(db, run, creator)
+    art = _art(segment)
+    waited = art.pop("waiting_for", None)
+    if state == "go":
+        if waited is not None:
+            _set_art(segment, art)
+        return True
+    if state == "wait":
+        art["waiting_for"] = {"kind": "draft_items", "version": n}
+        _set_art(segment, art)
+        segment.status = "pending"
+        segment.error = None
+        run.status = "running"
+        return False
+    art["note"] = note
+    _note_art(art, note or "")
+    _set_art(segment, art)
+    segment.status = "skipped"
+    segment.estimate_usd = Decimal("0.00")
+    segment.cost_usd = Decimal("0")
+    segment.finished_at = _now()
+    segment.error = None
+    await _next(db, run, segment, segments)
+    return False
+
+
+def _awaiting_items(segments: list[RunSegment]) -> RunSegment | None:
+    """The segment waiting for the draft's roadmap items (F4 lane B), if any."""
+    return next(
+        (s for s in segments if s.status == "pending" and (s.artifacts or {}).get("waiting_for")),
+        None,
+    )
 
 
 def _keep_previous(art: dict[str, Any]) -> None:
@@ -4566,6 +4634,11 @@ async def _advance(
         payload[eng_check.PAYLOAD_KEY] = await eng_check.check_segment(
             db, run, art["files"].get(flows.BRIEFS_FILE)
         )
+    if sdef.checkpoint == eng_dates.KIND:
+        # F4 lane B: what the Engineering dates' screen and its gate read.
+        payload[eng_dates.PAYLOAD_KEY] = await eng_dates.summarize(
+            db, run, art["files"].get(eng_dates.FILE)
+        )
     if imported is not None:
         payload["import"] = imported
     if baseline_import is not None:
@@ -5266,6 +5339,11 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         # A submission the runtime refused earlier, or one a request queued: the caller
         # submits it (what this pass wrote, a cancel confirmed above, commits first).
         if any(_waiting(s) for s in segments):
+            await db.commit()
+            return
+        if (awaiting := _awaiting_items(segments)) is not None:
+            # F4 lane B: the draft's roadmap items, re-checked on every tick.
+            await _submit(db, run, awaiting, segments)
             await db.commit()
             return
         # Resumed after an overrun with a finished segment not yet advanced.
@@ -6549,6 +6627,18 @@ async def _take_answer(
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
     _set_wait(cp, wait)
+    if approved and cp.kind == eng_dates.KIND:
+        # F4 lane B: a counted console approval records the dates as Oracle's Approve does
+        # (decide_checkpoint), for the member who answered (or Oracle's own Inbox user).
+        decider = member or (await db.get(User, cp.decided_by) if cp.decided_by else None)
+        if decider is not None and decider.disabled_at is None:
+            staged = await db.scalars(
+                select(CheckpointAction)
+                .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+                .order_by(CheckpointAction.created_at, CheckpointAction.id)
+            )
+            principal = _creator(current_tenant(db), decider, None)
+            await eng_dates.on_approved(db, principal, run, cp, list(staged))
     # H1: a counted answer from the console (or Oracle's own lost post) is the stop's
     # decision: a checkpoint record, unless one was recorded when it was decided here.
     await decisions_capture.checkpoint(
@@ -7167,6 +7257,14 @@ async def decide_checkpoint(
             )
         )
         await eng_check.on_approved(db, principal, run, cp, list(staged))
+    if decision == "approved" and cp.kind == eng_dates.KIND:
+        # F4 lane B: the lead's dates become verified bases, the draft's items re-checked.
+        staged = await db.scalars(
+            select(CheckpointAction)
+            .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+            .order_by(CheckpointAction.created_at, CheckpointAction.id)
+        )
+        await eng_dates.on_approved(db, principal, run, cp, list(staged))
     if decision == "approved":
         # F5-1: an approved Engineering check registers its tech briefs when the run's
         # PRD exists (else the prd_draft import does), in this transaction.

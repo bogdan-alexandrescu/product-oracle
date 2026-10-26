@@ -5,7 +5,8 @@ approvers only; an update is created with it). For a commenter or a viewer an
 ``approvers`` document is absent: a direct read is a 404, a list has no row for it, search
 has no hit, and what hangs off it (feedback, comments, suggestions, discussions, Inbox
 rows) is not shown either. A run's calls act as the run's creator (oracle.auth.deps), so a
-run token reads such a document only when its run was started by an approver or owner.
+run token reads such a document only when its run was started by an approver or owner,
+and never in a run whose output every member reads (below).
 
 The rule lives here only:
 
@@ -33,12 +34,21 @@ of hidden decisions and documents (:func:`hidden_decision_ids`, :func:`hidden_do
 oracle.rituals.blocks.for_reader), and a run reads it as a commenter would, since what it
 writes from it is shown to every member.
 
+A run of a flow whose output every member reads (``FlowDef.member_output``: the ritual
+summary, variance explanations, the competitive digest, request triage, a code map) reads
+every tool as a commenter would, whoever started it (``Principal.as_member``, set from
+the run's flow in oracle.auth.deps); its importer checks what it cites as a commenter
+(:data:`MEMBER`); and what such a run wrote is withheld at read time from a reader to
+whom it names something hidden (:func:`names_hidden`).
+
 A new document's visibility comes from its kind (:func:`default_for`), on every path
 that creates one (a template start, an import).
 """
 
+import re
 import uuid
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import (
@@ -81,8 +91,23 @@ def default_for(kind: str) -> str:
 
 def restricted(principal: Any) -> bool:
     """Whether ``approvers`` documents are hidden from ``principal`` (None: Oracle's own
-    work, which sees everything)."""
-    return principal is not None and not has_role(principal.role, MIN_ROLE)
+    work, which sees everything): a commenter or a viewer, and a run whose output every
+    member reads (``as_member``), whoever started it."""
+    if principal is None:
+        return False
+    return getattr(principal, "as_member", False) or not has_role(principal.role, MIN_ROLE)
+
+
+class _Member:
+    """A reader who sees what a commenter sees (:data:`MEMBER`)."""
+
+    role = "commenter"
+    as_member = True
+
+
+# For Oracle's own checks of what it keeps for every member (an importer's refs):
+# ``bind(session, MEMBER)`` makes the session's reads a commenter's.
+MEMBER = _Member()
 
 
 def visible_to(principal: Any) -> ColumnElement[bool]:
@@ -149,6 +174,94 @@ async def hidden_decision_ids(
         .execution_options(oracle_all_documents=True)
     )
     return set(await session.scalars(stmt))
+
+
+@dataclass(frozen=True)
+class Hidden:
+    """What the session's principal may not see, to check text Oracle wrote for every
+    member (a summary, a variance draft) at read time: the hidden decisions (ids, baseline
+    entity ids, numbers, titles) and documents (ids, slugs, titles)."""
+
+    decision_ids: frozenset[uuid.UUID]
+    document_ids: frozenset[uuid.UUID]
+    ids: frozenset[str]
+    numbers: frozenset[int]
+    words: frozenset[str]
+
+    def cites(
+        self,
+        decision_ids: Iterable[uuid.UUID | None] = (),
+        document_ids: Iterable[uuid.UUID | None] = (),
+    ) -> bool:
+        return bool(self.decision_ids & set(decision_ids) or self.document_ids & set(document_ids))
+
+    def names(self, text: str | None) -> bool:
+        """Whether ``text`` names a hidden decision (``D-<n>``, its title, its id or its
+        entity's) or a hidden document (its title, slug or id). Paraphrase is not caught."""
+        if not text:
+            return False
+        if any(i in text for i in self.ids):
+            return True
+        folded = text.casefold()
+        if any(w in folded for w in self.words):
+            return True
+        return any(int(n) in self.numbers for n in _D_NUMBER.findall(text))
+
+
+_D_NUMBER = re.compile(r"\bD-(\d+)\b", re.IGNORECASE)
+# A title shorter than this is not looked for in text (it would match ordinary words).
+_MIN_TITLE = 12
+
+
+def _words_of(*titles: str | None) -> set[str]:
+    out = set()
+    for title in titles:
+        for t in (title or "", (title or "").partition(": ")[2]):
+            t = t.strip().casefold()
+            if len(t) >= _MIN_TITLE:
+                out.add(t)
+    return out
+
+
+async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -> Hidden | None:
+    """What the session's principal may not see (:class:`Hidden`); None for owners,
+    approvers and Oracle's own sessions, who see everything. ``as_member``: what a
+    commenter may not see, whoever reads (what Oracle builds for every member)."""
+    if not as_member and not restricted(principal_of(session)):
+        return None
+    from oracle.decisions.models import Decision
+
+    decisions = Decision.__table__
+    documents = Document.__table__
+    d_rows = (
+        await session.execute(
+            select(decisions.c.id, decisions.c.number, decisions.c.title, decisions.c.entity_id)
+            .where(not_(_decision_visible(decisions.c)))
+            .execution_options(oracle_all_documents=True)
+        )
+    ).all()
+    doc_rows = (
+        await session.execute(
+            select(documents.c.id, documents.c.slug, documents.c.title)
+            .where(documents.c.visibility != COMPANY)
+            .execution_options(oracle_all_documents=True)
+        )
+    ).all()
+    words: set[str] = set()
+    ids: set[str] = set()
+    for _id, _n, title, entity_id in d_rows:
+        words |= _words_of(title)
+        ids |= {str(_id), *([str(entity_id)] if entity_id else [])}
+    for _id, slug, title in doc_rows:
+        words |= _words_of(title, slug if "-" in (slug or "") else None)
+        ids.add(str(_id))
+    return Hidden(
+        decision_ids=frozenset(r[0] for r in d_rows),
+        document_ids=frozenset(r[0] for r in doc_rows),
+        ids=frozenset(ids),
+        numbers=frozenset(r[1] for r in d_rows),
+        words=frozenset(words),
+    )
 
 
 @event.listens_for(TenantSession, "do_orm_execute")
@@ -268,6 +381,12 @@ def _attached_visible(cls: Any) -> ColumnElement[bool]:
         or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
         or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
     )
+
+
+def member_attached_visible(cls: Any) -> ColumnElement[bool]:
+    """A revision, evidence row, proposal or conflict a commenter may see, whoever reads
+    (a count Oracle builds for every member)."""
+    return _attached_visible(cls)
 
 
 def _change_visible(cls: Any) -> ColumnElement[bool]:

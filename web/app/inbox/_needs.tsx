@@ -31,6 +31,8 @@ import {
   CANCEL_AGAIN_CONFIRM,
   briefsCheck,
   CHECKPOINT_LABEL,
+  datesCheck,
+  datesToDecide,
   FINAL_STATUSES,
   orderHref,
   RETRY_CONFIRM,
@@ -866,8 +868,18 @@ export function strategyNeeds(strategy: InboxOut["strategy"]): Need[] {
   ];
 }
 
-/** A checkpoint row's name; the Engineering check says its document, features and blocking questions (F4). */
+/**
+ * A checkpoint row's name; the Engineering check says its document, features and blocking
+ * questions, the Engineering dates its document, Now items and the dates left to decide (F4).
+ */
 function checkpointSummary(c: InboxOut["checkpoints"][number]): string {
+  const dates = datesCheck(c);
+  if (dates) {
+    const n = dates.items.length;
+    return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], c.document_slug ?? dates.prd?.document, `${n} Now item${n === 1 ? "" : "s"}`, `${datesToDecide(c)} to decide`]
+      .filter(Boolean)
+      .join(" · ");
+  }
   const check = briefsCheck(c);
   if (!check) return CHECKPOINT_LABEL[c.kind];
   const n = check.features.length;
@@ -1187,7 +1199,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         // D1: the Roadmap items review screen.
         <LinkButton href={reviewHref(c) ?? review}>Review items</LinkButton>
       ) : reviewHref(c) ? (
-        // F4: the Engineering check has its own review screen.
+        // F4: the Engineering check and the Engineering dates have their own review screens.
         <LinkButton href={reviewHref(c)!}>Review</LinkButton>
       ) : (
         // The same verb as the runs list: the run page opens at the decision; a priority stop

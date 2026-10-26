@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";
@@ -43,6 +43,9 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import {
   briefsCheck,
   CANCEL_AGAIN_CONFIRM,
+  datesCheck,
+  datesToDecide,
+  screenedStop,
   CHECKPOINT_LABEL,
   FINAL_STATUSES,
   orderHref,
@@ -457,16 +460,24 @@ export function RunDetail({ id }: { id: string }) {
           </div>
           <ol data-testid="segment-timeline">
             {run.segments.map((s) => (
-              <SegmentItem
-                key={s.id}
-                run={run}
-                segment={s}
-                checkpoints={run.checkpoints.filter((c) => c.segment_seq === s.seq)}
-                busy={busy}
-                onDecide={decide}
-                onRetryImport={retryImport}
-                onDraftChanged={() => void reload()}
-              />
+              <Fragment key={s.id}>
+                {run.waiting_for && s.name === "eng_dates" && s.status === "pending" && (
+                  // F4 lane B: the Engineering dates read the draft's Now items, derived after the PRD review.
+                  <li className="flex items-center gap-2 border-t border-line px-4 py-2 pl-[56px] text-text2 max-[600px]:pl-[44px]" data-testid="waiting-for">
+                    <Icon name="clock" size={16} />
+                    Waiting for v{run.waiting_for.version}&apos;s roadmap items
+                  </li>
+                )}
+                <SegmentItem
+                  run={run}
+                  segment={s}
+                  checkpoints={run.checkpoints.filter((c) => c.segment_seq === s.seq)}
+                  busy={busy}
+                  onDecide={decide}
+                  onRetryImport={retryImport}
+                  onDraftChanged={() => void reload()}
+                />
+              </Fragment>
             ))}
           </ol>
         </Panel>
@@ -744,8 +755,8 @@ function SegmentItem({
     // onDraftChanged is a new function on every render: the revision decides.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revisionKey]);
-  // F4: a stop with its own review screen (the Engineering check) is opened from a line here.
-  const screened = checkpoints.find((c) => c.status === "pending" && briefsCheck(c)) ?? null;
+  // F4: a stop with its own review screen (the Engineering check, the Engineering dates) is opened from a line here.
+  const screened = checkpoints.find((c) => c.status === "pending" && screenedStop(c)) ?? null;
   // The Waiting chip counts every stop waiting for me, the screened one included.
   const mine = checkpoints.filter((c) => c.status === "pending" && c.can_decide);
   const deciding = mine.filter((c) => c !== screened);
@@ -1070,15 +1081,19 @@ function ItemsReviewLine({ run, cp, needYou, blocking, anchor }: { run: RunOut; 
   );
 }
 
-/** F4: the Engineering check waiting, its counts, and Review (its own screen). */
+/** F4: the Engineering check (or the Engineering dates) waiting, its counts, and Review (its own screen). */
 function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
-  const check = briefsCheck(cp)!;
+  const check = briefsCheck(cp);
+  const dates = datesCheck(cp);
   const blocking = (cp.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
+  const toDecide = datesToDecide(cp);
   return (
     <div id="decide" tabIndex={-1} className="flex flex-wrap items-center gap-2" data-testid="review-screen-line">
       <span className="font-semibold">
-        {plural(check.features.length, "feature")}
-        {blocking > 0 && ` · ${blocking} blocking`}
+        {check && plural(check.features.length, "feature")}
+        {check && blocking > 0 && ` · ${blocking} blocking`}
+        {dates && plural(dates.items.length, "Now item")}
+        {dates && ` · ${toDecide} to decide`}
       </span>
       <span className="text-text2">{cp.can_decide ? "Waiting for you" : "Waits for the engineering lead"}</span>
       <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant={cp.can_decide ? "primary" : "secondary"}>

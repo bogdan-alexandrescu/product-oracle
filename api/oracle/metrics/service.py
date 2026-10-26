@@ -416,12 +416,16 @@ def ordered(rows: list[Metric]) -> list[Metric]:
     return out
 
 
-async def variance_outs(db: AsyncSession, rows: list[MetricVariance]) -> list[VarianceOut]:
+async def variance_outs(
+    db: AsyncSession, rows: list[MetricVariance], *, as_member: bool = False
+) -> list[VarianceOut]:
+    """``as_member``: Oracle's drafts as a commenter may see them (a pre-read's)."""
     metrics = {
         m.id: m
         for m in await db.scalars(select(Metric).where(Metric.id.in_({r.metric_id for r in rows})))
     }
     who = await names(db, {r.explained_by for r in rows})
+    withheld = await _withheld_drafts(db, rows, as_member=as_member)
     out = []
     for r in rows:
         m = metrics[r.metric_id]
@@ -436,11 +440,53 @@ async def variance_outs(db: AsyncSession, rows: list[MetricVariance]) -> list[Va
             direction=r.direction, status=r.status, explanation=r.explanation,
             explained_by_name=who.get(r.explained_by) if r.status == "explained" else None,
             find_out_by=r.find_out_by, noise_reason=r.noise_reason,
-            oracle_draft=r.oracle_draft, oracle_confidence=r.oracle_confidence,
+            oracle_draft=None if r.id in withheld else r.oracle_draft,
+            oracle_confidence=None if r.id in withheld else r.oracle_confidence,
             possible_causes=[PossibleCause(**c) for c in r.possible_causes or []],
             lock_version=r.lock_version,
         ))  # fmt: skip
     return out
+
+
+async def _withheld_drafts(
+    db: AsyncSession, rows: list[MetricVariance], *, as_member: bool = False
+) -> set[uuid.UUID]:
+    """The variances whose Oracle draft the reader may not see: it cites (a decision, a
+    roadmap item of a document) or names something hidden from them (oracle.docs.
+    visibility), as a draft written before #541 part 4 may (its run read as its
+    creator)."""
+    from oracle.docs import visibility
+    from oracle.roadmap.models import RoadmapItem
+
+    drafted = [r for r in rows if r.oracle_draft]
+    hidden = await visibility.hidden_for_reader(db, as_member=as_member) if drafted else None
+    if hidden is None:
+        return set()
+
+    def ids(r: MetricVariance, kind: str) -> list[uuid.UUID]:
+        out = []
+        for ref in r.oracle_refs or []:
+            try:
+                if ref.get("kind") == kind:
+                    out.append(uuid.UUID(str(ref.get("id"))))
+            except (ValueError, AttributeError):
+                continue
+        return out
+
+    items = {i for r in drafted for i in ids(r, "roadmap_item")}
+    item_docs = dict(
+        (await db.execute(
+            select(RoadmapItem.id, RoadmapItem.roadmap_document_id)
+            .where(RoadmapItem.id.in_(items))
+            .execution_options(oracle_all_documents=True)
+        )).all()
+    ) if items else {}  # fmt: skip
+    return {
+        r.id
+        for r in drafted
+        if hidden.names(r.oracle_draft)
+        or hidden.cites(ids(r, "decision"), [item_docs.get(i) for i in ids(r, "roadmap_item")])
+    }
 
 
 async def list_variances(
