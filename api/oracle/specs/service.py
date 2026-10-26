@@ -48,8 +48,10 @@ from oracle.specs.schemas import (
     AnnotationOut,
     DesignArtifactOut,
     DesignOutputOut,
+    DesignReviewEventOut,
     DesignReviewIn,
     DesignReviewOut,
+    EngineeringApprover,
     RegenerateIn,
     RegenerationOut,
     RequirementOut,
@@ -71,7 +73,7 @@ from oracle.v2.models import (
     ArtifactVersion,
     DocumentSectionLink,
 )
-from oracle.v2.schemas import ArtifactRequestOut, ArtifactReviewEventOut, ArtifactVersionOut
+from oracle.v2.schemas import ArtifactRequestOut, ArtifactVersionOut
 
 FLOW = "prd_to_spec"
 # Run statuses after which a spec may be regenerated again.
@@ -1121,6 +1123,30 @@ def _content_url(av_id: uuid.UUID, name: str) -> str:
     return f"/v1/design-artifacts/{av_id}/outputs/{name}"
 
 
+async def _people(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Members by display name and API tokens by name, by id."""
+    from oracle.runs.actions import _people as people
+
+    return {k: v.name for k, v in (await people(db, ids)).items()}
+
+
+async def _actor_names(db: AsyncSession, actors: list[str]) -> dict[str, str]:
+    """Review event actors ("user:<id>", "token:<id>", "system") by name."""
+    ids: dict[str, uuid.UUID] = {}
+    for actor in set(actors):
+        kind, _, ref = actor.partition(":")
+        if kind in ("user", "token") and is_uuid(ref):
+            ids[actor] = uuid.UUID(ref)
+    names = await _people(db, list(ids.values()))
+    return {"system": "Oracle", **{a: names[i] for a, i in ids.items() if i in names}}
+
+
+def _event_out(event: ArtifactReviewEvent, names: dict[str, str]) -> DesignReviewEventOut:
+    return DesignReviewEventOut.model_validate(event).model_copy(
+        update={"actor_name": names.get(event.actor)}
+    )
+
+
 async def _design_view(
     db: AsyncSession, request: ArtifactRequest, av: ArtifactVersion, lineage_view=None
 ) -> DesignArtifactOut:
@@ -1138,10 +1164,11 @@ async def _design_view(
             .order_by(ArtifactReviewEvent.created_at, ArtifactReviewEvent.id)
         )
     )
-    by_annotation: dict[tuple[str, str], list[ArtifactReviewEventOut]] = {}
-    general: list[ArtifactReviewEventOut] = []
+    names = await _actor_names(db, [e.actor for e in events])
+    by_annotation: dict[tuple[str, str], list[DesignReviewEventOut]] = {}
+    general: list[DesignReviewEventOut] = []
     for e in events:
-        out = ArtifactReviewEventOut.model_validate(e)
+        out = _event_out(e, names)
         key = ((e.data or {}).get("output"), (e.data or {}).get("annotation_id"))
         if key[0] and key[1]:
             by_annotation.setdefault(key, []).append(out)  # type: ignore[arg-type]
@@ -1267,11 +1294,18 @@ async def read_spec(db: AsyncSession, request_id: uuid.UUID) -> SpecOut:
     ]
     run = await db.get(Run, request.run_id) if request.run_id else None
     cmap = await capability_map(db)
+    approver_ids = [uuid.UUID(str(i)) for i in params.get("engineering_approver_ids") or []]
+    approver_names = await _people(db, approver_ids)
     return SpecOut(
         **summary.model_dump(),
         requirements=requirements,
         section_keys=list(request.section_keys),
         engineering_approver_ids=params.get("engineering_approver_ids") or [],
+        engineering_approvers=[
+            EngineeringApprover(id=i, name=approver_names[i])
+            for i in approver_ids
+            if i in approver_names
+        ],
         code_capability_map="used" if cmap is not None else "unavailable",
         versions=versions,
         sections=sections,
@@ -1413,7 +1447,7 @@ async def review_design(
     await db.refresh(event)
     await db.refresh(av)
     return DesignReviewOut(
-        event=ArtifactReviewEventOut.model_validate(event),
+        event=_event_out(event, await _actor_names(db, [event.actor])),
         version=ArtifactVersionOut.model_validate(av),
     )
 

@@ -32,6 +32,7 @@ import { DateMarker, type ExpandCtx, type Highlight } from "@/components/Markdow
 import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
+import { SpecDesignLinks } from "@/components/DesignReview";
 import { SpecStaleness } from "@/components/SpecStaleness";
 import { buildCodeIndex } from "@/lib/code-index";
 import { useCodeEntities } from "@/lib/codes";
@@ -1133,6 +1134,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         {document_?.kind === "spec" && version && !version.approved_at && (
           <SpecStaleness doc={doc} n={n} mayApprove={canApprove} onChanged={() => void verQ.reload()} />
         )}
+        {/* v2 screen 4: the spec's user flow and wireframes, and their review. */}
+        {document_?.kind === "spec" && <SpecDesignLinks doc={doc} />}
 
         {onDocument && hasBrief && (
           <p

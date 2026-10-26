@@ -25,6 +25,8 @@ const I = {
   specVersion: "c3000000-0000-4000-8000-000000000011",
   flowVersion: "c3000000-0000-4000-8000-000000000012",
   wireVersion: "c3000000-0000-4000-8000-000000000013",
+  /** The wireframes' v1: approved, until an approval of v2 supersedes it. */
+  wireVersionOld: "c3000000-0000-4000-8000-000000000014",
   docVersion: "c3000000-0000-4000-8000-000000000021",
   document: "c3000000-0000-4000-8000-000000000022",
   run: "c3000000-0000-4000-8000-000000000031",
@@ -77,13 +79,23 @@ export function staleSpecRefusal(db: SpecsDb | undefined, slug: string, n: numbe
 
 export interface SpecsDb {
   specs: Spec[];
+  /** Flow and wireframe versions older than the spec's latest (spec.design holds the latest). */
+  history?: Design[];
   /** Stored outputs by "<version id>/<name>". */
   files: Record<string, { media_type: string; content: string }>;
+}
+
+/** A member as the seed names them (api/oracle/members/names.py). */
+export interface SpecPerson {
+  id: string;
+  name: string;
 }
 
 export interface SpecsContext {
   db: SpecsDb;
   userId: string;
+  /** The member's display name, as the API's actor_name. */
+  name: (userId: string) => string | null;
   role: Role;
   uuid: () => string;
   now: () => string;
@@ -115,11 +127,13 @@ const wireframe = (n: number) =>
   `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Cart ${n}</title>` +
   `<style>html{filter:grayscale(100%)!important}body{font-family:system-ui,sans-serif;padding:16px}</style></head>` +
   `<body><main data-oracle-wireframe="1"><h1 id="heading-${n}">Cart ${n}</h1><div data-annotation="cost">Shipping: $4.99 (mocked)</div>` +
-  `<button type="button">Continue</button></main></body></html>\n`;
+  `<button type="button">Continue</button></main>` +
+  // Oracle's sanitiser writes each annotation's label into the footer (api/oracle/specs/sanitize.py).
+  `<aside class="oracle-annotations"><ol><li><strong>1. cost-early [s-5-2]</strong> The quote shows before the address step.</li></ol></aside></body></html>\n`;
 
-function version(id: string, requestId: string, freshness: Schemas["ArtifactVersionOut"]["freshness"]): Schemas["ArtifactVersionOut"] {
+function version(id: string, requestId: string, freshness: Schemas["ArtifactVersionOut"]["freshness"], number = 1): Schemas["ArtifactVersionOut"] {
   return {
-    id, request_id: requestId, number: 1, status: "in_review", freshness, source_version_id: null, composition_revision: null,
+    id, request_id: requestId, number, status: "in_review", freshness, source_version_id: null, composition_revision: null,
     content_hash: null, summary: null, created_by: null, approved_by: null, approved_at: null, created_at: AT,
     provenance: { origin: "run", run_id: I.run, prompt_version: "prd_to_spec/1", runner_profile: "claude-code", prd_version: 1, requirement_ids: [I.requirement] },
   };
@@ -136,18 +150,20 @@ function request(id: string, kind: Schemas["ArtifactRequestOut"]["kind"], title:
 const note = (target: string): Schemas["AnnotationOut"] => ({
   id: "cost-early", target, note: "The quote shows before the address step.", section_key: "s-5-2", requirement_ids: [I.requirement], reviews: [],
 });
+const guestNote: Schemas["AnnotationOut"] = {
+  id: "guest-path", target: "cart", note: "Guests skip the saved-address branch.", section_key: null, requirement_ids: [], reviews: [],
+};
 
-function design(kind: "user_flow" | "wireframe"): Design {
+function design(kind: "user_flow" | "wireframe", versionId = kind === "user_flow" ? I.flowVersion : I.wireVersion, number = 1): Design {
   const flow = kind === "user_flow";
-  const versionId = flow ? I.flowVersion : I.wireVersion;
   const outputs: Schemas["DesignOutputOut"][] = flow
-    ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote")], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
-    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
+    ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote"), guestNote], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
+    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<img> with a remote src"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
   return {
     request_id: flow ? I.flowRequest : I.wireRequest,
     kind,
     title: flow ? "Early shipping cost: user flows" : "Early shipping cost: wireframes",
-    version: version(versionId, flow ? I.flowRequest : I.wireRequest, flow ? "potentially_stale" : "fresh"),
+    version: version(versionId, flow ? I.flowRequest : I.wireRequest, flow ? "potentially_stale" : "fresh", number),
     outputs,
     reviews: [],
     lineage: null,
@@ -191,7 +207,11 @@ export function specStates(key: string, body: string, approved: boolean, depth: 
   return [{ label: approved ? APPROVED : PROPOSED, decided: approved, added: false, half: null, starts_at: null }];
 }
 
-export function seedSpecs(): SpecsDb {
+/**
+ * The seeded spec. `approver` approved the wireframes' v1 (v2 waits for review); `named` are
+ * the spec's engineering approvers (none by default: any approver decides).
+ */
+export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; named?: SpecPerson[] } = {}): SpecsDb {
   const parts: [string, string, string, Schemas["SpecSectionOut"]["part"]][] = [
     ["spec", "Early shipping cost: technical brief", "brief", "context"],
     ["summary", "Summary", "brief", "context"],
@@ -206,7 +226,7 @@ export function seedSpecs(): SpecsDb {
   const spec: Spec = {
     request: request(I.request, "tech_brief", "Early shipping cost: technical brief", {
       document_slug: "checkout-redesign-early-shipping-cost-spec", depth: "brief", design: true, screens: 2,
-      engineering_approver_ids: [], document_id: I.document, design_request_ids: { user_flow: I.flowRequest, wireframe: I.wireRequest },
+      engineering_approver_ids: named.map((x) => x.id), document_id: I.document, design_request_ids: { user_flow: I.flowRequest, wireframe: I.wireRequest },
     }),
     document_slug: "checkout-redesign-early-shipping-cost-spec",
     document_id: I.document,
@@ -217,7 +237,8 @@ export function seedSpecs(): SpecsDb {
     freshness: "potentially_stale",
     requirements: [{ id: I.requirement, key: "req-shipping-cost", title: "Show shipping cost on the cart", status: "confirmed", section_keys: ["s-5-2"], missing: false }],
     section_keys: ["s-5-2"],
-    engineering_approver_ids: [],
+    engineering_approver_ids: named.map((x) => x.id),
+    engineering_approvers: named.map(({ id, name }) => ({ id, name })),
     code_capability_map: "unavailable",
     versions: [{ artifact_version: version(I.specVersion, I.request, "potentially_stale"), document_version: 1, document_version_id: I.docVersion, approach_status: "proposed", approved_by: null, approved_at: null, origin: "run" }],
     // E1: only what Oracle locks is decided; the acceptance criteria read as two halves.
@@ -230,7 +251,7 @@ export function seedSpecs(): SpecsDb {
         { ...state, part: "proposed", decided: false, half: "proposed", label: "Proposed · not a product requirement until the PRD adopts it" },
       ];
     }),
-    design: [design("user_flow"), design("wireframe")],
+    design: [design("user_flow"), design("wireframe", I.wireVersion, 2)],
     stale: [
       { kind: "artifact_version", category: "engineering_spec", artifact_kind: "tech_brief", document_kind: null, artifact_version_id: I.specVersion, request_id: I.request, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: technical brief", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [prdSectionDependency(I.specDependency)], reasons: ["section s-5-2 changed in checkout-redesign"] },
       { kind: "artifact_version", category: "wireframe", artifact_kind: "user_flow", document_kind: null, artifact_version_id: I.flowVersion, request_id: I.flowRequest, document_version_id: null, document_id: null, document_slug: null, number: 1, title: "Early shipping cost: user flows", status: "in_review", approved: false, freshness: "potentially_stale", dependencies: [], reasons: ["section s-5-2 changed in checkout-redesign"] },
@@ -242,9 +263,17 @@ export function seedSpecs(): SpecsDb {
     feature_id: null,
     tech_brief_version_id: null,
   };
+  const v1 = design("wireframe", I.wireVersionOld, 1);
+  v1.version = { ...v1.version, status: "approved", approved_by: approver?.id ?? null, approved_at: AT };
+  v1.reviews = approver
+    ? [{ id: "c3000000-0000-4000-8000-000000000061", version_id: v1.version.id, kind: "approved", body: null, actor: `user:${approver.id}`, actor_name: approver.name, data: {}, created_at: AT }]
+    : [];
   return {
     specs: [spec],
+    history: [v1],
     files: {
+      [`${I.wireVersionOld}/cart-1.html`]: { media_type: "text/html", content: wireframe(1) },
+      [`${I.wireVersionOld}/cart-2.html`]: { media_type: "text/html", content: wireframe(2) },
       [`${I.flowVersion}/checkout-flow.svg`]: { media_type: "image/svg+xml", content: FLOW_SVG },
       [`${I.wireVersion}/cart-1.html`]: { media_type: "text/html", content: wireframe(1) },
       [`${I.wireVersion}/cart-2.html`]: { media_type: "text/html", content: wireframe(2) },
@@ -279,7 +308,7 @@ const slugify = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 
 function findDesign(db: SpecsDb, versionId: string): Design | null {
   for (const s of db.specs) for (const d of s.design ?? []) if (d.version.id === versionId) return d;
-  return null;
+  return db.history?.find((d) => d.version.id === versionId) ?? null;
 }
 
 /** The specs routes; null when the path is not one of them. */
@@ -395,18 +424,45 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       const denied = need("commenter");
       if (denied) return denied;
       const data = await body<Schemas["DesignReviewIn"]>();
-      if (data.kind !== "comment" && !atLeast(ctx.role, "approver")) return fail(403, "only the spec's engineering approvers (or an owner) decide on it");
-      if (data.kind === "comment" && !data.body?.trim()) return fail(422, "a comment needs a body");
-      const event: Schemas["ArtifactReviewEventOut"] = {
+      // In the API's order (api/oracle/specs/service.py review_design).
+      let target: Schemas["AnnotationOut"] | undefined;
+      if (data.annotation_id != null || data.output != null) {
+        if (data.annotation_id == null || data.output == null) return fail(422, "name both the output and the annotation_id");
+        target = d.outputs.find((o) => o.name === data.output)?.annotations?.find((a) => a.id === data.annotation_id);
+        if (!target) return fail(422, `no annotation '${data.annotation_id}' on '${data.output}'`);
+      }
+      if (data.kind !== "comment") {
+        if (target) return fail(422, "a verdict is on the version: approve, reject or request changes on it");
+        const spec = ctx.db.specs.find((s) => s.design?.some((x) => x.request_id === d.request_id));
+        const named = spec?.engineering_approver_ids ?? [];
+        const may = ctx.role === "owner" || (atLeast(ctx.role, "approver") && (named.length === 0 || named.includes(ctx.userId)));
+        if (!may) return fail(403, "only the spec's engineering approvers (or an owner) decide on it");
+        if (d.version.status === "superseded" || d.version.status === "rejected") return fail(409, `version ${d.version.number} is ${d.version.status}`);
+        if (data.kind === "approved" && d.version.freshness === "potentially_stale") {
+          return json(409, { detail: `this version ${STALE} it`, refs: { artifact_version: d.version.id } });
+        }
+        if ((data.kind === "changes_requested" || data.kind === "rejected") && !data.body?.trim()) {
+          return fail(422, "say why: a note is required to request changes or reject");
+        }
+      } else if (!data.body?.trim()) return fail(422, "a comment needs a body");
+      const event: Schemas["DesignReviewEventOut"] = {
         id: ctx.uuid(), version_id: d.version.id, kind: data.kind, body: data.body ?? null, actor: `user:${ctx.userId}`,
-        data: data.annotation_id ? { output: data.output, annotation_id: data.annotation_id } : {}, created_at: ctx.now(),
+        actor_name: ctx.name(ctx.userId),
+        data: target ? { output: data.output, annotation_id: data.annotation_id } : {}, created_at: ctx.now(),
       };
-      const target = data.annotation_id && d.outputs.find((o) => o.name === data.output)?.annotations?.find((a) => a.id === data.annotation_id);
-      if (data.annotation_id && !target) return fail(422, `no annotation '${data.annotation_id}' on '${data.output}'`);
       if (target) target.reviews = [...(target.reviews ?? []), event];
       else d.reviews = [...(d.reviews ?? []), event];
-      if (data.kind === "approved") d.version = { ...d.version, status: "approved", approved_by: ctx.userId, approved_at: ctx.now() };
+      if (data.kind === "approved") {
+        d.version = { ...d.version, status: "approved", approved_by: ctx.userId, approved_at: ctx.now() };
+        // As lineage.supersede_approved: the artifact's earlier approved and open versions are superseded.
+        const others = [...(ctx.db.history ?? []), ...ctx.db.specs.flatMap((s) => s.design ?? [])];
+        for (const o of others) {
+          const earlier = o.request_id === d.request_id && o.version.number < d.version.number;
+          if (earlier && ["approved", "draft", "in_review"].includes(o.version.status)) o.version = { ...o.version, status: "superseded" };
+        }
+      }
       if (data.kind === "rejected") d.version = { ...d.version, status: "rejected" };
+      if (data.kind === "changes_requested" && d.version.status === "draft") d.version = { ...d.version, status: "in_review" };
       return json(201, { event, version: d.version });
     }
   }
