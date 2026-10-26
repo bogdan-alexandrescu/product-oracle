@@ -61,6 +61,40 @@ test("Ask on the slip card asks a teammate about the item; their Inbox row names
   await expect(inspector(page)).toContainText(SLIP);
 });
 
+// protects = #598 review, decided 2026-10-25 "Pre-fill the only lead": with exactly one
+// engineering lead, Ask on the slip card opens with that lead as the person to ask, and the
+// question reaches them; with two leads the person is left for the asker to pick; fails_when =
+// the form opens empty with one lead, or names a lead while there are two; no_claim = who sees
+// the suggestion (pytest: only the server decides it, never from the people directory).
+test("Ask on the slip card pre-fills the engineering lead when there is exactly one", async ({ page }) => {
+  const leadBox = (email: string) => page.getByRole("checkbox", { name: `Engineering lead: ${email}` });
+  await scenario(page, TRACK_ALERTS_SCENARIO);
+  await login(page);
+  await page.goto("/settings/members");
+  await leadBox("approver@example.com").check();
+  await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
+
+  await openItem(page, SLIP);
+  const slip = cards(page).filter({ hasText: "ENG-405 moved to Dec 9" });
+  await slip.getByRole("button", { name: "Ask", exact: true }).click();
+  const ask = inspector(page).getByTestId("ask-teammate");
+  await expect(ask).toContainText("approver@example.com");
+  await expect(ask.getByLabel("Find a person")).toHaveCount(0);
+  await ask.getByLabel("Question").fill("Does ENG-405's new date hold?");
+  await ask.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(ask).toContainText("Asked Approver");
+
+  // A second lead: nobody is pre-filled.
+  await page.goto("/settings/members");
+  await leadBox("commenter@example.com").check();
+  await expect(page.getByTestId("engineering-lead-count")).toHaveText("2");
+  await openItem(page, SLIP);
+  await cards(page).filter({ hasText: "ENG-405 moved to Dec 9" }).getByRole("button", { name: "Ask", exact: true }).click();
+  const again = inspector(page).getByTestId("ask-teammate");
+  await expect(again.getByLabel("Find a person")).toBeVisible();
+  await expect(again).not.toContainText("approver@example.com");
+});
+
 // protects = Discuss on the slip card starts a discussion on the item, titled after it, and a
 // commenter (who cannot accept or keep) still gets Ask and Discuss; fails_when = no Discuss, the
 // discussion is about something else, or a commenter sees Accept new date; no_claim = Oracle's

@@ -17,6 +17,7 @@ from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.auth.models import User
 from oracle.docs.models import Document
 from oracle.mcp import scopes
+from oracle.members.names import display_name
 from oracle.roadmap import alerts, views
 from oracle.roadmap.models import (
     ProductTrack,
@@ -209,6 +210,60 @@ async def test_ask_and_discuss_reach_commenters_on_the_kinds_they_fit(client, ow
     await importing(client, auth, record(track["id"], BETA))
     (gone,) = [a for a in await alerts_of(client, auth, "resolved") if a["id"] == slip["id"]]
     assert gone["actions"] == []
+
+
+async def test_ask_suggests_the_engineering_lead_when_there_is_exactly_one(
+    client, owner, runtime,  # noqa: F811
+):
+    """protects=F2 §3's Ask "a question to the engineering lead" (decided 2026-10-25, "Pre-fill
+    the only lead"): with exactly one active lead, an alert the caller may Ask on names that
+    lead as ``suggested_assignee``; with none or several, or for the lead themselves, none;
+    fails_when=the flag of several leads, or of a disabled one, reaches a picker that cannot
+    read it; no_claim=the Ask form's pre-fill (the Plan spec)."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-777", "title": "Refactor cart", "state": "todo",
+         "track_id": track["id"]},
+    )  # fmt: skip
+    commenter = await as_user(tenant_id, "commenter")
+    by = {a["kind"]: a for a in await alerts_of(client, commenter)}
+    assert by["date_slip"]["suggested_assignee"] is None
+
+    lead_auth = await as_user(tenant_id, "approver")
+    async with tenant_session(tenant_id) as s:
+        lead = await s.scalar(select(User).where(User.role == "approver"))
+        lead.engineering_lead = True
+        lead_id, lead_email = lead.id, lead.email
+        await s.commit()
+    by = {a["kind"]: a for a in await alerts_of(client, commenter)}
+    assert by["date_slip"]["suggested_assignee"] == {
+        "user_id": str(lead_id), "name": display_name(lead_email), "email": lead_email,
+        "role": "approver", "can_write": True,
+    }  # fmt: skip
+    # Only where the caller may Ask: not on a kind Ask does not fit, nor for a viewer.
+    assert by["unplanned"]["suggested_assignee"] is None
+    viewer = await as_user(tenant_id, "viewer")
+    assert all(a["suggested_assignee"] is None for a in await alerts_of(client, viewer))
+    # The lead is not offered to themselves.
+    mine = {a["kind"]: a for a in await alerts_of(client, lead_auth)}
+    assert "ask" in mine["date_slip"]["actions"] and mine["date_slip"]["suggested_assignee"] is None
+
+    # A second lead: none is suggested, so the flag stays unread.
+    async with tenant_session(tenant_id) as s:
+        await s.execute(update(User).where(User.role == "commenter").values(engineering_lead=True))
+        await s.commit()
+    by = {a["kind"]: a for a in await alerts_of(client, auth)}
+    assert by["date_slip"]["suggested_assignee"] is None
+    # A disabled lead does not count: the one active lead is suggested again.
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(User).where(User.role == "commenter").values(disabled_at=datetime.now(UTC))
+        )
+        await s.commit()
+    by = {a["kind"]: a for a in await alerts_of(client, auth)}
+    assert by["date_slip"]["suggested_assignee"]["user_id"] == str(lead_id)
 
 
 async def test_the_item_history_lists_its_tracker_events(client, owner, runtime):  # noqa: F811
