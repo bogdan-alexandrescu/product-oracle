@@ -55,13 +55,13 @@ from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import service
 from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleSession
 from oracle.simple.schemas import (
-    ChangeIn,
-    ChangeOut,
-    ChangeResult,
     InboxSimpleChange,
-    ItemFlags,
-    SessionOut,
+    SimpleChangeIn,
+    SimpleChangeOut,
+    SimpleChangeResult,
     SimpleFlag,
+    SimpleItemFlags,
+    SimpleSessionOut,
 )
 
 IDLE = timedelta(minutes=30)
@@ -114,8 +114,8 @@ def _idle(s: SimpleSession, now: datetime) -> bool:
     return (s.last_change_at or s.started_at) <= now - IDLE
 
 
-def session_out(s: SimpleSession) -> SessionOut:
-    return SessionOut(id=s.id, kind=s.kind, started_by=s.started_by, started_at=s.started_at,  # type: ignore[arg-type]
+def session_out(s: SimpleSession) -> SimpleSessionOut:
+    return SimpleSessionOut(id=s.id, kind=s.kind, started_by=s.started_by, started_at=s.started_at,  # type: ignore[arg-type]
                       last_change_at=s.last_change_at, closed_at=s.closed_at)  # fmt: skip
 
 
@@ -313,7 +313,7 @@ def _touched(c: SimpleChange) -> set[str]:
 
 
 async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
-    """(PersonRef dict, when) of the last change through Simple that wrote these items."""
+    """(SimplePersonRef dict, when) of the last change through Simple that wrote these items."""
     rows = await db.scalars(
         select(SimpleChange)
         .where(SimpleChange.status.in_(WRITTEN))
@@ -399,7 +399,7 @@ def _fix_plan(
 
 
 async def _plan(
-    db: AsyncSession, principal: Any, body: ChangeIn, read_: service.Read
+    db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """(entry, target, before as stored now, after) for a new change; 409 on a stale
     ``before``; 422 on a malformed one."""
@@ -559,7 +559,7 @@ async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
         await db.refresh(r)
 
 
-async def _flags(db: AsyncSession, c: SimpleChange) -> list[ItemFlags]:
+async def _flags(db: AsyncSession, c: SimpleChange) -> list[SimpleItemFlags]:
     read_ = await service.load(db)
     by_id = read_.by_id()
     ids: list[uuid.UUID] = []
@@ -571,7 +571,7 @@ async def _flags(db: AsyncSession, c: SimpleChange) -> list[ItemFlags]:
             if i not in ids:
                 ids.append(i)
     return [
-        ItemFlags(
+        SimpleItemFlags(
             item_id=i,
             flags=[
                 SimpleFlag(
@@ -592,10 +592,8 @@ async def _flags(db: AsyncSession, c: SimpleChange) -> list[ItemFlags]:
 # --------------------------------------------------------------------------- the routes
 
 
-async def create(db: AsyncSession, principal: Any, body: ChangeIn) -> ChangeResult:
+async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
     me, now = _me(principal), company_time.now()
-    if not has_role(principal.role, "commenter"):
-        raise ChangeError(403, "Viewers read Simple; commenters and up propose changes")
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
         ids.append(_uuid(body.target["subject"], "subject"))
@@ -635,7 +633,7 @@ async def create(db: AsyncSession, principal: Any, body: ChangeIn) -> ChangeResu
                        data={"op": c.op, "target": target, "before": before, "after": after,
                              "document_id": str(entry.roadmap.id)})  # fmt: skip
     await db.commit()
-    return ChangeResult(change=await one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
 
 
 async def _get(db: AsyncSession, change_id: uuid.UUID) -> SimpleChange:
@@ -647,7 +645,7 @@ async def _get(db: AsyncSession, change_id: uuid.UUID) -> SimpleChange:
 
 async def decide(
     db: AsyncSession, principal: Any, change_id: uuid.UUID, action: str, reason: str | None
-) -> ChangeResult:
+) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
@@ -675,10 +673,10 @@ async def decide(
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
-    return ChangeResult(change=await one_out(db, principal, c), flags=flags)
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
 
 
-async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> ChangeResult:
+async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
     if c.status != "applied":
@@ -707,7 +705,7 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Change
     await audit.record(db, principal, "simple_change.undone", "simple_change", u.id,
                        data={"op": c.op, "target": c.target, "undoes_id": str(c.id)})  # fmt: skip
     await db.commit()
-    return ChangeResult(change=await one_out(db, principal, u), flags=flags)
+    return SimpleChangeResult(change=await one_out(db, principal, u), flags=flags)
 
 
 # --------------------------------------------------------------------------- reading
@@ -775,8 +773,8 @@ class _View:
         )
 
 
-def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> ChangeOut:
-    return ChangeOut(
+def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChangeOut:
+    return SimpleChangeOut(
         id=c.id, session_id=c.session_id, document_id=c.document_id, op=c.op,  # type: ignore[arg-type]
         target=c.target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
         by=c.by, by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
@@ -805,7 +803,7 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     return _View(principal, read_, await _reviewers(db), sessions, undone)
 
 
-async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> ChangeOut:
+async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:
     v = await _view(db, principal, [c])
     return _out(c, v, await _names(db, {c.by}))
 
@@ -817,7 +815,7 @@ async def listing(
     document_id: uuid.UUID | None,
     status: str | None,
     mine: bool,
-) -> list[ChangeOut]:
+) -> list[SimpleChangeOut]:
     q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.id).limit(500)
     if session_id is not None:
         q = q.where(SimpleChange.session_id == session_id)

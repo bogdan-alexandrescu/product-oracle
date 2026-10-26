@@ -35,15 +35,21 @@ interface SeedItem {
   status?: Item["status"];
   draft?: boolean;
   milestone?: { name: string; day: number };
-  risks?: { flag: Flag["kind"]; note: string }[];
+  risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
+  /** Simple S3a's change engine (./simple-changes.ts) edits these. */
+  outcome?: string | null;
+  position?: number;
 }
 
 interface SimpleDb {
   items: SeedItem[];
   ids: Record<string, string>;
-  /** The items' own dates once a suggestion was accepted or edited (ISO days). */
-  own: Record<string, { start: string; end: string }>;
+  /** The items' own dates once a suggestion was accepted or edited, or moved in Simple (ISO days). */
+  own: Record<string, { start: string; end: string; source?: "typed" | "accepted" }>;
   suggestions: Suggestion[];
+  /** Simple S3a (./simple-changes.ts): sessions and changes. */
+  sessions?: Schemas["SimpleSessionOut"][];
+  changes?: Schemas["SimpleChangeOut"][];
 }
 
 const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string }> = {
@@ -103,7 +109,10 @@ export function seedSimpleRoadmap(): SimpleDb {
 
 function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
   const own = db.own[s.key];
-  if (own) return { start: { date: own.start, source: "accepted", estimated: false }, end: { date: own.end, source: "accepted", estimated: false } };
+  if (own) {
+    const source = own.source ?? "accepted";
+    return { start: { date: own.start, source, estimated: false }, end: { date: own.end, source, estimated: false } };
+  }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
   if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
@@ -132,7 +141,7 @@ const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
-    const risk = s.risks?.find((x) => x.flag === kind);
+    const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
     out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null });
   };
   for (const key of s.depends ?? []) {
@@ -215,7 +224,7 @@ function regenerate(db: SimpleDb, today: string): number {
   return open;
 }
 
-function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams): Schemas["SimpleRoadmapOut"] | null {
+export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams): Schemas["SimpleRoadmapOut"] | null {
   const today = iso(mockNowMs());
   const w = simpleWindows(today);
   const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
@@ -227,7 +236,7 @@ function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams): Schemas["Simp
     const rm = ROADMAPS[s.roadmap];
     const suggestion = db.suggestions.find((x) => x.item_id === db.ids[s.key] && x.status === "open");
     return {
-      id: db.ids[s.key], key: s.key, title: s.title, outcome: null, horizon: s.horizon,
+      id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] } : null,

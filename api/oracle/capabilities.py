@@ -135,14 +135,19 @@ DECIDED_PER_ITEM = frozenset(
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
+# Simple (#723): a date suggestion and a proposal are decided by an owner, the roadmap's
+# decider or (with none) its owner; a change is undone by its author alone; the changes'
+# list shows owners all, others those they made, decide or review.
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
     "accept_blocker_risk": "owner",
+    "accept_date_suggestion": "owner",
     "accept_intake_proposal": "approver",
     "accept_scope_enhancement": "approver",
+    "accept_simple_change": "owner",
     "accept_track_alert_date": "owner",
     "add_discussion_participants": "commenter",
     "add_scope_requirement": "approver",
@@ -172,13 +177,16 @@ PER_ITEM: dict[str, Role | None] = {
     "decide_knowledge_gap": "owner",
     # H9: only the pricing owner, one owner (oracle.pricing.decide).
     "decide_pricing_memo": None,
+    "decline_simple_change": "owner",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_scope_item": "approver",
+    "dismiss_date_suggestion": "owner",
     "dismiss_discussion_change": "approver",
     "dismiss_overrun_run": "owner",
     # H10: a request's replies are its filer's, an approver's or an owner's.
     "draft_request_replies": "approver",
+    "edit_date_suggestion": "owner",
     "edit_document_section": "approver",
     "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
@@ -195,6 +203,7 @@ PER_ITEM: dict[str, Role | None] = {
     # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
     # in_audience): the track's owner, else every owner, and the leads for slips.
     "keep_track_alert": None,
+    "list_simple_changes": "owner",
     "mark_metric_variance_unknown": "approver",
     "mark_request_reply_sent": "approver",
     "mirror_discussion_to_slack": "approver",
@@ -239,6 +248,7 @@ PER_ITEM: dict[str, Role | None] = {
     "take_team_turn": None,
     "tick": "owner",
     "undo_oracle_action": "owner",
+    "undo_simple_change": None,
     "update_blocker": "owner",
     "update_decision": None,
     "update_discussion": None,

@@ -150,6 +150,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
+import { routeSimpleChanges, simpleInboxRows } from "./simple-changes";
 import { routeSimpleRoadmap, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -4667,6 +4668,19 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap ??= seedSimpleRoadmap();
   const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role }, req, p, q);
   if (simpleRes) return simpleRes;
+  const simpleChanges = await routeSimpleChanges(
+    db.simple_roadmap,
+    {
+      id: me.id,
+      role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+    },
+    req,
+    p,
+    q,
+  );
+  if (simpleChanges) return simpleChanges;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
@@ -4742,6 +4756,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
+    // Simple S3a: proposals waiting for me count; decisions on mine are shown.
+    const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore);
+    Object.assign(inbox, simpleRows);
+    inbox.total += simpleRows.simple_proposals.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;

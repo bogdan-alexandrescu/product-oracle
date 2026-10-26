@@ -11643,6 +11643,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Simple Session
+         * @description Start a session: the caller's open editing session is reused (one per person); a
+         *     meeting session is always new. A session closes after 30 minutes without a change.
+         */
+        post: operations["create_simple_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/sessions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Current Simple Session
+         * @description The caller's open editing session, or null.
+         */
+        get: operations["get_current_simple_session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/sessions/{session_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Simple Session
+         * @description Close a session the caller started: its changes no longer undo.
+         */
+        post: operations["close_simple_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Changes
+         * @description Changes newest first: those the caller made, decides or reviews, or whose session
+         *     they started (owners: all); everyone else sees none (the published version only).
+         */
+        get: operations["list_simple_changes"];
+        put?: never;
+        /**
+         * Create Simple Change
+         * @description Make a change to a roadmap item: applied for an owner and the roadmap's decider
+         *     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
+         *     ``before`` no longer matches the stored values (nothing is written). Returns the
+         *     constraint flags of the touched items (a proposal's as if applied).
+         */
+        post: operations["create_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes/{change_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Simple Change
+         * @description Undo one of the caller's applied changes, in its open session, while the target
+         *     still holds its ``after``: writes an ``undone`` row (history is kept).
+         */
+        post: operations["undo_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes/{change_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Simple Change
+         * @description Accept a proposal: it applies, unless the item changed since (409 "outdated").
+         */
+        post: operations["accept_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes/{change_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Simple Change
+         * @description Decline a proposal, with an optional reason: nothing changes.
+         */
+        post: operations["decline_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/stack": {
         parameters: {
             query?: never;
@@ -23171,6 +23321,16 @@ export interface components {
              * @default []
              */
             intake_reads: components["schemas"]["InboxIntakeRead"][];
+            /**
+             * Simple Proposals
+             * @default []
+             */
+            simple_proposals: components["schemas"]["InboxSimpleChange"][];
+            /**
+             * Simple Decisions
+             * @default []
+             */
+            simple_decisions: components["schemas"]["InboxSimpleChange"][];
         };
         /**
          * InboxOutcome
@@ -23402,6 +23562,59 @@ export interface components {
             total: number;
             /** Reviewed */
             reviewed: number;
+        };
+        /**
+         * InboxSimpleChange
+         * @description A proposal waiting for me (``simple_proposals``) or a decision on my proposal
+         *     (``simple_decisions``).
+         */
+        InboxSimpleChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "proposed" | "accepted" | "declined" | "undone";
+            /** Item Id */
+            item_id: string | null;
+            /** Item Title */
+            item_title: string | null;
+            /** Document Id */
+            document_id: string | null;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Decided By */
+            decided_by: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Decision Reason */
+            decision_reason: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open" | "done";
         };
         /** InboxSource */
         InboxSource: {
@@ -34113,6 +34326,125 @@ export interface components {
              */
             runs_tokens_revoked: number;
         };
+        /**
+         * SimpleChangeConflict
+         * @description The 409 detail: what the target holds now and who changed it last (null: not
+         *     through Simple). Nothing was written.
+         */
+        SimpleChangeConflict: {
+            /** Message */
+            message: string;
+            /** Current */
+            current: {
+                [key: string]: unknown;
+            };
+            changed_by: components["schemas"]["SimplePersonRef"] | null;
+            /** Changed At */
+            changed_at: string | null;
+        };
+        /** SimpleChangeIn */
+        SimpleChangeIn: {
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency";
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** After */
+            after?: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason?: string | null;
+        };
+        /** SimpleChangeOut */
+        SimpleChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Session Id */
+            session_id: string | null;
+            /** Document Id */
+            document_id: string | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency";
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** After */
+            after: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "proposed" | "accepted" | "declined" | "undone";
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Decided By */
+            decided_by: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Decision Reason */
+            decision_reason: string | null;
+            /** Routed To */
+            routed_to: string[];
+            /** Undoes Id */
+            undoes_id: string | null;
+            /**
+             * Undone
+             * @default false
+             */
+            undone: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Can Undo
+             * @default false
+             */
+            can_undo: boolean;
+        };
+        /** SimpleChangeResult */
+        SimpleChangeResult: {
+            change: components["schemas"]["SimpleChangeOut"];
+            /** Flags */
+            flags: components["schemas"]["SimpleItemFlags"][];
+        };
         /** SimpleDate */
         SimpleDate: {
             /**
@@ -34127,6 +34459,11 @@ export interface components {
             source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
             /** Estimated */
             estimated: boolean;
+        };
+        /** SimpleDecisionIn */
+        SimpleDecisionIn: {
+            /** Reason */
+            reason?: string | null;
         };
         /** SimpleDocRef */
         SimpleDocRef: {
@@ -34182,6 +34519,16 @@ export interface components {
             /** Item Ids */
             item_ids: string[];
         };
+        /** SimpleItemFlags */
+        SimpleItemFlags: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Flags */
+            flags: components["schemas"]["SimpleFlag"][];
+        };
         /** SimpleItemMilestone */
         SimpleItemMilestone: {
             /** Name */
@@ -34222,6 +34569,16 @@ export interface components {
             status: "planned" | "done" | "dropped";
             /** Item Ids */
             item_ids: string[];
+        };
+        /** SimplePersonRef */
+        SimplePersonRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** SimplePhase */
         SimplePhase: {
@@ -34316,6 +34673,42 @@ export interface components {
             items: components["schemas"]["SimpleRoadmapItem"][];
             /** Milestones */
             milestones: components["schemas"]["SimpleMilestone"][];
+        };
+        /** SimpleSessionIn */
+        SimpleSessionIn: {
+            /**
+             * Kind
+             * @default editing
+             * @enum {string}
+             */
+            kind: "editing" | "meeting";
+        };
+        /** SimpleSessionOut */
+        SimpleSessionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "editing" | "meeting";
+            /**
+             * Started By
+             * Format: uuid
+             */
+            started_by: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Last Change At */
+            last_change_at: string | null;
+            /** Closed At */
+            closed_at: string | null;
         };
         /** SimpleTrackRef */
         SimpleTrackRef: {
@@ -62204,6 +62597,291 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_simple_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_simple_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleSessionOut"] | null;
+                };
+            };
+        };
+    };
+    close_simple_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_changes: {
+        parameters: {
+            query?: {
+                session?: string | null;
+                document?: string | null;
+                status?: ("applied" | "proposed" | "accepted" | "declined" | "undone") | null;
+                mine?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleDecisionIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleDecisionIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
                 };
             };
             /** @description Validation Error */

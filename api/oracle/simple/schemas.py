@@ -188,11 +188,11 @@ ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
 
 
-class SessionIn(BaseModel):
+class SimpleSessionIn(BaseModel):
     kind: SessionKind = "editing"
 
 
-class SessionOut(BaseModel):
+class SimpleSessionOut(BaseModel):
     id: uuid.UUID
     kind: SessionKind
     started_by: uuid.UUID
@@ -201,7 +201,7 @@ class SessionOut(BaseModel):
     closed_at: dt.datetime | None
 
 
-class ChangeIn(BaseModel):
+class SimpleChangeIn(BaseModel):
     # The caller's open session; without one, an applied change goes to the caller's
     # open editing session (opened when none), a proposal to none.
     session_id: uuid.UUID | None = None
@@ -217,16 +217,16 @@ class ChangeIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
-class DecisionIn(BaseModel):
+class SimpleDecisionIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
-class PersonRef(BaseModel):
+class SimplePersonRef(BaseModel):
     id: uuid.UUID
     name: str
 
 
-class ChangeOut(BaseModel):
+class SimpleChangeOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID | None
     document_id: uuid.UUID | None
@@ -251,25 +251,25 @@ class ChangeOut(BaseModel):
     can_undo: bool = False
 
 
-class ItemFlags(BaseModel):
+class SimpleItemFlags(BaseModel):
     item_id: uuid.UUID
     flags: list[SimpleFlag]
 
 
-class ChangeResult(BaseModel):
-    change: ChangeOut
+class SimpleChangeResult(BaseModel):
+    change: SimpleChangeOut
     # S2's constraint checker on the touched items and their dependents, after the
     # change (for a proposal: as if it were applied).
-    flags: list[ItemFlags]
+    flags: list[SimpleItemFlags]
 
 
-class ChangeConflict(BaseModel):
+class SimpleChangeConflict(BaseModel):
     """The 409 detail: what the target holds now and who changed it last (null: not
     through Simple). Nothing was written."""
 
     message: str
     current: dict[str, Any]
-    changed_by: PersonRef | None
+    changed_by: SimplePersonRef | None
     changed_at: dt.datetime | None
 
 
