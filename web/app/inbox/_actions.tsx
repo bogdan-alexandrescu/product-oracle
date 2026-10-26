@@ -12,7 +12,10 @@ import type { InboxOut } from "../runs/_lib";
 
 type FeedbackRow = InboxOut["items"][number];
 
-/** What an action did, said once above the rows; `undo` where the routes allow it (Decline). */
+/**
+ * What an action did, said once above the rows; `undo` where the routes allow it: Decline,
+ * and Accept, Close or Merge (not Send answer: the reply is posted on the thread).
+ */
 export type Acted = { id: string; message: string; undo?: () => Promise<unknown> };
 export type OnActed = (a: Acted) => void;
 
@@ -91,7 +94,14 @@ export function InboxActions({
     run(
       () => unwrap(api.POST("/v1/suggestions/{suggestion_id}/accept", { ...suggestionPath(sid!), body: reason ? { reason } : {} })),
       primary === "Accept" ? "Staged" : "Done",
-      { message: doneMessage(f, primary!) },
+      {
+        message: doneMessage(f, primary!),
+        // Back to open, as before Accept; the API says why when it cannot (a build uses it).
+        undo:
+          primary === "Send answer"
+            ? undefined
+            : () => unwrap(api.POST("/v1/suggestions/{suggestion_id}/undo-accept", suggestionPath(sid!))),
+      },
     );
 
   function onPrimary() {

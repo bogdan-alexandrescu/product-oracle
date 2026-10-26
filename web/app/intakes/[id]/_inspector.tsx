@@ -8,6 +8,7 @@ import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe, type Role } from "@/lib/me";
+import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CATEGORY_LABEL, DECIDED_GAP, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
@@ -247,6 +248,20 @@ export function IntakeInspector({
           <p className="text-sm text-text">
             {s.answers_since_run === 1 ? "1 answer" : `${s.answers_since_run ?? 0} answers`} since drafting started
           </p>
+          {/* C5: each became a feedback item on the PRD; the next draft takes them. */}
+          {(s.late_answers_as_feedback ?? 0) > 0 && (
+            <p className="text-sm text-text" data-testid="late-answers-feedback">
+              {s.late_answers_as_feedback === 1 ? "1" : s.late_answers_as_feedback} became feedback for the next draft
+              {s.draft_document && s.draft_version != null && (
+                <>
+                  {" · "}
+                  <Link href={sectionHref(s.draft_document, s.draft_version, null, { feedback: "open" })} className="font-semibold text-accent-ink underline">
+                    Open the PRD&apos;s feedback
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
           {s.draft_run_id && (
             <Link href={`/runs/${s.draft_run_id}`} className="text-sm font-semibold text-accent-ink underline">
               Open the draft run

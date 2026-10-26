@@ -330,6 +330,10 @@ async def answer(
          "gap_id": str(gap.id) if gap else None},
     )  # fmt: skip
     if intake is not None:
+        # C5: an answer after drafting started becomes feedback on the draft.
+        from oracle.intake import late_answers
+
+        await late_answers.on_answer(db, intake, question, row)
         await engine.sync_questions(db, intake)
         engine.refresh_status(
             intake, await engine.intake_gaps(db, intake.id), ("awaiting_answers", "ready")

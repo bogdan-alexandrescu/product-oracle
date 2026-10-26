@@ -4361,6 +4361,14 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
                 result.version = await docs_service.read_version(s, row, require_dates=False)
         if run.flow == "feedback_loop" and any(knobs.get(k) for k in SENT_KNOBS):
             await _settle_sent_items(s, run, result.version.number, result.resolutions)
+        if (run.knobs or {}).get("intake_id"):
+            # C5: the intake's answers given while this draft was written become feedback.
+            from oracle.intake import late_answers
+
+            # Committed also when it raised nothing: it links the intake to its PRD, which
+            # an answer given later needs to become feedback (#587 review).
+            await late_answers.sync(s, run, result.version.document_id)
+            await s.commit()
         document = await s.get(Document, result.version.document_id)
         out: dict[str, Any] = {
             "document_id": str(result.version.document_id),

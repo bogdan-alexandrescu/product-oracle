@@ -90,6 +90,16 @@ export interface IntakeContext {
   questionsLevel?: () => "observe" | "draft" | "recommend" | "act";
   /** Kept learnings about question categories: they tune the drafted questions' order. */
   learned?: () => Nudges;
+  /** C5 late answers: raises a whole-draft feedback item on the document's latest version
+   * (by its id or slug); null when it has none yet. */
+  raiseFeedback?: (
+    document: string,
+    item: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string },
+  ) => { slug: string; version: number } | null;
+  /** Withdraws the late answers' feedback items of these answers, as late_answers.on_sharing
+   * does when their finding goes back to private or counts: deletes the ones nobody acted on,
+   * keeps the others with their quote withheld; returns the answer ids of the kept ones. */
+  withdrawFeedback?: (answerIds: string[]) => string[];
 }
 
 /** H11 questions at Observe: why no batch is proposed or asked (as oracle.intake.autoask). */
@@ -339,12 +349,80 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
 }
 
 /** The intake's draft run, and the answers given after it (C5). */
-function drafting(db: V2Db, intake: Intake): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run"> {
+function drafting(
+  db: V2Db,
+  intake: Intake,
+): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run" | "late_answers_as_feedback" | "draft_document" | "draft_version"> {
   const run = db.intake_runs?.[intake.id];
-  if (!run) return { draft_run_id: null, answers_since_run: 0 };
+  if (!run) return { draft_run_id: null, answers_since_run: 0, late_answers_as_feedback: 0, draft_document: null, draft_version: null };
   const mine = new Set(db.questions.filter((q) => q.intake_id === intake.id).map((q) => q.id));
   const since = db.answers.filter((a) => mine.has(a.question_id) && !run.answer_ids.includes(a.id)).length;
-  return { draft_run_id: run.run_id, answers_since_run: intake.status === "converted" ? since : 0 };
+  const raised = Object.values(db.late_answer_feedback ?? {}).filter((r) => r.intake_id === intake.id && !r.withheld);
+  const last = raised.at(-1);
+  return {
+    draft_run_id: run.run_id,
+    answers_since_run: intake.status === "converted" ? since : 0,
+    late_answers_as_feedback: raised.length,
+    draft_document: last?.slug ?? run.document ?? null,
+    draft_version: last?.version ?? null,
+  };
+}
+
+/** The prefix of a late answer's feedback item, as late_answers.LEAD. */
+export const LATE_ANSWER_LEAD = "Answered after drafting started";
+/** A kept item's summary while its finding is not shared in full, as late_answers.WITHHELD. */
+export const LATE_ANSWER_WITHHELD = `${LATE_ANSWER_LEAD} (withheld while its finding is not shared in full)`;
+
+/**
+ * C5 late answers, as late_answers.on_answer: an answer with a body given after the intake's
+ * draft run started becomes one whole-draft feedback item on its PRD, linked to its question.
+ */
+function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answer: Schemas["StakeholderAnswerOut"]) {
+  const intake = question.intake_id ? db.intakes.find((i) => i.id === question.intake_id) : undefined;
+  const run = intake ? db.intake_runs?.[intake.id] : undefined;
+  if (!intake || !run || intake.status !== "converted" || run.answer_ids.includes(answer.id)) return;
+  if (answer.kind !== "answer" || !answer.body || !ctx.raiseFeedback) return;
+  const gap = db.gaps.find((g) => g.id === question.gap_id);
+  const before = db.late_answer_feedback?.[answer.id];
+  if ((gap && !quotable(db, gap)) || (before && !before.withheld)) return;
+  const document = intake.document_id ?? run.document;
+  if (!document) return;
+  const at = ctx.raiseFeedback(document, {
+    summary: `${LATE_ANSWER_LEAD}: ${question.prompt} ${answer.body}`.slice(0, 4000),
+    author_id: answer.answered_by ?? null,
+    intake_question_id: question.id,
+    intake_answer_id: answer.id,
+  });
+  // A kept item reads in full again (raiseFeedback restores its summary).
+  if (at) db.late_answer_feedback = { ...db.late_answer_feedback, [answer.id]: { intake_id: intake.id, ...(before ?? at), withheld: false } };
+}
+
+/**
+ * Whether others read the gap's answers in full (S6, as answers.proposal_mode "full"): not a
+ * private gap, and not a finding of the author's that is private or shared at counts only.
+ */
+function quotable(db: V2Db, gap: Gap): boolean {
+  if (privateGap(db, gap)) return false;
+  const finding = Object.values(db.intake_findings ?? {}).flat().find((f) => f.gap_id === gap.id);
+  return !finding || finding.sharing === "summary" || finding.sharing === "full";
+}
+
+/** A finding's level changed: its late answers' feedback items follow it (late_answers.on_sharing). */
+function lateAnswersOnSharing(db: V2Db, ctx: IntakeContext, gapId: string) {
+  const gap = db.gaps.find((g) => g.id === gapId);
+  if (!gap) return;
+  const questions = db.questions.filter((q) => q.gap_id === gap.id);
+  const answers = db.answers.filter((a) => questions.some((q) => q.id === a.question_id));
+  if (!quotable(db, gap)) {
+    const ids = answers.map((a) => a.id).filter((id) => db.late_answer_feedback?.[id]);
+    const kept = ctx.withdrawFeedback?.(ids) ?? [];
+    for (const id of ids) {
+      if (kept.includes(id)) db.late_answer_feedback![id] = { ...db.late_answer_feedback![id], withheld: true };
+      else delete db.late_answer_feedback![id];
+    }
+    return;
+  }
+  for (const a of answers) raiseLateAnswer(db, ctx, questions.find((q) => q.id === a.question_id)!, a);
 }
 
 /** The draft gate (C5): the critical blockers neither answered nor decided. */
@@ -618,7 +696,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!changes) return null;
       const missing = changes.find((c) => !all.some((f) => f.id === c.finding_id));
       if (missing) return fail(404, `Finding ${missing.finding_id} not found`);
-      for (const c of changes) all.find((f) => f.id === c.finding_id)!.sharing = c.sharing;
+      for (const c of changes) {
+        const finding = all.find((f) => f.id === c.finding_id)!;
+        const before = finding.sharing;
+        finding.sharing = c.sharing;
+        if (finding.gap_id && before !== c.sharing) lateAnswersOnSharing(db, ctx, finding.gap_id);
+      }
       const set = new Set(changes.map((c) => c.finding_id));
       const out = findingsFor(db, intake, ctx.userId).filter((f) => set.has(f.id));
       return json(200, m === "PATCH" ? out[0] : out);
@@ -696,7 +779,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (resp.ok) {
         // The brief stays open until its run starts (startedIntakeRun converts it, C4).
         const run = (await resp.clone().json()) as { id: string };
-        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [] } };
+        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [], document: document ?? undefined } };
       }
       return resp;
     }
@@ -891,6 +974,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       knowledge_state: input.kind === "answer" ? input.knowledge_state ?? "user_decision" : "unknown", created_at: now(),
     };
     db.answers.push(answer);
+    raiseLateAnswer(db, ctx, question, answer);
     const effects: Record<Schemas["AnswerIn"]["kind"], [Question["status"], Gap["status"] | null]> = {
       answer: ["answered", "answered"], dont_know: ["answered", "unknown"], defer: ["deferred", "deferred"],
       delegate: ["delegated", null], research: ["researching", "under_investigation"],
