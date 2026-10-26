@@ -684,7 +684,7 @@ function CriterionInspector({
         firstSection ? (
           <Link
             href={`/documents/${doc}/v/${n}#${firstSection}`}
-            className="inline-flex h-8 items-center rounded-lg border border-hero-text2 px-3 text-sm text-hero-text hover:bg-hero-2"
+            className="inline-flex h-8 flex-none items-center rounded-lg border border-hero-text2 px-3 text-sm whitespace-nowrap text-hero-text hover:bg-hero-2"
           >
             Open sections
           </Link>
