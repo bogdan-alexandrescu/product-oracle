@@ -40,7 +40,7 @@ import {
   targetKey,
   targetTitle,
   tone,
-  unsupported,
+  unsupportedKeys,
   weakest,
   type EvidenceCitation,
   type EvidenceInspector,
@@ -219,7 +219,8 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
   const links = sections.reduce((a, s) => a + s.links.length, 0);
   const citations = sections.reduce((a, s) => a + s.citations.length, 0);
   const stale = sections.reduce((a, s) => a + staleCount(s), 0);
-  const gaps = sections.filter(unsupported);
+  const gapKeys = unsupportedKeys(sections);
+  const gaps = sections.filter((s) => gapKeys.has(s.section_key));
   const nothing = links === 0 && citations === 0;
 
   const roleNote = approved ? (
@@ -247,7 +248,8 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
           { value: "sections", label: "Sections" },
         ]}
       />
-      {capsReady && !canAdd && !approved && <ViewOnly />}
+      {/* The header shows View only to someone who can do nothing; a commenter sees it here. */}
+      {capsReady && !canAdd && !approved && can("create_comment") && <ViewOnly />}
       {stale > 0 && (
         <Chip kind="warn">
           {stale} stale link{stale === 1 ? "" : "s"}
@@ -258,9 +260,12 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
           <Chip kind="crit">{gaps.length === 1 ? `${gaps[0].heading} unsupported` : `${gaps.length} sections unsupported`}</Chip>
         </span>
       )}
-      <span className="ml-auto text-[13px] text-text2 max-[1100px]:hidden">
-        Rendered pages never show these links; exports list them under &ldquo;Sources and data points&rdquo;.
-      </span>
+      {/* The coverage view's footnote says it already. */}
+      {(view !== "coverage" || nothing) && (
+        <span className="ml-auto text-[13px] text-text2 max-[1100px]:hidden">
+          Rendered pages never show these links; exports list them under &ldquo;Sources and data points&rdquo;.
+        </span>
+      )}
     </div>
   );
 
@@ -285,7 +290,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
         {/* "Link a section" opens the first section's form, in the section view. */}
         {view === "sections" && selected && (
           <SectionsView
-            {...{ data, sections, selected, select, phone, sheetOpen, setSheetOpen, canAdd, canRemove, nameOf, remove, add, result, doc, n, rows }}
+            {...{ data, sections, gaps: gapKeys, selected, select, phone, sheetOpen, setSheetOpen, canAdd, canRemove, nameOf, remove, add, result, doc, n, rows }}
           />
         )}
       </>
@@ -298,11 +303,11 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
       {roleNote && <div className="mb-3">{roleNote}</div>}
       {view === "coverage" ? (
         <CoverageView
-          {...{ data, sections, rows, selected, select, phone, sheetOpen, setSheetOpen, canAdd, canRemove, nameOf, remove, add, result, links, citations, stale }}
+          {...{ data, sections, gaps: gapKeys, rows, selected, select, phone, sheetOpen, setSheetOpen, canAdd, canRemove, nameOf, remove, add, result, links, citations, stale }}
         />
       ) : (
         <SectionsView
-          {...{ data, sections, selected, select, phone, sheetOpen, setSheetOpen, canAdd, canRemove, nameOf, remove, add, result, doc, n, rows }}
+          {...{ data, sections, gaps: gapKeys, selected, select, phone, sheetOpen, setSheetOpen, canAdd, canRemove, nameOf, remove, add, result, doc, n, rows }}
         />
       )}
     </>
@@ -322,6 +327,8 @@ type NewLink = {
 type Shared = {
   data: EvidenceInspector;
   sections: SectionEvidence[];
+  /** The unsupported sections' keys (unsupportedKeys). */
+  gaps: Set<string>;
   rows: MatrixRow[];
   selected: string | null;
   select: (key: string) => void;
@@ -353,7 +360,7 @@ function Layout({ phone, sheetOpen, setSheetOpen, inspector, sheetTitle, childre
 // --- C · the coverage matrix ------------------------------------------------------------------
 
 function CoverageView(props: Shared & { links: number; citations: number; stale: number }) {
-  const { sections, rows, selected, select, phone, data, links, citations, stale } = props;
+  const { sections, gaps, rows, selected, select, phone, data, links, citations, stale, result } = props;
   const [showLinks, setShowLinks] = useState(true);
   const [showCites, setShowCites] = useState(true);
   const [staleOnly, setStaleOnly] = useState(false);
@@ -369,7 +376,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
       type="button"
       aria-pressed={on}
       onClick={flip}
-      className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm font-medium whitespace-nowrap max-[639px]:h-11 max-[639px]:px-3.5 ${
+      className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm font-medium whitespace-nowrap max-[600px]:h-11 max-[600px]:px-3.5 ${
         on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface text-text hover:bg-surface2"
       }`}
     >
@@ -381,6 +388,12 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
 
   return (
     <Layout phone={phone} sheetOpen={props.sheetOpen} setSheetOpen={props.setSheetOpen} inspector={inspector} sheetTitle={row?.title ?? "Evidence"}>
+      {/* Removing a target's last link drops its row and the inspector with it: say so here. */}
+      {!row && result && (
+        <div className="mb-3">
+          <Notice tone={result.tone}>{result.text}</Notice>
+        </div>
+      )}
       <Panel
         title="Coverage"
         count={undefined}
@@ -453,7 +466,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                     Linked to
                   </th>
                   {sections.map((s) => {
-                    const gap = unsupported(s);
+                    const gap = gaps.has(s.section_key);
                     return (
                       <th
                         key={s.section_key}
@@ -472,12 +485,17 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
               </thead>
               <tbody>
                 {groups.map((g) => (
-                  <MatrixGroupRows key={g} group={g} rows={shown.filter((r) => r.group === g)} sections={sections} selected={selected} select={select} />
+                  <MatrixGroupRows key={g} group={g} rows={shown.filter((r) => r.group === g)} sections={sections} gaps={gaps} selected={selected} select={select} />
                 ))}
                 <tr data-testid="evidence-totals" className="border-t border-line bg-surface2 text-sm font-semibold">
                   <td className="sticky left-0 bg-surface2 px-4 py-2">Per section</td>
                   {sections.map((s) => (
-                    <td key={s.section_key} data-section={s.section_key} className={`tnum px-1 py-2 text-center ${unsupported(s) ? "bg-crit-bg text-crit" : ""}`}>
+                    <td
+                      key={s.section_key}
+                      data-section={s.section_key}
+                      data-gap={gaps.has(s.section_key) ? "true" : undefined}
+                      className={`tnum px-1 py-2 text-center ${gaps.has(s.section_key) ? "bg-crit-bg text-crit" : ""}`}
+                    >
                       {s.links.length} · {s.citations.length}
                     </td>
                   ))}
@@ -487,7 +505,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           </div>
         )}
         <p className="border-t border-line px-4 py-2 text-[13px] text-text2">
-          Per section = links · citations. A red column has neither. Rendered pages never show these links; exports list them under
+          Per section = links · citations. A red column has neither, nor has any section under it. Rendered pages never show these links; exports list them under
           &ldquo;Sources and data points&rdquo; (rejected and superseded items left out). Snapshot{" "}
           <span className="font-mono">{data.snapshot ?? "not recorded"}</span>.
         </p>
@@ -497,7 +515,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
   );
 }
 
-function MatrixGroupRows({ group, rows, sections, selected, select }: { group: MatrixGroup; rows: MatrixRow[]; sections: SectionEvidence[]; selected: string | null; select: (k: string) => void }) {
+function MatrixGroupRows({ group, rows, sections, gaps, selected, select }: { group: MatrixGroup; rows: MatrixRow[]; sections: SectionEvidence[]; gaps: Set<string>; selected: string | null; select: (k: string) => void }) {
   return (
     <>
       <tr className="border-b border-line bg-surface2">
@@ -519,7 +537,7 @@ function MatrixGroupRows({ group, rows, sections, selected, select }: { group: M
           </td>
           {sections.map((s) => {
             const ls = r.links.get(s.section_key);
-            const gap = unsupported(s);
+            const gap = gaps.has(s.section_key);
             return (
               <td
                 key={s.section_key}
@@ -628,7 +646,7 @@ function TargetInspector(props: Shared & { row: MatrixRow }) {
           ))}
         </div>
       </InspectorSection>
-      {canAdd && <LinkElsewhereForm key={`${row.id}|${all.length}`} target={t} sections={sections} linked={new Set(row.links.keys())} add={add} />}
+      {canAdd && <LinkElsewhereForm key={`${row.id}|${all.length}`} target={t} sections={sections} gaps={props.gaps} linked={new Set(row.links.keys())} add={add} />}
     </Inspector>
   );
 }
@@ -718,9 +736,9 @@ function targetBody(t: SectionLinkTarget): Pick<NewLink, "entity_id" | "evidence
 }
 
 /** C's "Link to another section": the selected target, linked to a section it is not on yet. */
-function LinkElsewhereForm({ target, sections, linked, add }: { target: SectionLinkTarget; sections: SectionEvidence[]; linked: Set<string>; add: (l: NewLink) => Promise<boolean> }) {
+function LinkElsewhereForm({ target, sections, gaps, linked, add }: { target: SectionLinkTarget; sections: SectionEvidence[]; gaps: Set<string>; linked: Set<string>; add: (l: NewLink) => Promise<boolean> }) {
   // Unsupported sections first: they are what most needs evidence.
-  const options = sections.filter((s) => !linked.has(s.section_key)).sort((a, b) => Number(unsupported(b)) - Number(unsupported(a)));
+  const options = sections.filter((s) => !linked.has(s.section_key)).sort((a, b) => Number(gaps.has(b.section_key)) - Number(gaps.has(a.section_key)));
   const [section, setSection] = useState(options[0]?.section_key ?? "");
   const [kind, setKind] = useState<LinkKind>("evidences");
   const [precision, setPrecision] = useState<LinkPrecision>("section");
@@ -745,7 +763,7 @@ function LinkElsewhereForm({ target, sections, linked, add }: { target: SectionL
           <select aria-label="Section" className={INPUT} value={section} onChange={(e) => setSection(e.target.value)}>
             {options.map((s) => (
               <option key={s.section_key} value={s.section_key}>
-                {s.heading} ({s.section_key}){unsupported(s) ? " · unsupported" : ""}
+                {s.heading} ({s.section_key}){gaps.has(s.section_key) ? " · unsupported" : ""}
               </option>
             ))}
           </select>
@@ -888,11 +906,11 @@ function CitationBody({ c }: { c: EvidenceCitation }) {
 // --- A · the section table + inspector --------------------------------------------------------
 
 function SectionsView(props: Shared & { doc: string; n: number }) {
-  const { sections, selected, select, phone } = props;
+  const { sections, gaps, selected, select, phone } = props;
   const [filter, setFilter] = useState<SectionFilter>("all");
   const hasBrief = sections.some((s) => s.layer === "brief");
   const match = (s: SectionEvidence, f: SectionFilter) =>
-    f === "all" ? true : f === "brief" ? s.layer === "brief" : f === "detail" ? s.layer !== "brief" : f === "stale" ? staleCount(s) > 0 : unsupported(s);
+    f === "all" ? true : f === "brief" ? s.layer === "brief" : f === "detail" ? s.layer !== "brief" : f === "stale" ? staleCount(s) > 0 : gaps.has(s.section_key);
   const count = (f: SectionFilter) => sections.filter((s) => match(s, f)).length;
   const rows = sections.filter((s) => match(s, filter));
   const sel = selected?.startsWith("section:") ? sections.find((s) => `section:${s.section_key}` === selected) : undefined;
@@ -918,7 +936,7 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
       width: "118px",
       cell: (s) => {
         const w = weakest(s);
-        if (unsupported(s)) return <Chip kind="crit" className="border border-dashed border-crit">unsupported</Chip>;
+        if (gaps.has(s.section_key)) return <Chip kind="crit" className="border border-dashed border-crit">unsupported</Chip>;
         if (!s.links.length) return <span className="text-sm text-text2">citations only</span>;
         return <Chip kind={tone(w)}>{w == null ? "no score" : score(w)}</Chip>;
       },
@@ -971,7 +989,8 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
 }
 
 function SectionInspector(props: Shared & { section: SectionEvidence; doc: string; n: number }) {
-  const { section: s, canAdd, canRemove, nameOf, remove, add, result, rows, doc, n } = props;
+  const { section: s, gaps, canAdd, canRemove, nameOf, remove, add, result, rows, doc, n } = props;
+  const gap = gaps.has(s.section_key);
   const w = weakest(s);
   const st = staleCount(s);
   return (
@@ -993,7 +1012,7 @@ function SectionInspector(props: Shared & { section: SectionEvidence; doc: strin
               {st} stale link{st === 1 ? "" : "s"}
             </Chip>
           )}
-          {unsupported(s) && <Chip kind="crit">Unsupported</Chip>}
+          {gap && <Chip kind="crit">Unsupported</Chip>}
         </>
       }
       stats={[
@@ -1007,7 +1026,7 @@ function SectionInspector(props: Shared & { section: SectionEvidence; doc: strin
           <Notice tone={result.tone}>{result.text}</Notice>
         </div>
       )}
-      {unsupported(s) ? (
+      {gap ? (
         <InspectorSection>
           <p className="text-sm text-text2">Nothing backs this section yet: no section links and no citations in the draft.</p>
         </InspectorSection>
@@ -1107,6 +1126,12 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
   const [claim, setClaim] = useState("");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const reset = () => {
+    setKind("evidences");
+    setPrecision("section");
+    setClaim("");
+    setTo("");
+  };
   const linked = useMemo(() => new Set(section.links.map((l) => targetKey(l.target))), [section]);
   const known = rows.filter((r) => r.target && r.target.type !== "entity" && !linked.has(r.id));
   const entities = (entitiesQ.data ?? []).filter((e) => !linked.has(`entity:${e.id}`) && e.status !== "rejected");
@@ -1156,6 +1181,9 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" variant="primary" disabled={!ready || busy}>
             Add link
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={reset}>
+            Cancel
           </Button>
           <span className="text-[13px] text-text2">Pinned to this section&rsquo;s current text.</span>
         </div>

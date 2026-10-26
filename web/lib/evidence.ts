@@ -146,8 +146,24 @@ export function pivot(sections: SectionEvidence[]): MatrixRow[] {
   return [...rows.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
 }
 
-/** A section with neither links nor citations: nothing backs it. */
-export const unsupported = (s: SectionEvidence) => s.links.length === 0 && s.citations.length === 0;
+/** A section with neither links nor citations of its own. */
+const bare = (s: SectionEvidence) => s.links.length === 0 && s.citations.length === 0;
+
+/**
+ * The unsupported sections' keys: a section counts only when neither it nor any deeper
+ * section under it (the sections after it, until one at its level or above) has links or
+ * citations. The level-1 title is never flagged.
+ */
+export function unsupportedKeys(sections: SectionEvidence[]): Set<string> {
+  const out = new Set<string>();
+  sections.forEach((s, i) => {
+    if (s.level <= 1) return;
+    let end = i + 1;
+    while (end < sections.length && sections[end].level > s.level) end++;
+    if (sections.slice(i, end).every(bare)) out.add(s.section_key);
+  });
+  return out;
+}
 export const staleCount = (s: SectionEvidence) => s.links.filter((l) => !l.current).length;
 
 /** The lowest scored confidence of a section's links, or null when none is scored. */
