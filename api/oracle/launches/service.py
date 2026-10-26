@@ -30,7 +30,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy
+from oracle import audit, autonomy, autonomy_drafts
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -612,7 +612,9 @@ async def import_kit_run(db: AsyncSession, run: Any, text: str | None) -> dict[s
         return {"error": "the run's launch is gone"}
     if launch.kit_run_id != run.id:
         return {"error": "a later kit run replaced this one"}
-    result = await kit.import_kit(db, launch, text)
+    # H11 external_messages: at Observe the kit keeps to internal words.
+    external = await autonomy_drafts.kit_external_allowed(db)
+    result = await kit.import_kit(db, launch, text, external=external)
     await audit.record(db, audit.ORACLE, "launch.kit_imported", "launch", launch.id,
                        {"run_id": str(run.id), **{k: v for k, v in result.items()
                                                   if k != "problems"}})  # fmt: skip

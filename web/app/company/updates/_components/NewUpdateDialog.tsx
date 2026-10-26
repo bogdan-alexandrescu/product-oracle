@@ -6,6 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { Button, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
@@ -16,7 +17,9 @@ import { TEMPLATES, defaultPeriod, defaultTitle, templateOf, todayIso, type Peri
  * check the period (from the day after the last approved update of that template, else the
  * first of this month, through today) and the title, then Draft with Oracle: the draft is
  * started from the template, and Oracle's update_draft run writes it (quick depth for an
- * investor update, standard for a board update).
+ * investor update, standard for a board update). At Observe (H11: Settings › Autonomy's
+ * "Words for people outside") Oracle drafts no update: the dialog says so and only starts
+ * the update from its template, for the owner to write.
  */
 export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClose: () => void }) {
   const router = useRouter();
@@ -32,6 +35,7 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = templateOf(template)!;
+  const observing = useAutonomyLevel("external_messages") === "observe";
 
   function pick(t: UpdateTemplate) {
     setTemplate(t);
@@ -47,6 +51,7 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
     setError(null);
     try {
       const draft = await unwrap(api.POST("/v1/drafts", { body: { kind: "update", title: title.trim(), template, period } }));
+      if (observing) return router.push(`/documents/${draft.slug}`);
       const run = await unwrap(
         api.POST("/v1/runs", {
           body: { flow: "update_draft", document: draft.slug, knobs: { depth: chosen.depth, roles: {}, checkpoints: {} } },
@@ -122,17 +127,24 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
             Title
             <input className={INPUT} value={title} maxLength={200} onChange={(e) => setCustomTitle(e.target.value)} />
           </label>
-          <p className="text-sm text-text2">
-            Oracle drafts the product part at {chosen.depth} depth: metrics first, only dates a verified schedule basis supports, and the asks left for
-            you to write. Owners and approvers see it; you decide what is said and approve it.
-          </p>
+          {observing ? (
+            <AutonomyNote testId="update-observing" onFollow={onClose}>
+              Oracle is set to observe words for people outside, so it drafts no update. Start it from the template and write it yourself, or
+              change this in
+            </AutonomyNote>
+          ) : (
+            <p className="text-sm text-text2">
+              Oracle drafts the product part at {chosen.depth} depth: metrics first, only dates a verified schedule basis supports, and the asks left for
+              you to write. Owners and approvers see it; you decide what is said and approve it.
+            </p>
+          )}
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex justify-end gap-2 border-t border-line pt-3">
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={busy}>
-              {busy ? "Drafting…" : "Draft with Oracle"}
+              {observing ? (busy ? "Starting…" : "Start from the template") : busy ? "Drafting…" : "Draft with Oracle"}
             </Button>
           </div>
         </form>

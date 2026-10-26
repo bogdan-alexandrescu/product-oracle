@@ -34,7 +34,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
-from oracle.launches.checklist import tasks_of
+from oracle.launches.checklist import BY_KEY, tasks_of
 from oracle.launches.models import (
     CHANGELOG_AUDIENCES,
     CHANGELOG_CATEGORIES,
@@ -169,9 +169,13 @@ def _note_for(notes: list[RequesterNote], ref: str) -> RequesterNote | None:
     return None
 
 
-async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict[str, Any]:
+async def import_kit(
+    db: AsyncSession, launch: Launch, text: str | None, *, external: bool = True
+) -> dict[str, Any]:
     """Import a launch.yaml into its launch (the caller commits). Returns what changed,
-    or ``{"error": ...}`` (recorded as ``kit_error``)."""
+    or ``{"error": ...}`` (recorded as ``kit_error``). ``external=False`` (H11
+    ``external_messages`` at Observe): only internal tasks, internal changelog entries and
+    notes to members are taken; words for people outside are left to people."""
     if text is None:
         launch.kit_error = f"the run left no {FILE}"
         return {"error": launch.kit_error}
@@ -184,6 +188,8 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
 
     def draft(key: str, body: str) -> None:
         task = tasks.get(key)
+        if not external and (key not in BY_KEY or BY_KEY[key].audience == "external"):
+            return
         if task is not None and task.status in ("todo", "drafted"):
             task.body = body
             task.status = "drafted"
@@ -213,6 +219,7 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
             created_actor=audit.ORACLE,
         )
         for e in data.get("changelog") or []
+        if external or e["audience"] == "internal"
     ]
     db.add_all(entries)
     if entries:
@@ -224,7 +231,9 @@ async def import_kit(db: AsyncSession, launch: Launch, text: str | None) -> dict
     noted = 0
     for n in data.get("notes") or []:
         note = _note_for(notes, n["requester_ref"])
-        if note is not None and note.status == "drafted":
+        if note is None or note.status != "drafted":
+            continue
+        if external or note.requester_kind == "member":
             note.body = n["body"].strip()
             noted += 1
     if noted:
