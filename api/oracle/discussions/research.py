@@ -403,11 +403,6 @@ async def hidden_runs(db: AsyncSession, principal: Principal) -> set[uuid.UUID]:
     return await unreadable_runs(db, principal, rows)
 
 
-async def may_see_run(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> bool:
-    row = (await db.execute(select(Run.id, Run.flow, Run.knobs).where(Run.id == run_id))).first()
-    return row is None or not await unreadable_runs(db, principal, [row])
-
-
 async def run_reader(request: Request, principal: CurrentPrincipal, db: TenantDB) -> None:
     """A route dependency: the ``run_id`` in its path is absent (404) to someone who may
     not see the run (:func:`unreadable_runs`); a route without one passes."""
@@ -416,7 +411,10 @@ async def run_reader(request: Request, principal: CurrentPrincipal, db: TenantDB
         run_id = uuid.UUID(str(raw))
     except ValueError:
         return
-    if raw is not None and not await may_see_run(db, principal, run_id):
+    # The whole run, held for the request: the session keeps only what is referenced, and
+    # the route's own read of it (runs.service._get_run) is then this one, not a second.
+    request.state.gated_run = run = await db.get(Run, run_id)
+    if run is not None and await unreadable_runs(db, principal, [run]):
         raise HTTPException(404, f"run {run_id} not found")
 
 
