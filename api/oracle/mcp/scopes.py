@@ -81,6 +81,9 @@ READ_AREAS = {
         "positioning",
     },
     "read:documents": {"documents", "feedback", "exports"},
+    # #710: the live tools read a person's own sources at the moment they ask; only an
+    # Ask reply's live token (oracle.live.tokens) holds this scope, and it holds nothing else.
+    "live:sources": {"live"},
 }
 # GET /v1/<area>/{id}/<leaf> that can return source titles, links or excerpts: they
 # need read:sources (an intake's summary and question batch carry evidence refs).

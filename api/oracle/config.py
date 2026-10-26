@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     # INT2: where Oracle's read of a new intake runs: a SwarmCloud intake_analysis run, or
     # (the rollback, without a deploy) the built-in intake_analysis pool job as before.
     intake_read_runtime: Literal["swarmcloud", "job"] = "swarmcloud"
+    # #710: live reads of a person's own sources (/v1/live/*). "off" (ORACLE_LIVE_READS,
+    # the rollback without a deploy) answers 503 there.
+    live_reads: Literal["on", "off"] = "on"
 
     @model_validator(mode="after")
     def _no_reserved_domains_in_production(self) -> "Settings":

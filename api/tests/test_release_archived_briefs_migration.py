@@ -45,7 +45,7 @@ def _migration():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0073_share_links"]
+    assert script.get_heads() == ["0075_live_tokens"]
 
 
 async def test_releases_requests_behind_briefs_archived_before(client, ctx):

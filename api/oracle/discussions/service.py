@@ -51,6 +51,7 @@ from oracle.discussions.schemas import (
     PrivateFindings,
     ReplyUsage,
 )
+from oracle.live import tokens as live_tokens
 from oracle.members.names import display_name
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 
@@ -94,6 +95,24 @@ class DiscussionError(Exception):
         super().__init__(detail)
         self.status = status
         self.detail = detail
+
+
+class LiveReadsInChat(DiscussionError):
+    """#710: the chat holds what Oracle read from its asker's sources (a live read, or a
+    reply that may read right now): nobody joins it; Share as discussion shares an edited
+    summary instead. The same pattern as rule 3.4.3's ``author_only``."""
+
+    def __init__(self) -> None:
+        super().__init__(409, live_tokens.IN_CHAT)
+        self.detail = {"code": live_tokens.IN_CHAT_CODE, "message": live_tokens.IN_CHAT}  # type: ignore[assignment]
+
+
+async def refuse_if_live(db: AsyncSession, d: Discussion) -> None:
+    """Before anyone joins ``d`` or it opens to more people. The caller holds the
+    discussion row ``FOR UPDATE`` (``readable(lock=True)``), which every live read takes
+    ``FOR SHARE`` (amendment C3), so no read happens after the join."""
+    if await live_tokens.holds_live_reads(db, d.id):
+        raise LiveReadsInChat()
 
 
 class SubjectError(DiscussionError):
@@ -940,6 +959,7 @@ async def _bring_in(
     new = [u for u in dict.fromkeys(user_ids) if u not in _active(parts)]
     if not new:
         return []
+    await refuse_if_live(db, d)
     if d.origin == "panel":
         raise DiscussionError(422, PANEL_CHAT)
     if seat.author_only:
@@ -975,6 +995,8 @@ async def _post(
         parent = await db.get(DiscussionMessage, body.reply_to)
         if parent is None or parent.discussion_id != d.id:
             raise DiscussionError(422, "The message replied to is not in this discussion")
+    if d.visibility == "open" and me not in _active(parts):
+        await refuse_if_live(db, d)
     if d.visibility == "open" and _add(db, d, parts, me, "posted", me):
         await _record(db, principal, "participant_add", d, user_id=str(me), via="posted")
     message = DiscussionMessage(
@@ -1247,6 +1269,7 @@ async def _make_open(
     what it exposes; everyone in it stays in it."""
     if not seat.starter:
         raise DiscussionError(403, STARTER_OPENS)
+    await refuse_if_live(db, d)
     if seat.author_only:
         raise DiscussionError(422, SHARE_FIRST)
     if d.origin == "panel":
@@ -1315,6 +1338,8 @@ async def add_participants(
     if d.status == "closed":
         raise DiscussionError(409, CLOSED)
     if user_ids == [me] and access.can_follow(seat):
+        if me not in _active(parts):
+            await refuse_if_live(db, d)
         if _add(db, d, parts, me, "followed", me):
             await _record(db, principal, "participant_add", d, user_id=str(me), via="followed")
     else:

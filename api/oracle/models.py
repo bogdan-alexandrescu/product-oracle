@@ -75,6 +75,8 @@ from oracle.launches.models import (  # noqa: E402
     LaunchTask,
     RequesterNote,
 )
+from oracle.live.models import LiveRead  # noqa: E402
+from oracle.live.tokens import LiveToken  # noqa: E402
 from oracle.market.models import (  # noqa: E402
     Competitor,
     CompetitorChange,
@@ -222,6 +224,8 @@ __all__ = [
     "CompositionRevision",
     "Conflict",
     "Connection",
+    "LiveRead",
+    "LiveToken",
     "Document",
     "DocumentComposition",
     "DocumentPublication",

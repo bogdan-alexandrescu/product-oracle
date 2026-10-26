@@ -14125,6 +14125,578 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/live/sources": {
+      "get": {
+        "tags": [
+          "live"
+        ],
+        "summary": "Live Sources",
+        "description": "Your active connections that Oracle can read live (v1: Fireflies), with their\ntools.",
+        "operationId": "live_sources",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LiveSourceOut"
+                  },
+                  "type": "array",
+                  "title": "Response Live Sources"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/live/fireflies/{connection_id}/meetings": {
+      "get": {
+        "tags": [
+          "live"
+        ],
+        "summary": "Live Fireflies List Meetings",
+        "description": "Your Fireflies meetings, newest first, read live. The count is ``total`` with\nlimit=1 (null when the source does not offer it).",
+        "operationId": "live_fireflies_list_meetings",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "One of your Fireflies connections",
+              "title": "Connection Id"
+            },
+            "description": "One of your Fireflies connections"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD, whole days in the Company time zone",
+              "title": "Date From"
+            },
+            "description": "YYYY-MM-DD, whole days in the Company time zone"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD, inclusive",
+              "title": "Date To"
+            },
+            "description": "YYYY-MM-DD, inclusive"
+          },
+          {
+            "name": "series",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Series"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveMeetingList"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Fireflies connections, or no such meeting"
+          },
+          "422": {
+            "description": "A filter this source does not offer, or arguments that conflict"
+          },
+          "424": {
+            "description": "The source refused your key: reconnect it in Settings > Connections"
+          },
+          "429": {
+            "description": "The source is limiting requests, or this connection's live budget is spent; see Retry-After"
+          },
+          "502": {
+            "description": "The source did not answer, or answered in a way Oracle could not read"
+          },
+          "503": {
+            "description": "Live reads are turned off"
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/live/fireflies/{connection_id}/search": {
+      "get": {
+        "tags": [
+          "live"
+        ],
+        "summary": "Live Fireflies Search",
+        "description": "Search your Fireflies meetings live (people: names or emails, the archive only).",
+        "operationId": "live_fireflies_search",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "One of your Fireflies connections",
+              "title": "Connection Id"
+            },
+            "description": "One of your Fireflies connections"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "people",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "default": [],
+              "title": "People"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD, whole days in the Company time zone",
+              "title": "Date From"
+            },
+            "description": "YYYY-MM-DD, whole days in the Company time zone"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD, inclusive",
+              "title": "Date To"
+            },
+            "description": "YYYY-MM-DD, inclusive"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveSearch"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Fireflies connections, or no such meeting"
+          },
+          "422": {
+            "description": "A filter this source does not offer, or arguments that conflict"
+          },
+          "424": {
+            "description": "The source refused your key: reconnect it in Settings > Connections"
+          },
+          "429": {
+            "description": "The source is limiting requests, or this connection's live budget is spent; see Retry-After"
+          },
+          "502": {
+            "description": "The source did not answer, or answered in a way Oracle could not read"
+          },
+          "503": {
+            "description": "Live reads are turned off"
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/live/fireflies/{connection_id}/meetings/{meeting_id}": {
+      "get": {
+        "tags": [
+          "live"
+        ],
+        "summary": "Live Fireflies Get Meeting",
+        "description": "One meeting read live: its summary and, with part=all, up to max_lines lines.",
+        "operationId": "live_fireflies_get_meeting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "One of your Fireflies connections",
+              "title": "Connection Id"
+            },
+            "description": "One of your Fireflies connections"
+          },
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "summary",
+                "all"
+              ],
+              "type": "string",
+              "default": "summary",
+              "title": "Part"
+            }
+          },
+          {
+            "name": "max_lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2000,
+              "minimum": 1,
+              "default": 400,
+              "title": "Max Lines"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveMeetingDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Fireflies connections, or no such meeting"
+          },
+          "422": {
+            "description": "A filter this source does not offer, or arguments that conflict"
+          },
+          "424": {
+            "description": "The source refused your key: reconnect it in Settings > Connections"
+          },
+          "429": {
+            "description": "The source is limiting requests, or this connection's live budget is spent; see Retry-After"
+          },
+          "502": {
+            "description": "The source did not answer, or answered in a way Oracle could not read"
+          },
+          "503": {
+            "description": "Live reads are turned off"
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/live/fireflies/{connection_id}/meetings/{meeting_id}/lines": {
+      "get": {
+        "tags": [
+          "live"
+        ],
+        "summary": "Live Fireflies Get Lines",
+        "description": "A meeting's lines read live: by offset and limit (defaults 0 and 200), or the\nones starting in start_ms..end_ms.",
+        "operationId": "live_fireflies_get_lines",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "One of your Fireflies connections",
+              "title": "Connection Id"
+            },
+            "description": "One of your Fireflies connections"
+          },
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 1000000,
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 500,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "start_ms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Ms"
+            }
+          },
+          {
+            "name": "end_ms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Ms"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveLines"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your Fireflies connections, or no such meeting"
+          },
+          "422": {
+            "description": "A filter this source does not offer, or arguments that conflict"
+          },
+          "424": {
+            "description": "The source refused your key: reconnect it in Settings > Connections"
+          },
+          "429": {
+            "description": "The source is limiting requests, or this connection's live budget is spent; see Retry-After"
+          },
+          "502": {
+            "description": "The source did not answer, or answered in a way Oracle could not read"
+          },
+          "503": {
+            "description": "Live reads are turned off"
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/baseline/graph": {
       "get": {
         "tags": [
@@ -54645,6 +55217,52 @@
         ],
         "title": "CitationOut"
       },
+      "Cite": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "call": {
+            "type": "string",
+            "title": "Call"
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Read At"
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Connection Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "source",
+          "call",
+          "read_at",
+          "connection_id"
+        ],
+        "title": "Cite"
+      },
       "ClaimIn": {
         "properties": {
           "value": {
@@ -79799,6 +80417,393 @@
         ],
         "title": "LinkTarget",
         "description": "Exactly one of entity_id or edge_id."
+      },
+      "LiveLine": {
+        "properties": {
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "start_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Ms"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "speaker",
+          "start_ms",
+          "text"
+        ],
+        "title": "LiveLine"
+      },
+      "LiveLines": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LiveLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
+          "cite": {
+            "$ref": "#/components/schemas/Cite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines",
+          "next_offset",
+          "cite"
+        ],
+        "title": "LiveLines"
+      },
+      "LiveMatch": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snippet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "date",
+          "snippet"
+        ],
+        "title": "LiveMatch"
+      },
+      "LiveMeeting": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "participants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Participants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "date",
+          "duration_s",
+          "participants"
+        ],
+        "title": "LiveMeeting"
+      },
+      "LiveMeetingDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "participants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Participants"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LiveLine"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
+          "cite": {
+            "$ref": "#/components/schemas/Cite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "date",
+          "duration_s",
+          "participants",
+          "summary",
+          "lines",
+          "truncated",
+          "cite"
+        ],
+        "title": "LiveMeetingDetail"
+      },
+      "LiveMeetingList": {
+        "properties": {
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "meetings": {
+            "items": {
+              "$ref": "#/components/schemas/LiveMeeting"
+            },
+            "type": "array",
+            "title": "Meetings"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
+          "limit_capped": {
+            "type": "boolean",
+            "title": "Limit Capped",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "cite": {
+            "$ref": "#/components/schemas/Cite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "meetings",
+          "cite"
+        ],
+        "title": "LiveMeetingList"
+      },
+      "LiveSearch": {
+        "properties": {
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/LiveMatch"
+            },
+            "type": "array",
+            "title": "Matches"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
+          "limit_capped": {
+            "type": "boolean",
+            "title": "Limit Capped",
+            "default": false
+          },
+          "cite": {
+            "$ref": "#/components/schemas/Cite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "matches",
+          "cite"
+        ],
+        "title": "LiveSearch"
+      },
+      "LiveSourceOut": {
+        "properties": {
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Connection Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connection_id",
+          "provider",
+          "label",
+          "tools"
+        ],
+        "title": "LiveSourceOut"
       },
       "LlmJobOut": {
         "properties": {

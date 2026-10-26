@@ -14,6 +14,7 @@ import type { Schemas } from "@/lib/api/client";
 import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-changes";
 
 import { companyDayInWords } from "./connections";
+import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
 import { readableRefusal } from "./refusal";
 
 type Role = Schemas["MemberOut"]["role"];
@@ -87,6 +88,8 @@ export type MessageRow = {
   research_reads?: number;
   /** A research line whose run could not start: why, in words (the API keeps it in `error`). */
   research_error?: string;
+  /** #710: the live reads this reply made of its asker's sources (./live.ts). */
+  live_reads?: number;
 };
 
 /** G3/B6: a change Oracle or a person offered in a discussion (a section_edit, a goal_measure version); people by id, `action`, `can` and `needs_reason` computed per reader. */
@@ -153,6 +156,8 @@ export type DiscussionsContext = {
   current?: () => DiscussionsDb;
   /** B6: Oracle's scripted reply to a person's message (a goals interview); null: the canned one. */
   replyScript?: (d: DiscussionRow, asked: MessageRow) => { pieces: string[]; citations: Record<string, unknown>[] } | null;
+  /** #710: Oracle's answer that reads the asker's sources live (./live.ts liveReply); `alone`: only the asker is in the private chat. */
+  liveReply?: (asked: MessageRow, alone: boolean) => LiveReply | null;
   /** G8 POST/DELETE …/slack on a discussion the caller may read (./slack.ts). */
   slack?: (d: DiscussionRow, req: Request) => Promise<Response | null>;
   /** The gateway's refusal while the Claude account pool is spent, worded; null otherwise. */
@@ -973,6 +978,9 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     else db.participants.push({ discussion_id: d.id, user_id, added_via, left_at: null, last_read_at: null, created_at: ctx.now() });
     return true;
   };
+  /** #710 (service.refuse_if_live): a chat holding live reads lets nobody in; Share as discussion instead. */
+  const refuseIfLive = (d: DiscussionRow): Response | null =>
+    db.messages.some((x) => x.discussion_id === d.id && x.live_reads) ? json(409, { detail: { code: IN_CHAT_CODE, message: IN_CHAT } }) : null;
   const notMember = (ids: string[]) => ids.find((id) => !member(id) || member(id)!.status === "disabled");
   /** Bring in the people not in it yet, as the caller may; a refusal, or null. */
   const bringIn = (d: DiscussionRow, ids: string[], via: ParticipantRow["added_via"]): Response | null => {
@@ -980,6 +988,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (stranger) return refuse(422, `${stranger} is not a member of this company`);
     const fresh = [...new Set(ids)].filter((id) => !isIn(d, id));
     if (!fresh.length) return null;
+    const live = refuseIfLive(d);
+    if (live) return live;
     if (d.origin === "panel") return refuse(422, "Share a panel chat with Share as discussion");
     if (d.author_only) return refuse(422, "Share this finding at Summary or above to add people");
     if (d.visibility === "private" && !(starter(d) && isIn(d))) return refuse(422, "Only the starter can add people to a private discussion");
@@ -1013,18 +1023,22 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   /** G2: always while it is just one person; else only when Oracle is addressed. */
   const wantsReply = (d: DiscussionRow, x: MessageRow) => {
     if (x.mentions_oracle || /(^|[^\w@])@oracle\b/i.test(x.body)) return true;
-    const people = new Set([
+    return peopleIn(d).size <= 1;
+  };
+  /** As replies.people_in: everyone who has written in it or is in it now. */
+  const peopleIn = (d: DiscussionRow) =>
+    new Set([
       ...active(d).map((y) => y.user_id),
       ...db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "person" && y.author_id).map((y) => y.author_id!),
     ]);
-    return people.size <= 1;
-  };
   const postWithReply = async (d: DiscussionRow, input: Schemas["DiscussionMessageIn"]): Promise<Response> => {
     const res = post(d, input);
     if (!res.ok) return res;
     const message = (await res.json()) as Schemas["DiscussionMessageOut"];
     const row = db.messages.find((x) => x.id === message.id)!;
-    const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? null) : null;
+    const people = peopleIn(d);
+    const alone = d.visibility === "private" && people.size === 1 && people.has(me.id);
+    const script = wantsReply(d, row) ? (ctx.replyScript?.(d, row) ?? ctx.liveReply?.(row, alone) ?? null) : null;
     const reply = wantsReply(d, row)
       ? push(d, {
           author_kind: "oracle",
@@ -1036,6 +1050,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           status: "pending",
           citations: [],
           ...(script ? { script: script.pieces, script_citations: script.citations } : {}),
+          ...(script && "reads" in script && typeof script.reads === "number" && script.reads > 0 ? { live_reads: script.reads } : {}),
         })
       : null;
     if (reply) proposeSectionEdit(d, row);
@@ -1120,7 +1135,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           text += piece;
           controller.enqueue(event("delta", { text: piece }));
           // As the API: a citation is sent as soon as its marker is complete.
-          const used = citations.filter((c) => text.includes(`[c:${c.n}]`));
+          const used = citations.filter((c) => text.includes(c.kind === "live" ? `[${String(c.ref)}]` : `[c:${c.n}]`));
           if (used.length > cited) {
             cited = used.length;
             controller.enqueue(event("citations", used));
@@ -1403,6 +1418,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if ((manages || (patch.visibility && patch.visibility !== d.visibility)) && closed()) return refuse(409, "This discussion is closed");
     if (patch.visibility === "open" && d.visibility === "private") {
       if (!starter(d)) return refuse(403, "Only the starter can make a private discussion open");
+      const live = refuseIfLive(d);
+      if (live) return live;
       if (d.author_only) return refuse(422, "Share this finding at Summary or above first");
       if (d.origin === "panel") return refuse(422, "Share a panel chat with Share as discussion");
       const now = exposure(d);
@@ -1530,7 +1547,11 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (m === "POST" && !p[4]) {
       if (closed()) return refuse(409, "This discussion is closed");
       const { user_ids } = await body<Schemas["DiscussionParticipantsIn"]>();
-      if (user_ids.length === 1 && user_ids[0] === me.id && d.visibility === "open") add(d, me.id, "followed");
+      if (user_ids.length === 1 && user_ids[0] === me.id && d.visibility === "open") {
+        const live = isIn(d) ? null : refuseIfLive(d);
+        if (live) return live;
+        add(d, me.id, "followed");
+      }
       else {
         const refused = bringIn(
           d,
