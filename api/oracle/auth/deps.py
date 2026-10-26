@@ -363,9 +363,13 @@ def body_type(*media_types: str) -> Any:
     """A raw-body route's Content-Type check (415): a declared type must be one of
     ``media_types``, and a request the browser signs in itself must declare one, so a
     form or ``text/plain`` body never reaches the route. A bearer-token script may
-    leave it out."""
+    leave it out. The caller is authenticated first (the route's own get_principal,
+    cached for the request), so a read-only credential is refused as such (403, AC1)
+    and an anonymous one as such (401), whatever type its body declares."""
 
-    async def check(request: Request) -> None:
+    async def check(
+        request: Request, _principal: Annotated[Principal, Depends(get_principal)]
+    ) -> None:
         declared = request.headers.get("content-type")
         if declared is None and not browser_signed(request):
             return
