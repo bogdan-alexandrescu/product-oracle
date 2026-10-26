@@ -251,8 +251,9 @@ def accent_css(brand: "Brand | None") -> Markup:
 
 
 BRAND_CSS = """
-.brand-header { display: flex; align-items: center; gap: 12px; padding: 0 0 8px;
-  margin: 0 0 12px; border-bottom: 2px solid var(--color-accent, var(--accent, #2f5bd3)); }
+.brand-header { display: flex; flex-basis: 100%; align-items: center; gap: 12px;
+  padding: 0 0 8px; margin: 0 0 8px;
+  border-bottom: 2px solid var(--color-accent, var(--accent, #2f5bd3)); }
 .brand-header .brand-logo { max-height: 40px; height: auto; width: auto; }
 .brand-header .brand-name { font-weight: 600; font-size: 1rem; }
 .brand-header .brand-mark { margin-left: auto; font-size: 0.75rem; opacity: 0.7; }
@@ -263,20 +264,20 @@ BRAND_CSS = """
 def render_brand_header(
     brand: "Brand | None", *, shared: bool = False, dark: bool = False
 ) -> Markup:
-    """The header partial: the logo (at most 40 px high) or the company's name; on a
-    shared page (``shared``) also Oracle's small mark unless an owner switched it off
-    (O5-Q8; never on exports)."""
+    """The header partial, first in a page's header: the logo (at most 40 px high) or
+    the company's name; on a shared page (``shared``) also Oracle's small mark unless an
+    owner switched it off (O5-Q8; never on exports)."""
     if brand is None:
         return Markup("")
     uri = brand.logo_dark_data_uri if dark else brand.logo_data_uri
     name = escape(brand.display_name)
-    parts = ['<header class="brand-header" role="banner">']
+    parts = ['<div class="brand-header">']
     if uri:
         parts.append(f'<img class="brand-logo" src="{uri}" alt="{name}" height="40">')
     parts.append(f'<span class="brand-name">{name}</span>')
     if shared and brand.oracle_mark:
         parts.append(f'<span class="brand-mark">{MARK}</span>')
-    parts.append("</header>")
+    parts.append("</div>")
     return Markup("".join(parts))
 
 

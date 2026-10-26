@@ -212,8 +212,9 @@ async def test_only_png_jpeg_or_webp_logos_within_the_limits_are_stored(client, 
     out = (await client.get("/v1/branding", headers=owner)).json()
     assert out["logo"] is None and out["revision"] == 0
     async with tenant_session(ctx.tenant_id) as s:
-        from oracle.branding import BrandAsset
         from sqlalchemy import func, select
+
+        from oracle.branding import BrandAsset
 
         assert await s.scalar(select(func.count()).select_from(BrandAsset)) == 0
 
@@ -356,7 +357,9 @@ async def test_the_pptx_and_present_title_slides_carry_the_logo(client, branded)
     assert len(pictures) == 1
     assert hashlib.sha256(pictures[0].image.blob).hexdigest() == logo["sha256"]
     assert all(
-        sh.shape_type != MSO_SHAPE_TYPE.PICTURE for slide in list(prs.slides)[1:] for sh in slide.shapes
+        sh.shape_type != MSO_SHAPE_TYPE.PICTURE
+        for slide in list(prs.slides)[1:]
+        for sh in slide.shapes
     )
     texts = " ".join(sh.text_frame.text for sh in title.shapes if sh.has_text_frame)
     assert "Example Labs" in texts and MARK not in texts
