@@ -866,8 +866,9 @@ async def propose(
     in Baseline, its reason naming the discussion and linking its page (B1). A goal version
     goes through B6's one path (``goal_interview.propose_version``): B5's checks, Oracle's
     pushback once when its target is already met (the result is then None and the change
-    carries the pushback), and the typed values clearing their ``*_text``. ``payload``: the
-    person's Edit, proposed instead and kept as ``edited_payload`` only when it is used."""
+    carries the pushback), and the typed values clearing their ``*_text``. ``decision``: a
+    proposed decision in the log (H1). ``payload``: the person's Edit (every kind), proposed
+    instead and kept as ``edited_payload`` only when it is used."""
     from oracle.baseline import goal_interview
     from oracle.baseline import service as baseline
     from oracle.baseline.models import Proposal
@@ -879,6 +880,13 @@ async def propose(
     k = _need_kind(c, "goal_measure", "entity_edit", "decision")
     _need_role(seat, k.role, "Commenters and up propose changes")
     reason = f"From discussion {d.title} ({await discussion_page(db, d)})"
+    if payload is not None and c.kind != "goal_measure":
+        try:
+            c.edited_payload = kinds.validate_payload(c.kind, payload)
+        except ValidationError as e:
+            raise DiscussionError(
+                422, f"The change does not read as a {c.kind}: {e.errors()[0]['msg']}"
+            ) from e
     if c.kind == "decision":
         return await _propose_decision(db, principal, seat, d, c, reason)
     if c.kind == "goal_measure":
@@ -894,13 +902,6 @@ async def propose(
         proposal_id = out.result_ref["proposal_id"]
         status = (await db.get(Proposal, uuid.UUID(proposal_id))).status
     else:
-        if payload is not None:
-            try:
-                c.edited_payload = kinds.validate_payload(c.kind, payload)
-            except ValidationError as e:
-                raise DiscussionError(
-                    422, f"The change does not read as a {c.kind}: {e.errors()[0]['msg']}"
-                ) from e
         p = c.edited_payload or c.payload
         writer = baseline.Writer(principal, "user", reason=reason)
         try:

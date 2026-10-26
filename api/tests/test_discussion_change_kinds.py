@@ -201,6 +201,32 @@ async def test_a_decision_change_lands_as_a_proposed_decision(client):
         assert row.approver_id == ctx.users["approver"].id
 
 
+# protects=#676 on main: Propose's person's Edit (main's ChangeProposeIn.payload) reaches a
+# decision change too: the edited decision is proposed and the change keeps the edit, while
+# an edit that does not read as a decision is refused with nothing proposed or saved;
+# fails_when=the decision branch ignores the payload (the original title lands) or a bad
+# edit creates a decision; no_claim=the web form's Edit (it sends no payload for decisions).
+async def test_a_decision_change_is_proposed_with_the_persons_edit(client):
+    ctx, doc = await company(client)
+    _tenant[0] = ctx.tenant_id
+    d = await start(client, ctx, subject=section(doc), title="Caps or detection")
+    cid = await add_change(ctx.tenant_id, d["id"], "decision", {"title": "Drop the trial"})
+    bad = await act(client, ctx.as_("commenter"), cid, "propose", expect=422,
+                    payload={"title": ""})  # fmt: skip
+    assert bad["detail"].startswith("The change does not read as a decision")
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(Decision.id)) is None
+        assert (await s.get(DiscussionChange, uuid.UUID(cid))).edited_payload is None
+    edit = {"title": "Keep the trial, shorten it", "approver_id": uid(ctx, "approver")}
+    out = await act(client, ctx.as_("commenter"), cid, "propose", payload=edit)
+    assert out["change"]["status"] == "done"
+    assert out["change"]["edited_payload"]["title"] == "Keep the trial, shorten it"
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Decision, uuid.UUID(out["result"]["decision_id"]))
+        assert row.title == "Keep the trial, shorten it"
+        assert row.approver_id == ctx.users["approver"].id
+
+
 # protects=a decision written by hand: a commenter's is their suggestion, and the kind is
 # offered on the subject; fails_when=Propose a change does not list decision;
 # no_claim=the web form.
