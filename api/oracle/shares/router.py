@@ -95,7 +95,7 @@ class RevokeAllIn(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
-class DismissIn(BaseModel):
+class ShareDismissIn(BaseModel):
     ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
 
 
@@ -162,11 +162,11 @@ class ShareViewsOut(BaseModel):
     days: list[ShareDayOut]
 
 
-class RevokedCount(BaseModel):
+class ShareRevokedCount(BaseModel):
     revoked: int
 
 
-class DismissedCount(BaseModel):
+class ShareDismissedCount(BaseModel):
     dismissed: int
 
 
@@ -496,10 +496,10 @@ async def revoke_share_link(
     return (await _outs(db, [link]))[0]
 
 
-@router.post("/documents/{doc}/share-links/revoke-all", response_model=RevokedCount)
+@router.post("/documents/{doc}/share-links/revoke-all", response_model=ShareRevokedCount)
 async def revoke_all_share_links(
     doc: str, body: RevokeAllIn, principal: Owner, db: TenantDB
-) -> RevokedCount:
+) -> ShareRevokedCount:
     """Revoke every live link on the document (owners)."""
     document = await _document(db, doc)
     links = list(
@@ -513,13 +513,13 @@ async def revoke_all_share_links(
         await service.revoke(db, principal, link, body.reason, _actor(principal), all=True)
         link.inbox_dismissed_at = service.now()
     await db.commit()
-    return RevokedCount(revoked=len(links))
+    return ShareRevokedCount(revoked=len(links))
 
 
-@router.post("/share-links/dismiss", response_model=DismissedCount)
+@router.post("/share-links/dismiss", response_model=ShareDismissedCount)
 async def dismiss_share_revocations(
-    body: DismissIn, principal: Owner, db: TenantDB
-) -> DismissedCount:
+    body: ShareDismissIn, principal: Owner, db: TenantDB
+) -> ShareDismissedCount:
     """Dismiss the owners' Inbox row of links revoked because their creator left, was
     demoted, or their document changed (O5-Q10)."""
     links = list(
@@ -539,7 +539,7 @@ async def dismiss_share_revocations(
             {"ids": [str(x.id) for x in links]},
         )  # fmt: skip
     await db.commit()
-    return DismissedCount(dismissed=len(links))
+    return ShareDismissedCount(dismissed=len(links))
 
 
 @router.get("/share-links/{link_id}/views", response_model=ShareViewsOut)

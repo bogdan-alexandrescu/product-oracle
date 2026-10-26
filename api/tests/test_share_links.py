@@ -678,6 +678,8 @@ def test_the_public_routes_are_never_mcp_tools_and_members_routes_are():
     from oracle.mcp import tools
 
     assert set(share_public.OPERATIONS) <= tools.PUBLIC_OPERATIONS
-    names = {t.operation_id for t in tools.operations_from_openapi(app.openapi())}
+    ops = tools.operations_from_openapi(app.openapi())
+    names = {t.operation_id for t in ops if t.excluded is None}
+    assert set(share_public.OPERATIONS) <= {t.operation_id for t in ops}
     assert not names & set(share_public.OPERATIONS)
     assert {"create_share_link", "revoke_share_link", "list_share_links"} <= names

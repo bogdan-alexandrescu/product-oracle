@@ -134,11 +134,18 @@ DECIDED_PER_ITEM = frozenset(
 # review's rows (C7) the feature-set stop's approver role's. A discussion's change (G3) is a
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
+# A share link (O5) is an owner's to make for the Public audience and an approver's for the
+# others; its creator's or an owner's to extend, move or give a new passcode; and its
+# creator's or an owner's to revoke when Public (any approver's otherwise).
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
+    "create_share_link": "owner",
+    "revoke_share_link": "owner",
+    "rotate_share_link_passcode": "owner",
+    "update_share_link": "owner",
     "accept_blocker_risk": "owner",
     "accept_intake_proposal": "approver",
     "accept_scope_enhancement": "approver",

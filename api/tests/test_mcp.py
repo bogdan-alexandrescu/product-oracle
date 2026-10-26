@@ -225,6 +225,11 @@ def test_parity_every_operation_is_a_tool_or_listed_as_unavailable():
         "public_interview_message",
         "public_interview_skip",
         "public_interview_finish",
+        # O5: a share link's holder, behind the link and its passcode.
+        "public_share",
+        "unlock_public_share",
+        "public_share_pdf",
+        "public_share_status",
     }
     # A5's routes for owners and approvers are tools.
     tools = {o.operation_id for o in ops.values() if not o.excluded}
