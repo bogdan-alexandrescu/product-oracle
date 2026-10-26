@@ -78,7 +78,7 @@ import httpx
 
 from oracle.baseline.public_links import (
     LinkError,
-    _check_url,
+    check_url,
     guarded_transport,
     public_address,
     system_resolve,
@@ -643,7 +643,7 @@ def check_endpoint(url: str | None) -> str | None:
     if parts.query or parts.fragment or url.endswith(("?", "#")):
         raise EndpointRefused("The endpoint cannot have a query or a fragment.")
     try:
-        normalized, host = _check_url(url)
+        normalized, host = check_url(url)
     except LinkError as exc:
         raise EndpointRefused("The endpoint is not a valid URL.") from exc
     try:
