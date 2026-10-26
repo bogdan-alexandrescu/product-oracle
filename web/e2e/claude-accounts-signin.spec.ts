@@ -35,6 +35,9 @@ test("claude accounts: the method is a choice and the one solid button in the pa
   // One action, enabled and filled; no other button in the panel has its fill.
   const open = add.getByRole("button", { name: "Open Claude's sign-in page" });
   await expect(open).toBeEnabled();
+  // Buttons ease their colours (transition-colors): read the fills once the panel's
+  // transitions, such as this button's from its disabled fill, have finished.
+  await add.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
   const accent = await open.evaluate(fill);
   expect(transparent(accent)).toBe(false);
   const fills = await add.getByRole("button").evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor));

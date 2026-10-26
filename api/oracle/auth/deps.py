@@ -24,8 +24,8 @@ from oracle.tenancy import tenant_session
 # the run's creator). The value is the run id signed by the server and bound to the
 # acting user (oracle.auth.service.sign_run_binding). A run sees more than people do
 # (S6: the full text of what a finding shared in full), so the header is trusted only
-# when its signature verifies for the authenticated user; a bare or forged run id is
-# ignored and the caller stays the person, with person rules.
+# when its signature verifies for the authenticated user; a bare, forged, expired or
+# malformed one is refused with 400 (``_run_of``, fail closed), never read as the person.
 RUN_HEADER = "x-oracle-run-id"
 
 _bearer = HTTPBearer(auto_error=False, description="API token for the agent track")
@@ -55,6 +55,10 @@ class Principal:
     # agent's work (oracle.docs.service.import_draft holds approved text), and it reads
     # as a run (S6).
     run_id: uuid.UUID | None = None
+    # #541 part 4: a run of a flow whose output every member reads (FlowDef.member_output)
+    # reads as a commenter would, whoever started it (oracle.docs.visibility.restricted);
+    # its role still decides what it may write.
+    as_member: bool = False
 
     @property
     def is_run(self) -> bool:
@@ -191,6 +195,18 @@ async def _for_run(principal: Principal, raw: str) -> Principal:
     return replace(principal, run_id=run.id, run_token_id=claims.token_id)
 
 
+async def _member_run(principal: Principal) -> bool:
+    """Whether the principal's run is of a flow whose output every member reads."""
+    from sqlalchemy import select
+
+    from oracle.runs.flows import reads_as_member
+    from oracle.runs.models import Run
+
+    async with tenant_session(principal.tenant_id) as s:
+        flow = await s.scalar(select(Run.flow).where(Run.id == principal.run_id))
+    return reads_as_member(flow)
+
+
 def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:
     raw = request.headers.get(RUN_HEADER)
     if not raw:
@@ -226,6 +242,8 @@ async def get_principal(
         )
     if run_id is not None:
         principal = replace(principal, run_id=run_id)
+    if principal.run_id is not None:
+        principal = replace(principal, as_member=await _member_run(principal))
     # Parses of this request count against one person: the user, else the token; a run
     # token's, the run (oracle.safe_yaml.MAX_PER_OWNER).
     owner = principal.run_id or principal.user_id or principal.token_id

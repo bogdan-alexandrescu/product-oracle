@@ -7,7 +7,25 @@ import { Button } from "./Button";
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * While `open`: focus moves to the `[data-autofocus]` element (else the dialog), Tab and
+ * Makes everything outside `root` inert (each sibling of `root` and of its ancestors up to
+ * the body). Returns the undo, which clears only what it set: a dialog opened from another
+ * keeps that one's background inert.
+ */
+function inertOutside(root: HTMLElement): () => void {
+  const set: HTMLElement[] = [];
+  for (let at: HTMLElement | null = root; at && at !== document.body; at = at.parentElement) {
+    for (const sib of at.parentElement?.children ?? []) {
+      if (sib === at || !(sib instanceof HTMLElement) || sib.inert) continue;
+      sib.inert = true;
+      set.push(sib);
+    }
+  }
+  return () => set.forEach((el) => (el.inert = false));
+}
+
+/**
+ * While `open`: the page behind the dialog is inert (no clicks, hidden from assistive
+ * technology), focus moves to the `[data-autofocus]` element (else the dialog), Tab and
  * Shift+Tab stay inside `ref`, Escape calls `onClose`; on close, focus goes back to what
  * had it when the dialog opened.
  */
@@ -19,6 +37,8 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Its ancestors, the scrim among them (a click on it closes the dialog), stay live.
+    const restore = ref.current ? inertOutside(ref.current) : () => {};
     (ref.current?.querySelector<HTMLElement>("[data-autofocus]") ?? ref.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -48,6 +68,8 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean, 
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      // Live again first: an inert opener cannot take the focus back.
+      restore();
       if (opener?.isConnected) opener.focus();
     };
   }, [open, ref]);

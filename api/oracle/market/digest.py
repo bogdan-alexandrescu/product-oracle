@@ -333,7 +333,14 @@ async def _import_suggestions(
     return done
 
 
-def _fill_web_block(occ: RitualOccurrence, rows: list[dict[str, Any]]) -> None:
+async def _fill_web_block(
+    s: AsyncSession, occ: RitualOccurrence, rows: list[dict[str, Any]], zone: str
+) -> None:
+    """The pre-read's web block with the run's findings, and its stored markdown rendered
+    again from the blocks so the two say the same."""
+    from oracle.rituals import blocks as ritual_blocks
+    from oracle.rituals.models import Ritual
+
     pre = dict(occ.pre_read or {})
     out = []
     for b in pre.get("blocks") or []:
@@ -341,6 +348,9 @@ def _fill_web_block(occ: RitualOccurrence, rows: list[dict[str, Any]]) -> None:
             b = {**b, "rows": rows}
         out.append(b)
     pre["blocks"] = out
+    ritual = await s.get(Ritual, occ.ritual_id)
+    if ritual is not None:
+        pre["markdown"] = ritual_blocks.markdown(ritual.title, occ.due_at, out, zone)
     occ.pre_read = pre
 
 
@@ -391,7 +401,7 @@ async def import_digest(
             rows.append(blocks.finding_row(f, c, zone))
         if not recorded:
             rows.append({"href": "/company/market", "text": blocks.WEB_UNAVAILABLE})
-        _fill_web_block(occ, rows)
+        await _fill_web_block(s, occ, rows, zone)
         await s.commit()
     out_notes = [f"{n} {why}" for why, n in notes.items()]
     return {

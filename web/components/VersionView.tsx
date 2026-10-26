@@ -451,6 +451,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       frame = requestAnimationFrame(() => setSelection(readSelection()));
     };
     document.addEventListener("selectionchange", onChange);
+    // A selection made before tracking began (the right to comment still loading) counts too.
+    onChange();
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener("selectionchange", onChange);

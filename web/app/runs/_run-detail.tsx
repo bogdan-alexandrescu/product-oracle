@@ -824,7 +824,8 @@ function SegmentItem({
   };
   // Send back to writer: the Request changes flow of this segment's review, its note the
   // summary of what Oracle refused (kept with anything already written), to edit and send.
-  const review = deciding.find((cp) => cp.console?.needs !== "redo_or_continue");
+  // The segment's own stop (its kind), never another stop that waits on the same segment.
+  const review = deciding.find((cp) => cp.kind === kind && cp.console?.needs !== "redo_or_continue");
   const sendBack =
     rejected && review
       ? () => {

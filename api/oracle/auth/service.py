@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from itsdangerous import BadSignature, URLSafeTimedSerializer
+from itsdangerous import BadData, URLSafeTimedSerializer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -250,7 +250,7 @@ def read_run_binding(value: str, user_id: uuid.UUID | None) -> uuid.UUID | None:
         if uuid.UUID(data["u"]) != user_id:
             return None
         return uuid.UUID(data["r"])
-    except (BadSignature, KeyError, ValueError, TypeError, AttributeError):
+    except (BadData, KeyError, ValueError, TypeError, AttributeError):
         return None
 
 
@@ -271,7 +271,7 @@ def read_session_cookie(value: str) -> SessionCookie | None:
         if "i" in data:
             signed_at = datetime.fromtimestamp(int(data["i"]) / 1_000_000, UTC)
         return SessionCookie(uuid.UUID(data["u"]), uuid.UUID(data["t"]), signed_at)
-    except (BadSignature, KeyError, ValueError, TypeError, OverflowError):
+    except (BadData, KeyError, ValueError, TypeError, OverflowError):
         return None
 
 

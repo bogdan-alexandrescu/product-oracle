@@ -44,5 +44,6 @@ next-env.d.ts
 /.next-mock/
 /test-results/
 /playwright-report/
+/blob-report/
 /.next-e2e/
 /.next-*/

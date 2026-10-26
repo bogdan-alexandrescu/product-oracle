@@ -196,7 +196,7 @@ test("sharing a panel chat brings its change into the discussion's card, suggest
   await hop.getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the drop-off measure.");
   await hop.getByRole("button", { name: "Send" }).click();
   await expect(hop.getByTestId("oracle-reply").last()).toHaveAttribute("data-status", "complete");
-  await expect(hop.getByTestId("hop-change")).toContainText("Change problem");
+  await expect(hop.getByTestId("changes-card").getByTestId("change-label")).toContainText("Change problem");
 
   await hop.getByRole("button", { name: "Share as discussion" }).click();
   const form = hop.getByTestId("hop-share-form");

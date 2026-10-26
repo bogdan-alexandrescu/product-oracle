@@ -26,6 +26,31 @@ npm run test:e2e        # builds a mock-mode app into .next-mock and runs e2e/ a
 npm run test:e2e:real   # e2e/real against the real API + Postgres (see the root README, `make e2e`)
 ```
 
+### CI and sharding
+
+`npm run test:ci` runs the whole mock suite with the settings in `e2e/ci.env` (mock API,
+port 3100, `CI=1`, 2 workers, 1 retry); the config's webServer builds and starts the
+mock app, so nothing else needs to run first, and no Postgres. Variables already set in
+the environment win over the file. Append Playwright arguments after `--`:
+
+```bash
+npm run test:ci                                          # whole suite
+npm run test:ci -- --shard 1/8 --reporter=blob,line      # one shard; writes blob-report/
+npx playwright merge-reports --reporter=html all-blobs/  # merge the shards' blob zips
+```
+
+- `E2E_WORKERS` (a count or `50%`) and `E2E_RETRIES` override workers and retries; unset,
+  CI uses 2 workers and 1 retry, local runs Playwright's default and none.
+- A `--reporter` on the command line replaces the config's reporters; `E2E_BLOB=1` adds
+  `blob` to the CI reporters instead.
+- `@playwright/test` is pinned exactly so `npx playwright install chromium` fetches the
+  browser revision the tests expect; bump it in `package.json` and the lockfile together.
+
+SwarmCloud's sharded suite gate names `e2e/ci.env` as its env_file and, in each shard
+from `web/`, runs `npm ci`, `npx playwright install chromium` and
+`npx playwright test --shard k/N --reporter=blob,line` with one retry; a report step
+merges the blobs.
+
 ## Notes
 
 - Comment anchors are W3C `TextQuoteSelector`s (`exact`, `prefix`, `suffix`) over a

@@ -111,8 +111,11 @@ function VersionCard({
   onChanged: () => Promise<void>;
 }) {
   const { can } = useMe();
-  const canPropose = can("propose_goal_measure");
-  const canDecide = can("dismiss_goal_measure");
+  // G3's generic actions (#187): the change's own action and can_* decide below the route's role.
+  const action = change.action;
+  const canPropose = action?.verb === "Propose" && action.allowed && can("propose_discussion_change", action.allowed);
+  const canDismiss = change.can.dismiss && can("dismiss_discussion_change", change.can.dismiss);
+  const canAccept = can("accept_proposal");
   const shown = (change.edited_payload ?? change.payload) as GoalMeasure;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<GoalDraft>(() => draftOf(shown));
@@ -124,7 +127,7 @@ function VersionCard({
   const live = editing ? (typeof payloadOf(goal.id, draft) === "string" ? shown : (payloadOf(goal.id, draft) as GoalMeasure)) : shown;
   const owner = live.owner_id ? people.get(live.owner_id) : undefined;
 
-  const propose = async (keep = false) => {
+  const propose = async () => {
     setError(null);
     let payload: GoalMeasure | null = null;
     if (editing) {
@@ -134,7 +137,7 @@ function VersionCard({
     }
     setBusy(true);
     try {
-      const res = await proposeMeasure(change.id, payload, keep);
+      const res = await proposeMeasure(change, payload);
       if (res.kind === "invalid") {
         // Nothing was created: B5's words, on the card, under the field they are about.
         setProblems(res.errors);
@@ -220,7 +223,7 @@ function VersionCard({
       {error && <InlineError>{error}</InlineError>}
       {open && change.status === "proposed" && canPropose && (
         <div className="flex flex-wrap items-center gap-2 max-[600px]:flex-col max-[600px]:items-stretch" data-testid="version-actions">
-          <Button variant="solid" disabled={busy} onClick={() => void propose(!!pushback)}>
+          <Button variant="solid" disabled={busy} onClick={() => void propose()}>
             {pushback ? "Propose anyway" : "Propose"}
           </Button>
           <Button
@@ -234,8 +237,8 @@ function VersionCard({
           >
             {editing ? "Cancel edit" : "Edit"}
           </Button>
-          {canDecide && (
-            <Button variant="ghost" disabled={busy} onClick={() => void act(() => dismissMeasure(change.id))}>
+          {canDismiss && (
+            <Button variant="ghost" disabled={busy} onClick={() => void act(() => dismissMeasure(change))}>
               Dismiss
             </Button>
           )}
@@ -248,7 +251,7 @@ function VersionCard({
             <span className="text-pass">· Accepted</span>
           ) : proposal?.status === "rejected" ? (
             <span className="text-text2">· Rejected</span>
-          ) : canDecide ? (
+          ) : canAccept ? (
             <Button variant="solid" disabled={busy || !proposal} onClick={() => void acceptNow(proposalId!)}>
               Accept now
             </Button>

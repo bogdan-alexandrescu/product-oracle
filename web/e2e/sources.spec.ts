@@ -22,6 +22,8 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   // Edit channels and Delete sit in the row's More menu.
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
   await chat.getByRole("menuitem", { name: "Edit channels" }).click();
+  // The channel list names the picks (#product): wait for it before switching to pasting ids.
+  await expect(chat.getByRole("checkbox", { name: "#product", exact: true })).toBeChecked();
   await chat.getByRole("button", { name: "Paste ids" }).click();
   await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
   await chat.getByRole("button", { name: "Save channels" }).click();

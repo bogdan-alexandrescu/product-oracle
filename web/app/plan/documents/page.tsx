@@ -128,7 +128,6 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
 export default function RoadmapDocumentsPage() {
   const q = useQuery("documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
-  const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
   useArtifactsChanged(q.reload);
   useArtifactsChanged(prds.reload);
   const { can, capsReady } = useMe();
@@ -259,7 +258,7 @@ export default function RoadmapDocumentsPage() {
         action={
           <span className="flex flex-wrap items-center gap-2">
             {/* F6: the latest weekly alignment report (the Plan's header button until F1). */}
-            <LinkButton href={latestReport.data?.[0] ? `/plan/reports/${latestReport.data[0].id}` : "/plan/reports"}>
+            <LinkButton href="/plan/reports/latest">
               Alignment report
             </LinkButton>
             <LinkButton href="/roadmap/launches" data-testid="roadmap-launches-link">

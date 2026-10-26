@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { Button, InfoTip, Sheet } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { todayIn, useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
@@ -26,7 +27,9 @@ function defaultSpan(today: string): { from: string; to: string } {
  * last one, the horizon, and whether to start from the last approved version. Draft with
  * Oracle makes the document from the built-in template when there is none (start_draft),
  * then creates, estimates and starts the strategy_draft run and opens it. A new document
- * can instead start from the empty template.
+ * can instead start from the empty template. At Observe (H11: Settings › Autonomy's
+ * "Shape product strategy" or "Draft the vision") Oracle drafts none: the sheet says so,
+ * and a new document starts from the empty template only.
  */
 export function DraftSheet({
   kind,
@@ -57,6 +60,8 @@ export function DraftSheet({
   const title = doc ? "Draft next version" : kind === "vision" ? "New vision" : "New product strategy";
   const vision = kind === "vision";
   const yearsN = Number(years);
+  // H11: the responsibility keys are the document kinds ("strategy", "vision").
+  const observing = useAutonomyLevel(kind) === "observe";
   const valid = vision ? Number.isInteger(yearsN) && yearsN >= 1 && yearsN <= 10 : !!span.from && !!span.to && span.to > span.from;
 
   /** The document's slug: the existing one, or a new one from the built-in template. */
@@ -109,7 +114,7 @@ export function DraftSheet({
         className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-4 max-[600px]:px-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (valid && !busy) void draftWithOracle();
+          if (valid && !busy && !observing) void draftWithOracle();
         }}
       >
         <label className="block">
@@ -158,14 +163,24 @@ export function DraftSheet({
           </label>
         )}
         {error && <ErrorNote>{error}</ErrorNote>}
+        {observing && (
+          <AutonomyNote testId="strategy-observing" onFollow={onClose}>
+            Oracle is set to observe the {DOC[kind].name}, so it drafts none. {doc ? "Edit the document yourself" : "Start from the empty template"}, or
+            change this in
+          </AutonomyNote>
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" variant="primary" disabled={!valid || busy !== null}>
-            {busy === "oracle" ? "Starting…" : "Draft with Oracle"}
-          </Button>
-          <InfoTip label="drafting with Oracle" align="start">
-            Oracle reads the confirmed goals, approved PRDs and roadmaps, decisions, outcomes and the company&apos;s own strategy material, and
-            writes the draft. An owner reviews and approves it.
-          </InfoTip>
+          {!observing && (
+            <>
+              <Button type="submit" variant="primary" disabled={!valid || busy !== null}>
+                {busy === "oracle" ? "Starting…" : "Draft with Oracle"}
+              </Button>
+              <InfoTip label="drafting with Oracle" align="start">
+                Oracle reads the confirmed goals, approved PRDs and roadmaps, decisions, outcomes and the company&apos;s own strategy material, and
+                writes the draft. An owner reviews and approves it.
+              </InfoTip>
+            </>
+          )}
           {!doc && (
             <Button variant="ghost" className="ml-auto" disabled={busy !== null} onClick={emptyTemplate}>
               {busy === "empty" ? "Creating…" : "Start from the empty template"}

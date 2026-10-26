@@ -4,6 +4,8 @@ from a run token at observe.
 
 Each test's docstring is its card: protects=...; fails_when=...; no_claim=..."""
 
+import uuid
+
 import pytest
 
 from oracle.baseline import service as baseline_service
@@ -17,6 +19,8 @@ from tests.fixtures import seed_auth
 from tests.test_llm_jobs import DRAFT_V1, SLUG, FakeClaude, comment, import_draft, jobs
 from tests.test_mcp import mcp_client, run_token, text_of
 from tests.test_runs import RUN_BASELINE, get, pending, started, tick
+
+SUPERSEDED = "Superseded: the same run later applied this change directly"
 
 OBSERVE_NOTE = "Baseline merge skipped: Oracle is set to observe the baseline"
 
@@ -214,3 +218,36 @@ async def test_back_at_recommend_only_documents_switched_on_queue_again(client, 
     assert resp.status_code == 200
     await comment(client, ctx, "solution", "Make it skippable.")
     assert [j["kind"] for j in await jobs(client, ctx)] == ["review_comments"]
+
+
+async def test_a_later_merge_at_act_closes_the_same_run_s_proposals(client, owner, runtime):
+    """protects=hardening 2026-10-20 (a run's baseline.yaml): the run proposed below Act,
+    then its file is merged again at Act (a retried import): what it now writes directly
+    closes the run's matching open proposals as superseded; fails_when=a proposal the
+    applied change superseded stays open for a person to decide; no_claim=another run's
+    proposals, or a proposal on a locked item (it stays open)."""
+    from oracle.runs import service as runs_service
+    from oracle.runs.models import Run
+
+    tenant_id, auth = owner
+    await unlocked_checkout(tenant_id)
+    await set_level(client, auth, "baseline", "recommend")
+    run = await run_baseline(client, auth, runtime)
+    open_before = (await client.get("/v1/baseline/proposals", headers=auth)).json()
+    assert len(open_before) == 3 and all(p["status"] == "open" for p in open_before)
+
+    await set_level(client, auth, "baseline", "act")
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Run, uuid.UUID(run["id"]))
+        merged = await runs_service._import_baseline(s, row, RUN_BASELINE)
+    assert merged["proposals"] == 0 and merged["updated"] == 1 and merged["created"] == 3
+    graph = (await client.get("/v1/baseline/graph", headers=auth)).json()
+    titles = {e["key"]: e["title"] for e in graph["entities"]}
+    assert titles["checkout"] == "Checkout, as the agent sees it"
+    proposals = (await client.get("/v1/baseline/proposals", headers=auth)).json()
+    assert sorted((p["payload"]["op"], p["status"]) for p in proposals) == [
+        ("create", "rejected"),
+        ("create", "rejected"),
+        ("update", "rejected"),
+    ]
+    assert all(p["payload"]["note"] == SUPERSEDED for p in proposals)
