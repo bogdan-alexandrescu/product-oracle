@@ -245,3 +245,35 @@ async def test_oracle_did_goes_to_an_approver(client, ctx):
     await apply(ctx, await triage_run(ctx, "commenter"), triage_file([entry]))
     (action,) = await actions(ctx)
     assert action.notify_ids == [ctx.users["owner"].id]
+
+
+async def test_undo_of_a_merge_into_a_no_withdraws_its_reply(client, ctx):
+    """protects=#586 review minor: Oracle merges a request into one said no to, which drafts
+    the same reasoned reply for its asker (H10 Asked again); Undo reopens it and that
+    drafted reply goes, as a reopened request's own replies do; fails_when=the "why not"
+    reply stays to be sent for a request that is New again; no_claim=replies already sent
+    (they stay sent)."""
+    await set_level(client, ctx, "act")
+    a = await add(client, ctx, title="Export to a fax machine")
+    b = await add(client, ctx, title="Fax the weekly report")
+    b_lock = (await get(client, ctx, b["id"]))["lock_version"]
+    resp = await client.post(
+        f"/v1/requests/{b['id']}/disqualify",
+        json={"lock_version": b_lock, "reason": "no_goal"},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    entry = {"id": a["id"], "duplicate_of": b["id"], "confidence": 0.95}
+    await apply(ctx, await triage_run(ctx, "approver"), triage_file([entry]))
+    assert (await get(client, ctx, a["id"]))["state"] == "merged"
+
+    async def mine() -> list[dict]:
+        resp = await client.get(f"/v1/requests/{b['id']}/replies", headers=ctx.as_("approver"))
+        assert resp.status_code == 200, resp.text
+        return [r for r in resp.json() if r["request_id"] == a["id"]]
+
+    (drafted,) = await mine()
+    assert drafted["status"] != "withdrawn"
+    (action,) = await actions(ctx)
+    assert (await undo(client, ctx, action)).status_code == 200
+    assert [r["status"] for r in await mine()] in ([], ["withdrawn"])
