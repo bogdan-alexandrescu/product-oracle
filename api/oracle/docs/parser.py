@@ -10,10 +10,12 @@ front matter), so the agent track can fix a draft in one pass.
 import hashlib
 import json
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
@@ -133,8 +135,13 @@ def too_many_open_brackets(text: str) -> bool:
 
 
 class DraftError(ValueError):
-    def __init__(self, problems: list[ImportProblem]):
+    def __init__(
+        self, problems: list[ImportProblem], *, citations: list["CitationIn"] | None = None
+    ):
         self.problems = problems
+        # The citations that parsed, when the draft was refused (the import checks their
+        # oracle refs too, so one refusal names every problem).
+        self.citations = citations or []
         super().__init__("; ".join(p.message for p in problems))
 
 
@@ -157,6 +164,34 @@ def ref_scheme(ref: str) -> str | None:
     an item's id)."""
     m = _REF_SCHEME_RE.match(_URL_IGNORED_RE.sub("", ref))
     return m[1].lower() if m else None
+
+
+# An http(s) ref is a link to a host: "//" right after the scheme, then the host.
+_LINK_RE = re.compile(r"^https?://[^/\\?#]", re.IGNORECASE)
+
+
+def ref_problem(ref: str, *, oracle: bool = False) -> str | None:
+    """Why a citation's ref is refused at import; None when it is kept. Every ref: no
+    whitespace of any kind at either end, and no control or invisible character anywhere
+    (a browser drops some of them, so " javascript:" could still be read as a scheme). A
+    non-oracle ref is an absolute http(s) URL with a host, a urn, or a plain name (an
+    upload's, an item's id), which never starts with a slash or backslash ("//host" and
+    "/\\host" open another host). An oracle ref names a baseline item, checked at import
+    (oracle.docs.service)."""
+    scheme = None if oracle else ref_scheme(ref)
+    if scheme is not None and scheme not in REF_SCHEMES:
+        return f"ref's scheme '{scheme}:' isn't accepted (http, https or urn)"
+    if ref != ref.strip() or any(
+        unicodedata.category(c)[0] == "C" or unicodedata.category(c) in ("Zl", "Zp") for c in ref
+    ):
+        return "ref has whitespace at an end, or a control or invisible character"
+    if oracle:
+        return None
+    if ref[0] in "/\\":
+        return "ref starts with a slash: a link must be an http(s) URL with a host"
+    if scheme in ("http", "https") and not (_LINK_RE.match(ref) and urlsplit(ref).hostname):
+        return f"ref is not a {scheme} URL with a host ({scheme}://host/...)"
+    return None
 
 
 class CitationIn(BaseModel):
@@ -186,14 +221,13 @@ class CitationIn(BaseModel):
     @classmethod
     def _ref_is_a_link(cls, value: str, info: ValidationInfo) -> str:
         # The web opens an http(s) ref as a link (web/lib/format.ts): a ref of another
-        # scheme (javascript:, data:, ...) never gets in; a urn or a ref with no scheme (an
-        # upload's name, an item's id) does, and shows as text. An oracle ref names a
-        # baseline item (checked at import, oracle.docs.service). Not checked when the
+        # scheme (javascript:, data:, ...), with no host, or that a browser could read as
+        # one elsewhere never gets in (:func:`ref_problem`); a urn or a ref with no scheme
+        # (an upload's name, an item's id) does, and shows as text. Not checked when the
         # source itself is refused.
         source = info.data.get("source")
-        scheme = ref_scheme(value) if source not in (None, "oracle") else None
-        if scheme is not None and scheme not in REF_SCHEMES:
-            raise ValueError(f"ref's scheme '{scheme}:' isn't accepted (http, https or urn)")
+        if source is not None and (problem := ref_problem(value, oracle=source == "oracle")):
+            raise ValueError(problem)
         return value
 
 
@@ -721,7 +755,7 @@ def _parse_draft(markdown: str) -> ParsedDraft:
         problems.append(ImportProblem(code="missing_title", message="front matter needs a title"))
 
     if problems:
-        raise DraftError(problems)
+        raise DraftError(problems, citations=citations)
     return ParsedDraft(
         document=document,
         title=title,
