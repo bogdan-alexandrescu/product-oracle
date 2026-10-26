@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {
   Button,
@@ -765,6 +765,9 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const id = useId();
+  // The router keeps this page's state when it is left (cacheComponents): one Continue that
+  // went through must not leave it "Saving…" when Start a PRD opens it again (#599 review).
+  useEffect(() => () => setBusy(null), []);
 
   const choice = useDraftChoice({ kind, prd });
   const { templateKey, themeKey } = choice;
