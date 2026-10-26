@@ -579,3 +579,12 @@ async def test_list_filters_match_what_readers_see(client):
         assert await listed(private_id, "/v1/questions", status=status) == await listed(
             plain_id, "/v1/questions", status=status
         ), status
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")
