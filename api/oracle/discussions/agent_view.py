@@ -294,4 +294,4 @@ async def for_member_run(
     hidden = await member_hidden(db, run)
     if hidden is None:
         return entries
-    return [e for e in entries if not hidden.names(json.dumps(e, default=str))]
+    return [e for e in entries if not hidden.names_in(e)]
