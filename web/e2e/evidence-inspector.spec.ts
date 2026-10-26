@@ -157,7 +157,8 @@ test("evidence: partial targets — a restricted source shows its kind only, a r
 for (const who of ["commenter", "viewer"] as const) {
   test(`evidence: a ${who} reads the evidence with no Remove and no link form`, async ({ page }) => {
     await evidenceTab(page, `${who}@example.com`);
-    await expect(page.getByText("View only").first()).toBeVisible();
+    // Drawn once: the header has it for a viewer, the evidence toolbar for a commenter.
+    await expect(page.getByText("View only", { exact: true }).filter({ visible: true })).toHaveCount(1);
     await cell(page, "Guided setup", "scope").getByRole("button").click();
     const insp = page.getByRole("complementary", { name: "Guided setup" });
     await expect(insp.getByTestId("evidence-link")).toHaveCount(1);
@@ -233,4 +234,81 @@ test("evidence: dark theme renders the matrix with no sideways page scroll", asy
   await evidenceTab(page);
   await expect(column(page, "metrics")).toHaveAttribute("data-gap", "true");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("evidence: a section counts as unsupported only when nothing under it is supported, and the title never does", async ({ page }) => {
+  await evidenceTab(page);
+  // The level-1 title is never flagged.
+  await expect(column(page, "title")).toBeVisible();
+  await expect(column(page, "title")).not.toHaveAttribute("data-gap", "true");
+  // 5. Proposed flow has nothing of its own, but 5.2 under it cites the draft's sources.
+  await expect(column(page, "s-5")).not.toHaveAttribute("data-gap", "true");
+  await expect(page.getByTestId("evidence-totals").locator('td[data-section="s-5"]')).toHaveText("0 · 0");
+  await expect(page.getByTestId("evidence-totals").locator('td[data-section="s-5"]')).not.toHaveAttribute("data-gap", "true");
+  // Leaf sections with nothing behind them still are.
+  for (const key of ["users", "s-5-1", "s-5-3", "metrics"]) await expect(column(page, key)).toHaveAttribute("data-gap", "true");
+  await expect(page.getByTestId("evidence-totals").locator('td[data-section="s-5-1"]')).toHaveAttribute("data-gap", "true");
+  await expect(page.getByTestId("evidence-unsupported")).toHaveText("4 sections unsupported");
+
+  // "Link to another section" marks only those sections unsupported.
+  await cell(page, "Guided setup", "scope").getByRole("button").click();
+  const select = page.getByRole("complementary", { name: "Guided setup" }).getByRole("form", { name: "Link to another section" }).getByLabel("Section");
+  await expect(select.locator("option", { hasText: "5. Proposed flow" })).toHaveText("5. Proposed flow (s-5)");
+  await expect(select.locator("option", { hasText: "Checkout redesign PRD" })).toHaveText("Checkout redesign PRD (title)");
+  await expect(select.locator("option", { hasText: "5.1 Cart review" })).toHaveText("5.1 Cart review (s-5-1) · unsupported");
+
+  // The section view and its "No links or citations" filter follow the same rule.
+  await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
+  await page.getByRole("group", { name: "Sections shown" }).getByRole("button", { name: /No links or citations/ }).click();
+  const table = page.getByRole("grid", { name: "Sections" });
+  await expect(table.getByRole("row", { name: /5\.1 Cart review/ })).toBeVisible();
+  await expect(table.getByRole("row", { name: /5\. Proposed flow/ })).toHaveCount(0);
+  await expect(table.getByRole("row", { name: /Checkout redesign PRD/ })).toHaveCount(0);
+});
+
+test("evidence: the note on rendered pages shows once on a desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await evidenceTab(page);
+  await expect(page.getByText(/Rendered pages never show these links/).filter({ visible: true })).toHaveCount(1);
+});
+
+test("evidence: removing a target's last link in the coverage view still says Link removed.", async ({ page }) => {
+  await evidenceTab(page);
+  await cell(page, "Guided setup", "scope").getByRole("button").click();
+  const insp = page.getByRole("complementary", { name: "Guided setup" });
+  await insp.getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByText("Link removed.")).toBeVisible();
+  await expect(page.getByTestId("evidence-matrix").locator("tr[data-target]", { hasText: "Guided setup" })).toHaveCount(0);
+});
+
+test("evidence: a link names who made it", async ({ page }) => {
+  await evidenceTab(page, "approver@example.com");
+  await cell(page, "Guided setup", "scope").getByRole("button").click();
+  const insp = page.getByRole("complementary", { name: "Guided setup" });
+  await expect(insp.getByTestId("evidence-link")).toContainText("Admin · ");
+});
+
+test("evidence: the coverage chips turn phone-sized at 600 px, as the rest of the screen", async ({ page }) => {
+  await page.setViewportSize({ width: 620, height: 900 });
+  await evidenceTab(page);
+  const chip = page.getByRole("group", { name: "Rows shown" }).getByRole("button", { name: /^Links/ });
+  expect((await chip.boundingBox())!.height).toBeLessThan(40);
+  await page.setViewportSize({ width: 600, height: 900 });
+  await expect.poll(async () => (await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+});
+
+test("evidence: Cancel clears the Add a section link form", async ({ page }) => {
+  await open(page, "approver@example.com");
+  await page.goto(`${DOC}/v/2/evidence?view=sections`);
+  await page.getByRole("grid", { name: "Sections" }).getByRole("row", { name: /Success metrics/ }).click();
+  const form = page.getByRole("complementary", { name: "7. Success metrics" }).getByRole("form", { name: "Add a section link" });
+  await form.getByLabel("Kind").selectOption("claims");
+  await form.getByLabel("Precision").selectOption("claim");
+  await form.getByLabel("Links to").selectOption({ label: "Guided setup · feature:f.guided-setup" });
+  await form.getByLabel(/^Claim/).fill("Guided setup lifts week-1 activation.");
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(form.getByLabel("Links to")).toHaveValue("");
+  await expect(form.getByLabel("Kind")).toHaveValue("evidences");
+  await expect(form.getByLabel("Precision")).toHaveValue("section");
+  await expect(form.getByRole("button", { name: "Add link" })).toBeDisabled();
 });
