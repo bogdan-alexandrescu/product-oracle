@@ -6,6 +6,7 @@ import { useId, useState, type ReactNode } from "react";
 import { usePolling } from "@/components/JobsPanel";
 import { peopleByIds } from "@/components/PersonPicker";
 import { Button, Chip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { findingSentence, findingText, WarningTicks, type Places } from "@/components/share/PublicWarnings";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type LlmJob, type Schemas } from "@/lib/api/client";
 import { formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
@@ -17,25 +18,7 @@ type Row = Schemas["PublicRowOut"];
 type Finding = Schemas["LeakFindingOut"];
 type Stage = Schemas["PublicTextIn"]["stage"];
 type TextIn = Schemas["PublicTextIn"];
-
-/** The leak check's finding codes, as a person reads them. */
-const FINDING: Record<string, string> = {
-  person_name: "Person name",
-  email_or_phone: "Email or phone",
-  customer_name: "Customer name",
-  alternative_name: "Alternative name",
-  internal_code: "Internal code",
-  internal_host: "Internal address",
-  internal_document: "Internal document",
-  decision: "Decision",
-  pricing: "Pricing",
-  internal_note: "Internal note",
-  money_or_metric: "Money or metric",
-  date: "Date",
-  internal_title_copy: "Internal title copy",
-};
-const findingLabel = (code: string) => FINDING[code] ?? code.replace(/_/g, " ");
-const findingText = (f: Finding) => `${findingLabel(f.code)}: ${f.words.join(", ")}`;
+type PageIn = Schemas["PublicPageIn"];
 
 const STATE: Record<Row["state"], { label: string; kind: ChipKind }> = {
   approved: { label: "Approved", kind: "pass" },
@@ -69,7 +52,7 @@ type Pane = "review" | "preview";
 
 /** A row's refusal: blocking findings, unticked warnings, or a plain message. */
 type Refusal =
-  | { kind: "blocking"; findings: Finding[] }
+  | { kind: "blocking"; message: string; findings: Finding[] }
   | { kind: "warnings"; message: string; warnings: string[] }
   | { kind: "other"; message: string };
 
@@ -80,13 +63,16 @@ function refusal(error: unknown, status: number): Refusal {
   const detail = error && typeof error === "object" && "detail" in error ? (error as { detail: unknown }).detail : null;
   if (detail && typeof detail === "object") {
     const d = detail as { code?: string; message?: string; findings?: Finding[]; warnings?: string[] };
-    if (d.code === "leak_blocking") return { kind: "blocking", findings: d.findings ?? [] };
+    if (d.code === "leak_blocking") return { kind: "blocking", message: d.message ?? "", findings: d.findings ?? [] };
     if (d.code === "warnings_unchecked") return { kind: "warnings", message: d.message ?? 'Tick "I checked this" for each warning first', warnings: d.warnings ?? [] };
     if (d.message) return { kind: "other", message: d.message };
   }
   if (typeof detail === "string") return { kind: "other", message: detail };
   return { kind: "other", message: `Request failed (${status}).` };
 }
+
+/** Why Approve waits, beside the button. */
+const UNTICKED = 'Tick "I checked this" for each warning to approve this text.';
 
 async function putText(doc: string, version: number, itemKey: string, body: TextIn): Promise<Refusal | null> {
   try {
@@ -117,6 +103,15 @@ function RefusalAlert({ refusal }: { refusal: Refusal }) {
       )}
     </div>
   );
+}
+
+async function putPage(doc: string, body: PageIn): Promise<Refusal | null> {
+  try {
+    const { error, response } = await api.PUT("/v1/roadmaps/{doc}/public-page", { params: { path: { doc } }, body });
+    return response.ok ? null : refusal(error, response.status);
+  } catch (e) {
+    return { kind: "other", message: errorMessage(e) };
+  }
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: (id: string, hintId?: string) => ReactNode }) {
@@ -162,12 +157,23 @@ function TextEditor({
   const [ticked, setTicked] = useState<string[]>(t?.checked_warnings ?? []);
   const [refused, setRefused] = useState<Refusal | null>(initialRefusal);
   const [busy, setBusy] = useState(false);
+  const approveWhyId = useId();
 
-  const warningCodes = [
-    ...new Set([
-      ...row.findings.filter((f) => f.severity === "warning").map((f) => f.code),
-      ...(refused?.kind === "warnings" ? refused.warnings : []),
-    ]),
+  // A tick is for the text it was given on: any change to the text clears every tick.
+  const edit = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setTicked([]);
+  };
+  const changed =
+    title !== (t?.title ?? "") || description !== (t?.description ?? "") || quarter !== (t?.announced_quarter ?? "") || url !== (t?.changelog_url ?? "");
+  const warnings = row.findings.filter((f) => f.severity === "warning");
+  const warningCodes = [...new Set([...warnings.map((f) => f.code), ...(refused?.kind === "warnings" ? refused.warnings : [])])];
+  // The saved text's warnings are known; a changed text is checked again when it is saved.
+  const unticked = !changed && warningCodes.some((c) => !ticked.includes(c));
+  const places: Places = [
+    ["the public title", t?.title],
+    ["the public description", t?.description],
+    ["the changelog link", t?.changelog_url],
   ];
 
   const save = async (state: "draft" | "approved") => {
@@ -195,10 +201,10 @@ function TextEditor({
       }}
     >
       <Field label="Public title">
-        {(id) => <input id={id} className={INPUT} maxLength={80} required value={title} onChange={(e) => setTitle(e.target.value)} />}
+        {(id) => <input id={id} className={INPUT} maxLength={80} required value={title} onChange={(e) => edit(setTitle)(e.target.value)} />}
       </Field>
       <Field label="Public description">
-        {(id) => <textarea id={id} className={INPUT} rows={3} maxLength={280} value={description} onChange={(e) => setDescription(e.target.value)} />}
+        {(id) => <textarea id={id} className={INPUT} rows={3} maxLength={280} value={description} onChange={(e) => edit(setDescription)(e.target.value)} />}
       </Field>
       <div className="grid grid-cols-2 gap-3 max-[639px]:grid-cols-1">
         <Field label="Stage">
@@ -221,42 +227,43 @@ function TextEditor({
               placeholder="2026-Q4"
               pattern="\d{4}-Q[1-4]"
               value={quarter}
-              onChange={(e) => setQuarter(e.target.value)}
+              onChange={(e) => edit(setQuarter)(e.target.value)}
             />
           )}
         </Field>
       </div>
       <Field label="Changelog link">
-        {(id) => <input id={id} type="url" className={INPUT} placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} />}
+        {(id) => <input id={id} type="url" className={INPUT} placeholder="https://" value={url} onChange={(e) => edit(setUrl)(e.target.value)} />}
       </Field>
       {refused && <RefusalAlert refusal={refused} />}
-      {warningCodes.length > 0 && (
-        <ul className="flex flex-col gap-1.5">
-          {warningCodes.map((code) => (
-            <li key={code}>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={ticked.includes(code)}
-                  onChange={(e) => setTicked((prev) => (e.target.checked ? [...prev, code] : prev.filter((c) => c !== code)))}
-                />
-                {findingLabel(code)} — I checked this
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
+      <WarningTicks
+        codes={warningCodes}
+        findings={warnings}
+        places={places}
+        ticked={ticked}
+        onTick={(code, on) => setTicked((prev) => (on ? [...prev, code] : prev.filter((c) => c !== code)))}
+      />
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={busy || !title.trim()}>
           Save draft
         </Button>
-        <Button variant="solid" disabled={busy || !title.trim()} onClick={() => void save("approved")}>
+        <Button
+          variant="solid"
+          disabled={busy || !title.trim() || unticked}
+          aria-describedby={unticked ? approveWhyId : undefined}
+          onClick={() => void save("approved")}
+        >
           Approve
         </Button>
         <Button variant="ghost" disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
       </div>
+      {unticked && (
+        <p id={approveWhyId} data-testid="public-approve-why" className="text-[13px] text-text2">
+          {UNTICKED}
+        </p>
+      )}
     </form>
   );
 }
@@ -556,6 +563,94 @@ function Preview({ doc, version, rev }: { doc: string; version: number; rev: num
 }
 
 /**
+ * The Public page's own title and intro. Nobody ticks them: the kinds an item text's
+ * approver ticks block here, so each finding shows in words with no tick, and a save the
+ * API refuses (422 leak_blocking) shows why in place.
+ */
+function PageText({ doc, data, onSaved }: { doc: string; data: Texts; onSaved: () => void }) {
+  const { can } = useMe();
+  const [title, setTitle] = useState(data.public_title ?? "");
+  const [intro, setIntro] = useState(data.public_intro ?? "");
+  const [refused, setRefused] = useState<{ refusal: Refusal; places: Places } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const editable = can("put_public_page");
+  const saved: Places = [
+    ["the page title", data.public_title],
+    ["the intro", data.public_intro],
+  ];
+
+  const save = async () => {
+    setBusy(true);
+    const places: Places = [
+      ["the page title", title.trim()],
+      ["the intro", intro.trim()],
+    ];
+    const result = await putPage(doc, { public_title: title.trim() || null, public_intro: intro.trim() || null });
+    setBusy(false);
+    setRefused(result && { refusal: result, places });
+    if (!result) onSaved();
+  };
+
+  return (
+    <Panel title="Page title and intro" bodyClassName="px-4 py-3">
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <Field label="Page title" hint="Left empty, the page is titled with the company's name.">
+          {(id, hintId) => (
+            <input id={id} aria-describedby={hintId} className={INPUT} maxLength={120} disabled={!editable} value={title} onChange={(e) => setTitle(e.target.value)} />
+          )}
+        </Field>
+        <Field label="Intro">
+          {(id) => <textarea id={id} className={INPUT} rows={2} maxLength={600} disabled={!editable} value={intro} onChange={(e) => setIntro(e.target.value)} />}
+        </Field>
+        {data.page_findings.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Page findings">
+            {data.page_findings.map((f) => (
+              <li key={`${f.code}|${f.words.join()}`}>
+                <Chip kind={f.severity === "blocking" ? "crit" : "warn"} wrap>
+                  {findingSentence(f, saved)}
+                </Chip>
+              </li>
+            ))}
+          </ul>
+        )}
+        {data.page_findings.some((f) => f.severity === "blocking") && (
+          <p className="text-[13px] text-text2">The page leaves its title or intro out until this is fixed.</p>
+        )}
+        {refused && (
+          <div role="alert" className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit">
+            {refused.refusal.kind === "blocking" ? (
+              <>
+                <p>{refused.refusal.message || "The public title or intro names something a public reader may not see"}</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {refused.refusal.findings.map((f) => (
+                    <li key={`${f.code}|${f.words.join()}`}>{findingSentence(f, refused.places)}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p>{refused.refusal.message}</p>
+            )}
+          </div>
+        )}
+        {editable && (
+          <div>
+            <Button type="submit" disabled={busy}>
+              Save
+            </Button>
+          </div>
+        )}
+      </form>
+    </Panel>
+  );
+}
+
+/**
  * O5 §2, the Public check: every item's public text with its leak findings (left) beside
  * the exact page a link holder sees (right); on a phone one pane at a time.
  */
@@ -645,6 +740,7 @@ export function PublicCheck({ doc }: { doc: string }) {
         />
         <div className="grid grid-cols-2 items-start gap-4 max-[1100px]:grid-cols-1">
           <div className={`flex min-w-0 flex-col gap-4 ${pane === "review" ? "" : "max-[639px]:hidden"}`}>
+            <PageText doc={doc} data={data} onSaved={changed} />
             <Panel
               title="Review"
               count={data.rows.length}

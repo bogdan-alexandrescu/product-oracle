@@ -25,6 +25,15 @@ export const SHARING_ROADMAP_SLUG = "example-labs-roadmap";
 export const SHARING_ROADMAP_TITLE = "Platform roadmap, autumn";
 /** Win/loss account labels and request askers' company labels the leak check knows. */
 export const CUSTOMER_LABELS = ["Northwind", "Account 14"];
+/** The decision log's titles, the win/loss plans and quoted prices, and the items' internal notes the leak check knows. */
+export const DECISION_TITLES = ["Retire the legacy exporter"];
+export const PRICING_LABELS = ["Growth Plus plan"];
+export const ITEM_NOTES = ["Keep this quiet until the partner signs the renewal"];
+/** The warnings an item text's approver ticks (api/oracle/roadmap/leak_check.py WARNINGS). */
+const WARNINGS = ["money_or_metric", "date", "internal_title_copy", "internal_document", "decision", "pricing", "internal_note"];
+/** Of those, the kinds that block the page's own title and intro, where nobody ticks (public.py PAGE_BLOCKING). */
+const PAGE_BLOCKING = ["internal_document", "decision", "pricing", "internal_note"];
+const NOTE_WORDS = 5;
 
 export const SHARING_SECTIONS: SectionSeed[] = [
   { key: "title", level: 1, heading: SHARING_ROADMAP_TITLE, body: "Three bets for the autumn from the platform team." },
@@ -172,8 +181,31 @@ function items(v: VersionLike) {
   return out;
 }
 
+const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Each of `names` that `text` holds as whole words, as the text spells it. */
+const namesIn = (text: string, names: string[]) =>
+  names.flatMap((n) => text.match(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(n)}(?![\\p{L}\\p{N}])`, "iu"))?.[0] ?? []);
+
+/** The first five-word run of an internal note that `text` copies, if any. */
+function noteCopies(text: string): string[] {
+  const have = ` ${words(text).join(" ")} `;
+  const out: string[] = [];
+  for (const note of ITEM_NOTES) {
+    const w = words(note);
+    for (let i = 0; i + NOTE_WORDS <= w.length; i++) {
+      const run = w.slice(i, i + NOTE_WORDS).join(" ");
+      if (have.includes(` ${run} `)) {
+        out.push(run);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /** The leak check (api/oracle/roadmap/leak_check.py), on the words the mock knows. */
-function findings(ctx: SharesContext, text: string, internalTitle: string | null, checked: string[] = []): Finding[] {
+function findings(ctx: SharesContext, text: string, internalTitle: string | null): Finding[] {
   const out: Finding[] = [];
   const add = (code: string, severity: Finding["severity"], words: string[]) => words.length && out.push({ code, severity, words: [...new Set(words)] });
   const lower = text.toLowerCase();
@@ -183,9 +215,19 @@ function findings(ctx: SharesContext, text: string, internalTitle: string | null
   add("internal_code", "blocking", text.match(/\b[A-Z]{2,10}-\d+\b|\bG\d+\b|\bD-\d+\b/g) ?? []);
   add("money_or_metric", "warning", text.match(/[$€£]\s?\d[\d,.]*|\d+(\.\d+)?\s?%/g) ?? []);
   if (internalTitle && text.split("\n")[0].trim().toLowerCase() === internalTitle.toLowerCase()) add("internal_title_copy", "warning", [internalTitle]);
-  void checked;
+  const hidden = ctx.documents.filter((d) => (d.visibility ?? "company") !== "company").flatMap((d) => [d.title, d.slug]);
+  add("internal_document", "warning", namesIn(text, hidden));
+  add("decision", "warning", namesIn(text, DECISION_TITLES));
+  add("pricing", "warning", namesIn(text, PRICING_LABELS));
+  add("internal_note", "warning", noteCopies(text));
   return out;
 }
+
+/** The page's own title or intro: nobody ticks them, so PAGE_BLOCKING's kinds block there. */
+const pageFindings = (ctx: SharesContext, text: string | null): Finding[] =>
+  findings(ctx, text ?? "", null)
+    .map((f) => (PAGE_BLOCKING.includes(f.code) ? { ...f, severity: "blocking" as const } : f))
+    .sort((a, b) => Number(a.severity !== "blocking") - Number(b.severity !== "blocking"));
 
 function textOut(ctx: SharesContext, t: TextRow, internal: string): Schemas["PublicTextOut"] {
   const { document_id: _d, source_hash: _s, ...rest } = t;
@@ -212,7 +254,9 @@ function review(ctx: SharesContext, doc: DocLike, v: VersionLike): Review {
     const state = !t ? "missing" : t.state === "excluded" ? "excluded" : t.source_hash !== sourceHash(item.title) ? "changed" : t.state;
     const text = t ? textOut(ctx, t, item.title) : null;
     const found = text?.findings ?? [];
-    const shown = item.serves && state === "approved" && !found.some((f) => f.severity === "blocking");
+    // A warning not ticked (one found since the text was approved) leaves the text out.
+    const unticked = found.some((f) => f.severity === "warning" && !(t?.checked_warnings ?? []).includes(f.code));
+    const shown = item.serves && state === "approved" && !found.some((f) => f.severity === "blocking") && !unticked;
     const reason = !item.serves ? "no_goal" : state === "excluded" ? "excluded" : shown ? null : "no_approved_text";
     if (shown && t) {
       const quarter = t.announced_quarter ? `${t.announced_quarter.slice(5)} ${t.announced_quarter.slice(0, 4)}` : null;
@@ -229,7 +273,7 @@ function review(ctx: SharesContext, doc: DocLike, v: VersionLike): Review {
     company: ctx.company,
     title: page.public_title || `${ctx.company} roadmap`,
     intro: page.public_intro,
-    pageFindings: findings(ctx, `${page.public_title ?? ""}\n${page.public_intro ?? ""}`, null),
+    pageFindings: [...pageFindings(ctx, page.public_title), ...pageFindings(ctx, page.public_intro)],
     removed: {
       internal_titles: rows.length,
       owners: body.split("Owner:").length - 1,
@@ -509,7 +553,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
         announced_quarter: input.announced_quarter ?? null,
         changelog_url: input.changelog_url || null,
         state: input.state ?? "draft",
-        checked_warnings: input.checked_warnings ?? [],
+        checked_warnings: [...new Set(input.checked_warnings ?? [])].filter((c) => WARNINGS.includes(c)).sort(),
         source_hash: sourceHash(item.title),
         updated_at: ctx.now(),
         approved_by: input.state === "approved" ? me.id : null,
@@ -522,8 +566,10 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       const page = (ctx.db.pages[doc.id] ??= { public_title: null, public_intro: null });
       const title = "public_title" in input ? (input.public_title ?? null) : page.public_title;
       const intro = "public_intro" in input ? (input.public_intro ?? null) : page.public_intro;
-      const found = findings(ctx, `${title ?? ""}\n${intro ?? ""}`, null);
-      const blocking = found.filter((f) => f.severity === "blocking");
+      const found = [...pageFindings(ctx, title), ...pageFindings(ctx, intro)];
+      // Only a text this save changes is refused; an unchanged one that now leaks is reported.
+      const changed = [title, intro].filter((t, i) => (t || null) !== [page.public_title, page.public_intro][i]);
+      const blocking = changed.flatMap((t) => pageFindings(ctx, t)).filter((f) => f.severity === "blocking");
       if (blocking.length) return json(422, { detail: { code: "leak_blocking", message: "The public title or intro names something a public reader may not see", findings: blocking } });
       page.public_title = title || null;
       page.public_intro = intro || null;
