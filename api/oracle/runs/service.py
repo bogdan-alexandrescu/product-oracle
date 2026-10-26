@@ -593,7 +593,7 @@ def _summary(
         finished_at=run.finished_at,
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
         review_link=review_link.link(waiting) if waiting else None,
-        error=readable_refusal(run.error, refs.zone),
+        error=readable_refusal(run.error, refs.zone, past=run.status == "failed"),
         stuck=_stuck(run),
         can_retry=_can_retry(run),
         can_stop_cancelling=_cancel_stuck(run) is not None,
@@ -1034,7 +1034,7 @@ def _segment_out(
         autonomy_note=(merged.get("autonomy") or {}).get("note"),
         started_at=segment.started_at,
         finished_at=segment.finished_at,
-        error=readable_refusal(segment.error, zone),
+        error=readable_refusal(segment.error, zone, past=segment.status == "failed"),
         # #258: only while it runs, and only what was read of its current workflow.
         agents=[SegmentAgent(**a) for a in progress.get("agents") or []],
         checked_at=progress.get("checked_at"),

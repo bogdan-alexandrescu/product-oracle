@@ -142,7 +142,7 @@ async def jobs_out(db: AsyncSession, jobs: list[LlmJob]) -> list[LlmJobOut]:
     for j in jobs:
         o = LlmJobOut.model_validate(j)
         if zone is not None:
-            o.error = readable_refusal(o.error, zone)
+            o.error = readable_refusal(o.error, zone, past=j.status == "failed")
         o.version_number = numbers.get(j.version_id) if j.version_id else None
         o.cost_usd = float(j.cost_usd) if j.cost_usd is not None else None
         out.append(o)
