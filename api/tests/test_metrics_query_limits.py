@@ -339,3 +339,158 @@ async def test_a_bypass_is_422_and_never_sent(client, ctx, clock, fake_posthog, 
     assert resp.status_code == 422, resp.text
     assert (await create(client, ctx, source="posthog", query=query)).status_code == 422
     assert len(fake_posthog.requests) == before
+
+
+SAMPLE_OFFSETS = [
+    "SELECT count() FROM events SAMPLE 1 OFFSET 0, cohort_people",
+    "SELECT count() FROM events SAMPLE 1/10 OFFSET 1/2, cohort_people",
+    "SELECT count() FROM (SELECT * FROM events SAMPLE 1 OFFSET 0, numbers(1000000))",
+    "SELECT count() FROM events AS e SAMPLE 0.1 OFFSET 0.5, cohort_people",
+    "SELECT count() FROM events FINAL SAMPLE 1 OFFSET 0, cohort_people",
+    "SELECT count() FROM events WHERE person_id IN "
+    "(SELECT id FROM persons SAMPLE 1 OFFSET 0, cohort_people)",
+]
+
+
+@pytest.mark.parametrize("query", SAMPLE_OFFSETS)
+def test_a_comma_join_after_sample_offset_is_refused(query):
+    """protects=#643 re-review MAJOR 1: HogQL's SAMPLE r OFFSET r belongs to the table, so
+    its OFFSET does not end the FROM clause and a comma join after it is refused, in
+    check_query and in the row-limited text; fails_when=an approver's metric reads
+    cohort_people or scans numbers() past the allowed tables; no_claim=HogQL's own
+    parser (sqlglot's ClickHouse grammar is the one checked)."""
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(query)
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(posthog.limited(query))
+
+
+@pytest.mark.parametrize("query", SAMPLE_OFFSETS[:3])
+async def test_the_pull_path_refuses_a_sample_offset_join(fake_posthog, query):
+    """protects=#643 re-review MAJOR 1: query_number (the weekly pull and Check now)
+    refuses the SAMPLE OFFSET comma join before any request; fails_when=a saved metric
+    reads a table outside the allowed four with the owner's key; no_claim=PostHog's caps."""
+    conn = posthog.Connection(host="eu", project_id="12345", api_key="phx_test")
+    with pytest.raises(posthog.PostHogError):
+        await posthog.query_number(conn, query)
+    assert fake_posthog.requests == []
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # a clause word after "." does not end the join's ON
+        "SELECT count() FROM events e JOIN persons p ON e.properties.limit = 1, cohort_people",
+        "SELECT count() FROM events e JOIN persons p ON p.properties.where = 1, cohort_people",
+        # IN forms that read a table
+        "SELECT count() FROM events WHERE event IN ((cohort_people))",
+        "SELECT count() FROM events WHERE event IN [cohort_people]",
+        "SELECT count() FROM events WHERE notIn(event, cohort_people)",
+        "SELECT count() FROM events WHERE globalIn(event, cohort_people)",
+        "SELECT count() FROM events WHERE globalNotIn(event, cohort_people)",
+        "SELECT count() FROM events WHERE event IN (cohort_people AS c)",
+        "SELECT count() FROM events WHERE event IN (SELECT 1 FROM cohort_people)",
+        # WITH and ARRAY JOIN keep every table checked
+        "WITH x AS (SELECT 1) SELECT * FROM x",
+        "WITH x AS (SELECT * FROM cohort_people) SELECT count() FROM events",
+        "WITH events AS (SELECT * FROM cohort_people) SELECT count() FROM events",
+        "SELECT count() FROM events ARRAY JOIN (SELECT [1] FROM cohort_people) AS a",
+        # what the parser cannot read is refused
+        "SELECT count() FROM events WHERE",
+        "SELECT count() FROM FROM events",
+    ],
+)
+def test_the_parsed_tree_refuses_every_other_table(query):
+    """protects=#643 re-review minors: a clause word after a dot, IN over a table in any
+    form (nested parentheses, [ ], notIn, globalIn, an alias), a WITH or ARRAY JOIN that
+    reads another table, and a query the parser cannot read are refused;
+    fails_when=any of them reaches PostHog; no_claim=HogQL's own parser."""
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT count() FROM events WHERE properties.order = 'x'",
+        "SELECT count() FROM events WHERE properties.group = 'x' AND properties.limit = 1",
+        "SELECT count() FROM events e JOIN persons p ON e.properties.where = p.id WHERE 1 = 1",
+        "SELECT count() FROM events SAMPLE 1/10 OFFSET 1/2 WHERE event = 'x'",
+        "SELECT count() FROM events SAMPLE 0.1",
+        "SELECT count() FROM events e ARRAY JOIN e.properties.items AS item",
+        "WITH x AS (SELECT count() AS n FROM events) SELECT n FROM events",
+        "WITH 7 AS days SELECT count() FROM events WHERE timestamp > now() - INTERVAL days DAY",
+        "SELECT dateDiff('day', min(timestamp), max(timestamp)) FROM events",
+        "SELECT count() FROM events WHERE event IN ('a', 'b') AND properties.$os = 'x'",
+    ],
+)
+def test_names_and_clauses_the_scanner_refused_now_pass(query):
+    """protects=#643 re-review minors: a clause word after a dot (properties.order),
+    SAMPLE ... OFFSET without a comma join, ARRAY JOIN over a column and a WITH whose
+    tables are all allowed pass; fails_when=an ordinary metric query is refused;
+    no_claim=HogQL's own parser."""
+    posthog.check_query(query)
+
+
+def test_the_row_limit_wraps_the_parsed_statement():
+    """protects=#643 re-review: limited() refuses text the parser cannot read as one
+    checked SELECT (no string-glued wrapper escape) and sends the statement unchanged
+    inside SELECT * FROM ( ... ) LIMIT 2; fails_when=a wrapper-closing query is wrapped
+    and sent; no_claim=PostHog's own caps."""
+    for bad in (
+        "SELECT 1) UNION ALL SELECT event FROM (SELECT event FROM events",
+        "SELECT count() FROM events) AS t, cohort_people WHERE (1 = 1",
+        "SELECT count() FROM events SAMPLE 1 OFFSET 0, cohort_people",
+    ):
+        with pytest.raises(posthog.QueryRefused):
+            posthog.limited(bad)
+    query = "SELECT dateDiff('day', min(timestamp), max(timestamp)) FROM events SAMPLE 1/10;"
+    sent = posthog.limited(query)
+    assert sent == f"SELECT * FROM ({query[:-1]}) LIMIT {posthog.MAX_ROWS}"
+
+
+_TABLES = ["events", "events FINAL", "events SAMPLE 1 OFFSET 0", "events SAMPLE 1/10",
+           "(SELECT * FROM events)", "(SELECT * FROM events SAMPLE 1 OFFSET 0)"]  # fmt: skip
+_WORDS = ["order", "where", "limit", "offset", "sample", "group", "having", "prewhere",
+          "window", "qualify", "join", "final", "settings", "array", "global", "e"]  # fmt: skip
+_OTHERS = [", cohort_people", ", numbers(10)", ", system.tables", " JOIN cohort_people c ON 1 = 1",
+           " CROSS JOIN cohort_people", ", (SELECT * FROM cohort_people)",
+           " ARRAY JOIN (SELECT [1] FROM cohort_people) AS a"]  # fmt: skip
+
+
+def _fuzz_cases() -> list[tuple[str, bool]]:
+    """(query, allowed): each table form, with no alias, a bare or AS alias (a clause word
+    or a plain name), followed by another table (refused) or a JOIN of persons (allowed
+    when the alias is a plain name), at the top level, in a subquery or an IN."""
+    cases = []
+    for table in _TABLES:
+        for alias in ["", *(f" {w}" for w in _WORDS), *(f" AS {w}" for w in _WORDS)]:
+            plain = alias.split()[-1:] in ([], ["e"])
+            for wrap in ("{}", "SELECT 1 FROM ({})", "SELECT 1 FROM events WHERE 1 IN ({})"):
+                for other in _OTHERS:
+                    body = f"SELECT count() FROM {table}{alias}{other}"
+                    cases.append((wrap.format(body), False))
+                if plain:
+                    body = f"SELECT count() FROM {table}{alias} JOIN persons p ON 1 = 1 WHERE 1 = 1"
+                    cases.append((wrap.format(body), True))
+    return cases
+
+
+def test_fuzz_aliases_keywords_and_joins():
+    """protects=#643 re-review: over every combination of a table form (FINAL, SAMPLE,
+    SAMPLE OFFSET, a subquery), an alias (none, bare or after AS, a clause word or a
+    name), a place (top level, subquery, IN) and a second source (a comma join, a JOIN,
+    a table function, a system table, ARRAY JOIN over a subquery), a source outside the
+    allowed tables is always refused and a JOIN of persons with a plain alias passes;
+    fails_when=any combination reads another table; no_claim=forms outside these lists."""
+    leaks, refused = [], []
+    for query, allowed in _fuzz_cases():
+        try:
+            posthog.check_query(query)
+            if not allowed:
+                leaks.append(query)
+        except posthog.QueryRefused:
+            if allowed:
+                refused.append(query)
+    assert leaks == []
+    assert refused == []
