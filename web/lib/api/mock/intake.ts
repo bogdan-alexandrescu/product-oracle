@@ -20,6 +20,7 @@
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { displayName } from "@/lib/names";
 import { baselineReviewStatus } from "./baseline";
 import type { V2Db } from "./v2";
@@ -87,6 +88,8 @@ export interface IntakeContext {
   };
   /** H11 Ask people questions: the level Oracle follows now (Recommend without it). */
   questionsLevel?: () => "observe" | "draft" | "recommend" | "act";
+  /** Kept learnings about question categories: they tune the drafted questions' order. */
+  learned?: () => Nudges;
 }
 
 /** H11 questions at Observe: why no batch is proposed or asked (as oracle.intake.autoask). */
@@ -143,8 +146,18 @@ const forbidden = (min: Role) => fail(403, `Requires the ${min} role`);
 const score = (g: Gap) =>
   IMPORTANCE_WEIGHT[g.importance] * g.impact.reduce((s, a) => s + IMPACT_WEIGHT[a], 0) * (1 - KNOWN[g.knowledge_state]);
 const group = (g: Gap) => (OPEN.has(g.status) ? 0 : g.status === "deferred" ? 1 : 2);
+/** Kept learnings about question categories, read as each request starts (./learned.ts). */
+let learned: Nudges = {};
 function ranked(gaps: Gap[]): Gap[] {
   return [...gaps].sort((a, b) => group(a) - group(b) || score(b) - score(a));
+}
+/** The nudge each gap was last ranked with, by gap id (the API's analysis["learned"]): a gap
+ * whose question was asked keeps its own, so asked questions are never re-ranked. */
+const synced = new Map<string, Nudge | undefined>();
+/** A drafted question's why, and the learning that moved it ("Recommended because ..."). */
+function rationaleOf(g: Gap): string {
+  const n = synced.get(g.id);
+  return `${LABEL[g.category]} gap, ${g.importance}.${n ? ` ${nudgeReason(n)}` : ""}`;
 }
 
 function rankedOut(gaps: Gap[]): Schemas["RankedGap"][] {
@@ -379,18 +392,22 @@ function addIntake(db: V2Db, authorId: string, title: string, brief: string, sou
 
 /** Keep one question per open gap, drafted in rank order. */
 function syncQuestions(db: V2Db, intake: Intake, at = now()) {
-  ranked(db.gaps.filter((g) => g.intake_id === intake.id)).forEach((g, i) => {
+  const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
+  const asked = (g: Gap) => db.questions.some((q) => q.gap_id === g.id && q.status !== "draft" && q.status !== "withdrawn");
+  for (const g of gaps) if (!asked(g)) synced.set(g.id, learned[g.category]);
+  const tuned = (g: Gap) => applyNudge(score(g), synced.get(g.id));
+  [...gaps].sort((a, b) => group(a) - group(b) || tuned(b) - tuned(a)).forEach((g, i) => {
     const mine = db.questions.filter((q) => q.gap_id === g.id && q.status !== "withdrawn");
     if (!OPEN.has(g.status)) {
       mine.filter((q) => q.status === "draft").forEach((q) => (q.status = "withdrawn"));
       return;
     }
-    mine.filter((q) => q.status === "draft").forEach((q) => (q.priority = (i + 1) * 10));
+    mine.filter((q) => q.status === "draft").forEach((q) => Object.assign(q, { priority: (i + 1) * 10, rationale: rationaleOf(g) }));
     if (mine.length || g.status !== "unknown") return;
     const prompt = CATEGORIES.find((c) => c[0] === g.category)?.[4] ?? g.statement;
     db.questions.push({
       id: uuid(), gap_id: g.id, intake_id: intake.id, document_id: intake.document_id, category: g.category,
-      prompt, rationale: `${LABEL[g.category]} gap, ${g.importance}.`, priority: (i + 1) * 10, batch: null,
+      prompt, rationale: rationaleOf(g), priority: (i + 1) * 10, batch: null,
       asked_to: g.owner_id, asked_by: null, module_key: g.related_modules[0] ?? null, section_key: g.section_keys[0] ?? null,
       status: "draft", created_at: at, updated_at: at,
     });
@@ -500,6 +517,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const findIntake = (id: string) => db.intakes.find((i) => i.id === id);
+  learned = ctx.learned?.() ?? {};
 
   if (p[1] === "intakes" && p.length === 2 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");

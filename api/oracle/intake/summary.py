@@ -494,12 +494,14 @@ class View:
         self.raw = {g.id: g for g in raw}
         self.views = sharing.gap_views(raw, self.reg, self.v)
         self.gaps = [self.views[g.id] for g in raw if g.id in self.views]
-        # Anyone but the author reads each question's place among what everyone sees.
-        priorities = None if self.v.is_author else engine.priorities(self.intake, raw)
+        # Anyone but the author reads each question's place among what everyone sees,
+        # ranked with the learnings of the last sync, as the stored order is.
+        learned = engine.synced_learned(self.intake)
+        priorities = None if self.v.is_author else engine.priorities(self.intake, raw, learned)
         self.questions = [
             q
             for q in (
-                sharing.question_view(q, self.raw, self.views, priorities)
+                sharing.question_view(q, self.raw, self.views, priorities, learned)
                 for q in await engine.intake_questions(db, self.intake.id)
             )
             if q is not None
