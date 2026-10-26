@@ -129,7 +129,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
@@ -471,6 +471,31 @@ def flow_catalog() -> FlowCatalog:
     )
 
 
+def creator_only_visible(db: AsyncSession) -> ColumnElement[bool] | None:
+    """#624 review: the runs of a flow private to its creator (``FlowDef.creator_only``,
+    Oracle's read of an intake) that the session's principal may list, as a WHERE clause
+    on :class:`Run`; None for Oracle's own sessions, which see every run. Only the run's
+    creator sees one: a person, their personal token or MCP client, or a run they
+    started, unless that run reads as a member (its output is every member's)."""
+    principal = visibility.principal_of(db)
+    if principal is None:
+        return None
+    others = Run.flow.not_in(flows.CREATOR_ONLY_FLOWS)
+    user_id = getattr(principal, "user_id", None)
+    if user_id is None or getattr(principal, "as_member", False):
+        return others
+    return or_(others, Run.created_by == user_id)
+
+
+def creator_only_hidden(db: AsyncSession, run: Run) -> bool:
+    """:func:`creator_only_visible` on a loaded run."""
+    principal = visibility.principal_of(db)
+    if principal is None or run.flow not in flows.CREATOR_ONLY_FLOWS:
+        return False
+    user_id = getattr(principal, "user_id", None)
+    return user_id is None or getattr(principal, "as_member", False) or run.created_by != user_id
+
+
 async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -> Run:
     stmt = select(Run).where(Run.id == run_id)
     if lock:
@@ -478,9 +503,15 @@ async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -
         stmt = stmt.with_for_update().execution_options(populate_existing=True)
     run = await db.scalar(stmt)
     # H8: a run on a document the principal may not see (an update, for a commenter or a
-    # viewer) is as absent as its document, with its segments and files.
-    if run is None or (
-        run.document_id is not None and await visibility.hidden_document_ids(db, [run.document_id])
+    # viewer) is as absent as its document, with its segments and files; so is another
+    # member's run of a flow private to its creator (#624 review).
+    if (
+        run is None
+        or creator_only_hidden(db, run)
+        or (
+            run.document_id is not None
+            and await visibility.hidden_document_ids(db, [run.document_id])
+        )
     ):
         raise NotFound(f"run {run_id} not found")
     return run
@@ -1527,6 +1558,8 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
     if hidden := await visibility.hidden_document_ids(db):
         # H8: no row for a run on a document the principal may not see.
         stmt = stmt.where(or_(Run.document_id.is_(None), Run.document_id.not_in(hidden)))
+    if (private := creator_only_visible(db)) is not None:
+        stmt = stmt.where(private)
     runs = list(await db.scalars(stmt))
     refs = await _refs(db, runs)
     ids = [r.id for r in runs]
@@ -9125,6 +9158,25 @@ async def dismiss_overrun(db: AsyncSession, principal: Principal, run_id: uuid.U
     await db.commit()
 
 
+async def end_as_oracle(db: AsyncSession, run_id: uuid.UUID, reason: str) -> bool:
+    """Oracle ends a background run it started itself (INT2: a newer read of the same
+    intake replaces it, or a read that could not start falls back to the built-in job):
+    its live workflow is cancelled (one SwarmCloud does not confirm stays attached and the
+    tick cancels it again), its open segments are cancelled and its tokens revoked. The
+    caller commits. False when the run had already ended."""
+    run = await _get_run(db, run_id, lock=True)
+    if run.status in FINAL:
+        return False
+    for segment in await _segments(db, run.id):
+        if segment.status in ("pending", "running"):
+            unqueue(segment)
+            segment.status = "cancelled"
+            segment.finished_at = _now()
+    await _finish(db, run, "cancelled", reason)
+    await audit.record(db, audit.ORACLE, "run.cancelled", "run", run.id, {"reason": reason})
+    return True
+
+
 async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     """Cancel the run: its workflows are cancelled (a lost submission looked up first, and
     cancelled if it landed), its checkpoints skipped. SwarmCloud is called without the
@@ -9847,6 +9899,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     request_inbox = await request_rows(db, principal)
     counted += sum(1 for r in request_inbox if r.counts)
+    # INT2: intakes of mine Oracle couldn't read twice in a row.
+    from oracle.intake.read import inbox_rows as intake_read_rows
+
+    intake_reads = await intake_read_rows(db, principal)
+    counted += len(intake_reads)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9906,6 +9963,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         last_seen_at=seen,
         discussions=discussions,
         requests=request_inbox,
+        intake_reads=intake_reads,
     )
 
 

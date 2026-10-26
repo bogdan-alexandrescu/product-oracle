@@ -219,7 +219,10 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     )
     await ask(db, principal, intake, body.batch_size)
     if body.ai_extraction:
-        await queue_extraction(db, principal, intake)
+        # INT2: Oracle's read (a SwarmCloud run; the built-in job as fallback or rollback).
+        from oracle.intake import read
+
+        await read.start_read(db, principal, intake)
     return intake
 
 
@@ -292,7 +295,8 @@ async def _answer_gap(
 
 
 async def queue_extraction(db: AsyncSession, principal: Principal | None, intake: ProductIntake):
-    """Light extraction on Oracle's built-in model jobs (one queued job per intake)."""
+    """Light extraction on Oracle's built-in model jobs (one queued job per intake): the
+    SwarmCloud read's fallback and the rollback (``oracle.intake.read``)."""
     queued = await db.scalar(
         select(LlmJob).where(
             LlmJob.intake_id == intake.id,
@@ -519,8 +523,10 @@ async def repin(db: AsyncSession, principal: Principal, intake: ProductIntake) -
         db, principal, "intake.repinned", "intake", intake.id,
         {"version": version, "snapshot_id": str(snapshot.id)},
     )  # fmt: skip
-    if (intake.analysis or {}).get("extraction", {}).get("ai"):
-        await queue_extraction(db, principal, intake)
+    # INT2: Oracle's read of the new snapshot; one under way is ended first.
+    from oracle.intake import read
+
+    await read.start_read(db, principal, intake)
     return snapshot
 
 

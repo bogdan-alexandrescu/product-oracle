@@ -58,6 +58,17 @@ async def tick_company(
         await db.rollback()
         out.errors.append(exc)
     try:
+        # INT2: Oracle's intake reads: follow those under way (a run that could not start
+        # or failed falls back to the built-in job), then start the reads of intakes whose
+        # queued job moved to SwarmCloud (at most 20 a tick).
+        from oracle.intake import read as intake_read
+
+        await intake_read.tick(db)
+    except Exception as exc:
+        log.exception("tick: intake reads failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
+    try:
         # F5-2: code maps whose run ended, and one refresh per repo whose map is stale.
         from oracle.engineering import codemaps
 
