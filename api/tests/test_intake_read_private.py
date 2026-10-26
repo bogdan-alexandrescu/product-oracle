@@ -129,3 +129,21 @@ async def test_only_the_authors_mcp_client_reads_the_read_run(client):
         assert got.is_error and "HTTP 404" in text_of(got), (who, text_of(got))
         assert art.is_error and "HTTP 404" in text_of(art), (who, text_of(art))
         assert "Returning buyers" not in text_of(art), who
+
+
+# protects=the discussion panel's Runs screen context (built with Oracle's view, read by
+# every member's discussion) never lists an intake read, not even in its author's own
+# discussion; fails_when=the context names the run; no_claim=the model's reply.
+async def test_the_runs_screen_context_leaves_out_the_intake_read(client):
+    from tests.test_hop_panel import screen_context
+
+    ctx = await company()
+    set_runtime(FakeRuntime({"read": [Outcome(polls=50)]}))
+    await make_item(ctx, "commenter", content=PAIN, title="#support thread")
+    await create_intake(client, ctx, ai_extraction=True)
+    async with tenant_session(ctx.tenant_id) as s:
+        run = await s.scalar(select(Run).where(Run.flow == "intake_analysis"))
+    assert run is not None and run.status == "running"
+    built = await screen_context(client, ctx, "/runs")
+    assert str(run.id) not in {e["ref"] for e in built.entries.values()}
+    assert "Oracle's read" not in "\n".join(built.lines)
