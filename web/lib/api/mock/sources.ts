@@ -5,6 +5,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { CitedItem } from "./baseline";
+import { FIREFLIES_DEFAULT_ENDPOINT, mockConnectionEndpoint } from "./connections";
 import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID } from "./notion";
@@ -37,6 +38,12 @@ export type SourcesContext = {
 
 
 export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
+
+/** A Fireflies connection's endpoint, as Settings > Connections set it (the default otherwise). */
+function withEndpoint(c: Schemas["ConnectionChoice"]): Schemas["ConnectionChoice"] {
+  if (c.id !== FIREFLIES_CONNECTION_ID) return c;
+  return { ...c, endpoint_url: mockConnectionEndpoint(c.id) ?? FIREFLIES_DEFAULT_ENDPOINT };
+}
 
 const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
   slack: [
@@ -600,7 +607,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         kind,
         provider: PROVIDER[kind],
         connector_available: AVAILABLE[kind],
-        connections: PROVIDER[kind] ? (CONNECTIONS[PROVIDER[kind]!] ?? []) : [],
+        connections: PROVIDER[kind] ? (CONNECTIONS[PROVIDER[kind]!] ?? []).map(withEndpoint) : [],
       })),
     );
   }

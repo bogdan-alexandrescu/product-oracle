@@ -29,6 +29,7 @@ from oracle.auth.models import User
 from oracle.authz import require_role
 from oracle.connections.models import Connection
 from oracle.connections.providers import reconnect_reason
+from oracle.connections.router import endpoint_url as connection_endpoint
 from oracle.sources import coverage, items, service, store, uploads
 from oracle.sources import search as search_service
 from oracle.sources import sync as sync_engine
@@ -185,6 +186,7 @@ async def list_source_kinds(principal: CurrentPrincipal, db: TenantDB) -> list[S
                         account_label=c.account_label,
                         status=c.status,
                         reconnect_reason=reconnect_reason(c.provider, list(c.scopes or [])),
+                        endpoint_url=connection_endpoint(c),
                     )
                     for c in conns
                 ],

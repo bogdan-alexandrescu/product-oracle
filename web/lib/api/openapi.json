@@ -10298,7 +10298,71 @@
             "description": "A token Oracle will not use (a Slack bot token)"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/connections/{connection_id}/endpoint": {
+      "put": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Set Connection Endpoint",
+        "description": "Change a Fireflies connection's GraphQL endpoint (null: back to the default).\nOracle owners only; the API key is entered again and checked at the new endpoint\n(a stored key is never sent to another endpoint). Recorded in the audit log.",
+        "operationId": "set_connection_endpoint",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fireflies rejected the key, or it belongs to another account"
+          },
+          "403": {
+            "description": "Only an Oracle owner sets an endpoint"
+          },
+          "422": {
+            "description": "An endpoint Oracle does not call, or not a Fireflies connection"
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/connections/{provider}/authorize": {
@@ -54416,6 +54480,17 @@
               }
             ],
             "title": "Reconnect Reason"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
           }
         },
         "type": "object",
@@ -54532,6 +54607,17 @@
               }
             ],
             "title": "Reconnect Reason"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
           }
         },
         "type": "object",
@@ -61186,6 +61272,33 @@
           "applied"
         ],
         "title": "EdgeWriteOut"
+      },
+      "EndpointIn": {
+        "properties": {
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "EndpointIn"
       },
       "EntityCreate": {
         "properties": {
@@ -106798,6 +106911,18 @@
               }
             ],
             "title": "Label"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
           }
         },
         "type": "object",

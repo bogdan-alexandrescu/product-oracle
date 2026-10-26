@@ -56,6 +56,9 @@ class Connection(TenantScoped, Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Fireflies only: the GraphQL endpoint an owner set (https, checked by
+    # oracle.sources.connectors.fireflies.check_endpoint); None reads Fireflies' own API.
+    endpoint_url: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

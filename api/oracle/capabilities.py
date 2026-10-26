@@ -153,6 +153,9 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_again_run": "owner",
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
+    # A Fireflies endpoint is an owner's to set (on connect, or on its own route); below
+    # that, connecting without one (the input decides).
+    "connect_with_token": "owner",
     "create_checkpoint_action": "owner",
     "create_discussion_change": None,
     "create_discussion_message": None,
@@ -215,6 +218,7 @@ PER_ITEM: dict[str, Role | None] = {
     "revoke_interview": "approver",
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
+    "set_connection_endpoint": "owner",
     "set_document_visibility": "owner",
     "skip_request_reply": "approver",
     "stage_checkpoint_action": "owner",

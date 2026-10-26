@@ -180,6 +180,8 @@ function SourcesSearchPage() {
   const wanted = params.get("source");
 
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
+  // The connection each source reads (a Fireflies one shows its endpoint).
+  const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
   const coverage = useQuery("coverage", () => unwrap(api.GET("/v1/sources/coverage")));
   const rows = coverage.data?.sources;
   const current = rows?.find((r) => r.source_id === wanted) ?? rows?.[0];
@@ -206,6 +208,8 @@ function SourcesSearchPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const onAuth = useAuthRedirect();
   const names = new Map((sources.data ?? []).map((s) => [s.id, s.name]));
+  const currentConnection = (sources.data ?? []).find((s) => s.id === currentId)?.connection_id;
+  const endpoint = currentConnection ? kinds.data?.flatMap((k) => k.connections).find((c) => c.id === currentConnection)?.endpoint_url : null;
 
   async function run(e: FormEvent) {
     e.preventDefault();
@@ -295,6 +299,7 @@ function SourcesSearchPage() {
         onSync={() => void syncNow()}
         onLoadMore={() => void loadMore()}
         loadingMore={loadingMore}
+        endpoint={endpoint}
       />
     );
   } else if (tab === "company" && cPicked && !isPhone) {

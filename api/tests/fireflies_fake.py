@@ -48,6 +48,8 @@ class FakeFireflies:
     # Answer every query with this response instead (errors, rate limits).
     error: httpx.Response | None = None
     api_key: str = API_KEY
+    # The GraphQL endpoint the fake answers at (a connection's configured endpoint).
+    api_url: str = API_URL
     requests: list[dict[str, Any]] = field(default_factory=list)
     # Transcripts still being processed: answered as null this many more times.
     processing: dict[str, int] = field(default_factory=dict)
@@ -57,7 +59,7 @@ class FakeFireflies:
     forbidden: set[str] = field(default_factory=set)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        assert str(request.url) == API_URL
+        assert str(request.url) == self.api_url
         assert request.headers["Authorization"] == f"Bearer {self.api_key}"
         body = json.loads(request.content)
         self.requests.append(body)

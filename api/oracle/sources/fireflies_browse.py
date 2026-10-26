@@ -9,7 +9,9 @@ Browsing spends the person's Fireflies quota (the lower Fireflies plans allow 50
 calls a day), so its cost is bounded per connection: at most CALLS_PER_MINUTE and
 CALLS_PER_DAY Fireflies calls are made for browsing (a series list reads its window's
 pages, each one call, up to fireflies.SERIES_PAGES, and stops sooner where the budget
-does), the rest of the quota being left to syncs. The calls
+does), the rest of the quota being left to syncs. A connection whose owner-set endpoint is not
+on fireflies.ai (a GraphQL service of the company's own, not Fireflies' plan quota)
+browses on the looser OTHER_HOST_CALLS_PER_MINUTE and OTHER_HOST_CALLS_PER_DAY. The calls
 are counted in the database (``browse_calls``), so the budget holds across API
 processes; past it the routes answer 429 "Fireflies limit reached, try later". Answers
 are also cached for CACHE_SECONDS in the API process; a cached answer costs nothing, but
@@ -35,7 +37,7 @@ from oracle.auth.deps import TenantDB
 from oracle.connections import browse
 from oracle.connections import service as connections
 from oracle.connections.models import Connection
-from oracle.connections.router import ProviderHttp, UserPrincipal
+from oracle.connections.router import FirefliesHttp, UserPrincipal
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
@@ -46,14 +48,27 @@ router = APIRouter(prefix="/v1", tags=["connections"])
 
 CACHE_SECONDS = 60.0
 CACHE_ENTRIES = 1000
+# The browse budgets, in one place: fireflies.ai's (the lower Fireflies plans allow 50
+# calls a day), and the looser one of an owner-set endpoint on another host.
 CALLS_PER_MINUTE = 10
 CALLS_PER_DAY = 25
+OTHER_HOST_CALLS_PER_MINUTE = 60
+OTHER_HOST_CALLS_PER_DAY = 1000
 LIMIT_REACHED = "Fireflies limit reached, try later"
 UNREACHABLE = "Fireflies could not be reached: try again in a moment"
 _WINDOWS = (
     (timedelta(minutes=1), CALLS_PER_MINUTE, "a minute"),
     (timedelta(days=1), CALLS_PER_DAY, "a day"),
 )
+_OTHER_HOST_WINDOWS = (
+    (timedelta(minutes=1), OTHER_HOST_CALLS_PER_MINUTE, "a minute"),
+    (timedelta(days=1), OTHER_HOST_CALLS_PER_DAY, "a day"),
+)
+
+
+def _budget(conn: Connection) -> tuple[tuple[timedelta, int, str], ...]:
+    return _WINDOWS if fireflies.fireflies_host(conn.endpoint_url) else _OTHER_HOST_WINDOWS
+
 
 _clock = time.monotonic
 _cache: OrderedDict[Hashable, tuple[float, object]] = OrderedDict()
@@ -147,11 +162,12 @@ def _limited(detail: str, seconds: int | None) -> HTTPException:
 async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
     """Reserve ``calls`` Fireflies calls for this connection, or answer 429. Commits.
     Counted in the one browse budget of every picker (oracle.connections.browse)."""
-    windows = tuple((window, limit) for window, limit, _ in _WINDOWS)
+    budget = _budget(conn)
+    windows = tuple((window, limit) for window, limit, _ in budget)
     refused = await browse.reserve(db, conn.id, calls, windows, _now())
     if refused is not None:
         seconds, index = refused
-        _, limit, per = _WINDOWS[index]
+        _, limit, per = budget[index]
         raise _limited(
             f"Browsing may make {limit} Fireflies calls {per} for this connection, so "
             f"syncs keep the rest of your Fireflies quota. Try again in {_later(seconds)}.",
@@ -162,7 +178,7 @@ async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
 async def _more(db: TenantDB, conn: Connection) -> bool:
     """Reserve one more Fireflies call for a series list's next page: False when the
     browse budget refuses it."""
-    windows = tuple((window, limit) for window, limit, _ in _WINDOWS)
+    windows = tuple((window, limit) for window, limit, _ in _budget(conn))
     return await browse.reserve(db, conn.id, 1, windows, _now()) is None
 
 
@@ -177,8 +193,8 @@ async def _cached(
             f"The Fireflies connection is {conn.status}: reconnect it in Settings > Connections",
         )
     now = _clock()
-    # A reconnected key (new ciphertext) is another cache entry.
-    full_key = (conn.id, hashlib.sha256(conn.ciphertext).hexdigest(), key)
+    # A reconnected key (new ciphertext) or another endpoint is another cache entry.
+    full_key = (conn.id, hashlib.sha256(conn.ciphertext).hexdigest(), conn.endpoint_url, key)
     hit = _cache.get(full_key)
     if hit is not None and hit[0] > now:
         return hit[1]
@@ -221,6 +237,9 @@ async def _browse(db: TenantDB, conn: Connection, call):
             status.HTTP_409_CONFLICT,
             "Fireflies rejected the API key: reconnect it in Settings > Connections",
         ) from None
+    except fireflies.EndpointRefused as e:
+        # Oracle's own words (a redirect it does not follow): never the key.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e)) from None
     except base.ConnectorError as e:
         # Redacted like a sync's error: Fireflies may echo the key back.
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, redact(str(e), credential)) from None
@@ -247,7 +266,7 @@ async def list_fireflies_meetings(
     connection_id: uuid.UUID,
     principal: UserPrincipal,
     db: TenantDB,
-    http: ProviderHttp,
+    http: FirefliesHttp,
     search: Annotated[str, Query(max_length=255)] = "",
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
@@ -289,7 +308,7 @@ async def list_fireflies_series(
     connection_id: uuid.UUID,
     principal: UserPrincipal,
     db: TenantDB,
-    http: ProviderHttp,
+    http: FirefliesHttp,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> FirefliesSeriesList:
