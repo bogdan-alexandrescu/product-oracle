@@ -41,6 +41,8 @@ export async function capabilitiesOut(role: Role, engineeringLead: boolean, lead
   const operations: Record<string, boolean> = {};
   for (const [op, need] of Object.entries(min)) operations[op] = !runOnly.has(op) && (at(role, need) || (engineeringLead && op in lead && at(role, lead[op])));
   const decide_engineering_stops = leadNamed ? role === "owner" || (engineeringLead && at(role, "commenter")) : at(role, "approver");
-  // #723: the mock server says whether Simple is on (MOCK_SIMPLE_MODE_KEY).
-  return { role, engineering_lead: engineeringLead, operations, decide_engineering_stops, per_item: perItem, simple_mode: false };
+  // #723: the mock server says whether Simple is on (MOCK_SIMPLE_MODE_KEY). D13: viewers and
+  // commenters land in Simple without a saved mode, as the API's default_experience says.
+  const default_experience = at(role, "approver") ? "studio" : "simple";
+  return { role, engineering_lead: engineeringLead, operations, decide_engineering_stops, per_item: perItem, simple_mode: false, default_experience };
 }

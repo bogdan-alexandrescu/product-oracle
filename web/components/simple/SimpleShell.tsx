@@ -32,6 +32,17 @@ function isActive(pathname: string, d: Dest): boolean {
 }
 
 /**
+ * Whether Simple's page and rail may draw (#725 review): once the capabilities say Simple is
+ * on, never while they load or say it is off (the page then opens its Studio match). Signed
+ * out or unreadable, the page draws so its own calls send the person to sign in or say why.
+ */
+export function useSimpleShown(): boolean {
+  const { me, loading, capsReady, capsError, simpleMode } = useMe();
+  if (!loading && !me) return true;
+  return (capsReady && simpleMode) || !!capsError;
+}
+
+/**
  * Simple's rail (#723 S1): the [Simple | Studio] switch on top, its six destinations and the
  * user menu; on a phone, the same bottom tab bar and More drawer Studio uses. Its look comes
  * from the rail tokens under html[data-mode="simple"] (globals.css). While Simple is off, a
@@ -51,6 +62,9 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   useEffect(() => {
     if (off) router.replace(switchTarget(pathname, "studio"));
   }, [off, pathname, router]);
+
+  const shown = useSimpleShown();
+  if (!shown) return null;
 
   const tabDests = TABS.map((t) => SIMPLE_DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = SIMPLE_DESTINATIONS.filter((d) => !TABS.includes(d.label));

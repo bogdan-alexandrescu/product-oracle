@@ -1,13 +1,13 @@
 "use client";
 
-import { api, unwrap } from "@/lib/api/client";
-import type { Role } from "@/lib/me";
+import { api, ApiError, unwrap } from "@/lib/api/client";
 
 /**
  * #723 S1: the two modes of the app, Simple and Studio (D10, D17). A page's mode is in its
  * path (`/simple/...` is Simple, everything else Studio), so a link opens in the mode it was
  * shared from (D13); the person's saved mode (`experience` in GET /v1/me/preferences), or
- * their role's default, only decides where they land after sign-in and on `/`.
+ * their role's default (`default_experience` in GET /v1/me/capabilities), only decides where
+ * they land after sign-in and on `/`.
  */
 export type Mode = "simple" | "studio";
 
@@ -20,16 +20,17 @@ export function modeOf(pathname: string): Mode {
 
 export const homeOf = (mode: Mode) => (mode === "simple" ? SIMPLE_HOME : STUDIO_HOME);
 
-/** Unset, viewers and commenters land in Simple, approvers and owners in Studio (owner, D13). */
-export function defaultMode(role: Role | null | undefined): Mode {
-  return role === "viewer" || role === "commenter" ? "simple" : "studio";
+/**
+ * Where a person lands: their saved mode's home, else their role's default (the API's
+ * `default_experience`: viewers and commenters in Simple, D13); Studio while Simple is off.
+ */
+export function landingOf(simpleOn: boolean, saved: Mode | null | undefined, byRole: Mode | null | undefined): string {
+  if (!simpleOn) return STUDIO_HOME;
+  return homeOf(saved ?? byRole ?? "studio");
 }
 
-/** Where a person lands: their saved mode's home, else their role's; Studio while Simple is off. */
-export function landingOf(simpleOn: boolean, saved: Mode | null | undefined, role: Role | null | undefined): string {
-  if (!simpleOn) return STUDIO_HOME;
-  return homeOf(saved ?? defaultMode(role));
-}
+/** Plain sign-in, without `next`: after it, the landing rule decides where they go. */
+export const SIGN_IN = "/login";
 
 const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
@@ -67,13 +68,14 @@ export function saveMode(mode: Mode): Promise<unknown> {
 
 /**
  * Where the signed-in person lands (after sign-in, and on `/`): reads whether Simple is on,
- * their role and their saved mode. Studio's Home when any of it cannot be read.
+ * their role's default mode and their saved mode. Signed out, plain sign-in (#725 review:
+ * a `next` would pin them to one mode); Studio's Home when any of it cannot be read.
  */
 export async function loadLanding(): Promise<string> {
   try {
     const [caps, prefs] = await Promise.all([unwrap(api.GET("/v1/me/capabilities")), unwrap(api.GET("/v1/me/preferences"))]);
-    return landingOf(caps.simple_mode ?? false, prefs.experience, caps.role);
-  } catch {
-    return STUDIO_HOME;
+    return landingOf(caps.simple_mode ?? false, prefs.experience, caps.default_experience);
+  } catch (e) {
+    return e instanceof ApiError && e.status === 401 ? SIGN_IN : STUDIO_HOME;
   }
 }

@@ -29,6 +29,9 @@ class Capabilities(BaseModel):
     # #723: Simple mode is on (ORACLE_SIMPLE_MODE): the web shows the [Simple | Studio]
     # switch and lands people by their saved mode or role.
     simple_mode: bool = False
+    # #723 (D13): where the caller lands while they have no saved mode: Simple for viewers
+    # and commenters, Studio for approvers and owners.
+    default_experience: Literal["simple", "studio"] = "studio"
 
 
 class Me(BaseModel):

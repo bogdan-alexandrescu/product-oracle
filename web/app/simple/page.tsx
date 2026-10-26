@@ -44,8 +44,9 @@ function Part<T>({ q, empty, emptyId, children }: { q: { data: T[] | undefined; 
 }
 
 /**
- * Simple's Home (#723 S1): decisions waiting for me, the next meeting (H2 rituals) and this
- * quarter's plan (the Plan's Now items) as a strip, each with its empty state. Proposals on my
+ * Simple's Home (#723 S1): decisions waiting for me, the next meeting (H2 rituals) and the
+ * Plan's Now items as a strip, each with its empty state (labelled "Now", what it is, until
+ * S2's quarter dates land: #725 review). Proposals on my
  * items and what changed since my last visit arrive with later parts of Simple.
  */
 export default function SimpleHome() {
@@ -95,7 +96,7 @@ export default function SimpleHome() {
       </SimpleSection>
 
       <SimpleSection
-        title="This quarter"
+        title="Now"
         testId="simple-quarter"
         action={
           <Link href="/simple/roadmap" className="simple-small font-semibold hover:underline">
@@ -103,9 +104,9 @@ export default function SimpleHome() {
           </Link>
         }
       >
-        <Part q={quarter} empty="Nothing planned for this quarter yet." emptyId="simple-quarter-empty">
+        <Part q={quarter} empty="Nothing in the plan's Now yet." emptyId="simple-quarter-empty">
           {(items) => (
-            <ol className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1" aria-label="This quarter's items">
+            <ol className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1" aria-label="Now's items">
               {items.map((i) => (
                 <li key={i.id} data-testid="simple-quarter-item" className="flex w-60 flex-none flex-col gap-1 rounded-[var(--simple-card-radius)] bg-surface2 p-4">
                   <span className="font-semibold">{i.title}</span>

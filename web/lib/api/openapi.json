@@ -50890,6 +50890,15 @@
             "type": "boolean",
             "title": "Simple Mode",
             "default": false
+          },
+          "default_experience": {
+            "type": "string",
+            "enum": [
+              "simple",
+              "studio"
+            ],
+            "title": "Default Experience",
+            "default": "studio"
           }
         },
         "type": "object",

@@ -15227,6 +15227,12 @@ export interface components {
              * @default false
              */
             simple_mode: boolean;
+            /**
+             * Default Experience
+             * @default studio
+             * @enum {string}
+             */
+            default_experience: "simple" | "studio";
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
