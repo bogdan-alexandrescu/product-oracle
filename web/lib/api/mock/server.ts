@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
+import { citationHref } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
@@ -2642,11 +2643,14 @@ function exportHtml(doc: DocumentRow, v: VersionRow): string {
     })
     .join("\n");
   const notes = v.citations
-    // As the API's export: an "oracle" citation's ref names a baseline item, not a link.
+    // As the API's export: an "oracle" citation's ref names a baseline item, not a link, and
+    // only an http(s) ref is one (citationHref).
     .map((c) =>
       c.source === "oracle"
         ? `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`
-        : `<li><a href="${escapeHtml(c.ref)}">${escapeHtml(c.title ?? c.ref)}</a> (${c.source})</li>`,
+        : citationHref(c)
+          ? `<li><a href="${escapeHtml(c.ref)}">${escapeHtml(c.title ?? c.ref)}</a> (${c.source})</li>`
+          : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title></head><body><p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;

@@ -142,6 +142,35 @@ async def test_an_oracle_citation_naming_no_baseline_item_is_refused(client):
         assert await s.scalar(select(func.count()).select_from(Document)) == 0
 
 
+async def test_an_oracle_citation_naming_a_rejected_item_is_refused(client):
+    # #589 review: a rejected baseline item is none (as everywhere else in the baseline).
+    tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        s.add(Entity(type="goal", key="g7", title="G7", status="rejected", origin="user"))
+        await s.commit()
+    text = draft("prd_oracle_citations.md").replace("baseline goal g1 (", "baseline goal g7 (")
+    resp = await import_draft(client, auth, text, doc="example-prd")
+    assert resp.status_code == 422, resp.text
+    assert [p["cite_key"] for p in resp.json()["errors"]] == ["o-g1"]
+
+
+async def test_parse_problems_and_bad_oracle_refs_are_refused_together(client):
+    # #589 review: one refusal names every problem, not the parse's now and the refs' on
+    # the next try.
+    tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
+    text = (
+        draft("prd_oracle_citations.md")
+        .replace("baseline goal g1 (", "baseline goal g9 (")
+        .replace("ref: https://example.slack.com/", "ref: //example.slack.com/")
+    )
+    resp = await import_draft(client, auth, text, doc="example-prd")
+    assert resp.status_code == 422, resp.text
+    problems = [(p["code"], p["cite_key"]) for p in resp.json()["errors"]]
+    assert ("invalid_citation", "c1") in problems and ("invalid_citation", "o-g1") in problems
+
+
 async def test_reads_list_and_markdown(client):
     _, auth = await seed_auth()
     text = draft("prd_v1.md")

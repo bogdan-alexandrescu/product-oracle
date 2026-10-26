@@ -23,8 +23,11 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   oracle: "Oracle baseline",
 };
 
-/** An absolute http(s) URL: the only ref a citation opens as a link. */
-const HTTP_URL = /^https?:\/\/[^\s/?#]+/i;
+/** An absolute http(s) URL with a host: the only ref a citation opens as a link. */
+const HTTP_URL = /^https?:\/\/[^\s/\\?#]+/i;
+
+/** Whether a ref (a citation's, a piece of evidence's) may go in an href. */
+export const isHttpUrl = (ref: string): boolean => HTTP_URL.test(ref);
 
 /**
  * Where a citation opens, or null when its ref is not a link: an "oracle" citation names a
