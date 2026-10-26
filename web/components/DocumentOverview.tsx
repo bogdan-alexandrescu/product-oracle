@@ -143,6 +143,10 @@ function VersionInspector({
             By
           </InspectorRow>
         )}
+        {v.imported_again && (
+          // A run's refused draft a person imported again: who and when (Company time zone).
+          <InspectorRow value={<span data-testid="version-imported-again">{v.imported_again}</span>}>Retried</InspectorRow>
+        )}
         {v.approved_at && <InspectorRow value={formatDate(v.approved_at)}>Approved</InspectorRow>}
         <InspectorRow value={<span className="font-mono text-[13px] font-medium">{v.content_hash.slice(0, 8)}</span>}>Hash</InspectorRow>
       </InspectorSection>

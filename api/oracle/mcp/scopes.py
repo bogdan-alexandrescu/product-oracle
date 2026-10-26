@@ -96,6 +96,9 @@ SOURCE_READS = {
     # H10: a request's why-not replies quote what people asked.
     ("requests", "replies"),
 }
+# GET routes whose area's scope is not enough: they also show source-item titles and
+# links. The evidence inspector (owner, 2026-10-25): read:documents and read:sources.
+ALSO_NEEDS = {("documents", "evidence"): "read:sources"}
 # Reads for people's clients only, refused to run tokens like the runs reads: whether a
 # new PRD run may reuse the baseline (C4) is about runs, not baseline knowledge.
 # Likewise the goals an interview is offered on (B6): it names people's discussions.
@@ -145,9 +148,22 @@ def required_scope(method: str, path: str) -> str | None:
     return None
 
 
+def also_needed(method: str, path: str) -> str | None:
+    """The second scope a GET needs on top of :func:`required_scope`'s, else None."""
+    parts = _segments(path)
+    if method.upper() != "GET" or not parts:
+        return None
+    return ALSO_NEEDS.get((parts[0], parts[-1]))
+
+
+def missing(scopes: frozenset[str], method: str, path: str) -> list[str]:
+    """The scopes a run token lacks for this operation (empty: it may run)."""
+    needed = [s for s in (required_scope(method, path), also_needed(method, path)) if s]
+    return [s for s in needed if s not in scopes]
+
+
 def allowed(scopes: frozenset[str] | None, method: str, path: str) -> bool:
     if scopes is None:
         parts = _segments(path)
         return not (parts and parts[0] in RUN_ONLY_AREAS)
-    needed = required_scope(method, path)
-    return needed is not None and needed in scopes
+    return required_scope(method, path) is not None and not missing(scopes, method, path)

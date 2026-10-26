@@ -857,8 +857,9 @@ async def accept_proposal(
     db: TenantDB,
     body: ProposalAccept | None = None,
 ) -> ProposalOut:
-    """Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
-    fields as they are and applies the rest (#268)."""
+    """Apply the change as your own edit; the item is then
+    locked against Oracle's changes until a person unlocks it.
+    skip_fields keeps those fields as they are and applies the rest (#268)."""
     return await _decide(db, principal, proposal_id, True, body)
 
 

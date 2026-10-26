@@ -11,6 +11,7 @@ import { useGoalsLevel } from "@/lib/goals-autonomy";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { ACCEPT_LOCKS } from "./common";
 import { COMPARISONS, figure, GoalFields, goalDraft, goalPatch, HORIZONS, shortDay, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 
 /**
@@ -253,7 +254,7 @@ function VersionCard({
           ) : proposal?.status === "rejected" ? (
             <span className="text-text2">· Rejected</span>
           ) : canAccept ? (
-            <Button variant="solid" disabled={busy || !proposal} onClick={() => void acceptNow(proposalId!)}>
+            <Button variant="solid" disabled={busy || !proposal} title={ACCEPT_LOCKS} onClick={() => void acceptNow(proposalId!)}>
               Accept now
             </Button>
           ) : (

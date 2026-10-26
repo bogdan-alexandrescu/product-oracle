@@ -7,6 +7,9 @@ import { goalTree } from "@/lib/goal-tree";
 /** Default `low` threshold of the confidence settings; the trace report carries the company's. */
 export const DEFAULT_LOW = 0.4;
 
+/** What Accept does to the item (owner, 2026-10-25): it stays locked until a person unlocks it. */
+export const ACCEPT_LOCKS = "Accept applies the change and the item is then locked against Oracle's changes until a person unlocks it.";
+
 const SOURCE_KIND_LABEL: Record<string, string> = {
   slack: "Slack",
   notion: "Notion",

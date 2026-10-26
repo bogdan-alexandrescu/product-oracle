@@ -9,7 +9,7 @@ import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
 import { useCompanyZone, zoneDay } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
 
-import { formatValue, titleOf } from "./common";
+import { ACCEPT_LOCKS, formatValue, titleOf } from "./common";
 import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
 
 type Payload = { op?: string; kind?: string; fields?: Record<string, unknown>; reason?: string | null; origin?: string };
@@ -243,10 +243,10 @@ function OverlapWarning({
         ))}
       </ul>
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" disabled={busy} onClick={() => onDecide(p, true, skip)}>
+        <Button variant="primary" disabled={busy} title={ACCEPT_LOCKS} onClick={() => onDecide(p, true, skip)}>
           {skip.length === 1 ? `Skip ${fieldName(skip[0])}, apply the rest` : "Skip these fields, apply the rest"}
         </Button>
-        <Button disabled={busy} onClick={() => onDecide(p, true)}>
+        <Button disabled={busy} title={ACCEPT_LOCKS} onClick={() => onDecide(p, true)}>
           Apply anyway
         </Button>
         <Button disabled={busy} onClick={() => onDecide(p, false)}>
@@ -339,94 +339,105 @@ function ProposalList({
       {proposals.length === 0 ? (
         <p className="px-4 py-8 text-center text-text2">{byRun ? "No open proposals from this run." : "No open proposals."}</p>
       ) : (
-        <ul aria-label="Proposals">
-          {proposals.map((p) => {
-            const payload = p.payload as Payload;
-            const fields = flatFields(payload.fields);
-            const overlaps = p.overlaps ?? [];
-            const warn = canWrite && warning === p.id && overlaps.length > 0;
-            const siblings = p.entity_id ? proposals.filter((o) => o.id !== p.id && o.entity_id === p.entity_id).map((o) => o.id) : [];
-            const lit = highlighted.includes(p.id);
-            return (
-              <li
-                key={p.id}
-                ref={(el) => {
-                  if (el) cards.current.set(p.id, el);
-                  else cards.current.delete(p.id);
-                }}
-                data-testid="proposal"
-                data-highlighted={lit || undefined}
-                className={`flex items-start gap-4 border-t border-line px-4 py-3 transition-colors first:border-t-0 max-[600px]:flex-col max-[600px]:gap-2.5 max-[600px]:px-3 ${lit ? "bg-accent-soft" : ""}`}
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:w-full">
-                  {(payload.fields?.attrs as Record<string, unknown> | undefined)?.proposed_blocker != null && (
-                    <div>
-                      <Chip kind="warn">Suggested blocker</Chip>
+        <>
+          {canWrite && (
+            <p data-testid="proposals-accept-help" className="border-b border-line px-4 py-2 text-sm text-text2">
+              {ACCEPT_LOCKS}
+            </p>
+          )}
+          <ul aria-label="Proposals">
+            {proposals.map((p) => {
+              const payload = p.payload as Payload;
+              const fields = flatFields(payload.fields);
+              const overlaps = p.overlaps ?? [];
+              const warn = canWrite && warning === p.id && overlaps.length > 0;
+              const siblings = p.entity_id ? proposals.filter((o) => o.id !== p.id && o.entity_id === p.entity_id).map((o) => o.id) : [];
+              const lit = highlighted.includes(p.id);
+              return (
+                <li
+                  key={p.id}
+                  ref={(el) => {
+                    if (el) cards.current.set(p.id, el);
+                    else cards.current.delete(p.id);
+                  }}
+                  data-testid="proposal"
+                  data-highlighted={lit || undefined}
+                  className={`flex items-start gap-4 border-t border-line px-4 py-3 transition-colors first:border-t-0 max-[600px]:flex-col max-[600px]:gap-2.5 max-[600px]:px-3 ${lit ? "bg-accent-soft" : ""}`}
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:w-full">
+                    {(payload.fields?.attrs as Record<string, unknown> | undefined)?.proposed_blocker != null && (
+                      <div>
+                        <Chip kind="warn">Suggested blocker</Chip>
+                      </div>
+                    )}
+                    <Sentence p={p} graph={graph} onOpen={onOpen} />
+                    {overlaps.length > 0 && <OverlapChip overlaps={overlaps} />}
+                    <Source p={p} meId={meId} />
+                    {siblings.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => showSiblings(siblings)}
+                        className="w-fit text-left text-[13px] font-semibold text-accent-ink hover:underline"
+                      >
+                        {siblings.length === 1 ? "1 other open proposal on this entry" : `${siblings.length} other open proposals on this entry`}
+                      </button>
+                    )}
+                    {payload.reason && (
+                      <p className="truncate text-sm text-text2" title={payload.reason}>
+                        <CodeText text={payload.reason} />
+                      </p>
+                    )}
+                    <details className="text-sm">
+                      <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">Details</summary>
+                      <p className="mt-1 font-mono text-text2">
+                        {payload.op ?? "change"} {payload.kind ?? "entity"}
+                      </p>
+                      {fields.length > 0 && (
+                        <dl className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5" aria-label="Proposed fields">
+                          {fields.map(([k, v]) => (
+                            <div key={k} className="flex min-w-0 gap-1">
+                              <dt className="font-mono text-text2">{k}:</dt>
+                              <dd className="truncate font-semibold">{formatValue(v)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </details>
+                    {warn && <OverlapWarning p={p} busy={busy} onDecide={onDecide} />}
+                  </div>
+                  {byRun && onMakeMeasurable && p.entity_id && vagueGoal(graph, p.entity_id) && (
+                    <Button className="flex-none" disabled={busy} onClick={() => onMakeMeasurable(p.entity_id!)}>
+                      Make measurable
+                    </Button>
+                  )}
+                  {canWrite && !warn && (
+                    <div className="flex flex-none gap-2">
+                      {noChange(p) ? (
+                        // Nothing to accept: the item already reads so (#262). Dismissing rejects it.
+                        <Button disabled={busy} onClick={() => onDecide(p, false)}>
+                          Dismiss
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            disabled={busy}
+                            title={ACCEPT_LOCKS}
+                            onClick={() => (overlaps.length > 0 ? setWarning(p.id) : onDecide(p, true))}
+                          >
+                            Accept
+                          </Button>
+                          <Button disabled={busy} onClick={() => onDecide(p, false)}>
+                            Reject
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
-                  <Sentence p={p} graph={graph} onOpen={onOpen} />
-                  {overlaps.length > 0 && <OverlapChip overlaps={overlaps} />}
-                  <Source p={p} meId={meId} />
-                  {siblings.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => showSiblings(siblings)}
-                      className="w-fit text-left text-[13px] font-semibold text-accent-ink hover:underline"
-                    >
-                      {siblings.length === 1 ? "1 other open proposal on this entry" : `${siblings.length} other open proposals on this entry`}
-                    </button>
-                  )}
-                  {payload.reason && (
-                    <p className="truncate text-sm text-text2" title={payload.reason}>
-                      <CodeText text={payload.reason} />
-                    </p>
-                  )}
-                  <details className="text-sm">
-                    <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">Details</summary>
-                    <p className="mt-1 font-mono text-text2">
-                      {payload.op ?? "change"} {payload.kind ?? "entity"}
-                    </p>
-                    {fields.length > 0 && (
-                      <dl className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5" aria-label="Proposed fields">
-                        {fields.map(([k, v]) => (
-                          <div key={k} className="flex min-w-0 gap-1">
-                            <dt className="font-mono text-text2">{k}:</dt>
-                            <dd className="truncate font-semibold">{formatValue(v)}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    )}
-                  </details>
-                  {warn && <OverlapWarning p={p} busy={busy} onDecide={onDecide} />}
-                </div>
-                {byRun && onMakeMeasurable && p.entity_id && vagueGoal(graph, p.entity_id) && (
-                  <Button className="flex-none" disabled={busy} onClick={() => onMakeMeasurable(p.entity_id!)}>
-                    Make measurable
-                  </Button>
-                )}
-                {canWrite && !warn && (
-                  <div className="flex flex-none gap-2">
-                    {noChange(p) ? (
-                      // Nothing to accept: the item already reads so (#262). Dismissing rejects it.
-                      <Button disabled={busy} onClick={() => onDecide(p, false)}>
-                        Dismiss
-                      </Button>
-                    ) : (
-                      <>
-                        <Button disabled={busy} onClick={() => (overlaps.length > 0 ? setWarning(p.id) : onDecide(p, true))}>
-                          Accept
-                        </Button>
-                        <Button disabled={busy} onClick={() => onDecide(p, false)}>
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </Panel>
   );

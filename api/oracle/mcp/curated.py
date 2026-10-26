@@ -489,7 +489,9 @@ CURATED: tuple[Curated, ...] = (
         name="propose_change",
         about=(
             "Propose a change to the baseline. Proposals wait for a person to accept or "
-            "reject them; locked items only change this way. The run is recorded for you: "
+            "reject them; locked items only change this way. A person accepting it applies the "
+            "change, and the item is then locked against Oracle's changes until a person "
+            "unlocks it. The run is recorded for you: "
             "leave run_id out. Cite evidence for the change, "
             "and say when that evidence is low confidence. The response's `summary` is how "
             "people will read your proposal; check it says what you meant. " + CONFIDENCE_GUIDANCE

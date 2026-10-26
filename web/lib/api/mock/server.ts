@@ -76,6 +76,7 @@ import {
   seedFeatureSetRun,
   seedPriorityRuns,
   seedRunReviewRun,
+  seedNoDocumentRuns,
   seedRuns,
   seedScopeReviewRuns,
   seedStoredRefusalRun,
@@ -968,6 +969,13 @@ function seedRoadmapItemsConsoleHeld(): Db {
   const held = structuredClone(ROADMAP_REVIEW_HELD_RUN);
   db.runs!.runs.push(held.run);
   Object.assign(db.runs!.artifacts, held.artifacts);
+  return db;
+}
+
+/** #583 review "no-document" scenario: the default seed plus two runs that finished with no document (./runs.ts). */
+function seedNoDocument(): Db {
+  const db = seed();
+  seeded("no-document", () => seedNoDocumentRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -2034,6 +2042,10 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return vs.length ? vs[vs.length - 1].number : null;
     },
     sectionKeys: (versionId) => db.versions.find((v) => v.id === versionId)?.sections.map((s) => s.section_key) ?? [],
+    versionAfter: (documentId, slug, at) => {
+      const doc = db.documents.find((d) => d.id === documentId || (slug != null && d.slug === slug));
+      return !!doc && db.versions.some((v) => v.document_id === doc.id && Date.parse(v.created_at) > Date.parse(at));
+    },
     draftItemsToReuse: (documentId, version) => reusableDraftItems(draftDb(db), documentId, version),
     // The approved version a roadmap is built from: the one named, else the latest approved.
     sourceVersion: (documentId, number) => {
@@ -2053,7 +2065,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     // A run's draft becomes the next version: a copy of the latest one (or of the first
     // fixture for a new document); a roadmap draft is built from its PRD version. So the
     // review screens have something to show.
-    importDraft: (slug, run) => {
+    importDraft: (slug, run, again) => {
       const prd = run.source ? db.versions.find((v) => v.id === run.source!.version_id) : undefined;
       const fromPrd =
         prd &&
@@ -2116,6 +2128,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
           : { ...seed, number, created_at: now() };
       const v = buildVersion(doc, base);
       v.source = run.source ?? null;
+      v.imported_again = again ?? null;
       db.versions.push(v);
       queueDraft(db, doc.id, v);
       // D12: what Build next draft sent the agents: the text changes are applied in this
@@ -2193,6 +2206,8 @@ function load(): Db {
             ? seedRoadmapItemsConsoleHeld
           : scenario === "run-review" || scenario === DRAFT_NEW_ITEMS_SCENARIO
             ? seedRunReview
+          : scenario === "no-document"
+            ? seedNoDocument
           : scenario === "run-review-decider"
             ? seedRunReviewDecider
           : scenario === "priority-order"
@@ -2580,6 +2595,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     notes: v.notes,
     imported_by: v.imported_by,
     imported_by_name: v.imported_by_name,
+    imported_again: v.imported_again ?? null,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
     source: v.source ?? null,

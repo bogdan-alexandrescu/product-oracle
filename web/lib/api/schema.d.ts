@@ -4698,8 +4698,9 @@ export interface paths {
         put?: never;
         /**
          * Accept Proposal
-         * @description Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
-         *     fields as they are and applies the rest (#268).
+         * @description Apply the change as your own edit; the item is then
+         *     locked against Oracle's changes until a person unlocks it.
+         *     skip_fields keeps those fields as they are and applies the rest (#268).
          */
         post: operations["accept_proposal"];
         delete?: never;
@@ -21989,6 +21990,11 @@ export interface components {
              * @default []
              */
             imports: components["schemas"]["RunSummary"][];
+            /**
+             * No Documents
+             * @default []
+             */
+            no_documents: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /**
@@ -31042,6 +31048,8 @@ export interface components {
             searching?: string | null;
             /** Import Failed */
             import_failed?: string | null;
+            /** No Document */
+            no_document?: string | null;
             /**
              * Can Retry Import
              * @default false
@@ -31304,6 +31312,8 @@ export interface components {
             searching?: string | null;
             /** Import Failed */
             import_failed?: string | null;
+            /** No Document */
+            no_document?: string | null;
             /**
              * Can Retry Import
              * @default false
@@ -32797,6 +32807,8 @@ export interface components {
              * @default false
              */
             can_retry_draft_import: boolean;
+            /** Draft Retry Refused */
+            draft_retry_refused?: string | null;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
             feature_set_check?: components["schemas"]["FeatureSetCheck"] | null;
@@ -36871,6 +36883,8 @@ export interface components {
             imported_by?: string | null;
             /** Imported By Name */
             imported_by_name?: string | null;
+            /** Imported Again */
+            imported_again?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**
@@ -37000,6 +37014,8 @@ export interface components {
             imported_by?: string | null;
             /** Imported By Name */
             imported_by_name?: string | null;
+            /** Imported Again */
+            imported_again?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**

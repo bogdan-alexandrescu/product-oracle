@@ -733,6 +733,9 @@ class SegmentOut(BaseModel):
     # kept, and either its review is still open and I have the review's approver role or
     # above, or the run finished with no version imported and I am an owner.
     can_retry_draft_import: bool = False
+    # Why a refused draft stays refused on a finished run that imported a version from
+    # another segment or attempt, in plain words, offering a new run (owner, 2026-10-25).
+    draft_retry_refused: str | None = None
     items_check: ItemsCheck | None = None
     previous_attempt: PreviousAttempt | None = None
     # The feature-set segment's check of feature_set.yaml (C6).
@@ -963,6 +966,9 @@ class RunSummary(BaseModel):
     # Owners: Oracle stopped trying to import the output of a step whose advance kept
     # failing (the error's class, never what the agents wrote); Retry tries again.
     import_failed: str | None = None
+    # Owners' Inbox (owner, 2026-10-25): the run finished with no document, its draft
+    # refused at import and its review approved past it; why, and what to do.
+    no_document: str | None = None
     can_retry_import: bool = False
     # A draft one of its segments left that Oracle refused to import: its summary
     # (``segments[].draft_import.summary``, else the error). Set where ``progress`` is.
@@ -1408,6 +1414,9 @@ class InboxOut(BaseModel):
     # Owners only: runs whose output Oracle stopped trying to import
     # (RunSummary.import_failed), to Retry.
     imports: list[RunSummary] = []
+    # Owners only: runs that finished with no document (RunSummary.no_document), as the
+    # unfinished ones whose import failed; counted.
+    no_documents: list[RunSummary] = []
     # Approvers and owners: open feedback (not staged) on documents they can approve.
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).

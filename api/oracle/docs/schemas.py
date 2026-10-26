@@ -162,6 +162,10 @@ class VersionSummary(ORM):
     # Who imported it, as people read it (#256): the member's display name, "Oracle" for
     # a run's draft, or the API token's name. None when the importer is gone.
     imported_by_name: str | None = None
+    # A run's refused draft an owner imported again (owner, 2026-10-25): "imported again by
+    # <retrier> on 2026-10-25 14:59 PDT", in the Company time zone, as the audit records it.
+    # The version stays the run creator's (``imported_by``).
+    imported_again: str | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
     # document.
