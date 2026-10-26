@@ -202,3 +202,80 @@ async def test_a_late_answer_someone_acted_on_is_kept_with_its_quote_withheld(
     [back] = await _feedback(client, ctx)
     assert back["id"] == item["id"] and body in back["summary"]
     assert (await read_summary(client, ctx, intake_id))["late_answers_as_feedback"] == 1
+
+
+async def test_a_withheld_late_answer_hides_its_suggestions_too(
+    client,
+    runtime,  # noqa: F811
+):
+    """#636 re-review MAJOR 1: the model wrote a kept item's suggestion from the summary
+    that quoted the answer, so while the item is withheld every output that serves the
+    suggestion (Feedback, the suggestions list, the Inbox, staged changes) leaves its text,
+    edited text and rationale out, for every role; shared in full again, they show."""
+    from datetime import UTC, datetime
+
+    from oracle.jobs.models import LlmSuggestion
+    from oracle.review.models import FeedbackItem
+    from tests.test_intake_sharing_round4 import share
+
+    ctx, intake_id, fid, body = await _private_answer(client)
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
+    [item] = await _feedback(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(FeedbackItem, uuid.UUID(item["id"]))
+        sug = LlmSuggestion(
+            document_id=row.document_id,
+            feedback_item_id=row.id,
+            version_number=1,
+            classification="change_request",
+            kind="section_text",
+            section_key="solution",
+            text=f"Say it plainly: {body}",
+            rationale=f"The answer says: {body}",
+            status="open",
+            created_at=datetime.now(UTC),
+        )
+        s.add(sug)
+        await s.commit()
+        sug_id = str(sug.id)
+    approver = ctx.as_("approver")
+    resp = await client.post(
+        f"/v1/suggestions/{sug_id}/accept",
+        json={"text": f"Edited: {body}"},
+        headers=approver,
+    )
+    assert resp.status_code == 200, resp.text
+
+    async def outputs() -> dict[str, str]:
+        out = {}
+        for role in ("viewer", "commenter", "approver"):
+            listed = await client.get(f"/v1/documents/{SLUG}/feedback", headers=ctx.as_(role))
+            assert listed.status_code == 200, listed.text
+            out[f"feedback:{role}"] = listed.text
+            sugs = await client.get(f"/v1/documents/{SLUG}/suggestions", headers=ctx.as_(role))
+            assert sugs.status_code == 200, sugs.text
+            out[f"suggestions:{role}"] = sugs.text
+        staged = await client.get(f"/v1/documents/{SLUG}/staged-changes", headers=approver)
+        assert staged.status_code == 200, staged.text
+        out["staged-changes"] = staged.text
+        inbox = await client.get("/v1/inbox", headers=approver)
+        assert inbox.status_code == 200, inbox.text
+        out["inbox"] = inbox.text
+        return out
+
+    shown = await outputs()
+    assert all(body in text for k, text in shown.items() if k != "inbox"), shown
+
+    assert (await share(client, ctx, intake_id, fid, "private")).status_code == 200
+    hidden = await outputs()
+    assert not [k for k, text in hidden.items() if body in text], hidden
+    [kept] = await _feedback(client, ctx)
+    assert kept["id"] == item["id"] and kept["suggestion"]["id"] == sug_id
+    assert kept["suggestion"]["status"] == "accepted"
+    assert (kept["suggestion"]["text"], kept["suggestion"]["edited_text"]) == (None, None)
+    assert kept["suggestion"]["rationale"] is None
+
+    assert (await share(client, ctx, intake_id, fid, "full")).status_code == 200
+    [back] = await _feedback(client, ctx)
+    assert back["suggestion"]["edited_text"] == f"Edited: {body}"
+    assert back["suggestion"]["rationale"] == f"The answer says: {body}"

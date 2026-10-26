@@ -214,6 +214,35 @@ async def test_a_replaced_refinement_cannot_be_applied(client, ctx, pool, fake):
     assert (await feedback(client, ctx))[ids["goal"]]["suggestion"]["status"] == "open"
 
 
+async def test_a_replaced_refinement_without_a_section_key_cannot_be_applied(
+    client, ctx, pool, fake
+):
+    """#636 re-review minor: Undo (``_in_use``) reads a refinement with no ``section_key``
+    as the section "", so apply does too: a newer one keyed "" replaced it."""
+    import uuid
+
+    from sqlalchemy import update
+
+    from oracle.jobs.models import LlmJob
+    from oracle.tenancy import tenant_session
+
+    ids = await staged_setup(client, ctx, fake)
+    older = await refine(client, ctx, fake, "goal-trace", {})
+    newer = await refine(
+        client, ctx, fake, "goal-trace", {"suggestion_ids": [], "instruction": "Short."}
+    )
+    async with tenant_session(ctx["tenant_id"]) as s:
+        for job_id, key in ((older, None), (newer, "")):
+            await s.execute(
+                update(LlmJob).where(LlmJob.id == uuid.UUID(str(job_id))).values(section_key=key)
+            )
+        await s.commit()
+    assert (await undo(client, ctx, ids["goal_s"])).status_code == 200
+    resp = await client.post(f"/v1/llm-jobs/{older}/apply", json={}, headers=ctx["headers"])
+    assert resp.status_code == 409, resp.text
+    assert "newer refinement" in resp.json()["detail"]
+
+
 async def test_a_refinement_of_an_older_version_never_holds_undo(client, ctx, pool, fake):
     ids = await staged_setup(client, ctx, fake)
     await refine(client, ctx, fake, "goal-trace", {})

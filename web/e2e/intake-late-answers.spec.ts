@@ -169,3 +169,62 @@ test("a late answer someone declined stays, its quote withheld, while its findin
   await level("Full");
   await expect(await declined()).toContainText(REPLY);
 });
+
+/*
+ * #636 re-review MAJOR 1: Oracle's suggestion on a late answer was written from the
+ * summary that quoted it, and an approver's accepted text may restate it too. While the
+ * finding is private the kept item withholds them with its quote; shared in full again,
+ * they read in full.
+ *
+ * Test card: protects=a private answer is not read through the suggestion on its kept item;
+ * fails_when=the accepted answer text (or the note Accept wrote from it) still shows while
+ * the finding is private, or does not show once it is shared in full again; no_claim=other
+ * roles and outputs (api tests/test_late_answers_feedback.py lists Feedback, suggestions,
+ * the Inbox and staged changes as a viewer, a commenter and an approver).
+ */
+test("a late answer's accepted suggestion is withheld with it while its finding is private", async ({ page }) => {
+  const ACCEPTED = `Noted for Success metrics: ${REPLY}`;
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  const mine = bubble(page, ANSWER_ME);
+  await mine.getByRole("button", { name: "Answer", exact: true }).click();
+  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
+  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
+  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+
+  // Oracle's review answered it; the approver accepts an edited answer restating it.
+  await page.goto("/documents/checkout-redesign/v/2");
+  await openTab(page, "Feedback");
+  await feedbackState(page, "Open");
+  const open = page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: REPLY });
+  await open.getByRole("button", { name: "Edit and accept" }).click();
+  await open.getByLabel("Answer").fill(ACCEPTED);
+  await open.getByRole("button", { name: "Accept edited text" }).click();
+  await expect(open).toHaveCount(0);
+
+  const level = async (name: "Private" | "Full") => {
+    await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+    await page.getByRole("tab", { name: /^Findings/ }).click();
+    const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
+    await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name }).click();
+    await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+  };
+  const done = async () => {
+    await page.goto("/documents/checkout-redesign/v/2");
+    await openTab(page, "Feedback");
+    await feedbackState(page, "Done");
+    await showAll(page);
+    return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "Answered after drafting started" });
+  };
+  await expect((await done()).getByTestId("suggestion-text")).toContainText(ACCEPTED);
+
+  await level("Private");
+  const kept = await done();
+  await expect(kept).toHaveCount(1);
+  await expect(kept).toContainText("withheld while its finding is not shared in full");
+  await expect(kept.getByTestId("suggestion")).toBeVisible();
+  await expect(kept).not.toContainText(REPLY);
+
+  await level("Full");
+  await expect((await done()).getByTestId("suggestion-text")).toContainText(ACCEPTED);
+});
