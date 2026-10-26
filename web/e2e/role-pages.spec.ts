@@ -100,8 +100,8 @@ for (const role of ROLES) {
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
     await expect(jobs).toBeVisible();
     await expect(jobs.getByTestId("llm-job-settings")).toHaveCount(role === "owner" ? 1 : 0);
-    // Four switches since refinement and quality review got theirs (JOB_SETTING_LABEL, oracle-work.spec.ts).
-    await expect(jobs.getByRole("checkbox")).toHaveCount(role === "owner" ? 4 : 0);
+    // Five switches since refinement, quality review and O5's public texts got theirs (JOB_SETTING_LABEL, oracle-work.spec.ts).
+    await expect(jobs.getByRole("checkbox")).toHaveCount(role === "owner" ? 5 : 0);
     await expect(jobs.getByText(/Approvers and owners/)).toHaveCount(0);
 
     // A document only an owner approves: no "Only an owner approves" note for anyone.

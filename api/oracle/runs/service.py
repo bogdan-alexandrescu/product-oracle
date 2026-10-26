@@ -209,6 +209,7 @@ from oracle.runs.schemas import (
     InboxFeedbackItem,
     InboxOut,
     InboxRevokeFailure,
+    InboxShareRevocation,
     InboxStaged,
     InboxStrategy,
     ItemsCheck,
@@ -10506,6 +10507,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     approvals = [_summary(r, refs, None) for r in waiting_runs if r.status == "awaiting_approval"]
     overruns = [_summary(r, refs, None) for r in waiting_runs if r.status == "paused_overrun"]
     revoke_failures = await _revoke_failures(db) if owner else []
+    share_revocations: list[InboxShareRevocation] = []
+    if owner:
+        from oracle.shares.service import inbox_rows as share_rows
+
+        share_revocations = [InboxShareRevocation.model_validate(r) for r in await share_rows(db)]
     access_failures = await _access_failures(db) if owner else []
     access_requests = await _access_requests(db, principal)
     strategy = None
@@ -10611,6 +10617,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         no_documents=no_documents,
         feedback=feedback,
         revoke_failures=revoke_failures,
+        share_revocations=share_revocations,
         access_failures=access_failures,
         access_requests=access_requests,
         reports=reports,
@@ -10629,6 +10636,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + counts.new
         + counts.open
         + len(revoke_failures)
+        + len(share_revocations)
         + len(access_failures)
         # Pending access requests (A5), for those who may approve them.
         + len(access_requests)

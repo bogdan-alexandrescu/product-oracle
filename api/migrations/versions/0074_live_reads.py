@@ -9,8 +9,8 @@ Live-safe: one new table and a column with a constant default.
 
 The downgrade drops the table and the column.
 
-Revision ID: 0071_live_reads
-Revises: 0070_brand_assets
+Revision ID: 0074_live_reads
+Revises: 0073_share_links
 """
 
 from collections.abc import Sequence
@@ -18,8 +18,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0071_live_reads"
-down_revision: str | None = "0070_brand_assets"
+revision: str = "0074_live_reads"
+down_revision: str | None = "0073_share_links"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

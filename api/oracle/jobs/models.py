@@ -37,7 +37,15 @@ from oracle.docs.models import _in
 
 # quality_review (CR-08): light judging of a PRD version, stored as labelled model output.
 # refinement_batch (C1e): the next draft from every staged suggestion, in one pass.
-JOB_KINDS = ("review_comments", "reporting", "refinement", "quality_review", "refinement_batch")
+# public_text (O5): a roadmap's public item texts, drafted for a person to approve.
+JOB_KINDS = (
+    "review_comments",
+    "reporting",
+    "refinement",
+    "quality_review",
+    "refinement_batch",
+    "public_text",
+)
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.
 INTAKE_JOB_KINDS = ("intake_analysis",)

@@ -141,6 +141,9 @@ DECIDED_PER_ITEM = frozenset(
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
+# A share link (O5) is an owner's to make for the Public audience and an approver's for the
+# others; its creator's or an owner's to extend, move or give a new passcode; and its
+# creator's or an owner's to revoke when Public (any approver's otherwise).
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
@@ -172,6 +175,7 @@ PER_ITEM: dict[str, Role | None] = {
     "create_interview_link": "approver",
     "create_request": "owner",
     "create_run": "owner",
+    "create_share_link": "owner",
     "create_track_roadmap_run": "owner",
     "decide_checkpoint": "owner",
     "decide_decision": None,
@@ -191,11 +195,16 @@ PER_ITEM: dict[str, Role | None] = {
     "estimate_regeneration": "approver",
     # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
     "explain_metric_variance": "approver",
+    # O5: a roadmap's Public audience is an approver's (Board, Team and Engineering are
+    # every reader's: the audience query parameter decides).
+    "export_publication": "approver",
+    "export_version": "approver",
     # Filing a found item in the app for someone else is an owner's, as create_request.
     "file_request_candidate": "owner",
     "get_checkpoint_draft": "owner",
     # Company coverage is owners' only (owner 2026-10-24): its handler reads the role.
     "get_company_source_coverage": "owner",
+    "get_deck": "approver",
     "get_next_question_batch": "approver",
     "keep_request_no": None,
     # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
@@ -228,6 +237,8 @@ PER_ITEM: dict[str, Role | None] = {
     "review_decision": None,
     "review_design_artifact": "owner",
     "revoke_interview": "approver",
+    "revoke_share_link": "owner",
+    "rotate_share_link_passcode": "owner",
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_connection_endpoint": "owner",
@@ -256,6 +267,7 @@ PER_ITEM: dict[str, Role | None] = {
     "update_question": "approver",
     "update_request_reply": "approver",
     "update_requester_note": "approver",
+    "update_share_link": "owner",
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
     "withdraw_discussion_change": None,

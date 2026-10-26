@@ -8,8 +8,8 @@ Live-safe: one new table.
 
 The downgrade drops the table.
 
-Revision ID: 0072_live_tokens
-Revises: 0071_live_reads
+Revision ID: 0075_live_tokens
+Revises: 0074_live_reads
 """
 
 from collections.abc import Sequence
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0072_live_tokens"
-down_revision: str | None = "0071_live_reads"
+revision: str = "0075_live_tokens"
+down_revision: str | None = "0074_live_reads"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

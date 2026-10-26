@@ -52,6 +52,8 @@ MAX_TOKENS = {
     "scope_enhance": 2000,
     # H10: every reply of one decline, at most 120 words each.
     "why_not_reply": 4000,
+    # O5: one roadmap's public item texts, 80 + 280 characters each.
+    "public_text": 6000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1021,6 +1023,17 @@ async def why_not_reply_failed(s: AsyncSession, job: LlmJob) -> None:
     await replies.job_failed(s, job)
 
 
+# --- public item texts (O5) -----------------------------------------------------------------
+
+
+async def public_text(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Drafts a public text for each item of a roadmap version that has none
+    (oracle.roadmap.public)."""
+    from oracle.roadmap import public
+
+    return await public.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1039,6 +1052,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "interview_snapshot": interview_snapshot,
     "scope_enhance": scope_enhance,
     "why_not_reply": why_not_reply,
+    "public_text": public_text,
 }
 
 

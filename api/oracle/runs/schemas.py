@@ -1413,6 +1413,29 @@ class InboxIntakeRead(BaseModel):
     at: datetime | None = None
 
 
+class InboxSharedLink(BaseModel):
+    id: uuid.UUID
+    label: str
+    document: str
+    document_title: str
+    audience: Literal["board", "team", "engineering", "public"]
+    publication_id: uuid.UUID
+
+
+class InboxShareRevocation(BaseModel):
+    """Share links Oracle revoked because their creator left or was demoted, or their
+    document was trashed or limited (O5-Q10): Re-share or Dismiss (owners)."""
+
+    # "Links revoked: <name> left · 3 links"
+    title: str
+    reason: str
+    creator_id: uuid.UUID | None = None
+    creator_name: str | None = None
+    document_title: str | None = None
+    revoked_at: datetime
+    links: list[InboxSharedLink]
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -1442,6 +1465,8 @@ class InboxOut(BaseModel):
     feedback: list[InboxDocument]
     # Owners only: provider revokes a member's disable could not make (Retry, Dismiss).
     revoke_failures: list[InboxRevokeFailure] = []
+    # Owners only (O5-Q10): share links revoked with their creator or document; in total.
+    share_revocations: list[InboxShareRevocation] = []
     # Owners only (#245): access changes still failing after 24 hours.
     access_failures: list[InboxAccessFailure] = []
     # Owners and approvers (A5): pending access requests, oldest first; not in ``total``

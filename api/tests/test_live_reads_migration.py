@@ -1,4 +1,4 @@
-"""Migration 0071_live_reads (#710 lane 1): the live_reads table and browse_calls.kind.
+"""Migration 0074_live_reads (#710 lane 1): the live_reads table and browse_calls.kind.
 
 Each test carries its own card.
 
@@ -17,8 +17,8 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0071_live_reads"
-PREVIOUS = "0070_brand_assets"
+REVISION = "0074_live_reads"
+PREVIOUS = "0073_share_links"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_live_reads")
@@ -63,13 +63,13 @@ def scratch_db():
     asyncio.run(_reset_schema(SCRATCH_URL))
 
 
-# protects=0071_live_reads chains on 0070_brand_assets, and the live stack's head
-# (0072_live_tokens) is the single head; fails_when=the revision is re-parented or a second
+# protects=0074_live_reads chains on 0073_share_links, and the live stack's head
+# (0075_live_tokens) is the single head; fails_when=the revision is re-parented or a second
 # head appears; no_claim=what the revision creates (test_upgrade_and_downgrade).
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0072_live_tokens"]
+    assert script.get_heads() == ["0075_live_tokens"]
 
 
 # protects=live_reads and browse_calls.kind come and go with the revision: an existing

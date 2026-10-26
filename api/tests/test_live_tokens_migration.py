@@ -1,6 +1,6 @@
-"""Migration 0072_live_tokens (#710 lane 2): the live_tokens table.
+"""Migration 0075_live_tokens (#710 lane 2): the live_tokens table.
 
-Card: protects=live_tokens comes and goes with the revision, chained on 0071_live_reads
+Card: protects=live_tokens comes and goes with the revision, chained on 0074_live_reads
 as the single head; a token hash is unique; deleting its reply deletes its tokens; the
 downgrade drops only the table; fails_when=a column, the unique hash or the cascade is
 missing, or the downgrade leaves the table or drops live_reads; no_claim=the tokens' use
@@ -21,8 +21,8 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0072_live_tokens"
-PREVIOUS = "0071_live_reads"
+REVISION = "0075_live_tokens"
+PREVIOUS = "0074_live_reads"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_live_tokens")

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
+import { RoadmapSharing } from "@/components/share/RoadmapSharing";
 import { PricingDecide } from "@/components/PricingDecide";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import {
@@ -36,7 +37,7 @@ import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
 /** A template or theme key beside the title: small mono, hairline pill. */
-const META = "inline-flex h-[26px] items-center rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
+const META = "inline-flex h-[26px] shrink-0 items-center whitespace-nowrap rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
 
 function versionColumns(doc: string, kind: string | null | undefined, latest: number | null | undefined): Column<VersionSummary>[] {
   return [
@@ -333,6 +334,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 </>
               }
             />
+            {d.kind === "roadmap" && <RoadmapSharing d={d} />}
             <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} /> : undefined}>
               <Panel title="Versions" count={versions.length}>
                 <DataTable

@@ -1954,8 +1954,32 @@ export interface paths {
          *     from what was stored at publish time, so later edits, theme changes and source
          *     updates never change it. A PDF renders on the export pool in an export place, like an
          *     export (refused: 429 ``export_busy_you`` or 503 ``export_busy``).
+         *
+         *     ``audience`` (roadmaps, O5): the publication's pinned version rendered for Board, Team
+         *     or Engineering (oracle.roadmap.variants), on the export pool.
          */
         get: operations["export_publication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmap-audiences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audiences
+         * @description O5: the audience registry (oracle.roadmap.variants): what each audience hides,
+         *     which item fields it shows and how it groups them.
+         */
+        get: operations["list_audiences"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1974,7 +1998,8 @@ export interface paths {
         /**
          * Export Version
          * @description Full: html, pdf, md. Brief: html, pdf. Deck: pdf, pptx (html: the printable
-         *     slides).
+         *     slides). ``audience`` (roadmaps, O5): the rendering for Board, Team or Engineering;
+         *     markdown is the stored text and has none.
          */
         get: operations["export_version"];
         put?: never;
@@ -10194,6 +10219,368 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/{doc}/public-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Public Texts
+         * @description The Public check's review list: one row per item of the version with its public
+         *     text, state (Approved, Draft, Excluded, Missing, Internal item changed) and leak
+         *     findings, the shown and left-out counts, what is removed, and the check's state.
+         */
+        get: operations["list_public_texts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/public-texts/{item_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Public Text
+         * @description Edit, approve or exclude one item's public text. Approving is refused (422
+         *     ``leak_blocking``) while the text has a blocking leak finding, and (422
+         *     ``warnings_unchecked``) until every warning is ticked in ``checked_warnings``. A text
+         *     holding an invisible format character is refused in any state (422
+         *     ``format_characters``).
+         */
+        put: operations["put_public_text"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/public-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Public Page
+         * @description The Public page's own title and intro (the internal title is never shown). A
+         *     blocking leak finding in a text this save changes is 422 ``leak_blocking`` (an
+         *     approvers-only document, a decision, a plan or price and an internal note's words
+         *     block here, though an item text's approver ticks them), an invisible format
+         *     character 422 ``format_characters``; a change lapses the public check. Both are
+         *     re-checked at every render and left out of the page once they leak, so an unchanged
+         *     one that now leaks is reported, not refused.
+         */
+        put: operations["put_public_page"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/public-texts/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Public Texts
+         * @description Draft public texts (O5-Q7): one ``public_text`` job on Oracle's Claude account
+         *     pool writes a draft for each item with none. It only ever drafts (H11
+         *     ``external_messages``, ceiling Draft); a person approves each text.
+         */
+        post: operations["draft_public_texts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/versions/{n}/public-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Preview
+         * @description Exactly the page a Public link holder sees, rendered by the same code
+         *     (``render_public``) from the same rows; only the footer's dates are a link's.
+         */
+        get: operations["get_public_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/publications/{p}/public-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Public Check
+         * @description Mark as checked: a person looked at the exact Public page of this publication.
+         *     409 ``not_ready`` while any item that serves a goal and is not excluded lacks an
+         *     approved, current text, or has a blocking finding.
+         */
+        post: operations["post_public_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/share-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Share Links
+         * @description The document's share links, newest first: label, audience, version, creator,
+         *     expiry, views (distinct browsers), last viewed and state. Never a token, a URL or a
+         *     passcode: those are shown once.
+         */
+        get: operations["list_share_links"];
+        put?: never;
+        /**
+         * Create Share Link
+         * @description Make a link to one publication in one audience, with a passcode (set here, or
+         *     generated by Oracle) and an expiry (14 days unless chosen, 90 at most). The link's
+         *     address and passcode are returned once.
+         */
+        post: operations["create_share_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/share-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Share Link
+         * @description Extend (up to 90 days from now) or move the link to another publication of its
+         *     document (the token stays). The creator or an owner; audited.
+         */
+        patch: operations["update_share_link"];
+        trace?: never;
+    };
+    "/v1/share-links/{link_id}/passcode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Share Link Passcode
+         * @description A new passcode (set here, or generated), shown once. The link and its address stay;
+         *     every browser that opened it with the old passcode must enter the new one.
+         */
+        post: operations["rotate_share_link_passcode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/share-links/{link_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Share Link
+         * @description End the link now (the next request is refused). The creator, an owner, or any
+         *     approver for a non-public link. It cannot be undone: make a new link instead.
+         */
+        post: operations["revoke_share_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{doc}/share-links/revoke-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke All Share Links
+         * @description Revoke every live link on the document (owners).
+         */
+        post: operations["revoke_all_share_links"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/share-links/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Share Revocations
+         * @description Dismiss the owners' Inbox row of links revoked because their creator left, was
+         *     demoted, or their document changed (O5-Q10).
+         */
+        post: operations["dismiss_share_revocations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/share-links/{link_id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Share Link Views
+         * @description The view log: when the link was opened (page or download), the browser family and
+         *     the country when the load balancer gives one, per day, and the distinct-browser
+         *     count. It never records who opened it (O5-Q4).
+         */
+        get: operations["share_link_views"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/shares/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Share
+         * @description The shared page, once the passcode opened it in this browser; before that, the
+         *     passcode form, the same for every token.
+         */
+        get: operations["public_share"];
+        put?: never;
+        /**
+         * Unlock Public Share
+         * @description The passcode form's post (``passcode``, form-encoded or JSON). The right passcode
+         *     on a live link sets the link's cookie and goes back to the page; anything else is the
+         *     same 404, whatever the reason.
+         */
+        post: operations["unlock_public_share"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/shares/{token}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Share Pdf
+         * @description The page as a PDF, when the link allows downloads (O5-Q9); the same 404 as an
+         *     unknown token before the passcode or when downloads are off.
+         */
+        get: operations["public_share_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/shares/{token}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Share Status
+         * @description For the web page: ``locked`` until the passcode opened the link in this browser
+         *     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
+         *     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
+         *     only when it is on).
+         */
+        get: operations["public_share_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/alignment-reports": {
         parameters: {
             query?: never;
@@ -14028,6 +14415,32 @@ export interface components {
             reasons: {
                 [key: string]: string;
             }[];
+        };
+        /**
+         * AudienceOut
+         * @description O5: one audience of the roadmap variant registry (oracle.roadmap.variants).
+         */
+        AudienceOut: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "board" | "team" | "engineering" | "public";
+            /** Label */
+            label: string;
+            /** Hidden Sections */
+            hidden_sections: string[];
+            /** Item Fields */
+            item_fields: string[];
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "goal" | "theme" | "team" | "stage";
+            /** Max Items Per Horizon */
+            max_items_per_horizon: number | null;
+            /** Appendix */
+            appendix: boolean;
         };
         /** AuthorizationServerMetadata */
         AuthorizationServerMetadata: {
@@ -19306,6 +19719,8 @@ export interface components {
              * @enum {string}
              */
             visibility: "company" | "approvers";
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
             /** Latest Version */
             latest_version?: number | null;
@@ -19451,6 +19866,8 @@ export interface components {
              * @enum {string}
              */
             visibility: "company" | "approvers";
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
             /** Latest Version */
             latest_version?: number | null;
@@ -23006,6 +23423,11 @@ export interface components {
              */
             revoke_failures: components["schemas"]["InboxRevokeFailure"][];
             /**
+             * Share Revocations
+             * @default []
+             */
+            share_revocations: components["schemas"]["InboxShareRevocation"][];
+            /**
              * Access Failures
              * @default []
              */
@@ -23341,6 +23763,54 @@ export interface components {
             total: number;
             /** Reviewed */
             reviewed: number;
+        };
+        /**
+         * InboxShareRevocation
+         * @description Share links Oracle revoked because their creator left or was demoted, or their
+         *     document was trashed or limited (O5-Q10): Re-share or Dismiss (owners).
+         */
+        InboxShareRevocation: {
+            /** Title */
+            title: string;
+            /** Reason */
+            reason: string;
+            /** Creator Id */
+            creator_id?: string | null;
+            /** Creator Name */
+            creator_name?: string | null;
+            /** Document Title */
+            document_title?: string | null;
+            /**
+             * Revoked At
+             * Format: date-time
+             */
+            revoked_at: string;
+            /** Links */
+            links: components["schemas"]["InboxSharedLink"][];
+        };
+        /** InboxSharedLink */
+        InboxSharedLink: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Document */
+            document: string;
+            /** Document Title */
+            document_title: string;
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "board" | "team" | "engineering" | "public";
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
         };
         /** InboxSource */
         InboxSource: {
@@ -24872,6 +25342,11 @@ export interface components {
              * @default true
              */
             quality_review: boolean;
+            /**
+             * Public Text
+             * @default true
+             */
+            public_text: boolean;
         };
         /** JoinedOut */
         JoinedOut: {
@@ -25223,6 +25698,18 @@ export interface components {
              * @default []
              */
             absent_template_sections: string[];
+        };
+        /** LeakFindingOut */
+        LeakFindingOut: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "warning";
+            /** Words */
+            words: string[];
         };
         /** LearningCreate */
         LearningCreate: {
@@ -25583,7 +26070,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -27716,6 +28203,19 @@ export interface components {
             /** Status */
             status?: ("active" | "paused") | null;
         };
+        /** PasscodeIn */
+        PasscodeIn: {
+            /** Passcode */
+            passcode?: string | null;
+        };
+        /** PasscodeOut */
+        PasscodeOut: {
+            link: components["schemas"]["ShareLinkOut"];
+            /** Passcode */
+            passcode: string;
+            /** Passcode Generated */
+            passcode_generated: boolean;
+        };
         /** PasswordChange */
         PasswordChange: {
             /** Current Password */
@@ -29000,6 +29500,49 @@ export interface components {
             /** Token Help */
             token_help: string;
         };
+        /** PublicCheckOut */
+        PublicCheckOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Checked By
+             * Format: uuid
+             */
+            checked_by: string;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Shown Item Keys */
+            shown_item_keys: string[];
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "checked" | "lapsed";
+        };
+        /** PublicCheckState */
+        PublicCheckState: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "checked" | "lapsed";
+            check?: components["schemas"]["PublicCheckOut"] | null;
+        };
         /** PublicInterview */
         PublicInterview: {
             /** Company */
@@ -29064,6 +29607,152 @@ export interface components {
             progress: components["schemas"]["PublicInterviewProgress"];
             /** Done */
             done: boolean;
+        };
+        /** PublicPageIn */
+        PublicPageIn: {
+            /** Public Title */
+            public_title?: string | null;
+            /** Public Intro */
+            public_intro?: string | null;
+        };
+        /** PublicPageOut */
+        PublicPageOut: {
+            /** Public Title */
+            public_title?: string | null;
+            /** Public Intro */
+            public_intro?: string | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LeakFindingOut"][];
+        };
+        /** PublicRowOut */
+        PublicRowOut: {
+            /** Item Key */
+            item_key: string;
+            /** Internal Title */
+            internal_title: string;
+            /** Horizon */
+            horizon: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "approved" | "draft" | "excluded" | "missing" | "changed";
+            text?: components["schemas"]["PublicTextOut"] | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LeakFindingOut"][];
+            /** Shown */
+            shown: boolean;
+            /** Left Out Reason */
+            left_out_reason?: ("no_approved_text" | "excluded" | "no_goal") | null;
+        };
+        /** PublicTextIn */
+        PublicTextIn: {
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "exploring" | "planned" | "in_progress" | "shipped";
+            /** Announced Quarter */
+            announced_quarter?: string | null;
+            /** Changelog Url */
+            changelog_url?: string | null;
+            /**
+             * State
+             * @default draft
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "excluded";
+            /** Checked Warnings */
+            checked_warnings?: string[];
+        };
+        /** PublicTextOut */
+        PublicTextOut: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "exploring" | "planned" | "in_progress" | "shipped";
+            /** Announced Quarter */
+            announced_quarter?: string | null;
+            /** Changelog Url */
+            changelog_url?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "excluded";
+            /** Drafted By */
+            drafted_by: string;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /**
+             * Checked Warnings
+             * @default []
+             */
+            checked_warnings: string[];
+            /** Updated At */
+            updated_at?: string | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LeakFindingOut"][];
+        };
+        /** PublicTextsOut */
+        PublicTextsOut: {
+            /** Document */
+            document: string;
+            /** Version */
+            version: number;
+            /** Public Title */
+            public_title?: string | null;
+            /** Public Intro */
+            public_intro?: string | null;
+            /**
+             * Page Findings
+             * @default []
+             */
+            page_findings: components["schemas"]["LeakFindingOut"][];
+            /** Rows */
+            rows: components["schemas"]["PublicRowOut"][];
+            /** Shown */
+            shown: number;
+            /** Left Out */
+            left_out: {
+                [key: string]: number;
+            };
+            /** Removed */
+            removed: {
+                [key: string]: number;
+            };
+            /** Content Hash */
+            content_hash: string;
+            check: components["schemas"]["PublicCheckState"];
+            /** Not Ready */
+            not_ready: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * PublicationOut
@@ -31582,6 +32271,16 @@ export interface components {
             document_version_id?: string | null;
             diff: components["schemas"]["RevisionDiff"];
         };
+        /** RevokeAllIn */
+        RevokeAllIn: {
+            /** Reason */
+            reason: string;
+        };
+        /** RevokeIn */
+        RevokeIn: {
+            /** Reason */
+            reason?: string | null;
+        };
         /** Risk */
         Risk: {
             /** Risk */
@@ -34061,6 +34760,184 @@ export interface components {
             /** Detail */
             detail?: string | null;
         };
+        /** ShareDayOut */
+        ShareDayOut: {
+            /** Day */
+            day: string;
+            /** Views */
+            views: number;
+        };
+        /** ShareDismissIn */
+        ShareDismissIn: {
+            /** Ids */
+            ids: string[];
+        };
+        /** ShareDismissedCount */
+        ShareDismissedCount: {
+            /** Dismissed */
+            dismissed: number;
+        };
+        /** ShareLinkCreated */
+        ShareLinkCreated: {
+            link: components["schemas"]["ShareLinkOut"];
+            /** Url */
+            url: string;
+            /** Passcode */
+            passcode: string;
+            /** Passcode Generated */
+            passcode_generated: boolean;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** ShareLinkIn */
+        ShareLinkIn: {
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "board" | "team" | "engineering" | "public";
+            /** Label */
+            label: string;
+            /**
+             * Expires In
+             * @default 14d
+             * @enum {string}
+             */
+            expires_in: "24h" | "7d" | "14d" | "30d" | "90d";
+            /**
+             * Allow Download
+             * @default true
+             */
+            allow_download: boolean;
+            /** Passcode */
+            passcode?: string | null;
+        };
+        /** ShareLinkOut */
+        ShareLinkOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Document */
+            document: string;
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
+            /** Publication Number */
+            publication_number: number;
+            /** Version Number */
+            version_number: number;
+            /** Newer Publication */
+            newer_publication?: number | null;
+            /** Newer Version */
+            newer_version?: number | null;
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "board" | "team" | "engineering" | "public";
+            /** Label */
+            label: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "expired" | "revoked";
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Revoked Reason */
+            revoked_reason?: string | null;
+            /** Allow Download */
+            allow_download: boolean;
+            /** Views */
+            views: number;
+            /** Distinct Browsers */
+            distinct_browsers: number;
+            /** Last Viewed At */
+            last_viewed_at?: string | null;
+            /** Locked Until */
+            locked_until?: string | null;
+        };
+        /** ShareLinkPatch */
+        ShareLinkPatch: {
+            /** Expires In */
+            expires_in?: ("24h" | "7d" | "14d" | "30d" | "90d") | null;
+            /** Publication Id */
+            publication_id?: string | null;
+        };
+        /** ShareRevokedCount */
+        ShareRevokedCount: {
+            /** Revoked */
+            revoked: number;
+        };
+        /** ShareViewOut */
+        ShareViewOut: {
+            /**
+             * Viewed At
+             * Format: date-time
+             */
+            viewed_at: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "page" | "download";
+            /** Browser Family */
+            browser_family?: string | null;
+            /** Country */
+            country?: string | null;
+        };
+        /** ShareViewsOut */
+        ShareViewsOut: {
+            /**
+             * Link Id
+             * Format: uuid
+             */
+            link_id: string;
+            /** Zone */
+            zone: string;
+            /**
+             * Note
+             * @default Counts browsers, not people. Oracle never records who opened a link.
+             */
+            note: string;
+            /** Views */
+            views: number;
+            /** Distinct Browsers */
+            distinct_browsers: number;
+            /** Entries */
+            entries: components["schemas"]["ShareViewOut"][];
+            /** Days */
+            days: components["schemas"]["ShareDayOut"][];
+        };
         /** SharedDriveList */
         SharedDriveList: {
             /** Drives */
@@ -35384,6 +36261,8 @@ export interface components {
             template_version?: number | null;
             /** Theme */
             theme?: string | null;
+            /** Audience */
+            audience?: ("board" | "team" | "engineering" | "public") | null;
             period?: components["schemas"]["UpdatePeriod"] | null;
             /** Question */
             question?: string | null;
@@ -43474,6 +44353,7 @@ export interface operations {
             query?: {
                 format?: "html" | "pdf" | "md";
                 layer?: "full" | "brief" | "deck";
+                audience?: ("board" | "team" | "engineering" | "public") | null;
             };
             header?: never;
             path: {
@@ -43495,7 +44375,21 @@ export interface operations {
                     "text/markdown": string;
                 };
             };
-            /** @description Format not offered for the layer, or no brief */
+            /** @description The Public audience below the approver role, or for a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description public_not_ready: the Public audience needs a public check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Format not offered for the layer, no brief, or an audience for a document that is not a roadmap (or as markdown) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -43504,11 +44398,32 @@ export interface operations {
             };
         };
     };
+    list_audiences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudienceOut"][];
+                };
+            };
+        };
+    };
     export_version: {
         parameters: {
             query?: {
                 format?: "html" | "pdf" | "md" | "pptx";
                 layer?: "full" | "brief" | "deck";
+                audience?: ("board" | "team" | "engineering" | "public") | null;
             };
             header?: never;
             path: {
@@ -43531,7 +44446,21 @@ export interface operations {
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation": string;
                 };
             };
-            /** @description Format not offered for the layer, or the version has no brief */
+            /** @description The Public audience below the approver role, or for a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description public_not_ready: the Public audience needs a public check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Format not offered for the layer, the version has no brief, or an audience for a document that is not a roadmap (or as markdown) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -43542,7 +44471,9 @@ export interface operations {
     };
     get_deck: {
         parameters: {
-            query?: never;
+            query?: {
+                audience?: ("board" | "team" | "engineering" | "public") | null;
+            };
             header?: never;
             path: {
                 doc: string;
@@ -59358,6 +60289,714 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_public_texts: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTextsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_public_text: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+                item_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicTextIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTextOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_public_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicPageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_public_texts: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description the job is turned off, or Oracle only observes */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_public_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                p: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCheckOut"];
+                };
+            };
+            /** @description not_ready: what is left before the check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_share_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_share_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareLinkCreated"];
+                };
+            };
+            /** @description Public below owner, a run's token, or an approvers-only document */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description not_published, or no_public_check for the Public audience */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a roadmap, an expiry past 90 days, or a short passcode */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_share_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareLinkPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_share_link_passcode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasscodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasscodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_share_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_all_share_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeAllIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareRevokedCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_share_revocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareDismissIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareDismissedCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_link_views: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareViewsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description No cookie that opens this link: the passcode form (any token) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This link has ended (revoked or expired), for a cookie holder */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many requests (Retry-After) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Try again in a moment (the export pool is busy) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unlock_public_share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opened: the cookie is set, back to the page */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not opened: wrong passcode, unknown, expired or revoked (one body) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Locked out for guessing (Retry-After) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_share_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description No cookie that opens this link: the passcode form (any token) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not open */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This link has ended (revoked or expired), for a cookie holder */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many requests (Retry-After) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Try again in a moment (the export pool is busy) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    public_share_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description locked (no open cookie), or active or ended with allow_download */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
