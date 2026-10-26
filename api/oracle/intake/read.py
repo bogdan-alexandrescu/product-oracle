@@ -128,6 +128,9 @@ async def start_read(
     sources = await _sources(db, intake)
     if get_settings().intake_read_runtime == "job":
         return await _queue_job(db, principal, intake, sources, fallback=None)
+    # What came before (the new intake, the ended read) is kept whatever the run does: a
+    # run that cannot even be created rolls back only itself.
+    await db.commit()
     try:
         run_id = await _start_run(db, intake)
     except Exception as exc:  # noqa: BLE001 - any refusal falls back to the job (Q3)
