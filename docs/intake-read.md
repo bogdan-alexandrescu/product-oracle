@@ -32,6 +32,12 @@ and 404. The discussion panel's Runs screen context leaves it out.
   `intake_ai_read` is on (Settings › Company, default on, owners; Q2).
 - On demand: `POST /v1/intakes/{id}/ai-read` (Analyse with Oracle), the author only; 409
   while a read is under way, on a converted or archived intake, or with the switch off.
+  At most 3 a Company day per intake (owner decision 2026-10-26; `oracle.company_time`,
+  the Company time zone; the reads on create and repin are not counted, and owners get the
+  same cap): the fourth is 429, "This intake was read 3 times today; read it again
+  tomorrow". The author's `ai_read` carries `reads_today`, `reads_per_day` and, at the
+  cap, that sentence as `read_again_refused`; the intake page shows "(2 of 3 today)"
+  before Read again, and at the cap disables it with the sentence.
 - At the tick, for intakes whose queued job migration `0055_intake_read` cancelled
   (`moved_to_swarmcloud`): at most 20 a tick.
 
