@@ -23,7 +23,7 @@ from oracle.market.models import Competitor
 from oracle.models import AuditEvent
 from oracle.pricing.models import DealOutcome
 from oracle.roadmap import leak_check, public
-from oracle.roadmap.models import RoadmapItem, RoadmapPublicText
+from oracle.roadmap.models import RoadmapItem, RoadmapPublicCheck, RoadmapPublicText
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.claude_account_helpers import add_account, window
@@ -738,3 +738,92 @@ async def test_a_text_with_emoji_is_saved(client, ctx):
     resp = await put_text(client, ctx, "bulk-import", title=title, description=EMOJI)
     assert resp.status_code == 200, resp.text
     assert resp.json()["description"] == EMOJI
+
+
+# --- #677 re-review: only real flags, blanks as spaces, and the trash filter -----------
+
+
+def _flag(tags: str) -> str:
+    """A black flag carrying ``tags`` as tag characters, then the cancel tag."""
+    return "\U0001f3f4" + "".join(chr(0xE0000 + ord(c)) for c in tags) + "\U000e007f"
+
+
+SPLIT_NAME = f"Visit {_flag('nort')}{_flag('hwin')}d soon"
+SPLIT_PHONE = f"Call {_flag('555012')}{_flag('3456')} today"
+
+
+def test_only_the_three_subdivision_flags_pass():
+    """protects=#677 re-review major: England, Scotland and Wales are the only tag
+    sequences kept; any other tag run is refused, and the check reads tag letters as the
+    text a decoder sees, so a name or a phone number split across two flags is found;
+    fails_when="🏴[nort]🏴[hwin]d" or "🏴[555012]🏴[3456]" is kept or passes the check;
+    no_claim=two-letter (regional indicator) flags, which carry no tags."""
+    for tags in ("gbeng", "gbsct", "gbwls"):
+        text = f"Made in {_flag(tags)} with care"
+        assert leak_check.format_characters(text) == [], tags
+        assert leak_check.strip_format(text) == text
+        assert leak_check.check(text, _ctx()) == []
+    for tags in ("usca", "gbabc", "nort", "555012"):
+        assert leak_check.format_characters(f"Made in {_flag(tags)}"), tags
+    assert leak_check.format_characters(SPLIT_NAME)
+    assert leak_check.strip_format(SPLIT_NAME) == "Visit \U0001f3f4\U0001f3f4d soon"
+    found = leak_check.check(SPLIT_NAME, _ctx())
+    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
+    assert leak_check.format_characters(SPLIT_PHONE)
+    found = leak_check.check(SPLIT_PHONE, _ctx())
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    # A name right beside a real flag is still read on its own.
+    found = leak_check.check(f"Built for Northwind{_flag('gbsct')}", _ctx())
+    assert [f.code for f in found] == ["customer_name"]
+
+
+async def test_a_text_hiding_a_name_or_number_in_flags_is_not_saved(client, ctx):
+    """protects=#677 re-review major: saving refuses a tag run that is not one of the
+    three flags (422 format_characters); fails_when=the split name or number is saved."""
+    await seed(ctx)
+    for text in (SPLIT_NAME, SPLIT_PHONE):
+        resp = await put_text(client, ctx, "bulk-import", description=text, state="draft")
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"]["code"] == "format_characters"
+    resp = await put_text(client, ctx, "bulk-import", description=f"Made in {_flag('gbwls')}")
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.parametrize("blank", ["⠀", "\U0001d159", "　"], ids=lambda c: f"U+{ord(c):04X}")
+def test_blank_characters_read_as_spaces(blank):
+    """protects=#677 re-review minor: a character that renders blank but is not
+    Default_Ignorable (braille blank, the null notehead, the ideographic space) reads as a
+    space, so a phone number or a full name spaced with it is found; fails_when="555⠀012⠀3456"
+    passes; no_claim=a word split by a visible gap (the approver sees the gap)."""
+    found = leak_check.check(f"Call 555{blank}012{blank}3456", _ctx())
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    found = leak_check.check(f"Built with Priya{blank}Quillfeather", _ctx())
+    assert PERSON in found[0].words, found
+
+
+async def test_a_trashed_roadmap_hides_its_public_texts_and_checks(client, ctx):
+    """protects=#677 re-review (CI): roadmap_public_texts and roadmap_public_checks hang off
+    their roadmap, so the trash filter leaves them out while it is in Trash and restore
+    brings them back; fails_when=a trashed roadmap's public text or check is read."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    assert (await client.post(CHECK, headers=ctx.as_("approver"))).status_code == 201
+
+    async def counts() -> tuple[int, int]:
+        async with tenant_session(ctx.tenant_id) as s:
+            texts = len((await s.scalars(select(RoadmapPublicText))).all())
+            checks = len((await s.scalars(select(RoadmapPublicCheck))).all())
+        return texts, checks
+
+    assert await counts() == (2, 1)
+    resp = await client.request(
+        "DELETE",
+        f"/v1/documents/{SLUG}",
+        params={"confirm_published": "true"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert await counts() == (0, 0)
+    resp = await client.post(f"/v1/documents/{SLUG}/restore", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    assert await counts() == (2, 1)
