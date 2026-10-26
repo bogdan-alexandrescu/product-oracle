@@ -45,7 +45,8 @@ import pytest
 from sqlalchemy import select
 
 from oracle import audit
-from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+from oracle.auth.service import sign_run_binding
 from oracle.baseline.models import Entity
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion
@@ -539,7 +540,11 @@ async def _fetch_files(client, ctx, s: dict, who: str, sec: Secrets, out: Out) -
             scopes = sorted({x for seg in FLOWS["ritual_summary"].segments for x in seg.scopes})
             raw = await mint_run_token(db, rid, scopes, ttl_seconds=3600)
             await db.commit()
-        await rest("member-run-rest", {**ctx.as_("owner"), RUN_TOKEN_HEADER: raw})
+        # The token and the run binding, as Oracle's MCP server sends them (#614).
+        binding = sign_run_binding(ctx.users["owner"].id, rid)
+        await rest(
+            "member-run-rest", {**ctx.as_("owner"), RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
+        )
         await mcp("member-run-mcp", raw, "get_run_artifact")
     elif role == "own":
         for (flow, starter), rid in s["member_runs"].items():

@@ -28,7 +28,8 @@ import pytest
 from sqlalchemy import select
 
 from oracle import audit
-from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+from oracle.auth.service import sign_run_binding
 from oracle.docs.models import Document
 from oracle.launches import kit
 from oracle.launches.models import ChangelogEntry, Launch, LaunchTask, RequesterNote
@@ -438,7 +439,11 @@ async def test_the_inbox_through_a_member_run_shows_no_pricing_checkpoint(client
     assert slug in own.text, own.text[:400]
     run_id = await _run(ctx, "ritual_summary", "owner", knobs=_knobs(w))
     raw = await _token(ctx, run_id, "ritual_summary")
-    got = await client.get("/v1/inbox", headers={**ctx.as_("owner"), RUN_TOKEN_HEADER: raw})
+    # What Oracle's MCP server sends for a run token: the token and the run binding (#614).
+    binding = sign_run_binding(ctx.users["owner"].id, run_id)
+    got = await client.get(
+        "/v1/inbox", headers={**ctx.as_("owner"), RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
+    )
     assert got.status_code == 200, got.text
     assert slug not in got.text and doc_id not in got.text and not _leaks(got.text, w)
 

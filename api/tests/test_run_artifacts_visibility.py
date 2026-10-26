@@ -23,13 +23,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+from oracle.auth.service import sign_run_binding
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.launches import kit
 from oracle.launches.models import Launch
 from oracle.runs import service as runs_service
 from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.runtokens import verify_run_token
 from oracle.swarm import FakeRuntime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
@@ -42,6 +44,12 @@ from tests.test_member_runs_visibility import runtime as runtime  # noqa: F401
 
 READERS = ("viewer", "commenter")
 PRIVILEGED = ("owner", "approver")
+
+
+async def _as_run(headers: dict[str, str], user_id, raw: str) -> dict[str, str]:
+    """What Oracle's MCP server sends for a run token: the token and the run binding (#614)."""
+    claims = await verify_run_token(raw)
+    return {**headers, RUN_TOKEN_HEADER: raw, RUN_HEADER: sign_run_binding(user_id, claims.run_id)}
 
 
 @pytest.fixture
@@ -152,7 +160,7 @@ async def test_an_old_kit_file_is_not_served_to_a_member_run(client, ctx):
     w = await _world(client, ctx)
     _, run_id, files, previous = await _kit_run(ctx, w)
     raw = await _member_run_token(ctx, w)
-    headers = {**ctx.as_("owner"), RUN_TOKEN_HEADER: raw}
+    headers = await _as_run(ctx.as_("owner"), ctx.users["owner"].id, raw)
     for url in _urls(run_id, files, previous):
         got = await client.get(url, headers=headers)
         assert got.status_code == 404, (url, got.status_code, got.text[:300])
@@ -221,7 +229,7 @@ async def test_a_starter_view_run_serves_its_files_to_approvers_only(client, ctx
         run_id = run.id
     url = f"/v1/runs/{run_id}/segments/1/artifacts/baseline.yaml"
     raw = await _member_run_token(ctx, w)
-    member_run = {**ctx.as_("owner"), RUN_TOKEN_HEADER: raw}
+    member_run = await _as_run(ctx.as_("owner"), ctx.users["owner"].id, raw)
     for headers in (ctx.as_("viewer"), ctx.as_("commenter"), member_run):
         assert (await client.get(url, headers=headers)).status_code == 404
     for who in PRIVILEGED:

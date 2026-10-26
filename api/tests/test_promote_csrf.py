@@ -18,13 +18,15 @@ import pytest
 from fastapi.routing import _IncludedRouter
 from sqlalchemy import select
 
-from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
 from oracle.auth.iap import ASSERTION_HEADER
 from oracle.auth.models import User
+from oracle.auth.service import sign_run_binding
 from oracle.baseline.models import Entity, Proposal
 from oracle.config import get_settings
 from oracle.mcp.oauth.models import OAuthClient, OAuthToken
 from oracle.mcp.oauth.service import hash_token
+from oracle.runtokens import verify_run_token
 from oracle.tenancy import tenant_session
 from oracle.v2.models import KnowledgeGap, StakeholderQuestion
 from tests.baseline_helpers import make_ctx
@@ -41,6 +43,12 @@ MARKS = {
     "gap_id": str(uuid.UUID(int=7)),
     "intake_id": str(uuid.UUID(int=8)),
 }
+
+
+async def _as_run(headers: dict[str, str], user_id, raw: str) -> dict[str, str]:
+    """What Oracle's MCP server sends for a run token: the token and the run binding (#614)."""
+    claims = await verify_run_token(raw)
+    return {**headers, RUN_TOKEN_HEADER: raw, RUN_HEADER: sign_run_binding(user_id, claims.run_id)}
 
 
 @pytest.fixture
@@ -78,9 +86,9 @@ async def _senders(ctx) -> dict[str, dict[str, str]]:
     mcp = await _mcp_token(ctx, "commenter")
     return {
         "commenter": ctx.as_("commenter"),
-        # A run's REST call, as the MCP server makes it in-process: its creator's session
-        # and the run token.
-        "run": {**ctx.as_("commenter"), RUN_TOKEN_HEADER: run},
+        # A run's REST call, as the MCP server makes it in-process: its creator's session,
+        # the run token and the run binding (#614).
+        "run": await _as_run(ctx.as_("commenter"), ctx.users["commenter"].id, run),
         "mcp": {"Authorization": f"Bearer {mcp}"},
     }
 
@@ -293,7 +301,7 @@ async def test_bearer_tokens_are_not_browser_credentials(client, ctx):
     run = await run_token(ctx.tenant_id, ["write:proposals"], ctx.users["approver"].id)
     body = {"op": "create", "kind": "entity",
             "fields": {"type": "feature", "key": "from-run", "title": "Run"}}  # fmt: skip
-    headers = {**ctx.as_("approver"), RUN_TOKEN_HEADER: run}
+    headers = await _as_run(ctx.as_("approver"), ctx.users["approver"].id, run)
     resp = await client.post(f"{B}/proposals", json=body, headers=headers)
     assert resp.status_code == 201, resp.text
     assert resp.json()["proposer"]["kind"] == "run"
