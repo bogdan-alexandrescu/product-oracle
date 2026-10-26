@@ -99,7 +99,7 @@ import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from ".
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
-import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
+import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import {
@@ -864,6 +864,26 @@ function seedSuggestions(): Db {
 }
 
 /**
+ * The seeded spec: approver@example.com approved its wireframes' v1; the
+ * "design-named-approver" scenario names admin@example.com its engineering approver.
+ */
+function specsSeed(db: Db): SpecsDb {
+  const person = (email: string): SpecPerson | undefined => {
+    const m = db.members.find((x) => x.email === email);
+    return m && { id: m.id, name: displayName(m.email, m.name) };
+  };
+  const admin = person("admin@example.com");
+  const named = localStorage.getItem(MOCK_SCENARIO_KEY) === "design-named-approver" && admin ? [admin] : [];
+  return seedSpecs({ approver: person("approver@example.com"), named });
+}
+
+/** A member's display name (api/oracle/members/names.py), as the specs mock's actor_name. */
+function specActorName(db: Db, id: string): string | null {
+  const m = db.members.find((x) => x.id === id);
+  return m ? displayName(m.email, m.name) : null;
+}
+
+/**
  * A3 "eng-review" scenario: the default company with commenter@example.com named engineering
  * lead, and a run waiting at an Engineering review stop (./runs.ts).
  */
@@ -1380,7 +1400,7 @@ function seed(): Db {
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
     const brief = docs.get("checkout-redesign-early-shipping-cost-spec")!;
     for (const v of db.versions) if (v.document_id === brief.id) v.source = null;
-    db.specs ??= seedSpecs();
+    db.specs ??= specsSeed(db);
     for (const s of db.specs.specs) if (s.document_slug === brief.slug) s.request.source_document_id = docs.get("usage-alerts")!.id;
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
@@ -3496,7 +3516,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       versions: db.versions,
       runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
       intakes: () => ensureV2(db).intakes,
-      specRequests: () => (db.specs ??= seedSpecs()).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
+      specRequests: () => (db.specs ??= specsSeed(db)).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
       uuid,
       now,
@@ -3629,7 +3649,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
   if (p[1] === "trace" && p[2] === "staleness" && p[3] === "actions" && m === "POST") {
-    const acted = await specStalenessAction({ db: (db.specs ??= seedSpecs()), userId: me.id, role: me.role, uuid, now }, req);
+    const acted = await specStalenessAction({ db: (db.specs ??= specsSeed(db)), userId: me.id, name: (id) => specActorName(db, id), role: me.role, uuid, now }, req);
     if (acted) return acted;
   }
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
@@ -3757,8 +3777,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (quality) return quality;
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
   if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
-    db.specs ??= seedSpecs();
-    const specs = await routeSpecs({ db: db.specs, userId: me.id, role: me.role, uuid, now }, req, p, q);
+    db.specs ??= specsSeed(db);
+    const specs = await routeSpecs({ db: db.specs, userId: me.id, name: (id) => specActorName(db, id), role: me.role, uuid, now }, req, p, q);
     if (specs) return specs;
   }
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
@@ -4288,7 +4308,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
     if (superseded) return json(409, { detail: superseded });
     // #396: a spec version that may be stale is refused, in the app's words; its id in refs.
-    const stale = doc.kind === "spec" && !v.approved_at ? staleSpecRefusal((db.specs ??= seedSpecs()), doc.slug, v.number) : null;
+    const stale = doc.kind === "spec" && !v.approved_at ? staleSpecRefusal((db.specs ??= specsSeed(db)), doc.slug, v.number) : null;
     if (stale) return json(422, stale);
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {

@@ -103,6 +103,17 @@ class SpecVersionOut(BaseModel):
     origin: str | None = None
 
 
+class DesignReviewEventOut(ArtifactReviewEventOut):
+    # Read only: who wrote it, by name (the member's display name, the API token's name,
+    # "Oracle" for the system), so every role that reads the spec sees who said what.
+    actor_name: str | None = None
+
+
+class EngineeringApprover(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class AnnotationOut(BaseModel):
     id: str
     target: str
@@ -110,7 +121,7 @@ class AnnotationOut(BaseModel):
     section_key: str | None = None
     requirement_ids: list[uuid.UUID] = []
     # Review events on this annotation, oldest first.
-    reviews: list[ArtifactReviewEventOut] = []
+    reviews: list[DesignReviewEventOut] = []
 
 
 class DesignOutputOut(BaseModel):
@@ -136,7 +147,7 @@ class DesignArtifactOut(BaseModel):
     version: ArtifactVersionOut
     outputs: list[DesignOutputOut]
     # Review events on the version as a whole (not on an annotation), oldest first.
-    reviews: list[ArtifactReviewEventOut] = []
+    reviews: list[DesignReviewEventOut] = []
     # The version's dependencies and why any is stale (oracle.trace).
     lineage: TraceOutput | None = None
 
@@ -156,6 +167,8 @@ class SpecOut(SpecSummary):
     requirements: list[RequirementOut]
     section_keys: list[str]
     engineering_approver_ids: list[uuid.UUID] = []
+    # The same people by name, in that order, for every role that reads the spec.
+    engineering_approvers: list[EngineeringApprover] = []
     code_capability_map: Literal["used", "unavailable"]
     versions: list[SpecVersionOut]
     # The latest spec version's sections, with the part each belongs to.
@@ -198,5 +211,5 @@ class DesignReviewIn(BaseModel):
 
 
 class DesignReviewOut(BaseModel):
-    event: ArtifactReviewEventOut
+    event: DesignReviewEventOut
     version: ArtifactVersionOut

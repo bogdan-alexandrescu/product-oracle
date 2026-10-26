@@ -12713,7 +12713,7 @@ export interface components {
              * Reviews
              * @default []
              */
-            reviews: components["schemas"]["ArtifactReviewEventOut"][];
+            reviews: components["schemas"]["DesignReviewEventOut"][];
         };
         /** AnswerIn */
         AnswerIn: {
@@ -17387,7 +17387,7 @@ export interface components {
              * Reviews
              * @default []
              */
-            reviews: components["schemas"]["ArtifactReviewEventOut"][];
+            reviews: components["schemas"]["DesignReviewEventOut"][];
             lineage?: components["schemas"]["TraceOutput"] | null;
         };
         /** DesignOutputOut */
@@ -17427,6 +17427,39 @@ export interface components {
             /** Content Url */
             content_url: string;
         };
+        /** DesignReviewEventOut */
+        DesignReviewEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "comment" | "approved" | "changes_requested" | "rejected" | "marked_stale" | "reconciled";
+            /** Body */
+            body?: string | null;
+            /** Actor */
+            actor: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Actor Name */
+            actor_name?: string | null;
+        };
         /** DesignReviewIn */
         DesignReviewIn: {
             /**
@@ -17443,7 +17476,7 @@ export interface components {
         };
         /** DesignReviewOut */
         DesignReviewOut: {
-            event: components["schemas"]["ArtifactReviewEventOut"];
+            event: components["schemas"]["DesignReviewEventOut"];
             version: components["schemas"]["ArtifactVersionOut"];
         };
         /** DiffLine */
@@ -18747,6 +18780,16 @@ export interface components {
             applied: boolean;
             edge?: components["schemas"]["EdgeOut"] | null;
             proposal?: components["schemas"]["ProposalOut"] | null;
+        };
+        /** EngineeringApprover */
+        EngineeringApprover: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** EntityCreate */
         EntityCreate: {
@@ -32992,6 +33035,11 @@ export interface components {
              * @default []
              */
             engineering_approver_ids: string[];
+            /**
+             * Engineering Approvers
+             * @default []
+             */
+            engineering_approvers: components["schemas"]["EngineeringApprover"][];
             /**
              * Code Capability Map
              * @enum {string}

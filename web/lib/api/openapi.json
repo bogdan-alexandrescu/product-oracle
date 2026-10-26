@@ -43951,7 +43951,7 @@
           },
           "reviews": {
             "items": {
-              "$ref": "#/components/schemas/ArtifactReviewEventOut"
+              "$ref": "#/components/schemas/DesignReviewEventOut"
             },
             "type": "array",
             "title": "Reviews",
@@ -57360,7 +57360,7 @@
           },
           "reviews": {
             "items": {
-              "$ref": "#/components/schemas/ArtifactReviewEventOut"
+              "$ref": "#/components/schemas/DesignReviewEventOut"
             },
             "type": "array",
             "title": "Reviews",
@@ -57475,6 +57475,78 @@
         ],
         "title": "DesignOutputOut"
       },
+      "DesignReviewEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "approved",
+              "changes_requested",
+              "rejected",
+              "marked_stale",
+              "reconciled"
+            ],
+            "title": "Kind"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version_id",
+          "kind",
+          "actor",
+          "data",
+          "created_at"
+        ],
+        "title": "DesignReviewEventOut"
+      },
       "DesignReviewIn": {
         "properties": {
           "kind": {
@@ -57533,7 +57605,7 @@
       "DesignReviewOut": {
         "properties": {
           "event": {
-            "$ref": "#/components/schemas/ArtifactReviewEventOut"
+            "$ref": "#/components/schemas/DesignReviewEventOut"
           },
           "version": {
             "$ref": "#/components/schemas/ArtifactVersionOut"
@@ -61085,6 +61157,25 @@
           "applied"
         ],
         "title": "EdgeWriteOut"
+      },
+      "EngineeringApprover": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "EngineeringApprover"
       },
       "EntityCreate": {
         "properties": {
@@ -100596,6 +100687,14 @@
             },
             "type": "array",
             "title": "Engineering Approver Ids",
+            "default": []
+          },
+          "engineering_approvers": {
+            "items": {
+              "$ref": "#/components/schemas/EngineeringApprover"
+            },
+            "type": "array",
+            "title": "Engineering Approvers",
             "default": []
           },
           "code_capability_map": {

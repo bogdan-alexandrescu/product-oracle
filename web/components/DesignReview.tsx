@@ -15,7 +15,7 @@ type Spec = Schemas["SpecOut"];
 type Design = Schemas["DesignArtifactOut"];
 type Output = Schemas["DesignOutputOut"];
 type Annotation = Schemas["AnnotationOut"];
-type ReviewEvent = Schemas["ArtifactReviewEventOut"];
+type ReviewEvent = Schemas["DesignReviewEventOut"];
 type Verdict = Exclude<Schemas["DesignReviewIn"]["kind"], "comment">;
 
 const PHONE = "(max-width: 600px)";
@@ -81,10 +81,16 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
 
   const error = designQ.error ?? specQ.error;
   if (error) {
+    const back = specQ.data ? briefHref(specQ.data) : null;
     return (
       <Page>
         <PageHeader title="Design" testId="page-header" />
         <ErrorNote>{error}</ErrorNote>
+        {back && (
+          <div className="mt-3">
+            <LinkButton href={back}>Back to the tech brief</LinkButton>
+          </div>
+        )}
       </Page>
     );
   }
@@ -103,13 +109,14 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   };
 
   // The spec's engineering approvers (any approver when none are named) or an owner decide,
-  // as the API's review_design; regenerate_spec carries the same per-item rule.
+  // as the API's review_design; approve_version is the same rule on the spec's own approach
+  // (_may_approve_engineering): the approver role on its route, owners past any item.
   const named = spec.engineering_approver_ids;
-  const engineer = me?.role === "owner" || named.length === 0 || (!!me?.user_id && named.includes(me.user_id));
+  const engineer = named.length === 0 || (!!me?.user_id && named.includes(me.user_id));
   const roles = {
     comment: can("review_design_artifact", true),
-    approverRole: can("regenerate_spec", true),
-    decide: can("regenerate_spec", engineer) && can("review_design_artifact", engineer),
+    approverRole: can("approve_version", true),
+    decide: can("approve_version", engineer) && can("review_design_artifact", engineer),
     owner: can("review_design_artifact"),
   };
   const fresh = FRESHNESS[v.freshness];
@@ -379,7 +386,7 @@ function ReviewInspector({
       <InspectorSection label={`Verdict on v${v.number}`} testId="verdict">
         <VerdictSection spec={spec} d={d} brief={brief} reasons={reasons} roles={roles} readOnly={readOnly} post={post} />
       </InspectorSection>
-      <AnnotationsSection outputs={shown} roles={roles} readOnly={readOnly} meId={meId} post={post} />
+      <AnnotationsSection spec={spec} outputs={shown} roles={roles} meId={meId} post={post} />
       <InspectorSection label="Version reviews · oldest first" testId="version-reviews">
         <div className="flex flex-col gap-3.5">
           {d.reviews.length === 0 ? (
@@ -419,9 +426,19 @@ function VerdictSection({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const stale = v.freshness === "potentially_stale";
-  if (readOnly) return <Notice tone="info">{`version ${v.number} is ${v.status}`}: read only.</Notice>;
+  if (readOnly) {
+    const latest = spec.design?.find((a) => a.request_id === d.request_id && a.version.id !== v.id)?.version;
+    if (v.status === "superseded" && latest) {
+      return (
+        <Notice tone="info" action={<LinkButton href={designHref(spec.request.id, latest.id)}>Open v{latest.number}</LinkButton>}>
+          v{latest.number} replaced this version. Comments are still allowed; verdicts are not.
+        </Notice>
+      );
+    }
+    return <Notice tone="info">{`version ${v.number} is ${v.status}`}: comments are still allowed; verdicts are not.</Notice>;
+  }
   if (!roles.comment) return <Notice tone="info">You can read this review. Commenting needs the commenter role.</Notice>;
-  const named = spec.engineering_approver_ids.length;
+  const named = spec.engineering_approvers ?? [];
   const approvedLine = v.status === "approved" && v.approved_at && (
     <p className="mb-2 text-sm text-text2">Approved {formatDateTime(v.approved_at)}.</p>
   );
@@ -476,14 +493,14 @@ function VerdictSection({
         <>
           <Notice tone="error">only the spec&apos;s engineering approvers (or an owner) decide on it</Notice>
           <p className="text-[13px] text-text2">
-            {named} engineering approver{named === 1 ? " is" : "s are"} named on this spec.
+            Engineering approver{named.length === 1 ? "" : "s"} named on this spec: {named.map((x) => x.name).join(", ") || "—"}
           </p>
         </>
       ) : (
         <p className="text-[13px] text-text2">
           {roles.owner
             ? "Owners always decide. Approving supersedes the previously approved version."
-            : named > 0
+            : named.length > 0
               ? "You are a named engineering approver for this spec."
               : "No engineering approvers are named on this spec, so any approver decides."}
         </p>
@@ -493,20 +510,21 @@ function VerdictSection({
 }
 
 function AnnotationsSection({
+  spec,
   outputs,
   roles,
-  readOnly,
   meId,
   post,
 }: {
+  spec: Spec;
   outputs: Output[];
   roles: Roles;
-  readOnly: boolean;
   meId: string | null;
   post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
 }) {
   const [quiet, setQuiet] = useState(false);
   const total = outputs.reduce((n, o) => n + o.annotations.length, 0);
+  const counts = { All: total, "No comments": outputs.reduce((n, o) => n + o.annotations.filter((a) => a.reviews.length === 0).length, 0) };
   const filter = (
     <span className="inline-flex gap-1">
       {(["All", "No comments"] as const).map((label) => {
@@ -519,7 +537,7 @@ function AnnotationsSection({
             onClick={() => setQuiet(label === "No comments")}
             className={`rounded-full px-2.5 py-0.5 text-[13px] whitespace-nowrap font-semibold ${on ? "bg-accent text-on-accent" : "bg-surface2 text-text2 hover:text-text"}`}
           >
-            {label}
+            {label} <span className="tnum">{counts[label]}</span>
           </button>
         );
       })}
@@ -545,11 +563,12 @@ function AnnotationsSection({
                     {rows.map(({ a, n }) => (
                       <AnnotationRow
                         key={a.id}
+                        spec={spec}
                         a={a}
                         n={n}
                         output={o.name}
                         many={outputs.length > 1}
-                        canComment={roles.comment && !readOnly}
+                        canComment={roles.comment}
                         meId={meId}
                         post={post}
                       />
@@ -566,6 +585,7 @@ function AnnotationsSection({
 }
 
 function AnnotationRow({
+  spec,
   a,
   n,
   output,
@@ -574,6 +594,7 @@ function AnnotationRow({
   meId,
   post,
 }: {
+  spec: Spec;
   a: Annotation;
   n: number;
   output: string;
@@ -596,6 +617,11 @@ function AnnotationRow({
           <Chip kind="line">{a.id}</Chip>
           <Chip kind="na">→ {a.target}</Chip>
           {a.section_key && <Chip kind="na">{a.section_key}</Chip>}
+          {a.requirement_ids.map((id) => (
+            <Chip key={id} kind="line">
+              {requirementName(spec, id)}
+            </Chip>
+          ))}
         </div>
         <div className="mt-2 flex flex-col gap-2 border-l-2 border-line pl-2.5">
           {a.reviews.length === 0 ? (
@@ -615,15 +641,17 @@ function AnnotationRow({
   );
 }
 
-/** An event's actor is "<principal kind>:<id>" (a member or an API token); "system" is Oracle. No route returns names to every role. */
+/** An event's actor is "<principal kind>:<id>" (a member or an API token); "system" is Oracle. */
 const ACTOR_KIND = new Map([
   ["user", "A member"],
   ["token", "An API token"],
 ]);
 
-function actorName(actor: string, meId: string | null): string {
-  if (meId && actor === `user:${meId}`) return "You";
-  return ACTOR_KIND.get(actor.split(":")[0]) ?? "Oracle";
+/** The API names each event's author (actor_name); yours reads "<name> (you)". */
+function actorName(e: ReviewEvent, meId: string | null): string {
+  const name = e.actor_name ?? ACTOR_KIND.get(e.actor.split(":")[0]) ?? "Oracle";
+  if (meId && e.actor === `user:${meId}`) return e.actor_name ? `${e.actor_name} (you)` : "You";
+  return name;
 }
 
 function EventRow({ e, meId }: { e: ReviewEvent; meId: string | null }) {
@@ -631,7 +659,7 @@ function EventRow({ e, meId }: { e: ReviewEvent; meId: string | null }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <div className="flex flex-wrap items-center gap-1.5 text-sm">
-        <b>{actorName(e.actor, meId)}</b>
+        <b>{actorName(e, meId)}</b>
         <Chip kind={kind.kind}>{kind.label}</Chip>
         <span className="tnum text-xs text-text-faint">{formatDateTime(e.created_at)}</span>
       </div>
@@ -677,6 +705,14 @@ function MetaRow({ k, children }: { k: string; children: ReactNode }) {
       <span className="ml-auto min-w-0 text-right break-words">{children}</span>
     </div>
   );
+}
+
+/** Who approved the version: the name on its latest approval event by that person. */
+function approverName(d: Design, meId: string | null): string {
+  const v = d.version;
+  const e = d.reviews.findLast((x) => x.kind === "approved" && x.actor === `user:${v.approved_by}`);
+  if (e) return actorName(e, meId);
+  return meId && v.approved_by === meId ? "you" : "a member";
 }
 
 function VersionMeta({ spec, d, reasons, meId }: { spec: Spec; d: Design; reasons: string[]; meId: string | null }) {
@@ -725,7 +761,7 @@ function VersionMeta({ spec, d, reasons, meId }: { spec: Spec; d: Design; reason
         <MetaRow k="Approved">
           <span className="tnum">
             {formatDateTime(v.approved_at)}
-            {v.approved_by && ` · ${meId && v.approved_by === meId ? "by you" : "by a member"}`}
+            {v.approved_by && ` · by ${approverName(d, meId)}`}
           </span>
         </MetaRow>
       )}
