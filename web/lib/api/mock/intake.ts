@@ -410,9 +410,11 @@ function askBatch(db: V2Db, ctx: IntakeContext, intake: Intake, size: number, as
   for (const q of questions) if (q.status === "draft" && assign[q.id]) q.asked_to = assign[q.id];
   const drafts = chooseDrafts(questions, size);
   const n = Math.max(0, ...questions.map((q) => q.batch ?? 0)) + 1;
+  // At Draft (H11 questions) the person the preview named, never the sender (as the API).
+  const asker = questionsLevel(ctx) !== "draft";
   for (const q of drafts) {
     const g = db.gaps.find((x) => x.id === q.gap_id);
-    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q), updated_at: now() });
+    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q, asker), updated_at: now() });
     if (g && g.status === "unknown") g.status = "asked";
   }
   return drafts;
