@@ -75,6 +75,8 @@ CHANGE_KINDS = (
     "scope_requirement",
     "priority_move",
     "priority_pin",
+    # H1 Decision log's entry point: a discussion proposes a decision.
+    "decision",
 )
 CHANGE_STATUSES = ("proposed", "suggested", "staged", "done", "dismissed", "superseded")
 PROPOSED_BY_KINDS = ("oracle", "person")

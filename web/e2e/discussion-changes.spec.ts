@@ -23,7 +23,7 @@ const VIEWER = "viewer@example.com";
 const EDIT = "Edit problem: say that detection follows once activation holds";
 const SECOND = "Edit solution: read the caps from the plan thresholds";
 /** The kinds the API offers on a section (kinds.available_for("section")). */
-const SECTION_KINDS = ["section_edit", "answer"];
+const SECTION_KINDS = ["section_edit", "answer", "ask_person", "decision"];
 const STAGE_WHY_NOT = "Approvers stage changes. You can suggest it.";
 
 const withScenario = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "discussions"), MOCK_SCENARIO_KEY);
@@ -164,7 +164,7 @@ test("a viewer sees the changes and no buttons", async ({ page }) => {
 });
 
 // protects=criterion 13.6: "Propose a change" offers only the kinds the API offers on a section
-// (section_edit, answer), and a commenter's change lands as their suggestion; fails_when=the
+// (section_edit, answer, ask_person, decision), and a commenter's change lands as their suggestion; fails_when=the
 // picker lists a kind the subject does not offer (an item move), or the new change is missing; no_claim=the API's availability rules
 // (kinds.available, pytest).
 test("Propose a change offers only the subject's kinds", async ({ page }) => {
@@ -173,7 +173,7 @@ test("Propose a change offers only the subject's kinds", async ({ page }) => {
   await startDiscussion(page, { ask: false });
   await card(page).getByRole("button", { name: "Propose a change" }).click();
   const kind = card(page).getByRole("combobox", { name: "Kind of change" });
-  await expect(kind.locator("option")).toHaveText(["Edit a section", "Answer a question"]);
+  await expect(kind.locator("option")).toHaveText(["Edit a section", "Answer a question", "Ask someone", "Propose a decision"]);
   await kind.selectOption({ label: "Edit a section" });
   const form = card(page).getByTestId("change-form");
   await form.getByRole("textbox", { name: "What to change" }).fill("Add a handover step for the first admin.");
