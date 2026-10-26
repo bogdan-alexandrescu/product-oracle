@@ -68,7 +68,7 @@ def scratch_db():
 def test_the_chain_ends_here_after_discussion_replies():
     # Subgoals' 0041_subgoals (#345) chains on it; one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0054_reply_opened"]
+    assert script.get_heads() == ["0055_metric_errors_fixed"]
     assert script.get_revision("0041_subgoals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 

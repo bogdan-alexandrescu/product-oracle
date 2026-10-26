@@ -114,6 +114,27 @@ def stale_why(reasons: Iterable[str] | None, default: str) -> str:
     return "; ".join(one_count(reasons or [])) or default
 
 
+# A reason naming what the reader may not see, said without it (#541).
+HIDDEN_REASON = "a linked baseline item changed"
+
+
+def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
+    """``reasons`` as the reader may read them: one naming a decision or document the
+    reader may not see (``hidden``, :func:`oracle.docs.visibility.hidden_for_reader`;
+    None sees all) is said as :data:`HIDDEN_REASON`, once."""
+    out = list(reasons or [])
+    if hidden is None:
+        return out
+    return list(dict.fromkeys(HIDDEN_REASON if hidden.names(r) else r for r in out))
+
+
+def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
+    """A stored ``"; "``-joined reason line (:func:`stale_why`) for the reader."""
+    if not detail or hidden is None:
+        return detail
+    return "; ".join(for_reader(detail.split("; "), hidden))
+
+
 def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> None:
     if item.freshness != "potentially_stale" or item.stale_since is None:
         item.stale_since = now
