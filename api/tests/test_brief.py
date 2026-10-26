@@ -609,6 +609,8 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
         "document_view": "brief",
         # A1: Home's Set up checklist is shown until they hide it.
         "setup_hidden": False,
+        # A1: Home's welcome for invited members is shown until they dismiss it.
+        "welcome_dismissed": False,
     }
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"

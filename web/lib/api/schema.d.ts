@@ -26901,6 +26901,7 @@ export interface components {
          * @description What the signed-in user (or API token) chose. ``document_view``: the layer
          *     documents open on; brief unless they switched to the full document. ``setup_hidden``:
          *     they hid Home's Set up checklist (A1); a header chip shows it again.
+         *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
          */
         Preferences: {
             /**
@@ -26914,6 +26915,11 @@ export interface components {
              * @default false
              */
             setup_hidden: boolean;
+            /**
+             * Welcome Dismissed
+             * @default false
+             */
+            welcome_dismissed: boolean;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -26921,6 +26927,8 @@ export interface components {
             document_view?: ("brief" | "full") | null;
             /** Setup Hidden */
             setup_hidden?: boolean | null;
+            /** Welcome Dismissed */
+            welcome_dismissed?: boolean | null;
         };
         /**
          * PreviousAttempt
@@ -32412,6 +32420,11 @@ export interface components {
             total: number;
             /** Hidden */
             hidden: boolean;
+            /**
+             * Welcome
+             * @default false
+             */
+            welcome: boolean;
         };
         /** SetupStep */
         SetupStep: {

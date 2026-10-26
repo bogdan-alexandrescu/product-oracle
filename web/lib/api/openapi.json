@@ -83171,11 +83171,16 @@
             "type": "boolean",
             "title": "Setup Hidden",
             "default": false
+          },
+          "welcome_dismissed": {
+            "type": "boolean",
+            "title": "Welcome Dismissed",
+            "default": false
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1)."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -83204,6 +83209,17 @@
               }
             ],
             "title": "Setup Hidden"
+          },
+          "welcome_dismissed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Dismissed"
           }
         },
         "type": "object",
@@ -98891,6 +98907,11 @@
           "hidden": {
             "type": "boolean",
             "title": "Hidden"
+          },
+          "welcome": {
+            "type": "boolean",
+            "title": "Welcome",
+            "default": false
           }
         },
         "type": "object",

@@ -100,6 +100,8 @@ function selection(config: Record<string, unknown>): Record<string, unknown> {
 
 /** As the connectors' normalize_config: names kept only for the picks, each cut to length. */
 function normalizeLabels(kind: Source["kind"], config: Record<string, unknown>): Record<string, unknown> {
+  // GitHub's include is stored sorted, without repeats (the connector's normalize_config).
+  if (kind === "github" && Array.isArray(config.include)) config = { ...config, include: [...new Set(config.include.map(String))].sort() };
   const rule = LABELLED[kind];
   const labels = config.labels;
   const picks = config[rule?.key ?? ""];
@@ -409,6 +411,17 @@ function itemOut(i: Item): Schemas["ItemOut"] {
   return out;
 }
 
+/** GitHub: item kind -> the `include` entry that brings it in (the connector's _KIND_INCLUDE). */
+const GITHUB_KIND_INCLUDE: Record<string, string> = {
+  readme: "readme",
+  doc: "docs",
+  issue: "issues",
+  pull_request: "pull_requests",
+  release: "releases",
+  milestone: "milestones",
+};
+const GITHUB_INCLUDE = Object.values(GITHUB_KIND_INCLUDE);
+
 /** Narrowing takes effect on save (S5, owner 2026-10-20), as the API's
  * update_source does: stored items outside the new channels, repos or date range are
  * soft-deleted at once. */
@@ -417,10 +430,13 @@ function sweep(db: SourcesDb, s: Source) {
   const groups = s.kind === "slack" ? config.channels : s.kind === "github" ? config.repos : null;
   const allowed = Array.isArray(groups) ? new Set(groups.map((g) => String(g).toLowerCase())) : null;
   const from = s.kind === "slack" && typeof config.since === "string" ? `${config.since}T00:00:00Z` : null;
+  // GitHub's include: the kinds no longer read go too (all of them read when it is absent).
+  const include = Array.isArray(config.include) ? new Set(config.include.map(String)) : null;
   for (const item of db.items) {
     if (item.source_id !== s.id || item.deleted_at) continue;
     const group = item.external_id.includes(":") ? item.external_id.split(":")[0].toLowerCase() : null;
-    const outside = (allowed && group !== null && !allowed.has(group)) || (from && item.occurred_at && item.occurred_at < from);
+    const unread = s.kind === "github" && include !== null && !include.has(GITHUB_KIND_INCLUDE[item.kind] ?? "");
+    const outside = unread || (allowed && group !== null && !allowed.has(group)) || (from && item.occurred_at && item.occurred_at < from);
     if (outside) item.deleted_at = now();
   }
 }
@@ -482,6 +498,13 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
   // As the real connector reads a Notion allowlist: "roots" only.
   if (kind === "notion") {
     return Array.isArray(config.roots) && config.roots.length ? null : "allowlist at least one root page or database";
+  }
+  // As the GitHub connector's _parse_config reads include: absent (all), or at least one known kind.
+  if (kind === "github" && config.include !== undefined) {
+    const include = config.include;
+    if (!Array.isArray(include) || !include.length) return `include at least one of ${GITHUB_INCLUDE.join(", ")}`;
+    const unknown = include.find((i) => !GITHUB_INCLUDE.includes(String(i)));
+    if (unknown !== undefined) return `unknown include '${unknown}'; use ${GITHUB_INCLUDE.join(", ")}`;
   }
   if (kind !== "slack") return null;
   const channels = config.channels;

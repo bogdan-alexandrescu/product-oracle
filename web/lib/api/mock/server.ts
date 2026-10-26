@@ -2786,7 +2786,43 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     done: steps.filter((st) => st.done).length,
     total: steps.length,
     hidden: db.preferences?.[me.email]?.setup_hidden === true,
+    welcome: welcomed(db, me),
   };
+}
+
+/** A1 welcome: the member joined through an invite (however long ago) and has not dismissed it. */
+function welcomed(db: Db, me: MemberRow): boolean {
+  if (db.preferences?.[me.email]?.welcome_dismissed === true) return false;
+  return db.invites.some((i) => i.email === me.email && i.accepted_at);
+}
+
+/**
+ * A first sign-in with an open, unexpired invite's email takes it, as the API's Google (IAP)
+ * sign-in does (oracle.auth.iap, oracle.members.service.claim_open_invite). The mock has no
+ * Google sign-in, so its sign-in form stands in for it; the API's password sign-in never
+ * takes an invite: a member with the invite's role, the
+ * invite accepted. Null when there is no such invite.
+ */
+function claimInvite(db: Db, email: string): MemberRow | null {
+  const at = now();
+  const invite = db.invites.find((i) => i.email === email && i.status === "open" && (!i.expires_at || i.expires_at > at));
+  if (!invite) return null;
+  Object.assign(invite, { status: "accepted", accepted_at: at });
+  const member: MemberRow = {
+    id: uuid(),
+    email,
+    name: invite.name ?? null,
+    role: invite.role,
+    engineering_lead: !!invite.engineering_lead,
+    created_at: at,
+    last_sign_in_at: null,
+    disabled_at: null,
+    disabled_by: null,
+    status: "active",
+    open_tokens: 0,
+  };
+  db.members.push(member);
+  return member;
 }
 
 /** Where an invitee signs in with Google: the app's own address in the mock. */
@@ -3463,8 +3499,11 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
-    const member = db.members.find((x) => x.email === email.trim().toLowerCase());
+    const address = email.trim().toLowerCase();
     db.account ??= seedAccount(db.members, uuid);
+    const member =
+      db.members.find((x) => x.email === address) ??
+      (passwordOk(db.account, address, password, MOCK_LOGIN.password) ? claimInvite(db, address) : null);
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
@@ -3561,14 +3600,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
-    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false });
+    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false, welcome_dismissed: false });
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
       if (patch.document_view) mine.document_view = patch.document_view;
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
+      if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
     }
     mine.setup_hidden ??= false; // saved before A1
+    mine.welcome_dismissed ??= false; // saved before the A1 welcome
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
