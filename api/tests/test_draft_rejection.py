@@ -12,6 +12,7 @@ import pytest
 
 from oracle.docs.parser import DraftError, parse_draft
 from oracle.docs.schemas import ImportProblem
+from oracle.runs import rejection, workflow
 from oracle.runs.rejection import summary
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from tests.fixtures import seed_auth
@@ -106,6 +107,78 @@ def test_a_single_unknown_problem_reads_as_its_message():
     )
 
 
+def _citations_draft(citations: list[str], body: str) -> str:
+    return "\n".join(
+        ["---", "title: T", "citations:", *citations, "---", "", "# T {#title}", "", body]
+    )
+
+
+def test_invalid_citations_are_grouped_per_bad_field():
+    # a2 is wrong in two fields: it counts in the source group and in the confidence group,
+    # not as a cause of its own.
+    problems = _problems(
+        _citations_draft(
+            [
+                "  - {id: a1, source: x, ref: 'https://example.com'}",
+                "  - {id: a2, source: x, ref: 'https://example.com', confidence: 7}",
+                "  - {id: a3, source: web, ref: 'https://example.com', confidence: 9}",
+            ],
+            "[c:a1] [c:a2] [c:a3]",
+        )
+    )
+    assert summary("prd.md", problems) == (
+        "Oracle refused prd.md: 2 citations use source 'x', which isn't accepted; "
+        "2 references fail because of them. "
+        "2 citations are invalid (confidence must be a number from 0 to 1); "
+        "1 reference fails because of them."
+    )
+
+
+def test_a_second_invalid_citation_with_the_same_id_does_not_replace_the_first():
+    # Both "d" are refused; the references to "d" count against the first one.
+    problems = _problems(
+        _citations_draft(
+            [
+                "  - {id: d, source: x, ref: 'https://example.com'}",
+                "  - {id: d, source: web, ref: 'https://example.com', confidence: 5}",
+            ],
+            "[c:d] and again [c:d]",
+        )
+    )
+    assert [p.cite_key for p in problems if p.code == "invalid_citation"] == ["d", "d"]
+    assert summary("prd.md", problems) == (
+        "Oracle refused prd.md: 1 citation uses source 'x', which isn't accepted; "
+        "2 references fail because of it. "
+        "1 citation is invalid (confidence must be a number from 0 to 1)."
+    )
+
+
+def test_the_findings_are_capped_and_summarise_knock_ons():
+    """The agents' rendering (the send-back's findings) of the same groups as the summary:
+    each group lists at most FINDINGS_LISTED messages, then how many more; knock-on
+    references are one line, not one message each."""
+    problems = [p.model_dump(mode="json") for p in _problems(bad_source_draft())]
+    lines = rejection.findings("prd.md", problems)
+    assert lines[0].startswith("Oracle could not import prd.md")
+    (citations,) = [line for line in lines if line.startswith("Citations:")]
+    assert citations.count(" is invalid: ") == 10
+    assert "and 14 more like them" in citations
+    assert "102 references fail only because they cite these invalid citations" in citations
+    assert "cites a citation" not in "".join(lines)
+    assert sum(len(line) for line in lines) < 4000
+    # One summariser: the send-back's findings are this rendering.
+    assert workflow.import_findings("prd.md", problems) == lines
+
+
+def test_the_findings_say_how_many_problems_were_not_stored():
+    problems = [p.model_dump(mode="json") for p in _problems(bad_source_draft())]
+    lines = rejection.findings("prd.md", problems[: rejection.MAX_PROBLEMS], total=len(problems))
+    assert lines[-1] == (
+        f"Only the first {rejection.MAX_PROBLEMS} of 126 problems are listed; fix these and the "
+        "import lists the rest."
+    )
+
+
 MISSING_SUMMARY = "Oracle could not import prd.md: the run's agents did not write it."
 
 
@@ -139,7 +212,15 @@ async def test_a_refused_draft_carries_its_problems_and_summary(runtime, client)
     # The string stays, for compatibility.
     assert imp["error"].startswith("prd.md was rejected: [invalid_citation] citation #1 (k1)")
     assert imp["summary"] == SOURCE_SUMMARY
-    assert len(imp["problems"]) == 126
+    # Stored capped (the segment, the review's payload, the runs list): the first
+    # MAX_PROBLEMS and the count; the error string names how many it leaves out.
+    assert len(imp["problems"]) == 50
+    assert imp["problems_total"] == 126
+    assert imp["error"].endswith(f"; and {126 - rejection.MAX_PROBLEMS} more")
+    assert (
+        imp["error"].count("[invalid_citation]") + imp["error"].count("[unknown_citation]")
+        == rejection.MAX_PROBLEMS
+    )
     assert imp["problems"][0] == {
         "code": "invalid_citation",
         "message": "citation #1 (k1) is invalid: source 'x' isn't accepted",
@@ -155,7 +236,7 @@ async def test_a_refused_draft_carries_its_problems_and_summary(runtime, client)
     # The review's payload carries the same, so the Inbox and MCP read the same text.
     cp = pending(run)
     assert cp["payload"]["import"]["summary"] == SOURCE_SUMMARY
-    assert len(cp["payload"]["import"]["problems"]) == 126
+    assert len(cp["payload"]["import"]["problems"]) == rejection.MAX_PROBLEMS
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     (item,) = [c for c in inbox["checkpoints"] if c["id"] == cp["id"]]
     assert item["payload"]["import"]["summary"] == SOURCE_SUMMARY

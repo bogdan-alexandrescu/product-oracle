@@ -271,3 +271,30 @@ def test_citation_item_that_is_not_a_uuid_still_parses():
     citations = "citations:\n  - id: c1\n    source: web\n    ref: x\n    item: not-a-uuid\n"
     parsed = parse_draft(_draft("# T {#t}\n\nA [c:c1].\n", citations))
     assert parsed.citations[0].item == "not-a-uuid"
+
+
+@pytest.mark.parametrize(
+    "ref", ["javascript:alert(1)", "ftp://example.com/x", "example.com/x", "data:text/html,x"]
+)
+def test_a_non_oracle_ref_must_be_an_http_or_https_url(ref):
+    # The web opens a citation's ref as a link: nothing but http(s) gets in.
+    text = _draft(
+        "# T {#t}\n\nA claim [c:c1].\n",
+        citations=f"citations:\n  - id: c1\n    source: slack\n    ref: '{ref}'\n",
+    )
+    with pytest.raises(DraftError) as info:
+        parse_draft(text)
+    (problem,) = info.value.problems
+    assert (problem.code, problem.cite_key) == ("invalid_citation", "c1")
+    assert problem.message == "citation #1 (c1) is invalid: ref must be an http or https URL"
+
+
+def test_http_https_and_oracle_refs_parse():
+    text = _draft(
+        "# T {#t}\n\n[c:a] [c:b] [c:o]\n",
+        citations="citations:\n"
+        "  - {id: a, source: web, ref: 'HTTPS://example.com/a'}\n"
+        "  - {id: b, source: github, ref: 'http://example.com/b'}\n"
+        "  - {id: o, source: oracle, ref: 'baseline goal g1'}\n",
+    )
+    assert [c.id for c in parse_draft(text).citations] == ["a", "b", "o"]

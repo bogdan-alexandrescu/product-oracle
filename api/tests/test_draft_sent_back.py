@@ -13,11 +13,13 @@ While the revision runs, the run reads "Revising: sent back by Oracle", not "Dra
 rejected" (``SegmentOut.sent_back``, ``RunSummary.sent_back``), and the Inbox shows it
 as a row with nothing to decide (``InboxOut.revising``, not in ``total``)."""
 
+import json
 import uuid
 from dataclasses import replace
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.models import AuditEvent
 from oracle.runs import flows, service
@@ -271,3 +273,71 @@ async def test_a_run_cancelled_while_revising_reads_draft_rejected(client, owner
     assert seg["sent_back"] is False
     assert run["sent_back"] is None and run["draft_rejected"] == seg["draft_import"]["summary"]
     assert (await _inbox(client, auth))["revising"] == []
+
+
+async def test_a_send_back_whose_commit_was_lost_is_replayed_once(client, owner, monkeypatch):
+    """SwarmCloud took Oracle's NOT_YET, then the transaction that records it was lost:
+    the next tick sends the draft back again with the same answer id and payload (a
+    replay), and the run records one send-back."""
+    tenant_id, auth = owner
+    swarm = on()
+    swarm.step_files[WRITER] = {"prd.md": BAD_PRD}
+    run = await _feedback_run(client, auth, tenant_id, swarm)
+
+    real_send_back, real_commit = service._send_back, AsyncSession.commit
+    armed: list[bool] = []
+
+    async def send_back(*args, **kwargs):
+        sent = await real_send_back(*args, **kwargs)
+        if sent and not armed:
+            armed.append(True)
+        return sent
+
+    async def commit(self):
+        if armed and armed[-1]:
+            armed[-1] = False
+            await self.rollback()
+            raise ConnectionError("the commit after the send-back was lost")
+        return await real_commit(self)
+
+    monkeypatch.setattr(service, "_send_back", send_back)
+    monkeypatch.setattr(AsyncSession, "commit", commit)
+    resp = await client.post("/v1/internal/tick", headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["errors"] == [f"run {run['id']}: ConnectionError"]
+    assert armed == [False]
+    # Posted to SwarmCloud, recorded nowhere in Oracle.
+    assert len(swarm.answers) == 1
+    assert await _audit(tenant_id, "run.draft_sent_back") == []
+    assert (await get(client, auth, run["id"]))["segments"][0]["sent_back"] is False
+
+    await tick(client, auth)
+    posts = [
+        json.loads(r.content)
+        for r in swarm.requests
+        if r.method == "POST" and r.url.path.endswith("/steps/next_draft-review1/input")
+    ]
+    assert len(posts) == 2 and posts[0] == posts[1]
+    answer_id = str(uuid.uuid5(uuid.UUID(run["id"]), "send-back/wf_1/next_draft-review1"))
+    assert posts[1]["answer_id"] == answer_id
+    assert posts[1]["payload"]["verdict"] == "NOT_YET"
+    # The second post was a replay: SwarmCloud recorded one answer.
+    [answer] = swarm.answers
+    assert answer["answer_id"] == answer_id and answer["payload"] == posts[0]["payload"]
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "running", run
+    assert await _checkpoints(tenant_id, run["id"]) == []
+    [event] = await _audit(tenant_id, "run.draft_sent_back")
+    assert event.data["findings"] == answer["payload"]["findings"]
+    assert sum("Oracle sent" in n and "back to the writer" in n for n in run["notes"]) == 1
+    seg = run["segments"][0]
+    assert seg["sent_back"] is True and len(seg["attempts"]) == 2
+    assert seg["attempts"][-1]["note_by"] == "Oracle"
+
+    # The revision proceeds once: review2 opens for the person.
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint", run
+    assert pending(run)["payload"]["wait"]["step_id"] == "next_draft-review2"
+    assert len(swarm.answers) == 1
+    assert len(await _audit(tenant_id, "run.draft_sent_back")) == 1

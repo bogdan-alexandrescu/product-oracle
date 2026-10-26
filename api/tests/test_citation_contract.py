@@ -71,6 +71,24 @@ def test_the_source_list_follows_citation_source(monkeypatch):
     assert "source (one of: " + ", ".join((*SOURCES, "linear")) + ")" in text
 
 
+def test_the_contract_is_read_when_used_not_at_import(monkeypatch):
+    """Lazy: the draft tasks, push_draft and the send-back's findings read the contract
+    when they are used, so a source added later reaches them."""
+    from typing import Literal
+
+    from oracle.docs import schemas
+    from oracle.runs import workflow
+
+    monkeypatch.setattr(schemas, "CitationSource", Literal[(*SOURCES, "linear")])
+    listed = "source (one of: " + ", ".join((*SOURCES, "linear")) + ")"
+    sdef = flows.FLOWS["baseline_to_prd"].segment("prd_draft")
+    assert listed in sdef.task_for("prd")
+    tool = next(c for c in CURATED if c.name == "push_draft")
+    assert listed in tool.description
+    problem = {"code": "invalid_citation", "message": "citation #1 (a) is invalid: ref"}
+    assert listed in "\n".join(workflow.import_findings("prd.md", [problem]))
+
+
 def test_push_draft_states_the_citation_contract():
     tool = next(c for c in CURATED if c.name == "push_draft")
     _says_the_contract(tool.description)
