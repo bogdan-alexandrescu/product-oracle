@@ -282,6 +282,7 @@ export type NeedGroup =
   | "imports"
   | "revoke-failures"
   | "access-failures"
+  | "share-revocations"
   | "access-requests"
   | "report-failures"
   | "reports"
@@ -560,6 +561,51 @@ export function accessNeeds(failures: AccessFailure[], busy: string | null, act:
         >
           Retry
         </Button>
+      ),
+    };
+  });
+}
+
+type ShareRevocation = NonNullable<InboxOut["share_revocations"]>[number];
+
+/**
+ * Owners only (O5-Q10): share links Oracle revoked because their creator left or was
+ * demoted, or their document was trashed or limited. Re-share opens the document's Share
+ * sheet in the first link's audience; Dismiss clears the row.
+ */
+export function shareRevocationNeeds(rows: ShareRevocation[], busy: string | null, act: Act): Need[] {
+  return rows.map((r) => {
+    const first = r.links[0];
+    const labels = r.links.map((l) => `${l.label} (${l.document_title})`).join(", ");
+    const key = `share-revoked-${first?.id ?? r.revoked_at}`;
+    return {
+      key,
+      icon: "lock",
+      kind: "Links revoked",
+      item: (
+        <span className="truncate" title={r.title}>
+          {r.title}
+        </span>
+      ),
+      context: (
+        <span className="block truncate text-text2" title={labels}>
+          {labels}
+        </span>
+      ),
+      at: r.revoked_at,
+      action: (
+        <>
+          {first && (
+            <LinkButton href={`/documents/${first.document}?share=${first.audience}`}>Re-share</LinkButton>
+          )}
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => act(key, () => unwrap(api.POST("/v1/share-links/dismiss", { body: { ids: r.links.map((l) => l.id) } })))}
+          >
+            Dismiss
+          </Button>
+        </>
       ),
     };
   });
@@ -1809,6 +1855,7 @@ export function allNeeds(
     ...stated(n.imports, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
     ...stated(accessNeeds(inbox.access_failures ?? [], busy, act), "access-failures"),
+    ...stated(shareRevocationNeeds(inbox.share_revocations ?? [], busy, act), "share-revocations"),
     ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),
     ...reportNeeds(inbox.reports ?? [], seenBefore),
     ...stated(strategyNeeds(inbox.strategy), "strategy"),

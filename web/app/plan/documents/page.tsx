@@ -23,7 +23,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { DOC_STATUS_LABEL, formatDateTime } from "@/lib/format";
+import { DOC_STATUS_LABEL, formatDate, formatDateTime } from "@/lib/format";
 import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -41,6 +41,18 @@ function StatusChip({ status, hero = false }: { status: Doc["status"]; hero?: bo
     <Chip kind={STATUS_KIND[status]} hero={hero} dot={!hero} data-status={status}>
       {DOC_STATUS_LABEL[status]}
     </Chip>
+  );
+}
+
+/** O5: a roadmap's active share links and the next to end (approvers and owners). */
+function SharedCell({ slug }: { slug: string }) {
+  const q = useQuery(`share-links|${slug}|plan`, () => unwrap(api.GET("/v1/documents/{doc}/share-links", { params: { path: { doc: slug } } })));
+  const active = (q.data ?? []).filter((l) => l.state === "active");
+  const next = active.map((l) => l.expires_at).sort()[0];
+  return (
+    <span data-testid="shared-cell" className="tnum text-sm text-text2">
+      {!q.data ? "" : next ? `${active.length} active · ends ${formatDate(next)}` : "—"}
+    </span>
   );
 }
 
@@ -197,6 +209,17 @@ export default function RoadmapDocumentsPage() {
           <Chip kind="pass">v{r.d.approved_version} approved</Chip>
         ),
     },
+    ...(can("list_share_links")
+      ? [
+          {
+            key: "shared",
+            header: "Shared",
+            width: "170px",
+            hideOnPhone: true,
+            cell: (r: Row) => (r.kind === "roadmap" ? <SharedCell slug={r.d.slug} /> : null),
+          },
+        ]
+      : []),
     {
       key: "source",
       header: "Source PRD",
