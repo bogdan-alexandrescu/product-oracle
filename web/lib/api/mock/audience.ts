@@ -346,6 +346,15 @@ function boardSections<S extends Section>(sections: S[], items: BoardItem[]): S[
   return out;
 }
 
+/**
+ * Whether a rebuilt section is a goal group holding an audience's item table (Board's), as the API's
+ * variants.spans_row: the themed export marks it full width (section-wide), so the roadmap-board theme spans
+ * it across its card grid instead of one card column. Team's goal groups hold no table; Engineering has none.
+ */
+export function spansRow(key: string, body: string): boolean {
+  return /^(now|next|later)-group-\d+$/.test(key) && /^\|.*\|\s*\n\|[-:| ]+\|\s*$/m.test(body);
+}
+
 /** The sections of one rendering in `audience` (see the file comment); Board is built from `items` alone. */
 export function audienceSections<S extends Section>(sections: S[], audience: Audience, items: BoardItem[] = []): S[] {
   if (audience === "board") return boardSections(sections, items);
