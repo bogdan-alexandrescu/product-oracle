@@ -87,6 +87,8 @@ async def test_defaults_and_unknown_keys(client, owner):
         "pricing_owner": None,
         # H7: 200 open-web searches a month for the competitive digest.
         "web_searches_per_month": 200,
+        # INT2: Oracle reads new intakes (a SwarmCloud run each; owner answer Q2, on).
+        "intake_ai_read": True,
         # O5 lane 4: no logo or accent, the company's name, Oracle's mark on shared pages.
         "branding": {
             "display_name": None,

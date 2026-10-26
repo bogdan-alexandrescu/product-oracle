@@ -24,6 +24,7 @@ from oracle.tenancy import tenant_session
 from tests.intake_helpers import answer, batch, company, intake_with_source
 from tests.intake_helpers import summary as read_summary
 from tests.test_intake_draft_gate import _create_run, runtime  # noqa: F401 (fixture)
+from tests.test_intake_sharing import _intake_read_on_the_job  # noqa: F401 (autouse fixture: INT2's job path)
 from tests.test_llm_jobs import DRAFT_V1
 
 SLUG = "saved-addresses"
