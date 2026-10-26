@@ -42,8 +42,13 @@ test("Request spec from an approved Plan item drafts the spec run with the dialo
   await login(page);
   // The owner names an approver the engineering lead (A3), whom the spec gets as its approver.
   await page.goto("/settings/members");
-  await page.getByRole("checkbox", { name: `Engineering lead: ${APPROVER}` }).check();
+  const lead = page.getByRole("checkbox", { name: `Engineering lead: ${APPROVER}` });
+  await lead.check();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
+  // The tick shows at once and the box stays disabled until the change is saved: leaving
+  // before then (the Plan is a new page load) would drop the mock's queued write.
+  await expect(lead).toBeEnabled();
+  await expect(lead).toBeChecked();
   await openItem(page, "Threshold alerts on spend");
   const line = inspector(page).getByTestId("plan-spec");
   await expect(line).toContainText("No engineering spec yet");

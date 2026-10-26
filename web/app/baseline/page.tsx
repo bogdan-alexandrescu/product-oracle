@@ -98,7 +98,7 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
 }
 
 export default function BaselinePage() {
-  const { me, can, capsReady } = useMe();
+  const { me, can, capsReady, capsError } = useMe();
   // #370: approvers change the baseline, commenters propose; a viewer only reads it.
   const canWrite = can("confirm_entity");
   const canComment = can("create_proposal");
@@ -393,6 +393,17 @@ export default function BaselinePage() {
       ),
     },
   ];
+
+  // The page waits for what the role may do: drawn before it, Add item, Promote to blocker, the
+  // Accept help line and the Accept buttons appear afterwards and push what a person reads down
+  // (on a phone, out of view). A failed read shows the viewer's page.
+  if (!capsReady && !capsError)
+    return (
+      <Page>
+        <PageHeader title="Baseline" />
+        <Loading />
+      </Page>
+    );
 
   return (
     <Page>

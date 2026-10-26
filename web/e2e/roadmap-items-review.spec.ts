@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import fixture from "../lib/api/mock/checkpoint-review.json";
 import { ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2, routeRuns, type RunsContext } from "../lib/api/mock/runs";
-import { MOCK_REVIEW_CHANGE_KEY } from "../lib/api/mock/server";
+import { MOCK_REVIEW_CHANGE_KEY, MOCK_SLOW_KEY } from "../lib/api/mock/server";
 import { login, openSeeded, seedRoadmapAttempt2, seedRoadmapFileProblem, seedRoadmapReview } from "./helpers";
 
 // D1 Roadmap items review (/runs/<id>/review/<checkpoint>): the seeded roadmap review run
@@ -420,4 +420,20 @@ test("the mock's review route answers in the shared fixture's shapes", async () 
   const stale = await call("POST", "decide", { decision: "approved", expected_revision: 0 });
   expect(stale.json.detail.code).toBe("review_changed");
   same(stale.json.detail, fixture.conflicts.review_changed, "review_changed");
+});
+
+// Card keyboard-decide under a slow role read: protects = the review screen draws an approver's
+// controls from the start, so Enter on a row asks to confirm its first fix even when what the
+// role may do (GET /v1/me/capabilities) answers after the review (a busy API); fails_when =
+// the screen shows a viewer's rows first and Enter on a row only picks it; no_claim = a
+// failed role read (the shell says so, with Retry).
+test("Enter on a row asks to confirm its first fix when the role's capabilities answer late", async ({ page }) => {
+  await login(page);
+  await page.evaluate(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/me/capabilities"] as const);
+  await openSeeded(page, seedRoadmapReview, SCREEN);
+  await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
+  await row(page, "slack-alerts").focus();
+  await page.keyboard.press("Enter");
+  await expect(row(page, "slack-alerts").getByRole("button", { name: "Confirm: Remove date" })).toBeFocused();
+  await expect(bar(page).getByTestId("staged-chip")).toHaveCount(0);
 });
