@@ -159,6 +159,51 @@ async def test_the_sign_in_keeps_the_claude_account_it_was_for_and_the_list_serv
     assert resp.json()["account"]["claude_organization"] is None
 
 
+@pytest.mark.parametrize("role", ["viewer", "commenter", "approver"])
+async def test_below_owner_the_pool_reads_without_the_account_holder(
+    client, tenant_id, owner, role
+):
+    # BGD 2026-10-25: every role reads the pool, but who holds an account (its Claude email
+    # and organisation) is an owner's to see.
+    a = await add_account(tenant_id, "personal")
+    await edit_row(
+        tenant_id, a.account_id, claude_email="ada@example.com",
+        claude_organization="Example Studio",
+    )  # fmt: skip
+    mine = (await client.get(BASE, headers=owner.headers)).json()["accounts"]
+    assert [(r["claude_email"], r["claude_organization"]) for r in mine] == [
+        ("ada@example.com", "Example Studio")
+    ]
+
+    person = await make_person(tenant_id, f"{role}@example.com", role)
+    resp = await client.get(BASE, headers=person.headers)
+    assert resp.status_code == 200
+    rows = resp.json()["accounts"]
+    assert [(r["label"], r["claude_email"], r["claude_organization"]) for r in rows] == [
+        ("personal", None, None)
+    ]
+    assert "ada@example.com" not in resp.text and "Example Studio" not in resp.text
+    for leaf in ("holders", "history"):
+        other = await client.get(f"{BASE}/{a.account_id}/{leaf}", headers=person.headers)
+        assert other.status_code == 200
+        assert "ada@example.com" not in other.text and "Example Studio" not in other.text
+
+
+async def test_an_api_token_below_owner_reads_the_pool_without_the_account_holder(
+    client, tenant_id
+):
+    a = await add_account(tenant_id, "personal")
+    await edit_row(tenant_id, a.account_id, claude_email="ada@example.com")
+    async with tenant_session(tenant_id) as s:
+        token, raw = await create_api_token(s, "cli")
+        token.role = "approver"
+        await s.commit()
+    resp = await client.get(BASE, headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 200
+    assert "ada@example.com" not in resp.text
+    assert resp.json()["accounts"][0]["claude_email"] is None
+
+
 async def test_only_whoever_started_a_sign_in_can_finish_it(client, tenant_id, owner, endpoint):
     other = await make_person(tenant_id, "other-owner@example.com", "owner")
     s = (await client.post(f"{BASE}/authorize", json={"label": "x"}, headers=owner.headers)).json()
