@@ -63,7 +63,7 @@ def test_chains_on_mains_head():
     # on a fixed number other than main's head; no_claim=the schema (below).
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0073_share_links"]
+    assert script.get_heads() == ["0074_board_wide_tables"]
 
 
 def _basis(tenant, doc, reference: str, status: str, **cols) -> uuid.UUID:

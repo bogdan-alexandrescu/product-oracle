@@ -70,7 +70,7 @@ def test_chains_after_mains_head_with_a_single_head():
     no_claim=other lanes' later migrations."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == BEFORE
-    assert script.get_heads() == ["0073_share_links"]
+    assert script.get_heads() == ["0074_board_wide_tables"]
 
 
 def test_the_migration_imports_no_application_code():

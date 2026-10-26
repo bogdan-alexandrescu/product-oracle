@@ -1,8 +1,9 @@
 """Board's goal tables span the card board (train O5 follow-up): under a horizon, each
 goal group holding Board's item table is marked full width (``section-wide``) where the
 themed export builds the group, and every built-in theme that lays a horizon's sections
-out as a grid of cards spans it (``grid-column: 1 / span 3``, the grid's column count), in the HTML and in the PDF
-(WeasyPrint lays out the same HTML). Ordinary item cards keep the three-column board.
+out as a grid of cards spans it (``grid-column: 1 / span 3``, the grid's column count),
+in the HTML and in the PDF (WeasyPrint lays out the same HTML). Ordinary item cards keep
+the three-column board.
 
 The "empty fifth column" seen beside a goal table was the card frame, not a cell: the
 table's right rule, the card's side padding and the card's own rule (the same colour)

@@ -68,7 +68,7 @@ def scratch_db():
 def test_the_chain_ends_here_after_discussion_replies():
     # Subgoals' 0041_subgoals (#345) chains on it; one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0073_share_links"]
+    assert script.get_heads() == ["0074_board_wide_tables"]
     assert script.get_revision("0041_subgoals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 

@@ -80,7 +80,7 @@ def test_chains_on_mains_head():
     parent; no_claim=later lanes' re-chaining."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0073_share_links"]
+    assert script.get_heads() == ["0074_board_wide_tables"]
 
 
 def test_upgrade_adds_the_table_and_values_and_downgrade_refuses_while_memos_exist(scratch_db):
