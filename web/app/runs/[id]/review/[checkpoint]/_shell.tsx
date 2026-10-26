@@ -18,7 +18,7 @@ type CheckpointOut = Schemas["CheckpointOut"];
 
 export type ReviewViewProps = { run: RunOut; cp: CheckpointOut; item: string | null; reloadRun: () => Promise<void> };
 
-/** F4's Engineering check reads its own draft review (./_review.tsx). */
+/** F4's Engineering check and Engineering dates read their own draft review (./_review.tsx). */
 function EngReviewView({ run, cp }: ReviewViewProps) {
   return <CheckpointReviewScreen runId={run.id} checkpointId={cp.id} />;
 }
@@ -28,6 +28,7 @@ const VIEWS: Partial<Record<CheckpointOut["kind"], ComponentType<ReviewViewProps
   feature_set: ScopeReview,
   roadmap_items: ItemsReview,
   eng_review: EngReviewView,
+  eng_dates: EngReviewView,
 };
 
 export function ReviewShell({ runId, checkpointId, item }: { runId: string; checkpointId: string; item: string | null }) {

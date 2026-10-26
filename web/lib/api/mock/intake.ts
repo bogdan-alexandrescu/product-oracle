@@ -870,7 +870,7 @@ function privateGap(db: V2Db, gap: Gap | null | undefined): boolean {
 }
 const CHECKPOINT_LABEL: Record<string, string> = {
   baseline_confirm: "Confirm the baseline", feature_set: "Feature set and dependencies", priority_order: "Priority order",
-  prd_review: "PRD review", eng_review: "Engineering review", roadmap_items: "Roadmap items", roadmap_review: "Roadmap review",
+  prd_review: "PRD review", eng_review: "Engineering review", eng_dates: "Engineering dates", roadmap_items: "Roadmap items", roadmap_review: "Roadmap review",
 };
 
 /** An active member who can answer: commenter or above. */

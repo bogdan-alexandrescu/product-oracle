@@ -9,14 +9,16 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { briefsCheck, CHECKPOINT_LABEL } from "../../../_lib";
+import { briefsCheck, CHECKPOINT_LABEL, datesCheck } from "../../../_lib";
 import { draftKey, loadDraft } from "./_draft";
+import { EngDates } from "./_eng-dates";
 import { EngReview } from "./_eng-review";
 
 /**
  * A checkpoint's review screen (F4): the table left, the inspector right, the decision bar
  * at the bottom. The shell reads the run and the checkpoint's shared draft (D8) and hands
- * them to its kind's view; a kind without a view here is decided on the run page.
+ * them to its kind's view (the Engineering check, the Engineering dates); a kind without a view
+ * here is decided on the run page.
  */
 export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string; checkpointId: string }) {
   const run = useQuery(`run|${runId}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })));
@@ -61,6 +63,21 @@ export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string;
   }
   const segment = r.segments.find((s) => s.seq === cp.segment_seq);
   const check = briefsCheck(cp);
+  const dates = datesCheck(cp);
+  if (dates) {
+    return (
+      <EngDates
+        run={r}
+        cp={cp}
+        title={segment?.title ?? CHECKPOINT_LABEL[cp.kind]}
+        check={dates}
+        review={draft.data}
+        back={back}
+        onReview={accept}
+        onDecided={reloadAll}
+      />
+    );
+  }
   if (!check) {
     return (
       <Page>
