@@ -68,6 +68,8 @@ export type LlmContext = {
   runEstimateUsd?: () => number | null;
   /** D12: starts the agents' feedback-loop run for Build next draft. */
   startRun?: StartRun;
+  /** CR-08: stores a quality_review job's answer as a model-output report (./quality.ts); returns its output. */
+  runQualityReview?: (job: Job, versionId: string) => Record<string, unknown>;
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
@@ -339,6 +341,17 @@ export function tick(ctx: LlmContext) {
     } else if (job.kind === BATCH) finish(ctx, job, runBatch(ctx, job, v));
     else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
+}
+
+/** POST .../quality-review (CR-08): queues the version's quality review, or the 409 while its switch is off. */
+export function queueQualityReview(ctx: LlmContext, documentId: string, n: number): Job | { status: number; detail: string } {
+  const doc = ctx.documents.find((d) => d.id === documentId);
+  const v = doc && versionsOf(ctx, doc).find((x) => x.number === n);
+  if (!doc || !v) return { status: 404, detail: "Version not found" };
+  if ((ctx.db.disabled[doc.id] ?? []).includes("quality_review")) return { status: 409, detail: turnedOff("quality_review") };
+  const job = makeJob(ctx, doc, "quality_review", v);
+  ctx.db.jobs.push(job);
+  return job;
 }
 
 // ------------------------------------------------------------------ seed

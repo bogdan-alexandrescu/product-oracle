@@ -18,6 +18,8 @@ type Learning = Schemas["LearningOut"];
 export interface QualityDb {
   outcomes: Outcome[];
   learnings: Learning[];
+  /** Checks that could not run, per PRD slug and criterion (the item's ``error``); the "quality" scenario sets one. */
+  check_errors?: Record<string, Record<string, string>>;
 }
 
 export interface QualityContext {
@@ -29,11 +31,14 @@ export interface QualityContext {
   findVersion: (doc: string, n: number) => { documentId: string; slug: string; versionId: string } | null;
   /** The blockers lane's ``critical_blockers`` hard check for a document (./blockers.ts). */
   blockerGate: (documentId: string) => { status: Status; rationale: string; evidence_ids: string[] };
+  /** POST .../quality-review: queues a quality_review job in ./llm-jobs.ts, or refuses it (409 switched off). */
+  queueReview?: (documentId: string, n: number) => Schemas["LlmJobOut"] | { status: number; detail: string };
+  /** A built-in model job by id (the model review's job). */
+  job?: (id: string) => Schemas["LlmJobOut"] | undefined;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
-const AT = "2026-10-19T10:00:00Z";
 const DISCLAIMER =
   "Model output from Oracle's built-in quality review job: an opinion to compare with the rules and human ratings, not independent ground truth. It never blocks a publish.";
 const POLICY_NOTE =
@@ -317,6 +322,7 @@ function dashboard(
   const model = reports(ctx, v.versionId, "llm_job")[0];
   const humans = reports(ctx, v.versionId, "human");
   const rules = RULES_BY_SLUG[v.slug] ?? RULES;
+  const errors = ctx.db.check_errors?.[v.slug] ?? {};
   const gate = ctx.blockerGate(v.documentId);
   // The blockers lane registers its hard check after the quality criteria.
   const checks = [...CRITERIA, { key: BLOCKERS_KEY, title: "Critical blockers", question: "A readiness check registered by Oracle.", hard: true }];
@@ -331,7 +337,7 @@ function dashboard(
     );
     return {
       key: c.key, title: c.title, question: c.question, hard: c.hard, status, rationale,
-      evidence_ids, owner_id: ctx.userId, section_keys, error: null,
+      evidence_ids, owner_id: ctx.userId, section_keys, error: errors[c.key] ?? null,
       model: mf ? { status: mf.status, rationale: mf.rationale, section_keys: mf.section_keys, report_id: model.id } : null,
       human,
       agreement: {
@@ -347,8 +353,17 @@ function dashboard(
     composition_revision: null, policy: "advisory", policy_note: POLICY_NOTE, purpose,
     evaluated_at: new Date().toISOString(), blocked: blocking.length > 0, blocking,
     counts: counts(items.map((i) => i.status)), items,
-    model_review: model ? { report_id: model.id, job_id: null, model: "mock", created_at: model.created_at, label: "model_output", disclaimer: DISCLAIMER } : null,
+    model_review: model ? modelInfo(ctx, model) : null,
     latest_report: latest ? { id: latest.id, created_at: latest.created_at } : null,
+  };
+}
+
+function modelInfo(ctx: QualityContext, report: Schemas["EvaluationReportOut"]): Schemas["ModelReviewInfo"] {
+  const jobId = typeof report.summary.job_id === "string" ? report.summary.job_id : null;
+  const job = jobId ? ctx.job?.(jobId) : undefined;
+  return {
+    report_id: report.id, job_id: job?.id ?? null, model: job?.model ?? null, created_at: report.created_at,
+    label: "model_output", disclaimer: typeof report.summary.disclaimer === "string" ? report.summary.disclaimer : DISCLAIMER,
   };
 }
 
@@ -401,6 +416,118 @@ function storeReport(
   return { ...report, findings: rows };
 }
 
+type ModelFinding = { criterion: string; status: Status; rationale: string; section_keys: string[] };
+
+/** The mock model's answer to a quality review: two criteria, labelled model output. */
+const MOCK_ANSWER: ModelFinding[] = [
+  { criterion: "validation_plan", status: "warning", rationale: "The pilot has no stated sample size.", section_keys: ["metrics"] },
+  { criterion: "problem_clarity", status: "pass", rationale: "The problem names the users and quantifies the drop-off.", section_keys: ["problem"] },
+];
+
+/**
+ * Stores a quality_review job's answer as the API's judge does (oracle.quality.judge.run):
+ * an ``llm_job`` report labelled model output, its summary naming the job. Returns the job's output.
+ */
+export function storeModelReview(
+  v2: V2Db,
+  job: Schemas["LlmJobOut"],
+  versionId: string,
+  findings: ModelFinding[] = MOCK_ANSWER,
+  summary = "Clear problem; the pilot lacks a sample size.",
+  at = new Date().toISOString(),
+): Record<string, unknown> {
+  const c: Record<string, number> = {};
+  for (const f of findings) c[f.status] = (c[f.status] ?? 0) + 1;
+  const report: Schemas["EvaluationReportOut"] = {
+    id: uuid(), document_id: job.document_id!, version_id: versionId, composition_revision: null, evaluator: "llm_job",
+    policy: "advisory", status: "complete",
+    summary: { label: "model_output", disclaimer: DISCLAIMER, job_id: job.id, counts: c, summary },
+    created_by: job.requested_by ?? null, created_at: at,
+  };
+  v2.evaluation_reports.push(report);
+  v2.evaluation_findings.push(
+    ...findings.map((f) => ({ id: uuid(), report_id: report.id, ...f, hard: false, evidence_ids: [], owner_id: null, module_key: null, created_at: at })),
+  );
+  return { report_id: report.id, label: "model_output", criteria: findings.length, counts: c, summary };
+}
+
+/**
+ * The "quality" scenarios (invented): Team workspaces v2 with a stored rules snapshot, a model
+ * review of 7 of the 10 criteria and two people's ratings, and one check that could not run.
+ * "quality-job-failed" adds a later model job that failed (pool paused); "quality-job-running"
+ * one still running; "quality-off" turns the quality review off for the PRD and stores nothing.
+ */
+export function seedQualityScenario(
+  scenario: string,
+  s: {
+    quality: QualityDb;
+    v2: V2Db;
+    jobs: Schemas["LlmJobOut"][];
+    disabled: Record<string, Schemas["LlmJobOut"]["kind"][]>;
+    documentId: string;
+    versionId: string;
+    owner: string;
+    approver: string;
+    commenter: string;
+  },
+) {
+  if (scenario === "quality-off") {
+    s.disabled[s.documentId] = [...(s.disabled[s.documentId] ?? []), "quality_review"];
+    return;
+  }
+  const base = { document_id: s.documentId, version_id: s.versionId, composition_revision: null, policy: "advisory", status: "complete" as const };
+  const report = (evaluator: "rules" | "human", by: string, at: string, rows: [string, Status, string, string[]][], summary: Record<string, unknown>) => {
+    const r: Schemas["EvaluationReportOut"] = { id: uuid(), ...base, evaluator, summary: { counts: counts(rows.map((x) => x[1])), ...summary }, created_by: by, created_at: at };
+    s.v2.evaluation_reports.push(r);
+    s.v2.evaluation_findings.push(
+      ...rows.map(([criterion, status, rationale, section_keys]) => ({
+        id: uuid(), report_id: r.id, criterion, status, rationale, hard: evaluator === "rules" && CRITERIA.findIndex((c) => c.key === criterion) >= 10,
+        evidence_ids: [], owner_id: by, section_keys, module_key: null, created_at: at,
+      })),
+    );
+  };
+  s.quality.check_errors = { "team-workspaces": { downstream_consistency: "artifact dependency lookup timed out" } };
+  report("rules", s.owner, "2026-10-20T09:41:00Z",
+    CRITERIA.map((c) => [c.key, RULES[c.key][0], RULES[c.key][1], RULES[c.key][2]]),
+    { blocked: false, blocking: [], errors: ["downstream_consistency"] });
+  report("human", s.commenter, "2026-10-20T11:05:00Z",
+    [["scope_testability", "warning", "Non-goals are implied in the scope section; only the acceptance criteria need work.", ["solution"]]],
+    { note: "Mostly fine; the acceptance criteria need tests." });
+  report("human", s.approver, "2026-10-21T16:20:00Z",
+    [
+      ["scope_testability", "critical", "Agree: AC-4 cannot be tested.", ["solution"]],
+      ["problem_clarity", "pass", "The problem is clear and backed by calls.", ["problem"]],
+    ],
+    { note: null });
+  const at = "2026-10-21T09:52:00Z";
+  const job: Schemas["LlmJobOut"] = {
+    id: uuid(), kind: "quality_review", document_id: s.documentId, version_number: 2, section_key: null, status: "succeeded",
+    input: { version: 2 }, output: null, account_label: "personal", via: "account", model: "claude-sonnet-5",
+    input_tokens: 12410, output_tokens: 1128, cost_usd: 0.05, attempts: 1, error: null, error_reason: null, next_reset_at: null,
+    requested_by: s.owner, created_at: "2026-10-21T09:51:00Z", started_at: "2026-10-21T09:51:10Z", finished_at: at,
+  };
+  job.output = storeModelReview(s.v2, job, s.versionId, [
+    { criterion: "problem_clarity", status: "pass", rationale: "The problem names the teams who share work and the calls that asked for it.", section_keys: ["problem"] },
+    { criterion: "goal_alignment", status: "pass", rationale: "Shared editing maps to the activation goal.", section_keys: [] },
+    { criterion: "evidence_provenance", status: "warning", rationale: "One cited figure is older than the last release.", section_keys: [] },
+    { criterion: "blocker_feasibility", status: "warning", rationale: "The permissions migration has no stated fallback.", section_keys: [] },
+    { criterion: "scope_testability", status: "critical", rationale: "Acceptance criteria describe intent (\"feels easy\") rather than tests; non-goals are missing.", section_keys: ["solution"] },
+    { criterion: "validation_plan", status: "warning", rationale: "The pilot has no stated sample size.", section_keys: [] },
+    { criterion: "ownership_readiness", status: "pass", rationale: "An owner and a rollout plan are named.", section_keys: [] },
+  ], "Clear problem and evidence; the acceptance criteria are not testable.", at);
+  s.jobs.push(job);
+  if (scenario === "quality-job-failed" || scenario === "quality-job-running") {
+    const failed = scenario === "quality-job-failed";
+    s.jobs.push({
+      ...job, id: uuid(), status: failed ? "failed" : "running", output: null, model: failed ? null : "claude-sonnet-5",
+      input_tokens: null, output_tokens: null, cost_usd: null, attempts: 1,
+      error: failed ? "no Claude account could take the call" : null, error_reason: failed ? "pool_paused" : null,
+      next_reset_at: failed ? "2026-10-22T14:00:00Z" : null,
+      created_at: "2026-10-22T10:14:00Z", started_at: "2026-10-22T10:14:05Z", finished_at: failed ? "2026-10-22T10:14:30Z" : null,
+    });
+  }
+}
+
 function signals(db: QualityDb, appliesTo: string | null): Schemas["LearningSignal"][] {
   const sign = { recommend_more: 1, recommend_less: -1, note: 0 } as const;
   const groups = new Map<string, Learning[]>();
@@ -438,16 +565,22 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       const denied = need("commenter");
       if (denied) return denied;
       if (!v) return fail(404, "Version not found");
-      const findings = CRITERIA.map((c) => ({ criterion: c.key, status: RULES[c.key][0], rationale: RULES[c.key][1], hard: c.hard, section_keys: RULES[c.key][2] }));
-      return json(201, storeReport(ctx, v, "rules", findings, { blocked: false, blocking: [], errors: [] }));
+      // A snapshot of what the dashboard shows: every registered check.
+      const d = dashboard(ctx, v, n);
+      const findings = d.items.map((i) => ({ criterion: i.key, status: i.status, rationale: i.rationale, hard: i.hard, section_keys: i.section_keys }));
+      return json(201, storeReport(ctx, v, "rules", findings, { blocked: d.blocked, blocking: d.blocking, errors: d.items.filter((i) => i.error).map((i) => i.key) }));
     }
     if (p[5] === "evaluations" && p[6] === "human" && m === "POST") {
       const denied = need("commenter");
       if (denied) return denied;
       if (!v) return fail(404, "Version not found");
       const data = await body<Schemas["HumanRatingIn"]>();
-      const known = new Set(CRITERIA.slice(0, 10).map((c) => c.key));
-      if (!data?.ratings?.length || data.ratings.some((r) => !known.has(r.criterion))) return fail(422, "unknown criteria");
+      const keys = CRITERIA.slice(0, 10).map((c) => c.key);
+      if (!data?.ratings?.length) return fail(422, "ratings: List should have at least 1 item after validation, not 0");
+      if (data.ratings.some((r) => !r.rationale?.trim())) return fail(422, "rationale: String should have at least 1 character");
+      const unknown = [...new Set(data.ratings.map((r) => r.criterion).filter((c) => !keys.includes(c)))].sort();
+      if (unknown.length) return fail(422, `unknown criteria: ${unknown.join(", ")}; expected one of ${keys.join(", ")}`);
+      if (new Set(data.ratings.map((r) => r.criterion)).size !== data.ratings.length) return fail(422, "rate each criterion once");
       const findings = data.ratings.map((r) => ({ criterion: r.criterion, status: r.status, rationale: r.rationale, hard: false, section_keys: r.section_keys ?? [] }));
       return json(201, storeReport(ctx, v, "human", findings, { note: data.note ?? null }));
     }
@@ -455,17 +588,10 @@ export async function routeQuality(ctx: QualityContext, req: Request, p: string[
       const denied = need("approver");
       if (denied) return denied;
       if (!v) return fail(404, "Version not found");
-      // The mock's model answers at once: two criteria, labelled model output.
-      storeReport(ctx, v, "llm_job", [
-        { criterion: "validation_plan", status: "warning", rationale: "The pilot has no stated sample size.", hard: false, section_keys: ["metrics"] },
-        { criterion: "problem_clarity", status: "pass", rationale: "The problem names the users and quantifies the drop-off.", hard: false, section_keys: ["problem"] },
-      ], { label: "model_output", disclaimer: DISCLAIMER });
-      const job: Schemas["LlmJobOut"] = {
-        id: uuid(), kind: "quality_review", document_id: v.documentId, version_number: n, section_key: null,
-        status: "succeeded", input: { version: n, prompt: "quality_review.v1" }, output: null, account_label: null,
-        via: null, model: null, input_tokens: null, output_tokens: null, cost_usd: null, attempts: 1, error: null,
-        error_reason: null, next_reset_at: null, requested_by: ctx.userId, created_at: AT, started_at: AT, finished_at: AT,
-      };
+      // A quality_review job, run by the mock's tick (./llm-jobs.ts) like the worker would.
+      const job = ctx.queueReview?.(v.documentId, n);
+      if (!job) return fail(503, "No job queue");
+      if (!("id" in job)) return fail(job.status, job.detail);
       return json(201, job);
     }
     return null;
