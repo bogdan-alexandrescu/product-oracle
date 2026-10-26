@@ -7,7 +7,7 @@ import { usePolling } from "@/components/JobsPanel";
 import { Button, Chip, InfoTip } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type LlmJob, type RefinementPreview } from "@/lib/api/client";
-import { JOB_STATUS_LABEL, jobFailure } from "@/lib/format";
+import { failedAt, JOB_STATUS_LABEL, jobFailure } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
 
@@ -157,8 +157,12 @@ export function RefineSection({
       )}
       {job && job.status !== "succeeded" && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-testid="refine-status">
-          <Chip kind={job.status === "failed" ? "crit" : job.status === "cancelled" ? "na" : "acc"} dot>
-            {JOB_STATUS_LABEL[job.status]}
+          <Chip
+            kind={job.status === "failed" ? "crit" : job.status === "cancelled" ? "na" : "acc"}
+            dot
+            data-testid={job.status === "failed" && job.finished_at ? "job-failed" : undefined}
+          >
+            {job.status === "failed" && job.finished_at ? failedAt(job.finished_at) : JOB_STATUS_LABEL[job.status]}
           </Chip>
           {running && <span className="text-text2">Oracle is revising the section.</span>}
           {job.status === "failed" && (

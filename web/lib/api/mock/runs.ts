@@ -12,6 +12,7 @@ import { companyDayInWords, companyDayIso } from "./connections";
 import { ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
+import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
@@ -416,7 +417,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
     review_link: r.review_link ?? null,
-    error: r.error,
+    error: readableRefusal(r.error, r.status === "failed"),
     stuck: r.stuck,
     can_retry: r.can_retry,
     can_stop_cancelling: r.can_stop_cancelling,
@@ -1685,7 +1686,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ...(c.kind === "baseline_confirm" && c.status === "approved" && ctx.vagueGoals ? { vague_goals: ctx.vagueGoals() } : {}),
       lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
-    return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
+    const segments = r.segments.map((s) => (s.error ? { ...s, error: readableRefusal(s.error, s.status === "failed") } : s));
+    return json(status, { ...r, error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -2191,6 +2194,20 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   for (const r of db.runs) refresh(r);
   return db;
+}
+
+/**
+ * #561 review, the "stored-refusals" scenario: a feedback loop on checkout-redesign that failed
+ * on Oct 18, its segment and the run on a refusal stored before #403's wording.
+ */
+export function seedStoredRefusalRun(db: RunsDb, ctx: Omit<RunsContext, "db">, error: string): RunOut {
+  const run = seedRun(ctx, db, "feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
+  const at = "2026-10-18T23:12:00Z";
+  run.segments[0].attempts.push({ attempt: 1, workflow_id: null, submitted_at: "2026-10-18T23:00:00Z", cost_usd: 0, note: null, state: "failed" });
+  Object.assign(run.segments[0], { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
+  Object.assign(run, { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
+  refresh(run);
+  return run;
 }
 
 /** The run the "feature-set" scenario seeds (C6). */

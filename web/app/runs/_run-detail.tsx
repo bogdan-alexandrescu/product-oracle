@@ -34,7 +34,7 @@ import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { failedAt, formatDateTime, formatDay } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -310,7 +310,12 @@ export function RunDetail({ id }: { id: string }) {
       />
       <Split inspector={<RunInspector run={run} />}>
         {error && <ErrorNote>{error}</ErrorNote>}
-        {run.error && <ErrorNote>{run.error}</ErrorNote>}
+        {run.error && (
+          <ErrorNote>
+            {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
+            {run.error}
+          </ErrorNote>
+        )}
         {run.stuck && (
           <Notice
             testId="run-stuck"
@@ -944,7 +949,12 @@ function SegmentItem({
       </div>
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
-          {s.error && <p className="text-crit">{s.error}</p>}
+          {s.error && (
+            <p className="text-crit">
+              {s.status === "failed" && s.finished_at && <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>}
+              {s.error}
+            </p>
+          )}
           {s.status === "running" && <SegmentProgress segment={s} />}
           {s.autonomy_note && (
             // H11: the baseline's level changed this segment's merge.

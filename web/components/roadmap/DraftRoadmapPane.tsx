@@ -19,7 +19,7 @@ import {
 } from "@/lib/api/draft-roadmap";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { formatDateTime } from "@/lib/format";
+import { failedAt, formatDateTime } from "@/lib/format";
 
 import { baseName, CompareBar } from "./CompareBar";
 import { HORIZONS, needsAttention, toItemRow, type ItemRow } from "./item-row";
@@ -386,7 +386,12 @@ function StatusRow({
       break;
     }
     case "failed":
-      copy = <span className="font-medium">Oracle could not derive roadmap items: {data.error ?? "unknown error"}</span>;
+      copy = (
+        <span className="font-medium">
+          {data.requested_at && <span data-testid="failed-at">{failedAt(data.requested_at)}. </span>}
+          Oracle could not derive roadmap items: {data.error ?? "unknown error"}
+        </span>
+      );
       act = action("Try again");
       break;
     case "superseded":

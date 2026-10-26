@@ -304,7 +304,7 @@ export function NextDraftSheet({ doc, staged, onClose }: { doc: string; staged: 
       <HeroChip>
         <VersionStep from={preview?.base_version ?? staged.latest_version} to={preview?.next_version ?? next} />
       </HeroChip>
-      {job && <JobStatusChip status={job.status} />}
+      {job && <JobStatusChip status={job.status} at={job.finished_at} />}
     </>
   );
 

@@ -109,6 +109,9 @@ export const NO_ACCOUNT_REASON: Record<string, string> = {
   unusable: "No Claude account's credential could be read. An owner signs in again.",
 };
 
+/** When something failed, so its stored error reads as then, not now (#561 review). */
+export const failedAt = (at: string) => `Failed ${formatDateTime(at)}`;
+
 /** A failed job's stored error and its pool reason as sentences apart (#556). */
 export function jobFailure(job: Pick<LlmJob, "error" | "error_reason">, fallback = "The job failed."): string {
   const error = (job.error ?? fallback).trim();

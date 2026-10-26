@@ -6,10 +6,10 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { wordDiff } from "@/lib/diff";
-import { inWords, turnedOff } from "@/lib/format";
+import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
-import { mockSettingValue } from "./connections";
+import { readableRefusal } from "./refusal";
 import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type NextDraftChangeRow, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
@@ -32,6 +32,8 @@ export interface LlmDb {
   next_draft_changes?: NextDraftChangeRow[];
   /** Job kinds an owner turned off, per document id. */
   disabled: Record<string, Job["kind"][]>;
+  /** #561 review: job kinds the Claude pool refuses (every account spent; the "stored-refusals" scenario). */
+  refuse?: Job["kind"][];
 }
 
 export type LlmContext = {
@@ -333,6 +335,10 @@ export function tick(ctx: LlmContext) {
     const vs = doc ? versionsOf(ctx, doc) : [];
     const v = vs.find((x) => x.number === job.version_number) ?? vs.at(-1);
     if (!doc || !v) continue;
+    if (ctx.db.refuse?.includes(job.kind)) {
+      Object.assign(job, { status: "failed", attempts: job.attempts + 1, started_at: ctx.now(), finished_at: ctx.now(), error: SPENT, error_reason: "no_account_available", next_reset_at: SPENT_RESET });
+      continue;
+    }
     if (job.kind === "review_comments") finish(ctx, job, runReview(ctx, job, doc, v));
     else if (job.kind === "reporting") {
       const since = (job.input.since as number | undefined) ?? (v.number > 1 ? v.number - 1 : null);
@@ -344,20 +350,12 @@ export function tick(ctx: LlmContext) {
 
 // ------------------------------------------------------------------ stored refusals
 
-const REFUSAL = "No Claude account can take this call";
-const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?/g;
-const companyZone = () => (mockSettingValue("alignment_report") as { timezone?: string } | undefined)?.timezone ?? "America/Los_Angeles";
+/** A refusal stored before #403's wording: every account spent, the earliest reset as raw UTC. */
+export const SPENT_RESET = "2026-10-25T22:00:00.475990Z";
+export const SPENT = "No Claude account can take this call: every Claude account is spent; the earliest window clears 2026-10-25T22:00:00.475990+00:00";
 
-/** The API's read-time rewrite (oracle.claude_accounts.pool.readable_refusal, #556): each ISO moment in words in the Company time zone, and a refusal ends its sentence. */
-export function readableRefusal(text: string | null): string | null {
-  if (!text) return text;
-  let out = text.replace(ISO, (m) => inWords(m, companyZone()));
-  if (out.startsWith(REFUSAL) && !/[.!?]\s*$/.test(out)) out = `${out.trimEnd()}.`;
-  return out;
-}
-
-/** A job as the API returns it: its stored error read through readableRefusal. */
-export const jobOut = (job: Job): Job => (job.error ? { ...job, error: readableRefusal(job.error) } : job);
+/** A job as the API returns it: its stored error read through readableRefusal, in the past once it failed. */
+export const jobOut = (job: Job): Job => (job.error ? { ...job, error: readableRefusal(job.error, job.status === "failed") } : job);
 
 // ------------------------------------------------------------------ seed
 
@@ -467,12 +465,31 @@ function seedStoredRefusal(c: LlmContext) {
       created_at: "2026-10-18T23:11:58Z",
       started_at: "2026-10-18T23:12:00Z",
       finished_at: "2026-10-18T23:12:00Z",
-      error:
-        "No Claude account can take this call: every Claude account is spent; the earliest window clears 2026-10-25T22:00:00.475990+00:00",
+      error: SPENT,
       error_reason: "no_account_available",
-      next_reset_at: "2026-10-25T22:00:00.475990Z",
+      next_reset_at: SPENT_RESET,
     }),
   );
+}
+
+/** #561 review, the "stored-refusals" scenario: Clinic outreach's draft 6 build failed on Oct 18 on the same refusal, and every refinement now is refused. */
+export function seedStoredRefusals(c: LlmContext) {
+  const doc = c.documents.find((d) => d.slug === "clinic-outreach");
+  const v = doc && versionsOf(c, doc).at(-1);
+  if (!doc || !v) return;
+  c.db.jobs.push(
+    makeJob(c, doc, BATCH, v, {
+      status: "failed",
+      attempts: 1,
+      created_at: "2026-10-18T23:11:58Z",
+      started_at: "2026-10-18T23:12:00Z",
+      finished_at: "2026-10-18T23:12:00Z",
+      error: SPENT,
+      error_reason: "no_account_available",
+      next_reset_at: SPENT_RESET,
+    }),
+  );
+  c.db.refuse = ["refinement"];
 }
 
 /**
