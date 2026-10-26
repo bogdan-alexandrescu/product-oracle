@@ -112,7 +112,7 @@ async def test_the_sent_query_has_a_row_limit_and_the_read_a_time_limit(
 
 
 async def test_a_failed_pull_stores_and_shows_a_fixed_error(
-    client, ctx, clock, fake_posthog, caplog
+    client, ctx, clock, fake_posthog, caplog, monkeypatch
 ):
     """protects=criterion 1: PostHog's error text never reaches metric.last_error, Pull
     now's 502 or Test's error; every role reads the same fixed sentence; the full text
@@ -128,6 +128,8 @@ async def test_a_failed_pull_stores_and_shows_a_fixed_error(
         )
 
     posthog.set_transport(metrics_helpers.httpx.MockTransport(leaky))
+    # The migrations' fileConfig disables loggers that already exist; the server's is on.
+    monkeypatch.setattr(posthog.log, "disabled", False)
     with caplog.at_level(logging.WARNING, logger="oracle.metrics.posthog"):
         resp = await client.post(f"/v1/metrics/{metric['id']}/pull",
                                  headers=ctx.as_("approver"))  # fmt: skip
