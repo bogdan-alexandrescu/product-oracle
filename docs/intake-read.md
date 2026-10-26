@@ -20,6 +20,12 @@ brief and the author's pinned sources that adds inferences and open gaps, marked
 The intake records which path produced its read (`ai_read.path`), and, for a fallback,
 why (`ai_read.fallback.code`: `agent_unavailable`, `agent_failed` or `invalid_output`).
 
+The run itself is private to its creator, the intake's author (`FlowDef.creator_only`):
+`GET /v1/runs`, `GET /v1/runs/{id}` and its files (and MCP `list_runs`, `get_run`,
+`get_run_artifact`) list and read it for the author, their personal tokens and MCP
+clients only; any other member, an API token, or a run that reads as a member gets no row
+and 404. The discussion panel's Runs screen context leaves it out.
+
 ## When it starts
 
 - On create and on repin, when the intake's `ai_extraction` is on and the company setting
@@ -40,7 +46,7 @@ of that intake's own `intake_analysis` run may call it: the run's flow is
 author, its snapshot is the intake's latest, and its token holds `read:intake-input`
 (minted for that segment only). Any other run token gets 404; people, API tokens and MCP
 clients get 403 "This is for Oracle's read of an intake"; an ended run's token 401. Each
-read is audited (`intake.evidence_read`, route `get_intake_analysis_input`).
+read is audited (`intake.evidence_query`, route `get_intake_analysis_input`, spec-INT2).
 
 What leaves Oracle: the brief and up to 25 excerpts of the author's pinned sources, which
 now also pass through the company's SwarmCloud tenant; its step logs and artifacts hold

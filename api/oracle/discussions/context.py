@@ -395,13 +395,14 @@ async def _documents(db: AsyncSession, ctx: Context) -> None:
 async def _runs(db: AsyncSession, ctx: Context) -> None:
     from oracle.runs import flows
     from oracle.runs.models import Run
-    from oracle.runs.service import creator_only_visible
 
-    stmt = select(Run).where(Run.status.in_(OPEN_RUNS)).order_by(Run.created_at.desc()).limit(20)
-    # #624 review: another member's intake read is not listed.
-    if (private := creator_only_visible(db)) is not None:
-        stmt = stmt.where(private)
-    runs = await db.scalars(stmt)
+    # #624 review: a run private to its creator (an intake read) is no member's to read.
+    runs = await db.scalars(
+        select(Run)
+        .where(Run.status.in_(OPEN_RUNS), Run.flow.not_in(flows.CREATOR_ONLY_FLOWS))
+        .order_by(Run.created_at.desc())
+        .limit(20)
+    )
     for run in runs:
         flow = flows.FLOWS.get(run.flow)
         title = flow.title if flow else run.flow
