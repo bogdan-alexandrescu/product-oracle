@@ -157,7 +157,8 @@ test("impact: a version nothing was built on is empty, and a missing one says so
   await openImpact(page, undefined, 1);
   await expect(page.getByText("No outputs depend on what v1 changed. Nothing to regenerate.")).toBeVisible();
   await page.goto("/documents/checkout-redesign/v/9/impact");
-  await expect(page.getByRole("alert").filter({ hasText: "not found" })).toContainText("Version not found");
+  // The API's words for a missing version (docs.service.get_version_row).
+  await expect(page.getByRole("alert").filter({ hasText: "not found" })).toContainText("version 9 of 'checkout-redesign' not found");
 });
 
 test("impact: past 15 outputs the graph groups them by category, and a cut-off walk says so", async ({ page }) => {
