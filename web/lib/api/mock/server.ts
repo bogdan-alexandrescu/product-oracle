@@ -3159,7 +3159,8 @@ function bodyHtml(text: string, tables: boolean): string {
 }
 
 // As the API's themed export with the roadmap-board theme (a roadmap's default): the sections under a
-// horizon laid out as a three-column board of cards; a goal table (section-wide) spans the row.
+// horizon laid out as a three-column board of cards; a goal group (section-wide: Board's table, Team's
+// heading) spans the row.
 const BOARD_THEME_CSS = `<style>
 .section-group > .group-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .section-group > .group-body > .prd-section { margin: 0; padding: 0.45rem 0.6rem; border: 1px solid #d0d5dd; border-top: 3px solid #1d4ed8; border-radius: 4px; }
@@ -3173,7 +3174,7 @@ function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBr
   const board = doc.kind === "roadmap" && !!audience;
   const section = (s: VersionRow["sections"][number]) => {
     const tag = `h${Math.min(s.level, 3)}`;
-    const attrs = board ? ` class="prd-section level-${s.level}${spansRow(s.section_key, s.body_md) ? " section-wide" : ""}" data-section-key="${s.section_key}"` : "";
+    const attrs = board ? ` class="prd-section level-${s.level}${spansRow(s.section_key) ? " section-wide" : ""}" data-section-key="${s.section_key}"` : "";
     return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_text, board)}</section>`;
   };
   const groups: { head: VersionRow["sections"][number]; children: VersionRow["sections"] }[] = [];

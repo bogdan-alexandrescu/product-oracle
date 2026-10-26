@@ -233,12 +233,12 @@ def goal_groups(items: list[ItemView]) -> list[tuple[str, list[ItemView]]]:
 _GROUP_KEY = re.compile(rf"^(?:{'|'.join(HORIZON_SECTIONS)})-group-\d+$")
 
 
-def spans_row(key: str, body_md: str | None) -> bool:
-    """Whether a rebuilt section is a goal group holding an audience's item table
-    (Board's): a themed export marks it full width, so a theme that lays a horizon's
-    sections out as a grid of cards spans it across the row instead of one card column.
-    Team's goal groups hold no table (their cards follow) and Engineering has none."""
-    return bool(_GROUP_KEY.match(key)) and _parse_table(body_md or "")[0] != []
+def spans_row(key: str) -> bool:
+    """Whether a rebuilt section is a goal group (Board's, holding its item table, and
+    Team's, a heading over its item cards): a themed export marks it full width, so a theme
+    that lays a horizon's sections out as a grid of cards spans it across the row instead
+    of one card column. Item cards stay cards, and Engineering has no goal groups."""
+    return bool(_GROUP_KEY.match(key))
 
 
 def label(audience: str) -> str:

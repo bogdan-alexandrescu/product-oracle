@@ -945,7 +945,7 @@ class ThemedSection:
     heading: Markup
     body: Markup
     flagged: bool = False
-    # A goal group holding an audience's item table spans a card board's row.
+    # A goal group (Board's table, Team's heading) spans a card board's row.
     wide: bool = False
     children: list["ThemedSection"] = field(default_factory=list)
 
@@ -1056,7 +1056,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
             flagged=ev.document.kind == "roadmap"
             and s.level == 3
             and NO_GOAL_PHRASE in layers.strip_comments(s.body_md or "").lower(),
-            wide=ev.audience is not None and variants.spans_row(s.section_key, s.body_md),
+            wide=ev.audience is not None and variants.spans_row(s.section_key),
         )
 
     def _body_md(s: Section, strip: bool) -> str:
