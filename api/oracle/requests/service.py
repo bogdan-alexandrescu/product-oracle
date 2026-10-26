@@ -18,7 +18,7 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, select, text
+from sqlalchemy import ColumnElement, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -844,10 +844,12 @@ async def _reopen(db: AsyncSession, row: ProductRequest) -> None:
     row.decided_at = None
     row.asked_again_since = None
     row.loop_closed_on = None
-    # Drafted replies go: nobody is told a no that no longer stands.
+    # Drafted replies go: nobody is told a no that no longer stands, its own (H10 Asked
+    # again, when it was merged into a no) included (#586 review).
     for reply in await db.scalars(
         select(RequestReply).where(
-            RequestReply.root_request_id == row.id, RequestReply.status == "drafted"
+            or_(RequestReply.root_request_id == row.id, RequestReply.request_id == row.id),
+            RequestReply.status == "drafted",
         )
     ):
         reply.status = "withdrawn"
