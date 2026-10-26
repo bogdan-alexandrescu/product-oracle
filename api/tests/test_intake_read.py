@@ -337,3 +337,28 @@ async def test_pending_reads_start_at_most_twenty_per_tick(client):
         assert await intake_read.start_pending_reads(s) == 1
         assert await intake_read.start_pending_reads(s) == 0
     assert len(await _runs(ctx)) == 21
+
+
+# protects=Q3 at creation: a run that cannot even be created (the runs service refuses)
+# still leaves the new intake in place and falls back to the job at once;
+# fails_when=the refusal rolls the intake back (500 or a missing intake) or no job is
+# queued; no_claim=why the runs service refused.
+async def test_a_run_that_cannot_be_created_keeps_the_intake_and_queues_the_job(
+    client, monkeypatch
+):
+    from oracle.runs import service as runs_service
+
+    async def refuse(*args, **kwargs):
+        raise runs_service.RunError("refused for the test")
+
+    monkeypatch.setattr(runs_service, "create_run", refuse)
+    ctx = await company()
+    _runtime()
+    intake_id = await _new(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.get(ProductIntake, uuid.UUID(intake_id)) is not None
+    [job] = await _jobs(ctx)
+    assert job.status == "queued" and str(job.intake_id) == intake_id
+    read = (await summary(client, ctx, intake_id, who="commenter"))["ai_read"]
+    assert read["path"] == "job" and read["fallback"]["code"] == "agent_unavailable"
+    assert await _runs(ctx) == []
