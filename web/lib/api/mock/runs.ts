@@ -141,6 +141,16 @@ export interface RunsContext {
    * second finishes the segment.
    */
   slowAgents?: boolean;
+  /**
+   * H11 Order priorities, as oracle.autonomy for the runs: its level, its limits, and the
+   * "Oracle did" row Oracle leaves when it saves a run's order itself (_tell_order_saved).
+   * Absent: Oracle never saves an order at a stop that is on.
+   */
+  autonomy?: {
+    level: () => "observe" | "draft" | "recommend" | "act";
+    limits: () => { max_rank_move?: number } | null;
+    acted: (a: { summary: string; subject: Record<string, unknown>; undo: null; notify: string[] }) => void;
+  };
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   /** #260: the confirmed goals a Baseline to PRD run may name. */
@@ -1165,6 +1175,54 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunO
   if (decision === "approved") snap.document = orderDocument(ctx, r) ?? snap.document;
 }
 
+/** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
+const ORDER_SAVED_BY_ORACLE = "Oracle saved this order: Order priorities is set to Act within limits.";
+
+const goalsOf = (row: SnapshotRow["ranking"][number]) => new Set((row.explanation?.goals ?? []).map((g) => String(g.goal)));
+
+/**
+ * As oracle.priorities.run_order.outside_limits: why an order is outside the limits, or null.
+ * Compared with the live ranking of the same features, a feature moves more than
+ * `most` places, or passes one that shares no goal with it. Features the live ranking does
+ * not hold are not moves.
+ */
+function outsideLimits(rows: SnapshotRow["ranking"], most: number): string | null {
+  const ranked = rows.filter((r) => r.live_rank != null).sort((a, b) => a.rank - b.rank);
+  for (const [i, r] of ranked.entries()) {
+    const moved = Math.abs(i + 1 - r.live_rank!);
+    if (moved > most) return `${r.key} moves ${moved === 1 ? "1 place" : `${moved} places`}, more than ${most}`;
+  }
+  for (const [i, a] of ranked.entries()) {
+    for (const b of ranked.slice(i + 1)) {
+      const ga = goalsOf(a);
+      if (a.live_rank! > b.live_rank! && ![...goalsOf(b)].some((g) => ga.has(g))) return `${a.key} passes ${b.key}, which serves another goal`;
+    }
+  }
+  return null;
+}
+
+/** As the API's _oracle_saves_order: ``priorities`` at Act, nothing blocking, every move within one goal and the limit. */
+function oracleSavesOrder(ctx: RunsContext, check: PriorityCheck, snap: SnapshotRow): boolean {
+  const a = ctx.autonomy;
+  if (!a || a.level() !== "act") return false;
+  if (check.problems.some((p) => p.blocking ?? true)) return false;
+  const limits = a.limits();
+  if (!limits) return false;
+  return outsideLimits(snap.ranking, Number(limits.max_rank_move ?? 0)) === null;
+}
+
+/** As the API's _tell_order_saved: the run's starter gets an "Oracle did" row, with no Undo. */
+function tellOrderSaved(ctx: RunsContext, r: RunOut) {
+  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : undefined;
+  const name = doc?.title ?? r.document_slug ?? "this run";
+  ctx.autonomy?.acted({
+    summary: `Saved the priority order of ${name}, within one goal and your limit`,
+    subject: { kind: "run", key: r.id, href: `/runs/${r.id}` },
+    undo: null,
+    notify: r.created_by ? [r.created_by] : [],
+  });
+}
+
 function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
   if (name === "tech_briefs.yaml") return briefsYaml(LOCAL_BRIEFS, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
@@ -1225,8 +1283,11 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     next(ctx, r, s);
     return;
   }
-  const on = r.knobs.checkpoints[def.checkpoint] ?? true;
-  if (!on && s.feature_set_check) decideScope(ctx, r, "approved", null);
+  const stopOn = r.knobs.checkpoints[def.checkpoint] ?? true;
+  // H11 ``priorities`` at Act: Oracle saves an order inside the limits itself.
+  const oracleOrders = stopOn && !!snapshot && oracleSavesOrder(ctx, s.priority_check!, snapshot);
+  const on = stopOn && !oracleOrders;
+  if (!stopOn && s.feature_set_check) decideScope(ctx, r, "approved", null);
   const cp: CheckpointOut = {
     id: ctx.uuid(),
     run_id: r.id,
@@ -1237,7 +1298,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     segment_seq: s.seq,
     decided_by: null,
     decided_at: on ? null : ctx.now(),
-    note: on ? null : "Turned off when the run started.",
+    note: on ? null : oracleOrders ? ORDER_SAVED_BY_ORACLE : "Turned off when the run started.",
     payload,
     created_at: ctx.now(),
     can_decide: on,
@@ -1256,6 +1317,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
       return finish(ctx, r, "failed");
     }
     decideOrder(ctx, r, cp, "approved", null);
+    if (oracleOrders) tellOrderSaved(ctx, r);
   }
   if (on) r.status = "awaiting_checkpoint";
   else next(ctx, r, s);

@@ -318,7 +318,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "within_goal"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "C9",
     "wired_by_name": "C9 Priorities move and pin",
     "limits_default": {
@@ -331,7 +331,7 @@ const REGISTRY: RegistryRow[] = [
     "title": "Watch the roadmap",
     "group": "planning",
     "group_title": "Planning",
-    "default": "observe",
+    "default": "recommend",
     "ceiling": "recommend",
     "allowed": [
       "observe",
@@ -346,7 +346,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "date commitments",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "F2",
     "wired_by_name": "F2 Track health, drift and date slips",
     "limits_default": null
@@ -407,7 +407,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "reversible_only"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H1",
     "wired_by_name": "H1 Decision log",
     "limits_default": {
@@ -498,7 +498,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "only_parsed_actuals"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H3",
     "wired_by_name": "H3 Predicted versus actual",
     "limits_default": {
@@ -713,6 +713,38 @@ function actionOut(a: OracleActionRow, me: string): Schemas["InboxOracleAction"]
   return { ...rest, state: done ? "done" : "open", counts: !done };
 }
 
+/** A responsibility's limits as Oracle follows them now (defaults with what an owner stored), or null. */
+export function limitsFor(db: AutonomyDb, key: string): Limits | null {
+  const r = REGISTRY.find((x) => x.key === key);
+  if (!r) throw new Error(`no responsibility ${key}`);
+  return itemOut(r, db.stored[key]).limits as Limits | null;
+}
+
+/** What Oracle did on its own (the API's autonomy.acted): an "Oracle did" row for each person told. */
+export function oracleDid(
+  db: AutonomyDb,
+  key: string,
+  a: { summary: string; subject: Record<string, unknown>; undo: OracleActionRow["undo"]; notify: string[] },
+): OracleActionRow {
+  const r = REGISTRY.find((x) => x.key === key);
+  if (!r) throw new Error(`no responsibility ${key}`);
+  const row: OracleActionRow = {
+    id: crypto.randomUUID(),
+    responsibility: key,
+    responsibility_title: r.title,
+    summary: a.summary,
+    subject: a.subject,
+    undo: a.undo,
+    created_at: now(),
+    undone_at: null,
+    notify_ids: [...new Set(a.notify)],
+    opened_by: [],
+    undone_by: null,
+  };
+  db.actions.push(row);
+  return row;
+}
+
 /** The "Oracle did" rows of `me`, newest first. */
 export function inboxActions(db: AutonomyDb, me: string): Schemas["InboxOracleAction"][] {
   return db.actions
@@ -774,7 +806,10 @@ export function seedRitualDid(ownerId: string, id: string, ritual: { id: string;
   };
 }
 
-export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], me: { id: string; role: Role }): Promise<Response | null> {
+/** Calls an action's stored undo route as the signed-in person; null where the mock has no such route. */
+export type Replay = (undo: NonNullable<OracleActionRow["undo"]>) => Promise<Response | null>;
+
+export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], me: { id: string; role: Role }, replay?: Replay): Promise<Response | null> {
   const m = req.method;
   if (p[1] === "autonomy") {
     if (p.length === 2 && m === "GET") {
@@ -812,7 +847,9 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
     if (p[3] === "undo") {
       if (!a.undo) return json(409, { detail: "This action has no undo" });
       if (a.undone_at) return json(409, { detail: "Already undone" });
-      // The API calls the stored route as the person; the mock records the undo.
+      // The API calls the stored route as the person; so does the mock where it has the route.
+      const res = replay ? await replay(a.undo) : null;
+      if (res && !res.ok) return res;
       a.undone_at = now();
       a.undone_by = me.id;
       if (!a.opened_by.includes(me.id)) a.opened_by.push(me.id);

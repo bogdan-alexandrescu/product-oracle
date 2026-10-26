@@ -324,13 +324,15 @@ _ALL: tuple[Responsibility, ...] = (
         limits=PrioritiesLimits,
         wired_by="C9",
         wired_by_name="C9 Priorities move and pin",
+        wired=True,
     ),
     Responsibility(
         key="roadmap_watch",
         title="Watch the roadmap",
         group="planning",
         ceiling="recommend",
-        default="observe",
+        # F2 built Recommend (a slip offers Accept new date and Re-plan): today's behaviour.
+        default="recommend",
         levels={
             "observe": "Oracle watches tracks every hour and flags drift.",
             "draft": "Oracle drafts a track update for its owner to edit.",
@@ -339,6 +341,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=None,
         wired_by="F2",
         wired_by_name="F2 Track health, drift and date slips",
+        wired=True,
         ceiling_reason="date commitments",
     ),
     Responsibility(
@@ -362,6 +365,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=DecisionsLimits,
         wired_by="H1",
         wired_by_name="H1 Decision log",
+        wired=True,
     ),
     Responsibility(
         key="rituals",
@@ -403,6 +407,7 @@ _ALL: tuple[Responsibility, ...] = (
         limits=OutcomesLimits,
         wired_by="H3",
         wired_by_name="H3 Predicted versus actual",
+        wired=True,
     ),
     Responsibility(
         key="launches",

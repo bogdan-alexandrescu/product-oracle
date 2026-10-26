@@ -503,7 +503,8 @@ function AssessmentForm({
 }: {
   o: Outcome;
   from: {
-    verdict: Verdict;
+    // None below Recommend (H11 Check outcomes): Oracle read the actual but proposes no verdict.
+    verdict: Verdict | null;
     actual_value?: number | null;
     measured_at?: string | null;
     note?: string | null;
@@ -512,7 +513,7 @@ function AssessmentForm({
   onSave: (a: Schemas["AssessmentIn"]) => void;
   onCancel: () => void;
 }) {
-  const [verdict, setVerdict] = useState<Verdict>(from.verdict);
+  const [verdict, setVerdict] = useState<Verdict | "">(from.verdict ?? "");
   const [value, setValue] = useState(from.actual_value?.toString() ?? "");
   const [on, setOn] = useState(from.measured_at ?? "");
   const [note, setNote] = useState(from.note ?? "");
@@ -520,6 +521,7 @@ function AssessmentForm({
     "h-9 w-full rounded-lg border border-line-strong bg-surface px-2.5 text-[15px]";
   function save() {
     const v = num(value);
+    if (!verdict) return;
     onSave({
       verdict,
       observed: figure(v, o.prediction.unit) ?? "no value",
@@ -545,6 +547,11 @@ function AssessmentForm({
           value={verdict}
           onChange={(e) => setVerdict(e.target.value as Verdict)}
         >
+          {!verdict && (
+            <option value="" disabled>
+              Pick a verdict
+            </option>
+          )}
           {VERDICTS.map((v) => (
             <option key={v} value={v}>
               {STATE_LABEL[v]}
@@ -580,7 +587,7 @@ function AssessmentForm({
         />
       </label>
       <div className="col-span-2 flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy || !verdict}>
           Record assessment
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
@@ -741,7 +748,7 @@ function OutcomeInspector({
       )}
       {prop && (
         <InspectorSection
-          label="Oracle's proposal"
+          label={prop.verdict ? "Oracle's proposal" : "Oracle's reading"}
           tools={
             <InfoTip label="How Oracle reads the actual">
               The first goal value recorded on or after the prediction&apos;s
@@ -753,11 +760,13 @@ function OutcomeInspector({
             data-testid="outcome-proposal"
             className="flex flex-col gap-1.5 text-sm"
           >
-            <span>
-              <Chip kind={STATE_KIND[prop.verdict]}>
-                {STATE_LABEL[prop.verdict]}
-              </Chip>
-            </span>
+            {prop.verdict && (
+              <span>
+                <Chip kind={STATE_KIND[prop.verdict]}>
+                  {STATE_LABEL[prop.verdict]}
+                </Chip>
+              </span>
+            )}
             <span className="text-text2">
               {now
                 ? `Goal value ${now}${prop.measured_at ? `, recorded ${formatDate(prop.measured_at)}` : ""}`
@@ -768,21 +777,23 @@ function OutcomeInspector({
           </div>
           {canApprove && o.status === "tracking" && !assessing && (
             <div className="mt-2 flex flex-wrap gap-2">
+              {prop.verdict && (
+                <Button
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => prop.verdict && assess(prop.verdict)}
+                  data-testid="outcome-confirm"
+                >
+                  Confirm
+                </Button>
+              )}
               <Button
-                variant="primary"
-                disabled={busy}
-                onClick={() => assess(prop.verdict)}
-                data-testid="outcome-confirm"
-              >
-                Confirm
-              </Button>
-              <Button
-                variant="secondary"
+                variant={prop.verdict ? "secondary" : "primary"}
                 disabled={busy}
                 onClick={() => setAssessing(true)}
                 data-testid="outcome-assess-edit"
               >
-                Edit
+                {prop.verdict ? "Edit" : "Record verdict"}
               </Button>
               <Button
                 variant="secondary"

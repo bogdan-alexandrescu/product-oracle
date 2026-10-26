@@ -27400,13 +27400,11 @@ export interface components {
         /**
          * ProposedAssessment
          * @description Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.
+         *     ``verdict`` is None at H11 ``outcomes`` Observe or Draft: the actual only.
          */
         ProposedAssessment: {
-            /**
-             * Verdict
-             * @enum {string}
-             */
-            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Verdict */
+            verdict: ("held" | "partially_held" | "not_held" | "inconclusive") | null;
             /** Observed */
             observed?: string | null;
             /** Actual Value */
