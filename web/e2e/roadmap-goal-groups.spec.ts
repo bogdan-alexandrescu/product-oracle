@@ -1,4 +1,6 @@
-import { expect, test, type FrameLocator, type Page } from "./test";
+import type { FrameLocator } from "@playwright/test";
+
+import { expect, test, type Page } from "./test";
 import { login } from "./helpers";
 
 /**
@@ -21,7 +23,7 @@ async function sharing(page: Page) {
 
 /** The preview's headings from Now up to the next section after the horizons, in order. */
 async function horizonOutline(frame: FrameLocator, end?: string): Promise<string[]> {
-  const headings = (await frame.locator("h1, h2, h3, h4, h5, h6").allTextContents()).map((t) => t.trim());
+  const headings = (await frame.locator("h1, h2, h3, h4, h5, h6").allTextContents()).map((t: string) => t.trim());
   const from = headings.indexOf("Now");
   const to = end ? headings.indexOf(end) : headings.length;
   return headings.slice(from, to < 0 ? headings.length : to);
