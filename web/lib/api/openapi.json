@@ -36245,7 +36245,7 @@
           "shares"
         ],
         "summary": "Public Share Status",
-        "description": "For the web page's server render: ``locked`` until the passcode opened the link\nin this browser (for every token, known or not), then ``active`` or ``ended``.",
+        "description": "For the web page: ``locked`` until the passcode opened the link in this browser\n(for every token, known or not, and nothing else), then ``active`` or ``ended`` with\nthe link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF\nonly when it is on).",
         "operationId": "public_share_status",
         "parameters": [
           {
@@ -36260,7 +36260,7 @@
         ],
         "responses": {
           "200": {
-            "description": "locked (no open cookie), active or ended",
+            "description": "locked (no open cookie), or active or ended with allow_download",
             "content": {
               "application/json": {
                 "schema": {}
