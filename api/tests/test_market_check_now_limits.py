@@ -62,9 +62,7 @@ async def test_check_now_once_per_page_per_ten_minutes(client, ctx, at, web):
     assert (await _check(client, ctx, first)).status_code == 200
 
 
-async def test_check_now_at_most_so_many_per_company_per_hour(
-    client, ctx, at, web, monkeypatch
-):
+async def test_check_now_at_most_so_many_per_company_per_hour(client, ctx, at, web, monkeypatch):
     """protects=criterion 2: past the company's hourly number of Check nows (20; 3 here)
     the next one is 429 naming when the oldest of the hour drops out; fails_when=many
     pages let one person fetch without limit; no_claim=several API processes racing
@@ -79,8 +77,7 @@ async def test_check_now_at_most_so_many_per_company_per_hour(
     resp = await _check(client, ctx, ids[3])
     assert resp.status_code == 429, resp.text
     assert resp.json()["detail"] == (
-        "Check now was used 3 times in the last hour; "
-        "it works again after Mon Oct 19, 1:00 PM PDT"
+        "Check now was used 3 times in the last hour; it works again after Mon Oct 19, 1:00 PM PDT"
     )
     assert resp.headers["Retry-After"] == str(55 * 60)
     at(START + timedelta(hours=1))

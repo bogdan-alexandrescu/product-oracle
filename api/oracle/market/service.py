@@ -5,7 +5,6 @@ read (oracle.mcp.scopes)."""
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
-from urllib.parse import urlsplit
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
+from oracle.baseline import public_links
 from oracle.baseline.public_links import LinkFetcher
 from oracle.docs import visibility
 from oracle.market import robots, watch
@@ -47,12 +47,17 @@ from oracle.market.schemas import (
     SuggestionRef,
     WebFindingOut,
 )
+from oracle.models import AuditEvent
 from oracle.rituals import clock
 from oracle.rituals.models import Ritual
 
 MAX_ALIASES = 5
 PAGES_PER_COMPETITOR = 10
 PAGES_PER_COMPANY = 60
+# Check now (#541): once per page per window, and so many per company an hour.
+CHECKS_PER_PAGE_WINDOW = timedelta(minutes=10)
+CHECKS_PER_COMPANY_HOUR = 20
+CHECKED = "competitor_page.checked"
 ITEM_CHARS = 300
 ITEMS_PER_FIELD = 10
 # Promoted and dismissed URLs are not shown again for this long.
@@ -64,10 +69,11 @@ STALE_POSITIONING = "Someone else changed the positioning; reload"
 
 
 class MarketError(Exception):
-    def __init__(self, status: int, message: str) -> None:
+    def __init__(self, status: int, message: str, retry_after: timedelta | None = None) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
+        self.retry_after = retry_after
 
 
 def _now() -> datetime:
@@ -287,13 +293,15 @@ def page_out(p: CompetitorPage) -> PageOut:
 
 
 def _https(url: str) -> str:
+    """``url`` (trimmed) when the web fetcher's own check takes it (public_links.check_url:
+    https, no user name, the standard port, no private IP literal or local name)."""
     url = url.strip()
     try:
-        parts = urlsplit(url)
-    except ValueError as e:
-        raise MarketError(422, "url: not a valid URL") from e
-    if parts.scheme.lower() != "https" or not parts.hostname:
-        raise MarketError(422, "url: only https:// pages can be watched")
+        public_links.check_url(url)
+    except public_links.LinkError as e:
+        if e.code == "not_https":
+            raise MarketError(422, "url: only https:// pages can be watched") from e
+        raise MarketError(422, f"url: {e}") from e
     return url
 
 
@@ -364,12 +372,50 @@ async def delete_page(db: AsyncSession, principal: Principal, pid: uuid.UUID) ->
     await db.commit()
 
 
+async def _check_now_allowed(db: AsyncSession, p: CompetitorPage, now: datetime) -> None:
+    """Check now at most once per page per :data:`CHECKS_PER_PAGE_WINDOW` and
+    :data:`CHECKS_PER_COMPANY_HOUR` times per company an hour (each one an audit row);
+    429 saying when, in the Company time zone, otherwise."""
+    zone = await company_time.company_time_zone(db)
+    used = (
+        select(AuditEvent.created_at)
+        .where(AuditEvent.action == CHECKED, AuditEvent.created_at > now - timedelta(hours=1))
+        .order_by(AuditEvent.created_at)
+    )
+    times = list(await db.scalars(used))
+    last = max(
+        (t for t in await db.scalars(used.where(AuditEvent.entity_id == p.id))), default=None
+    )
+    if last is not None and now - last < CHECKS_PER_PAGE_WINDOW:
+        again = last + CHECKS_PER_PAGE_WINDOW
+        raise MarketError(
+            429,
+            f"This page was checked at {company_time.in_words(last, zone)}; Check now works "
+            f"on it again after {company_time.in_words(again, zone)}",
+            retry_after=again - now,
+        )
+    if len(times) >= CHECKS_PER_COMPANY_HOUR:
+        again = times[-CHECKS_PER_COMPANY_HOUR] + timedelta(hours=1)
+        raise MarketError(
+            429,
+            f"Check now was used {len(times)} times in the last hour; it works again after "
+            f"{company_time.in_words(again, zone)}",
+            retry_after=again - now,
+        )
+
+
 async def check_now(
     db: AsyncSession, principal: Principal, pid: uuid.UUID, fetch: LinkFetcher
 ) -> PageOut:
-    """Check now: robots.txt is honoured (409 when it disallows the page)."""
+    """Check now: rate limited (429, :func:`_check_now_allowed`); robots.txt is honoured
+    (409 when it disallows the page)."""
     p = await get_page(db, pid, lock=True)
     now = _now()
+    await _check_now_allowed(db, p, now)
+    event = await audit.record(db, principal, CHECKED, "competitor_page", p.id, {})
+    event.created_at = now
+    await db.commit()
+    p = await get_page(db, pid, lock=True)
     if not await robots.allowed(fetch, p.url, now):
         p.status, p.last_error, p.last_checked_at = "blocked", robots.BLOCKED, now
         await db.commit()
