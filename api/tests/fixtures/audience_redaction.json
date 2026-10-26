@@ -1,0 +1,289 @@
+[
+  {
+    "name": "single-dash separator",
+    "items": [],
+    "text": "| Item | Owner | Est. |\n|-|-|-|\n| CSV parser | Dana | 3 |",
+    "board": "| Item |\n| - |\n| CSV parser |",
+    "team": "| Item | Owner |\n| - | - |\n| CSV parser | Dana |",
+    "engineering": "| Item | Owner | Est. |\n|-|-|-|\n| CSV parser | Dana | 3 |"
+  },
+  {
+    "name": "no leading or trailing pipes",
+    "items": [],
+    "text": "Item | Owner | Est.\n--- | --- | ---\nCSV parser | Dana | 3",
+    "board": "| Item |\n| --- |\n| CSV parser |",
+    "team": "| Item | Owner |\n| --- | --- |\n| CSV parser | Dana |",
+    "engineering": "Item | Owner | Est.\n--- | --- | ---\nCSV parser | Dana | 3"
+  },
+  {
+    "name": "emphasised headers and aligned separator",
+    "items": [],
+    "text": "| Item | **Owner** | _Est._ |\n|:--|:-:|--:|\n| CSV parser | Dana | 3 |",
+    "board": "| Item |\n| :-- |\n| CSV parser |",
+    "team": "| Item | **Owner** |\n| :-- | :-: |\n| CSV parser | Dana |",
+    "engineering": "| Item | **Owner** | _Est._ |\n|:--|:-:|--:|\n| CSV parser | Dana | 3 |"
+  },
+  {
+    "name": "qualified owner headers",
+    "items": [],
+    "text": "| Item | Owner / PM | Who | Tech lead | Lead PM |\n|---|---|---|---|---|\n| CSV parser | Jo | Kim | Lee | Ana |",
+    "board": "| Item |\n| --- |\n| CSV parser |",
+    "team": "| Item | Owner / PM | Who | Tech lead | Lead PM |\n|---|---|---|---|---|\n| CSV parser | Jo | Kim | Lee | Ana |",
+    "engineering": "| Item | Owner / PM | Who | Tech lead | Lead PM |\n|---|---|---|---|---|\n| CSV parser | Jo | Kim | Lee | Ana |"
+  },
+  {
+    "name": "a body row before a rule",
+    "items": [],
+    "text": "| Item | Note |\n|---|---|\n| CSV parser | Owner: Dana |\n---",
+    "board": "| Item | Note |\n|---|---|\n| CSV parser |  |\n---",
+    "team": "| Item | Note |\n|---|---|\n| CSV parser | Owner: Dana |\n---",
+    "engineering": "| Item | Note |\n|---|---|\n| CSV parser | Owner: Dana |\n---"
+  },
+  {
+    "name": "a row with no table before a rule",
+    "items": [],
+    "text": "| CSV parser | Owner: Dana |\n---",
+    "board": "| CSV parser | |\n---",
+    "team": "| CSV parser | Owner: Dana |\n---",
+    "engineering": "| CSV parser | Owner: Dana |\n---"
+  },
+  {
+    "name": "a placeholder row after a body row",
+    "items": [
+      {
+        "title": "CSV parser"
+      },
+      {
+        "title": "Import",
+        "no_goal": true
+      }
+    ],
+    "text": "| Item | Note |\n|---|---|\n| CSV parser | Owner: Dana |\n| -- | -- |\n| Import | old importer |",
+    "board": "| Item | Note |\n|---|---|\n| CSV parser |  |\n| -- | -- |",
+    "team": "| Item | Note |\n|---|---|\n| CSV parser | Owner: Dana |\n| -- | -- |\n| Import | old importer |",
+    "engineering": "| Item | Note |\n|---|---|\n| CSV parser | Owner: Dana |\n| -- | -- |\n| Import | old importer |"
+  },
+  {
+    "name": "a goal-less row before a rule",
+    "items": [
+      {
+        "title": "Import",
+        "no_goal": true
+      }
+    ],
+    "text": "| Item | Note |\n|---|---|\n| Import | first |\n---",
+    "board": "| Item | Note |\n|---|---|\n---",
+    "team": "| Item | Note |\n|---|---|\n| Import | first |\n---",
+    "engineering": "| Item | Note |\n|---|---|\n| Import | first |\n---"
+  },
+  {
+    "name": "a line without pipes continues a table",
+    "items": [],
+    "text": "Item | Owner\n--- | ---\nCSV parser | Dana\nBulk import\n\nOwner: Dana.",
+    "board": "| Item |\n| --- |\n| CSV parser |\nBulk import",
+    "team": "Item | Owner\n--- | ---\nCSV parser | Dana\nBulk import\n\nOwner: Dana.",
+    "engineering": "Item | Owner\n--- | ---\nCSV parser | Dana\nBulk import\n\nOwner: Dana."
+  },
+  {
+    "name": "owner label Tech lead:",
+    "items": [],
+    "text": "- CSV parser (must). Tech lead: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). Tech lead: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). Tech lead: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label Eng lead:",
+    "items": [],
+    "text": "- CSV parser (must). Eng lead: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). Eng lead: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). Eng lead: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label PM:",
+    "items": [],
+    "text": "- CSV parser (must). PM: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). PM: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). PM: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label Lead PM:",
+    "items": [],
+    "text": "- CSV parser (must). Lead PM: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). Lead PM: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). Lead PM: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label *Owner*:",
+    "items": [],
+    "text": "- CSV parser (must). *Owner*: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). *Owner*: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). *Owner*: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label _Owner_:",
+    "items": [],
+    "text": "- CSV parser (must). _Owner_: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). _Owner_: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). _Owner_: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label **Owner**:",
+    "items": [],
+    "text": "- CSV parser (must). **Owner**: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). **Owner**: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). **Owner**: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label **Owner:**",
+    "items": [],
+    "text": "- CSV parser (must). **Owner:** Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). **Owner:** Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). **Owner:** Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label Owner / PM:",
+    "items": [],
+    "text": "- CSV parser (must). Owner / PM: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). Owner / PM: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). Owner / PM: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label Who:",
+    "items": [],
+    "text": "- CSV parser (must). Who: Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). Who: Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). Who: Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "owner label Tech lead —",
+    "items": [],
+    "text": "- CSV parser (must). Tech lead — Jo Parkwood. Why: day one (G1).",
+    "board": "- CSV parser (must). Why: day one (G1).",
+    "team": "- CSV parser (must). Tech lead — Jo Parkwood. Why: day one (G1).",
+    "engineering": "- CSV parser (must). Tech lead — Jo Parkwood. Why: day one (G1)."
+  },
+  {
+    "name": "prose that only looks like a label",
+    "items": [],
+    "text": "Key points: imports lead to reports. Sizes vary by plan. The PM team decides who: owners or leads.",
+    "board": "Key points: imports lead to reports. Sizes vary by plan. The PM team decides who: owners or leads.",
+    "team": "Key points: imports lead to reports. Sizes vary by plan. The PM team decides who: owners or leads.",
+    "engineering": "Key points: imports lead to reports. Sizes vary by plan. The PM team decides who: owners or leads."
+  },
+  {
+    "name": "estimates hidden from Team, owners kept",
+    "items": [],
+    "text": "- CSV parser. Est.: 3w. Story points: 8. Owner: Dana.",
+    "board": "- CSV parser.",
+    "team": "- CSV parser. Owner: Dana.",
+    "engineering": "- CSV parser. Est.: 3w. Story points: 8. Owner: Dana."
+  },
+  {
+    "name": "revenue hidden from Engineering",
+    "items": [],
+    "text": "- CSV parser. Revenue impact: $2M ARR. Est.: 3w.",
+    "board": "- CSV parser. Revenue impact: $2M ARR.",
+    "team": "- CSV parser. Revenue impact: $2M ARR.",
+    "engineering": "- CSV parser. Est.: 3w."
+  },
+  {
+    "name": "a sentence naming a tracker issue",
+    "items": [
+      {
+        "title": "CSV parser",
+        "tracker": [
+          "ENG-12"
+        ]
+      }
+    ],
+    "text": "- CSV parser ships in Q3. See ENG-12 for the plan.",
+    "board": "- CSV parser ships in Q3.",
+    "team": "- CSV parser ships in Q3.",
+    "engineering": "- CSV parser ships in Q3. See ENG-12 for the plan."
+  },
+  {
+    "name": "a short goal-less title drops only its own entries",
+    "items": [
+      {
+        "title": "Import",
+        "no_goal": true
+      },
+      {
+        "title": "Import wizard"
+      },
+      {
+        "title": "CSV parser"
+      }
+    ],
+    "text": "- Import wizard: guided setup for imports.\n- Import: a second importer\n  wrapped-marker.\n- CSV parser: parses every import.\nImport is slow today.\n\n| Item | Note |\n|---|---|\n| CSV parser | Import wizard first |\n| Import | old importer |\n| Import wizard | Import first |",
+    "board": "- Import wizard: guided setup for imports.\n- CSV parser: parses every import.\nImport is slow today.\n\n| Item | Note |\n|---|---|\n| CSV parser | Import wizard first |\n| Import wizard | Import first |",
+    "team": "- Import wizard: guided setup for imports.\n- Import: a second importer\n  wrapped-marker.\n- CSV parser: parses every import.\nImport is slow today.\n\n| Item | Note |\n|---|---|\n| CSV parser | Import wizard first |\n| Import | old importer |\n| Import wizard | Import first |",
+    "engineering": "- Import wizard: guided setup for imports.\n- Import: a second importer\n  wrapped-marker.\n- CSV parser: parses every import.\nImport is slow today.\n\n| Item | Note |\n|---|---|\n| CSV parser | Import wizard first |\n| Import | old importer |\n| Import wizard | Import first |"
+  },
+  {
+    "name": "a goal-less item's entry forms",
+    "items": [
+      {
+        "title": "Import",
+        "no_goal": true
+      },
+      {
+        "title": "CSV parser"
+      }
+    ],
+    "text": "- **Import** — old importer.\n- [Import](#now-import): old importer.\n- Import (must). Old.\n- Import\n- CSV parser.",
+    "board": "- CSV parser.",
+    "team": "- **Import** — old importer.\n- [Import](#now-import): old importer.\n- Import (must). Old.\n- Import\n- CSV parser.",
+    "engineering": "- **Import** — old importer.\n- [Import](#now-import): old importer.\n- Import (must). Old.\n- Import\n- CSV parser."
+  },
+  {
+    "name": "the key column is the Item column",
+    "items": [
+      {
+        "title": "Import",
+        "no_goal": true
+      },
+      {
+        "title": "CSV parser"
+      }
+    ],
+    "text": "| Quarter | Item | Depends on |\n|---|---|---|\n| Q3 | CSV parser | Import |\n| Q4 | Import | — |",
+    "board": "| Quarter | Item |\n| --- | --- |\n| Q3 | CSV parser |",
+    "team": "| Quarter | Item | Depends on |\n|---|---|---|\n| Q3 | CSV parser | Import |\n| Q4 | Import | — |",
+    "engineering": "| Quarter | Item | Depends on |\n|---|---|---|\n| Q3 | CSV parser | Import |\n| Q4 | Import | — |"
+  },
+  {
+    "name": "a bracketed owner keeps the spacing",
+    "items": [],
+    "text": "CSV parser (Owner: Prof. A. B. Smith) ships.",
+    "board": "CSV parser ships.",
+    "team": "CSV parser (Owner: Prof. A. B. Smith) ships.",
+    "engineering": "CSV parser (Owner: Prof. A. B. Smith) ships."
+  },
+  {
+    "name": "a dashed owner leaves no dangling dash",
+    "items": [],
+    "text": "CSV parser — Owner: Dr. Markerson.",
+    "board": "CSV parser.",
+    "team": "CSV parser — Owner: Dr. Markerson.",
+    "engineering": "CSV parser — Owner: Dr. Markerson."
+  },
+  {
+    "name": "an owner in raw HTML keeps the tags",
+    "items": [],
+    "text": "<li>CSV parser. Owner: Dana Markerson</li><li>Bulk import</li>",
+    "board": "<li>CSV parser.</li><li>Bulk import</li>",
+    "team": "<li>CSV parser. Owner: Dana Markerson</li><li>Bulk import</li>",
+    "engineering": "<li>CSV parser. Owner: Dana Markerson</li><li>Bulk import</li>"
+  }
+]
