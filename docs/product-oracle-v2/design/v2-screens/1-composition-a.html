@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Composition · Team workspaces · Product Oracle mockup</title>
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t;})();</script>
+<style>/* Product Oracle mockup base: tokens copied from web/app/globals.css (I3 "Open sky"),
+   component classes transcribed from web/components/ds/*. Static, no external requests. */
+:root{--bg:#f3f6f9;--surface:#fff;--surface2:#eef4fa;--line:#d6e0ea;--line-strong:#7d8ea3;--text:#0d1724;--text2:#4f5d6e;--text-faint:#606a77;--accent:#0369a1;--on-accent:#fff;--accent-ink:#075985;--accent-soft:#e5f3fc;--accent-mid:#b6daf2;--hero:#0c1a2e;--hero-2:#173052;--hero-text:#eef4fa;--hero-text2:#b4c3d4;--hero-line:#2a4568;--hero-accent:#7cc8f8;--brand:#38bdf8;--on-brand:#06101e;--pass:#0a7a55;--pass-bg:#e3f5ee;--warn:#8a5a00;--warn-bg:#fdf3dc;--crit:#b42318;--crit-bg:#fdecea;--na:#5b6878;--na-bg:#eef1f5;--tip:#0d1724;--tip-text:#eef4fa;--spark-fill:rgba(3,105,161,.1);--shadow:0 1px 2px rgba(13,23,36,.06);--tip-shadow:0 12px 32px rgba(13,23,36,.28);--rail:linear-gradient(180deg,#0b3a7a,#06101e);--rail-top:#0b3a7a;--rail-foot:#06101e;--rail-text:#bcd6ee;--rail-hover:#194b89;--rail-active:#225693;--rail-active-text:#fff;--rail-bar:#7cc8f8;--rail-badge:#f5c451;--on-rail-badge:#06101e;--rail-sep:rgba(255,255,255,.16);--rail-avatar:#0369a1;--sans:"Inter Tight","Liberation Sans",ui-sans-serif,system-ui,sans-serif;--mono:"DM Mono","Liberation Mono",ui-monospace,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#06101e;--surface:#0c1a2e;--surface2:#11233b;--line:#1e3350;--line-strong:#5f7087;--text:#eef4fa;--text2:#9fb0c4;--text-faint:#828d9b;--accent:#7cc8f8;--on-accent:#06101e;--accent-ink:#b9e3fc;--accent-soft:#10294a;--accent-mid:#1f4a7a;--hero:#11233b;--hero-2:#1a3352;--hero-text:#eef4fa;--hero-text2:#9fb0c4;--hero-line:#2e4c72;--pass:#4cd9a0;--pass-bg:#0d2e25;--warn:#f5c451;--warn-bg:#3a2a0c;--crit:#ff8a80;--crit-bg:#3a1512;--na:#9aa8b8;--na-bg:#16263b;--tip:#eef4fa;--tip-text:#0d1724;--spark-fill:rgba(124,200,248,.14);--shadow:none;--tip-shadow:0 12px 32px rgba(0,0,0,.5);color-scheme:dark}}
+:root[data-theme=dark]{--bg:#06101e;--surface:#0c1a2e;--surface2:#11233b;--line:#1e3350;--line-strong:#5f7087;--text:#eef4fa;--text2:#9fb0c4;--text-faint:#828d9b;--accent:#7cc8f8;--on-accent:#06101e;--accent-ink:#b9e3fc;--accent-soft:#10294a;--accent-mid:#1f4a7a;--hero:#11233b;--hero-2:#1a3352;--hero-text:#eef4fa;--hero-text2:#9fb0c4;--hero-line:#2e4c72;--pass:#4cd9a0;--pass-bg:#0d2e25;--warn:#f5c451;--warn-bg:#3a2a0c;--crit:#ff8a80;--crit-bg:#3a1512;--na:#9aa8b8;--na-bg:#16263b;--tip:#eef4fa;--tip-text:#0d1724;--spark-fill:rgba(124,200,248,.14);--shadow:none;--tip-shadow:0 12px 32px rgba(0,0,0,.5);color-scheme:dark}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg)}
+body{color:var(--text);font:400 15px/22px var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4,p,dl,dd,ul,ol{margin:0;padding:0}
+ul,ol{list-style:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+a{color:inherit;text-decoration:none}
+svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.i16{width:16px;height:16px}
+.tnum{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:13px}
+.muted{color:var(--text2)}
+.faint{color:var(--text-faint)}
+.b{font-weight:600}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.wrap{flex-wrap:wrap}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.grow{flex:1;min-width:0}
+.ml-auto{margin-left:auto}
+.gap4{gap:4px}.gap12{gap:12px}.gap16{gap:16px}
+.sm{font-size:14px;line-height:20px}.xs{font-size:13px;line-height:18px}
+
+/* Shell: rail 88 px, main, Ask dock 45 px (AppShell.tsx) */
+.shell{display:grid;grid-template-columns:88px minmax(0,1fr) 45px;min-height:100vh}
+.rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--rail);padding:14px 0}
+.rail .logo{margin-bottom:12px}
+.rail a{position:relative;width:70px;display:flex;flex-direction:column;align-items:center;gap:2px;border-radius:10px;padding:7px 0 6px;font-size:13px;line-height:16px;font-weight:500;color:var(--rail-text)}
+.rail a[aria-current=page]{background:var(--rail-active);color:var(--rail-active-text);font-weight:600}
+.rail a[aria-current=page]::before{content:"";position:absolute;top:10px;bottom:10px;left:-9px;width:3px;border-radius:2px;background:var(--rail-bar)}
+.rail .badge{position:absolute;top:4px;right:6px;height:16px;min-width:16px;border-radius:8px;background:var(--rail-badge);color:var(--on-rail-badge);font:600 13px/16px var(--mono);padding:0 4px;text-align:center}
+.rail .spacer{flex:1}
+.rail .sep{height:1px;width:40px;background:var(--rail-sep);margin-bottom:6px}
+.avatar{display:grid;place-items:center;border-radius:999px;background:var(--rail-avatar);color:#fff;font-weight:600;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.rail .avatar{width:38px;height:38px;font-size:14px;margin-top:8px}
+.dock{border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:10px;color:var(--text2)}
+.dock span{writing-mode:vertical-rl;font-size:15px;font-weight:600}
+.phead,.tabbar{display:none}
+main.page{min-width:0;padding:0 24px 24px}
+
+/* Page header (Layout.tsx) */
+.ph{display:flex;min-height:64px;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 0}
+.ph .back{flex-basis:100%;font-size:14px;color:var(--text2)}
+.ph .back a{color:var(--accent-ink);font-weight:600}
+.ph h1{min-width:0;font:700 28px/32px var(--sans);letter-spacing:-.015em}
+.ph h1 small{margin-left:6px;font-size:18px;font-weight:600;letter-spacing:0;color:var(--text2)}
+.ph .chips{display:flex;min-width:0;flex:1 1 auto;flex-wrap:wrap;align-items:center;gap:8px}
+.ph .actions{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px}
+.ph .tabs{order:4;flex-basis:100%;min-width:0}
+.strip{border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:6px 8px;box-shadow:var(--shadow);display:flex;gap:4px;overflow:hidden}
+.strip a{display:flex;align-items:center;height:32px;flex:none;border-radius:8px;padding:0 12px;font-size:15px;font-weight:500;white-space:nowrap}
+.strip a[aria-current=page]{background:var(--accent);color:var(--on-accent)}
+
+/* Layout */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;align-items:start;gap:16px}
+.split.wide-insp{grid-template-columns:minmax(0,1fr) 440px}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+
+/* Panel */
+.panel{min-width:0;border-radius:12px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.panel-h{display:flex;min-height:48px;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:8px 16px}
+.panel-h h2{font:700 18px/24px var(--sans);letter-spacing:-.015em}
+.panel-h .count{font:700 18px/24px var(--sans);letter-spacing:-.015em;color:var(--accent-ink)}
+.panel-h .tools{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.panel-b{padding:12px 16px}
+.panel-f{border-top:1px solid var(--line);padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filters{display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);padding:12px 16px}
+.label{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--text2)}
+.input{width:100%;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);padding:6px 10px;font-size:15px;color:var(--text)}
+textarea.input{min-height:72px;resize:none;line-height:22px}
+.input::placeholder{color:var(--text-faint)}
+
+/* DataTable */
+table.dt{width:100%;table-layout:fixed;border-collapse:collapse;font-size:15px;line-height:22px}
+.dt th{height:36px;background:var(--surface2);padding:0 8px;font-size:13px;line-height:16px;font-weight:600;white-space:nowrap;color:var(--text2);text-align:left}
+.dt th:first-child,.dt td:first-child{padding-left:16px}
+.dt th:last-child,.dt td:last-child{padding-right:16px}
+.dt tr.grp th{border-top:1px solid var(--line);background:var(--surface2);height:36px;padding:0 16px;font-size:15px;font-weight:700;letter-spacing:-.015em;color:var(--text)}
+.dt tr.grp th .n{color:var(--accent-ink);margin-left:6px}
+.dt tbody tr{height:44px;border-top:1px solid var(--line)}
+.dt td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px}
+.dt tr.sel{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent)}
+.dt td.wrapc{white-space:normal}
+.dt .ref{font-family:var(--mono);font-size:14px;color:var(--accent-ink)}
+.rowbtn{display:inline-flex;align-items:center;height:28px;border-radius:8px;border:1px solid var(--line-strong);padding:0 8px;font-size:14px;font-weight:600;background:var(--surface)}
+
+/* Inspector */
+.insp{min-width:0;overflow:hidden;border-radius:16px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.insp-h{background:var(--hero);padding:16px 20px 18px;color:var(--hero-text)}
+.insp-h .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.insp-h .eyebrow{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--hero-text2)}
+.insp-h h2{margin:6px 0 10px;font:700 22px/27px var(--sans);letter-spacing:-.015em;overflow-wrap:anywhere}
+.insp-h .chips{display:flex;flex-wrap:wrap;gap:8px}
+.insp-h .chip.hero{background:var(--hero-2);color:var(--hero-text)}
+.insp-h .sub{color:var(--hero-text2);font-size:14px;line-height:20px}
+.stats{display:grid;border-bottom:1px solid var(--line)}
+.stats>div{display:flex;flex-direction:column-reverse;justify-content:flex-end;padding:14px 8px 12px 20px;min-width:0}
+.stats>div+div{border-left:1px solid var(--line)}
+.stats dt{margin-top:2px;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--text2)}
+.stats dd{font:700 34px/36px var(--sans);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stats dd small{font-size:18px;font-weight:600;letter-spacing:0;color:var(--text2)}
+.isec{border-bottom:1px solid var(--line);padding:14px 20px}
+.isec:last-child{border-bottom:0}
+.isec>.label{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.irow{display:flex;min-height:32px;align-items:center;gap:10px}
+.irow .k{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.irow .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.note{border-radius:8px;border:1px solid var(--line);background:var(--surface2);padding:8px 12px;font-size:15px}
+.quote{border-left:3px solid var(--accent-mid);padding-left:10px;color:var(--text2);font-size:14px;line-height:20px}
+
+/* Chip */
+.chip{display:inline-flex;max-width:100%;align-items:center;gap:6px;padding:0 10px;font-size:13px;font-weight:600;height:26px;border-radius:999px;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip .dot{width:8px;height:8px;flex:none;border-radius:999px;background:currentColor}
+.chip.pass{background:var(--pass-bg);color:var(--pass)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.crit{background:var(--crit-bg);color:var(--crit)}
+.chip.na{background:var(--na-bg);color:var(--na)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.chip.line{border:1px solid var(--line-strong);background:transparent;color:var(--text)}
+.chip.dash{border:1px dashed currentColor}
+.tag{display:inline-grid;height:24px;flex:none;place-items:center;border-radius:6px;padding:0 7px;font:500 13px/1 var(--mono);background:var(--accent-soft);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.na{background:var(--na-bg);color:var(--na)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-weight:600;height:32px;border-radius:8px;padding:0 12px;font-size:14px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text)}
+.btn.primary{height:40px;border-radius:10px;padding:0 16px;font-size:15px;background:var(--accent);color:var(--on-accent);border:0}
+.btn.primary[disabled]{background:var(--accent-mid);color:var(--accent-ink);cursor:not-allowed}
+.btn[disabled]{color:var(--text2);opacity:.7;cursor:not-allowed}
+.btn.solid{background:var(--accent-soft);color:var(--accent-ink);border:0}
+.btn.ghost{border:0;background:transparent;padding:0 10px;font-weight:500;color:var(--text2)}
+.btn.danger{border-color:var(--crit);color:var(--crit)}
+.btn.danger[disabled]{color:var(--text2);border-color:var(--line-strong)}
+.btn.hero{border-color:var(--hero-text2);background:transparent;color:var(--hero-text)}
+.seg{display:inline-flex;max-width:100%;flex:none;overflow:hidden;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface)}
+.seg>*{height:32px;padding:0 12px;font-size:14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--line);font-weight:500;white-space:nowrap}
+.seg>*:last-child{border-right:0}
+.seg>[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.seg b{font-weight:600;color:var(--text2)}
+.seg>[aria-pressed=true] b{color:var(--on-accent)}
+.fchips{display:flex;min-width:0;flex-wrap:wrap;gap:4px}
+.fchip{display:flex;height:32px;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);padding:0 8px;font-size:14px;font-weight:500;white-space:nowrap}
+.fchip[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.fchip b{font-weight:600;color:var(--text2)}
+.fchip[aria-pressed=true] b{color:var(--on-accent)}
+
+/* Notices, empty, loading */
+.notice{border-radius:10px;padding:8px 12px;font-size:14px;line-height:20px;font-weight:500;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.notice.err{background:var(--crit-bg);color:var(--crit)}
+.notice.ok{background:var(--pass-bg);color:var(--pass)}
+.notice.warn{background:var(--warn-bg);color:var(--warn)}
+.notice.info{background:var(--accent-soft);color:var(--accent-ink)}
+.notice .btn{margin-left:auto}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 16px;text-align:center}
+.empty .ic{display:grid;width:48px;height:48px;place-items:center;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink)}
+.empty p{font-size:15px;font-weight:600;color:var(--text2)}
+.empty.small{padding:24px 16px}
+.skel{display:block;height:12px;border-radius:4px;background:var(--surface2)}
+.state-tag{display:inline-block;font:500 13px/18px var(--mono);color:var(--text-faint);border:1px dashed var(--line-strong);border-radius:6px;padding:1px 6px}
+
+/* StatusMark (16 px) */
+.sm-mark{width:16px;height:16px;flex:none}
+
+/* Sheet (phone) */
+.sheet{border-radius:16px 16px 0 0;border-top:1px solid var(--line);background:var(--surface);box-shadow:var(--tip-shadow)}
+.sheet .handle{display:flex;height:24px;align-items:center;justify-content:center}
+.sheet .handle i{height:4px;width:40px;border-radius:999px;background:var(--line-strong)}
+.sheet .st{display:flex;min-height:44px;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:0 4px 0 16px}
+.sheet .st h2{flex:1;font:700 18px/24px var(--sans);letter-spacing:-.015em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Only-phone / only-desktop helpers */
+.phone-only{display:none}
+
+@media (max-width:600px){
+  .shell{display:block;padding-bottom:68px}
+  .rail,.dock{display:none}
+  .phead{position:sticky;top:0;z-index:30;display:flex;height:44px;align-items:center;gap:10px;background:var(--rail-top);padding:0 10px 0 12px}
+  .phead .t{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 17px/24px var(--sans);color:#fff}
+  .phead .ask{display:flex;height:36px;align-items:center;gap:4px;border-radius:8px;padding:0 8px;font-size:15px;font-weight:600;color:#fff}
+  .phead .avatar{width:32px;height:32px;font-size:13px}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:grid;grid-template-columns:repeat(5,1fr);height:68px;background:var(--rail-foot);padding:6px 6px 8px}
+  .tabbar a{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:10px;font-size:13px;line-height:16px;font-weight:500;color:var(--rail-text)}
+  .tabbar a[aria-current=page]{background:var(--rail-active);font-weight:600;color:#fff}
+  .tabbar a[aria-current=page]::before{content:"";position:absolute;left:10px;right:10px;top:-6px;height:3px;border-radius:2px;background:var(--rail-bar)}
+  main.page{padding:0 10px 24px}
+  .strip{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+  .ph{min-height:0;padding:12px 0}
+  .ph h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .split,.split.wide-insp,.grid2,.grid3{grid-template-columns:1fr;gap:12px}
+  .stack{gap:12px}
+  .panel-h{padding:8px 12px}
+  .panel-b,.filters,.panel-f{padding-left:12px;padding-right:12px}
+  .dt thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .dt,.dt tbody{display:block}
+  .dt tbody tr{display:flex;flex-wrap:wrap;min-height:48px;height:auto!important;gap:4px 12px;padding:10px 12px}
+  .dt td{padding:0!important;white-space:normal}
+  .dt td.meta{font-size:14px;color:var(--text2)}
+  .dt td.first{flex-basis:100%;font-weight:500}
+  .dt tr.grp{display:flex;padding:0}
+  .dt tr.grp th{display:flex;align-items:center;flex:1;padding:0 12px}
+  .insp{border-radius:14px}
+  .insp-h{padding:16px}
+  .isec{padding:12px 16px}
+  .stats>div{padding-left:16px}
+  .fchip{height:44px;padding:0 14px}
+  .desk-only{display:none!important}
+  .phone-only{display:block}
+}
+</style></head>
+<body><div class="shell">
+<nav class="rail" aria-label="Main"><a class="logo" href="#" style="width:auto;padding:0;background:none"><svg viewBox="0 0 32 32" width="44" height="44" aria-hidden="true"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g1)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g1)"/></svg></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>Requests</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Baseline</a><a href="#" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h9M5 18h5"/></svg>Priorities</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Plan</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 9l5 3-5 3z"/></svg>Runs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox<span class=badge>3</span></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V5l7-2v18M12 8h7v13M3 21h18"/><path d="M8 8h1M8 12h1M8 16h1M15 12h1M15 16h1"/></svg>Company</a><span class="spacer"></span><span class="sep"></span><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</a><span class="avatar">JP</span></nav>
+<header class="phead"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g2)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g2)"/></svg><span class="t">Composition</span><span class="ask"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9.5a2.3 2.3 0 114 1.6c-.8.6-1.8 1.1-1.8 2.4M12 16.5v.5"/></svg>Ask</span><span class="avatar">JP</span></header>
+<main class="page">
+
+<style>
+.mk-board{margin-top:32px;border:1px dashed var(--line-strong);border-radius:12px;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}.mk-h{grid-column:1/-1;font:700 18px/24px var(--sans);color:var(--text2)}.mk-card{min-width:0}.mk-cap{font:500 13px/18px var(--mono);color:var(--text-faint);margin-bottom:6px}
+.mt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mt .k{font:500 13px/18px var(--mono);color:var(--text-faint)}
+.ord{font:500 13px/18px var(--mono);color:var(--text-faint)}
+.out td:not(:first-child){color:var(--text2)}
+.out .ttl{color:var(--text2);text-decoration:line-through;text-decoration-color:var(--line-strong)}
+.add-mark{box-shadow:inset 4px 0 0 var(--pass)}
+.lay{display:inline-flex;gap:4px}
+.basis{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:14px;line-height:20px;padding:8px 0;border-top:1px solid var(--line)}
+.basis:first-of-type{border-top:0;padding-top:0}
+.basis .p{font:500 13px/20px var(--mono);overflow-wrap:anywhere}
+.basis .d{grid-column:1/-1;color:var(--text2)}
+.ilist li{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:14px;line-height:20px}
+.ilist li .tag{flex:none}
+.draft{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px}
+.chg li{display:flex;align-items:center;gap:8px;min-height:32px;font-size:15px}
+.sign{font:700 15px/1 var(--mono);width:16px;text-align:center}
+.sign.plus{color:var(--pass)}.sign.minus{color:var(--crit)}
+.rev{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.rev:first-child{border-top:0}
+.rev .n{font:700 15px/22px var(--mono)}
+.rev .why{grid-column:2;color:var(--text2);font-size:14px;line-height:20px}
+.mini{font-size:14px}
+.mini .dt tbody tr{height:40px}
+@media (max-width:600px){.draft{grid-template-columns:1fr}.hide-ph{display:none}}
+</style>
+
+<div class="ph">
+  <div class="back"><a href="#">← Team workspaces</a> <span class="mono faint">team-workspaces</span></div>
+  <h1>Composition<small>rev 3 in force</small></h1>
+  <div class="chips">
+    <span class="chip acc">Viewing as approver</span>
+    <span class="chip pass"><span class="dot"></span>Confirmed rev 3</span>
+    <span class="chip warn dash"><span class="dot"></span>Working draft rev 4</span>
+    <span class="tag">oracle-default v3</span>
+    <span class="chip line">Pack: General Tech Startup · default</span>
+  </div>
+  <div class="actions">
+    <button class="btn">Preview recommendation</button>
+    <button class="btn">Publish rev 3</button>
+    <button class="btn primary">Confirm rev 5…</button>
+  </div>
+  <div class="tabs"><nav class="strip"><a href="#" aria-current="page">Modules</a><a href="#">Catalog</a><a href="#">Company policy</a><a href="#">History</a></nav></div>
+</div>
+
+<div class="split">
+  <div class="stack">
+    <div class="notice warn"><b>Company policy changed Oct 20.</b> Compositions are only flagged; confirm a new revision to apply it. <button class="btn">Preview with new policy</button></div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Modules</h2><span class="count">8 of 9 included</span>
+        <div class="tools"><div class="seg"><span aria-pressed="true">Working rev 4</span><span>Confirmed rev 3</span></div></div>
+      </div>
+      <div class="filters"><div class="fchips"><span class="fchip" aria-pressed="true">All <b>9</b></span><span class="fchip">Mandatory <b>6</b></span><span class="fchip">Suggested <b>2</b></span><span class="fchip">Optional <b>1</b></span><span class="fchip">Excluded <b>1</b></span><span class="fchip">Has problems <b>1</b></span></div></div>
+      <table class="dt">
+        <thead><tr><th style="width:44px">#</th><th>Module</th><th style="width:118px">Selection</th><th style="width:150px">Decided by</th><th style="width:116px">Layout</th><th style="width:88px">Version</th></tr></thead>
+        <tbody>
+          <tr class="grp"><th colspan="6">Mandatory<span class="n">6</span></th></tr>
+          <tr><td class="meta ord">1</td><td class="first"><div class="mt"><span class="trunc">Executive decision</span><span class="k">decision.executive</span></div></td><td class="meta"><span class="chip pass">Mandatory</span></td><td class="meta">Company policy</td><td class="meta"><span class="lay"><span class="tag">B 1</span><span class="tag na">F 0</span></span></td><td class="meta mono">1.0.0</td></tr>
+          <tr><td class="meta ord">2</td><td class="first"><div class="mt"><span class="trunc">Strategy alignment</span><span class="k">strategy.alignment</span></div></td><td class="meta"><span class="chip pass">Mandatory</span></td><td class="meta">Pack policy</td><td class="meta"><span class="lay"><span class="tag">B 1</span><span class="tag">F 1</span></span></td><td class="meta mono">1.1.0</td></tr>
+          <tr><td class="meta ord">3</td><td class="first"><div class="mt"><span class="trunc">Goals and outcomes</span><span class="k">goals.outcomes</span></div></td><td class="meta"><span class="chip pass">Mandatory</span></td><td class="meta">Pack policy</td><td class="meta"><span class="lay"><span class="tag">B 1</span><span class="tag">F 2</span></span></td><td class="meta mono">2.0.0</td></tr>
+          <tr><td class="meta ord">4</td><td class="first"><div class="mt"><span class="trunc">Constraints, blockers &amp; solutions</span><span class="k">constraints.solutions</span></div></td><td class="meta"><span class="chip pass">Mandatory</span></td><td class="meta">Pack policy</td><td class="meta"><span class="lay"><span class="tag na">B 0</span><span class="tag">F 3</span></span></td><td class="meta mono">1.0.0</td></tr>
+          <tr><td class="meta ord">7</td><td class="first"><div class="mt"><span class="row"><span class="trunc">Risk register</span><span class="chip crit">1 field problem</span></span><span class="k">risks.register</span></div></td><td class="meta"><span class="chip pass">Mandatory</span></td><td class="meta">Pack policy</td><td class="meta"><span class="lay"><span class="tag">B 1</span><span class="tag">F 1</span></span></td><td class="meta mono">1.2.0</td></tr>
+          <tr><td class="meta ord">8</td><td class="first"><div class="mt"><span class="trunc">Sources and data points</span><span class="k">sources.data-points · always last</span></div></td><td class="meta"><span class="chip pass">Mandatory</span></td><td class="meta">Company policy</td><td class="meta"><span class="lay"><span class="tag na">B 0</span><span class="tag">F 4</span></span></td><td class="meta mono">1.0.0</td></tr>
+          <tr class="grp"><th colspan="6">Suggested<span class="n">2</span></th></tr>
+          <tr class="sel"><td class="meta ord">5</td><td class="first"><div class="mt"><span class="row"><span class="trunc">Economics and value</span><span class="tag">latest 1.3.0</span></span><span class="k">economics.value</span></div></td><td class="meta"><span class="chip warn">Suggested</span></td><td class="meta">Condition holds</td><td class="meta"><span class="lay"><span class="tag">B 1</span><span class="tag">F 2</span></span></td><td class="meta mono">1.2.0</td></tr>
+          <tr class="out"><td class="meta ord">—</td><td class="first"><div class="mt"><span class="trunc ttl">Agent tool policies</span><span class="k">agents.tool-policies · owner review</span></div></td><td class="meta"><span class="chip warn">Suggested</span></td><td class="meta">User removed</td><td class="meta"><span class="chip na">Excluded</span></td><td class="meta mono">1.0.0</td></tr>
+          <tr class="grp"><th colspan="6">Optional<span class="n">1</span></th></tr>
+          <tr class="add-mark"><td class="meta ord">6</td><td class="first"><div class="mt"><span class="row"><span class="trunc">Tenant isolation</span><span class="chip pass">+ in draft</span></span><span class="k">platform.tenant-isolation</span></div></td><td class="meta"><span class="chip na">Optional</span></td><td class="meta">Added by Jun Park</td><td class="meta"><span class="lay"><span class="tag">B 1</span><span class="tag">F 2</span></span></td><td class="meta mono">1.0.0</td></tr>
+        </tbody>
+      </table>
+      <div class="panel-f"><span class="sm muted">1 section no module claims: <span class="tag na">glossary</span> (kept as written) · B = brief sections, F = full sections</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><h2>Working draft rev 4</h2><span class="chip warn dash">Supersedes nothing until confirmed</span><span class="tools sm muted">Started from rev 3 · Jun Park · Oct 22</span></div>
+      <div class="panel-b draft">
+        <div class="col">
+          <span class="label">Changes against rev 3</span>
+          <ul class="chg">
+            <li><span class="sign plus">+</span>Tenant isolation <span class="tag">platform.tenant-isolation</span></li>
+            <li class="muted sm">Order: Tenant isolation after Economics and value</li>
+          </ul>
+          <div class="note sm"><b>Material change.</b> Approvals on <span class="tag">tenant-boundaries</span> <span class="tag">isolation-tests</span> <span class="tag">data-residency</span> will be invalidated when confirmed.</div>
+        </div>
+        <div class="col">
+          <label class="label" for="why">Reason (required)</label>
+          <textarea id="why" class="input">Workspaces share one database across customers, so isolation needs its own reviewed section.</textarea>
+          <div class="row wrap"><span class="sm faint">Based on rev 4 (head)</span><span class="ml-auto"></span><button class="btn">Save as working</button><button class="btn primary">Confirm rev 5</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="insp desk-only">
+    <div class="insp-h">
+      <div class="top"><span class="eyebrow">Module · conditional · built-in</span><button class="btn hero">Catalog entry</button></div>
+      <h2>Economics and value</h2>
+      <div class="chips"><span class="chip warn">Suggested</span><span class="chip hero">Included</span><span class="chip hero">v1.2.0</span><span class="chip hero">Policy: pack</span></div>
+    </div>
+    <dl class="stats" style="grid-template-columns:repeat(3,1fr)"><div><dd>1</dd><dt>Brief sections</dt></div><div><dd>2</dd><dt>Full sections</dt></div><div><dd>2</dd><dt>New to template</dt></div></dl>
+    <div class="isec"><div class="label">Why it is here</div>
+      <p class="sm">Suggested because the condition holds: scope lists usage billing.</p>
+      <ul class="ilist muted"><li>· Pack General Tech Startup marks it conditional.</li><li>· No company policy for this module.</li></ul>
+    </div>
+    <div class="isec"><div class="label">What it rests on <span class="faint">basis</span></div>
+      <div class="basis"><span class="p">scope.capabilities contains "usage_billing"</span><span class="chip pass">Holds</span><span class="d">Read: <span class="mono">["usage_billing","sso"]</span> · <b>User decision</b> · source: intake · evidence <span class="tag">ev-2231</span></span></div>
+      <div class="basis"><span class="p">audience.segment in ["smb","mid"]</span><span class="chip na">Missing</span><span class="d">Not answered yet · <b>Unknown</b></span></div>
+    </div>
+    <div class="isec"><div class="label">Missing information</div>
+      <ul class="ilist"><li><span class="tag warn">high</span>Who pays for a workspace seat? <span class="faint">economics</span></li><li><span class="tag na">med</span>Expected change in revenue per account</li></ul>
+    </div>
+    <div class="isec"><div class="label">Brief / full layout</div>
+      <div class="irow"><span class="k">Brief</span><span class="tag">value-hypothesis</span></div>
+      <div class="irow"><span class="k">Full · new</span><span class="tag">unit-economics</span><span class="tag">pricing-impact</span></div>
+    </div>
+    <div class="isec"><div class="label">Dependencies &amp; conflicts</div>
+      <div class="irow"><span class="k">Depends on</span><span class="tag">goals.outcomes</span></div>
+      <div class="irow"><span class="k">Required by</span><span class="v faint">—</span></div>
+      <div class="irow"><span class="k">Conflicts with</span><span class="v faint">—</span></div>
+    </div>
+    <div class="isec"><div class="label">Version</div>
+      <div class="irow"><span class="k">In use</span><span class="tag">1.2.0 built-in</span></div>
+      <div class="irow"><span class="k">Latest</span><span class="tag">1.3.0 company</span><span class="chip acc">Latest</span></div>
+      <div class="irow"><span class="k">Advisory score</span><span class="v">0.72</span></div>
+      <p class="xs faint">The score is shown for context and never decides.</p>
+    </div>
+    <div class="isec row wrap"><button class="btn danger">Remove from draft…</button><button class="btn">Move up</button><button class="btn">Move down</button></div>
+  </aside>
+</div>
+
+<p class="mk-cap phone-only" style="margin-top:16px">Phone: tapping a row opens this sheet</p>
+<div class="sheet phone-only">
+  <div class="handle"><i></i></div>
+  <div class="st"><h2>Economics and value</h2><button class="btn ghost">Close</button></div>
+  <div class="insp" style="border:0;border-radius:0;box-shadow:none">
+    <dl class="stats" style="grid-template-columns:repeat(3,1fr)"><div><dd>1</dd><dt>Brief</dt></div><div><dd>2</dd><dt>Full</dt></div><div><dd>2</dd><dt>New</dt></div></dl>
+    <div class="isec"><div class="row wrap"><span class="chip warn">Suggested</span><span class="chip acc">Included</span><span class="tag">1.2.0</span></div></div>
+    <div class="isec"><div class="label">Why it is here</div><p class="sm">Suggested because the condition holds: scope lists usage billing.</p></div>
+    <div class="isec"><div class="label">What it rests on</div><div class="basis"><span class="p">scope.capabilities contains "usage_billing"</span><span class="chip pass">Holds</span><span class="d">User decision · <span class="tag">ev-2231</span></span></div></div>
+    <div class="isec"><div class="label">Missing information</div><ul class="ilist"><li><span class="tag warn">high</span>Who pays for a workspace seat?</li></ul></div>
+    <div class="isec"><div class="label">Dependencies</div><div class="irow"><span class="k">Depends on</span><span class="tag">goals.outcomes</span></div></div>
+    <div class="isec row wrap"><button class="btn danger">Remove from draft…</button></div>
+  </div>
+</div>
+
+<section class="mk-board"><h2 class="mk-h">States &amp; roles · mockup board</h2>
+  <div class="mk-card"><div class="mk-cap">tab: Catalog (GET /module-catalog)</div>
+    <div class="panel mini"><div class="panel-h"><h2>Catalog</h2><span class="count">9</span><div class="tools"><span class="fchip" aria-pressed="true">All packs</span></div></div>
+      <table class="dt"><tbody>
+        <tr><td class="first"><div class="mt">Economics and value<span class="k">economics.value · 1.2.0</span></div></td><td class="meta" style="width:96px"><span class="chip na">No policy</span></td></tr>
+        <tr><td class="first"><div class="mt">Executive decision<span class="k">decision.executive · 1.0.0</span></div></td><td class="meta" style="width:96px"><span class="chip pass">Required</span></td></tr>
+        <tr><td class="first"><div class="mt">Agent tool policies<span class="k">agents.tool-policies · owner review</span></div></td><td class="meta" style="width:96px"><span class="chip acc">Optional</span></td></tr>
+      </tbody></table></div></div>
+  <div class="mk-card"><div class="mk-cap">tab: Company policy, as approver (read only)</div>
+    <div class="panel"><div class="panel-h"><h2>Company policy</h2><span class="chip na">Owner edits</span></div><div class="panel-b col">
+      <div class="irow"><span class="k" style="flex:none">Required</span><span class="row wrap gap4" style="margin-left:auto;justify-content:flex-end"><span class="tag">decision.executive</span><span class="tag">sources.data-points</span></span></div>
+      <div class="irow"><span class="k">Optional</span><span class="tag">agents.tool-policies</span></div>
+      <div class="irow"><span class="k">Disabled</span><span class="faint">—</span></div>
+      <div class="irow"><span class="k">Default packs</span><span class="tag">startup.standard</span></div>
+      <span class="xs faint">Updated Oct 20</span></div></div></div>
+  <div class="mk-card"><div class="mk-cap">tab: History (revisions[], newest first)</div>
+    <div class="panel"><div class="panel-b">
+      <div class="rev"><span class="n">4</span><span class="row"><span class="chip warn dash">Working</span><span class="sm muted">Jun Park · Oct 22</span></span><span class="why">+ platform.tenant-isolation · from rev 3</span></div>
+      <div class="rev"><span class="n">3</span><span class="row"><span class="chip pass">Confirmed</span><span class="sm muted">Mara Osei · Oct 18</span></span><span class="why">“No tool use in scope for v1” · − agents.tool-policies · material</span></div>
+      <div class="rev"><span class="n">2</span><span class="row"><span class="chip acc">Published</span><span class="sm muted">Mara Osei · Oct 9</span></span><span class="why">Pinned to document v5</span></div>
+      <div class="rev"><span class="n">1</span><span class="row"><span class="chip na">Superseded</span><span class="sm muted">Oct 2</span></span><span class="why">First confirmation of the recommendation</span></div>
+    </div></div></div>
+  <div class="mk-card"><div class="mk-cap">legacy: no composition yet (recommendation)</div>
+    <div class="panel"><div class="empty small"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/></svg></span><p>This PRD has no composition yet. Oracle recommends 7 modules from General Tech Startup.</p><button class="btn primary">Review and confirm rev 1</button></div></div></div>
+  <div class="mk-card"><div class="mk-cap">loading</div>
+    <div class="panel"><div class="panel-b col"><span class="skel" style="width:40%"></span><span class="skel"></span><span class="skel"></span><span class="skel" style="width:70%"></span><span class="skel"></span></div></div></div>
+  <div class="mk-card"><div class="mk-cap">empty: no modules match the filter</div>
+    <div class="panel"><div class="empty small"><p>No modules match “Has problems”.</p><button class="btn">Show all</button></div></div></div>
+  <div class="mk-card"><div class="mk-cap">error 409 stale base_revision</div>
+    <div class="notice err">Someone else changed this since you loaded it; reload and try again. <button class="btn">Reload</button></div></div>
+  <div class="mk-card"><div class="mk-cap">error 422 required_module (fatal)</div>
+    <div class="notice err" style="display:block"><b>Can’t confirm.</b><br><span class="tag">required_module</span> Executive decision is required by company policy.</div></div>
+  <div class="mk-card"><div class="mk-cap">error 422 required_dependency</div>
+    <div class="notice err" style="display:block"><span class="tag">required_dependency</span> Strategy alignment is needed by Goals and outcomes. Remove both in the same change.</div></div>
+  <div class="mk-card"><div class="mk-cap">confirmed with non-fatal problems</div>
+    <div class="notice ok" style="display:block">Rev 5 confirmed.</div>
+    <div class="notice warn" style="display:block;margin-top:8px"><span class="tag warn">decision_superseded</span> Your earlier removal of Risk register was set aside: it is now mandatory.</div></div>
+  <div class="mk-card"><div class="mk-cap">error 409 publish</div>
+    <div class="notice err">revision 4 is working, not confirmed</div></div>
+  <div class="mk-card"><div class="mk-cap">partial: field_problems / condition_error</div>
+    <div class="panel"><div class="panel-b col">
+      <div class="row"><b>Risk register</b><span class="chip crit">1 field problem</span></div>
+      <div class="sm"><span class="tag">risks[2].owner</span> <span class="muted">required · An owner is required for each risk.</span></div>
+      <div class="sm"><span class="tag warn">condition_error</span> <span class="muted">Tenant isolation: condition could not be read; shown as optional.</span></div></div></div></div>
+  <div class="mk-card"><div class="mk-cap">as owner</div>
+    <div class="insp"><div class="isec"><div class="row"><b>Agent tool policies</b><span class="chip acc">Owner review</span></div><p class="sm muted" style="margin-top:6px">Owners may add or remove this module.</p></div><div class="isec row wrap"><button class="btn">Add to draft…</button><button class="btn">Edit company policy</button></div></div></div>
+  <div class="mk-card"><div class="mk-cap">as approver: owner-review module</div>
+    <div class="insp"><div class="isec"><div class="row"><b>Agent tool policies</b><span class="chip acc">Owner review</span></div></div><div class="isec row wrap"><button class="btn" disabled>Add to draft…</button><span class="sm muted">Requires the owner role</span></div></div></div>
+  <div class="mk-card"><div class="mk-cap">as viewer / commenter</div>
+    <div class="ph" style="padding:0;min-height:0"><div class="chips"><span class="chip acc">Viewing as commenter</span></div><div class="actions"><button class="btn">Preview recommendation</button></div></div>
+    <p class="sm muted" style="margin-top:8px">Read only. Preview writes nothing; confirming and publishing need an approver.</p></div>
+</section>
+
+</main>
+<aside class="dock desk-only"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc8f8"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g3)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g3)"/></svg><span>Ask Oracle</span></aside>
+<nav class="tabbar" aria-label="Tabs"><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Plan</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</a></nav>
+</div></body></html>

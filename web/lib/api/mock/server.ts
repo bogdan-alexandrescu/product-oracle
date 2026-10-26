@@ -3510,6 +3510,48 @@ function goalLinks(db: Db): V2Db["section_links"] {
   return out;
 }
 
+/**
+ * v2 screen 3 "evidence" scenario: Checkout redesign PRD v2's sections linked to baseline
+ * evidence (one from a removed source, one behind a claim), a restricted source item, a
+ * feature and a stale link to a proposed one; and one link on the approved Usage alerts v1.
+ */
+function evidenceLinks(db: Db): V2Db["section_links"] {
+  const doc = findDocument(db, "checkout-redesign");
+  if (!doc) return [];
+  const v2 = docVersions(db, doc)[1];
+  const alerts = findDocument(db, "usage-alerts");
+  const approved = alerts ? docVersions(db, alerts).find((v) => v.approved_at) : undefined;
+  const entity = (key: string) => db.baseline.entities.find((e) => e.key === key)?.id ?? null;
+  const evidence = (ref: string) => db.baseline.evidence.find((e) => e.ref === ref)?.id ?? null;
+  const out: V2Db["section_links"] = [];
+  const link = (
+    v: VersionRow | undefined,
+    section_key: string,
+    kind: V2Db["section_links"][number]["kind"],
+    target: { entity_id?: string | null; evidence_id?: string | null; source_item_id?: string | null },
+    more: { precision?: "section" | "paragraph" | "claim"; claim?: string; stale?: boolean; module_key?: string; at?: string } = {},
+  ) => {
+    if (!v || !v.sections.some((s) => s.section_key === section_key)) return;
+    if (!target.entity_id && !target.evidence_id && !target.source_item_id) return;
+    out.push({
+      id: uuid(), document_id: v.document_id, version_id: v.id, section_key,
+      // A stale link was made on an earlier revision of its section.
+      section_hash: more.stale ? "0".repeat(16) : (v.sections.find((s) => s.section_key === section_key)?.content_hash ?? null),
+      composition_revision: more.module_key ? 1 : null, module_key: more.module_key ?? null, kind,
+      entity_id: target.entity_id ?? null, evidence_id: target.evidence_id ?? null, source_item_id: target.source_item_id ?? null,
+      precision: more.precision ?? "section", claim: more.claim ?? null, created_by: db.user_id, created_at: more.at ?? v.created_at,
+    });
+  };
+  link(v2, "problem", "evidences", { evidence_id: evidence("Sample store spec") }, { precision: "paragraph" });
+  link(v2, "problem", "mentions", { source_item_id: "6f1e2d3c-4b5a-4968-8778-a1b2c3d4e5f6" }, { precision: "paragraph" });
+  link(v2, "goal-trace", "claims", { evidence_id: evidence("#sales thread") }, { precision: "claim", claim: "Week-1 activation rises once the cost shows early." });
+  link(v2, "goal-trace", "implements", { entity_id: entity("f.usage-export") }, { stale: true, at: "2026-10-16T15:00:00Z" });
+  link(v2, "scope", "tests", { entity_id: entity("f.guided-setup") }, { precision: "paragraph", module_key: "acceptance-criteria" });
+  link(v2, "risks", "evidences", { evidence_id: evidence("Onboarding review (meeting)") }, { stale: true });
+  link(approved, "behaviour", "evidences", { evidence_id: evidence("Sample store spec") });
+  return out;
+}
+
 /** The v2 rows, seeded on first use against the first mock PRD. */
 /** Every use of a source item (A2 coverage): baseline evidence, citations and section links. */
 function itemUses(db: Db): Schemas["UsedIn"][] {
@@ -3565,6 +3607,7 @@ function ensureV2(db: Db): V2Db {
     db.v2 = seeded("v2", () => {
       const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
       v2.section_links.push(...goalLinks(db));
+      if (localStorage.getItem(MOCK_SCENARIO_KEY) === "evidence") v2.section_links.push(...evidenceLinks(db));
       return v2;
     });
   }
@@ -4069,6 +4112,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         versions: db.versions,
         entities: db.baseline.entities,
         edges: db.baseline.edges,
+        evidence: db.baseline.evidence,
         userId: me.id,
         role: me.role,
         now,
