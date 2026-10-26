@@ -756,15 +756,17 @@ async def _oracle_ref_problems(
             )
         )
         found = {(t, k) for t, k in rows}
+    # The citation's id is the key the draft's author wrote (as the parser's refusals
+    # echo it), not a database id.
+    keys = {i: citations[i].id for i, pair in named.items() if pair not in found}
     return [
         ImportProblem(
             code="invalid_citation",
-            message=f"citation #{i + 1} ({citations[i].id}) is invalid: ref names no "
+            message=f"citation #{i + 1} ({key}) is invalid: ref names no "
             "baseline item of this company",
-            cite_key=citations[i].id,
+            cite_key=key,
         )
-        for i, pair in named.items()
-        if pair not in found
+        for i, key in keys.items()
     ]
 
 
