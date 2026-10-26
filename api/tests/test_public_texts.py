@@ -232,6 +232,9 @@ def test_plain_customer_words_have_no_finding():
     assert leak_check.check(text, _ctx()) == []
     # A name must match as words, not inside another word.
     assert leak_check.check("Acme Rivalry board games", _ctx()) == []
+    # A one-word slug is an ordinary word; a year range is not a phone number.
+    assert leak_check.check("Import your data", _ctx(slugs=["import"])) == []
+    assert leak_check.check("Our plans for 2026-2027", _ctx()) == []
 
 
 def test_the_public_page_has_only_allowlisted_fields():

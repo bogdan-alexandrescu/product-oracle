@@ -38,6 +38,8 @@ WARNINGS = ("money_or_metric", "date", "internal_title_copy")
 # Shorter names match too often inside ordinary words to be told apart from them.
 MIN_NAME = 3
 NOTE_WORDS = 5
+# A phone number has at least this many digits ("2026-2027" is a range of years).
+PHONE_DIGITS = 9
 MAX_TEXT = 2000
 
 _EMAIL = re.compile(r"[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
@@ -99,6 +101,23 @@ def _names(text: str, names: list[str]) -> list[str]:
         if f" {n} " in padded:
             out.append(name)
     return out
+
+
+def _slug_in(slug: str, lowered: str) -> bool:
+    """A document slug as a whole token. Only hyphenated slugs count: a one-word slug
+    ("import") is an ordinary word."""
+    slug = (slug or "").lower()
+    if "-" not in slug or len(slug) < MIN_NAME:
+        return False
+    start = lowered.find(slug)
+    while start != -1:
+        end = start + len(slug)
+        before = lowered[start - 1] if start else " "
+        after = lowered[end] if end < len(lowered) else " "
+        if not (before.isalnum() or before in "-_") and not (after.isalnum() or after in "-_"):
+            return True
+        start = lowered.find(slug, start + 1)
+    return False
 
 
 def _person_names(ctx: LeakContext) -> list[str]:
@@ -186,12 +205,14 @@ def check(
     people = _names(text, _person_names(ctx))
     people += [e for e in ctx.emails if e and e.lower() in text.lower() and e not in emails]
     add("person_name", people)
-    add("email_or_phone", emails + [m.group(0).strip() for m in _PHONE.finditer(text)])
+    phones = [m.group(0).strip() for m in _PHONE.finditer(text)]
+    phones = [p for p in phones if sum(c.isdigit() for c in p) >= PHONE_DIGITS]
+    add("email_or_phone", emails + phones)
     add("customer_name", _names(text, ctx.customers))
     add("alternative_name", _names(text, ctx.alternatives))
     codes = [m.group(0) for p in (_TRACKER, _GOAL, _DECISION) for m in p.finditer(text)]
     lowered = text.lower()
-    codes += [s for s in ctx.slugs if s and len(s) >= MIN_NAME and s.lower() in lowered]
+    codes += [s for s in ctx.slugs if _slug_in(s, lowered)]
     add("internal_code", codes)
     add("internal_host", _hosts(text, ctx))
     add("internal_document", _names(text, ctx.hidden_documents))
