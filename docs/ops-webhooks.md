@@ -99,7 +99,9 @@ never a run's token; each is audited with the credential used). It is stored enc
 - A webhook whose every delivery failed for 72 hours (at least 5 deliveries) pauses
   (`failing`); its creator and every owner get the Inbox row "Webhook <name> paused: failing
   for 3 days". Resuming sends what is still within 24 hours; older deliveries are `failed`
-  and can be redelivered by hand.
+  and can be redelivered by hand. A resume starts the count again (`webhooks.resumed_at`):
+  the webhook reads Active until a delivery fails after it, and the 72 hours run from the
+  resume, not from the old failures.
 - At least once, not ordered: each body has `occurred_at`.
 - The minute tick (`ticker/router.py`, `_tick_company`) fans out new events and sends due
   deliveries with up to 15 s of the company's tick. Webhooks are sent side by side, each with
