@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -7,13 +8,20 @@ import { login } from "./helpers";
  * panel docked on a 1512 px window the PRD header's action buttons squeezed its template and
  * theme pills, whose text wrapped inside their 26 px height and ran over the next pill, and
  * /runs cut its rows' buttons off at the table's right edge. Checked at 1512 and 1280 px, with
- * the panel open and closed, as a person opens it: the Ask strip.
+ * the panel open and closed, as a person opens it: the Ask strip. The PRD has a title as long as
+ * real ones are (the mock's "long-title" scenario): the mock's short title left the old header
+ * room enough that its squeezed pills stacked in a column without any pill's text wrapping.
+ * /runs is swept from 1280 to 1600 px in 10 px steps (#711's review: the window's width does
+ * not tell how much room the table has beside the panel).
  *
  * Cards: PRD header: protects=each pill keeps its text on one line at its 26 px height, and the
- * status row drops to its own line when the actions leave no room; fails_when=a pill wraps,
- * grows or overlaps the title, another pill or a button; no_claim=the order of the actions.
- * Runs table: protects=every row's button is fully visible inside the table and the window;
- * fails_when=the last column is cut off; no_claim=which columns a narrow table drops.
+ * status row drops to its own line when the actions leave no room, its chip and pills on one row;
+ * fails_when=a pill wraps, grows, overlaps the title, another pill or a button, or the pills
+ * stack in a narrow column; no_claim=the order of the actions.
+ * Runs table: protects=every row's button is fully visible inside the table and the window at
+ * every width, and with the panel closed the inspector stays beside the table; fails_when=the
+ * last column is cut off, or the closed-panel layout moves the inspector below; no_claim=which
+ * columns a narrow table drops, where the inspector sits with the panel open.
  */
 
 const SIZES = [
@@ -49,7 +57,7 @@ function overlaps(a: Box, b: Box) {
   return a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 }
 
-/** The pill's height and the height of its text's lines (one line: under 26 px). */
+/** The pill's top and height, and the height of its text's lines (one line: under 26 px). */
 async function pillMetrics(page: Page, text: string) {
   const pill = page.locator("main [data-page-header]").getByText(text, { exact: true });
   await expect(pill).toBeVisible();
@@ -57,9 +65,13 @@ async function pillMetrics(page: Page, text: string) {
     const range = document.createRange();
     range.selectNodeContents(el);
     const tops = new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top)));
-    return { height: el.getBoundingClientRect().height, lines: tops.size, textHeight: range.getBoundingClientRect().height };
+    const box = el.getBoundingClientRect();
+    return { top: box.top, height: box.height, lines: tops.size, textHeight: range.getBoundingClientRect().height };
   });
 }
+
+/** An invented PRD title as long as real ones are (the "long-title" scenario's). */
+const LONG_TITLE = "Saved carts for returning buyers PRD";
 
 for (const size of SIZES) {
   for (const open of [true, false]) {
@@ -67,18 +79,29 @@ for (const size of SIZES) {
 
     // PRD header card.
     test(`PRD header at ${where}: the template and theme pills stay on one line and nothing overlaps`, async ({ page }) => {
+      await page.addInitScript(([key]) => localStorage.setItem(key, "long-title"), [MOCK_SCENARIO_KEY] as const);
       await page.setViewportSize(size);
       await login(page);
       await page.goto("/documents/saved-carts");
-      await expect(page.getByRole("heading", { level: 1, name: /Saved carts PRD/ })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: LONG_TITLE })).toBeVisible();
       await expect(page.getByRole("link", { name: "Composition" })).toBeVisible();
       await setPanel(page, open);
 
+      const tops: number[] = [];
       for (const text of ["template oracle-default v2", "theme clean-document"]) {
         const m = await pillMetrics(page, text);
         expect(m.height, `${text} height`).toBe(26);
         expect(m.lines, `${text} lines`).toBe(1);
         expect(m.textHeight, `${text} text height`).toBeLessThan(26);
+        tops.push(m.top);
+      }
+      // The status chip and both pills share one row (beside the title or wrapped below it as
+      // a group), never a column of pills squeezed beside the title.
+      const status = (await page.locator("main [data-page-header] [data-status]").first().boundingBox())!;
+      const chipMiddle = status.y + status.height / 2;
+      for (const top of tops) {
+        expect(Math.abs(top - tops[0]!), "the pills' tops").toBeLessThanOrEqual(2);
+        expect(Math.abs(top + 13 - chipMiddle), "the pills' middles and the status chip's").toBeLessThanOrEqual(2);
       }
       const boxes = await headerBoxes(page);
       expect(boxes.length).toBeGreaterThanOrEqual(5);
@@ -88,27 +111,44 @@ for (const size of SIZES) {
       const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
       expect(scroll).toBeLessThanOrEqual(inner);
     });
+  }
+}
 
-    // Runs table card.
-    test(`/runs at ${where}: every row's button is inside the table and the window`, async ({ page }) => {
-      await page.setViewportSize(size);
-      await login(page);
-      await page.goto("/runs");
-      await setPanel(page, open);
-      const table = page.getByTestId("runs-table");
-      const buttons = table.getByTestId("run-row").getByRole("button");
-      await expect(buttons.first()).toBeVisible();
-      const count = await buttons.count();
-      expect(count).toBeGreaterThan(0);
+// Runs table card: every 10 px from 1280 to 1600, with the panel open and closed.
+const WIDTHS = Array.from({ length: 33 }, (_, i) => 1280 + i * 10);
+
+for (const open of [true, false]) {
+  test(`/runs from 1280 to 1600 px, Ask panel ${open ? "open" : "closed"}: every row's button is inside the table and the window`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1512, height: 806 });
+    await login(page);
+    await page.goto("/runs");
+    await setPanel(page, open);
+    const table = page.getByTestId("runs-table");
+    const buttons = table.getByTestId("run-row").getByRole("button");
+    const inspector = page.getByRole("complementary", { name: "Run", exact: true });
+    await expect(buttons.first()).toBeVisible();
+    const count = await buttons.count();
+    expect(count).toBeGreaterThan(0);
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 806 });
+      await expect(page.getByTestId("hop-dock")).toHaveAttribute("data-open", String(open));
       const t = (await table.boundingBox())!;
       const panel = open ? (await page.getByTestId("hop-dock").boundingBox())! : null;
       for (let i = 0; i < count; i++) {
         const b = buttons.nth(i);
-        await expect(b).toBeInViewport({ ratio: 1 });
+        await expect(b, `button ${i} at ${width} px`).toBeInViewport({ ratio: 1 });
         const box = (await b.boundingBox())!;
-        expect(box.x + box.width, `button ${i} right edge`).toBeLessThanOrEqual(t.x + t.width);
-        if (panel) expect(box.x + box.width, `button ${i} under the panel`).toBeLessThanOrEqual(panel.x);
+        expect(box.x, `button ${i} left edge at ${width} px`).toBeGreaterThanOrEqual(t.x);
+        expect(box.x + box.width, `button ${i} right edge at ${width} px`).toBeLessThanOrEqual(t.x + t.width);
+        if (panel) expect(box.x + box.width, `button ${i} under the panel at ${width} px`).toBeLessThanOrEqual(panel.x);
       }
-    });
-  }
+      // The panel-closed layout is as it was before #711: the inspector beside the table
+      // on any window over 1100 px.
+      if (!open) {
+        const ins = (await inspector.boundingBox())!;
+        expect(ins.x, `the inspector beside the table at ${width} px`).toBeGreaterThanOrEqual(t.x + t.width);
+      }
+    }
+  });
 }
