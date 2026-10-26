@@ -153,6 +153,32 @@ test("waiting: the run page says it waits for v2's roadmap items before the Engi
   expect(above && dates && prd && above.y > prd.y && above.y < dates.y).toBeTruthy();
 });
 
+/**
+ * Oracle's ticker: POST /v1/internal/tick. The mock API lives in the page, so the call goes
+ * through the mock's own fetch, as page.request would reach the real API.
+ */
+async function tick(page: Page) {
+  const code = await page.evaluate(async () => {
+    const fetchMock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> }).__poMockFetch!;
+    const res = await fetchMock(new Request(new URL("/v1/internal/tick", location.origin), { method: "POST" }));
+    return res.status;
+  });
+  expect(code).toBe(200);
+}
+
+test("wait ends: once v2's roadmap items are ready, the Engineering dates run and their stop opens", async ({ page }) => {
+  // protects=the wait for the draft's items ends on a tick and the dates stop opens on the run page; fails_when=the waiting line stays, or the Engineering dates never reach their review; no_claim=E1's derivation itself (draft-roadmap.spec).
+  await withScenario(page, "eng-dates");
+  await login(page);
+  await page.goto(`/runs/${ENG_DATES_WAITING_RUN}`);
+  await expect(page.getByTestId("waiting-for")).toHaveText("Waiting for v2's roadmap items");
+  await tick(page);
+  await tick(page);
+  await page.reload();
+  await expect(page.getByTestId("waiting-for")).toHaveCount(0);
+  await expect(page.getByTestId("segment-eng_dates").getByTestId("review-screen-line")).toContainText("2 Now items · 1 to decide");
+});
+
 test("phone: at 390 px the rows are cards, the decision bar stays on screen and nothing scrolls sideways", async ({ page }) => {
   // protects=the screen at 390 px; fails_when=rows are not stacked cards, the decision bar is off screen, or the page scrolls sideways; no_claim=other phone layouts.
   await page.setViewportSize({ width: 390, height: 844 });
