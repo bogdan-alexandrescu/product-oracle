@@ -28,6 +28,7 @@ Flow = Literal[
     "metrics_variance",
     "pricing_memo",
     "competitive_digest",
+    "intake_analysis",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[
@@ -1383,6 +1384,16 @@ class InboxRequestReply(BaseModel):
     counts: bool
 
 
+class InboxIntakeRead(BaseModel):
+    """INT2: Oracle couldn't read an intake of mine twice or more in a row (the fallback
+    job failing too); counted until a read succeeds or the intake closes."""
+
+    intake_id: uuid.UUID
+    title: str
+    failures: int
+    at: datetime | None = None
+
+
 class InboxOut(BaseModel):
     checkpoints: list[InboxCheckpoint]
     # Those with the checkpoint's approver role: decisions recorded and not delivered to
@@ -1458,6 +1469,8 @@ class InboxOut(BaseModel):
     discussions: list[InboxDiscussionItem] = []
     # H10: replies to send, asked again, answers to my requests; counted ones in ``total``.
     requests: list[InboxRequestReply] = []
+    # INT2: intakes of mine Oracle couldn't read twice in a row; each counted in ``total``.
+    intake_reads: list[InboxIntakeRead] = []
 
 
 FeatureState = Literal["on", "off", "unknown"]

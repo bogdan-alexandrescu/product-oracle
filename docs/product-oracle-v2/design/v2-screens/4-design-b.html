@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Design: Early shipping cost · Product Oracle mockup</title>
+<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t;})();</script>
+<style>/* Product Oracle mockup base: tokens copied from web/app/globals.css (I3 "Open sky"),
+   component classes transcribed from web/components/ds/*. Static, no external requests. */
+:root{--bg:#f3f6f9;--surface:#fff;--surface2:#eef4fa;--line:#d6e0ea;--line-strong:#7d8ea3;--text:#0d1724;--text2:#4f5d6e;--text-faint:#606a77;--accent:#0369a1;--on-accent:#fff;--accent-ink:#075985;--accent-soft:#e5f3fc;--accent-mid:#b6daf2;--hero:#0c1a2e;--hero-2:#173052;--hero-text:#eef4fa;--hero-text2:#b4c3d4;--hero-line:#2a4568;--hero-accent:#7cc8f8;--brand:#38bdf8;--on-brand:#06101e;--pass:#0a7a55;--pass-bg:#e3f5ee;--warn:#8a5a00;--warn-bg:#fdf3dc;--crit:#b42318;--crit-bg:#fdecea;--na:#5b6878;--na-bg:#eef1f5;--tip:#0d1724;--tip-text:#eef4fa;--spark-fill:rgba(3,105,161,.1);--shadow:0 1px 2px rgba(13,23,36,.06);--tip-shadow:0 12px 32px rgba(13,23,36,.28);--rail:linear-gradient(180deg,#0b3a7a,#06101e);--rail-top:#0b3a7a;--rail-foot:#06101e;--rail-text:#bcd6ee;--rail-hover:#194b89;--rail-active:#225693;--rail-active-text:#fff;--rail-bar:#7cc8f8;--rail-badge:#f5c451;--on-rail-badge:#06101e;--rail-sep:rgba(255,255,255,.16);--rail-avatar:#0369a1;--sans:"Inter Tight","Liberation Sans",ui-sans-serif,system-ui,sans-serif;--mono:"DM Mono","Liberation Mono",ui-monospace,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#06101e;--surface:#0c1a2e;--surface2:#11233b;--line:#1e3350;--line-strong:#5f7087;--text:#eef4fa;--text2:#9fb0c4;--text-faint:#828d9b;--accent:#7cc8f8;--on-accent:#06101e;--accent-ink:#b9e3fc;--accent-soft:#10294a;--accent-mid:#1f4a7a;--hero:#11233b;--hero-2:#1a3352;--hero-text:#eef4fa;--hero-text2:#9fb0c4;--hero-line:#2e4c72;--pass:#4cd9a0;--pass-bg:#0d2e25;--warn:#f5c451;--warn-bg:#3a2a0c;--crit:#ff8a80;--crit-bg:#3a1512;--na:#9aa8b8;--na-bg:#16263b;--tip:#eef4fa;--tip-text:#0d1724;--spark-fill:rgba(124,200,248,.14);--shadow:none;--tip-shadow:0 12px 32px rgba(0,0,0,.5);color-scheme:dark}}
+:root[data-theme=dark]{--bg:#06101e;--surface:#0c1a2e;--surface2:#11233b;--line:#1e3350;--line-strong:#5f7087;--text:#eef4fa;--text2:#9fb0c4;--text-faint:#828d9b;--accent:#7cc8f8;--on-accent:#06101e;--accent-ink:#b9e3fc;--accent-soft:#10294a;--accent-mid:#1f4a7a;--hero:#11233b;--hero-2:#1a3352;--hero-text:#eef4fa;--hero-text2:#9fb0c4;--hero-line:#2e4c72;--pass:#4cd9a0;--pass-bg:#0d2e25;--warn:#f5c451;--warn-bg:#3a2a0c;--crit:#ff8a80;--crit-bg:#3a1512;--na:#9aa8b8;--na-bg:#16263b;--tip:#eef4fa;--tip-text:#0d1724;--spark-fill:rgba(124,200,248,.14);--shadow:none;--tip-shadow:0 12px 32px rgba(0,0,0,.5);color-scheme:dark}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg)}
+body{color:var(--text);font:400 15px/22px var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4,p,dl,dd,ul,ol{margin:0;padding:0}
+ul,ol{list-style:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+a{color:inherit;text-decoration:none}
+svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg.i16{width:16px;height:16px}
+.tnum{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:13px}
+.muted{color:var(--text2)}
+.faint{color:var(--text-faint)}
+.b{font-weight:600}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.wrap{flex-wrap:wrap}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.grow{flex:1;min-width:0}
+.ml-auto{margin-left:auto}
+.gap4{gap:4px}.gap12{gap:12px}.gap16{gap:16px}
+.sm{font-size:14px;line-height:20px}.xs{font-size:13px;line-height:18px}
+
+/* Shell: rail 88 px, main, Ask dock 45 px (AppShell.tsx) */
+.shell{display:grid;grid-template-columns:88px minmax(0,1fr) 45px;min-height:100vh}
+.rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--rail);padding:14px 0}
+.rail .logo{margin-bottom:12px}
+.rail a{position:relative;width:70px;display:flex;flex-direction:column;align-items:center;gap:2px;border-radius:10px;padding:7px 0 6px;font-size:13px;line-height:16px;font-weight:500;color:var(--rail-text)}
+.rail a[aria-current=page]{background:var(--rail-active);color:var(--rail-active-text);font-weight:600}
+.rail a[aria-current=page]::before{content:"";position:absolute;top:10px;bottom:10px;left:-9px;width:3px;border-radius:2px;background:var(--rail-bar)}
+.rail .badge{position:absolute;top:4px;right:6px;height:16px;min-width:16px;border-radius:8px;background:var(--rail-badge);color:var(--on-rail-badge);font:600 13px/16px var(--mono);padding:0 4px;text-align:center}
+.rail .spacer{flex:1}
+.rail .sep{height:1px;width:40px;background:var(--rail-sep);margin-bottom:6px}
+.avatar{display:grid;place-items:center;border-radius:999px;background:var(--rail-avatar);color:#fff;font-weight:600;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.rail .avatar{width:38px;height:38px;font-size:14px;margin-top:8px}
+.dock{border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:10px;color:var(--text2)}
+.dock span{writing-mode:vertical-rl;font-size:15px;font-weight:600}
+.phead,.tabbar{display:none}
+main.page{min-width:0;padding:0 24px 24px}
+
+/* Page header (Layout.tsx) */
+.ph{display:flex;min-height:64px;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 0}
+.ph .back{flex-basis:100%;font-size:14px;color:var(--text2)}
+.ph .back a{color:var(--accent-ink);font-weight:600}
+.ph h1{min-width:0;font:700 28px/32px var(--sans);letter-spacing:-.015em}
+.ph h1 small{margin-left:6px;font-size:18px;font-weight:600;letter-spacing:0;color:var(--text2)}
+.ph .chips{display:flex;min-width:0;flex:1 1 auto;flex-wrap:wrap;align-items:center;gap:8px}
+.ph .actions{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px}
+.ph .tabs{order:4;flex-basis:100%;min-width:0}
+.strip{border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:6px 8px;box-shadow:var(--shadow);display:flex;gap:4px;overflow:hidden}
+.strip a{display:flex;align-items:center;height:32px;flex:none;border-radius:8px;padding:0 12px;font-size:15px;font-weight:500;white-space:nowrap}
+.strip a[aria-current=page]{background:var(--accent);color:var(--on-accent)}
+
+/* Layout */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;align-items:start;gap:16px}
+.split.wide-insp{grid-template-columns:minmax(0,1fr) 440px}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+
+/* Panel */
+.panel{min-width:0;border-radius:12px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.panel-h{display:flex;min-height:48px;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:8px 16px}
+.panel-h h2{font:700 18px/24px var(--sans);letter-spacing:-.015em}
+.panel-h .count{font:700 18px/24px var(--sans);letter-spacing:-.015em;color:var(--accent-ink)}
+.panel-h .tools{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.panel-b{padding:12px 16px}
+.panel-f{border-top:1px solid var(--line);padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filters{display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);padding:12px 16px}
+.label{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--text2)}
+.input{width:100%;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);padding:6px 10px;font-size:15px;color:var(--text)}
+textarea.input{min-height:72px;resize:none;line-height:22px}
+.input::placeholder{color:var(--text-faint)}
+
+/* DataTable */
+table.dt{width:100%;table-layout:fixed;border-collapse:collapse;font-size:15px;line-height:22px}
+.dt th{height:36px;background:var(--surface2);padding:0 8px;font-size:13px;line-height:16px;font-weight:600;white-space:nowrap;color:var(--text2);text-align:left}
+.dt th:first-child,.dt td:first-child{padding-left:16px}
+.dt th:last-child,.dt td:last-child{padding-right:16px}
+.dt tr.grp th{border-top:1px solid var(--line);background:var(--surface2);height:36px;padding:0 16px;font-size:15px;font-weight:700;letter-spacing:-.015em;color:var(--text)}
+.dt tr.grp th .n{color:var(--accent-ink);margin-left:6px}
+.dt tbody tr{height:44px;border-top:1px solid var(--line)}
+.dt td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px}
+.dt tr.sel{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent)}
+.dt td.wrapc{white-space:normal}
+.dt .ref{font-family:var(--mono);font-size:14px;color:var(--accent-ink)}
+.rowbtn{display:inline-flex;align-items:center;height:28px;border-radius:8px;border:1px solid var(--line-strong);padding:0 8px;font-size:14px;font-weight:600;background:var(--surface)}
+
+/* Inspector */
+.insp{min-width:0;overflow:hidden;border-radius:16px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.insp-h{background:var(--hero);padding:16px 20px 18px;color:var(--hero-text)}
+.insp-h .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.insp-h .eyebrow{font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--hero-text2)}
+.insp-h h2{margin:6px 0 10px;font:700 22px/27px var(--sans);letter-spacing:-.015em;overflow-wrap:anywhere}
+.insp-h .chips{display:flex;flex-wrap:wrap;gap:8px}
+.insp-h .chip.hero{background:var(--hero-2);color:var(--hero-text)}
+.insp-h .sub{color:var(--hero-text2);font-size:14px;line-height:20px}
+.stats{display:grid;border-bottom:1px solid var(--line)}
+.stats>div{display:flex;flex-direction:column-reverse;justify-content:flex-end;padding:14px 8px 12px 20px;min-width:0}
+.stats>div+div{border-left:1px solid var(--line)}
+.stats dt{margin-top:2px;font-size:13px;line-height:16px;font-weight:600;letter-spacing:.02em;color:var(--text2)}
+.stats dd{font:700 34px/36px var(--sans);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stats dd small{font-size:18px;font-weight:600;letter-spacing:0;color:var(--text2)}
+.isec{border-bottom:1px solid var(--line);padding:14px 20px}
+.isec:last-child{border-bottom:0}
+.isec>.label{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.irow{display:flex;min-height:32px;align-items:center;gap:10px}
+.irow .k{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.irow .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.note{border-radius:8px;border:1px solid var(--line);background:var(--surface2);padding:8px 12px;font-size:15px}
+.quote{border-left:3px solid var(--accent-mid);padding-left:10px;color:var(--text2);font-size:14px;line-height:20px}
+
+/* Chip */
+.chip{display:inline-flex;max-width:100%;align-items:center;gap:6px;padding:0 10px;font-size:13px;font-weight:600;height:26px;border-radius:999px;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip .dot{width:8px;height:8px;flex:none;border-radius:999px;background:currentColor}
+.chip.pass{background:var(--pass-bg);color:var(--pass)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.crit{background:var(--crit-bg);color:var(--crit)}
+.chip.na{background:var(--na-bg);color:var(--na)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.chip.line{border:1px solid var(--line-strong);background:transparent;color:var(--text)}
+.chip.dash{border:1px dashed currentColor}
+.tag{display:inline-grid;height:24px;flex:none;place-items:center;border-radius:6px;padding:0 7px;font:500 13px/1 var(--mono);background:var(--accent-soft);color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.na{background:var(--na-bg);color:var(--na)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;font-weight:600;height:32px;border-radius:8px;padding:0 12px;font-size:14px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text)}
+.btn.primary{height:40px;border-radius:10px;padding:0 16px;font-size:15px;background:var(--accent);color:var(--on-accent);border:0}
+.btn.primary[disabled]{background:var(--accent-mid);color:var(--accent-ink);cursor:not-allowed}
+.btn[disabled]{color:var(--text2);opacity:.7;cursor:not-allowed}
+.btn.solid{background:var(--accent-soft);color:var(--accent-ink);border:0}
+.btn.ghost{border:0;background:transparent;padding:0 10px;font-weight:500;color:var(--text2)}
+.btn.danger{border-color:var(--crit);color:var(--crit)}
+.btn.danger[disabled]{color:var(--text2);border-color:var(--line-strong)}
+.btn.hero{border-color:var(--hero-text2);background:transparent;color:var(--hero-text)}
+.seg{display:inline-flex;max-width:100%;flex:none;overflow:hidden;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface)}
+.seg>*{height:32px;padding:0 12px;font-size:14px;display:flex;align-items:center;gap:8px;border-right:1px solid var(--line);font-weight:500;white-space:nowrap}
+.seg>*:last-child{border-right:0}
+.seg>[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.seg b{font-weight:600;color:var(--text2)}
+.seg>[aria-pressed=true] b{color:var(--on-accent)}
+.fchips{display:flex;min-width:0;flex-wrap:wrap;gap:4px}
+.fchip{display:flex;height:32px;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);padding:0 8px;font-size:14px;font-weight:500;white-space:nowrap}
+.fchip[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--on-accent)}
+.fchip b{font-weight:600;color:var(--text2)}
+.fchip[aria-pressed=true] b{color:var(--on-accent)}
+
+/* Notices, empty, loading */
+.notice{border-radius:10px;padding:8px 12px;font-size:14px;line-height:20px;font-weight:500;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.notice.err{background:var(--crit-bg);color:var(--crit)}
+.notice.ok{background:var(--pass-bg);color:var(--pass)}
+.notice.warn{background:var(--warn-bg);color:var(--warn)}
+.notice.info{background:var(--accent-soft);color:var(--accent-ink)}
+.notice .btn{margin-left:auto}
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 16px;text-align:center}
+.empty .ic{display:grid;width:48px;height:48px;place-items:center;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink)}
+.empty p{font-size:15px;font-weight:600;color:var(--text2)}
+.empty.small{padding:24px 16px}
+.skel{display:block;height:12px;border-radius:4px;background:var(--surface2)}
+.state-tag{display:inline-block;font:500 13px/18px var(--mono);color:var(--text-faint);border:1px dashed var(--line-strong);border-radius:6px;padding:1px 6px}
+
+/* StatusMark (16 px) */
+.sm-mark{width:16px;height:16px;flex:none}
+
+/* Sheet (phone) */
+.sheet{border-radius:16px 16px 0 0;border-top:1px solid var(--line);background:var(--surface);box-shadow:var(--tip-shadow)}
+.sheet .handle{display:flex;height:24px;align-items:center;justify-content:center}
+.sheet .handle i{height:4px;width:40px;border-radius:999px;background:var(--line-strong)}
+.sheet .st{display:flex;min-height:44px;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:0 4px 0 16px}
+.sheet .st h2{flex:1;font:700 18px/24px var(--sans);letter-spacing:-.015em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Only-phone / only-desktop helpers */
+.phone-only{display:none}
+
+@media (max-width:600px){
+  .shell{display:block;padding-bottom:68px}
+  .rail,.dock{display:none}
+  .phead{position:sticky;top:0;z-index:30;display:flex;height:44px;align-items:center;gap:10px;background:var(--rail-top);padding:0 10px 0 12px}
+  .phead .t{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 17px/24px var(--sans);color:#fff}
+  .phead .ask{display:flex;height:36px;align-items:center;gap:4px;border-radius:8px;padding:0 8px;font-size:15px;font-weight:600;color:#fff}
+  .phead .avatar{width:32px;height:32px;font-size:13px}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:grid;grid-template-columns:repeat(5,1fr);height:68px;background:var(--rail-foot);padding:6px 6px 8px}
+  .tabbar a{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:10px;font-size:13px;line-height:16px;font-weight:500;color:var(--rail-text)}
+  .tabbar a[aria-current=page]{background:var(--rail-active);font-weight:600;color:#fff}
+  .tabbar a[aria-current=page]::before{content:"";position:absolute;left:10px;right:10px;top:-6px;height:3px;border-radius:2px;background:var(--rail-bar)}
+  main.page{padding:0 10px 24px}
+  .strip{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+  .ph{min-height:0;padding:12px 0}
+  .ph h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .split,.split.wide-insp,.grid2,.grid3{grid-template-columns:1fr;gap:12px}
+  .stack{gap:12px}
+  .panel-h{padding:8px 12px}
+  .panel-b,.filters,.panel-f{padding-left:12px;padding-right:12px}
+  .dt thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .dt,.dt tbody{display:block}
+  .dt tbody tr{display:flex;flex-wrap:wrap;min-height:48px;height:auto!important;gap:4px 12px;padding:10px 12px}
+  .dt td{padding:0!important;white-space:normal}
+  .dt td.meta{font-size:14px;color:var(--text2)}
+  .dt td.first{flex-basis:100%;font-weight:500}
+  .dt tr.grp{display:flex;padding:0}
+  .dt tr.grp th{display:flex;align-items:center;flex:1;padding:0 12px}
+  .insp{border-radius:14px}
+  .insp-h{padding:16px}
+  .isec{padding:12px 16px}
+  .stats>div{padding-left:16px}
+  .fchip{height:44px;padding:0 14px}
+  .desk-only{display:none!important}
+  .phone-only{display:block}
+}
+</style></head>
+<body><div class="shell">
+<nav class="rail" aria-label="Main"><a class="logo" href="#" style="width:auto;padding:0;background:none"><svg viewBox="0 0 32 32" width="44" height="44" aria-hidden="true"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g1)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g1)"/></svg></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>Requests</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Baseline</a><a href="#" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h9M5 18h5"/></svg>Priorities</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Plan</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 9l5 3-5 3z"/></svg>Runs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox<span class=badge>3</span></a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V5l7-2v18M12 8h7v13M3 21h18"/><path d="M8 8h1M8 12h1M8 16h1M15 12h1M15 16h1"/></svg>Company</a><span class="spacer"></span><span class="sep"></span><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</a><span class="avatar">MO</span></nav>
+<header class="phead"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g2)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g2)"/></svg><span class="t">Design · Early shipping cost</span><span class="ask"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9.5a2.3 2.3 0 114 1.6c-.8.6-1.8 1.1-1.8 2.4M12 16.5v.5"/></svg>Ask</span><span class="avatar">MO</span></header>
+<main class="page">
+
+<style>
+.mk-board{margin-top:32px;border:1px dashed var(--line-strong);border-radius:12px;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}.mk-h{grid-column:1/-1;font:700 18px/24px var(--sans);color:var(--text2)}.mk-card{min-width:0}.mk-cap{font:500 13px/18px var(--mono);color:var(--text-faint);margin-bottom:6px}
+.frame{min-width:0;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;background:var(--surface)}
+.frame-bar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:6px 10px;background:var(--surface2);border-bottom:1px solid var(--line);font:500 13px/18px var(--mono);color:var(--text2)}
+.frame-bar b{font-family:var(--sans);font-weight:600;color:var(--text)}
+.frame-body{padding:12px;overflow:hidden}
+.frame-body svg.art{display:block;width:100%;height:auto}
+/* artifact content: grayscale by product rule (hard-coded greys are the artifact itself) */
+.wf{background:#fff;color:#333;font:400 13px/18px var(--sans);border:1px solid #bbb;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.wf .bar{height:28px;border:2px solid #777;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-weight:700;color:#333}
+.wf .item{display:flex;gap:8px;align-items:center;border:1px dashed #999;border-radius:4px;padding:6px}
+.wf .pic{width:36px;height:36px;flex:none;background:#ddd;border:1px solid #aaa;display:block;min-height:0;padding:0}
+.wf .ln{display:block;height:8px;background:#ccc;border-radius:2px}
+.wf .box{border:2px solid #555;border-radius:4px;padding:8px;background:#f2f2f2}
+.wf .fld{border:1px solid #777;border-radius:4px;padding:4px 8px;color:#777;background:#fff}
+.wf .cta{border:2px solid #333;border-radius:4px;padding:6px;text-align:center;font-weight:700;background:#e6e6e6}
+.wf .row2{display:flex;justify-content:space-between;gap:8px}
+.wf ol.oa{border-top:1px solid #999;padding-top:8px;display:flex;flex-direction:column;gap:4px;list-style:none}
+.wf ol.oa strong{font-family:var(--mono);font-weight:600}
+.ann{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.ann .n{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:999px;background:var(--accent-soft);color:var(--accent-ink);font:700 13px/1 var(--mono)}
+.ann.on .n{background:var(--accent);color:var(--on-accent)}
+.thread{display:flex;flex-direction:column;gap:8px;margin-top:8px;border-left:2px solid var(--line);padding-left:10px}
+.ev{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ev .who{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px;line-height:20px}
+.ev p{font-size:14px;line-height:20px;color:var(--text2);overflow-wrap:anywhere}
+.tl{display:flex;flex-direction:column;gap:14px}
+.mini{width:100%;max-width:220px}
+.mini svg{display:block;width:100%;height:auto}
+.vbtns{display:flex;flex-wrap:wrap;gap:8px}
+.why{font-size:13px;line-height:18px;color:var(--text2)}
+.sheetwrap{margin-top:16px}
+@media (max-width:600px){.frame-body{padding:8px}.vbtns .btn{flex:1}.vbar{flex-direction:column;align-items:stretch!important}.vbtns{width:100%}.panel-f .input{flex:1 1 100%}}
+
+.films{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
+.film{flex:none;width:220px;display:flex;flex-direction:column;overflow:hidden}
+.film .mini{max-width:none;height:130px;overflow:hidden;background:var(--surface2);padding:8px;border-bottom:1px solid var(--line)}
+.film .mini .wf{transform:scale(.55);transform-origin:top left;width:182%}
+.film .mini .wf ol.oa{display:none}
+.vbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px;border-top:1px solid var(--line)}
+.vbar:first-child{border-top:0}
+.cap{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+@media (max-width:600px){.film{width:170px}.film .mini{height:100px}}
+</style>
+<div class="ph"><div class="back"><a href="#">← Early shipping cost · tech brief</a></div><h1>Early shipping cost<small>design</small></h1>
+<div class="chips"><span class="chip acc">Viewing as owner</span><span class="chip line">checkout-redesign v4</span><span class="chip warn"><span class="dot"></span>1 of 2 potentially stale</span><span class="chip na">2 in review</span></div>
+<div class="actions"><a class="btn" href="#">Open tech brief</a></div></div>
+<div class="stack">
+<div class="films" role="list"><a href="#" class="film panel"><div class="mini"><svg class="art" viewBox="0 0 760 300" role="img" aria-label="Checkout flow (user flow, grayscale)" font-family="Liberation Sans, sans-serif" font-size="15">
+<rect width="760" height="300" fill="#fff"/>
+<defs><marker id="art" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#555"/></marker></defs>
+<g stroke="#555" stroke-width="2" fill="none" marker-end="url(#art)">
+<path d="M130 70H170"/><path d="M300 70H340"/><path d="M470 70H510"/><path d="M575 100V150"/><path d="M510 190H470"/><path d="M405 230V250H235"/><path d="M405 150V110"/>
+</g>
+<g stroke="#333" stroke-width="2">
+<rect x="20" y="40" width="110" height="60" rx="8" fill="#f2f2f2"/>
+<rect id="step-cost" x="170" y="40" width="130" height="60" rx="8" fill="#e0e0e0" stroke-width="3"/>
+<rect x="340" y="40" width="130" height="60" rx="8" fill="#f2f2f2"/>
+<rect x="510" y="40" width="130" height="60" rx="8" fill="#f2f2f2"/>
+<path id="step-guest" d="M575 150L635 190L575 230L515 190Z" fill="#fff"/>
+<rect x="340" y="160" width="130" height="60" rx="8" fill="#f2f2f2"/>
+<rect x="105" y="225" width="130" height="50" rx="25" fill="#fff"/>
+</g>
+<g fill="#222" text-anchor="middle">
+<text x="75" y="75">Cart</text>
+<text x="235" y="67">Shipping</text><text x="235" y="85">estimate</text>
+<text x="405" y="67">Postcode</text><text x="405" y="85">check</text>
+<text x="575" y="75">Address</text>
+<text x="575" y="195" font-size="13">Signed in?</text>
+<text x="405" y="195">Payment</text>
+<text x="170" y="255">Confirmed</text>
+</g>
+<g fill="#555" font-size="13"><text x="494" y="182">no</text><text x="412" y="132">edit</text></g>
+</svg></div><div class="col gap4" style="padding:8px 10px"><b class="sm trunc">Checkout flow</b><span class="mono faint trunc">checkout-flow.svg</span><div class="row wrap gap4"><span class="chip acc">In review</span><span class="chip warn"><span class="dot"></span>Potentially stale</span></div></div></a><a href="#" class="film panel" style="border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)"><div class="mini"><div class="wf" aria-label="cart-1.html wireframe (grayscale)"><div class="bar">Cart</div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:70%"></span><span class="ln" style="width:40%"></span></div><span>$48</span></div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:55%"></span><span class="ln" style="width:30%"></span></div><span>$22</span></div>
+<div class="row2"><span>Subtotal</span><b>$70</b></div>
+<div class="box" id="quote-box"><div class="row2"><span>Estimated shipping</span><b>from $4.90</b></div><div class="fld" id="postcode-field" style="margin-top:6px">Postcode</div></div>
+<div class="cta">Checkout</div></div></div><div class="col gap4" style="padding:8px 10px"><b class="sm trunc">Cart</b><span class="mono faint trunc">cart-1.html</span><div class="row wrap gap4"><span class="chip acc">In review</span><span class="chip pass"><span class="dot"></span>Fresh</span></div></div></a><a href="#" class="film panel"><div class="mini"><div class="wf" aria-label="cart-2.html wireframe (grayscale)"><div class="bar">Cart</div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:70%"></span><span class="ln" style="width:40%"></span></div><span>$48</span></div>
+<div class="row2"><span>Subtotal</span><b>$70</b></div>
+<div class="box" id="quote-updated"><div class="row2"><span>Shipping to 40-210</span><b>$5.40</b></div><div class="fld" style="margin-top:6px">40-210 · change</div></div>
+<div class="box" id="free-threshold" style="background:#fff">Add $10 for free shipping</div>
+<div class="cta">Checkout</div></div></div><div class="col gap4" style="padding:8px 10px"><b class="sm trunc">Cart after postcode</b><span class="mono faint trunc">cart-2.html</span><div class="row wrap gap4"><span class="chip acc">In review</span><span class="chip warn">Sanitised</span></div></div></a></div>
+<div class="panel"><div class="panel-h"><h2>Checkout flow</h2><span class="chip line">v1</span><span class="chip line">User flow</span><span class="chip warn"><span class="dot"></span>Potentially stale</span><div class="tools"><span class="why">section s-5-2 changed in checkout-redesign</span></div></div>
+<div class="panel-b"><div class="frame"><div class="frame-bar"><b>Checkout flow</b>checkout-flow.svg · image/svg+xml · 6.2 KB</div><div class="frame-body"><svg class="art" viewBox="0 0 760 300" role="img" aria-label="Checkout flow (user flow, grayscale)" font-family="Liberation Sans, sans-serif" font-size="15">
+<rect width="760" height="300" fill="#fff"/>
+<defs><marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#555"/></marker></defs>
+<g stroke="#555" stroke-width="2" fill="none" marker-end="url(#arb)">
+<path d="M130 70H170"/><path d="M300 70H340"/><path d="M470 70H510"/><path d="M575 100V150"/><path d="M510 190H470"/><path d="M405 230V250H235"/><path d="M405 150V110"/>
+</g>
+<g stroke="#333" stroke-width="2">
+<rect x="20" y="40" width="110" height="60" rx="8" fill="#f2f2f2"/>
+<rect id="step-cost" x="170" y="40" width="130" height="60" rx="8" fill="#e0e0e0" stroke-width="3"/>
+<rect x="340" y="40" width="130" height="60" rx="8" fill="#f2f2f2"/>
+<rect x="510" y="40" width="130" height="60" rx="8" fill="#f2f2f2"/>
+<path id="step-guest" d="M575 150L635 190L575 230L515 190Z" fill="#fff"/>
+<rect x="340" y="160" width="130" height="60" rx="8" fill="#f2f2f2"/>
+<rect x="105" y="225" width="130" height="50" rx="25" fill="#fff"/>
+</g>
+<g fill="#222" text-anchor="middle">
+<text x="75" y="75">Cart</text>
+<text x="235" y="67">Shipping</text><text x="235" y="85">estimate</text>
+<text x="405" y="67">Postcode</text><text x="405" y="85">check</text>
+<text x="575" y="75">Address</text>
+<text x="575" y="195" font-size="13">Signed in?</text>
+<text x="405" y="195">Payment</text>
+<text x="170" y="255">Confirmed</text>
+</g>
+<g fill="#555" font-size="13"><text x="494" y="182">no</text><text x="412" y="132">edit</text></g>
+</svg></div></div>
+<div class="cap"><div class="ann"><span class="n">1</span><p class="sm grow"><span class="tag">cost-early</span> The quote shows before the address step. <span class="tag warn">s-5-2</span> <span class="why">2 comments</span></p></div><div class="ann"><span class="n">2</span><p class="sm grow"><span class="tag">guest-path</span> Guests skip the saved-address branch. <span class="tag na">s-4-1</span> <span class="why">no comments</span></p></div></div></div></div>
+<div class="panel"><div class="panel-h"><h2>Cart wireframes</h2><span class="chip line">v1</span><span class="count">2</span><span class="faint sm">screens</span><span class="chip pass"><span class="dot"></span>Fresh</span><div class="tools"><span class="seg"><button aria-pressed="true">Side by side</button><button>One at a time</button></span></div></div>
+<div class="panel-b grid2">
+<div><div class="frame"><div class="frame-bar"><b>Cart</b>cart-1.html · 3.1 KB</div><div class="frame-body"><div class="wf" aria-label="cart-1.html wireframe (grayscale)"><div class="bar">Cart</div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:70%"></span><span class="ln" style="width:40%"></span></div><span>$48</span></div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:55%"></span><span class="ln" style="width:30%"></span></div><span>$22</span></div>
+<div class="row2"><span>Subtotal</span><b>$70</b></div>
+<div class="box" id="quote-box"><div class="row2"><span>Estimated shipping</span><b>from $4.90</b></div><div class="fld" id="postcode-field" style="margin-top:6px">Postcode</div></div>
+<div class="cta">Checkout</div><ol class="oa"><li><strong>1. quote-box [s-5-2]</strong> The estimate sits under the subtotal before checkout.</li><li><strong>2. postcode-field [s-5-3]</strong> Postcode only; the full address comes later.</li></ol></div></div></div><p class="why" style="margin-top:6px">Sections <span class="tag na">s-5-2</span> <span class="tag na">s-5-3</span> · Requirements <span class="tag">R-12</span></p></div>
+<div><div class="frame"><div class="frame-bar"><b>Cart after postcode</b>cart-2.html · 2.8 KB</div><div class="frame-body"><div class="notice warn" style="margin-bottom:8px">Sanitised: 2 things removed</div><div class="wf" aria-label="cart-2.html wireframe (grayscale)"><div class="bar">Cart</div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:70%"></span><span class="ln" style="width:40%"></span></div><span>$48</span></div>
+<div class="row2"><span>Subtotal</span><b>$70</b></div>
+<div class="box" id="quote-updated"><div class="row2"><span>Shipping to 40-210</span><b>$5.40</b></div><div class="fld" style="margin-top:6px">40-210 · change</div></div>
+<div class="box" id="free-threshold" style="background:#fff">Add $10 for free shipping</div>
+<div class="cta">Checkout</div><ol class="oa"><li><strong>1. quote-updated [s-5-2]</strong> The estimate updates once a postcode is in.</li><li><strong>2. free-threshold [s-5-4]</strong> Says how far the cart is from free shipping.</li></ol></div></div></div><p class="why" style="margin-top:6px">Sections <span class="tag na">s-5-2</span> <span class="tag na">s-5-4</span> · Requirements <span class="tag">R-12</span> <span class="tag">R-14</span></p></div>
+</div></div>
+<div class="panel"><div class="panel-h"><h2>Verdicts</h2><div class="tools"><span class="why">One verdict per version</span></div></div>
+<div class="vbar"><div class="col gap4 grow"><div class="row wrap"><b>Checkout flow</b><span class="chip line">v1</span><span class="chip acc">In review</span><span class="chip warn"><span class="dot"></span>Potentially stale</span></div><p class="why">Approve is off: the PRD changed (s-5-2). Review or reconcile it on the tech brief first.</p></div>
+<div class="vbtns"><button class="btn primary" disabled>Approve</button><button class="btn">Request changes</button><button class="btn danger">Reject</button></div></div><div class="vbar"><div class="col gap4 grow"><div class="row wrap"><b>Cart wireframes</b><span class="chip line">v1</span><span class="chip acc">In review</span><span class="chip pass"><span class="dot"></span>Fresh</span></div><p class="why">Approving supersedes the previously approved wireframes, if any.</p></div>
+<div class="vbtns"><button class="btn primary">Approve</button><button class="btn">Request changes</button><button class="btn danger">Reject</button></div></div>
+<div class="panel-b" style="border-top:1px solid var(--line)"><label class="label">Note (required to request changes or reject)</label><textarea class="input" style="margin-top:6px" placeholder="Say why"></textarea></div></div>
+<div class="panel"><div class="panel-h"><h2>Review timeline</h2><span class="count">5</span><div class="tools"><span class="seg"><button aria-pressed="true">All</button><button>Flow</button><button>Wireframes</button></span></div></div>
+<table class="dt"><thead><tr><th>Note</th><th style="width:120px">Who</th><th style="width:150px">Kind</th><th style="width:280px">On</th><th style="width:120px">When</th></tr></thead><tbody>
+<tr class="grp"><th colspan="5">Checkout flow v1<span class="n">3</span></th></tr>
+<tr><td class="first wrapc">Does the estimate need a postcode first?</td><td class="meta">Ines Duarte</td><td class="meta"><span class="chip na">Comment</span></td><td class="meta mono">1. cost-early</td><td class="meta tnum">24 Oct 16:20</td></tr><tr><td class="first wrapc">"From" price first, exact after postcode.</td><td class="meta">Jun Park</td><td class="meta"><span class="chip na">Comment</span></td><td class="meta mono">1. cost-early</td><td class="meta tnum">24 Oct 17:05</td></tr><tr><td class="first wrapc">section s-5-2 changed in checkout-redesign</td><td class="meta">Oracle</td><td class="meta"><span class="chip warn">Marked stale</span></td><td class="meta mono">version</td><td class="meta tnum">25 Oct 09:12</td></tr>
+<tr class="grp"><th colspan="5">Cart wireframes v1<span class="n">2</span></th></tr>
+<tr><td class="first wrapc">Postcode-only field reads well on the cart.</td><td class="meta">Priya Nair</td><td class="meta"><span class="chip na">Comment</span></td><td class="meta mono">cart-1.html · 2. postcode-field</td><td class="meta tnum">24 Oct 15:10</td></tr><tr><td class="first wrapc">Screen 2 should say when the estimate is final.</td><td class="meta">Tomas Reyes</td><td class="meta"><span class="chip warn">Changes requested</span></td><td class="meta mono">version</td><td class="meta tnum">25 Oct 10:02</td></tr>
+</tbody></table>
+<div class="panel-f"><select class="input" style="width:auto;max-width:100%"><option>Cart wireframes v1 · the version</option><option>cart-1.html · 1. quote-box</option><option>cart-1.html · 2. postcode-field</option></select><input class="input grow" placeholder="Add a comment"><button class="btn solid">Comment</button></div></div>
+</div>
+<p class="mk-cap phone-only" style="margin-top:16px">Phone: tapping a row opens this sheet</p>
+<div class="sheet phone-only sheetwrap"><div class="handle"><i></i></div><div class="st"><h2>cart-2.html</h2><button class="btn ghost">Close</button></div><div class="insp" style="border:0;border-radius:0"><div class="insp-h"><div class="top"><span class="eyebrow">cart-2.html · viewing as owner</span></div><h2>Cart after postcode</h2><div class="chips"><span class="chip hero">Wireframe · screen 2</span><span class="chip pass"><span class="dot"></span>Fresh</span></div></div>
+<div class="isec"><div class="notice warn">Sanitised: attribute onclick on &lt;button&gt;; &lt;script&gt; element and its content</div></div>
+<div class="isec"><div class="label">Annotations</div><ul class="col gap12">
+<li class="ann"><span class="n">1</span><div class="grow"><p class="sm">The estimate updates once a postcode is in.</p><div class="row wrap" style="margin-top:4px"><span class="tag">quote-updated</span><span class="tag na">s-5-2</span></div><p class="why">1 comment</p></div></li>
+<li class="ann"><span class="n">2</span><div class="grow"><p class="sm">Says how far the cart is from free shipping.</p><div class="row wrap" style="margin-top:4px"><span class="tag">free-threshold</span><span class="tag na">s-5-4</span></div><p class="why">No comments yet</p></div></li></ul></div>
+<div class="isec"><div class="irow"><span class="k muted">Media type · size</span><span class="v mono">text/html · 2.8 KB</span></div><div class="irow"><span class="k muted">sha256</span><span class="v mono">71c0…9ab3</span></div></div>
+<div class="isec"><div class="vbtns"><button class="btn primary">Approve wireframes v1</button><button class="btn">Request changes</button><button class="btn danger">Reject</button></div></div></div></div>
+<section class="mk-board"><h2 class="mk-h">States &amp; roles · mockup board</h2><div class="mk-card"><div class="mk-cap">wireframes: one at a time (screen 2 of 2)</div><div class="row" style="margin-bottom:8px"><button class="btn">‹</button><span class="sm b grow">Cart after postcode · 2 / 2</span><button class="btn">›</button></div><div class="frame"><div class="frame-bar">cart-2.html</div><div class="frame-body"><div class="wf" aria-label="cart-2.html wireframe (grayscale)"><div class="bar">Cart</div>
+<div class="item"><span class="pic"></span><div class="grow col gap4"><span class="ln" style="width:70%"></span><span class="ln" style="width:40%"></span></div><span>$48</span></div>
+<div class="row2"><span>Subtotal</span><b>$70</b></div>
+<div class="box" id="quote-updated"><div class="row2"><span>Shipping to 40-210</span><b>$5.40</b></div><div class="fld" style="margin-top:6px">40-210 · change</div></div>
+<div class="box" id="free-threshold" style="background:#fff">Add $10 for free shipping</div>
+<div class="cta">Checkout</div><ol class="oa"><li><strong>1. quote-updated [s-5-2]</strong> The estimate updates once a postcode is in.</li><li><strong>2. free-threshold [s-5-4]</strong> Says how far the cart is from free shipping.</li></ol></div></div></div></div><div class="mk-card"><div class="mk-cap">loading</div><div class="panel"><div class="panel-h"><span class="skel" style="width:160px;height:16px"></span></div><div class="panel-b col"><span class="skel" style="height:180px;border-radius:8px"></span><span class="skel" style="width:70%"></span><span class="skel" style="width:45%"></span></div></div></div><div class="mk-card"><div class="mk-cap">error 404 version</div><div class="panel"><div class="empty small"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M10 12l4 4M14 12l-4 4"/></svg></span><p>design artifact version not found</p><a class="btn" href="#">Back to the tech brief</a></div></div></div><div class="mk-card"><div class="mk-cap">error 404 output (iframe)</div><div class="frame"><div class="frame-bar"><b>Cart · step 3</b> cart-3.html</div><div class="frame-body"><div class="notice err">output 'cart-3.html' not found</div></div></div></div><div class="mk-card"><div class="mk-cap">partial: sanitised (removed[] non-empty)</div><div class="notice warn">Sanitised: Oracle dropped markup from cart-2.html before storing it.</div><ul class="col" style="margin-top:8px"><li class="mono">attribute onclick on &lt;button&gt;</li><li class="mono">&lt;script&gt; element and its content</li></ul></div><div class="mk-card"><div class="mk-cap">regeneration run in progress</div><div class="notice warn"><span class="chip warn"><span class="dot"></span>Potentially stale · regeneration running</span></div><p class="sm muted" style="margin-top:8px">A draft run regenerates this spec from the PRD. <a class="b" style="color:var(--accent-ink)" href="#">Estimate and start it</a></p><p class="why" style="margin-top:4px">Approve stays off until the new version supersedes this one.</p></div><div class="mk-card"><div class="mk-cap">approved</div><div class="row wrap"><span class="chip pass">Approved</span><span class="chip pass"><span class="dot"></span>Fresh</span></div><div class="irow"><span class="k muted">Approved by</span><span class="v">Mara Osei</span></div><div class="irow"><span class="k muted">Approved at</span><span class="v tnum">25 Oct 2026, 10:41</span></div><p class="why">Approving this version superseded the previously approved one, which is now read only.</p></div><div class="mk-card"><div class="mk-cap">superseded / rejected: read only</div><div class="row wrap"><span class="chip na">Superseded</span><span class="chip line">v1</span></div><div class="notice info" style="margin-top:8px">v2 replaced this version. Comments are still allowed; verdicts are not. <a class="btn" href="#">Open v2</a></div><div class="notice err" style="margin-top:8px">409 · version 1 is rejected</div></div><div class="mk-card"><div class="mk-cap">stale: approve refused (409)</div><div class="vbtns"><button class="btn primary" disabled>Approve</button><button class="btn">Request changes</button></div><div class="notice err" style="margin-top:8px">this version may be stale: the PRD it rests on changed since it was written (the reasons are beside its Potentially stale label). Review or reconcile it from its tech brief page (Potentially stale › Review / Reconcile) before approving</div></div><div class="mk-card"><div class="mk-cap">form error 422: verdict note</div><label class="label">Why (required)</label><textarea class="input" style="margin-top:6px;border-color:var(--crit)"></textarea><div class="notice err" style="margin-top:8px">say why: a note is required to request changes or reject</div></div><div class="mk-card"><div class="mk-cap">form error 422: empty comment / verdict on annotation</div><div class="notice err">a comment needs a body</div><div class="notice err" style="margin-top:8px">a verdict is on the version: approve, reject or request changes on it</div></div><div class="mk-card"><div class="mk-cap">empty: no reviews yet</div><div class="panel"><div class="empty small"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span><p>No reviews yet. Comments and verdicts on this version show here.</p></div></div></div><div class="mk-card"><div class="mk-cap">annotation with no reviews</div><div class="ann"><span class="n">2</span><div class="grow"><p class="sm">Postcode only; the full address comes later.</p><div class="row wrap" style="margin-top:4px"><span class="tag">postcode-field</span><span class="tag na">s-5-3</span></div><p class="why" style="margin-top:6px">No comments on this annotation yet.</p></div></div></div><div class="mk-card"><div class="mk-cap">as viewer</div><div class="notice info">You can read this review. Commenting needs the commenter role.</div><p class="why" style="margin-top:6px">No composer, no verdict buttons. (A POST would be 403.)</p></div><div class="mk-card"><div class="mk-cap">as commenter</div><textarea class="input" placeholder="Comment on the version or an annotation"></textarea><div class="row" style="margin-top:8px"><button class="btn solid">Comment</button><span class="why">Verdicts are for the spec's engineering approvers.</span></div></div><div class="mk-card"><div class="mk-cap">as approver not named (403)</div><div class="vbtns"><button class="btn primary" disabled>Approve</button><button class="btn" disabled>Request changes</button><button class="btn danger" disabled>Reject</button></div><div class="notice err" style="margin-top:8px">only the spec's engineering approvers (or an owner) decide on it</div><p class="why" style="margin-top:6px">Engineering approvers: Jun Park, Tomas Reyes. (If none were named, any approver could decide.)</p></div><div class="mk-card"><div class="mk-cap">as owner</div><div class="vbtns"><button class="btn primary">Approve</button><button class="btn">Request changes</button><button class="btn danger">Reject</button></div><p class="why" style="margin-top:6px">Owners always decide. Approving supersedes the previously approved version.</p></div></section>
+</main>
+<aside class="dock desk-only"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc8f8"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><circle cx="16" cy="16" r="13" fill="none" stroke="url(#g3)" stroke-width="3"/><path d="M22 6 L18.3 18.3 L9.5 26 L13.7 13.7 Z" fill="url(#g3)"/></svg><span>Ask Oracle</span></aside>
+<nav class="tabbar" aria-label="Tabs"><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Home</a><a href="#" aria-current=page><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>PRDs</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6M4 12h10M4 18h16"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/></svg>Plan</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>Inbox</a><a href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</a></nav>
+</div></body></html>

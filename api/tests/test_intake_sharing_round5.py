@@ -618,3 +618,12 @@ async def test_b4_only_an_owner_accepts_a_blockers_risk_for_at_most_90_days(clie
     assert resp.status_code == 201, resp.text
     review_at = datetime.fromisoformat(resp.json()["decision"]["review_at"])
     assert review_at <= datetime.now(UTC) + timedelta(days=90, minutes=1)
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")

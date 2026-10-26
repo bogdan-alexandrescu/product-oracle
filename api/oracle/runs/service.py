@@ -9125,6 +9125,25 @@ async def dismiss_overrun(db: AsyncSession, principal: Principal, run_id: uuid.U
     await db.commit()
 
 
+async def end_as_oracle(db: AsyncSession, run_id: uuid.UUID, reason: str) -> bool:
+    """Oracle ends a background run it started itself (INT2: a newer read of the same
+    intake replaces it, or a read that could not start falls back to the built-in job):
+    its live workflow is cancelled (one SwarmCloud does not confirm stays attached and the
+    tick cancels it again), its open segments are cancelled and its tokens revoked. The
+    caller commits. False when the run had already ended."""
+    run = await _get_run(db, run_id, lock=True)
+    if run.status in FINAL:
+        return False
+    for segment in await _segments(db, run.id):
+        if segment.status in ("pending", "running"):
+            unqueue(segment)
+            segment.status = "cancelled"
+            segment.finished_at = _now()
+    await _finish(db, run, "cancelled", reason)
+    await audit.record(db, audit.ORACLE, "run.cancelled", "run", run.id, {"reason": reason})
+    return True
+
+
 async def cancel(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
     """Cancel the run: its workflows are cancelled (a lost submission looked up first, and
     cancelled if it landed), its checkpoints skipped. SwarmCloud is called without the
@@ -9847,6 +9866,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     request_inbox = await request_rows(db, principal)
     counted += sum(1 for r in request_inbox if r.counts)
+    # INT2: intakes of mine Oracle couldn't read twice in a row.
+    from oracle.intake.read import inbox_rows as intake_read_rows
+
+    intake_reads = await intake_read_rows(db, principal)
+    counted += len(intake_reads)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -9906,6 +9930,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         last_seen_at=seen,
         discussions=discussions,
         requests=request_inbox,
+        intake_reads=intake_reads,
     )
 
 
