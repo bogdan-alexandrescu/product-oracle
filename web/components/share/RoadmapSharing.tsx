@@ -296,7 +296,7 @@ function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial
       {pubs.data && !pub && (
         <Notice>
           Publish this version first: a link shows a published version, never a draft.{" "}
-          <Link href={`/documents/${doc}/publish`} className="font-semibold text-accent-ink underline">
+          <Link href={`/documents/${doc}/publish`} onClick={onClose} className="font-semibold text-accent-ink underline">
             Publish
           </Link>
         </Notice>
@@ -324,7 +324,7 @@ function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial
               </span>
               {checkState !== "checked" && (
                 <div className="mt-1">
-                  <Link href={`/documents/${doc}/public`} className="font-semibold text-accent-ink underline">
+                  <Link href={`/documents/${doc}/public`} onClick={onClose} className="font-semibold text-accent-ink underline">
                     Check public version
                   </Link>
                 </div>
@@ -702,7 +702,7 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
   const v = q.data;
   const most = Math.max(1, ...(v?.days ?? []).map((d) => d.views));
   return (
-    <Modal title={`View log: ${link.label}`} onClose={onClose} footer={<Button onClick={onClose}>Close</Button>}>
+    <Modal title={`View log: ${link.label}`} onClose={onClose} footer={<Button onClick={onClose}>Done</Button>}>
       <p className="text-text2">Counts browsers, not people. Oracle never records who opened a link.</p>
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!v && !q.error && <Loading />}

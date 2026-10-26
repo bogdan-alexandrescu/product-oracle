@@ -43,7 +43,7 @@ test("an owner switches the audience: Board hides its sections and goal-less ite
   await audience.getByRole("radio", { name: "Board" }).click();
   await expect(page).toHaveURL(/[?&]audience=board/);
   const board = page.frameLocator('iframe[title="Roadmap for Board"]');
-  await expect(board.getByText("Audience Board")).toBeVisible();
+  await expect(board.getByText("Audience Board", { exact: true })).toBeVisible();
   await expect(board.getByRole("heading", { name: "Dependencies and owners" })).toHaveCount(0);
   await expect(board.getByRole("heading", { name: "Ops console cleanup" })).toHaveCount(0);
   await expect(board.getByText("1 item serves no confirmed goal and is left out.")).toBeVisible();
@@ -101,7 +101,7 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   await holder.getByLabel("Passcode").fill(code);
   await holder.getByRole("button", { name: "Open" }).click();
   const shared = holder.frameLocator('iframe[title="Shared roadmap"]');
-  await expect(shared.getByText("Audience Board")).toBeVisible();
+  await expect(shared.getByText("Audience Board", { exact: true })).toBeVisible();
   await expect(holder.getByRole("button", { name: "Download PDF" })).toBeVisible();
 });
 
@@ -117,7 +117,7 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   await page.goto(path);
   await page.getByLabel("Passcode").fill(code);
   await page.getByRole("button", { name: "Open" }).click();
-  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board")).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
 
   await page.goto(DOC);
   const row = page.getByTestId("share-links").getByRole("row").filter({ hasText: "Board, October meeting" });
@@ -129,7 +129,7 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   await expect(log.getByTestId("view-entry").first()).toContainText("Page");
   await expect(log.getByTestId("distinct-browsers")).toHaveText("1 browser");
   await expect(log.getByTestId("view-day")).toHaveCount(1);
-  await log.getByRole("button", { name: "Close" }).click();
+  await log.getByRole("button", { name: "Done" }).click();
 
   // A new passcode keeps the link: the old one stops opening it, the new one is shown once.
   await row.getByRole("button", { name: "New passcode" }).click();
@@ -140,6 +140,18 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   await expect(rotate.getByText("This passcode is shown once. Send it apart from the link.")).toBeVisible();
   await rotate.getByRole("button", { name: "Done" }).click();
 
+  // The rotation ended this browser's opening: the old passcode no longer opens it, the new one does.
+  await page.goto(path);
+  await expect(page.getByRole("heading", { name: "Enter the passcode" })).toBeVisible();
+  await page.getByLabel("Passcode").fill(code);
+  await page.getByRole("button", { name: "Open" }).click();
+  await expect(page.getByText("That passcode did not open a link.")).toBeVisible();
+  await page.getByLabel("Passcode").fill(fresh);
+  await page.getByRole("button", { name: "Open" }).click();
+  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
+
+  await page.goto(DOC);
+  await expect(row.getByTestId("share-views")).toHaveText("2");
   await row.getByRole("button", { name: "Revoke" }).click();
   const revoke = page.getByRole("dialog", { name: "Revoke link" });
   await revoke.getByLabel("Reason (optional)").fill("Meeting moved");
@@ -171,7 +183,7 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     await page.goto(DOC);
     const audience = page.getByRole("radiogroup", { name: "Audience" });
     await audience.getByRole("radio", { name: "Board" }).click();
-    await expect(page.frameLocator('iframe[title="Roadmap for Board"]').getByText("Audience Board")).toBeVisible();
+    await expect(page.frameLocator('iframe[title="Roadmap for Board"]').getByText("Audience Board", { exact: true })).toBeVisible();
     await expect(audience.getByRole("radio", { name: "Public" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);
     await expect(page.getByTestId("share-links")).toHaveCount(0);
