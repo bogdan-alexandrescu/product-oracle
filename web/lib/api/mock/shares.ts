@@ -716,7 +716,8 @@ export async function routePublicShares(ctx: SharesContext, req: Request, p: str
   }
   if (p[4] === "status" && m === "GET") {
     if (!open) return json(200, { state: "locked" });
-    return json(200, { state: state(link!, at) === "active" ? "active" : "ended" });
+    // allow_download only once the passcode opened the link (owner decision 2026-10-26).
+    return json(200, { state: state(link!, at) === "active" ? "active" : "ended", allow_download: link!.allow_download });
   }
   if (!open) return p[4] === "pdf" ? json(404, { reason: "not_found" }) : html(401, page("Enter the passcode", "<h1>Enter the passcode</h1>"));
   if (state(link!, at) !== "active") return html(410, page("Link ended", `<p>${esc(ENDED)}</p>`));
