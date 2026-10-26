@@ -401,15 +401,17 @@ async def suggestions_out(db: AsyncSession, rows: Iterable[LlmSuggestion]) -> li
 
 
 def shown_note(item: FeedbackItem, suggestion: LlmSuggestion | None) -> str | None:
-    """The item's resolution note as outputs serve it: on a withheld item, a note Accept
-    wrote from its suggestion (an answer's text, a "nothing to change" rationale) is
-    withheld with it. A note a person wrote is shown as written: they wrote it while they
-    could read the answer, and it may quote it (#636 re-review)."""
+    """The item's resolution note as outputs serve it: on a withheld item, a note Oracle
+    wrote from its suggestion (Accept: an answer's text, a "nothing to change" rationale;
+    Dismiss and decline: its pushback reason) is withheld with it. A note a person wrote is
+    shown as written: they wrote it while they could read the answer, and it may quote it
+    (#636 re-review)."""
     note = item.resolution_note
     if item.withheld_at is None or note is None or suggestion is None:
         return note
     final = suggestion.edited_text or suggestion.text
-    if note == f"Answered: {final}" or (suggestion.rationale and note == suggestion.rationale):
+    pushback = (suggestion.pushback or {}).get("reason")
+    if note in {f"Answered: {final}", suggestion.rationale, pushback}:
         return WITHHELD_REASON
     return note
 

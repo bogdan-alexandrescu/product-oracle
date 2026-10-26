@@ -214,7 +214,8 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
       section_key: key,
       section_heading: section?.heading ?? older?.heading ?? key,
       feedback_summary: f?.summary ?? "",
-      text: s.edited_text ?? s.text ?? "",
+      // #636 re-review: none of a withheld item's text (the next draft still takes it).
+      text: f?.withheld_at ? "" : (s.edited_text ?? s.text ?? ""),
       accepted_by: s.decided_by ?? null,
       accepted_by_name: memberName(ctx, s.decided_by),
       accepted_at: s.decided_at ?? null,
@@ -314,7 +315,27 @@ export async function stageRoute(ctx: LlmContext, req: Request, p: string[], liv
   if (!on) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
   f.updated_at = ctx.now();
   const latest = latestOf(ctx, f.document_id)?.number ?? null;
-  return json(200, { ...f, suggestion: s, ...stateOf(f, s, latest) });
+  return json(200, { ...f, resolution_note: shownNote(f, s), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) });
+}
+
+/** A withheld item's suggestion: what its pushback says instead of its reason (jobs.service.WITHHELD_REASON). */
+export const WITHHELD_REASON = "Withheld while its finding is not shared in full";
+
+/** A suggestion as every output serves it (jobs.service.suggestion_out, #636 re-review): on a
+ * withheld item (a late answer whose finding is not shared in full) its text, edited text and
+ * rationale are left out, and its pushback keeps its sources but not its reason. */
+export function shownSuggestion<S extends Suggestion | null>(f: Pick<Feedback, "withheld_at"> | undefined, s: S): S {
+  if (!s || !f?.withheld_at) return s;
+  return { ...s, text: null, edited_text: null, rationale: null, pushback: s.pushback ? { ...s.pushback, reason: WITHHELD_REASON } : null };
+}
+
+/** The item's resolution note as outputs serve it (jobs.service.shown_note): on a withheld item
+ * a note Accept wrote from its suggestion is withheld with it; a person's note is shown as written. */
+export function shownNote(f: Feedback, s: Suggestion | null): string | null {
+  const note = f.resolution_note ?? null;
+  if (!f.withheld_at || note == null || !s) return note;
+  if ([`Answered: ${s.edited_text ?? s.text}`, s.rationale, s.pushback?.reason].includes(note)) return WITHHELD_REASON;
+  return note;
 }
 
 function strip(body: string) {
@@ -614,7 +635,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     const latest = latestOf(ctx, doc.id)?.number ?? null;
     const { state: base, staged_for_version, staged_for_agents } = stateOf(f, s, latest);
     const state: InboxItem["state"] = base === "open" && (!seen || f.created_at > seen) ? "new" : base;
-    const acting = s?.status === "open" ? s : null;
+    const acting = shownSuggestion(f, s?.status === "open" ? s : null);
     counts[state] += 1;
     items.push({
       id: f.id,
@@ -629,7 +650,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
       title: doc.title,
       latest_version: latest,
       state,
-      resolution_note: f.resolution_note ?? null,
+      resolution_note: shownNote(f, s),
       addressed_in_version: f.addressed_in_version ?? null,
       staged_for_version,
       staged_for_agents,

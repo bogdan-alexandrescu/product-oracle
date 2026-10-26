@@ -137,6 +137,8 @@ type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_versio
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
   staged_for_agents_by?: string | null;
+  /** #636 re-review: a kept late-answer item withholding its quote (feedback_items.withheld_at). */
+  withheld_at?: string | null;
 };
 type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
@@ -3908,7 +3910,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // An item kept with its quote withheld reads in full again.
       const kept = db.feedback.find((f) => f.intake_answer_id === input.intake_answer_id);
       if (kept) {
-        Object.assign(kept, { summary: input.summary, updated_at: at });
+        Object.assign(kept, { summary: input.summary, withheld_at: null, updated_at: at });
         touch(db, kept.document_id);
         return { slug: doc.slug, version: kept.raised_on_version };
       }
@@ -3932,7 +3934,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id)) continue;
         const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
         if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
-          Object.assign(f, { summary: LATE_ANSWER_WITHHELD, updated_at: now() });
+          if (!f.withheld_at) Object.assign(f, { summary: LATE_ANSWER_WITHHELD, withheld_at: now(), updated_at: now() });
           kept.push(f.intake_answer_id);
         } else {
           db.feedback.splice(i, 1);
