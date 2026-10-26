@@ -60,7 +60,14 @@ SLUG = "big-roadmap"
 @contextlib.asynccontextmanager
 async def heartbeat():
     """The most CPU time the event loop's thread spent without running this task, in seconds
-    (``[0]``)."""
+    (``[0]``).
+
+    What the worker already holds is collected and frozen first: a full garbage collection
+    that lands on the loop's thread would otherwise scan every object earlier tests left
+    (about 0.9 s in CI), which is not work kept off the loop. Collecting what the window
+    makes still counts."""
+    gc.collect()
+    gc.freeze()
     longest = [0.0]
     stop = asyncio.Event()
 
@@ -78,6 +85,7 @@ async def heartbeat():
     finally:
         stop.set()
         await task
+        gc.unfreeze()
 
 
 def off_the_loop(threads: list[str]) -> None:
