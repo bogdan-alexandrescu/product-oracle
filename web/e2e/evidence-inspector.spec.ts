@@ -281,11 +281,13 @@ test("evidence: removing a target's last link in the coverage view still says Li
   await expect(page.getByTestId("evidence-matrix").locator("tr[data-target]", { hasText: "Guided setup" })).toHaveCount(0);
 });
 
-test("evidence: a link names who made it", async ({ page }) => {
-  await evidenceTab(page, "approver@example.com");
-  await cell(page, "Guided setup", "scope").getByRole("button").click();
-  const insp = page.getByRole("complementary", { name: "Guided setup" });
-  await expect(insp.getByTestId("evidence-link")).toContainText("Admin · ");
+test("evidence: every link names who made it", async ({ page }) => {
+  await open(page, "approver@example.com");
+  await page.goto(`${DOC}/v/2/evidence?view=sections`);
+  await page.getByRole("grid", { name: "Sections" }).getByRole("row", { name: /Goal trace/ }).click();
+  const links = page.getByRole("complementary", { name: "1. Goal trace" }).getByTestId("evidence-link");
+  await expect(links).toHaveCount(4);
+  for (const l of await links.all()) await expect(l).toContainText("Admin · ");
 });
 
 test("evidence: the coverage chips turn phone-sized at 600 px, as the rest of the screen", async ({ page }) => {
@@ -293,7 +295,7 @@ test("evidence: the coverage chips turn phone-sized at 600 px, as the rest of th
   await evidenceTab(page);
   const chip = page.getByRole("group", { name: "Rows shown" }).getByRole("button", { name: /^Links/ });
   expect((await chip.boundingBox())!.height).toBeLessThan(40);
-  await page.setViewportSize({ width: 600, height: 900 });
+  await page.setViewportSize({ width: 599, height: 900 });
   await expect.poll(async () => (await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 });
 
