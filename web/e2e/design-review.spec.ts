@@ -145,6 +145,8 @@ test("approving v2 supersedes v1: v1 links to v2, names who approved it, and sti
   await login(page);
   await openFlow(page);
   await page.getByRole("navigation", { name: "Design artifacts" }).getByRole("link", { name: /Early shipping cost: wireframes · v2/ }).click();
+  // The flow's review stays in the page, hidden, once v2 shows: its Approve is not the one to press.
+  await expect(inspector(page)).toContainText("Early shipping cost: wireframes v2");
   await inspector(page).getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("page-header").filter({ visible: true })).toContainText("Approved");
 
