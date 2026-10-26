@@ -180,18 +180,22 @@ export function describe(ctx: TraceContext, deps: Schemas["ArtifactDependencyOut
   return [...views.values()].sort((a, b) => ORDER[b.freshness] - ORDER[a.freshness] || a.title.localeCompare(b.title));
 }
 
-function plan(views: Schemas["TraceOutput"][]): Schemas["RegenerationProposal"][] {
+function plan(views: Schemas["TraceOutput"][], subjectKind: string): Schemas["RegenerationProposal"][] {
   return views
     .filter((v) => v.status !== "superseded" && v.status !== "rejected")
     .map((v) => {
       const sections = [...new Set((v.dependencies ?? []).map((d) => d.upstream.section_key).filter((k): k is string => Boolean(k)))].sort();
       const keeps = `the current version (v${v.number}${v.approved ? ", approved" : ""}) stays as it is`;
       const scope = sections.length ? `sections ${sections.join(", ")}` : "what changed";
+      // A source's permission changed (oracle.trace.impact): review the claims, regenerate only if they fail.
+      const review = subjectKind === "source_permission";
       return {
         kind: v.kind, category: v.category, artifact_version_id: v.artifact_version_id ?? null,
-        document_version_id: v.document_version_id ?? null, title: v.title, action: "regenerate" as const,
+        document_version_id: v.document_version_id ?? null, title: v.title, action: review ? ("review" as const) : ("regenerate" as const),
         section_keys: sections, entity_ids: [], reasons: v.reasons ?? [], approved: v.approved, keeps_approved_version: true,
-        how: v.category === "roadmap"
+        how: review
+          ? `Check the claims that relied on the changed source (${scope}); regenerate only if they no longer hold. Nothing changes until you decide; ${keeps}.`
+          : v.category === "roadmap"
           ? `Start a roadmap run from the approved PRD version (flow prd_to_roadmap), focused on ${scope}; it imports a new version for review, and ${keeps} until a reviewer approves the new one.`
           : `Propose a new version of this ${(v.artifact_kind ?? v.category).replace("_", " ")} covering only ${scope}, from the current upstream; ${keeps} until a reviewer approves the new one.`,
       };
@@ -207,7 +211,7 @@ function report(
   const affected = describe(ctx, deps, true);
   const counts: Record<string, number> = { total: affected.length, approved: affected.filter((a) => a.approved).length };
   for (const a of affected) counts[a.category] = (counts[a.category] ?? 0) + 1;
-  return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected), counts, truncated: Boolean(ctx.v2.walk_truncated) };
+  return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected, subject.kind), counts, truncated: Boolean(ctx.v2.walk_truncated) };
 }
 
 function linkViews(ctx: TraceContext, version: TraceVersion, key: string): Schemas["SectionLinkView"][] {

@@ -60,7 +60,7 @@ export function PlanSteps({
     <ol className="flex flex-col gap-3" aria-label="Steps">
       <Step title="1 · Settle staleness">
         {mayAct ? (
-          <Settle output={output} onChanged={onChanged} />
+          <Settle output={output} review={proposal.action === "review"} onChanged={onChanged} />
         ) : (
           <p className="text-sm text-text2">
             You decide on this {isDoc ? output.category.replace("_", " ") : "output"}, so you can regenerate it. Settling its staleness needs an approver.
@@ -122,7 +122,8 @@ function useAction() {
   return { busy, error, run };
 }
 
-function Settle({ output, onChanged }: { output: Output; onChanged: () => void }) {
+/** A "review" row (a source's permission changed) only marks the output reviewed, as mockup C. */
+function Settle({ output, review, onChanged }: { output: Output; review: boolean; onChanged: () => void }) {
   const id = useId();
   const { busy, error, run } = useAction();
   const [reconciling, setReconciling] = useState(false);
@@ -147,6 +148,7 @@ function Settle({ output, onChanged }: { output: Output; onChanged: () => void }
     });
 
   if (f === "fresh" || f === "reconciled") return <p className="text-sm text-text2">Settled: {FRESH[f].label}.</p>;
+  if (review && f !== "potentially_stale") return <p className="text-sm text-text2">Marked reviewed: {FRESH[f].label}.</p>;
   return (
     <div className="flex flex-col gap-2">
       {!reconciling && (
@@ -156,12 +158,16 @@ function Settle({ output, onChanged }: { output: Output; onChanged: () => void }
               Mark reviewed
             </Button>
           )}
-          <Button disabled={busy} onClick={() => void act("accept_regeneration")}>
-            Accept regeneration
-          </Button>
-          <Button variant="ghost" disabled={busy} onClick={() => setReconciling(true)}>
-            Reconcile…
-          </Button>
+          {!review && (
+            <>
+              <Button disabled={busy} onClick={() => void act("accept_regeneration")}>
+                Accept regeneration
+              </Button>
+              <Button variant="ghost" disabled={busy} onClick={() => setReconciling(true)}>
+                Reconcile…
+              </Button>
+            </>
+          )}
         </div>
       )}
       {reconciling && (

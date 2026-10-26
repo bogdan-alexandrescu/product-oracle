@@ -7,6 +7,7 @@ import {
   Chip,
   DataTable,
   Empty,
+  FilterChips,
   Inspector,
   InspectorSection,
   LinkButton,
@@ -164,16 +165,31 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
               </Empty>
             </Panel>
           ) : view === "lineage" ? (
+            // On a phone the plan and the inspector give way to the sheet (both mockups), so an
+            // output's steps are drawn once; the CSS hides them before the media query answers.
             <Split
               inspector={
-                <PlanSidebar report={report} source={source} selected={selected} onPick={pick} rowProps={rowProps} />
+                !phone && (
+                  <div className="max-[600px]:hidden">
+                    <PlanSidebar report={report} source={source} selected={selected} onPick={pick} rowProps={rowProps} />
+                  </div>
+                )
               }
             >
               <Lineage report={report} source={source} selected={selected} onPick={pick} />
               <AffectedList report={report} selected={selected} onPick={pick} />
             </Split>
           ) : (
-            <Split inspector={selected && <OutputInspector report={report} {...rowProps(selected)} />}>
+            <Split
+              inspector={
+                selected &&
+                !phone && (
+                  <div className="max-[600px]:hidden">
+                    <OutputInspector report={report} {...rowProps(selected)} />
+                  </div>
+                )
+              }
+            >
               <OutputTable report={report} selected={selected} onPick={pick} />
               <PlanList report={report} />
               {report.affected_entities.length > 0 && <EntitiesPanel report={report} />}
@@ -435,7 +451,7 @@ function SubjectNode({ report, style }: { report: Report; style: React.CSSProper
   );
 }
 
-/** B's grouped list, below the graph (and instead of it on a phone): outputs by what they were built from. */
+/** B's grouped list, instead of the graph on a phone only: outputs by what they were built from. */
 function AffectedList({ report, selected, onPick }: { report: Report; selected: Output | null; onPick: (o: Output) => void }) {
   const groups = new Map<string, Output[]>();
   for (const o of report.affected) {
@@ -443,7 +459,7 @@ function AffectedList({ report, selected, onPick }: { report: Report; selected: 
     groups.set(label, [...(groups.get(label) ?? []), o]);
   }
   return (
-    <Panel title="Affected outputs" count={report.affected.length}>
+    <Panel title="Affected outputs" count={report.affected.length} className="min-[601px]:hidden">
       {[...groups.entries()].map(([label, os]) => (
         <div key={label} className="border-b border-line last:border-b-0">
           <div className="bg-surface2 px-4 py-1.5 text-[13px] font-semibold text-text2">{label}</div>
@@ -597,6 +613,14 @@ function ProposalBody({ proposal }: { proposal: NonNullable<ReturnType<typeof pr
 
 // --- A: table + inspector ---------------------------------------------------------------
 
+/** Mockup A's filter chips over the table. */
+type Filter = "all" | "stale" | "approved";
+const FILTER: Record<Filter, (o: Output) => boolean> = {
+  all: () => true,
+  stale: (o) => o.freshness === "potentially_stale",
+  approved: (o) => o.approved,
+};
+
 function OutputTable({ report, selected, onPick }: { report: Report; selected: Output | null; onPick: (o: Output) => void }) {
   const columns: Column<Output>[] = [
     {
@@ -624,9 +648,26 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
       },
     },
   ];
-  const rows = [...report.affected].sort((a, b) => a.category.localeCompare(b.category));
+  const [filter, setFilter] = useState<Filter>("all");
+  const shown = report.affected.filter((o) => FILTER[filter](o));
+  const rows = [...shown].sort((a, b) => a.category.localeCompare(b.category));
   return (
-    <Panel title="Affected outputs" count={report.affected.length}>
+    <Panel
+      title="Affected outputs"
+      count={report.affected.length}
+      tools={
+        <FilterChips<Filter>
+          label="Filter outputs"
+          value={filter}
+          onChange={setFilter}
+          items={[
+            { value: "all", label: "All", count: report.affected.length },
+            { value: "stale", label: "Potentially stale", count: report.affected.filter(FILTER.stale).length },
+            { value: "approved", label: "Approved", count: report.affected.filter(FILTER.approved).length },
+          ]}
+        />
+      }
+    >
       <DataTable<Output>
         label="Affected outputs"
         columns={columns}
@@ -635,7 +676,7 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
         selected={selected ? keyOf(selected) : null}
         onSelect={(_, o) => onPick(o)}
         group={(o) => o.category}
-        groupLabel={(g) => `${CATEGORY[g as Output["category"]] ?? g} · ${report.counts[g] ?? rows.filter((o) => o.category === g).length}`}
+        groupLabel={(g) => `${CATEGORY[g as Output["category"]] ?? g} · ${rows.filter((o) => o.category === g).length}`}
       />
     </Panel>
   );

@@ -69,9 +69,15 @@ export function seedImpact(v2: V2Db, ctx: ImpactSeedContext, large: boolean): vo
   };
   v2.deleted_entities = [deleted];
 
+  // Recorded: a source's permission changed under the evidence the users section cites.
+  const revoked = ctx.uuid();
+  v2.change_events.push({
+    id: revoked, subject_kind: "source_permission", subject_id: ctx.uuid(), subject_ref: "source:interviews", document_id: null,
+    cause: "source_permission", actor: `user:${ctx.userId}`, data: {}, handled_by: ["trace.mark_stale"], created_at: AT,
+  } as Schemas["ChangeEventOut"]);
   output("tech_brief", "Early shipping cost brief", "approved", "potentially_stale", [
     { upstream_section_key: "problem" },
-    { upstream_section_key: "users" },
+    { upstream_section_key: "users", caused_by_change_id: revoked },
   ]);
   output("user_flow", "Checkout flow (user flow)", "draft", "potentially_stale", [
     { upstream_section_key: "scope" },
