@@ -103,7 +103,9 @@ const wireframe = (n: number) =>
   `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Cart ${n}</title>` +
   `<style>html{filter:grayscale(100%)!important}body{font-family:system-ui,sans-serif;padding:16px}</style></head>` +
   `<body><main data-oracle-wireframe="1"><h1 id="heading-${n}">Cart ${n}</h1><div data-annotation="cost">Shipping: $4.99 (mocked)</div>` +
-  `<button type="button">Continue</button></main></body></html>\n`;
+  `<button type="button">Continue</button></main>` +
+  // Oracle's sanitiser writes each annotation's label into the footer (api/oracle/specs/sanitize.py).
+  `<aside class="oracle-annotations"><ol><li><strong>1. cost-early [s-5-2]</strong> The quote shows before the address step.</li></ol></aside></body></html>\n`;
 
 function version(id: string, requestId: string, freshness: Schemas["ArtifactVersionOut"]["freshness"]): Schemas["ArtifactVersionOut"] {
   return {
@@ -124,13 +126,16 @@ function request(id: string, kind: Schemas["ArtifactRequestOut"]["kind"], title:
 const note = (target: string): Schemas["AnnotationOut"] => ({
   id: "cost-early", target, note: "The quote shows before the address step.", section_key: "s-5-2", requirement_ids: [I.requirement], reviews: [],
 });
+const guestNote: Schemas["AnnotationOut"] = {
+  id: "guest-path", target: "cart", note: "Guests skip the saved-address branch.", section_key: null, requirement_ids: [], reviews: [],
+};
 
 function design(kind: "user_flow" | "wireframe"): Design {
   const flow = kind === "user_flow";
   const versionId = flow ? I.flowVersion : I.wireVersion;
   const outputs: Schemas["DesignOutputOut"][] = flow
-    ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote")], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
-    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
+    ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote"), guestNote], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
+    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<img> with a remote src"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
   return {
     request_id: flow ? I.flowRequest : I.wireRequest,
     kind,
@@ -311,18 +316,36 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
       const denied = need("commenter");
       if (denied) return denied;
       const data = await body<Schemas["DesignReviewIn"]>();
-      if (data.kind !== "comment" && !atLeast(ctx.role, "approver")) return fail(403, "only the spec's engineering approvers (or an owner) decide on it");
-      if (data.kind === "comment" && !data.body?.trim()) return fail(422, "a comment needs a body");
+      // In the API's order (api/oracle/specs/service.py review_design).
+      let target: Schemas["AnnotationOut"] | undefined;
+      if (data.annotation_id != null || data.output != null) {
+        if (data.annotation_id == null || data.output == null) return fail(422, "name both the output and the annotation_id");
+        target = d.outputs.find((o) => o.name === data.output)?.annotations?.find((a) => a.id === data.annotation_id);
+        if (!target) return fail(422, `no annotation '${data.annotation_id}' on '${data.output}'`);
+      }
+      if (data.kind !== "comment") {
+        if (target) return fail(422, "a verdict is on the version: approve, reject or request changes on it");
+        const spec = ctx.db.specs.find((s) => s.design?.includes(d));
+        const named = spec?.engineering_approver_ids ?? [];
+        const may = ctx.role === "owner" || (atLeast(ctx.role, "approver") && (named.length === 0 || named.includes(ctx.userId)));
+        if (!may) return fail(403, "only the spec's engineering approvers (or an owner) decide on it");
+        if (d.version.status === "superseded" || d.version.status === "rejected") return fail(409, `version ${d.version.number} is ${d.version.status}`);
+        if (data.kind === "approved" && d.version.freshness === "potentially_stale") {
+          return json(409, { detail: `this version ${STALE} it`, refs: { artifact_version: d.version.id } });
+        }
+        if ((data.kind === "changes_requested" || data.kind === "rejected") && !data.body?.trim()) {
+          return fail(422, "say why: a note is required to request changes or reject");
+        }
+      } else if (!data.body?.trim()) return fail(422, "a comment needs a body");
       const event: Schemas["ArtifactReviewEventOut"] = {
         id: ctx.uuid(), version_id: d.version.id, kind: data.kind, body: data.body ?? null, actor: `user:${ctx.userId}`,
-        data: data.annotation_id ? { output: data.output, annotation_id: data.annotation_id } : {}, created_at: ctx.now(),
+        data: target ? { output: data.output, annotation_id: data.annotation_id } : {}, created_at: ctx.now(),
       };
-      const target = data.annotation_id && d.outputs.find((o) => o.name === data.output)?.annotations?.find((a) => a.id === data.annotation_id);
-      if (data.annotation_id && !target) return fail(422, `no annotation '${data.annotation_id}' on '${data.output}'`);
       if (target) target.reviews = [...(target.reviews ?? []), event];
       else d.reviews = [...(d.reviews ?? []), event];
       if (data.kind === "approved") d.version = { ...d.version, status: "approved", approved_by: ctx.userId, approved_at: ctx.now() };
       if (data.kind === "rejected") d.version = { ...d.version, status: "rejected" };
+      if (data.kind === "changes_requested" && d.version.status === "draft") d.version = { ...d.version, status: "in_review" };
       return json(201, { event, version: d.version });
     }
   }

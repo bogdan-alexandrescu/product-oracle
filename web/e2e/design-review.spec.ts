@@ -108,7 +108,7 @@ test("wireframes: switch screens, compare 2-4 side by side, see the sanitised no
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Early shipping cost: wireframes");
   const files = page.getByRole("group", { name: "Files" });
   await expect(files.getByRole("button", { name: "cart-1.html" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. cost [s-5-2]");
+  await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. cost-early [s-5-2]");
   await files.getByRole("button", { name: "cart-2.html" }).click();
   await expect(canvas(page).locator("iframe")).toHaveAttribute("title", /cart-2\.html/);
   await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("Sanitised");
