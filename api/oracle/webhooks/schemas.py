@@ -27,6 +27,8 @@ EventGroup = Literal["runs", "drafts", "approvals"]
 
 
 class WebhookCompany(BaseModel):
+    # Companies have no slug in Oracle: their id and name.
+    id: uuid.UUID
     name: str
 
 

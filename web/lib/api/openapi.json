@@ -113140,12 +113140,18 @@
       },
       "WebhookCompany": {
         "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
           }
         },
         "required": [
+          "id",
           "name"
         ],
         "title": "WebhookCompany",

@@ -280,7 +280,7 @@ def _host(url: str) -> str:
 
 
 async def create(db: AsyncSession, principal: "Principal", body: WebhookIn) -> tuple[Webhook, str]:
-    count = await db.scalar(select(func.count()).select_from(Webhook))
+    count = await db.scalar(select(func.count(Webhook.id)))
     if count >= MAX_PER_COMPANY:
         raise WebhookError("invalid", f"A company has at most {MAX_PER_COMPANY} webhooks")
     if body.include_approvers_content and principal.role != "owner":

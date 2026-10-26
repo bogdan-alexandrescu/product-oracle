@@ -37624,6 +37624,11 @@ export interface components {
         };
         /** WebhookCompany */
         WebhookCompany: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /** Name */
             name: string;
         };
