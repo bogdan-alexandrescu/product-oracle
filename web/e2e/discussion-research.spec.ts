@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openTab } from "./helpers";
+import { login, openTab, signOut } from "./helpers";
 
 /*
  * G2 §4 Research this, from inside a discussion, on the mock layer ("discussion-replies"
@@ -114,4 +114,42 @@ test("a research run that cannot start says so in the thread and can be tried ag
   await question(page).getByRole("button", { name: "Research this" }).click();
   await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
   await expect(thread(page).getByTestId("research-line").filter({ hasText: "Oracle is researching…" })).toBeVisible();
+});
+
+// protects=minor (#606 re-review): a commenter reads that a research start failed, in a
+// plain sentence, never the runs' own words (which can name another run); fails_when=the
+// commenter reads the refusal's text; no_claim=the approver's view (the test above).
+test("a commenter reads a failed research start without the runs' detail", async ({ page }) => {
+  await openDiscussion(page, APPROVER, "research-refused");
+  await question(page).getByRole("button", { name: "Research this" }).click();
+  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
+  await expect(thread(page).getByTestId("research-line")).toContainText("The company's monthly run budget is spent.");
+  await signOut(page);
+
+  await login(page, COMMENTER);
+  await page.goto(SEEDED);
+  await openTab(page, "Feedback");
+  await panel(page).getByTestId("feedback-discussions").click();
+  await panel(page).getByTestId("discussion-row").filter({ hasText: TITLE }).first().click();
+  const line = thread(page).getByTestId("research-line");
+  await expect(line).toHaveAttribute("data-status", "failed");
+  await expect(line).toContainText("Research didn't start: Oracle couldn't start this research.");
+  await expect(line).not.toContainText("budget");
+});
+
+// protects=minor (#606 re-review): a web citation whose address is not http(s) shows its
+// title but opens nothing; fails_when=the card links to a javascript: address;
+// no_claim=other citation kinds (lib/format citationHref).
+test("a cited page whose address is not http(s) is not a link", async ({ page }) => {
+  await openDiscussion(page, APPROVER, "research-unsafe-link");
+  await question(page).getByRole("button", { name: "Research this" }).click();
+  await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
+  const answer = thread(page).getByTestId("discussion-message").filter({ has: page.getByTestId("research-answer") });
+  await expect(answer).toBeVisible({ timeout: 15_000 });
+  const chip = answer.getByTestId("cite-c-2");
+  await chip.hover();
+  const card = page.getByRole("tooltip");
+  await expect(card).toContainText("Caps at Example");
+  await expect(card.getByRole("link")).toHaveCount(0);
+  await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
 });

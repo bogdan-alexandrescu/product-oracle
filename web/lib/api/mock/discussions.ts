@@ -156,6 +156,8 @@ export type DiscussionsContext = {
   refusal?: () => string | null;
   /** G2 §4: the runs' refusal of a research start, worded; null when they start it. */
   researchRefusal?: () => string | null;
+  /** The address the research's web citation carries instead of its own; null: its own. */
+  researchLink?: () => string | null;
   /** #406: the text of the document version a discussion is on, the section it is on first. */
   documentText?: (d: DiscussionRow) => DocumentSection[];
   /** F3 Date bases' rights for me (leads.date_rights): verify, propose, or none. */
@@ -179,6 +181,11 @@ export const RESEARCH_ANSWER =
 /** The "research-refused" scenario: the runs refuse the first research start (as a spent budget or one build at a time would). */
 export const RESEARCH_REFUSED_SCENARIO = "research-refused";
 export const RESEARCH_REFUSED = "The company's monthly run budget is spent.";
+/** What a commenter or a viewer reads of a refused start (the API's research.START_FAILED): approvers read why. */
+export const RESEARCH_START_FAILED = "Oracle couldn't start this research.";
+/** The "research-unsafe-link" scenario: the web page the research cites has an address that is not http(s) (#606 re-review). */
+export const RESEARCH_UNSAFE_LINK_SCENARIO = "research-unsafe-link";
+export const RESEARCH_UNSAFE_LINK = "javascript:alert(document.domain)";
 const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/baseline", confidence: 0.82, low_confidence: false }];
 /** The web page the mock's research read (read:web): a `web` citation linking to it. */
 const RESEARCH_CITATIONS: Record<string, unknown>[] = [
@@ -768,7 +775,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
   const researchOf = (x: MessageRow): Schemas["MessageResearch"] | null =>
     x.run_id
       ? x.research_error
-        ? { run_id: x.run_id, status: "failed", error: x.research_error }
+        ? { run_id: x.run_id, status: "failed", error: atLeast(me.role, "approver") ? x.research_error : RESEARCH_START_FAILED }
         : { run_id: x.run_id, status: db.messages.some((y) => y.run_id === x.run_id && y.author_kind === "oracle") ? "done" : "running", error: null }
       : null;
   const messageOut = (x: MessageRow): Schemas["DiscussionMessageOut"] => ({
@@ -1215,7 +1222,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           mentions_oracle: false,
           reply_to: x.reply_to,
           status: "complete",
-          citations: RESEARCH_CITATIONS,
+          citations: RESEARCH_CITATIONS.map((c) => (c.kind === "web" && ctx.researchLink?.() ? { ...c, url: ctx.researchLink() } : c)),
           run_id: x.run_id,
         });
       }

@@ -2,6 +2,7 @@
 
 import { CitationChip } from "@/components/CitationChip";
 import type { CitationOut } from "@/lib/api/client";
+import { isWebLink } from "@/lib/format";
 
 /** A discussion citation as an Oracle reply carries it. */
 export type Cite = {
@@ -18,7 +19,8 @@ export type Cite = {
 /** A discussion citation as the document citation chip reads it. */
 function chipCitation(c: Cite): CitationOut {
   // A public link, or a web page a research run read (G2 §4, read:web): it opens the page.
-  const link = (c.kind === "public_link" || c.kind === "web") && !!c.url;
+  // Only an http(s) address opens (#606 re-review): never javascript:, data: or the like.
+  const link = (c.kind === "public_link" || c.kind === "web") && isWebLink(c.url);
   return {
     id: `c${c.n}`,
     cite_key: `c:${c.n}`,

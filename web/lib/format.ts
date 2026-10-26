@@ -23,11 +23,22 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   oracle: "Oracle baseline",
 };
 
+/** Whether `url` is an http(s) address (as a browser reads it: spaces and controls dropped). */
+export const isWebLink = (url: string | null | undefined): url is string => !!url && /^https?:/i.test(url.replace(/[\u0000-\u0020]/g, ""));
+
+/** Whether `ref` has a scheme other than http(s) (#606 re-review). */
+const hasOtherScheme = (ref: string) => {
+  const s = ref.replace(/[\u0000-\u0020]/g, "");
+  return /^[a-z][a-z0-9+.-]*:/i.test(s) && !isWebLink(s);
+};
+
 /**
  * Where a citation opens, or null when its ref is not a link: an "oracle" citation names a
- * baseline item in free text ("baseline decision <key> ..."), shown as text.
+ * baseline item in free text ("baseline decision <key> ..."), shown as text, and a ref
+ * with a scheme other than http(s) (javascript:, data:) never opens.
  */
-export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null => (c.source === "oracle" ? null : c.ref);
+export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null =>
+  c.source === "oracle" || hasOtherScheme(c.ref) ? null : c.ref;
 
 /**
  * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,
