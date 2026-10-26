@@ -7,9 +7,10 @@ Every authenticated endpoint takes ``principal: CurrentPrincipal`` and/or
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -309,6 +310,74 @@ def _allowed_origins(request: Request) -> set[str]:
     return {h.lower() for h in hosts if h}
 
 
+CROSS_SITE_REFUSED = "Cross-site request refused"
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+def browser_signed(request: Request) -> bool:
+    """Whether the browser's own credentials sign the request in (the session cookie or
+    Google sign-in's IAP header), not a bearer token a browser never sends on its own."""
+    if request.headers.get("authorization"):
+        return False
+    return bool(
+        request.cookies.get(get_settings().session_cookie_name)
+        or request.headers.get(iap.ASSERTION_HEADER)
+    )
+
+
+def cross_site(request: Request) -> bool:
+    """A request signed in by the browser's credentials that another site sent: its
+    ``Sec-Fetch-Site`` says so, or its ``Origin`` (without one, its ``Referer``) is not
+    one of ours. A request with none of them is not a browser's, and passes."""
+    from urllib.parse import urlsplit
+
+    if not browser_signed(request):
+        return False
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return True
+    origin = request.headers.get("origin")
+    if origin is None:
+        referer = request.headers.get("referer")
+        return bool(referer) and urlsplit(referer).netloc.lower() not in _allowed_origins(request)
+    return origin == "null" or urlsplit(origin).netloc.lower() not in _allowed_origins(request)
+
+
+class SameOriginMiddleware:
+    """:func:`same_origin` on every request that may change something (any method but
+    GET, HEAD and OPTIONS), app-wide: no route, mounted app or route added later goes
+    without it."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope["method"] not in _SAFE_METHODS:
+            if cross_site(Request(scope)):
+                response = JSONResponse({"detail": CROSS_SITE_REFUSED}, 403)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+def body_type(*media_types: str) -> Any:
+    """A raw-body route's Content-Type check (415): a declared type must be one of
+    ``media_types``, and a request the browser signs in itself must declare one, so a
+    form or ``text/plain`` body never reaches the route. A bearer-token script may
+    leave it out."""
+
+    async def check(request: Request) -> None:
+        declared = request.headers.get("content-type")
+        if declared is None and not browser_signed(request):
+            return
+        if (declared or "").split(";", 1)[0].strip().lower() not in media_types:
+            raise HTTPException(
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                f"Send the body as {media_types[0]}",
+            )
+
+    return Depends(check)
+
+
 async def same_origin(request: Request) -> None:
     """Refuse a cross-site request signed in by the browser's own credentials (403).
 
@@ -316,26 +385,10 @@ async def same_origin(request: Request) -> None:
     a run, disable a member): it has no JSON body, so the browser sends it cross-site
     without a CORS preflight, and SameSite=Lax does not cover every case (a same-site
     sibling host, IAP's own cookie). Checked only when the session cookie or Google
-    sign-in signs the request in: a bearer token is never sent by a browser on its own.
-    A browser sends ``Sec-Fetch-Site`` and ``Origin`` on such a request; a request with
-    neither is not a browser's, and passes."""
-    from urllib.parse import urlsplit
-
-    if request.headers.get("authorization"):
-        return
-    ambient = request.cookies.get(get_settings().session_cookie_name) or request.headers.get(
-        iap.ASSERTION_HEADER
-    )
-    if not ambient:
-        return
-    refused = HTTPException(status.HTTP_403_FORBIDDEN, "Cross-site request refused")
-    if request.headers.get("sec-fetch-site") == "cross-site":
-        raise refused
-    origin = request.headers.get("origin")
-    if origin is None:
-        return
-    if origin == "null" or urlsplit(origin).netloc.lower() not in _allowed_origins(request):
-        raise refused
+    sign-in signs the request in: a bearer token is never sent by a browser on its own
+    (:func:`cross_site`). :class:`SameOriginMiddleware` applies it to every write."""
+    if cross_site(request):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, CROSS_SITE_REFUSED)
 
 
 async def get_db(principal: CurrentPrincipal) -> AsyncIterator[AsyncSession]:

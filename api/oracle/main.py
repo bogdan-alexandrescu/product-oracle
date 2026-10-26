@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from oracle import wording
 from oracle.account.router import router as account_router
+from oracle.auth.deps import SameOriginMiddleware
 from oracle.auth.router import router as auth_router
 from oracle.autonomy_router import router as autonomy_router
 from oracle.baseline.goal_interview import router as goal_interview_router
@@ -150,6 +151,8 @@ def create_app() -> FastAPI:
         # operationId = function name, so generated clients get readable names.
         generate_unique_id_function=lambda route: route.name,
     )
+    # The CSRF guard on every write the browser signs in itself (outside it: CORS).
+    app.add_middleware(SameOriginMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

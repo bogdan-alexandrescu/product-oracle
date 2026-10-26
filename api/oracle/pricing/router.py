@@ -12,7 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from oracle.auth.deps import Principal, TenantDB
+from oracle.auth.deps import Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now, require_role_or_absent
 from oracle.decisions import service as decisions_service
 from oracle.decisions.schemas import DecisionOut
@@ -127,6 +127,7 @@ async def delete_deal_outcome(outcome_id: uuid.UUID, db: TenantDB, principal: Ap
 @router.post(
     "/deal-outcomes/import",
     response_model=ImportOut,
+    dependencies=[body_type("text/csv", "application/csv")],
     responses={
         **OUTCOME_ERRORS,
         422: {"description": "Over 1 MB or 2,000 rows, no header row, or not UTF-8 CSV"},

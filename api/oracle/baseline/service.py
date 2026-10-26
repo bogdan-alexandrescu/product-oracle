@@ -53,7 +53,13 @@ MANAGED_ATTRS = {
     "blocker": "the blocker routes (/v1/blockers)",
     # A decided judgement call's entity (H1): the decision log keeps it in step.
     "decision_id": "the decision log (/v1/decisions)",
+    # An intake answer's marks (B4): which intake and gap it came from and the blocker it
+    # suggests. Set only by the answer's own proposal; Promote clears the suggestion.
+    "proposed_blocker": "an intake answer (POST /v1/questions/{id}/answers)",
+    "gap_id": "an intake answer (POST /v1/questions/{id}/answers)",
+    "intake_id": "an intake answer (POST /v1/questions/{id}/answers)",
 }
+INTAKE_ATTRS = ("proposed_blocker", "gap_id", "intake_id")
 EDGE_FIELDS = ("attrs", "status")
 
 
@@ -405,6 +411,9 @@ async def propose(
     payload = _jsonable(
         {"op": op, "kind": kind, "fields": fields, "reason": writer.reason, "origin": writer.origin}
     )
+    if writer.manages:
+        # Its acceptance may write these keys too (:func:`intake_made`).
+        payload["manages"] = list(writer.manages)
     stmt = select(Proposal).where(
         Proposal.status == "open",
         Proposal.entity_id == entity.id if entity else Proposal.entity_id.is_(None),
@@ -489,6 +498,40 @@ async def awaits_answer(db: AsyncSession, payload: dict[str, Any]) -> bool:
         return False
     gap = await db.get(KnowledgeGap, gap_id)
     return gap is not None and gap.intake_id is not None and gap.category == attrs["category"]
+
+
+async def intake_made(db: AsyncSession, proposals: list[Proposal]) -> set[uuid.UUID]:
+    """The proposals an intake answer made, of those carrying an intake's marks: its
+    writer managed them (``payload.manages``), or, proposed before payloads recorded
+    that, it names an answer to the gap it carries, or it is that gap's question-only
+    proposal. Anyone else's is not, whatever its attrs say."""
+    from oracle.v2.models import StakeholderAnswer, StakeholderQuestion
+
+    out: set[uuid.UUID] = set()
+    for p in proposals:
+        payload = p.payload or {}
+        attrs = (payload.get("fields") or {}).get("attrs") or {}
+        if not isinstance(attrs, dict) or not set(attrs) & set(INTAKE_ATTRS):
+            continue
+        if set(INTAKE_ATTRS) <= set(payload.get("manages") or ()):
+            out.add(p.id)
+        elif payload.get("origin") != "agent" or p.run_id is not None:
+            continue
+        elif "answer_id" in attrs:
+            try:
+                answer_id = uuid.UUID(str(attrs["answer_id"]))
+            except ValueError:
+                continue
+            gap_id = await db.scalar(
+                select(StakeholderQuestion.gap_id)
+                .join(StakeholderAnswer, StakeholderAnswer.question_id == StakeholderQuestion.id)
+                .where(StakeholderAnswer.id == answer_id)
+            )
+            if gap_id is not None and str(gap_id) == str(attrs.get("gap_id")):
+                out.add(p.id)
+        elif await awaits_answer(db, payload):
+            out.add(p.id)
+    return out
 
 
 async def list_proposals(
@@ -683,7 +726,9 @@ async def decide_proposal(
     if accept:
         p = proposal.payload
         reason = note or p.get("reason") or f"accepted proposal {proposal.id}"
-        writer = Writer(principal, "user", run_id=proposal.run_id, reason=reason)
+        # Only an intake answer's own proposal writes its marks (MANAGED_ATTRS).
+        manages = INTAKE_ATTRS if proposal.id in await intake_made(db, [proposal]) else ()
+        writer = Writer(principal, "user", run_id=proposal.run_id, reason=reason, manages=manages)
         fields = _without(dict(p.get("fields") or {}), skipped)
         if p["kind"] == "entity":
             if p["op"] == "create":
