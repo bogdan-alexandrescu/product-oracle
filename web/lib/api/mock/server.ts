@@ -23,7 +23,7 @@ import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import { afterAccept, goalInterviewReply, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
+import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
 import {
   discussionInboxRows,
@@ -2611,6 +2611,19 @@ function addReview(
   return r;
 }
 
+/** B6 Goals interview's context: its routes, and G3's Propose on a goal version, write through it. */
+function goalContext(db: Db, me: { id: string; role: Role }): GoalInterviewContext {
+  return {
+    baseline: db.baseline,
+    discussions: () => (db.discussions ??= emptyDiscussions()),
+    members: db.members,
+    me: { id: me.id, role: me.role },
+    isMember: (id) => activeMember(db, id),
+    uuid,
+    now,
+  };
+}
+
 function lockedKeys(db: Db, v: VersionRow): string[] {
   return v.sections
     .filter((s) => latestReview(db, v.id, s.section_key)?.verdict === "approved")
@@ -3609,6 +3622,12 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (me.role === "owner" || (leads.includes(me.id) && atLeast(me.role, "commenter"))) return "verify";
         return atLeast(me.role, "approver") ? (leads.length ? "propose" : "verify") : null;
       },
+      lockedSection: (documentId, sectionKey) => {
+        const v = db.versions.filter((x) => x.document_id === documentId).sort((a, b) => b.number - a.number)[0];
+        const s = v && lockedKeys(db, v).includes(sectionKey) ? v.sections.find((x) => x.section_key === sectionKey) : undefined;
+        return s ? `Section ${/^\d/.test(s.heading) ? s.heading : `${s.ordinal}. ${s.heading}`} is approved and locked` : null;
+      },
+      proposeGoalMeasure: (c, d, payload) => proposeVersion(goalContext(db, me), c, d, payload),
       recordBasis: async (b) => {
         const ctx = roadmapContext(db, me);
         db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
@@ -3677,15 +3696,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
-    const goalCtx: GoalInterviewContext = {
-      baseline: db.baseline,
-      discussions: () => (db.discussions ??= emptyDiscussions()),
-      members: db.members,
-      me: { id: me.id, role: me.role },
-      isMember: (id) => activeMember(db, id),
-      uuid,
-      now,
-    };
+    const goalCtx = goalContext(db, me);
     const res = await routeGoalInterview(goalCtx, req, p);
     if (res) return res;
     if (p[2] === "proposals" && p[3] && p[4] === "accept" && req.method === "POST") {

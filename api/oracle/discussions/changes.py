@@ -368,11 +368,16 @@ async def _supersede(
 
 
 def action_for(
-    seat: access.Seat, c: DiscussionChange, decided: bool = False, records: bool | None = None
+    seat: access.Seat,
+    c: DiscussionChange,
+    decided: bool = False,
+    records: bool | None = None,
+    locked: str | None = None,
 ) -> ChangeAction | None:
     """The kind's action for this caller; None for a viewer or a handled change.
     ``records``: whether ``leads.date_rights`` lets the caller record a date basis (F3), which
-    decides Record instead of the role."""
+    decides Record instead of the role. ``locked``: "Section <n>. <heading> is approved and
+    locked" when a section_edit's section is (AUD-1: Stage refuses it, so it is not offered)."""
     if not access.can_write(seat) or c.status not in OPEN:
         return None
     k = kinds.REGISTRY[c.kind]
@@ -382,6 +387,8 @@ def action_for(
         return ChangeAction(verb=k.verb, allowed=False, why_not=DECIDED)  # type: ignore[arg-type]
     if not k.available(None):
         return ChangeAction(verb=k.verb, allowed=False, why_not=None)  # type: ignore[arg-type]
+    if locked is not None:
+        return ChangeAction(verb=k.verb, allowed=False, why_not=locked)  # type: ignore[arg-type]
     if c.kind == "basis_record" and records is not None:
         return ChangeAction(verb=k.verb, allowed=records, why_not=None if records else RECORDERS)  # type: ignore[arg-type]
     if has_role(seat.role, k.role):
@@ -437,6 +444,7 @@ async def changes_out(
         from oracle.members.leads import date_rights, engineering_leads
 
         records = date_rights(principal, await engineering_leads(db)) is not None
+    locked = await _locked_reasons(db, d, rows)
     return [
         DiscussionChangeOut(
             id=c.id,
@@ -451,7 +459,9 @@ async def changes_out(
             proposed_by=person(c.proposed_by),
             suggested_by=person(c.suggested_by),
             status=c.status,  # type: ignore[arg-type]
-            action=action_for(seat, c, decided and c.kind.startswith("item_"), records),
+            action=action_for(
+                seat, c, decided and c.kind.startswith("item_"), records, locked.get(c.id)
+            ),
             can=can_of(seat, c, principal.user_id),
             pushback=c.pushback,
             needs_reason=d.visibility == "private" and access.can_write(seat),
@@ -464,6 +474,23 @@ async def changes_out(
         )
         for c in rows
     ]
+
+
+async def _locked_reasons(
+    db: AsyncSession, d: Discussion, rows: list[DiscussionChange]
+) -> dict[uuid.UUID, str]:
+    """Each open section_edit whose section is approved in the document's latest version, with
+    the reason Stage would refuse it (AUD-1)."""
+    edits = [c for c in rows if c.kind == "section_edit" and c.status in OPEN]
+    if not edits or d.document_id is None:
+        return {}
+    keys = await locked_sections(db, d.document_id)
+    out = {}
+    for c in edits:
+        key = (c.edited_payload or c.payload).get("section_key")
+        if key in keys:
+            out[c.id] = LOCKED.format(section=await _heading(db, d.document_id, key))
+    return out
 
 
 async def _decided(db: AsyncSession, d: Discussion) -> bool:
@@ -757,13 +784,18 @@ async def _done(db, principal, d, c, ref: dict[str, Any], did: str) -> None:
 
 
 async def propose(
-    db: AsyncSession, principal: "Principal", change_id: uuid.UUID, lock_version: int
+    db: AsyncSession,
+    principal: "Principal",
+    change_id: uuid.UUID,
+    lock_version: int,
+    payload: dict[str, Any] | None = None,
 ) -> tuple[DiscussionChange, dict[str, Any] | None]:
     """``goal_measure`` and ``entity_edit``: an open baseline proposal an approver accepts
     in Baseline, its reason naming the discussion and linking its page (B1). A goal version
     goes through B6's one path (``goal_interview.propose_version``): B5's checks, Oracle's
     pushback once when its target is already met (the result is then None and the change
-    carries the pushback), and the typed values clearing their ``*_text``."""
+    carries the pushback), and the typed values clearing their ``*_text``. ``payload``: the
+    person's Edit, proposed instead and kept as ``edited_payload`` only when it is used."""
     from oracle.baseline import goal_interview
     from oracle.baseline import service as baseline
     from oracle.baseline.models import Proposal
@@ -777,9 +809,8 @@ async def propose(
     reason = f"From discussion {d.title} ({await discussion_page(db, d)})"
     if c.kind == "goal_measure":
         try:
-            out = await goal_interview.propose_version(
-                db, principal, c, d, goal_interview.GoalMeasureAct(), reason=reason
-            )
+            act = goal_interview.GoalMeasureAct(payload=payload)
+            out = await goal_interview.propose_version(db, principal, c, d, act, reason=reason)
         except baseline.GoalFieldsInvalid:
             raise  # B5: 422 with every problem (the app's handler)
         except baseline.BaselineError as e:
@@ -789,6 +820,13 @@ async def propose(
         proposal_id = out.result_ref["proposal_id"]
         status = (await db.get(Proposal, uuid.UUID(proposal_id))).status
     else:
+        if payload is not None:
+            try:
+                c.edited_payload = kinds.validate_payload(c.kind, payload)
+            except ValidationError as e:
+                raise DiscussionError(
+                    422, f"The change does not read as a {c.kind}: {e.errors()[0]['msg']}"
+                ) from e
         p = c.edited_payload or c.payload
         writer = baseline.Writer(principal, "user", reason=reason)
         try:
