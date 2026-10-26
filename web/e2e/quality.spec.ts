@@ -6,7 +6,8 @@ import { login } from "./helpers";
 // v2 screen 5, Quality evaluation (picks.md 5: A's criteria table + inspector, C's "hide
 // until you pick" in the rating form, B's report list as History). Team workspaces v2 in
 // the mock; the "quality" scenario adds a stored rules snapshot, a model review (7 of 10
-// criteria) and two people's ratings, all invented.
+// criteria) and two people's ratings, all invented. MOCK_ROLE_KEY changes the signed-in
+// member's role, not who they are: their own reports read "Admin".
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 const URL = "/documents/team-workspaces/v/2/quality";
@@ -108,7 +109,7 @@ test("commenter rates a criterion: one human report, the row and History update"
 
   await expect(page.getByTestId("rating-stored")).toContainText("Rating stored as human report");
   await expect(row(page, "alternatives_tradeoffs").getByTestId("people-cell")).toHaveText("1 warning");
-  await expect(history(page).getByTestId("history-row").first()).toContainText("Human rating · Commenter");
+  await expect(history(page).getByTestId("history-row").first()).toContainText("Human rating · Admin");
 });
 
 test("hide rules, model and other people until the rater picks a status", async ({ page }) => {
@@ -195,7 +196,7 @@ test("commenter sees no Retry or Cancel on a model job", async ({ page }) => {
 test("409: the quality review switched off shows the API's words", async ({ page }) => {
   await open(page, { role: "owner", scenario: "quality-off" });
   await page.getByTestId("page-queue-review").click();
-  await expect(page.getByRole("alert")).toHaveText('"Quality review" is turned off for this document');
+  await expect(page.getByTestId("action-error")).toContainText('"Quality review" is turned off for this document');
 });
 
 test("History: empty, then a stored rules snapshot", async ({ page }) => {
@@ -203,7 +204,7 @@ test("History: empty, then a stored rules snapshot", async ({ page }) => {
   await expect(history(page)).toContainText("No evaluation reports for v2 yet");
   await page.getByRole("button", { name: "Store rules snapshot" }).click();
   await expect(history(page).getByTestId("history-row")).toHaveCount(1);
-  await expect(history(page).getByTestId("history-row")).toContainText("Rules snapshot · Commenter");
+  await expect(history(page).getByTestId("history-row")).toContainText("Rules snapshot · Admin");
   await expect(page.getByTestId("latest-report")).toContainText("Latest stored report");
 });
 

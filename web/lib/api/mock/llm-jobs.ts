@@ -339,7 +339,9 @@ export function tick(ctx: LlmContext) {
       const since = (job.input.since as number | undefined) ?? (v.number > 1 ? v.number - 1 : null);
       finish(ctx, job, runReports(ctx, doc, v, since));
     } else if (job.kind === BATCH) finish(ctx, job, runBatch(ctx, job, v));
-    else finish(ctx, job, runRefinement(ctx, job, doc, v));
+    else if (job.kind === "quality_review") {
+      if (ctx.runQualityReview) finish(ctx, job, ctx.runQualityReview(job, v.id));
+    } else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
 }
 

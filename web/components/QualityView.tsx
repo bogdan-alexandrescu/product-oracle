@@ -454,7 +454,11 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
             {readinessQ.error}
           </Notice>
         )}
-        {error && <Notice tone="error">{error}</Notice>}
+        {error && (
+          <Notice tone="error" testId="action-error">
+            {error}
+          </Notice>
+        )}
         {stored && (
           <Notice tone="pass" testId="rating-stored">
             {stored}
