@@ -2,20 +2,14 @@
  * O5 lane 1 (as api/oracle/roadmap/variants.py): the roadmap audience registry and the
  * `audience=` parameter of a version's export and deck.
  *
- * The mock renders an audience from the version's sections: it drops the audience's
- * hidden sections (and their sub-sections) and, for Board, the item cards that serve no
- * confirmed goal, with the line "N items serve no confirmed goal and are left out". The
- * API also rebuilds the item rows from the version's roadmap items and reads "serves no
- * confirmed goal" from each item's feature-to-goal link; the mock keeps the cards as
- * written and reads it from their words. As the API, it takes out of the item areas
- * (horizons, releases, lanes, milestones, bets, pitches, ideas) the labelled parts the
- * audience hides in their common written forms ("Owner: …", "Lead:", "DRI:", "Owner (PM):",
- * "Owned by …", "Owner — …", "Tech lead:", "PM:", "Owner / PM:", "Who:", "*Owner*:" on
- * Board, a name whole past its initials and titles; "Tracker: …", "Jira:", "Estimate: …",
- * "Story points:", "Est.:" where the audience does not show them; revenue for
- * Engineering) and so-headed table columns ("Owner(s)", "Est.", "Tech lead"), reading
- * tables as GFM does. A table keeps its header and delimiter rows. `redact` is the API's
- * variants.redact case for case (api/tests/fixtures/audience_redaction.json).
+ * Board (owner decision 2026-10-26) is built from the version's roadmap items alone, as the API's: a row per
+ * shown item (title, outcome, confidence, goal) under Now, Next and Later, the line "N items serve no confirmed
+ * goal and are left out", or a sentence when the version has no items; no written text reaches it. Team and
+ * Engineering keep the written sections without the audience's hidden ones and, in the item areas (horizons,
+ * releases, lanes, milestones, bets, pitches, ideas), without the labelled parts they hide ("Tracker: …",
+ * "Jira:", "Estimate: …", "Story points:", "Est.:"; revenue for Engineering) and so-headed table columns,
+ * reading tables as GFM does. `redact` is the API's variants.redact case for case
+ * (api/tests/fixtures/audience_redaction.json).
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -30,7 +24,7 @@ export const AUDIENCES: Schemas["AudienceOut"][] = [
     key: "board",
     label: "Board",
     hidden_sections: [...ALWAYS, "sources", "changes", "risks", "dependencies", "capacity", "drift", "launch", "no-goal"].sort(),
-    item_fields: ["confidence", "horizon", "outcome", "risk", "title"],
+    item_fields: ["confidence", "horizon", "outcome", "title"],
     group_by: "goal",
     max_items_per_horizon: 7,
     appendix: false,
@@ -47,8 +41,6 @@ export const AUDIENCES: Schemas["AudienceOut"][] = [
   },
   { key: "public", label: "Public", hidden_sections: [], item_fields: [], group_by: "stage", max_items_per_horizon: null, appendix: false },
 ];
-
-const NO_GOAL = "serves no confirmed goal";
 
 export function isAudience(value: string | null): value is Audience {
   return !!value && AUDIENCES.some((a) => a.key === value);
@@ -92,62 +84,39 @@ export function audienceRefusal(
 
 const ITEM_AREAS = new Set(["now", "next", "later", "releases", "timeline", "milestones", "current", "candidates", "ideas"]);
 const LABELS: Record<string, string> = {
-  owner: "owner", owners: "owner", "owned by": "owner", lead: "owner", leads: "owner", dri: "owner",
-  assignee: "owner", assignees: "owner", "assigned to": "owner", pm: "owner", pms: "owner", who: "owner",
-  "product manager": "owner", "product owner": "owner",
   tracker: "tracker", "tracker key": "tracker", "tracker keys": "tracker", issue: "tracker", issues: "tracker",
   epic: "tracker", epics: "tracker", jira: "tracker", ticket: "tracker", tickets: "tracker",
   estimate: "effort", estimates: "effort", est: "effort", effort: "effort", "story points": "effort",
   points: "effort", size: "effort", "depends on": "depends_on", dependencies: "depends_on",
 };
-const BARE_LABELS = ["owned by", "assigned to"];
-// Words that qualify an owner label ("Tech lead", "Eng lead", "Lead PM"); only owner labels take them.
-const QUALIFIERS = ["tech", "technical", "eng", "engineering", "product", "design", "project", "program", "delivery", "team", "lead", "co"];
-const OWNER_CORE = ["lead", "leads", "owner", "owners", "pm", "pms", "dri", "manager"];
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const EMPH = "(?:\\*\\*|__|\\*|_)?";
 const ONE_LABEL =
-  `(?:(?:${QUALIFIERS.join("|")})\\s+)+(?:${OWNER_CORE.join("|")})|` +
-  Object.keys(LABELS).filter((k) => !BARE_LABELS.includes(k)).sort((a, b) => b.length - a.length).map(escape).join("|") +
-  "|revenue[\\w ]{0,20}?";
-// One label, or several joined by "/" ("Owner / PM").
+  Object.keys(LABELS).sort((a, b) => b.length - a.length).map(escape).join("|") + "|revenue[\\w ]{0,20}?";
+// One label, or several joined by "/" ("Est. / Jira").
 const ONE = `(?:${ONE_LABEL})(?![^\\W_])(?:\\(s\\))?\\.?`;
 const PART = new RegExp(
-  `(?<![\\w-])${EMPH}(?:(?<label>${ONE}(?:\\s*/\\s*${ONE})*)${EMPH}(?:\\s*\\([^()\\n]{1,24}\\))?${EMPH}\\s*(?::|—|–|\\s-\\s)${EMPH}` +
-    "|(?<bare>" + BARE_LABELS.join("|") + ")\\s+)[ \\t]*",
+  `(?<![\\w-])${EMPH}(?:(?<label>${ONE}(?:\\s*/\\s*${ONE})*)${EMPH}(?:\\s*\\([^()\\n]{1,24}\\))?${EMPH}\\s*(?::|—|–|\\s-\\s)${EMPH})[ \\t]*`,
   "gi",
 );
-// A full stop inside a name: an initial ("Dana M. Markerson") or a title ("Dr. Markerson").
-const NAME_STOPS = new Set(["dr", "mr", "mrs", "ms", "mx", "prof", "jr", "sr", "st"]);
 // A table's delimiter row (GFM): cells of one or more dashes with optional colons.
 const TABLE_SEP = /^ {0,3}(?!-\s)[-:| ]*-[-:| ]*$/;
 const DELIM_CELL = /^:?-+:?$/;
 // Lines that end a table's body (GFM): a heading, quote, fence, list item or rule.
 const BLOCK_START = /^ {0,3}(?:#{1,6}(?:\s|$)|>|```|~~~|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$)/;
-// A table's key column: the first so headed, else the first column.
-const KEY_HEADERS = new Set(["item", "items", "bet", "bets", "title", "feature", "features", "pitch", "pitches", "idea", "ideas", "initiative", "project", "name"]);
-const LIST_ITEM = /^(\s*)(?:[-*+]|\d+[.)])\s+/;
 const SENTENCE_END = /(?<=[.;!?])\s+/;
-// What may follow an item's title in its own entry: nothing, or a closing emphasis or link, then a separator.
-const ENTRY_END = /^(?:[*_]+|\](?:\([^)]*\))?)*(?:\s*$|\s*[:.(]|\s+[—–-](?:\s|$))/;
 
-/** The fields a label or column header names ("Owner(s)", "Est.", "Tech lead", "Lead PM", "Owner / PM"). */
+/** The fields a label or column header names ("Est.", "Estimate (days)", "**Jira**", "Est. / Jira"). */
 function labelFields(label: string): Set<string> {
   const out = new Set<string>();
   for (const part of label.replace(/\(s\)|\([^()]*\)\s*$|[*_]/g, "").split("/")) {
-    let words = part.replace(/^[ .:\t]+|[ .:\t]+$/g, "").toLowerCase().replace(/\s+/g, " ").split(" ");
+    const words = part.replace(/^[ .:\t]+|[ .:\t]+$/g, "").toLowerCase().replace(/\s+/g, " ").split(" ");
     if (words[0].startsWith("revenue")) {
       out.add("revenue");
       continue;
     }
-    let qualified = false;
-    while (words.length > 1 && !(words.join(" ") in LABELS) && QUALIFIERS.includes(words[0])) {
-      words = words.slice(1);
-      qualified = true;
-    }
     const field = LABELS[words.join(" ")];
-    if (field && (!qualified || OWNER_CORE.includes(words.join(" ")))) out.add(field);
-    else if (qualified && words.join(" ") === "manager") out.add("owner");
+    if (field) out.add(field);
   }
   return out;
 }
@@ -155,7 +124,6 @@ function labelFields(label: string): Set<string> {
 function hiddenFields(audience: Audience): Set<string> {
   const fields = new Set(AUDIENCES.find((a) => a.key === audience)!.item_fields);
   const out = new Set(["tracker", "effort", "depends_on"].filter((f) => !fields.has(f)));
-  if (audience === "board") out.add("owner");
   if (fields.has("effort")) out.add("revenue");
   return out;
 }
@@ -201,23 +169,14 @@ function tableRows(lines: string[]): ([string, string[]] | null)[] {
   return out;
 }
 
-function keyColumn(head: string[]): number {
-  const at = head.findIndex((h) => KEY_HEADERS.has(h.replace(/[*_]/g, "").replace(/^[ .:]+|[ .:]+$/g, "").toLowerCase()));
-  return at < 0 ? 0 : at;
-}
-
 const mentions = (line: string, name: string) => new RegExp(`(?<!\\w)${escape(name)}(?!\\w)`, "i").test(line);
 
-/** Where a labelled value starting at `i` ends: `;`, `|`, a tag, `closer` or a sentence's full stop (a name runs past an initial or a title). */
-function valueEnd(text: string, i: number, field: string, closer: string | null): number {
+/** Where a labelled value starting at `i` ends: `;`, `|`, a tag, `closer` or a sentence's full stop. */
+function valueEnd(text: string, i: number, closer: string | null): number {
   for (; i < text.length; i++) {
     const c = text[i];
     if (c === ";" || c === "|" || c === "\n" || c === closer || (c === "<" && /^<\/?[A-Za-z]/.test(text.slice(i, i + 3)))) return i;
-    if (c === "." && (i + 1 === text.length || /\s/.test(text[i + 1]))) {
-      const w = /([A-Za-z]+)$/.exec(text.slice(0, i))?.[1] ?? "";
-      const nameStop = (w.length === 1 && w === w.toUpperCase()) || NAME_STOPS.has(w.toLowerCase());
-      if (!(field === "owner" && nameStop && i + 1 < text.length)) return i;
-    }
+    if (c === "." && (i + 1 === text.length || /\s/.test(text[i + 1]))) return i;
   }
   return text.length;
 }
@@ -228,7 +187,7 @@ function stripParts(text: string, hidden: Set<string>): string {
   let pos = 0;
   PART.lastIndex = 0;
   for (let m = PART.exec(text); m; m = PART.exec(text)) {
-    const fields = [...labelFields(m.groups!.label ?? m.groups!.bare)].filter((f) => hidden.has(f));
+    const fields = [...labelFields(m.groups!.label)].filter((f) => hidden.has(f));
     const before = text.slice(0, m.index).replace(/[ \t]+$/, "");
     const end0 = m.index + m[0].length;
     if (!fields.length || /[\p{L}\p{N}]$/u.test(before)) {
@@ -237,11 +196,10 @@ function stripParts(text: string, hidden: Set<string>): string {
       PART.lastIndex = pos;
       continue;
     }
-    const field = fields.includes("owner") ? "owner" : fields.sort()[0];
     const closer = before.endsWith("(") ? ")" : null;
-    let end = valueEnd(text, end0, field, closer);
+    let end = valueEnd(text, end0, closer);
     if (closer && text[end] === ")") {
-      // "(Owner: Dana)": the brackets go with it, the space after them stays.
+      // "(Est.: 3w)": the brackets go with it, the space after them stays.
       out += text.slice(pos, m.index).replace(/[ \t]+$/, "").slice(0, -1).replace(/[ \t]+$/, "");
       pos = end + 1;
     } else {
@@ -274,40 +232,25 @@ function redactPart(text: string, hidden: Set<string>, refs: string[]): string {
   return next === text ? text : next.trimEnd();
 }
 
-/** Whether a line (or a table's key cell) is an entry keyed by a dropped item's whole title, not a line merely containing the word. */
-function namesDropped(text: string, dropTitles: string[]): boolean {
-  const lead = text.replace(LIST_ITEM, "").trimStart().replace(/^(?:\*\*|__|\[)+/, "").toLowerCase();
-  return dropTitles.some((title) => {
-    const t = title.trim().toLowerCase();
-    return !!t && lead.startsWith(t) && ENTRY_END.test(lead.slice(t.length));
-  });
-}
-
 /**
- * Written item text without what `audience` hides (as the API's variants.redact): hidden table columns and
- * labelled parts, sentences naming a hidden tracker issue (`refs`), and the entries of `dropTitles` (Board's
- * goal-less items) with a dropped bullet's wrapped lines. A table keeps its header and delimiter rows.
+ * Written item text without what `audience` (Team, Engineering) hides (as the API's variants.redact): hidden
+ * table columns and labelled parts, and sentences naming a hidden tracker issue (`refs`). A table keeps its
+ * header and delimiter rows.
  */
-export function redact(text: string, audience: Audience, refs: string[] = [], dropTitles: string[] = []): string {
+export function redact(text: string, audience: Audience, refs: string[] = []): string {
   const hidden = hiddenFields(audience);
   if (!hidden.has("tracker")) refs = [];
   const lines = text.split("\n");
   const rows = tableRows(lines);
   const out: string[] = [];
   let fence = false;
-  let dropped: number | null = null; // the indent of a dropped bullet, while its lines run on
   lines.forEach((line, n) => {
     const row = rows[n];
     if (row) {
-      dropped = null;
       const [kind, head] = row;
       const drop = new Set(head.flatMap((h, i) => ([...labelFields(h)].some((f) => hidden.has(f)) ? [i] : [])));
       let cells = splitRow(line);
-      if (kind === "body") {
-        const key = keyColumn(head);
-        if (key < cells.length && namesDropped(cells[key], dropTitles)) return;
-        cells = cells.map((c) => redactPart(c, hidden, refs));
-      }
+      if (kind === "body") cells = cells.map((c) => redactPart(c, hidden, refs));
       const kept = cells.filter((_, i) => !drop.has(i));
       if (drop.size === head.length) return; // every column hidden: the table goes
       out.push(kept.join("\u0000") === splitRow(line).join("\u0000") ? line : joinRow(kept));
@@ -315,17 +258,7 @@ export function redact(text: string, audience: Audience, refs: string[] = [], dr
     }
     if (isFence(line)) fence = !fence;
     if (fence || isFence(line) || !line.trim()) {
-      dropped = null;
       out.push(line);
-      return;
-    }
-    const bullet = LIST_ITEM.exec(line);
-    if (dropped !== null) {
-      if (!(bullet && bullet[1].length <= dropped)) return;
-      dropped = null;
-    }
-    if (namesDropped(line, dropTitles)) {
-      if (bullet) dropped = bullet[1].length;
       return;
     }
     const kept = redactPart(line, hidden, refs);
@@ -335,12 +268,63 @@ export function redact(text: string, audience: Audience, refs: string[] = [], dr
   return out.join("\n").replace(/^\n+|\n+$/g, "");
 }
 
-/** The sections of one rendering in `audience` (see the file comment). */
-export function audienceSections<S extends Section>(sections: S[], audience: Audience): S[] {
+/** A roadmap item as Board reads it (as the API's variants.ItemView): `goals` and `no_goal` from its feature-to-goal link. */
+export type BoardItem = {
+  key: string;
+  title: string;
+  outcome: string | null;
+  horizon: "now" | "next" | "later";
+  position: number;
+  confidence: string | null;
+  rank: number | null;
+  goals: string[];
+  no_goal: boolean;
+};
+
+const HORIZONS = { now: "Now", next: "Next", later: "Later" } as const;
+const BOARD_COLUMNS = ["Item", "Outcome", "Confidence", "Goal"];
+export const BOARD_NO_ITEMS =
+  "This roadmap version has no structured items yet, so Board has no rows to show: Board is built from its items only, never its written text.";
+const cell = (text: string | null) => (text ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ").trim();
+const leftOutLine = (n: number) => (n === 1 ? "1 item serves no confirmed goal and is left out." : `${n} items serve no confirmed goal and are left out.`);
+
+/**
+ * Board (owner decision 2026-10-26, as the API's variants._board): from the items alone, a section per horizon
+ * with a row per shown item (title, outcome, confidence, goal; at most 7, best ranked first), the left-out line
+ * before the first; a version without items says so. Nothing of the written text is read.
+ */
+function boardSections<S extends Section>(sections: S[], items: BoardItem[]): S[] {
+  const like = sections[0];
+  if (!like) return [];
+  const section = (section_key: string, heading: string, body: string): S => ({ ...like, section_key, level: 2, heading, body_md: body, body_text: body });
+  if (!items.length) return [section("brief-items", "Roadmap items", BOARD_NO_ITEMS)];
+  const sorted = [...items].sort((a, b) => a.position - b.position);
+  const leftOut = sorted.filter((i) => i.no_goal && i.horizon in HORIZONS).length;
+  const out: S[] = [];
+  for (const [horizon, heading] of Object.entries(HORIZONS)) {
+    const rows = sorted
+      .filter((i) => i.horizon === horizon && !i.no_goal)
+      .sort((a, b) => (a.rank === null ? 1 : 0) - (b.rank === null ? 1 : 0) || (a.rank ?? 0) - (b.rank ?? 0) || a.position - b.position)
+      .slice(0, 7);
+    if (!rows.length) continue;
+    const lines = [joinRow(BOARD_COLUMNS), "|" + "---|".repeat(BOARD_COLUMNS.length)];
+    for (const i of rows) lines.push(joinRow([i.title, i.outcome, i.confidence, i.goals.join(", ")].map(cell)));
+    out.push(section(horizon, heading, lines.join("\n")));
+  }
+  if (leftOut) {
+    const note = leftOutLine(leftOut);
+    if (out.length) out[0] = { ...out[0], body_md: `${note}\n\n${out[0].body_md}`, body_text: `${note}\n\n${out[0].body_text}` };
+    else out.push(section("brief-items", "Roadmap items", note));
+  }
+  return out;
+}
+
+/** The sections of one rendering in `audience` (see the file comment); Board is built from `items` alone. */
+export function audienceSections<S extends Section>(sections: S[], audience: Audience, items: BoardItem[] = []): S[] {
+  if (audience === "board") return boardSections(sections, items);
   const hidden = new Set(AUDIENCES.find((a) => a.key === audience)!.hidden_sections);
   const out: S[] = [];
   let skip: number | null = null;
-  let leftOut = 0;
   let area: number | null = null;
   for (const s of sections) {
     if (skip !== null) {
@@ -349,9 +333,7 @@ export function audienceSections<S extends Section>(sections: S[], audience: Aud
     }
     if (area !== null && s.level <= area) area = null;
     if (area === null && ITEM_AREAS.has(s.section_key)) area = s.level;
-    const goalless = s.level >= 3 && s.body_md.toLowerCase().includes(NO_GOAL);
-    if (hidden.has(s.section_key) || (audience === "board" && goalless)) {
-      if (!hidden.has(s.section_key)) leftOut++;
+    if (hidden.has(s.section_key)) {
       skip = s.level;
       continue;
     }
@@ -361,13 +343,6 @@ export function audienceSections<S extends Section>(sections: S[], audience: Aud
     }
     const body_md = redact(s.body_md, audience);
     out.push(body_md === s.body_md ? s : { ...s, body_md, body_text: redact(s.body_text, audience) });
-  }
-  if (!leftOut) return out;
-  const line = leftOut === 1 ? "1 item serves no confirmed goal and is left out." : `${leftOut} items serve no confirmed goal and are left out.`;
-  const at = out.findIndex((s) => s.section_key === "brief-items");
-  if (at >= 0) {
-    const s = out[at];
-    out[at] = { ...s, body_md: `${s.body_md}\n\n${line}`, body_text: `${s.body_text}\n\n${line}` };
   }
   return out;
 }

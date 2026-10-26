@@ -118,7 +118,7 @@ import {
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
-import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience } from "./audience";
+import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, type BoardItem } from "./audience";
 
 /**
  * latest_version, approved_version, source and an update's period are read off the versions;
@@ -4344,7 +4344,34 @@ async function route(db: Db, req: Request): Promise<Response> {
   const audience = sub === "deck" || sub === "export" ? q.get("audience") : null;
   const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
   if (refused) return json(refused.status, refused.body);
-  return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience) } : v, sub, q, audience);
+  return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience, boardItems(db, v)) } : v, sub, q, audience);
+}
+
+/**
+ * O5: a version's roadmap items as Board reads them (as the API's render.load_audience): the goal each
+ * item's feature serves by a confirmed supports edge to a confirmed goal; with no confirmed goal in the
+ * company nothing is measured, so no item is left out.
+ */
+function boardItems(db: Db, v: VersionRow): BoardItem[] {
+  const goals = new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+  return (db.roadmap?.items[v.id] ?? []).map((i) => {
+    const feature = i.feature?.id ?? db.baseline.entities.find((e) => e.type === "feature" && e.key === i.item_key)?.id;
+    const served = db.baseline.edges
+      .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
+      .map((e) => goals.get(e.dst_id)!);
+    const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
+    return {
+      key: i.item_key,
+      title: i.title,
+      outcome: i.outcome,
+      horizon: i.horizon,
+      position: i.position,
+      confidence: i.confidence ?? null,
+      rank: typeof rank === "number" ? rank : null,
+      goals: served.slice(0, 1),
+      no_goal: goals.size > 0 && !served.length,
+    };
+  });
 }
 
 /** A version's deck and export (O5: `v` already rendered for its audience, if any). */

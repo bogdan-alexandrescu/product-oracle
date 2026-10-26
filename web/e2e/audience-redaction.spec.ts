@@ -25,7 +25,7 @@ const CASES: Case[] = JSON.parse(readFileSync(path.join(__dirname, "../../api/te
 
 // Words Board writes itself (headings, column heads, the left-out and no-items lines).
 const BOARD_WORDS = new Set(
-  "now next later item items outcome confidence goal serve serves no confirmed and is are left out this roadmap version has structured so board rows to show built from its only never written text yet the a of".split(" "),
+  "now next later item items outcome confidence goal serve serves no confirmed and is are left out this roadmap version has structured so board rows to show built from its only never written text yet the a of 0 1 2 3 4 5 6 7 8 9".split(" "),
 );
 const words = (text: string) => new Set((text.match(/[\p{L}\p{N}]+/gu) ?? []).map((w) => w.toLowerCase()));
 
