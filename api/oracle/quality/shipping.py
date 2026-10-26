@@ -17,10 +17,11 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy
+from oracle.auth.models import User
 from oracle.baseline.models import EntityRevision, GoalMeasurement
 from oracle.quality import outcomes
 from oracle.quality.capture import figure_text, number
@@ -176,8 +177,10 @@ async def propose(db: AsyncSession, row: OutcomeRecord) -> None:
     found = await actual_value(db, row.goal_id, by)
     value, on, observed, note, source = found if found else (None, None, None, None, None)
     v = verdict(p, value)
+    # H11 ``outcomes`` at Observe or Draft: the predicted and actual results, no verdict.
+    proposes = await autonomy.allows(db, "outcomes", "recommend")
     row.proposed_assessment = {
-        "verdict": v,
+        "verdict": v if proposes else None,
         "observed": figure_text(value, p.get("unit")) if value is not None else observed,
         "actual_value": value,
         "measured_at": on.isoformat() if on else None,
@@ -186,11 +189,13 @@ async def propose(db: AsyncSession, row: OutcomeRecord) -> None:
     }
     await db.flush()
     await audit.record(db, audit.ORACLE, "outcome.proposed", "outcome_record", row.id,
-                       {"verdict": v})  # fmt: skip
+                       {"verdict": v if proposes else None})  # fmt: skip
     # H11 ``outcomes`` at Act: only an actual read from data (its fixed limit).
     if v != "inconclusive" and value is not None and await autonomy.allows(db, "outcomes", "act"):
         await record_verdict(db, row, actor="oracle")
-        if row.owner_id is not None:
+        # With no owner, the company's owners hear of it.
+        told = [row.owner_id] if row.owner_id is not None else await _owner_ids(db)
+        if told:
             await autonomy.acted(
                 db,
                 "outcomes",
@@ -204,8 +209,18 @@ async def propose(db: AsyncSession, row: OutcomeRecord) -> None:
                     "href": f"/plan/outcomes?outcome={row.id}",
                 },
                 undo=None,
-                notify=[row.owner_id],
+                notify=told,
             )
+
+
+async def _owner_ids(db: AsyncSession) -> list[uuid.UUID]:
+    return list(
+        await db.scalars(
+            select(User.id)
+            .where(User.role == "owner", User.disabled_at.is_(None))
+            .order_by(User.id)
+        )
+    )
 
 
 async def record_verdict(db: AsyncSession, row: OutcomeRecord, *, actor: str) -> None:
@@ -240,7 +255,13 @@ async def tick_due(db: AsyncSession) -> tuple[int, int]:
             .where(
                 OutcomeRecord.status == "tracking",
                 OutcomeRecord.assess_due_on <= date.today(),
-                OutcomeRecord.proposed_assessment.is_(None),
+                # Read at Observe or Draft (no verdict): proposed again once the level allows.
+                OutcomeRecord.proposed_assessment.is_(None)
+                | (
+                    OutcomeRecord.proposed_assessment["verdict"].as_string().is_(None)
+                    if await autonomy.allows(db, "outcomes", "recommend")
+                    else false()
+                ),
             )
             .order_by(OutcomeRecord.assess_due_on, OutcomeRecord.id)
         )

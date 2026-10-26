@@ -5,8 +5,8 @@ call keeps in step.
 A decision has one approver, and only that person decides it, except where H11 Autonomy
 sets Decide reversible calls to "Act within limits": then Oracle decides a reversible
 proposal of a listed origin on the option it recommends, within the cost limit
-(:func:`decide_within_limits`), and tells the approver, who can reverse it from the
-Inbox. A hard-to-reverse decision also needs its approver
+(:func:`decide_within_limits`), and tells the approver, whose Undo in the Inbox hands it
+back as a revisit. A hard-to-reverse decision also needs its approver
 to hold the company setting ``decision_irreversible_role`` (default ``owner``). Checkpoint
 records (:mod:`oracle.decisions.capture`) record a run's decision and are never edited.
 
@@ -690,8 +690,9 @@ async def decide(db: AsyncSession, principal: Principal, d: Decision, body: Deci
     return d
 
 
-# Oracle's own decision (H11 ``decisions`` at Act) is reversed from the Inbox with this note.
-UNDO_NOTE = "Reversed Oracle's decision from the Inbox"
+# Oracle's own decision (H11 ``decisions`` at Act) is handed back from the Inbox with this
+# note: a revisit, a new proposal for the approver with no recommendation.
+UNDO_NOTE = "Handed Oracle's decision back from the Inbox"
 _USD = re.compile(r"(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)", re.IGNORECASE)
 
 
@@ -721,15 +722,44 @@ async def _limits_set_by(db: AsyncSession) -> str:
     return user.email if user is not None else "an owner"
 
 
+async def _about_approvers_only(db: AsyncSession, d: Decision) -> bool:
+    """Whether a subject of ``d`` is an approvers-only document (or one of its versions)."""
+    from oracle.docs.models import DocumentVersion
+    from oracle.docs.visibility import hidden_document_ids
+
+    ids: set[uuid.UUID] = set()
+    for s in d.subjects or []:
+        try:
+            key = uuid.UUID(str(s.get("id")))
+        except ValueError:
+            continue
+        if s.get("kind") == "document":
+            ids.add(key)
+        elif s.get("kind") == "document_version":
+            doc = await db.scalar(
+                select(DocumentVersion.document_id)
+                .where(DocumentVersion.id == key)
+                .execution_options(oracle_all_documents=True)
+            )
+            if doc is not None:
+                ids.add(doc)
+    return bool(ids and await hidden_document_ids(db, ids, as_member=True))
+
+
 async def decide_within_limits(db: AsyncSession, d: Decision) -> bool:
     """H11 ``decisions`` at "Act within limits": Oracle decides a proposal on the option it
     recommends when the decision is reversible (fixed), of a listed origin, and the
-    option's stated cost is within the limit; then the approver gets an "Oracle did" row
-    whose Undo reverses it. Anything else waits for the approver. Flushes; the caller
-    commits. Returns whether Oracle decided."""
+    option's stated cost is within the limit, and it neither revisits a decision nor is
+    about an approvers-only document; then the approver gets an "Oracle did" row
+    whose Undo hands it back (a revisit, :func:`review`). Anything else waits for the
+    approver. Flushes; the caller commits. Returns whether Oracle decided."""
     from oracle import autonomy
 
     if d.status != "proposed" or d.origin == "checkpoint" or d.reversibility != "reversible":
+        return False
+    # A revisit (an Undo, or a person's) is the approver's; so is a call about an
+    # approvers-only document: pricing stays with people.
+    if d.supersedes_id is not None or await _about_approvers_only(db, d):
         return False
     if not await autonomy.allows(db, "decisions", "act"):
         return False
@@ -783,7 +813,7 @@ async def decide_within_limits(db: AsyncSession, d: Decision) -> bool:
         undo={
             "method": "POST",
             "path": f"/v1/decisions/{d.id}/reviews",
-            "body": {"verdict": "reversed", "note": UNDO_NOTE},
+            "body": {"verdict": "revisit", "note": UNDO_NOTE},
         },
         notify=[d.approver_id],
     )
