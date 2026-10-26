@@ -117,6 +117,7 @@ import {
 } from "./pricing";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
+import { seedWebhooks, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /**
@@ -180,6 +181,8 @@ export interface Db {
   trash?: TrashDb;
   /** v2 review state, campaigns, notifications, publications (./review-v2.ts). */
   review_v2?: ReviewV2Db;
+  /** I1: Settings › Webhooks, their events and delivery log (./webhooks.ts). */
+  webhooks?: WebhooksDb;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
@@ -3097,6 +3100,20 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
   };
 }
 
+/** The webhooks mock's view of the db (./webhooks.ts); its Inbox rows are review-v2 notifications. */
+function webhooksContext(db: Db, me: { id: string; role: Role }): WebhooksContext {
+  const base = {
+    me: { id: me.id, role: me.role },
+    members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.id === me.id ? me.role : x.role })),
+    notifications: db.review_v2!.notifications,
+    company: { id: "c0000000-0000-4000-8000-00000000c0de", name: "Example Co" },
+    uuid,
+    now,
+  };
+  db.webhooks ??= seedWebhooks(base, localStorage.getItem(MOCK_SCENARIO_KEY));
+  return { ...base, db: db.webhooks };
+}
+
 /** The v2 review mock's view of the db; a section save copies the latest version. */
 function reviewV2Context(db: Db, userId: string, role: Role) {
   return {
@@ -3520,6 +3537,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       });
     }
   }
+  // I1: webhooks check roles themselves; seeded before the notifications they write are read.
+  const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
+  if (hooks) return hooks;
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
