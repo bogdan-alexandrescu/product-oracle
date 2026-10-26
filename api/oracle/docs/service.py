@@ -15,7 +15,7 @@ from sqlalchemy import func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes, company_time, safe_yaml, wording
+from oracle import audit, changes, company_time, safe_yaml, webhooks, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.docs import layers, named_codes
@@ -1412,7 +1412,8 @@ async def import_draft(
     document.title = draft.title
     document.template = draft.template
     document.template_version = draft.template_version
-    if document.status == "approved":
+    to_review = document.status == "approved"
+    if to_review:
         # A newer, unapproved version now exists.
         document.status = "in_review"
 
@@ -1443,6 +1444,18 @@ async def import_draft(
 
         await pings.draft_ready(
             db, document, version.number, principal.user_id if principal else None
+        )
+    await webhooks.capture(
+        db,
+        "draft.version_created",
+        principal,
+        document_id=document.id,
+        version=version.number,
+        origin=origin,
+    )
+    if to_review:
+        await webhooks.capture(
+            db, "draft.in_review", principal, document_id=document.id, version=version.number
         )
     await (db.commit() if commit else db.flush())
     if dates is not None:

@@ -88,6 +88,9 @@ from oracle.trace.router import router as trace_router
 from oracle.trash.router import router as trash_router
 from oracle.v2.router import router as v2_router
 from oracle.web.router import router as web_router
+from oracle.webhooks.events import EVENT_TYPES
+from oracle.webhooks.router import router as webhooks_router
+from oracle.webhooks.schemas import openapi_webhooks
 
 log = logging.getLogger(__name__)
 
@@ -263,6 +266,8 @@ def create_app() -> FastAPI:
     # F6: the weekly alignment report and the company's Slack install it posts through.
     app.include_router(reports_router)
     app.include_router(company_integrations_router)
+    # I1: outbound webhooks (Settings › Webhooks).
+    app.include_router(webhooks_router)
     app.include_router(requests_router)
     # C3 Interviews: members' routes, and the customer's behind a private link (no member
     # credential, never MCP tools: oracle.mcp.tools.PUBLIC_OPERATIONS).
@@ -295,6 +300,10 @@ def create_app() -> FastAPI:
             doc.setdefault("components", {}).setdefault("schemas", {})["GoalAttrs"] = (
                 GoalAttrs.model_json_schema()
             )
+            # I1: each event type's body, as OpenAPI 3.1 webhooks.
+            hooks, schemas = openapi_webhooks(EVENT_TYPES)
+            doc["webhooks"] = hooks
+            doc["components"]["schemas"].update(schemas)
         return app.openapi_schema
 
     app.openapi = openapi

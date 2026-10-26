@@ -10260,6 +10260,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/webhook-event-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Webhook Event Types
+         * @description The events a webhook may subscribe to, in the registry's order.
+         */
+        get: operations["list_webhook_event_types"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Webhooks
+         * @description An approver's own webhooks; every webhook for an owner. Never the secret.
+         */
+        get: operations["list_webhooks"];
+        put?: never;
+        /**
+         * Create Webhook
+         * @description Create a webhook. The answer holds its signing secret, once: copy it now.
+         */
+        post: operations["create_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Webhook */
+        get: operations["get_webhook"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Webhook
+         * @description Delete a webhook, its secret and its delivery log.
+         */
+        delete: operations["delete_webhook"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Webhook
+         * @description Rename, re-point, change the events, pause or resume. Owners-and-approvers content
+         *     is an owner's change, with a reason, on an owner's webhook only.
+         */
+        patch: operations["update_webhook"];
+        trace?: never;
+    };
+    "/v1/webhooks/{webhook_id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Webhook Secret
+         * @description A new signing secret, shown once. The old one keeps signing for 24 hours unless
+         *     ``end_old_now``.
+         */
+        post: operations["rotate_webhook_secret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhook_id}/take-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take Over Webhook
+         * @description An owner makes a paused webhook of someone else's their own.
+         */
+        post: operations["take_over_webhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhook_id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Webhook Deliveries
+         * @description The delivery log, newest first, 50 a page.
+         */
+        get: operations["list_webhook_deliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/{webhook_id}/deliveries/{delivery_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Webhook Delivery */
+        get: operations["get_webhook_delivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/requests": {
         parameters: {
             query?: never;
@@ -12370,7 +12518,263 @@ export interface paths {
         trace?: never;
     };
 }
-export type webhooks = Record<string, never>;
+export interface webhooks {
+    "run.awaiting_approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run's estimate is over the limit and waits for an owner */
+        post: operations["webhook_run_awaiting_approval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.started": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run started */
+        post: operations["webhook_run_started"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.checkpoint_waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run is waiting at a checkpoint for a person */
+        post: operations["webhook_run_checkpoint_waiting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.checkpoint_decided": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A checkpoint was approved or sent back with changes */
+        post: operations["webhook_run_checkpoint_decided"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.checkpoint_voided": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A checkpoint decision was voided by a disable or demotion */
+        post: operations["webhook_run_checkpoint_voided"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.paused_overrun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run passed its spend limit; an owner must resume it */
+        post: operations["webhook_run_paused_overrun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.resumed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** An owner resumed a run */
+        post: operations["webhook_run_resumed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.succeeded": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run succeeded */
+        post: operations["webhook_run_succeeded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run failed */
+        post: operations["webhook_run_failed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "run.cancelled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A run was cancelled */
+        post: operations["webhook_run_cancelled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "draft.version_created": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new version of a document was imported */
+        post: operations["webhook_draft_version_created"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "draft.in_review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A document moved to In review */
+        post: operations["webhook_draft_in_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "approval.version_approved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A version was approved */
+        post: operations["webhook_approval_version_approved"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "approval.approvals_invalidated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approvals on a version lapsed or were voided */
+        post: operations["webhook_approval_approvals_invalidated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "approval.version_published": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A version was published */
+        post: operations["webhook_approval_version_published"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
 export interface components {
     schemas: {
         /** AcceptDateOut */
@@ -17553,6 +17957,55 @@ export interface components {
              */
             at: string;
         };
+        /** DeliveryOut */
+        DeliveryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Event Id */
+            event_id: string;
+            /** Event Type */
+            event_type: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "retrying" | "succeeded" | "failed" | "withheld";
+            /** Attempts */
+            attempts: number;
+            /** Next At */
+            next_at: string | null;
+            /** Last At */
+            last_at: string | null;
+            /** Http Status */
+            http_status: number | null;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Error */
+            error: string | null;
+            /** Response Excerpt */
+            response_excerpt: string | null;
+            /** Body */
+            body: {
+                [key: string]: unknown;
+            } | null;
+            /** Redelivery Of */
+            redelivery_of: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** DeliveryPage */
+        DeliveryPage: {
+            /** Items */
+            items: components["schemas"]["DeliveryOut"][];
+            /** Next Before */
+            next_before?: string | null;
+        };
         /** DependenciesCreate */
         DependenciesCreate: {
             /** Artifact Version Id */
@@ -19450,6 +19903,20 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** EventTypeOut */
+        EventTypeOut: {
+            /** Type */
+            type: string;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "runs" | "drafts" | "approvals";
+            /** Label */
+            label: string;
+            /** Can Be Approvers Only */
+            can_be_approvers_only: boolean;
         };
         /**
          * EvidenceChip
@@ -24076,6 +24543,15 @@ export interface components {
              */
             updated_at: string;
         };
+        /** LastDelivery */
+        LastDelivery: {
+            /** Status */
+            status: string;
+            /** At */
+            at: string | null;
+            /** Http Status */
+            http_status: number | null;
+        };
         /** LaunchCreate */
         LaunchCreate: {
             /** Title */
@@ -26111,7 +26587,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "comment" | "reply" | "assignment" | "rereview_requested" | "campaign" | "patch_proposed" | "published";
+            kind: "comment" | "reply" | "assignment" | "rereview_requested" | "campaign" | "patch_proposed" | "published" | "webhook_paused" | "webhook_url_changed";
             /** Title */
             title: string;
             /** Document Id */
@@ -26662,6 +27138,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Name */
+            name: string;
+        };
+        /** PersonName */
+        PersonName: {
             /** Name */
             name: string;
         };
@@ -30829,6 +31310,14 @@ export interface components {
             view: "brief" | "full";
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /** RotateIn */
+        RotateIn: {
+            /**
+             * End Old Now
+             * @default false
+             */
+            end_old_now: boolean;
         };
         /**
          * RowOverride
@@ -37339,6 +37828,91 @@ export interface components {
             /** Searches Left */
             searches_left: number;
         };
+        /** WebhookCreated */
+        WebhookCreated: {
+            webhook: components["schemas"]["WebhookOut"];
+            /** Secret */
+            secret: string;
+        };
+        /** WebhookIn */
+        WebhookIn: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /** Event Types */
+            event_types: string[];
+            /**
+             * Include Approvers Content
+             * @default false
+             */
+            include_approvers_content: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** WebhookOut */
+        WebhookOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /** Host */
+            host: string;
+            /** Event Types */
+            event_types: string[];
+            /** Api Version */
+            api_version: string;
+            /** Include Approvers Content */
+            include_approvers_content: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused";
+            /** Paused Reason */
+            paused_reason: ("manual" | "failing" | "gone" | "creator_disabled" | "creator_demoted") | null;
+            /** Secret Hint */
+            secret_hint: string;
+            /**
+             * Secret Rotated At
+             * Format: date-time
+             */
+            secret_rotated_at: string;
+            created_by: components["schemas"]["PersonName"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            last_delivery?: components["schemas"]["LastDelivery"] | null;
+            /** Failing Since */
+            failing_since?: string | null;
+            /**
+             * Can Take Over
+             * @default false
+             */
+            can_take_over: boolean;
+        };
+        /** WebhookPatch */
+        WebhookPatch: {
+            /** Name */
+            name?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Event Types */
+            event_types?: string[] | null;
+            /** Status */
+            status?: ("active" | "paused") | null;
+            /** Include Approvers Content */
+            include_approvers_content?: boolean | null;
+            /** Reason */
+            reason?: string | null;
+        };
         /** WeekValue */
         WeekValue: {
             /**
@@ -37603,6 +38177,500 @@ export interface components {
              * @default null
              */
             weight: number | null;
+        };
+        /** WebhookActor */
+        WebhookActor: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "person" | "oracle" | "system";
+            /**
+             * Name
+             * @default null
+             */
+            name: string | null;
+        };
+        /** WebhookApprovalData */
+        WebhookApprovalData: {
+            document: components["schemas"]["WebhookDocument"];
+            approver: components["schemas"]["WebhookActor"];
+            actor: components["schemas"]["WebhookActor"];
+        };
+        /** WebhookCheckpoint */
+        WebhookCheckpoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Approver Role */
+            approver_role: string;
+            /** Url */
+            url: string;
+            /**
+             * Outcome
+             * @default null
+             */
+            outcome: ("approved" | "changes_requested") | null;
+        };
+        /** WebhookCheckpointData */
+        WebhookCheckpointData: {
+            run: components["schemas"]["WebhookRun"];
+            checkpoint: components["schemas"]["WebhookCheckpoint"];
+            actor: components["schemas"]["WebhookActor"];
+        };
+        /** WebhookCompany */
+        WebhookCompany: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** WebhookDocument */
+        WebhookDocument: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Version
+             * @default null
+             */
+            version: number | null;
+            /** Url */
+            url: string;
+            /**
+             * Origin
+             * @default null
+             */
+            origin: string | null;
+        };
+        /** WebhookDocumentData */
+        WebhookDocumentData: {
+            document: components["schemas"]["WebhookDocument"];
+            actor: components["schemas"]["WebhookActor"];
+        };
+        /** WebhookInvalidatedData */
+        WebhookInvalidatedData: {
+            document: components["schemas"]["WebhookDocument"];
+            /** Reason */
+            reason: string;
+            actor: components["schemas"]["WebhookActor"];
+        };
+        /** WebhookRun */
+        WebhookRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow */
+            flow: string;
+            /** Status */
+            status: string;
+            /**
+             * Title
+             * @default null
+             */
+            title: string | null;
+            /** Url */
+            url: string;
+            /**
+             * Error Kind
+             * @default null
+             */
+            error_kind: string | null;
+        };
+        /** WebhookRunData */
+        WebhookRunData: {
+            run: components["schemas"]["WebhookRun"];
+            actor: components["schemas"]["WebhookActor"];
+        };
+        /**
+         * WebhookEvent_run_awaiting_approval
+         * @description The body Oracle posts for a run.awaiting_approval event.
+         */
+        "WebhookEvent_run.awaiting_approval": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.awaiting_approval";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_run_started
+         * @description The body Oracle posts for a run.started event.
+         */
+        "WebhookEvent_run.started": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.started";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_run_checkpoint_waiting
+         * @description The body Oracle posts for a run.checkpoint_waiting event.
+         */
+        "WebhookEvent_run.checkpoint_waiting": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.checkpoint_waiting";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookCheckpointData"];
+        };
+        /**
+         * WebhookEvent_run_checkpoint_decided
+         * @description The body Oracle posts for a run.checkpoint_decided event.
+         */
+        "WebhookEvent_run.checkpoint_decided": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.checkpoint_decided";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookCheckpointData"];
+        };
+        /**
+         * WebhookEvent_run_checkpoint_voided
+         * @description The body Oracle posts for a run.checkpoint_voided event.
+         */
+        "WebhookEvent_run.checkpoint_voided": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.checkpoint_voided";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookCheckpointData"];
+        };
+        /**
+         * WebhookEvent_run_paused_overrun
+         * @description The body Oracle posts for a run.paused_overrun event.
+         */
+        "WebhookEvent_run.paused_overrun": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.paused_overrun";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_run_resumed
+         * @description The body Oracle posts for a run.resumed event.
+         */
+        "WebhookEvent_run.resumed": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.resumed";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_run_succeeded
+         * @description The body Oracle posts for a run.succeeded event.
+         */
+        "WebhookEvent_run.succeeded": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.succeeded";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_run_failed
+         * @description The body Oracle posts for a run.failed event.
+         */
+        "WebhookEvent_run.failed": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.failed";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_run_cancelled
+         * @description The body Oracle posts for a run.cancelled event.
+         */
+        "WebhookEvent_run.cancelled": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "run.cancelled";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookRunData"];
+        };
+        /**
+         * WebhookEvent_draft_version_created
+         * @description The body Oracle posts for a draft.version_created event.
+         */
+        "WebhookEvent_draft.version_created": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "draft.version_created";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookDocumentData"];
+        };
+        /**
+         * WebhookEvent_draft_in_review
+         * @description The body Oracle posts for a draft.in_review event.
+         */
+        "WebhookEvent_draft.in_review": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "draft.in_review";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookDocumentData"];
+        };
+        /**
+         * WebhookEvent_approval_version_approved
+         * @description The body Oracle posts for a approval.version_approved event.
+         */
+        "WebhookEvent_approval.version_approved": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "approval.version_approved";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookApprovalData"];
+        };
+        /**
+         * WebhookEvent_approval_approvals_invalidated
+         * @description The body Oracle posts for a approval.approvals_invalidated event.
+         */
+        "WebhookEvent_approval.approvals_invalidated": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "approval.approvals_invalidated";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookInvalidatedData"];
+        };
+        /**
+         * WebhookEvent_approval_version_published
+         * @description The body Oracle posts for a approval.version_published event.
+         */
+        "WebhookEvent_approval.version_published": {
+            /**
+             * Id
+             * @description evt_<ulid>: unique, the receivers' idempotency key
+             */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "approval.version_published";
+            /** Api Version */
+            api_version: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            company: components["schemas"]["WebhookCompany"];
+            data: components["schemas"]["WebhookDocumentData"];
         };
     };
     responses: never;
@@ -57582,6 +58650,307 @@ export interface operations {
             };
         };
     };
+    list_webhook_event_types: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTypeOut"][];
+                };
+            };
+        };
+    };
+    list_webhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookOut"][];
+                };
+            };
+        };
+    };
+    create_webhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_webhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_webhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_webhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_webhook_secret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RotateIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_over_webhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_webhook_deliveries: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "retrying" | "succeeded" | "failed" | "withheld") | null;
+                type?: string | null;
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_webhook_delivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+                delivery_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_requests: {
         parameters: {
             query?: {
@@ -62297,6 +63666,336 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    webhook_run_awaiting_approval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.awaiting_approval"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_started: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.started"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_checkpoint_waiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.checkpoint_waiting"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_checkpoint_decided: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.checkpoint_decided"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_checkpoint_voided: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.checkpoint_voided"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_paused_overrun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.paused_overrun"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_resumed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.resumed"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_succeeded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.succeeded"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_failed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.failed"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_run_cancelled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_run.cancelled"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_draft_version_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_draft.version_created"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_draft_in_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_draft.in_review"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_approval_version_approved: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_approval.version_approved"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_approval_approvals_invalidated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_approval.approvals_invalidated"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_approval_version_published: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookEvent_approval.version_published"];
+            };
+        };
+        responses: {
+            /** @description Received */
+            "2XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

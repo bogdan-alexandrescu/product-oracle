@@ -35473,6 +35473,576 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/webhook-event-types": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "List Webhook Event Types",
+        "description": "The events a webhook may subscribe to, in the registry's order.",
+        "operationId": "list_webhook_event_types",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventTypeOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Webhook Event Types"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/webhooks": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "List Webhooks",
+        "description": "An approver's own webhooks; every webhook for an owner. Never the secret.",
+        "operationId": "list_webhooks",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Webhooks"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      },
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Create Webhook",
+        "description": "Create a webhook. The answer holds its signing secret, once: copy it now.",
+        "operationId": "create_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/webhooks/{webhook_id}": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Get Webhook",
+        "operationId": "get_webhook",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "patch": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Update Webhook",
+        "description": "Rename, re-point, change the events, pause or resume. Owners-and-approvers content\nis an owner's change, with a reason, on an owner's webhook only.",
+        "operationId": "update_webhook",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      },
+      "delete": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Delete Webhook",
+        "description": "Delete a webhook, its secret and its delivery log.",
+        "operationId": "delete_webhook",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/webhooks/{webhook_id}/rotate-secret": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Rotate Webhook Secret",
+        "description": "A new signing secret, shown once. The old one keeps signing for 24 hours unless\n``end_old_now``.",
+        "operationId": "rotate_webhook_secret",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RotateIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/webhooks/{webhook_id}/take-over": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Take Over Webhook",
+        "description": "An owner makes a paused webhook of someone else's their own.",
+        "operationId": "take_over_webhook",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/webhooks/{webhook_id}/deliveries": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "List Webhook Deliveries",
+        "description": "The delivery log, newest first, 50 a page.",
+        "operationId": "list_webhook_deliveries",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "retrying",
+                    "succeeded",
+                    "failed",
+                    "withheld"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/webhooks/{webhook_id}/deliveries/{delivery_id}": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Get Webhook Delivery",
+        "operationId": "get_webhook_delivery",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Delivery Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/requests": {
       "get": {
         "tags": [
@@ -57893,6 +58463,181 @@
         ],
         "title": "Definition"
       },
+      "DeliveryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "retrying",
+              "succeeded",
+              "failed",
+              "withheld"
+            ],
+            "title": "Status"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "next_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next At"
+          },
+          "last_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last At"
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Http Status"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "response_excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Excerpt"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "redelivery_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redelivery Of"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "event_id",
+          "event_type",
+          "status",
+          "attempts",
+          "next_at",
+          "last_at",
+          "http_status",
+          "duration_ms",
+          "error",
+          "response_excerpt",
+          "body",
+          "redelivery_of",
+          "created_at"
+        ],
+        "title": "DeliveryOut"
+      },
+      "DeliveryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DeliveryPage"
+      },
       "DependenciesCreate": {
         "properties": {
           "artifact_version_id": {
@@ -63048,6 +63793,39 @@
           "created_at"
         ],
         "title": "EvaluationReportOut"
+      },
+      "EventTypeOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "runs",
+              "drafts",
+              "approvals"
+            ],
+            "title": "Group"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "can_be_approvers_only": {
+            "type": "boolean",
+            "title": "Can Be Approvers Only"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "group",
+          "label",
+          "can_be_approvers_only"
+        ],
+        "title": "EventTypeOut"
       },
       "EvidenceChip": {
         "properties": {
@@ -75324,6 +76102,44 @@
         ],
         "title": "KnowledgeGapOut"
       },
+      "LastDelivery": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Http Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "at",
+          "http_status"
+        ],
+        "title": "LastDelivery"
+      },
       "LaunchCreate": {
         "properties": {
           "title": {
@@ -80697,7 +81513,9 @@
               "rereview_requested",
               "campaign",
               "patch_proposed",
-              "published"
+              "published",
+              "webhook_paused",
+              "webhook_url_changed"
             ],
             "title": "Kind"
           },
@@ -82384,6 +83202,19 @@
         ],
         "title": "PersonAsker",
         "description": "A person's question to a teammate: \"<name> asks\"."
+      },
+      "PersonName": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PersonName"
       },
       "PersonOut": {
         "properties": {
@@ -94336,6 +95167,17 @@
           "items"
         ],
         "title": "RoadmapItemsOut"
+      },
+      "RotateIn": {
+        "properties": {
+          "end_old_now": {
+            "type": "boolean",
+            "title": "End Old Now",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "RotateIn"
       },
       "RowOverride": {
         "properties": {
@@ -112823,6 +113665,275 @@
         ],
         "title": "WebSearchOut"
       },
+      "WebhookCreated": {
+        "properties": {
+          "webhook": {
+            "$ref": "#/components/schemas/WebhookOut"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "webhook",
+          "secret"
+        ],
+        "title": "WebhookCreated"
+      },
+      "WebhookIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Event Types"
+          },
+          "include_approvers_content": {
+            "type": "boolean",
+            "title": "Include Approvers Content",
+            "default": false
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "event_types"
+        ],
+        "title": "WebhookIn"
+      },
+      "WebhookOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "host": {
+            "type": "string",
+            "title": "Host"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Event Types"
+          },
+          "api_version": {
+            "type": "string",
+            "title": "Api Version"
+          },
+          "include_approvers_content": {
+            "type": "boolean",
+            "title": "Include Approvers Content"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "failing",
+                  "gone",
+                  "creator_disabled",
+                  "creator_demoted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "secret_hint": {
+            "type": "string",
+            "title": "Secret Hint"
+          },
+          "secret_rotated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Secret Rotated At"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/PersonName"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failing_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failing Since"
+          },
+          "can_take_over": {
+            "type": "boolean",
+            "title": "Can Take Over",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "url",
+          "host",
+          "event_types",
+          "api_version",
+          "include_approvers_content",
+          "status",
+          "paused_reason",
+          "secret_hint",
+          "secret_rotated_at",
+          "created_by",
+          "created_at"
+        ],
+        "title": "WebhookOut"
+      },
+      "WebhookPatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "event_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Types"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "include_approvers_content": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Approvers Content"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "WebhookPatch"
+      },
       "WeekValue": {
         "properties": {
           "week_start": {
@@ -113541,6 +114652,899 @@
         },
         "title": "GoalAttrs",
         "type": "object"
+      },
+      "WebhookActor": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "person",
+              "oracle",
+              "system"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WebhookActor",
+        "type": "object"
+      },
+      "WebhookApprovalData": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/WebhookDocument"
+          },
+          "approver": {
+            "$ref": "#/components/schemas/WebhookActor"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/WebhookActor"
+          }
+        },
+        "required": [
+          "document",
+          "approver",
+          "actor"
+        ],
+        "title": "WebhookApprovalData",
+        "type": "object"
+      },
+      "WebhookCheckpoint": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "approver_role": {
+            "title": "Approver Role",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "approved",
+                  "changes_requested"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Outcome"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "approver_role",
+          "url"
+        ],
+        "title": "WebhookCheckpoint",
+        "type": "object"
+      },
+      "WebhookCheckpointData": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/WebhookRun"
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/WebhookCheckpoint"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/WebhookActor"
+          }
+        },
+        "required": [
+          "run",
+          "checkpoint",
+          "actor"
+        ],
+        "title": "WebhookCheckpointData",
+        "type": "object"
+      },
+      "WebhookCompany": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "WebhookCompany",
+        "type": "object"
+      },
+      "WebhookDocument": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Version"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Origin"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "url"
+        ],
+        "title": "WebhookDocument",
+        "type": "object"
+      },
+      "WebhookDocumentData": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/WebhookDocument"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/WebhookActor"
+          }
+        },
+        "required": [
+          "document",
+          "actor"
+        ],
+        "title": "WebhookDocumentData",
+        "type": "object"
+      },
+      "WebhookInvalidatedData": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/WebhookDocument"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/WebhookActor"
+          }
+        },
+        "required": [
+          "document",
+          "reason",
+          "actor"
+        ],
+        "title": "WebhookInvalidatedData",
+        "type": "object"
+      },
+      "WebhookRun": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "flow": {
+            "title": "Flow",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Kind"
+          }
+        },
+        "required": [
+          "id",
+          "flow",
+          "status",
+          "url"
+        ],
+        "title": "WebhookRun",
+        "type": "object"
+      },
+      "WebhookRunData": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/WebhookRun"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/WebhookActor"
+          }
+        },
+        "required": [
+          "run",
+          "actor"
+        ],
+        "title": "WebhookRunData",
+        "type": "object"
+      },
+      "WebhookEvent_run.awaiting_approval": {
+        "description": "The body Oracle posts for a run.awaiting_approval event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.awaiting_approval",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_awaiting_approval",
+        "type": "object"
+      },
+      "WebhookEvent_run.started": {
+        "description": "The body Oracle posts for a run.started event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.started",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_started",
+        "type": "object"
+      },
+      "WebhookEvent_run.checkpoint_waiting": {
+        "description": "The body Oracle posts for a run.checkpoint_waiting event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.checkpoint_waiting",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookCheckpointData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_checkpoint_waiting",
+        "type": "object"
+      },
+      "WebhookEvent_run.checkpoint_decided": {
+        "description": "The body Oracle posts for a run.checkpoint_decided event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.checkpoint_decided",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookCheckpointData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_checkpoint_decided",
+        "type": "object"
+      },
+      "WebhookEvent_run.checkpoint_voided": {
+        "description": "The body Oracle posts for a run.checkpoint_voided event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.checkpoint_voided",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookCheckpointData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_checkpoint_voided",
+        "type": "object"
+      },
+      "WebhookEvent_run.paused_overrun": {
+        "description": "The body Oracle posts for a run.paused_overrun event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.paused_overrun",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_paused_overrun",
+        "type": "object"
+      },
+      "WebhookEvent_run.resumed": {
+        "description": "The body Oracle posts for a run.resumed event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.resumed",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_resumed",
+        "type": "object"
+      },
+      "WebhookEvent_run.succeeded": {
+        "description": "The body Oracle posts for a run.succeeded event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.succeeded",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_succeeded",
+        "type": "object"
+      },
+      "WebhookEvent_run.failed": {
+        "description": "The body Oracle posts for a run.failed event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.failed",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_failed",
+        "type": "object"
+      },
+      "WebhookEvent_run.cancelled": {
+        "description": "The body Oracle posts for a run.cancelled event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "run.cancelled",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookRunData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_run_cancelled",
+        "type": "object"
+      },
+      "WebhookEvent_draft.version_created": {
+        "description": "The body Oracle posts for a draft.version_created event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "draft.version_created",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookDocumentData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_draft_version_created",
+        "type": "object"
+      },
+      "WebhookEvent_draft.in_review": {
+        "description": "The body Oracle posts for a draft.in_review event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "draft.in_review",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookDocumentData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_draft_in_review",
+        "type": "object"
+      },
+      "WebhookEvent_approval.version_approved": {
+        "description": "The body Oracle posts for a approval.version_approved event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "approval.version_approved",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookApprovalData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_approval_version_approved",
+        "type": "object"
+      },
+      "WebhookEvent_approval.approvals_invalidated": {
+        "description": "The body Oracle posts for a approval.approvals_invalidated event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "approval.approvals_invalidated",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookInvalidatedData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_approval_approvals_invalidated",
+        "type": "object"
+      },
+      "WebhookEvent_approval.version_published": {
+        "description": "The body Oracle posts for a approval.version_published event.",
+        "properties": {
+          "id": {
+            "description": "evt_<ulid>: unique, the receivers' idempotency key",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "approval.version_published",
+            "title": "Type",
+            "type": "string"
+          },
+          "api_version": {
+            "title": "Api Version",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/WebhookCompany"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookDocumentData"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "api_version",
+          "occurred_at",
+          "company",
+          "data"
+        ],
+        "title": "WebhookEvent_approval_version_published",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -113554,6 +115558,323 @@
         "description": "UI session",
         "in": "cookie",
         "name": "oracle_session"
+      }
+    }
+  },
+  "webhooks": {
+    "run.awaiting_approval": {
+      "post": {
+        "summary": "A run's estimate is over the limit and waits for an owner",
+        "operationId": "webhook_run_awaiting_approval",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.awaiting_approval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.started": {
+      "post": {
+        "summary": "A run started",
+        "operationId": "webhook_run_started",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.started"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.checkpoint_waiting": {
+      "post": {
+        "summary": "A run is waiting at a checkpoint for a person",
+        "operationId": "webhook_run_checkpoint_waiting",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.checkpoint_waiting"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.checkpoint_decided": {
+      "post": {
+        "summary": "A checkpoint was approved or sent back with changes",
+        "operationId": "webhook_run_checkpoint_decided",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.checkpoint_decided"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.checkpoint_voided": {
+      "post": {
+        "summary": "A checkpoint decision was voided by a disable or demotion",
+        "operationId": "webhook_run_checkpoint_voided",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.checkpoint_voided"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.paused_overrun": {
+      "post": {
+        "summary": "A run passed its spend limit; an owner must resume it",
+        "operationId": "webhook_run_paused_overrun",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.paused_overrun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.resumed": {
+      "post": {
+        "summary": "An owner resumed a run",
+        "operationId": "webhook_run_resumed",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.resumed"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.succeeded": {
+      "post": {
+        "summary": "A run succeeded",
+        "operationId": "webhook_run_succeeded",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.succeeded"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.failed": {
+      "post": {
+        "summary": "A run failed",
+        "operationId": "webhook_run_failed",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.failed"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "run.cancelled": {
+      "post": {
+        "summary": "A run was cancelled",
+        "operationId": "webhook_run_cancelled",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_run.cancelled"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "draft.version_created": {
+      "post": {
+        "summary": "A new version of a document was imported",
+        "operationId": "webhook_draft_version_created",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_draft.version_created"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "draft.in_review": {
+      "post": {
+        "summary": "A document moved to In review",
+        "operationId": "webhook_draft_in_review",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_draft.in_review"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "approval.version_approved": {
+      "post": {
+        "summary": "A version was approved",
+        "operationId": "webhook_approval_version_approved",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_approval.version_approved"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "approval.approvals_invalidated": {
+      "post": {
+        "summary": "Approvals on a version lapsed or were voided",
+        "operationId": "webhook_approval_approvals_invalidated",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_approval.approvals_invalidated"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "approval.version_published": {
+      "post": {
+        "summary": "A version was published",
+        "operationId": "webhook_approval_version_published",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent_approval.version_published"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
       }
     }
   }

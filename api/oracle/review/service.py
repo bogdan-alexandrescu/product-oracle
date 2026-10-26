@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, wording
+from oracle import audit, webhooks, wording
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review import publish_gate
@@ -147,9 +147,14 @@ async def _comment_document(session: AsyncSession, comment: Comment) -> Document
     return await session.get(Document, version.document_id)
 
 
-async def _mark_in_review(session: AsyncSession, document: Document) -> None:
+async def _mark_in_review(
+    session: AsyncSession, document: Document, principal: "Principal", version: int
+) -> None:
     if document.status == "draft":
         document.status = "in_review"
+        await webhooks.capture(
+            session, "draft.in_review", principal, document_id=document.id, version=version
+        )
 
 
 # --- Serialisation -----------------------------------------------------------------------
@@ -363,7 +368,7 @@ async def create_comment(
     session.add(item)
     await session.flush()
     document = await session.get(Document, version.document_id)
-    await _mark_in_review(session, document)
+    await _mark_in_review(session, document, principal, version.number)
     from oracle.review import collab
 
     await collab.on_comment(session, principal, document, version.number, comment)
@@ -415,7 +420,9 @@ async def create_general_feedback(
     )
     session.add(item)
     await session.flush()
-    await _mark_in_review(session, await session.get(Document, version.document_id))
+    await _mark_in_review(
+        session, await session.get(Document, version.document_id), principal, version.number
+    )
     await audit.record(
         session,
         principal,
@@ -748,7 +755,9 @@ async def review_section(
     )
     if state is not None and state.rereview_requested_at is not None:
         state.rereview_requested_at = None
-    await _mark_in_review(session, await session.get(Document, version.document_id))
+    await _mark_in_review(
+        session, await session.get(Document, version.document_id), principal, version.number
+    )
     await session.flush()
     return review, item
 
@@ -1141,6 +1150,13 @@ async def approve_version(
         },
     )
     if not already:
+        await webhooks.capture(
+            session,
+            "approval.version_approved",
+            principal,
+            document_id=document.id,
+            version=version.number,
+        )
         # H1: the first approval of a version is a decision ("Publish <document> v<n>").
         from oracle.decisions import capture
 

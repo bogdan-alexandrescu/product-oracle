@@ -205,6 +205,11 @@ async def set_role(
     await audit.record(
         session, principal, "member.role", "user", user.id, {"before": before, "after": role}
     )
+    # I1: below approver their webhooks pause; below owner, owners-and-approvers content
+    # goes off them.
+    from oracle.webhooks import service as webhooks_service
+
+    await webhooks_service.creator_role_changed(session, principal, user.id, role)
     if cleared:
         await audit.record(
             session,
@@ -413,6 +418,10 @@ async def disable_member(
     tokens = await select_tokens(session, user.id)
     for token in tokens:
         token.revoked_at = at
+    # I1: their webhooks pause; a restore does not resume them.
+    from oracle.webhooks import service as webhooks_service
+
+    await webhooks_service.creator_disabled(session, principal, user.id)
     await session.execute(
         update(OAuthToken)
         .where(*_grants_where(user.id))
