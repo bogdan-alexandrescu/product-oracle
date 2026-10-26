@@ -647,3 +647,22 @@ def test_the_loopback_switch_is_refused_in_a_real_deployment():
     assert Settings(webhooks_allow_loopback_for_tests=True).webhooks_allow_loopback_for_tests
     with pytest.raises(ValueError):
         Settings(webhooks_allow_loopback_for_tests=True, cookie_secure=True)
+
+
+# --- the tick -------------------------------------------------------------------------------
+
+
+async def test_the_minute_tick_fans_out_and_delivers_each_companys_events(
+    client, tenant_id, owner, receiver
+):
+    """protects=spec Delivery (the outbox runs as a step of _tick_company, counted in the
+    tick's answer); fails_when=the ticker never sends a captured event."""
+    from oracle.ticker import router as ticker
+
+    await hook(client, owner.headers)
+    sub = await subjects(tenant_id)
+    await capture(tenant_id, "run.started", None, run_id=sub["run_id"])
+    out = ticker.TickerOut()
+    await ticker._tick_company(tenant_id, out, ticker._Failures(out))
+    assert out.webhooks.queued == 1 and out.webhooks.sent == 1
+    assert [json.loads(r.content)["type"] for r in receiver.got] == ["run.started"]
