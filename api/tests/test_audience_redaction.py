@@ -162,21 +162,28 @@ def test_board_of_a_version_without_items_says_so_in_words():
 
 
 def test_board_rows_are_grouped_by_horizon_and_capped():
-    """protects=Board groups rows as before (Now, Next, Later; at most 7 per horizon,
-    best ranked first); fails_when=a row sits under another horizon or the cap is lost;
-    no_claim=grouping by goal (an open owner question)."""
+    """protects=Board groups rows by horizon (Now, Next, Later; at most 7 per horizon,
+    best ranked first), then by goal group (owner decision 2026-10-26); fails_when=a row
+    sits under another horizon or the cap is lost; no_claim=deriving the group from the
+    baseline (tests/test_board_goal_groups.py)."""
     items = [
         variants.ItemView(key=f"k{n}", title=f"Row {n}", outcome="Lands", horizon="now",
-                          position=n, rank=float(10 - n), confidence="low", goals=["Grow"])
+                          position=n, rank=float(10 - n), confidence="low", goals=["Grow"],
+                          group="Grow")
         for n in range(9)
     ] + [variants.ItemView(key="z", title="Later row", outcome="Ships", horizon="later",
                            position=9, confidence="medium")]  # fmt: skip
     out = variants.rebuild(_sections("Written.", items), "board", items, set())
-    assert [(s.section_key, s.heading) for s in out] == [("now", "Now"), ("later", "Later")]
-    now_rows = [ln for ln in out[0].body_md.split("\n") if ln.startswith("| Row")]
+    assert [(s.section_key, s.heading) for s in out] == [
+        ("now", "Now"),
+        ("now-group-1", "Grow"),
+        ("later", "Later"),
+        ("later-group-1", variants.NO_GOAL_GROUP),
+    ]
+    now_rows = [ln for ln in out[1].body_md.split("\n") if ln.startswith("| Row")]
     assert [r.split(" | ")[0] for r in now_rows] == [f"| Row {n}" for n in range(8, 1, -1)]
     # An item with no goal link where the tenant has no confirmed goal: an empty cell.
-    assert "| Later row | Ships | medium |  |" in out[1].body_md
+    assert "| Later row | Ships | medium |  |" in out[3].body_md
 
 
 # --- property: no written text of any form reaches Board -------------------------------
