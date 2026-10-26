@@ -9,14 +9,18 @@ import base64
 import copy
 import json
 import re
+import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import httpx
 import mcp_types as types
 from fastapi import FastAPI
+from fastapi.routing import iter_route_contexts
+from starlette.routing import Match
 
 from oracle.auth.deps import READ_ONLY
 from oracle.mcp import scopes
@@ -294,6 +298,50 @@ class RestResponse:
         )
 
 
+# A path value holding one of these could leave its segment (a /, an encoded one, a
+# backslash, a query or fragment, a control character): the call would reach another
+# route than the one whose scope was checked.
+_UNSAFE_PATH_VALUE = re.compile(r"[/\\%?#\x00-\x1f\x7f]")
+
+
+def _path_value(p: Param, value: Any) -> str:
+    """``value`` as the text of path parameter ``p``; ToolError unless it fits its
+    declared type and format and stays one plain segment."""
+    kind = p.schema.get("type")
+    fmt = p.schema.get("format")
+    refused = ToolError(f"Refused: {p.name} is not a valid {fmt or kind or 'path value'}.")
+    if kind == "integer":
+        if isinstance(value, bool) or not (
+            isinstance(value, int) or (isinstance(value, str) and re.fullmatch(r"-?\d+", value))
+        ):
+            raise refused
+        return str(int(value))
+    if not isinstance(value, str):
+        raise refused
+    try:
+        if fmt == "uuid":
+            return str(uuid.UUID(value))
+        if fmt == "date":
+            return date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise refused from None
+    if not value.strip() or value == "." or ".." in value or _UNSAFE_PATH_VALUE.search(value):
+        raise refused
+    return value
+
+
+def _resolves_to(app: FastAPI, op: Operation, path: str) -> bool:
+    """Whether the app routes ``op.method path`` to ``op``'s own route, as it will once
+    the in-process transport decodes the path."""
+    scope = {"type": "http", "method": op.method, "path": unquote(path), "root_path": ""}
+    # In the router's own order, included routers walked into, as FastAPI matches them.
+    for route in iter_route_contexts(app.router.routes):
+        match, _ = route.matches(scope)
+        if match == Match.FULL:
+            return getattr(route, "path_format", None) == op.path
+    return False
+
+
 def _build_request(op: Operation, args: dict[str, Any]) -> tuple[str, dict, Any, str | None]:
     path = op.path
     query: dict[str, Any] = {}
@@ -311,7 +359,7 @@ def _build_request(op: Operation, args: dict[str, Any]) -> tuple[str, dict, Any,
         if value is None:
             continue
         if p.location == "path":
-            path = path.replace("{" + p.name + "}", quote(str(value), safe=""))
+            path = path.replace("{" + p.name + "}", quote(_path_value(p, value), safe=""))
         else:
             query[p.name] = value
     body = args.get(op.body_key) if op.body_media_type else None
@@ -384,6 +432,9 @@ async def call_operation(
         if held:
             raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {held}.")
     path, query, body, media = _build_request(op, args)
+    # The scope above was checked against op.path: the request must reach that route.
+    if not _resolves_to(app, op, path):
+        raise ToolError(f"Refused: {op.method} {path} is not a {op.method} {op.path} call.")
     if caller.kind == "run" and scopes.required_scope(op.method, op.path) == "write:drafts":
         refusal = await _run_document_refusal(caller, str(args.get("doc") or ""))
         if refusal:

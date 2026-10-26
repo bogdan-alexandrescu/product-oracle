@@ -135,9 +135,10 @@ async def answers(db: AsyncSession, principal: Principal, rows: list[Any]) -> li
     out = []
     for a in rows:
         q = found.get(a.question_id)
-        if q is not None and await readers.question(q) is None:
+        # No question found: the trash hides it (a trashed intake's), so its answer too.
+        if q is None or await readers.question(q) is None:
             continue
-        if pin is not None and not pin.keeps(q.intake_id if q else None, a.id):
+        if pin is not None and not pin.keeps(q.intake_id, a.id):
             continue
         out.append(StakeholderAnswerOut.model_validate(a))
     return out
