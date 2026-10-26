@@ -12084,7 +12084,9 @@ export interface paths {
         put?: never;
         /**
          * Accept Date Suggestion
-         * @description Accept: the item takes the suggested dates (``date_source`` accepted).
+         * @description Accept: an ``accept_date_suggestion`` change (D-b). Who decides puts the suggested
+         *     dates into the roadmap's working draft (``date_source`` accepted, undoable); others
+         *     propose it. 409 ``outdated`` when the item has dates now.
          */
         post: operations["accept_date_suggestion"];
         delete?: never;
@@ -12104,7 +12106,7 @@ export interface paths {
         put?: never;
         /**
          * Edit Date Suggestion
-         * @description Edit: the item takes these dates instead (``date_source`` accepted).
+         * @description Edit: the same change with these dates instead (the suggestion becomes edited).
          */
         post: operations["edit_date_suggestion"];
         delete?: never;
@@ -12361,6 +12363,28 @@ export interface paths {
          *     is approved (published to readers) when all are in.
          */
         post: operations["approve_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Simple Draft
+         * @description Withdraw a submitted draft from review: it is a working draft again, its changes
+         *     kept and undoable in their session; the version it imported is marked withdrawn and
+         *     can't be approved. Its author or the roadmap's decider.
+         */
+        post: operations["withdraw_simple_draft"];
         delete?: never;
         options?: never;
         head?: never;
@@ -35767,6 +35791,38 @@ export interface components {
             changes: number;
         };
         /**
+         * SimpleDraftChange
+         * @description One change a draft holds (D-d): what an approval covers, by whom, when, and whether
+         *     it was made in a meeting.
+         */
+        SimpleDraftChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Op */
+            op: string;
+            /** Item Id */
+            item_id: string | null;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Session Kind */
+            session_kind: ("editing" | "meeting") | null;
+            /** In Meeting */
+            in_meeting: boolean;
+        };
+        /**
          * SimpleDraftOut
          * @description A working draft of one roadmap (S3b): its changes until submitted, then the version
          *     in review and who it waits on.
@@ -35822,6 +35878,16 @@ export interface components {
             can_resume: boolean;
             /** Can Approve */
             can_approve: boolean;
+            /**
+             * Change Log
+             * @default []
+             */
+            change_log: components["schemas"]["SimpleDraftChange"][];
+            /**
+             * Can Withdraw
+             * @default false
+             */
+            can_withdraw: boolean;
         };
         /** SimpleFlag */
         SimpleFlag: {
@@ -64960,7 +65026,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DateSuggestionOut"];
+                    "application/json": components["schemas"]["SimpleChangeResult"];
                 };
             };
             /** @description Validation Error */
@@ -64995,7 +65061,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DateSuggestionOut"];
+                    "application/json": components["schemas"]["SimpleChangeResult"];
                 };
             };
             /** @description Validation Error */
@@ -65408,6 +65474,37 @@ export interface operations {
         };
     };
     approve_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_simple_draft: {
         parameters: {
             query?: never;
             header?: never;

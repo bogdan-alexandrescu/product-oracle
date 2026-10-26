@@ -41911,7 +41911,7 @@
           "simple"
         ],
         "summary": "Accept Date Suggestion",
-        "description": "Accept: the item takes the suggested dates (``date_source`` accepted).",
+        "description": "Accept: an ``accept_date_suggestion`` change (D-b). Who decides puts the suggested\ndates into the roadmap's working draft (``date_source`` accepted, undoable); others\npropose it. 409 ``outdated`` when the item has dates now.",
         "operationId": "accept_date_suggestion",
         "security": [
           {
@@ -41939,7 +41939,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DateSuggestionOut"
+                  "$ref": "#/components/schemas/SimpleChangeResult"
                 }
               }
             }
@@ -41955,8 +41955,7 @@
             }
           }
         },
-        "x-min-role": "viewer",
-        "x-per-item": "owner"
+        "x-min-role": "commenter"
       }
     },
     "/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit": {
@@ -41965,7 +41964,7 @@
           "simple"
         ],
         "summary": "Edit Date Suggestion",
-        "description": "Edit: the item takes these dates instead (``date_source`` accepted).",
+        "description": "Edit: the same change with these dates instead (the suggestion becomes edited).",
         "operationId": "edit_date_suggestion",
         "security": [
           {
@@ -42003,7 +42002,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DateSuggestionOut"
+                  "$ref": "#/components/schemas/SimpleChangeResult"
                 }
               }
             }
@@ -42019,8 +42018,7 @@
             }
           }
         },
-        "x-min-role": "viewer",
-        "x-per-item": "owner"
+        "x-min-role": "commenter"
       }
     },
     "/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss": {
@@ -42816,6 +42814,60 @@
         },
         "x-min-role": "commenter",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/drafts/{draft_id}/withdraw": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Withdraw Simple Draft",
+        "description": "Withdraw a submitted draft from review: it is a working draft again, its changes\nkept and undoable in their session; the version it imported is marked withdrawn and\ncan't be approved. Its author or the roadmap's decider.",
+        "operationId": "withdraw_simple_draft",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/drafts/{draft_id}/resume": {
@@ -108128,6 +108180,77 @@
         ],
         "title": "SimpleDraftBrief"
       },
+      "SimpleDraftChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "op": {
+            "type": "string",
+            "title": "Op"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "By"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "session_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "editing",
+                  "meeting"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Kind"
+          },
+          "in_meeting": {
+            "type": "boolean",
+            "title": "In Meeting"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "op",
+          "item_id",
+          "by",
+          "by_name",
+          "at",
+          "session_kind",
+          "in_meeting"
+        ],
+        "title": "SimpleDraftChange",
+        "description": "One change a draft holds (D-d): what an approval covers, by whom, when, and whether\nit was made in a meeting."
+      },
       "SimpleDraftOut": {
         "properties": {
           "id": {
@@ -108259,6 +108382,19 @@
           "can_approve": {
             "type": "boolean",
             "title": "Can Approve"
+          },
+          "change_log": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftChange"
+            },
+            "type": "array",
+            "title": "Change Log",
+            "default": []
+          },
+          "can_withdraw": {
+            "type": "boolean",
+            "title": "Can Withdraw",
+            "default": false
           }
         },
         "type": "object",

@@ -4807,7 +4807,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (roadmapRes) return roadmapRes;
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   db.simple_roadmap ??= seedSimpleRoadmap();
-  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role }, req, p, q);
+  const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
+  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles }, req, p, q);
   if (simpleRes) return simpleRes;
   const simpleChanges = await routeSimpleChanges(
     db.simple_roadmap,
@@ -4816,6 +4817,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       role: me.role,
       owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
       names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+      roles: simpleRoles,
     },
     req,
     p,
@@ -4900,7 +4902,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Simple S3a: proposals waiting for me count; decisions on mine are shown.
-    const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore);
+    const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+    });
     Object.assign(inbox, simpleRows);
     inbox.total += simpleRows.simple_proposals.length;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;

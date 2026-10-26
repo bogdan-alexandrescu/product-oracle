@@ -55,10 +55,15 @@ async def regenerate(db: AsyncSession) -> int:
         text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
         {"k": f"simple_date_suggestions:{current_tenant(db)}"},
     )
+    from oracle.simple import drafts
+
     principal = visibility.principal_of(db)
     visibility.bind(db, None)
     try:
-        read = await service.load(db)
+        # The items as their open drafts have them: dates accepted into a working draft
+        # (D-b) are not offered again.
+        overlays = {d.document_id: dict(d.overlay or {}) for d in await drafts.open_drafts(db)}
+        read = await service.load(db, overlays)
     finally:
         visibility.bind(db, principal)
     entries = read.entries

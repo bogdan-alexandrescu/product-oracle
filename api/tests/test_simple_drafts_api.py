@@ -235,9 +235,11 @@ async def test_approve_in_meeting_present_and_absent(client):
                               headers=w.ctx.as_("decider"))).status_code == 200  # fmt: skip
     async with tenant_session(w.ctx.tenant_id) as s:
         session = await s.get(SimpleSession, uuid.UUID(sid))
-        [out] = await drafts.approve_in_meeting(
-            s, session, w.ctx.users["decider"].id, [w.ctx.users["approver"].id]
-        )
+        [out] = (
+            await drafts.approve_in_meeting(
+                s, session, w.ctx.users["decider"].id, [w.ctx.users["approver"].id]
+            )
+        ).drafts
         await s.commit()
     assert out.status == "submitted"
     assert out.waiting_on == [w.ctx.users["reviewer2"].id]

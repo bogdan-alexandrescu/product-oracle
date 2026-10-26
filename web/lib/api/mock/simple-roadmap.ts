@@ -54,12 +54,23 @@ interface SimpleDb {
   drafts?: MockDraft[];
   /** S3b: non-versioned targets (item tasks, action items, overrides, launch tasks) by id. */
   targets?: Record<string, Record<string, unknown>>;
+  /** D-a (#730 review): each roadmap's designated decider (roadmap slug -> person id). */
+  deciders?: Record<string, string>;
+  /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
+  track_owners?: Record<string, string>;
+}
+
+/** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
+export interface Who {
+  id: string;
+  role: Role;
+  roles?: Record<string, Role>;
 }
 
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
  * draft's; `published` keeps the roadmap's published items for those who may not see it. */
 interface MockDraft {
-  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve">;
+  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "change_log" | "can_withdraw">;
   roadmap: string;
   published: { items: SeedItem[]; own: SimpleDb["own"] };
 }
@@ -177,8 +188,34 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   return out;
 }
 
-/** The mock's roadmaps name no decider and no track owner: owners decide (service.can_decide). */
-const canDecide = (role: Role): boolean => role === "owner";
+const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
+
+/** service.decider_ids (D-a): the roadmap's decider, else the item's track owner when an
+ * approver or owner; [] when the company's owners decide. The seed names none (set
+ * `deciders` and `track_owners` to reach those paths). */
+export function deciderIds(db: SimpleDb, s: SeedItem, roles?: Record<string, Role>): string[] {
+  const decider = db.deciders?.[s.roadmap];
+  if (decider) return [decider];
+  const owner = s.track ? db.track_owners?.[s.track] : undefined;
+  return owner && RANK[roles?.[owner] ?? "viewer"] >= RANK.approver ? [owner] : [];
+}
+
+/** service.can_decide (D-a): an owner; the decider; with none, the item's track owner while an approver or owner. */
+export function canDecideItem(db: SimpleDb, s: SeedItem, me: { id: string; role: Role }): boolean {
+  if (me.role === "owner") return true;
+  const decider = db.deciders?.[s.roadmap];
+  if (decider) return decider === me.id;
+  return !!s.track && db.track_owners?.[s.track] === me.id && RANK[me.role] >= RANK.approver;
+}
+
+/** drafts.can_edit: who changes (submits, approves) a roadmap directly. */
+export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; role: Role }): boolean {
+  if (me.role === "owner") return true;
+  const decider = db.deciders?.[roadmap];
+  if (decider) return decider === me.id;
+  const tracks = new Set(db.items.filter((s) => s.roadmap === roadmap && s.track).map((s) => s.track!));
+  return [...tracks].some((t) => db.track_owners?.[t] === me.id) && RANK[me.role] >= RANK.approver;
+}
 
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
@@ -244,9 +281,9 @@ export function draftChanges(db: SimpleDb, id: string): number {
   return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
 }
 
-/** Who sees a draft in the mock (no deciders, reviewers or track owners): owners and its people. */
-export function seesDraft(d: MockDraft, me: { id: string; role: Role }): boolean {
-  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id);
+/** Who sees a draft in the mock (no required reviewers): owners, its people and the roadmap's decider. */
+export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
+  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id;
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
@@ -256,7 +293,7 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   let hidden = 0;
   const visible: Schemas["SimpleDraftBrief"][] = [];
   for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status))) {
-    if (seesDraft(d, me)) {
+    if (seesDraft(d, me, db)) {
       visible.push({ id: d.out.id, document_id: d.out.document.id, status: d.out.status, changes: draftChanges(db, d.out.id) });
       continue;
     }
@@ -271,6 +308,7 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
 }
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { id: string; role: Role }): Schemas["SimpleRoadmapOut"] | null {
+  const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
   const reader = me ? readerView(db, me) : { db, hidden: 0, visible: [] };
   db = reader.db;
   const today = iso(mockNowMs());
@@ -295,7 +333,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { 
       start: r.start, end: r.end,
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
-      suggestion: suggestion ? { ...suggestion, can_decide: canDecide(role) } : null,
+      suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
       milestone: s.milestone ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item" } : null,
       phases: phases(r.start.date, r.end.date),
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
@@ -343,7 +381,7 @@ function json(status: number, body: unknown): Response {
 }
 
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
-export async function routeSimpleRoadmap(db: SimpleDb, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
   const m = req.method;
   const today = iso(mockNowMs());
@@ -355,28 +393,21 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: { id: string; role: R
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {
     const status = q.get("status") ?? "open";
-    const keys = new Set(visibleItems(db, me.role).map((s) => db.ids[s.key]));
-    return json(200, db.suggestions.filter((s) => s.status === status && keys.has(s.item_id)).map((s) => ({ ...s, can_decide: canDecide(me.role) })));
+    const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
+    return json(200, db.suggestions.filter((s) => s.status === status && seeds.has(s.item_id)).map((s) => ({ ...s, can_decide: canDecideItem(db, seeds.get(s.item_id)!, me) })));
   }
   if (p[4] === "refresh" && m === "POST") {
     if (me.role !== "owner" && me.role !== "approver") return json(403, { detail: "Requires the approver role" });
     return json(200, { open: regenerate(db, today) });
   }
-  const action = p[5];
-  if (m !== "POST" || !p[4] || !["accept", "edit", "dismiss"].includes(action ?? "")) return null;
+  // D-b: accept and edit are changes (./simple-changes.ts routes them); dismiss is here.
+  if (m !== "POST" || !p[4] || p[5] !== "dismiss") return null;
   const s = db.suggestions.find((x) => x.id === p[4]);
   const item = s && visibleItems(db, me.role).find((x) => db.ids[x.key] === s.item_id);
   if (!s || !item) return json(404, { detail: "No such date suggestion" });
-  if (!canDecide(me.role)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions" });
+  if (!canDecideItem(db, item, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions" });
   if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
-  if (action === "edit") {
-    const body = (await req.json()) as { start_date?: string; end_date?: string };
-    if (!body.start_date || !body.end_date || body.end_date < body.start_date) return json(422, { detail: "end_date must not be before start_date" });
-    db.own[item.key] = { start: body.start_date, end: body.end_date };
-  } else if (action === "accept") {
-    db.own[item.key] = { start: s.start_date, end: s.end_date };
-  }
-  Object.assign(s, { status: { accept: "accepted", edit: "edited", dismiss: "dismissed" }[action!], decided_by: me.id, decided_at: new Date(mockNowMs()).toISOString() });
+  Object.assign(s, { status: "dismissed", decided_by: me.id, decided_at: new Date(mockNowMs()).toISOString() });
   return json(200, { ...s, can_decide: true });
 }
 

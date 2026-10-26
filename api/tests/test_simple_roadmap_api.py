@@ -587,14 +587,15 @@ async def test_accept_edit_dismiss(client):
     rows = {r["item_key"]: r for r in (await client.get(SUGGESTIONS, headers=owner)).json()}
     assert set(rows) == {"a", "b", "c"}
 
+    # #730 review (D-b): accept and edit answer the change they made through the engine.
     r = await client.post(f"{SUGGESTIONS}/{rows['a']['id']}/accept", headers=owner)
-    assert r.status_code == 200 and r.json()["status"] == "accepted"
+    assert r.status_code == 200 and r.json()["change"]["status"] == "applied"
     r = await client.post(
         f"{SUGGESTIONS}/{rows['b']['id']}/edit",
         headers=owner,
         json={"start_date": "2026-11-02", "end_date": "2026-11-30"},
     )
-    assert r.status_code == 200 and r.json()["status"] == "edited"
+    assert r.status_code == 200 and r.json()["change"]["after"]["start_date"] == "2026-11-02"
     r = await client.post(
         f"{SUGGESTIONS}/{rows['b']['id']}/edit",
         headers=owner,
