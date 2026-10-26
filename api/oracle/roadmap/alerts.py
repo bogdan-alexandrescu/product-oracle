@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
@@ -311,16 +311,25 @@ def may_accept(principal: "Principal", leads: frozenset[uuid.UUID]) -> bool:
 
 
 def actions(
-    a: TrackAlert, track: ProductTrack, principal: "Principal", leads: frozenset[uuid.UUID]
+    a: TrackAlert,
+    track: ProductTrack,
+    principal: "Principal",
+    leads: frozenset[uuid.UUID],
+    level: str = "recommend",
 ) -> list[str]:
+    """What the caller may do now. ``level``: H11 ``roadmap_watch``. Oracle's one-step
+    fixes follow it: Re-plan (a draft roadmap run for the track's owner) from Draft, Accept
+    new date (the date change with the tracker's evidence) at Recommend; at Observe an
+    alert only flags."""
     if principal.read_only:
         return ["open_blocker"] if a.kind == "blocked" and a.state != "resolved" else []
     out: list[str] = []
     live = a.state != "resolved"
     approver = has_role(principal.role, "approver") and principal.run_id is None
-    if a.kind == "date_slip" and a.state == "open" and may_accept(principal, leads):
+    proposes, drafts = level == "recommend", level in ("draft", "recommend")
+    if proposes and a.kind == "date_slip" and a.state == "open" and may_accept(principal, leads):
         out.append("accept_date")
-    if live and approver and a.kind in REPLAN_KINDS:
+    if drafts and live and approver and a.kind in REPLAN_KINDS:
         out.append("replan")
     if live and approver and a.kind == "stale":
         out += ["review", "reconcile"]
@@ -343,6 +352,8 @@ class Lookups:
     titles: dict[tuple[uuid.UUID, str], str]
     names: dict[uuid.UUID, str]
     leads: frozenset[uuid.UUID]
+    # H11 ``roadmap_watch``, read per request.
+    level: str = "recommend"
 
 
 async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
@@ -375,7 +386,8 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
         u.id: u.email
         for u in (await db.scalars(select(User).where(User.id.in_(kept_by))) if kept_by else [])
     }
-    return Lookups(track_rows, prds, titles, names, await engineering_leads(db))
+    level = await autonomy.level(db, "roadmap_watch")
+    return Lookups(track_rows, prds, titles, names, await engineering_leads(db), level)
 
 
 def out(
@@ -400,7 +412,7 @@ def out(
         kept_at=a.kept_at,
         note=a.note,
         resolved_at=a.resolved_at,
-        actions=actions(a, track, principal, lk.leads),  # type: ignore[arg-type]
+        actions=actions(a, track, principal, lk.leads, lk.level),  # type: ignore[arg-type]
     )
 
 

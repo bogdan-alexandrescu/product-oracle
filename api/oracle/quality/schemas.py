@@ -266,9 +266,10 @@ class ShipSignal(BaseModel):
 
 
 class ProposedAssessment(BaseModel):
-    """Oracle's reading on the due date; a person confirms, edits or marks it inconclusive."""
+    """Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.
+    ``verdict`` is None at H11 ``outcomes`` Observe or Draft: the actual only."""
 
-    verdict: Verdict
+    verdict: Verdict | None
     observed: str | None = None
     actual_value: float | None = None
     measured_at: date | None = None

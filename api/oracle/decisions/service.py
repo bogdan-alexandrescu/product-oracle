@@ -2,14 +2,18 @@
 them, the Inbox rows they raise, and the baseline ``decision`` entity a decided judgement
 call keeps in step.
 
-A decision has one approver, and only that person decides it: Oracle never decides on
-its own (H11 Autonomy is not built). A hard-to-reverse decision also needs its approver
+A decision has one approver, and only that person decides it, except where H11 Autonomy
+sets Decide reversible calls to "Act within limits": then Oracle decides a reversible
+proposal of a listed origin on the option it recommends, within the cost limit
+(:func:`decide_within_limits`), and tells the approver, whose Undo in the Inbox hands it
+back as a revisit. A hard-to-reverse decision also needs its approver
 to hold the company setting ``decision_irreversible_role`` (default ``owner``). Checkpoint
 records (:mod:`oracle.decisions.capture`) record a run's decision and are never edited.
 
 The caller commits.
 """
 
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -486,6 +490,9 @@ async def create(
         d.id,
         {"number": d.number, "approver_id": str(d.approver_id), "origin": d.origin},
     )
+    if by_oracle and supersedes is None:
+        # A run's proposal comes with Oracle's recommendation (H11 ``decisions`` at Act).
+        await decide_within_limits(db, d)
     return d
 
 
@@ -681,6 +688,136 @@ async def decide(db: AsyncSession, principal: Principal, d: Decision, body: Deci
         },
     )
     return d
+
+
+# Oracle's own decision (H11 ``decisions`` at Act) is handed back from the Inbox with this
+# note: a revisit, a new proposal for the approver with no recommendation.
+UNDO_NOTE = "Handed Oracle's decision back from the Inbox"
+_USD = re.compile(r"(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)", re.IGNORECASE)
+
+
+def stated_cost(option: dict[str, Any]) -> float:
+    """The highest dollar amount an option's cost of being wrong states ("about $120");
+    0 when it names none (the cost is in time or words, not money)."""
+    amounts = [float(m.replace(",", "")) for m in _USD.findall(option.get("cost_if_wrong") or "")]
+    return max(amounts, default=0.0)
+
+
+async def _limits_set_by(db: AsyncSession) -> str:
+    """Who set Decide reversible calls to Act: the latest change's owner, by email."""
+    actor = await db.scalar(
+        select(AuditEvent.actor)
+        .where(
+            AuditEvent.action == "autonomy.changed",
+            AuditEvent.data["key"].astext == "decisions",
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .limit(1)
+    )
+    _, _, raw = (actor or "").partition(":")
+    try:
+        user = await db.get(User, uuid.UUID(raw)) if raw else None
+    except ValueError:
+        user = None
+    return user.email if user is not None else "an owner"
+
+
+async def _about_approvers_only(db: AsyncSession, d: Decision) -> bool:
+    """Whether a subject of ``d`` is an approvers-only document (or one of its versions)."""
+    from oracle.docs.models import DocumentVersion
+    from oracle.docs.visibility import hidden_document_ids
+
+    ids: set[uuid.UUID] = set()
+    for s in d.subjects or []:
+        try:
+            key = uuid.UUID(str(s.get("id")))
+        except ValueError:
+            continue
+        if s.get("kind") == "document":
+            ids.add(key)
+        elif s.get("kind") == "document_version":
+            doc = await db.scalar(
+                select(DocumentVersion.document_id)
+                .where(DocumentVersion.id == key)
+                .execution_options(oracle_all_documents=True)
+            )
+            if doc is not None:
+                ids.add(doc)
+    return bool(ids and await hidden_document_ids(db, ids, as_member=True))
+
+
+async def decide_within_limits(db: AsyncSession, d: Decision) -> bool:
+    """H11 ``decisions`` at "Act within limits": Oracle decides a proposal on the option it
+    recommends when the decision is reversible (fixed), of a listed origin, and the
+    option's stated cost is within the limit, and it neither revisits a decision nor is
+    about an approvers-only document; then the approver gets an "Oracle did" row
+    whose Undo hands it back (a revisit, :func:`review`). Anything else waits for the
+    approver. Flushes; the caller commits. Returns whether Oracle decided."""
+    from oracle import autonomy
+
+    if d.status != "proposed" or d.origin == "checkpoint" or d.reversibility != "reversible":
+        return False
+    # A revisit (an Undo, or a person's) is the approver's; so is a call about an
+    # approvers-only document: pricing stays with people.
+    if d.supersedes_id is not None or await _about_approvers_only(db, d):
+        return False
+    if not await autonomy.allows(db, "decisions", "act"):
+        return False
+    limits = await autonomy.limits(db, "decisions")
+    options = list(d.options or [])
+    pick = next((o for o in options if o.get("recommended")), None)
+    if limits is None or pick is None or len(options) < 2:
+        return False
+    if d.origin not in getattr(limits, "origins", ()):
+        return False
+    if stated_cost(pick) > getattr(limits, "max_cost_usd", 0):
+        return False
+    approver = await db.get(User, d.approver_id)
+    if approver is None or approver.disabled_at is not None:
+        return False
+    day = await company_today(db)
+    kept = d.review_at if d.review_at and d.review_at >= day else None
+    why = (pick.get("summary") or pick.get("label") or "").strip()
+    d.chosen_option = pick["key"]
+    d.rationale = (
+        f"Decided by Oracle within limits set by {await _limits_set_by(db)}. "
+        f"It recommended {pick.get('label') or pick['key']}" + (f": {why}" if why else ".")
+    )
+    d.expected_outcome = d.expected_outcome or why or str(pick.get("label") or pick["key"])
+    d.review_at = kept or day + timedelta(days=REVIEW_DAYS)
+    d.status = "decided"
+    d.decided_by = None
+    d.decided_actor = "oracle"
+    d.decided_at = _now()
+    await flush_or_conflict(db)
+    await sync_entity(db, None, d)
+    await audit.record(
+        db,
+        audit.ORACLE,
+        "decision.decided",
+        "decision",
+        d.id,
+        {
+            "number": d.number,
+            "chosen_option": d.chosen_option,
+            "reversibility": d.reversibility,
+            "review_at": d.review_at.isoformat(),
+            "by": "oracle",
+        },
+    )
+    await autonomy.acted(
+        db,
+        "decisions",
+        summary=f"Decided {ref(d.number)}: {pick.get('label') or pick['key']}",
+        subject={"kind": "decision", "key": str(d.id), "href": f"/company/decisions?d={d.number}"},
+        undo={
+            "method": "POST",
+            "path": f"/v1/decisions/{d.id}/reviews",
+            "body": {"verdict": "revisit", "note": UNDO_NOTE},
+        },
+        notify=[d.approver_id],
+    )
+    return True
 
 
 async def reassign(
