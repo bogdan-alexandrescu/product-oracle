@@ -201,9 +201,10 @@ async def feedback_out(
             select(SectionReview.id, SectionReview.verdict).where(SectionReview.id.in_(review_ids))
         )
         verdicts = {k: v for k, v in rows}
-    from oracle.jobs.service import latest_suggestions, shown_note, suggestion_out
+    from oracle.jobs.service import latest_suggestions, oracle_notes, shown_note, suggestion_out
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
+    notes = await oracle_notes(session, items)
     latest = await latest_numbers(session, {i.document_id for i in items})
     intakes: dict[uuid.UUID, uuid.UUID | None] = {}
     if question_ids := {i.intake_question_id for i in items if i.intake_question_id}:
@@ -235,7 +236,7 @@ async def feedback_out(
                 verdict=verdicts.get(item.section_review_id) if item.section_review_id else None,
                 status=item.status,
                 addressed_in_version=item.addressed_in_version,
-                resolution_note=shown_note(item, suggestion),
+                resolution_note=shown_note(item, notes),
                 severity=item.severity,
                 created_at=item.created_at,
                 updated_at=item.updated_at,

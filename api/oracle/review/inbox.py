@@ -19,7 +19,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.jobs import kinds
 from oracle.jobs.models import LlmSuggestion
 from oracle.jobs.next_draft import current_job
-from oracle.jobs.service import latest_suggestions, shown_note, suggestion_out
+from oracle.jobs.service import latest_suggestions, oracle_notes, shown_note, suggestion_out
 from oracle.preferences.models import UserPreference
 from oracle.review.models import FeedbackItem
 from oracle.review.service import feedback_state, latest_numbers, staged_for_agents
@@ -111,6 +111,7 @@ async def feedback_states(
     )
     rows = [*live, *settled]
     suggestions = await latest_suggestions(db, [f.id for f in rows])
+    notes = await oracle_notes(db, rows)
     latest = await latest_numbers(db, {f.document_id for f in rows})
     docs = {
         d.id: d
@@ -156,7 +157,7 @@ async def feedback_states(
                 title=d.title if d else None,
                 latest_version=latest.get(f.document_id),
                 state=state,  # type: ignore[arg-type]
-                resolution_note=shown_note(f, s),
+                resolution_note=shown_note(f, notes),
                 addressed_in_version=f.addressed_in_version,
                 staged_for_version=(latest.get(f.document_id) or 0) + 1
                 if state == "staged"

@@ -8,8 +8,9 @@ Roles (checked by the router): viewers read; approvers queue, retry and cancel j
 decide suggestions and refine sections; owners turn job kinds on or off per document.
 """
 
+import copy
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -136,13 +137,82 @@ async def jobs_out(db: AsyncSession, jobs: list[LlmJob]) -> list[LlmJobOut]:
                 )
             ).all()
         )
+    withheld = await withheld_items(db, {f for j in jobs for f in _line_ids(j.output)})
     out = []
     for j in jobs:
         o = LlmJobOut.model_validate(j)
+        if withheld and j.output:
+            o.output = withheld_output(j.output, withheld)
         o.version_number = numbers.get(j.version_id) if j.version_id else None
         o.cost_usd = float(j.cost_usd) if j.cost_usd is not None else None
         out.append(o)
     return out
+
+
+def _resolutions_of(output: dict[str, Any]) -> list[dict[str, Any]]:
+    """The resolutions a refinement (top level) or a next draft (per section) wrote."""
+    sections = [s for s in output.get("sections") or [] if isinstance(s, dict)]
+    return [
+        r
+        for r in [
+            *(output.get("resolutions") or []),
+            *(r for s in sections for r in s.get("resolutions") or []),
+        ]
+        if isinstance(r, dict)
+    ]
+
+
+def _report_lines(output: dict[str, Any]) -> list[dict[str, Any]]:
+    resolution = output.get("resolution")
+    items = resolution.get("items") if isinstance(resolution, dict) else None
+    return [i for i in items or [] if isinstance(i, dict)]
+
+
+def _line_ids(output: dict[str, Any] | None) -> set[uuid.UUID]:
+    """The feedback items a job's output has a line or a resolution note for."""
+    ids = set()
+    for line in [*_report_lines(output or {}), *_resolutions_of(output or {})]:
+        try:
+            ids.add(uuid.UUID(str(line.get("feedback_id"))))
+        except ValueError:
+            continue
+    return ids
+
+
+def withheld_narrative(n: int) -> str:
+    """A report's narrative while a line it was written from is withheld (#645 re-review)."""
+    return (
+        f"{n} feedback item(s) were raised on earlier versions; the rest of this summary is "
+        "withheld while one of them is not shared in full."
+    )
+
+
+def withheld_output(output: dict[str, Any], withheld: set[uuid.UUID]) -> dict[str, Any]:
+    """A job's output as readers get it (#645 re-review). A report keeps each item's
+    summary, note and explanation as they were when it ran, and a refinement or next
+    draft the resolution note it wrote from the item: while an item is withheld its line
+    reads the withheld summary without note and explanation, its resolution notes read
+    :data:`WITHHELD_REASON`, and the report's narrative, written from every line, is
+    withheld with it. The stored output is not changed."""
+    from oracle.intake.late_answers import WITHHELD
+
+    out = copy.deepcopy(output)
+    ids = {str(i) for i in withheld}
+    lines = _report_lines(out)
+    hit = [line for line in lines if str(line.get("feedback_id")) in ids]
+    for line in hit:
+        line.update(summary=WITHHELD, resolution_note=None, explanation="")
+    if hit:
+        out["resolution"]["summary"] = withheld_narrative(len(lines))
+    for r in _resolutions_of(out):
+        if str(r.get("feedback_id")) in ids and r.get("note"):
+            r["note"] = WITHHELD_REASON
+    return out
+
+
+async def shown_output(db: AsyncSession, output: dict[str, Any]) -> dict[str, Any]:
+    withheld = await withheld_items(db, _line_ids(output))
+    return withheld_output(output, withheld) if withheld else output
 
 
 async def job_out(db: AsyncSession, job: LlmJob) -> LlmJobOut:
@@ -400,20 +470,48 @@ async def suggestions_out(db: AsyncSession, rows: Iterable[LlmSuggestion]) -> li
     return [suggestion_out(r, r.feedback_item_id in withheld) for r in rows]
 
 
-def shown_note(item: FeedbackItem, suggestion: LlmSuggestion | None) -> str | None:
+async def oracle_notes(
+    db: AsyncSession, items: Iterable[FeedbackItem]
+) -> dict[uuid.UUID, set[str]]:
+    """For each withheld item among ``items``, the notes Oracle wrote from it: the ones
+    Accept and Dismiss-and-decline write from any of its suggestions (an answer's text, a
+    "nothing to change" rationale, a pushback's reason), and the resolution notes a
+    refinement or a next draft wrote, which the draft's front matter sets on the item when
+    it is imported (``review.service.apply_resolutions``) (#645 re-review)."""
+    held = [i for i in items if i.withheld_at is not None]
+    notes: dict[uuid.UUID, set[str]] = {i.id: set() for i in held}
+    if not held:
+        return notes
+    rows = await db.scalars(select(LlmSuggestion).where(LlmSuggestion.feedback_item_id.in_(notes)))
+    for r in rows:
+        mine = notes[r.feedback_item_id]
+        final = r.edited_text or r.text
+        mine.update(x for x in (final and f"Answered: {final}", r.rationale) if x)
+        mine.update(x for x in [(r.pushback or {}).get("reason")] if x)
+    outputs = await db.scalars(
+        select(LlmJob.output).where(
+            LlmJob.document_id.in_({i.document_id for i in held}),
+            LlmJob.kind.in_(("refinement", "refinement_batch")),
+            LlmJob.status == "succeeded",
+        )
+    )
+    for output in outputs:
+        for r in _resolutions_of(output or {}):
+            for item_id, mine in notes.items():
+                if str(r.get("feedback_id")) == str(item_id) and r.get("note"):
+                    mine.add(r["note"])
+    return notes
+
+
+def shown_note(item: FeedbackItem, notes: Mapping[uuid.UUID, set[str]]) -> str | None:
     """The item's resolution note as outputs serve it: on a withheld item, a note Oracle
-    wrote from its suggestion (Accept: an answer's text, a "nothing to change" rationale;
-    Dismiss and decline: its pushback reason) is withheld with it. A note a person wrote is
+    wrote from it (:func:`oracle_notes`) is withheld with it. A note a person wrote is
     shown as written: they wrote it while they could read the answer, and it may quote it
     (#636 re-review)."""
     note = item.resolution_note
-    if item.withheld_at is None or note is None or suggestion is None:
+    if item.withheld_at is None or note is None:
         return note
-    final = suggestion.edited_text or suggestion.text
-    pushback = (suggestion.pushback or {}).get("reason")
-    if note in {f"Answered: {final}", suggestion.rationale, pushback}:
-        return WITHHELD_REASON
-    return note
+    return WITHHELD_REASON if note in notes.get(item.id, set()) else note
 
 
 async def list_suggestions(
@@ -989,15 +1087,11 @@ async def version_reports(db: AsyncSession, doc: str, n: int) -> VersionReports:
     if done is not None:
         out.report_job_id = done.id
         out.generated_at = done.finished_at
-        out.resolution = ResolutionNarrative.model_validate(done.output["resolution"])
         # The report was written when the item read in full: while it is withheld its line
-        # reads the withheld summary, without the note and explanation (#636 re-review).
-        from oracle.intake.late_answers import WITHHELD
-
-        withheld = await withheld_items(db, [i.feedback_id for i in out.resolution.items])
-        for line in out.resolution.items:
-            if line.feedback_id in withheld:
-                line.summary, line.resolution_note, line.explanation = WITHHELD, None, ""
+        # reads the withheld summary, without the note and explanation (#636 re-review),
+        # and so does latest_job's output (#645 re-review).
+        shown = await shown_output(db, done.output)
+        out.resolution = ResolutionNarrative.model_validate(shown["resolution"])
         out.changes = ChangesReport.model_validate(done.output["changes"])
     return out
 
