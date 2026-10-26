@@ -310,7 +310,7 @@ def _candidates(
 def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
     if row.draft:
         return "draft"
-    if row.item_key in cut:
+    if row.cut or row.item_key in cut:
         return "cut"
     states = {r.state for r in recs if r.state != "cancelled"}
     if states and states <= {"done"}:

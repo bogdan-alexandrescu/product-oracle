@@ -183,7 +183,7 @@ class World:
 
 async def changed(w: World, op: str) -> bool:
     """Whether the op's effect is on the items."""
-    a, b, u = (await w.item(f"{op}-{x}") for x in "abu")
+    a, b, u = [await w.item(f"{op}-{x}") for x in "abu"]
     match op:
         case "move_dates":
             return (a.start_date, a.end_date) == (date(2026, 10, 5), date(2026, 11, 20))

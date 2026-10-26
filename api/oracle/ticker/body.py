@@ -41,6 +41,8 @@ class CompanyTick:
     trash_purged: int = 0
     # Simple's date suggestions were regenerated (once a company day).
     date_suggestions: bool = False
+    # Simple's sessions closed after 30 idle minutes.
+    sessions_closed: int = 0
     # What raised, step by step (logged); the other steps still ran.
     errors: list[BaseException] = field(default_factory=list)
 
@@ -49,7 +51,7 @@ async def tick_company(
     db: AsyncSession, tenant_id: uuid.UUID, principal: "Principal | None" = None
 ) -> CompanyTick:
     """The company's runs, its code map refreshes, the Trash purge, Simple's daily date
-    suggestions, then its account sweep when due."""
+    suggestions and idle sessions, then its account sweep when due."""
     from oracle.runs import service as runs_service
 
     out = CompanyTick()
@@ -96,6 +98,16 @@ async def tick_company(
         await db.commit()
     except Exception as exc:
         log.exception("tick: roadmap date suggestions failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
+    try:
+        # Simple S3a (#723): sessions idle 30 minutes close.
+        from oracle.simple import changes as simple_changes
+
+        out.sessions_closed = await simple_changes.close_idle(db)
+        await db.commit()
+    except Exception as exc:
+        log.exception("tick: closing idle Simple sessions failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
     try:

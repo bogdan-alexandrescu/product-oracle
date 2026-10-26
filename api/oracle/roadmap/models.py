@@ -342,6 +342,9 @@ class RoadmapItem(TenantScoped, Base):
     accepted_risks: Mapped[list[dict[str, Any]]] = _json("[]")
     draft: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                         server_default=false())  # fmt: skip
+    # Simple S3a: cut in Simple (oracle.simple.changes); restore clears it.
+    cut: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                      server_default=false())  # fmt: skip
     updated_at: Mapped[datetime] = _updated_at()
 
 

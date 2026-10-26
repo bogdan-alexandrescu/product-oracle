@@ -1,8 +1,9 @@
-"""Simple S2 (#723): the company-wide roadmap read and the date suggestions."""
+"""Simple S2 (#723): the company-wide roadmap read and the date suggestions; S3a: the
+change engine's sessions and changes."""
 
 import datetime as dt
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -166,3 +167,127 @@ class DateSuggestionEdit(BaseModel):
 
 class RefreshOut(BaseModel):
     open: int = Field(description="Open suggestions after the refresh")
+
+
+# --------------------------------------------------------------------------- S3a changes
+
+ChangeOp = Literal[
+    "move_dates",
+    "change_horizon",
+    "reorder",
+    "cut",
+    "restore",
+    "edit_title",
+    "edit_outcome",
+    "accept_date_suggestion",
+    "accept_risk",
+    "shift_dependents",
+    "move_dependency",
+]
+ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
+SessionKind = Literal["editing", "meeting"]
+
+
+class SessionIn(BaseModel):
+    kind: SessionKind = "editing"
+
+
+class SessionOut(BaseModel):
+    id: uuid.UUID
+    kind: SessionKind
+    started_by: uuid.UUID
+    started_at: dt.datetime
+    last_change_at: dt.datetime | None
+    closed_at: dt.datetime | None
+
+
+class ChangeIn(BaseModel):
+    # The caller's open session; without one, an applied change goes to the caller's
+    # open editing session (opened when none), a proposal to none.
+    session_id: uuid.UUID | None = None
+    op: ChangeOp
+    # {"item_id"} for every op; accept_date_suggestion adds "suggestion_id"; accept_risk
+    # "flag" and "subject" (optional); shift_dependents and move_dependency "subject" (the
+    # dependency's item id of the flag).
+    target: dict[str, Any]
+    # The fields the change writes, as the caller saw them; for shift_dependents and
+    # move_dependency, {item_id: {"start_date", "end_date"}} for the item and its subject.
+    before: dict[str, Any]
+    after: dict[str, Any] = Field(default_factory=dict)
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class DecisionIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class PersonRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class ChangeOut(BaseModel):
+    id: uuid.UUID
+    session_id: uuid.UUID | None
+    document_id: uuid.UUID | None
+    op: ChangeOp
+    target: dict[str, Any]
+    before: dict[str, Any]
+    after: dict[str, Any]
+    status: ChangeStatus
+    by: uuid.UUID
+    by_name: str
+    at: dt.datetime
+    decided_by: uuid.UUID | None
+    decided_at: dt.datetime | None
+    reason: str | None
+    decision_reason: str | None
+    routed_to: list[uuid.UUID]
+    undoes_id: uuid.UUID | None
+    # An undone row reverses this change.
+    undone: bool = False
+    # The caller may accept or decline this proposal / undo this change now.
+    can_decide: bool = False
+    can_undo: bool = False
+
+
+class ItemFlags(BaseModel):
+    item_id: uuid.UUID
+    flags: list[SimpleFlag]
+
+
+class ChangeResult(BaseModel):
+    change: ChangeOut
+    # S2's constraint checker on the touched items and their dependents, after the
+    # change (for a proposal: as if it were applied).
+    flags: list[ItemFlags]
+
+
+class ChangeConflict(BaseModel):
+    """The 409 detail: what the target holds now and who changed it last (null: not
+    through Simple). Nothing was written."""
+
+    message: str
+    current: dict[str, Any]
+    changed_by: PersonRef | None
+    changed_at: dt.datetime | None
+
+
+class InboxSimpleChange(BaseModel):
+    """A proposal waiting for me (``simple_proposals``) or a decision on my proposal
+    (``simple_decisions``)."""
+
+    id: uuid.UUID
+    op: ChangeOp
+    status: ChangeStatus
+    item_id: uuid.UUID | None
+    item_title: str | None
+    document_id: uuid.UUID | None
+    by: uuid.UUID
+    by_name: str
+    at: dt.datetime
+    decided_by: uuid.UUID | None
+    decided_at: dt.datetime | None
+    reason: str | None
+    decision_reason: str | None
+    state: Literal["new", "open", "done"]
