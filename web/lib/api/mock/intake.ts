@@ -307,6 +307,8 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     shared_counts: [],
     is_author: intake.author_id === userId,
     ...drafting(db, intake),
+    // INT2: Oracle's read (the author's only); the mock has no read states yet (lane 2 adds them).
+    ai_read: null,
   };
 }
 
