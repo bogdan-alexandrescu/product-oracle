@@ -85,6 +85,9 @@ for (const size of SIZES) {
       await page.goto("/documents/saved-carts");
       await expect(page.getByRole("heading", { level: 1, name: LONG_TITLE })).toBeVisible();
       await expect(page.getByRole("link", { name: "Composition" })).toBeVisible();
+      // Review settings arrives with the section states, after the document: measure the
+      // header only once every action is in it, or a late button moves what was measured.
+      await expect(page.getByRole("button", { name: "Review settings" })).toBeVisible();
       await setPanel(page, open);
 
       const tops: number[] = [];
