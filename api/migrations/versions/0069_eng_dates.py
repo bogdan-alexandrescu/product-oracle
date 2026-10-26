@@ -9,8 +9,8 @@ Live-safe: one check constraint replaced, no rewrite.
 The downgrade refuses while any ``eng_dates`` checkpoint exists (cancel or finish those
 runs first), then removes only that value.
 
-Revision ID: 0055_eng_dates
-Revises: 0054_reply_opened
+Revision ID: 0069_eng_dates
+Revises: 0068_intake_read
 """
 
 from collections.abc import Sequence
@@ -20,8 +20,8 @@ from alembic import op
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0055_eng_dates"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0069_eng_dates"
+down_revision: str | None = "0068_intake_read"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -1,4 +1,4 @@
-"""Migration 0055_eng_dates: ``ck_checkpoints_kind`` gains ``eng_dates`` (F4 lane B).
+"""Migration 0069_eng_dates: ``ck_checkpoints_kind`` gains ``eng_dates`` (F4 lane B).
 
 Up keeps every kind other lanes added; down refuses while an eng_dates checkpoint exists,
 and otherwise removes only that value. Sync tests on purpose (Alembic runs its own event
@@ -16,8 +16,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0055_eng_dates"
-PREVIOUS = "0054_reply_opened"
+REVISION = "0069_eng_dates"
+PREVIOUS = "0068_intake_read"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_eng_dates")
@@ -61,7 +61,7 @@ def _check() -> str:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0070_brand_assets"]
 
 
 def test_up_down_up_keeps_every_other_kind(scratch_db):

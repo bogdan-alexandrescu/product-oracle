@@ -16,8 +16,8 @@ Downgrade: refuses while an intake_analysis run is not ended; deletes the ended 
 any stored ``intake_ai_read`` setting, and narrows both checks. Cancelled jobs stay
 cancelled (findings already imported stay: they are the job's shape).
 
-Revision ID: 0055_intake_read
-Revises: 0054_reply_opened
+Revision ID: 0068_intake_read
+Revises: 0067_webhook_resumed_at
 """
 
 from collections.abc import Sequence
@@ -27,8 +27,8 @@ from sqlalchemy import text
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0055_intake_read"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0068_intake_read"
+down_revision: str | None = "0067_webhook_resumed_at"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

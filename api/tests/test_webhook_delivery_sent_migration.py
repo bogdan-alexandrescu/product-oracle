@@ -1,7 +1,7 @@
-"""Migration 0056_webhook_delivery_sent (I1, review of #637): ``webhook_deliveries.host``
+"""Migration 0066_webhook_delivery_sent (I1, review of #637): ``webhook_deliveries.host``
 and ``webhook_deliveries.headers``, where each delivery went and the headers it sent.
 
-Card: protects=both columns come and go with the revision, chained on 0055_webhooks as
+Card: protects=both columns come and go with the revision, chained on 0065_webhooks as
 the single head, nullable so every earlier delivery stays as it was; fails_when=the
 upgrade misses a column, or the downgrade leaves one; no_claim=what is written to them
 (tests/test_webhooks_delivery.py).
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0056_webhook_delivery_sent"
-PREVIOUS = "0055_webhooks"
+REVISION = "0066_webhook_delivery_sent"
+PREVIOUS = "0065_webhooks"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_webhook_delivery_sent")
@@ -67,7 +67,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0070_brand_assets"]
 
 
 def test_upgrade_and_downgrade(scratch_db):

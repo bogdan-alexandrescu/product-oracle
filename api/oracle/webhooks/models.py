@@ -1,4 +1,4 @@
-"""Outbound webhooks (I1, migration 0055_webhooks).
+"""Outbound webhooks (I1, migration 0065_webhooks).
 
 ``webhooks``: an address outside Oracle that Oracle calls when something happens, with the
 event types it wants and its signing secret, encrypted with :mod:`oracle.crypto` (Oracle

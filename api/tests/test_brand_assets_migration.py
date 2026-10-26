@@ -1,4 +1,4 @@
-"""Migration 0055_brand_assets (O5 lane 4): the brand_assets table.
+"""Migration 0070_brand_assets (O5 lane 4): the brand_assets table.
 
 Card: protects=brand_assets comes and goes with the revision, chained on 0054_reply_opened
 as the single head, one logo per sha256 per company, and the downgrade takes the stored
@@ -21,8 +21,8 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0055_brand_assets"
-PREVIOUS = "0054_reply_opened"
+REVISION = "0070_brand_assets"
+PREVIOUS = "0069_eng_dates"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_brand_assets")

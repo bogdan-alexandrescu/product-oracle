@@ -31,7 +31,7 @@ SCOPES = (
     # segment only (migration 0052_market).
     "read:web",
     # INT2: the one run-bound read of an intake's analysis input (the job's payload); the
-    # intake_analysis segment only (migration 0055_intake_read).
+    # intake_analysis segment only (migration 0068_intake_read).
     "read:intake-input",
 )
 

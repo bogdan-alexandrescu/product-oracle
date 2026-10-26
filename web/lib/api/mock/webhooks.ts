@@ -220,6 +220,10 @@ async function sendNow(ctx: WebhooksContext, hook: HookRow, d: DeliveryRow): Pro
   d.attempts += 1;
   d.last_at = new Date(started).toISOString();
   d.body = JSON.parse(body);
+  // As the API's log (0066, oracle.webhooks.sign.shown): where it went and the headers sent,
+  // each signature cut to "v1," and 8 characters.
+  d.host = hostOf(hook.url);
+  d.headers = { ...headers, "webhook-signature": signature.split(" ").map((x) => `${x.slice(0, 11)}…`).join(" ") };
   const send = receiver();
   if (!send) {
     Object.assign(d, { status: "retrying", http_status: null, error: "connect", response_excerpt: null, duration_ms: 0, next_at: new Date(started + 60_000).toISOString() });
@@ -261,7 +265,7 @@ export function seedWebhooks(ctx: Omit<WebhooksContext, "db">, scenario: string 
     db.deliveries.push({
       id: ctx.uuid(), webhook_id: deploy.id, event: event.id, status: i < 2 ? "failed" : "retrying", attempts: 6, next_at: null,
       last_at: at(h), http_status: 500, duration_ms: 230, error: null, response_excerpt: "Internal Server Error",
-      body: { id: event.public_id, type: event.type }, redelivery_of: null, created_at: at(h),
+      body: { id: event.public_id, type: event.type }, redelivery_of: null, created_at: at(h), host: deploy.host, headers: null,
     });
   }
   const note = (user_id: string, kind: Notification["kind"], title: string, hookId: string, actor: string, h: number, reason?: string): Notification => ({
@@ -411,7 +415,7 @@ function newDelivery(ctx: WebhooksContext, hook: HookRow, event: string, of: str
   const at = new Date(Math.max(Date.parse(ctx.now()), last ? Date.parse(last) + 1 : 0)).toISOString();
   const d: DeliveryRow = {
     id: ctx.uuid(), webhook_id: hook.id, event, status: "pending", attempts: 0, next_at: null, last_at: null, http_status: null,
-    duration_ms: null, error: null, response_excerpt: null, body: null, redelivery_of: of, created_at: at,
+    duration_ms: null, error: null, response_excerpt: null, body: null, redelivery_of: of, created_at: at, host: null, headers: null,
   };
   ctx.db.deliveries.push(d);
   return d;

@@ -9,8 +9,8 @@ Live-safe: two nullable columns, no default, no rewrite.
 
 The downgrade drops both columns (the hosts and headers kept go with them).
 
-Revision ID: 0056_webhook_delivery_sent
-Revises: 0055_webhooks
+Revision ID: 0066_webhook_delivery_sent
+Revises: 0065_webhooks
 """
 
 from collections.abc import Sequence
@@ -19,8 +19,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0056_webhook_delivery_sent"
-down_revision: str | None = "0055_webhooks"
+revision: str = "0066_webhook_delivery_sent"
+down_revision: str | None = "0065_webhooks"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

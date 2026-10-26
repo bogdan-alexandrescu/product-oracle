@@ -13,8 +13,8 @@ all pass); nothing else is rewritten.
 The downgrade drops the tables (every webhook, event and delivery with them, secrets
 included) and the two Inbox row kinds' rows, then narrows the constraint back.
 
-Revision ID: 0055_webhooks
-Revises: 0054_reply_opened
+Revision ID: 0065_webhooks
+Revises: 0064_feedback_withheld
 """
 
 from collections.abc import Sequence
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0055_webhooks"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0065_webhooks"
+down_revision: str | None = "0064_feedback_withheld"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

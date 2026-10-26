@@ -9,8 +9,8 @@ Live-safe: one new table.
 
 The downgrade drops the table and any stored ``branding`` setting.
 
-Revision ID: 0055_brand_assets
-Revises: 0054_reply_opened
+Revision ID: 0070_brand_assets
+Revises: 0069_eng_dates
 """
 
 from collections.abc import Sequence
@@ -19,8 +19,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import text
 
-revision: str = "0055_brand_assets"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0070_brand_assets"
+down_revision: str | None = "0069_eng_dates"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

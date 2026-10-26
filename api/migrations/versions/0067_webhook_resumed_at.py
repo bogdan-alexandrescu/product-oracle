@@ -9,8 +9,8 @@ Live-safe: one nullable column, no default, no rewrite.
 
 The downgrade drops the column (the resume marks go with it).
 
-Revision ID: 0056_webhook_resumed_at
-Revises: 0055_webhooks
+Revision ID: 0067_webhook_resumed_at
+Revises: 0066_webhook_delivery_sent
 """
 
 from collections.abc import Sequence
@@ -18,8 +18,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0056_webhook_resumed_at"
-down_revision: str | None = "0055_webhooks"
+revision: str = "0067_webhook_resumed_at"
+down_revision: str | None = "0066_webhook_delivery_sent"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

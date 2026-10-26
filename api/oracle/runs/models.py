@@ -51,7 +51,7 @@ FLOWS = (
     "competitive_digest",
     # G2 §4 (migration 0060_discussion_research): Research this, from inside a discussion.
     "discussion_research",
-    # INT2 (migration 0055_intake_read): Oracle's read of a new intake.
+    # INT2 (migration 0068_intake_read): Oracle's read of a new intake.
     "intake_analysis",
 )
 RUN_STATUSES = (

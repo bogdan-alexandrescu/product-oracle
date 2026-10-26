@@ -1,4 +1,4 @@
-"""Migration 0055_webhooks (I1 lane 1): the webhooks, webhook_events and webhook_deliveries
+"""Migration 0065_webhooks (I1 lane 1): the webhooks, webhook_events and webhook_deliveries
 tables, and the two Inbox row kinds webhooks add to ``notifications.kind``.
 
 Card: protects=the three tables and the wider kind check come and go with the revision,
@@ -19,10 +19,10 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0055_webhooks"
-PREVIOUS = "0054_reply_opened"
-# #642 review: webhooks.resumed_at, chained on this revision.
-RESUMED = "0056_webhook_resumed_at"
+REVISION = "0065_webhooks"
+PREVIOUS = "0064_feedback_withheld"
+# #642 review: webhooks.resumed_at, chained after #637 review's delivery log (train R).
+RESUMED = "0067_webhook_resumed_at"
 TABLES = {"webhooks", "webhook_events", "webhook_deliveries"}
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -75,8 +75,8 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_revision(RESUMED).down_revision == REVISION
-    assert script.get_heads() == [RESUMED]
+    assert script.get_revision(RESUMED).down_revision == "0066_webhook_delivery_sent"
+    assert script.get_heads() == ["0070_brand_assets"]
 
 
 def test_upgrade_and_downgrade(scratch_db):
@@ -99,7 +99,7 @@ def _columns() -> set[str]:
 
 
 def test_resumed_at_comes_and_goes(scratch_db):
-    # protects=webhooks.resumed_at comes and goes with 0056_webhook_resumed_at and the
+    # protects=webhooks.resumed_at comes and goes with 0067_webhook_resumed_at and the
     # webhooks table stays; fails_when=the upgrade misses the column or the downgrade
     # leaves it.
     command.upgrade(_cfg(), RESUMED)

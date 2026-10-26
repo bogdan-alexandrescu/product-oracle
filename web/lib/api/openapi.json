@@ -26366,6 +26366,121 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/intakes/{intake_id}/analysis-input": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Intake Analysis Input",
+        "description": "The intake's brief, goals and the author's chosen source excerpts, exactly as\nOracle's built-in job reads them, for this intake's own read run only (its token,\nholding read:intake-input). Everything under untrusted_data is untrusted data.",
+        "operationId": "get_intake_analysis_input",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Intake Analysis Input"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This is for Oracle's read of an intake"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-run-only": true
+      }
+    },
+    "/v1/intakes/{intake_id}/ai-read": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Start Intake Read",
+        "description": "Analyse with Oracle (the author only): start Oracle's read of the brief and the\nauthor's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot\nstart or fails). 409 while a read is under way, on a converted or archived intake, or\nwhen Oracle's read is off for the company. Re-analyse runs the rules only.",
+        "operationId": "start_intake_read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiReadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/intakes/{intake_id}/analyze": {
       "post": {
         "tags": [
@@ -36291,6 +36406,122 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/webhooks/{webhook_id}/test": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Test Webhook",
+        "description": "Send a ``webhook.test`` event to this webhook only, now; the answer is its log row.",
+        "operationId": "test_webhook",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/webhooks/{webhook_id}/deliveries/{delivery_id}/redeliver": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Redeliver Webhook Delivery",
+        "description": "Send a delivery's event again, now: a new delivery with the same ``webhook-id``, so\nreceivers dedupe it. An owners-and-approvers event is checked again first.",
+        "operationId": "redeliver_webhook_delivery",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Webhook Id"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Delivery Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/requests": {
       "get": {
         "tags": [
@@ -44695,6 +44926,197 @@
         "type": "object",
         "title": "Agreement"
       },
+      "AiReadCount": {
+        "properties": {
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "gaps": {
+            "type": "integer",
+            "title": "Gaps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "gaps"
+        ],
+        "title": "AiReadCount"
+      },
+      "AiReadNote": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "AiReadNote"
+      },
+      "AiReadOut": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "off",
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "swarmcloud",
+                  "job"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "off_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "company",
+                  "intake"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Reason"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "sources": {
+            "type": "integer",
+            "title": "Sources",
+            "default": 0
+          },
+          "added": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiReadCount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dropped_refs": {
+            "type": "integer",
+            "title": "Dropped Refs",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiReadNote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiReadNote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "failures": {
+            "type": "integer",
+            "title": "Failures",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "AiReadOut",
+        "description": "INT2 Oracle's read of the intake, the author's only (``IntakeSummary.ai_read`` is\nnull for anyone else). ``path``: what produced or is producing the read, a SwarmCloud\nrun or Oracle's built-in job (the fallback, with ``fallback`` saying why, or the\nrollback); ``off_reason``: ``company`` (the switch on Settings \u203a Company is off) or\n``intake`` (no read was asked for this intake)."
+      },
       "AlignmentItem": {
         "properties": {
           "item_key": {
@@ -45163,7 +45585,7 @@
           },
           "reviews": {
             "items": {
-              "$ref": "#/components/schemas/ArtifactReviewEventOut"
+              "$ref": "#/components/schemas/DesignReviewEventOut"
             },
             "type": "array",
             "title": "Reviews",
@@ -58983,6 +59405,31 @@
             ],
             "title": "Body"
           },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "headers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headers"
+          },
           "redelivery_of": {
             "anyOf": [
               {
@@ -59015,6 +59462,8 @@
           "error",
           "response_excerpt",
           "body",
+          "host",
+          "headers",
           "redelivery_of",
           "created_at"
         ],
@@ -59178,7 +59627,7 @@
           },
           "reviews": {
             "items": {
-              "$ref": "#/components/schemas/ArtifactReviewEventOut"
+              "$ref": "#/components/schemas/DesignReviewEventOut"
             },
             "type": "array",
             "title": "Reviews",
@@ -59293,6 +59742,78 @@
         ],
         "title": "DesignOutputOut"
       },
+      "DesignReviewEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "approved",
+              "changes_requested",
+              "rejected",
+              "marked_stale",
+              "reconciled"
+            ],
+            "title": "Kind"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version_id",
+          "kind",
+          "actor",
+          "data",
+          "created_at"
+        ],
+        "title": "DesignReviewEventOut"
+      },
       "DesignReviewIn": {
         "properties": {
           "kind": {
@@ -59351,7 +59872,7 @@
       "DesignReviewOut": {
         "properties": {
           "event": {
-            "$ref": "#/components/schemas/ArtifactReviewEventOut"
+            "$ref": "#/components/schemas/DesignReviewEventOut"
           },
           "version": {
             "$ref": "#/components/schemas/ArtifactVersionOut"
@@ -63009,6 +63530,25 @@
           "token"
         ],
         "title": "EndpointIn"
+      },
+      "EngineeringApprover": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "EngineeringApprover"
       },
       "EntityCreate": {
         "properties": {
@@ -66854,7 +67394,8 @@
               "metrics_variance",
               "pricing_memo",
               "competitive_digest",
-              "discussion_research"
+              "discussion_research",
+              "intake_analysis"
             ],
             "title": "Key"
           },
@@ -69954,7 +70495,8 @@
               "metrics_variance",
               "pricing_memo",
               "competitive_digest",
-              "discussion_research"
+              "discussion_research",
+              "intake_analysis"
             ],
             "title": "Flow"
           },
@@ -70915,6 +71457,43 @@
         ],
         "title": "InboxFeedbackItem"
       },
+      "InboxIntakeRead": {
+        "properties": {
+          "intake_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intake Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "failures": {
+            "type": "integer",
+            "title": "Failures"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intake_id",
+          "title",
+          "failures"
+        ],
+        "title": "InboxIntakeRead",
+        "description": "INT2: Oracle couldn't read an intake of mine twice or more in a row (the fallback\njob failing too); counted until a read succeeds or the intake closes."
+      },
       "InboxLaunch": {
         "properties": {
           "launch_id": {
@@ -71405,6 +71984,14 @@
             },
             "type": "array",
             "title": "Requests",
+            "default": []
+          },
+          "intake_reads": {
+            "items": {
+              "$ref": "#/components/schemas/InboxIntakeRead"
+            },
+            "type": "array",
+            "title": "Intake Reads",
             "default": []
           }
         },
@@ -73625,6 +74212,16 @@
               }
             ],
             "title": "Draft Version"
+          },
+          "ai_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiReadOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -95769,7 +96366,8 @@
               "metrics_variance",
               "pricing_memo",
               "competitive_digest",
-              "discussion_research"
+              "discussion_research",
+              "intake_analysis"
             ],
             "title": "Flow"
           },
@@ -96241,7 +96839,8 @@
               "metrics_variance",
               "pricing_memo",
               "competitive_digest",
-              "discussion_research"
+              "discussion_research",
+              "intake_analysis"
             ],
             "title": "Flow"
           },
@@ -97083,7 +97682,8 @@
               "metrics_variance",
               "pricing_memo",
               "competitive_digest",
-              "discussion_research"
+              "discussion_research",
+              "intake_analysis"
             ],
             "title": "Flow"
           },
@@ -103332,6 +103932,14 @@
             },
             "type": "array",
             "title": "Engineering Approver Ids",
+            "default": []
+          },
+          "engineering_approvers": {
+            "items": {
+              "$ref": "#/components/schemas/EngineeringApprover"
+            },
+            "type": "array",
+            "title": "Engineering Approvers",
             "default": []
           },
           "code_capability_map": {

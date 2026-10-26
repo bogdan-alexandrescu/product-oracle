@@ -33,6 +33,7 @@ export const DECIDED_BY: Record<Module["decided_by"], string> = {
   policy: "Policy",
   template: "Template",
   condition: "Condition holds",
+  learning: "A kept learning",
   dependency: "Dependency",
   user: "A person",
   conflict: "Conflict",
