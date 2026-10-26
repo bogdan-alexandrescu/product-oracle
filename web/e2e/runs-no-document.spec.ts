@@ -1,12 +1,16 @@
 import { expect, test, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { NO_DOCUMENT_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 // Owner decisions, 2026-10-25: a run that finished with no document (its review approved
 // past a refused draft) gets an Inbox row with a plain reason and the action to take; its
 // Draft rejected chip clears once it succeeded; an owner's retry is shown in the version's
 // history as "imported again by" them; and once another segment imported a version, the
-// refused segment says why it cannot be retried and offers a new run.
+// refused segment says why it cannot be retried and offers a new run. #583 review: the row
+// clears itself once a later run imports the document, and runs that finished before it
+// shipped get none (the "no-document" scenario reaches them without writing the mock's state).
 
 const ID = "7a11c0de-0000-4000-8000-0000000000e1";
 
@@ -71,11 +75,22 @@ async function seedFinishedWithoutDocument(page: Page, otherImported = false): P
   );
 }
 
-test("a run that finished with no document: an Inbox row says why and what to do, and the run reads no Draft rejected", async ({ page }) => {
+/**
+ * The "no-document" scenario (#583 review): guest-checkout's run finished with no document
+ * just now, old-checkout's on Oct 1, before the No document row shipped. The clock is set
+ * past that day, as the API's NO_DOCUMENT_SINCE.
+ */
+async function noDocumentScenario(page: Page) {
+  await page.clock.setSystemTime(new Date("2026-10-27T12:00:00Z"));
+  await page.addInitScript((key) => localStorage.setItem(key, "no-document"), MOCK_SCENARIO_KEY);
   await login(page);
-  await seedFinishedWithoutDocument(page);
+}
+
+test("a run that finished with no document: an Inbox row says why and what to do, and the run reads no Draft rejected", async ({ page }) => {
+  await noDocumentScenario(page);
   await page.goto("/inbox");
   const row = page.getByTestId("inbox-no-document");
+  // The run from before the row shipped gets none.
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("guest-checkout finished without a document: Oracle refused its draft");
   await expect(row).toContainText("Retry import");
@@ -86,16 +101,54 @@ test("a run that finished with no document: an Inbox row says why and what to do
   await expect(listed).toContainText("Succeeded");
   await expect(listed.getByTestId("run-draft-rejected")).toHaveCount(0);
 
-  // Retry import on the run imports it; the version's history says who imported it again.
-  await page.goto(`/runs/${ID}`);
+  // Retry import on the run imports it and clears the row; the version's history says who
+  // imported it again.
+  await page.getByTestId("nav-inbox").click();
+  await page.getByRole("row").filter({ has: row }).getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${NO_DOCUMENT_RUN}$`));
   const prd = page.getByTestId("segment-prd_draft");
   await prd.getByRole("button", { name: "Retry import" }).click();
   await expect(prd).toContainText("Imported as guest-checkout v");
-  await page.goto("/inbox");
+  await page.getByTestId("nav-inbox").click();
   await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);
   await page.goto("/documents/guest-checkout");
   const again = page.getByTestId("version-inspector").getByTestId("version-imported-again");
   await expect(again).toHaveText(/^imported again by .+ on \d{4}-\d{2}-\d{2} \d{2}:\d{2} \S+$/);
+});
+
+test("the No document row clears itself once a later run imports the document", async ({ page }) => {
+  await noDocumentScenario(page);
+  await page.getByTestId("nav-inbox").click();
+  const row = page.getByTestId("inbox-no-document");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("or start a new run");
+
+  // The owner follows the advice: a new run of the same document, from the finished run.
+  await page.getByRole("row").filter({ has: row }).getByRole("link", { name: "Open" }).click();
+  await page.getByTestId("segment-prd_draft").getByRole("button", { name: "Start a new run" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("PRD document")).toHaveValue("guest-checkout");
+  await dialog.getByRole("button", { name: "Estimate" }).click();
+  await dialog.getByRole("button", { name: "Start run" }).click();
+  await expect(page).not.toHaveURL(new RegExp(NO_DOCUMENT_RUN));
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+
+  // Its stops approved, its PRD draft imports a version of guest-checkout.
+  const prd = page.getByTestId("segment-prd_draft");
+  for (let i = 0; i < 8 && !(await prd.getByText("Imported as guest-checkout v1").count()); i++) {
+    await page.getByRole("button", { name: "Check agents now" }).click();
+    const approve = page.getByTestId(/^checkpoint-/).filter({ hasText: "Waiting" }).getByRole("button", { name: "Approve and continue" });
+    if (await approve.count()) {
+      await approve.first().click();
+      await expect(approve).toHaveCount(0);
+    }
+  }
+  await expect(prd).toContainText("Imported as guest-checkout v1");
+
+  // The finished run's row is gone, with nobody dismissing it.
+  await page.getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);
 });
 
 test("once another segment imported a version, the refused one says why in plain words and offers a new run", async ({ page }) => {

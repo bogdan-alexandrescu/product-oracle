@@ -148,6 +148,8 @@ export interface RunsContext {
   lockedSections?: (documentId: string, version: number) => string[];
   /** Section keys of a version (a roadmap's items check their PRD sections). */
   sectionKeys: (versionId: string) => string[];
+  /** As the API's _no_documents (#583 review): the document (id, else slug) has a version made after `at`. */
+  versionAfter?: (documentId: string | null, slug: string | null, at: string) => boolean;
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
   sourceVersion: (documentId: string, number: number | null) => VersionSource | string;
   /** E1 part B: the PRD version's draft items a Build roadmap run may reuse, or null. */
@@ -807,10 +809,19 @@ function oneVersion(version: string): string {
   return `this run already imported ${version}, and a finished run imports one version only, so this draft is not imported. Start a new run to draft it again.`;
 }
 
-/** As the API (owner, 2026-10-25): a run that finished with no document, why and what to do; else null. */
-function noDocument(r: RunOut): string | null {
+/** As the API's NO_DOCUMENT_SINCE (#583 review): runs that finished before the No document row shipped get none. */
+export const NO_DOCUMENT_SINCE = "2026-10-25T00:00:00Z";
+
+/**
+ * As the API (owner, 2026-10-25): a run that finished with no document, why and what to do; else null.
+ * The row clears itself (#583 review) once the run imported a version (Retry import), or once its
+ * document has a version made after the run finished (a later run imported it).
+ */
+function noDocument(ctx: RunsContext, r: RunOut): string | null {
   const s = r.segments.find((x) => x.draft_import?.error);
   if (r.status !== "succeeded" || !s || runVersion(r)) return null;
+  if (!r.finished_at || Date.parse(r.finished_at) < Date.parse(NO_DOCUMENT_SINCE)) return null;
+  if (ctx.versionAfter?.(r.document_id ?? null, r.document_slug ?? null, r.finished_at)) return null;
   const imp = s.draft_import!;
   const action = s.can_retry_draft_import
     ? "Open the run and use Retry import once the problems are fixed, or start a new run."
@@ -1507,7 +1518,10 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   // Owners only: runs that finished with no document (owner, 2026-10-25).
   const finished = ctx.userRole === "owner" || ctx.userRole == null ? ctx.db.runs.filter((r) => r.status === "succeeded") : [];
   for (const r of finished) refresh(r);
-  const no_documents = finished.filter((r) => noDocument(r)).map((r) => ({ ...summary(r), no_document: noDocument(r) }));
+  const no_documents = finished.flatMap((r) => {
+    const why = noDocument(ctx, r);
+    return why ? [{ ...summary(r), no_document: why }] : [];
+  });
   // Runs that wait on their owner (stuck: Retry, Stop cancelling, Retry lookup, Cancel again,
   // Dismiss), and work given up on that is still looked for (shown only, not in the total).
   const lookups = ctx.db.runs.filter((r) => r.stuck).map(summary);
@@ -2492,6 +2506,43 @@ export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   refresh(r);
   db.runs.push(r);
   return r;
+}
+
+/** The runs the "no-document" scenario seeds (#583 review): a new one and one from before the row shipped. */
+export const NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e1";
+export const OLD_NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e2";
+
+/**
+ * The "no-document" scenario (#583 review): two Baseline to PRD runs approved past a refused PRD
+ * draft, so they finished with no document: guest-checkout's just now, and old-checkout's on
+ * Oct 1, before the No document row shipped (NO_DOCUMENT_SINCE), which gets no Inbox row.
+ */
+export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
+  const off = { baseline_confirm: false, feature_set: false, priority_order: false, eng_review: false };
+  const error = "prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source";
+  const summary = "Oracle refused prd.md: 1 citation uses source 'o', which isn't accepted.";
+  const make = (id: string, document: string, at: string) => {
+    const r = seedRun(ctx, db, "baseline_to_prd", document, { checkpoints: off }, at);
+    r.id = id;
+    for (const s of r.segments) {
+      s.attempts.push({ attempt: 1, workflow_id: `mock-wf-nodoc-${s.seq}`, submitted_at: at, cost_usd: 1, note: null, state: "succeeded" });
+      Object.assign(s, { status: "succeeded", cost_usd: 1, started_at: at, finished_at: at });
+      if (s.name !== "prd_draft") continue;
+      s.artifacts = ["prd.md"];
+      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], summary, source: null, prd_links: null };
+      db.artifacts[`${id}|${s.seq}|prd.md`] = fileContent("prd.md", s.name, 1, document);
+      r.checkpoints.push({
+        id: ctx.uuid(), run_id: id, kind: "prd_review", status: "approved", approver_role: "approver", segment_seq: s.seq,
+        decided_by: null, decided_at: at, note: null, created_at: at, can_decide: false, lead_stop: false, cannot_approve: null,
+        payload: { segment_seq: s.seq, segment: s.name, attempt: 1, artifacts: ["prd.md"], import: { error, problems: [], summary } },
+        approve_label: "Approve", needs_agents: [],
+      });
+    }
+    Object.assign(r, { status: "succeeded", document_id: null, started_at: at, finished_at: at, waiting_on: null });
+    refresh(r);
+  };
+  make(OLD_NO_DOCUMENT_RUN, "old-checkout", "2026-10-01T09:00:00Z");
+  make(NO_DOCUMENT_RUN, "guest-checkout", new Date().toISOString());
 }
 
 /** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */

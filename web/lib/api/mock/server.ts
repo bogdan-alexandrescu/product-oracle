@@ -64,6 +64,7 @@ import {
   seedFeatureSetRun,
   seedPriorityRuns,
   seedRunReviewRun,
+  seedNoDocumentRuns,
   seedRuns,
   seedScopeReviewRuns,
   sendBackEntries,
@@ -915,6 +916,13 @@ function seedRoadmapItemsConsoleHeld(): Db {
   const held = structuredClone(ROADMAP_REVIEW_HELD_RUN);
   db.runs!.runs.push(held.run);
   Object.assign(db.runs!.artifacts, held.artifacts);
+  return db;
+}
+
+/** #583 review "no-document" scenario: the default seed plus two runs that finished with no document (./runs.ts). */
+function seedNoDocument(): Db {
+  const db = seed();
+  seeded("no-document", () => seedNoDocumentRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -1873,6 +1881,10 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return vs.length ? vs[vs.length - 1].number : null;
     },
     sectionKeys: (versionId) => db.versions.find((v) => v.id === versionId)?.sections.map((s) => s.section_key) ?? [],
+    versionAfter: (documentId, slug, at) => {
+      const doc = db.documents.find((d) => d.id === documentId || (slug != null && d.slug === slug));
+      return !!doc && db.versions.some((v) => v.document_id === doc.id && Date.parse(v.created_at) > Date.parse(at));
+    },
     draftItemsToReuse: (documentId, version) => reusableDraftItems(draftDb(db), documentId, version),
     // The approved version a roadmap is built from: the one named, else the latest approved.
     sourceVersion: (documentId, number) => {
@@ -2015,6 +2027,8 @@ function load(): Db {
             ? seedRoadmapItemsConsoleHeld
           : scenario === "run-review"
             ? seedRunReview
+          : scenario === "no-document"
+            ? seedNoDocument
           : scenario === "run-review-decider"
             ? seedRunReviewDecider
           : scenario === "priority-order"

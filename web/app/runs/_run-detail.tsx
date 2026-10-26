@@ -999,7 +999,13 @@ function SegmentItem({
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
               onSendBack={sendBack}
               retryRefused={s.draft_retry_refused}
-              newRun={can("create_run", true) && run.document_slug ? { flow: run.flow, document: run.document_slug, title: "Start a new run" } : undefined}
+              // A finished run's refused draft (#583 review): a new run drafts it again, and its
+              // import clears the Inbox's No document row.
+              newRun={
+                run.status === "succeeded" && can("create_run", true) && run.document_slug
+                  ? { flow: run.flow, document: run.document_slug, title: "Start a new run" }
+                  : undefined
+              }
             />
           )}
           {(s.artifacts.length > 0 || s.previous_attempt) && (
@@ -1156,7 +1162,7 @@ function DraftImportLine({
   imp: NonNullable<SegmentOut["draft_import"]>;
   /** A finished run imported a version already: why this draft stays refused (owner, 2026-10-25). */
   retryRefused?: string | null;
-  /** Where Start a new run opens the New run dialog, for those who may start one. */
+  /** A finished run's: where Start a new run opens the New run dialog, for those who may start one. */
   newRun?: RunStart;
   busy: boolean;
   /** The import was refused and Oracle sent the draft back to the writer itself: revising. */
@@ -1266,7 +1272,7 @@ function DraftRejected({
           {retryRefused}
         </p>
       )}
-      {retryRefused && newRun && (
+      {newRun && (
         <Button disabled={busy} icon="plus" onClick={() => setStarting(true)}>
           Start a new run
         </Button>
