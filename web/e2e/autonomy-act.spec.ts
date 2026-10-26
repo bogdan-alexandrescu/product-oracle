@@ -111,3 +111,34 @@ test("autonomy: at Act Oracle records an outcome's verdict and tells its owner",
   await rail(page).getByRole("link", { name: "Inbox" }).click();
   await expect(page.getByRole("link", { name: "Recorded partly held for Saved payment methods: the goal read 41%" })).toBeVisible();
 });
+
+// protects=at Act, a run's order that stays within one goal and the most places an owner allows is
+// saved by Oracle with no stop: the run goes on to its PRD draft, the priority stop reads Skipped
+// with Oracle's note, and the run's starter gets an "Oracle did" row with no Undo that opens the
+// run; fails_when=the mock still stops the run at the priority order or nobody is told;
+// no_claim=an order outside the limits (pytest test_autonomy_wired.py).
+test("autonomy: at Act Oracle saves a run's order within the limits and tells its starter", async ({ page }) => {
+  await login(page);
+  await setLevel(page, "priorities", "Order priorities", "Act");
+  await rail(page).getByTestId("nav-runs").click();
+  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" }).getByRole("button", { name: "Approve and continue" }).click();
+  await page.getByRole("button", { name: "Check agents now" }).click();
+
+  // No stop: the order is saved and the PRD draft runs.
+  await expect(page.getByTestId("segment-prd_draft").getByTestId("segment-state")).toHaveText("Running");
+  const stop = page.getByTestId("checkpoint-priority_order").getByRole("generic").filter({ hasText: "Skipped" });
+  await expect(stop).toHaveAttribute("title", /Oracle saved this order: Order priorities is set to Act within limits\./);
+  await expect(page.getByRole("button", { name: "Check agents now" })).toBeVisible();
+
+  await rail(page).getByRole("link", { name: "Inbox" }).click();
+  const did = page.getByRole("link", { name: /^Saved the priority order of .+, within one goal and your limit$/ });
+  await expect(did).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Undo Saved the priority order/ })).toHaveCount(0);
+  await did.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByTestId("checkpoint-priority_order")).toContainText("Skipped");
+});
