@@ -35020,7 +35020,8 @@
             "description": "Not a roadmap, an expiry past 90 days, or a short passcode"
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/share-links/{link_id}": {
@@ -35083,7 +35084,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/share-links/{link_id}/passcode": {
@@ -35146,7 +35148,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/share-links/{link_id}/revoke": {
@@ -35209,7 +35212,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/documents/{doc}/share-links/revoke-all": {

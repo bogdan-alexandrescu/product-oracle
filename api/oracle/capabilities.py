@@ -142,10 +142,6 @@ DECIDED_PER_ITEM = frozenset(
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
-    "create_share_link": "owner",
-    "revoke_share_link": "owner",
-    "rotate_share_link_passcode": "owner",
-    "update_share_link": "owner",
     "accept_blocker_risk": "owner",
     "accept_intake_proposal": "approver",
     "accept_scope_enhancement": "approver",
@@ -167,6 +163,7 @@ PER_ITEM: dict[str, Role | None] = {
     "create_interview_link": "approver",
     "create_request": "owner",
     "create_run": "owner",
+    "create_share_link": "owner",
     "create_spec_request": "owner",
     "create_track_roadmap_run": "owner",
     "decide_checkpoint": "owner",
@@ -222,6 +219,8 @@ PER_ITEM: dict[str, Role | None] = {
     "review_decision": None,
     "review_design_artifact": "owner",
     "revoke_interview": "approver",
+    "revoke_share_link": "owner",
+    "rotate_share_link_passcode": "owner",
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_document_visibility": "owner",
@@ -249,6 +248,7 @@ PER_ITEM: dict[str, Role | None] = {
     "update_question": "approver",
     "update_request_reply": "approver",
     "update_requester_note": "approver",
+    "update_share_link": "owner",
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
     "withdraw_discussion_change": None,
