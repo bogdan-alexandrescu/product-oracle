@@ -164,10 +164,12 @@ function failingSince(db: WebhooksDb, hookId: string): string | null {
 }
 
 function hookOut(ctx: WebhooksContext, h: HookRow): WebhookOut {
-  const { secret: _s, previous_secret: _p, previous_expires_at: _e, created_by, ...rest } = h;
+  const rest: Partial<HookRow> = { ...h };
+  for (const k of ["secret", "previous_secret", "previous_expires_at", "created_by"] as const) delete rest[k];
+  const created_by = h.created_by;
   const last = ctx.db.deliveries.filter((d) => d.webhook_id === h.id && d.last_at && d.status !== "withheld").sort((a, b) => b.last_at!.localeCompare(a.last_at!))[0];
   return {
-    ...rest,
+    ...(rest as Omit<HookRow, "secret" | "previous_secret" | "previous_expires_at" | "created_by">),
     created_by: { name: nameOf(ctx, created_by) },
     last_delivery: last ? { status: last.status, at: last.last_at, http_status: last.http_status } : null,
     failing_since: failingSince(ctx.db, h.id),
@@ -177,8 +179,10 @@ function hookOut(ctx: WebhooksContext, h: HookRow): WebhookOut {
 
 function deliveryOut(db: WebhooksDb, d: DeliveryRow): DeliveryOut {
   const e = db.events.find((x) => x.id === d.event)!;
-  const { webhook_id: _w, event: _e, ...rest } = d;
-  return { ...rest, event_id: e.public_id, event_type: e.type };
+  const rest: Partial<DeliveryRow> = { ...d };
+  delete rest.webhook_id;
+  delete rest.event;
+  return { ...(rest as Omit<DeliveryRow, "webhook_id" | "event">), event_id: e.public_id, event_type: e.type };
 }
 
 type Receiver = (call: ReceivedCall) => Promise<Answer>;
