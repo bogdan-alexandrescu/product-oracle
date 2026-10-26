@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { DocCrumb } from "@/components/DocToolbar";
@@ -622,6 +623,9 @@ export function PublishView({ doc }: { doc: string }) {
                 {tally("warning") > 0 && <Chip kind="warn">{tally("warning")} warning</Chip>}
                 {tally("critical") > 0 && <Chip kind="crit">{tally("critical")} critical</Chip>}
                 {tally("not_applicable") > 0 && <Chip kind="na">{tally("not_applicable")} n/a</Chip>}
+                <Link href={`/documents/${doc}/v/${n}/quality`} className="text-sm font-medium text-accent-ink hover:underline">
+                  Open quality
+                </Link>
               </SubHead>
               <div className="grid grid-cols-2 max-[700px]:grid-cols-1" data-testid="advisory-columns">
                 {[advisory.slice(0, half), advisory.slice(half)].map((col, c) => (
