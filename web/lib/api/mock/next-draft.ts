@@ -20,6 +20,7 @@ import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
 import type { LlmContext } from "./llm-jobs";
+import { jobOut } from "./refusal";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -259,7 +260,7 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     items,
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
-    draft_job: job,
+    draft_job: job && jobOut(job),
     agent_items: agentItems(ctx, doc.id),
     next_draft_changes: changes,
   };
@@ -380,7 +381,7 @@ function preview(ctx: LlmContext, job: Job): Schemas["NextDraftPreview"] {
   const latest = latestOf(ctx, job.document_id ?? "")?.number ?? null;
   const done = job.status === "succeeded" && out;
   return {
-    job,
+    job: jobOut(job),
     base_version: base,
     next_version: base ? base + 1 : null,
     latest_version: latest,
@@ -541,7 +542,7 @@ export async function nextDraftRoute(
     if (job.status === "cancelled" || out?.discarded_at) return fail(409, "this next draft was already discarded");
     if (["queued", "running"].includes(job.status)) Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
     else job.output = { ...(out ?? {}), discarded_at: ctx.now() };
-    return json(200, job);
+    return json(200, jobOut(job));
   }
 
   if (p[5] === "apply" && m === "POST") {

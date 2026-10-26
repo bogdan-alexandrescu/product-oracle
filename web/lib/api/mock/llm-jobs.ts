@@ -9,7 +9,7 @@ import { wordDiff } from "@/lib/diff";
 import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
-import { readableRefusal } from "./refusal";
+import { jobOut } from "./refusal";
 import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type NextDraftChangeRow, type StartRun } from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
@@ -354,8 +354,6 @@ export function tick(ctx: LlmContext) {
 export const SPENT_RESET = "2026-10-25T22:00:00.475990Z";
 export const SPENT = "No Claude account can take this call: every Claude account is spent; the earliest window clears 2026-10-25T22:00:00.475990+00:00";
 
-/** A job as the API returns it: its stored error read through readableRefusal, in the past once it failed. */
-export const jobOut = (job: Job): Job => (job.error ? { ...job, error: readableRefusal(job.error, job.status === "failed") } : job);
 
 // ------------------------------------------------------------------ seed
 
@@ -642,14 +640,14 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     if (p[3] === "cancel" && m === "POST") {
       if (!["queued", "running"].includes(job.status)) return fail(409, `a ${job.status} job cannot be cancelled`);
       Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
-      return json(200, job);
+      return json(200, jobOut(job));
     }
     if (p[3] === "retry" && m === "POST") {
       if (!["failed", "cancelled"].includes(job.status)) return fail(409, `a ${job.status} job cannot be retried`);
       const doc = ctx.documents.find((d) => d.id === job.document_id);
       if (doc && !enabled(doc, job.kind)) return fail(409, turnedOff(switchOf(job.kind)));
       Object.assign(job, { status: "queued", attempts: 0, error: null, error_reason: null, next_reset_at: null, started_at: null, finished_at: null });
-      return json(200, job);
+      return json(200, jobOut(job));
     }
     if (p[3] === "preview" && m === "GET") {
       if (job.kind !== "refinement" || job.status !== "succeeded") return fail(409, "only a finished refinement has a preview");
@@ -758,7 +756,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       const v = vs.find((x) => x.number === input.version) ?? vs.at(-1)!;
       const job = makeJob(ctx, doc, input.kind, v, input.since ? { input: { version: v.number, since: input.since } } : {});
       db.jobs.push(job);
-      return json(201, job);
+      return json(201, jobOut(job));
     }
     return json(
       200,
@@ -812,5 +810,5 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     input: { version: v.number, suggestion_ids: accepted.map((s) => s.id), instruction },
   });
   db.jobs.push(job);
-  return json(201, job);
+  return json(201, jobOut(job));
 }

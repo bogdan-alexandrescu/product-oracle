@@ -223,24 +223,12 @@ export function seedApprovedPlanDraft(ctx: DraftRoadmapContext, db: DraftRoadmap
   });
 }
 
-/** #561 review, the "stored-refusals" scenario: usage-alerts v2's items failed on Oct 18 on a refusal stored before #403's wording. */
+/** #561 review, the "stored-refusals" scenario: checkout-redesign v2's items failed on Oct 18 on a refusal stored before #403's wording. */
 export function seedStoredRefusalDraft(ctx: DraftRoadmapContext, db: DraftRoadmapDb, error: string) {
-  const doc = ctx.documents.find((d) => d.slug === "usage-alerts");
-  if (!doc || !ctx.versions.some((x) => x.document_id === doc.id && x.number === 2)) return;
-  db.rows.push({
-    document_id: doc.id,
-    version: 2,
-    status: "failed",
-    requested_via: "auto",
-    requested_by: null,
-    requested_at: "2026-10-18T23:12:00Z",
-    run_id: null,
-    ready_at: null,
-    error,
-    depth: "standard",
-    check: null,
-    items: [],
-  });
+  const doc = ctx.documents.find((d) => d.slug === "checkout-redesign");
+  const r = doc && rowOf(db, doc.id, 2);
+  if (!r) return;
+  Object.assign(r, { status: "failed", requested_at: "2026-10-18T23:12:00Z", ready_at: null, error, check: null, items: [] });
 }
 
 /** Canned items for a derivation that finishes: the seed's for checkout-redesign v1/v2, else one per subsection. */

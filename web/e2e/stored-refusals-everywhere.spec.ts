@@ -7,7 +7,7 @@ import { login, openSection, sectionAction } from "./helpers";
  * #561 review (MAJOR 1): every surface that shows a stored Claude-pool refusal says when it
  * failed, in the Company time zone, and words the refusal as what was so then: nothing on the
  * page says every account is spent now. The "stored-refusals" scenario: a feedback loop, its
- * segment, usage-alerts v2's roadmap items and Clinic outreach's draft 6 build failed on
+ * segment, checkout-redesign v2's roadmap items and Clinic outreach's draft 6 build failed on
  * Oct 18 on a refusal stored before #403's wording; a refinement asked for now is refused.
  */
 const FAILED = "Failed Oct 18, 4:12 PM PDT";
@@ -39,7 +39,7 @@ test("a failed run and its segment say when they failed, the refusal in the past
 });
 
 test("roadmap items that failed say when, the refusal in the past", async ({ page }) => {
-  await page.goto("/documents/usage-alerts/v/2/roadmap");
+  await page.goto("/documents/checkout-redesign/v/2/roadmap");
   const status = page.getByTestId("draft-roadmap-status").filter({ visible: true });
   await expect(status).toHaveAttribute("data-status", "failed");
   await expect(status.getByTestId("failed-at")).toHaveText(`${FAILED}.`);

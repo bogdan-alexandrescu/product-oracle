@@ -40,3 +40,7 @@ export function readableRefusal(text: string | null | undefined, past = false): 
   if (!/[.!?]\s*$/.test(out)) out = `${out.trimEnd()}.`;
   return out;
 }
+
+/** A job as the API returns it (oracle.jobs.service.jobs_out): its stored error read through readableRefusal, in the past once it failed. */
+export const jobOut = <J extends { error?: string | null; status: string }>(job: J): J =>
+  job.error ? { ...job, error: readableRefusal(job.error, job.status === "failed") } : job;
