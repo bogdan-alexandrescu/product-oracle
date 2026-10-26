@@ -5,12 +5,12 @@ its secret, run tokens never). Invented data only."""
 import uuid
 
 import pytest
-from oracle.webhooks.models import Webhook
 from sqlalchemy import select
 
 from oracle import crypto
 from oracle.models import AuditEvent
 from oracle.tenancy import tenant_session
+from oracle.webhooks.models import Webhook
 from tests.conftest import make_tenant
 from tests.connection_helpers import make_person
 from tests.test_mcp import api_token, mcp_client, run_token, text_of
