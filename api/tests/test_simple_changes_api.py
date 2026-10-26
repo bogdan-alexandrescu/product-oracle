@@ -55,6 +55,7 @@ from typing import Any
 import pytest
 from sqlalchemy import select, text
 
+from oracle import company_time
 from oracle.auth.models import User
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
@@ -62,7 +63,7 @@ from oracle.simple import suggestions
 from oracle.simple.models import RoadmapDateSuggestion
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
-from tests.test_simple_roadmap_api import NOW, Seed, clock  # noqa: F401  (autouse clock)
+from tests.test_simple_roadmap_api import NOW, Seed
 
 SESSIONS = "/v1/simple/sessions"
 CHANGES = "/v1/simple/changes"
@@ -81,6 +82,17 @@ OPS = [
 ]
 A = {"start_date": "2026-10-01", "end_date": "2026-11-15"}
 B = {"start_date": "2026-11-10", "end_date": "2026-12-15"}
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch):
+    moment = {"now": NOW}
+    monkeypatch.setattr(company_time, "now", lambda: moment["now"])
+    return moment
+
+
+def seeded_title(key: str) -> str:
+    return key.replace("-", " ").title()
 
 
 async def make_people() -> Ctx:
@@ -148,7 +160,7 @@ class World:
             "cut": {"target": {"item_id": a}, "before": {"cut": False}, "after": {"cut": True}},
             "restore": {"target": {"item_id": a}, "before": {"cut": True},
                         "after": {"cut": False}},
-            "edit_title": {"target": {"item_id": a}, "before": {"title": f"{op}-a".replace("-", " ").title()},
+            "edit_title": {"target": {"item_id": a}, "before": {"title": seeded_title(f"{op}-a")},
                            "after": {"title": "Ledger v2"}},
             "edit_outcome": {"target": {"item_id": a}, "before": {"outcome": None},
                              "after": {"outcome": "Half the support tickets"}},
