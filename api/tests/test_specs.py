@@ -546,6 +546,47 @@ async def test_design_annotations_are_reviewable(client, runtime):
     assert [r["kind"] for r in view["reviews"]] == ["approved"]
 
 
+async def test_design_review_threads_name_people(client, runtime):
+    """#619 review: every role that reads the spec sees who wrote each review event and who
+    its engineering approvers are, by name."""
+    world = await make_world(client)
+    lead = await add_approver(world.ctx)
+    created = await generated(client, runtime, world, engineering_approver_ids=[str(lead.id)])
+    request_id = created["spec"]["request"]["id"]
+    viewer = world.ctx.as_("viewer")
+    spec = await get_spec(client, viewer, request_id)
+    assert spec["engineering_approvers"] == [{"id": str(lead.id), "name": "Eng Lead"}]
+    wire = next(d for d in spec["design"] if d["kind"] == "wireframe")
+    av_id = wire["version"]["id"]
+    url = f"/v1/design-artifacts/{av_id}/reviews"
+    resp = await client.post(
+        url,
+        json={"kind": "comment", "body": "Show the range too.", "output": "cart-1.html",
+              "annotation_id": "cost-label"},
+        headers=world.ctx.as_("commenter"),
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["event"]["actor_name"] == "Commenter"
+    resp = await client.post(
+        url, json={"kind": "comment", "body": "Looks right."}, headers=world.ctx.as_("token")
+    )
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(url, json={"kind": "approved"}, headers=world.ctx.as_(lead.email))
+    assert resp.status_code == 201, resp.text
+
+    view = (await client.get(f"/v1/design-artifacts/{av_id}", headers=viewer)).json()
+    out = next(o for o in view["outputs"] if o["name"] == "cart-1.html")
+    [note] = out["annotations"]
+    assert [r["actor_name"] for r in note["reviews"]] == ["Commenter"]
+    assert [(r["kind"], r["actor_name"]) for r in view["reviews"]] == [
+        ("comment", "agent-track"),
+        ("approved", "Eng Lead"),
+    ]
+    spec = await get_spec(client, viewer, request_id)
+    wire = next(d for d in spec["design"] if d["kind"] == "wireframe")
+    assert [r["actor_name"] for r in wire["reviews"]] == ["agent-track", "Eng Lead"]
+
+
 async def test_design_outputs_are_served_static_and_sandboxed(client, runtime):
     world = await make_world(client)
     created = await generated(client, runtime, world)
