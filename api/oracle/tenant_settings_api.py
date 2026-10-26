@@ -68,6 +68,10 @@ from every member's Google Docs sources in the same request, with no Drive call
   digest runs may make in the Company time zone's month (counted from ``web_searches``);
   0 turns web search off.
 
+- ``branding`` (O5): display name, logo, accent, public disclaimer and the "Made with
+  Product Oracle" switch (``oracle.branding``); written only through ``PUT /v1/branding``
+  and the logo routes, so its revision bumps on every change.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -86,6 +90,7 @@ from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import not_for_runs, recheck_caller, require_role
 from oracle.baseline.models import LINK_KINDS
+from oracle.branding import DEFAULT as BRANDING_DEFAULT
 from oracle.confidence import DEFAULTS as CONFIDENCE_DEFAULTS
 from oracle.rituals.schedule import DEFAULT_ZONE as COMPANY_ZONE
 from oracle.sources.models import ITEM_KINDS, SOURCE_KINDS
@@ -148,6 +153,8 @@ DEFAULTS: dict[str, Any] = {
     "pricing_owner": None,
     # H7 Competitive digest: open-web searches per month across runs; 0 turns them off.
     "web_searches_per_month": 200,
+    # O5 lane 4: the company's branding (oracle.branding), changed on PUT /v1/branding only.
+    "branding": BRANDING_DEFAULT,
 }
 MAX_WEB_SEARCHES_PER_MONTH = 2000
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
@@ -373,6 +380,11 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         from oracle.pricing.decide import check_pricing_owner
 
         return await check_pricing_owner(session, value)
+    if key == "branding":
+        raise InvalidSetting(
+            "branding changes on Settings › Company › Branding (PUT /v1/branding and its logo "
+            "routes; a null value here resets every default)"
+        )
     if key == "autonomy":
         raise InvalidSetting(
             "autonomy changes one responsibility at a time, with a reason: change it on "

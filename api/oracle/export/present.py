@@ -99,6 +99,8 @@ def key(principal: "Principal", ev: ExportVersion) -> Hashable:
         RENDERER,
         (theme.id, theme.updated_at) if theme is not None else None,
         marks,
+        # O5: a new logo, name or accent shows at once.
+        ev.brand.key if ev.brand is not None else None,
         (
             ev.title,
             ev.document.slug,

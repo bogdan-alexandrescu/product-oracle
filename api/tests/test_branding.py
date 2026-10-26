@@ -55,7 +55,7 @@ def _noisy_png(min_bytes: int) -> bytes:
     """A PNG over ``min_bytes`` (random pixels do not compress)."""
     import os
 
-    side = 1000
+    side = 1100
     img = Image.frombytes("RGB", (side, side), os.urandom(side * side * 3))
     buf = io.BytesIO()
     img.save(buf, format="PNG", compress_level=0)
@@ -356,7 +356,7 @@ async def test_the_pptx_and_present_title_slides_carry_the_logo(client, branded)
     assert len(pictures) == 1
     assert hashlib.sha256(pictures[0].image.blob).hexdigest() == logo["sha256"]
     assert all(
-        sh.shape_type != MSO_SHAPE_TYPE.PICTURE for slide in prs.slides[1:] for sh in slide.shapes
+        sh.shape_type != MSO_SHAPE_TYPE.PICTURE for slide in list(prs.slides)[1:] for sh in slide.shapes
     )
     texts = " ".join(sh.text_frame.text for sh in title.shapes if sh.has_text_frame)
     assert "Example Labs" in texts and MARK not in texts

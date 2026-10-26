@@ -24,8 +24,12 @@
 <style>
 {{ theme_css }}
 </style>
+<style>
+{{ brand_css }}
+</style>
 </head>
 <body class="{{ body_class }}">
+{{ brand_header }}
 {% if running_header %}
 <div class="doc-strings" aria-hidden="true">
   <span class="doc-strings-title">{{ header_title or title }}</span>

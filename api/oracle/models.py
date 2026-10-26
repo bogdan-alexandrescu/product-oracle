@@ -46,6 +46,7 @@ from oracle.baseline.models import (  # noqa: E402
     EvidenceLinkSnapshot,
     Proposal,
 )
+from oracle.branding import BrandAsset  # noqa: E402
 from oracle.claude_accounts.models import (  # noqa: E402
     ClaudeAccount,
     ClaudeAccountHold,
@@ -163,6 +164,7 @@ from oracle.v2.models import (  # noqa: E402
 from oracle.web.models import WebResult, WebSearch  # noqa: E402
 
 __all__ = [
+    "BrandAsset",
     "NextDraftChange",
     "AlignmentReport",
     "Ritual",

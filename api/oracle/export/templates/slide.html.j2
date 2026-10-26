@@ -3,6 +3,8 @@
 <section class="slide slide--{{ s.kind }}{% if s.dense %} slide-dense{% endif %}" id="slide-{{ s.index }}" data-slide="{{ s.index }}"{% if s.section_key %} data-section-key="{{ s.section_key }}"{% endif %} aria-label="Slide {{ s.index }} of {{ total }}: {{ s.heading }}">
   <div class="slide-inner">
   {% if s.kind == "title" %}
+    {{ deck.brand_logo }}
+    {% if deck.brand_name %}<p class="slide-brand">{{ deck.brand_name }}</p>{% endif %}
     <p class="slide-kicker">Brief</p>
     <h1 class="slide-title">{{ deck.title }}</h1>
     <p class="slide-subtitle">Version {{ deck.number }}{% if deck.number < deck.latest_number %} of {{ deck.latest_number }}{% endif %} · {{ deck.status | replace("_", " ") | capitalize }} · as of {{ deck.as_of }}</p>
