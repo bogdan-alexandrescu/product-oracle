@@ -129,7 +129,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
@@ -9608,46 +9608,118 @@ async def _date_rows(db: AsyncSession, principal: Principal, leads: frozenset[uu
     ]
 
 
+# Runs that finished before the No document row shipped get none (#583 review): the Inbox
+# does not fill with every past refused run at once. Their run pages still offer Retry
+# import; the row is for runs that finish from here on.
+NO_DOCUMENT_SINCE = datetime(2026, 10, 25, tzinfo=UTC)
+
+
 async def _no_documents(db: AsyncSession) -> list[RunSummary]:
     """The owners' Inbox rows for runs that finished with no document (owner, 2026-10-25):
     a segment's draft was refused at import, the run succeeded past it (its review
     approved, e.g. by a console MERGE) and no attempt imported a version. Each carries
-    ``no_document``: why, and the action (Retry import, else a new run)."""
+    ``no_document``: why, and the action (Retry import, else a new run).
+
+    A row clears itself (#583 review): on a successful Retry import (the run imported a
+    version), and once the run's document has a version made after the run finished (a
+    later run imported it). Only runs that finished since :data:`NO_DOCUMENT_SINCE`.
+    Filtered in SQL, reading only the refused import and the names of the kept files,
+    never the drafts."""
+    imp = RunSegment.artifacts["import"]
+    imported_segment = (
+        select(RunSegment.id)
+        .where(
+            RunSegment.run_id == Run.id,
+            RunSegment.artifacts["import"]["version"].astext.is_not(None),
+            func.coalesce(RunSegment.artifacts["import"]["error"].astext, "") == "",
+        )
+        .correlate(Run)
+        .exists()
+    )
+    imported_review = (
+        select(Checkpoint.id)
+        .where(
+            Checkpoint.run_id == Run.id,
+            Checkpoint.payload["import"]["version"].astext.is_not(None),
+            func.coalesce(Checkpoint.payload["import"]["error"].astext, "") == "",
+        )
+        .correlate(Run)
+        .exists()
+    )
+    later_version = (
+        select(DocumentVersion.id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(
+            or_(
+                Document.id == Run.document_id,
+                Document.slug == Run.knobs["document_slug"].astext,
+            ),
+            DocumentVersion.created_at > Run.finished_at,
+        )
+        .correlate(Run)
+        .exists()
+    )
     rows = (
         await db.execute(
-            select(Run, RunSegment)
+            select(
+                Run,
+                RunSegment.seq,
+                RunSegment.name,
+                imp,
+                func.jsonb_path_query_array(
+                    RunSegment.artifacts["files"], literal_column("'$.keyvalue().key'::jsonpath")
+                ),
+            )
             .join(RunSegment, RunSegment.run_id == Run.id)
-            .where(Run.status == "succeeded", RunSegment.artifacts.has_key("import"))
+            .where(
+                Run.status == "succeeded",
+                Run.finished_at >= NO_DOCUMENT_SINCE,
+                func.coalesce(imp["error"].astext, "") != "",
+                ~imported_segment,
+                ~imported_review,
+                ~later_version,
+            )
             .order_by(Run.created_at, Run.id, RunSegment.seq)
         )
     ).all()
     refused: dict[uuid.UUID, tuple[Run, RunSegment]] = {}
-    for run, segment in rows:
-        imp = (segment.artifacts or {}).get("import")
-        if isinstance(imp, dict) and imp.get("error"):
-            refused.setdefault(run.id, (run, segment))
+    for run, seq, name, refusal, files in rows:
+        # Only what the retry check reads: the refusal, and which files were kept.
+        light = RunSegment(
+            seq=seq,
+            name=name,
+            artifacts={"import": refusal, "files": dict.fromkeys(files or [], "")},
+        )
+        refused.setdefault(run.id, (run, light))
     if not refused:
         return []
-    segments: dict[uuid.UUID, list[RunSegment]] = {i: [] for i in refused}
-    for seg in await db.scalars(
-        select(RunSegment).where(RunSegment.run_id.in_(refused)).order_by(RunSegment.seq)
-    ):
-        segments[seg.run_id].append(seg)
-    checkpoints: dict[uuid.UUID, list[Checkpoint]] = {i: [] for i in refused}
-    for cp in await db.scalars(
-        select(Checkpoint).where(Checkpoint.run_id.in_(refused)).order_by(Checkpoint.created_at)
-    ):
-        checkpoints[cp.run_id].append(cp)
-    runs = [
-        (run, segment)
-        for run, segment in refused.values()
-        if _run_version(segments[run.id], checkpoints[run.id]) is None
-    ]
-    refs = await _refs(db, [r for r, _ in runs])
+    # Each segment's review: its latest checkpoint's status, nothing else.
+    reviews: dict[tuple[uuid.UUID, int], Checkpoint] = {}
+    for run_id, seq, status in (
+        await db.execute(
+            select(
+                Checkpoint.run_id, Checkpoint.payload["segment_seq"].as_integer(), Checkpoint.status
+            )
+            .where(Checkpoint.run_id.in_(refused))
+            .order_by(Checkpoint.created_at)
+        )
+    ).all():
+        reviews[(run_id, seq)] = Checkpoint(status=status)
+    runs = [run for run, _ in refused.values()]
+    kinds = dict(
+        (
+            await db.execute(
+                select(Document.id, Document.kind).where(
+                    Document.id.in_({r.document_id for r in runs if r.document_id})
+                )
+            )
+        ).all()
+    )
+    refs = await _refs(db, runs)
     out: list[RunSummary] = []
-    for run, segment in runs:
-        kind = await _target_kind(db, run)
-        review = _review_of(checkpoints[run.id], segment.seq)
+    for run, segment in refused.values():
+        kind = _flow(run).target_kind or kinds.get(run.document_id) or "prd"
+        review = reviews.get((run.id, segment.seq))
         retry = _draft_retry_refusal(run, segment, review, kind, None) is None
         out.append(
             _summary(run, refs, None).model_copy(

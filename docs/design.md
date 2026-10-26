@@ -131,8 +131,9 @@ writing the PRD alone from memory plus a few searches.
   releases; refreshed on merge (S2 GitHub depth).
 - **Baseline graph (B1):** typed entities (Goal, Product, Feature, Requirement,
   Constraint, Decision, Person, Evidence) and edges (supports, depends_on, blocks,
-  evidenced_by). User corrections are locked; agents must ask to override. Accepting a proposal applies it,
-  and the item is then locked against Oracle's changes until a person unlocks it. Goals are
+  evidenced_by). User corrections are locked; agents must ask to override. Accepting a
+  proposal applies it, and the item is then locked against Oracle's changes until a
+  person unlocks it. Goals are
   extracted from every source, proposed in measurable form and confirmed, with a goals
   interview where gaps remain; horizons default to current quarter / next 2 quarters /
   12–24 months (B2 Company goals). Every claim cites; conflicts resolve by stated

@@ -384,7 +384,8 @@ async def imported_again(
         try:
             name = people.get(uuid.UUID(who)) or tokens.get(uuid.UUID(who))
         except ValueError:
-            name = None
+            # Not a member or a token: Oracle's or the system's own retry (#583 review).
+            name = {audit.ORACLE: "Oracle", "system": "the system"}.get(e.actor)
         out[numbers[e.data["version"]]] = (
             f"imported again by {name or 'a former member'} on {stamp(e.created_at, zone)}"
         )
