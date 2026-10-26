@@ -3357,6 +3357,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Branding
+         * @description The company's branding (every member reads it; ``can_edit`` for owners). A run's
+         *     own token is refused: a run's agents never need it.
+         */
+        get: operations["get_branding"];
+        /**
+         * Put Branding
+         * @description Display name, accent (contrast-checked), public disclaimer and Oracle's mark on
+         *     shared pages (owners).
+         */
+        put: operations["put_branding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Brand Logo
+         * @description Store a logo (PNG, JPEG or WebP; re-encoded to PNG) as the light or dark variant.
+         */
+        post: operations["upload_brand_logo"];
+        /**
+         * Delete Brand Logo
+         * @description Remove the light or dark logo (owners).
+         */
+        delete: operations["delete_brand_logo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/uploads/brand/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Brand Logo
+         * @description A stored logo, to members of its company only, as a PNG that runs nothing.
+         */
+        get: operations["get_brand_logo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/setup": {
         parameters: {
             query?: never;
@@ -14110,6 +14180,11 @@ export interface components {
             /** Resource */
             resource?: string | null;
         };
+        /** Body_upload_brand_logo */
+        Body_upload_brand_logo: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_files */
         Body_upload_files: {
             /**
@@ -14117,6 +14192,52 @@ export interface components {
              * @description .md, .txt or .pdf files
              */
             files: string[];
+        };
+        /** BrandLogo */
+        BrandLogo: {
+            /** Sha256 */
+            sha256: string;
+            /** Type */
+            type: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Url */
+            url: string;
+        };
+        /** BrandingIn */
+        BrandingIn: {
+            /** Display Name */
+            display_name: string;
+            /** Accent */
+            accent?: string | null;
+            /** Public Disclaimer */
+            public_disclaimer: string;
+            /**
+             * Oracle Mark
+             * @default true
+             */
+            oracle_mark: boolean;
+        };
+        /** BrandingOut */
+        BrandingOut: {
+            /** Display Name */
+            display_name: string;
+            logo: components["schemas"]["BrandLogo"] | null;
+            logo_dark: components["schemas"]["BrandLogo"] | null;
+            /** Accent */
+            accent: string | null;
+            /** Public Disclaimer */
+            public_disclaimer: string;
+            /** Oracle Mark */
+            oracle_mark: boolean;
+            /** Revision */
+            revision: number;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** CalibrationFigures */
         CalibrationFigures: {
@@ -43849,6 +43970,180 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_branding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingOut"];
+                };
+            };
+        };
+    };
+    put_branding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingOut"];
+                };
+            };
+            /** @description Not an owner, or a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upload_brand_logo: {
+        parameters: {
+            query?: {
+                variant?: "light" | "dark";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_brand_logo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingOut"];
+                };
+            };
+            /** @description Not an owner, or a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a PNG, JPEG or WebP, over 512 KB or over 2,000 px */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_brand_logo: {
+        parameters: {
+            query?: {
+                variant?: "light" | "dark";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingOut"];
+                };
+            };
+            /** @description Not an owner, or a run */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_brand_logo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description No such logo */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

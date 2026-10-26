@@ -274,12 +274,14 @@ test("setup: on a phone each row keeps one line and nothing scrolls sideways", a
   }
 });
 
-test("setup: a non-owner on Settings > Company sees it is not for their role, and no inputs", async ({ page }) => {
+test("setup: a non-owner on Settings > Company reads the branding only, and no inputs", async ({ page }) => {
   // protects=company settings stay the owner's in the UI; fails_when=a commenter gets
   // controls; no_claim=the API's owner check (test_tenant_settings_api covers it).
   await login(page, "commenter@example.com");
   await page.goto("/settings/company");
-  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
+  // O5 lane 4: every member reads the company's branding there, read-only.
+  await expect(page.getByTestId("branding-panel")).toBeVisible();
+  await expect(page.getByTestId("branding-panel").getByRole("textbox")).toHaveCount(0);
   const main = page.getByRole("main");
   await expect(main.getByRole("combobox")).toHaveCount(0);
   await expect(main.getByRole("spinbutton")).toHaveCount(0);

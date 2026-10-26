@@ -28,15 +28,16 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from markupsafe import Markup, escape
 from pydantic import BaseModel
-from sqlalchemy import Index, Integer, LargeBinary, Text, Uuid, delete, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import has_role, not_for_runs, recheck_caller, require_role
-from oracle.db import Base, TenantScoped
+from oracle.branding_models import BrandAsset
 from oracle.tenancy import current_tenant
+
+__all__ = ["BrandAsset", "Brand", "load_brand", "render_brand_header", "router"]
 
 MAX_LOGO_BYTES = 512 * 1024
 MAX_LOGO_SIDE = 2000
@@ -71,20 +72,6 @@ LOGO_HEADERS = {
     "Cache-Control": "private, max-age=86400, immutable",
     "Content-Disposition": "inline",
 }
-
-
-class BrandAsset(TenantScoped, Base):
-    """A stored logo, re-encoded to PNG; addressed by the sha256 of its bytes."""
-
-    __tablename__ = "brand_assets"
-    __table_args__ = (Index("uq_brand_assets_sha256", "tenant_id", "sha256", unique=True),)
-
-    sha256: Mapped[str] = mapped_column(Text, nullable=False)
-    content_type: Mapped[str] = mapped_column(Text, nullable=False)
-    bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    width: Mapped[int] = mapped_column(Integer, nullable=False)
-    height: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class InvalidLogo(ValueError):
@@ -133,6 +120,8 @@ def check_accent(value: Any) -> str | None:
         background = (theme.tokens.get("colors") or {}).get("background") or "#ffffff"
         if contrast(value, background) < AA_BODY:
             raise ValueError(TOO_LIGHT)
+    if len(value) == 4:  # "#rgb" is stored as "#rrggbb"
+        value = "#" + "".join(c * 2 for c in value[1:])
     return value.lower()
 
 
@@ -198,8 +187,12 @@ class Brand:
 
     @property
     def key(self) -> tuple:
-        """What a kept render of this brand depends on."""
-        return (self.tenant_id, self.revision)
+        """What a kept render of this brand depends on: what it shows, not the revision
+        (a reset of the setting starts the revision again)."""
+        digest = hashlib.sha256()
+        for part in (self.logo_png, self.logo_dark_png):
+            digest.update(hashlib.sha256(part or b"").digest())
+        return (self.tenant_id, self.display_name, self.accent, digest.hexdigest())
 
     def apply_accent(self, tokens: dict | None) -> dict:
         """Theme tokens with the brand's accent in place of the theme's."""

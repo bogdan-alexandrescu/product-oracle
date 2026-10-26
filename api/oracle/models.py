@@ -46,7 +46,7 @@ from oracle.baseline.models import (  # noqa: E402
     EvidenceLinkSnapshot,
     Proposal,
 )
-from oracle.branding import BrandAsset  # noqa: E402
+from oracle.branding_models import BrandAsset  # noqa: E402
 from oracle.claude_accounts.models import (  # noqa: E402
     ClaudeAccount,
     ClaudeAccountHold,

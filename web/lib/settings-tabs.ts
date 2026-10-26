@@ -1,5 +1,6 @@
 "use client";
 
+import { BRANDING_OPS } from "@/lib/api/branding-types";
 import { useMe, type Operation } from "@/lib/me";
 
 /**
@@ -8,7 +9,8 @@ import { useMe, type Operation } from "@/lib/me";
  */
 export const SETTINGS_TABS: { label: string; href: string; testId: string; read: Operation }[] = [
   { label: "Members", href: "/settings/members", testId: "nav-members", read: "list_people" },
-  { label: "Company", href: "/settings/company", testId: "nav-company", read: "get_setting_endpoint" },
+  // O5 lane 4: every member reads the company's branding there; the other company settings are the owner's.
+  { label: "Company", href: "/settings/company", testId: "nav-company", read: BRANDING_OPS.get },
   { label: "API tokens", href: "/settings/api-tokens", testId: "nav-api-tokens", read: "list_api_tokens" },
   { label: "Connections", href: "/settings/connections", testId: "nav-connections", read: "list_connections" },
   { label: "Claude accounts", href: "/settings/claude-accounts", testId: "nav-claude-accounts", read: "list_claude_accounts" },
