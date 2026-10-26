@@ -100,7 +100,7 @@ async def test_the_runs_token_reads_exactly_the_jobs_payload(client):
     assert len(got["untrusted_data"]["sources"]) == len(chosen) == 1
     async with tenant_session(ctx.tenant_id) as s:
         events = list(await s.scalars(select(AuditEvent).where(
-            AuditEvent.action == "intake.evidence_read")))  # fmt: skip
+            AuditEvent.action == "intake.evidence_query")))  # fmt: skip
         assert any(e.data.get("route") == "get_intake_analysis_input" for e in events)
         minted = list(await s.scalars(select(RunToken).where(RunToken.run_id == run.id)))
         assert all(t.scopes == [SCOPE] for t in minted)
