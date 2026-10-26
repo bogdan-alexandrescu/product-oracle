@@ -3,8 +3,8 @@
 
 Card: protects=the flow and the scope come and go with the revision, chained on
 0054_reply_opened as the single head; the upgrade cancels queued intake_analysis jobs as
-moved_to_swarmcloud and leaves other jobs alone; the downgrade refuses while a read is
-running; fails_when=either check misses its value, a queued job stays queued, another kind
+moved_to_swarmcloud and leaves ended jobs alone; the downgrade refuses while a read is
+running; fails_when=either check misses its value, a queued job stays queued, an ended job
 is touched, or the downgrade drops the value under a live run; no_claim=the reads the tick
 then starts (tests/test_intake_read.py).
 
@@ -75,23 +75,25 @@ def test_upgrade_cancels_queued_jobs_and_downgrade_refuses_under_a_live_read(scr
     command.upgrade(_cfg(), PREVIOUS)
     tenant = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=tenant)
-    queued, done, other = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    for job, kind, status in (
-        (queued, "intake_analysis", "queued"),
-        (done, "intake_analysis", "succeeded"),
-        (other, "review_comments", "queued"),
-    ):
+    intake = uuid.uuid4()
+    _run(
+        "INSERT INTO product_intakes (id, tenant_id, title, brief) "
+        "VALUES (:i, :t, 'Saved addresses', 'A made-up brief')",
+        i=intake, t=tenant,
+    )  # fmt: skip
+    queued, done, failed = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    for job, status in ((queued, "queued"), (done, "succeeded"), (failed, "failed")):
         _run(
-            "INSERT INTO llm_jobs (id, tenant_id, kind, status, input, attempts) "
-            "VALUES (:j, :t, :k, :s, '{}', 0)",
-            j=job, t=tenant, k=kind, s=status,
+            "INSERT INTO llm_jobs (id, tenant_id, kind, intake_id, status, input, attempts) "
+            "VALUES (:j, :t, 'intake_analysis', :i, :s, '{}', 0)",
+            j=job, t=tenant, i=intake, s=status,
         )  # fmt: skip
     command.upgrade(_cfg(), REVISION)
     assert "intake_analysis" in _check("ck_runs_flow")
     assert "read:intake-input" in _check("ck_run_tokens_scopes")
     rows = dict((r[0], (r[1], r[2])) for r in _run("SELECT id, status, error_reason FROM llm_jobs"))
     assert rows[queued] == ("cancelled", "moved_to_swarmcloud")
-    assert rows[done][0] == "succeeded" and rows[other][0] == "queued"
+    assert rows[done][0] == "succeeded" and rows[failed][0] == "failed"
 
     run = uuid.uuid4()
     _run(
