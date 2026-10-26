@@ -248,6 +248,8 @@ class DecisionOut(DecisionSummary):
     outcome_id: uuid.UUID | None = None
     # The outcome record's status now (H3), for the inspector's Expected.
     outcome_status: OutcomeStatus | None = None
+    # Tracking with a proposed assessment: the Outcomes tab's "Check due".
+    outcome_check_due: bool = False
     # entity_ids and evidence_ids, in their order, with what a person reads.
     entities: list[DecisionEntityRef] = []
     evidence: list[DecisionEvidenceRef] = []

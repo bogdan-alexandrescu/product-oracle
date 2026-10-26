@@ -7,12 +7,16 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>. Synthetic placeholders only.
 """
 
+import uuid
+
 import pytest
 
+from oracle.quality.models import OutcomeRecord
 from oracle.swarm import FakeRuntime, set_runtime
+from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.blocker_helpers import make_entity, make_evidence
-from tests.decision_helpers import clock, propose  # noqa: F401 (clock: autouse)
+from tests.decision_helpers import clock, decide, in_days, propose  # noqa: F401 (clock: autouse)
 from tests.pricing_helpers import approved_memo
 
 
@@ -137,3 +141,27 @@ async def test_a_commenters_edit_keeps_a_link_they_cannot_see(client, ctx):
     assert out["entity_ids"] == []
     theirs = await _read(client, ctx, d, "approver")
     assert theirs["entity_ids"] == [hidden]
+
+
+async def test_the_outcome_reads_check_due_once_an_assessment_is_proposed(client, ctx):
+    """protects=a decided decision's outcome reads check due once its tracking record has a
+    proposed assessment, as the Outcomes tab's "Check due", and not before; fails_when=the
+    inspector can only say "Measuring" for it; no_claim=how an assessment is proposed (H3)."""
+    goal = await make_entity(ctx, "goal", "fewer-spend-incidents")
+    d = await propose(client, ctx)
+    prediction = {
+        "goal_id": str(goal),
+        "metric": "spend incidents per month",
+        "baseline": "6",
+        "predicted": "2",
+        "threshold": "3",
+        "by": in_days(100),
+    }
+    out = await decide(client, ctx, d["number"], prediction=prediction)
+    assert (out["outcome_status"], out["outcome_check_due"]) == ("tracking", False)
+    async with tenant_session(ctx.tenant_id) as s:
+        record = await s.get(OutcomeRecord, uuid.UUID(out["outcome_id"]))
+        record.proposed_assessment = {"verdict": "held", "observed": "2", "note": None}
+        await s.commit()
+    out = await _read(client, ctx, d, "viewer")
+    assert (out["outcome_status"], out["outcome_check_due"]) == ("tracking", True)

@@ -56417,6 +56417,11 @@
             ],
             "title": "Outcome Status"
           },
+          "outcome_check_due": {
+            "type": "boolean",
+            "title": "Outcome Check Due",
+            "default": false
+          },
           "entities": {
             "items": {
               "$ref": "#/components/schemas/DecisionEntityRef"

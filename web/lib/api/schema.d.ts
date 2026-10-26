@@ -17071,6 +17071,11 @@ export interface components {
             /** Outcome Status */
             outcome_status?: ("predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
             /**
+             * Outcome Check Due
+             * @default false
+             */
+            outcome_check_due: boolean;
+            /**
              * Entities
              * @default []
              */
