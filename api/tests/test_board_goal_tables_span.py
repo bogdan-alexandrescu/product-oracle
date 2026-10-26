@@ -1,7 +1,7 @@
 """Board's goal tables span the card board (train O5 follow-up): under a horizon, each
 goal group holding Board's item table is marked full width (``section-wide``) where the
 themed export builds the group, and every built-in theme that lays a horizon's sections
-out as a grid of cards spans it (``grid-column: 1 / -1``), in the HTML and in the PDF
+out as a grid of cards spans it (``grid-column: 1 / span 3``, the grid's column count), in the HTML and in the PDF
 (WeasyPrint lays out the same HTML). Ordinary item cards keep the three-column board.
 
 The "empty fifth column" seen beside a goal table was the card frame, not a cell: the
@@ -81,7 +81,7 @@ async def test_board_goal_tables_are_marked_full_width_and_the_theme_spans_them(
     assert all("section-wide" in classes for classes, _ in groups.values()), groups
     assert [k for k, (c, _) in found.items() if "section-wide" in c] == sorted(groups)
     rule = re.search(r"\.section-wide\s*\{([^}]*)\}", html)
-    assert rule and re.search(r"grid-column:\s*1\s*/\s*-1", rule.group(1)), "theme rule"
+    assert rule and re.search(r"grid-column:\s*1\s*/\s*span 3\b", rule.group(1)), "theme rule"
 
 
 @pytest.mark.parametrize("audience", ["team", "engineering"])
@@ -107,7 +107,10 @@ def test_every_built_in_grid_theme_spans_a_wide_section_and_others_are_unchanged
         rule = re.search(r"\.group-body\s*>\s*\.section-wide\s*\{([^}]*)\}", css)
         if path in grid:
             assert rule, path.name
-            assert re.search(r"grid-column:\s*1\s*/\s*-1", rule.group(1)), path.name
+            # Every column of the theme's grid, by count (WeasyPrint misplaces 1 / -1).
+            columns = re.search(r"grid-template-columns:\s*repeat\((\d+)", css)
+            span = re.search(r"grid-column:\s*1\s*/\s*span (\d+)", rule.group(1))
+            assert columns and span and span.group(1) == columns.group(1), path.name
             assert re.search(r"padding-(?:left|right):\s*0|padding:\s*[^;]*\b0\b", rule.group(1))
         else:
             assert "section-wide" not in css, path.name
