@@ -11038,7 +11038,8 @@ export interface paths {
          * Get Plan Item History
          * @description A roadmap item across its roadmap's versions, in version order: its horizon in
          *     each version that has it, the PRD version it came from, and when that roadmap
-         *     version was approved. ``tracker_events`` stays empty until F2 Track health.
+         *     version was approved; ``tracker_events``: what each import changed on the item's
+         *     tracker issues (F2 Track health), oldest first.
          */
         get: operations["get_plan_item_history"];
         put?: never;
@@ -22206,7 +22207,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "intake" | "document_section" | "checkpoint_item" | "entity";
+            kind: "intake" | "document_section" | "checkpoint_item" | "entity" | "roadmap_item";
             /** Title */
             title: string;
             /** Href */
@@ -23281,9 +23282,12 @@ export interface components {
              * Tracker Events
              * @default []
              */
-            tracker_events: {
-                [key: string]: unknown;
-            }[];
+            tracker_events: components["schemas"]["ItemTrackerEvent"][];
+            /**
+             * Tracker Events Older
+             * @default 0
+             */
+            tracker_events_older: number;
         };
         /** ItemIn */
         ItemIn: {
@@ -23400,6 +23404,29 @@ export interface components {
             }[];
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /**
+         * ItemTrackerEvent
+         * @description One import's changes to one of the item's tracker issues (F2 §2), in field order.
+         *     The tracker's own status name is left out: the state says it in Oracle's words.
+         */
+        ItemTrackerEvent: {
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Tracker */
+            tracker: string;
+            /** External Ref */
+            external_ref: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Changes */
+            changes: components["schemas"]["TrackerFieldChange"][];
         };
         /** ItemVersion */
         ItemVersion: {
@@ -28009,7 +28036,7 @@ export interface components {
             /** Rationale */
             rationale?: string | null;
             /** Subject */
-            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"];
+            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"] | components["schemas"]["RoadmapItemSubject"];
         };
         /**
          * QuestionPatch
@@ -30447,6 +30474,24 @@ export interface components {
             engineering: components["schemas"]["TrackerRecordRef"][];
             /** Note */
             note?: string | null;
+        };
+        /**
+         * RoadmapItemSubject
+         * @description A Plan item: its PRD and its item key (F2 Ask, from the Plan).
+         */
+        RoadmapItemSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "roadmap_item";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Item Key */
+            item_key: string;
         };
         /** RoadmapItemsOut */
         RoadmapItemsOut: {
@@ -35628,7 +35673,11 @@ export interface components {
         /**
          * TrackAlertOut
          * @description One situation on one track. ``actions``: only what the caller may do now.
-         *     ``inbox_state``: in the Inbox only (new, open, done; C1e).
+         *     ``inbox_state``: in the Inbox only (new, open, done; C1e). ``suggested_assignee``: whom
+         *     Ask pre-fills (F2 §3, "a question to the engineering lead"; decided 2026-10-25): the
+         *     company's engineering lead when exactly one active member carries the flag and the
+         *     caller, not that lead, may Ask; else none. The server decides, so the flag itself never
+         *     reaches a picker (``GET /v1/people`` does not show it).
          */
         TrackAlertOut: {
             /**
@@ -35680,7 +35729,8 @@ export interface components {
             /** Resolved At */
             resolved_at: string | null;
             /** Actions */
-            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "keep" | "reopen")[];
+            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "ask" | "discuss" | "keep" | "reopen")[];
+            suggested_assignee?: components["schemas"]["PersonOut"] | null;
         };
         /** TrackAlertPrd */
         TrackAlertPrd: {
@@ -35841,6 +35891,21 @@ export interface components {
             read_only_alignment: boolean;
             /** Reason */
             reason: string;
+        };
+        /**
+         * TrackerFieldChange
+         * @description One field an import changed: before and after, as the tracker history keeps them.
+         */
+        TrackerFieldChange: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "state" | "target_date" | "estimate";
+            /** Before */
+            before: string | null;
+            /** After */
+            after: string | null;
         };
         /** TrackerImportOut */
         TrackerImportOut: {

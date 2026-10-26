@@ -23,14 +23,17 @@ export function questionsChanged() {
 export function AskTeammate({
   subject,
   context,
+  person: suggested = null,
   onClose,
 }: {
   subject: Schemas["QuestionCreate"]["subject"];
   /** What the question is about, in the form's title ("6. Success metrics"). */
   context: string;
+  /** Who the form starts with (a Plan alert's one engineering lead); the asker may change it. */
+  person?: Person | null;
   onClose: () => void;
 }) {
-  const [person, setPerson] = useState<Person | null>(null);
+  const [person, setPerson] = useState<Person | null>(suggested);
   const [prompt, setPrompt] = useState("");
   const [why, setWhy] = useState("");
   const [busy, setBusy] = useState(false);

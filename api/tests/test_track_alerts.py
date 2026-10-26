@@ -17,6 +17,7 @@ from oracle.auth.deps import RUN_TOKEN_HEADER
 from oracle.auth.models import User
 from oracle.docs.models import Document
 from oracle.mcp import scopes
+from oracle.members.names import display_name
 from oracle.roadmap import alerts, views
 from oracle.roadmap.models import (
     ProductTrack,
@@ -31,6 +32,7 @@ from tests.day_helpers import company_today
 from tests.roadmap_helpers import basis, other_company, seed_trace
 from tests.test_roadmap import (  # noqa: F401 - fixtures
     PRD,
+    ROADMAP,
     approved_prd,
     as_user,
     built_roadmap,
@@ -121,7 +123,7 @@ async def test_a_slip_opens_one_alert_and_resolves_when_the_date_comes_back(
     assert slip["item_key"] == "payment-step" and slip["item_title"] == "Payment step"
     assert slip["prd"]["slug"] == PRD and slip["state"] == "open"
     assert slip["data"]["slip_days"] == 9 and slip["data"]["previous_tracker_date"] == BETA
-    assert set(slip["actions"]) == {"accept_date", "replan", "keep"}
+    assert set(slip["actions"]) == {"accept_date", "replan", "ask", "discuss", "keep"}
     got = (await client.get(events, headers=auth)).json()
     assert sorted((e["field"], e["before"], e["after"]) for e in got) == [
         ("raw_status", None, "In Progress"),
@@ -151,7 +153,7 @@ async def test_a_kept_alert_waits_until_the_facts_change(client, owner, runtime)
     assert resp.status_code == 200, resp.text
     kept = resp.json()
     assert kept["state"] == "kept" and kept["note"] == "Lead says one week"
-    assert kept["kept_by_name"] and kept["actions"] == ["replan", "reopen"]
+    assert kept["kept_by_name"] and kept["actions"] == ["replan", "ask", "discuss", "reopen"]
     assert (await client.post(f"{url}/keep", json={}, headers=auth)).status_code == 409
     assert slip["id"] not in [a["id"] for a in await alerts_of(client, auth)]
     # Monitoring again with the same facts: still kept.
@@ -181,6 +183,226 @@ async def test_reopen_puts_a_kept_alert_back(client, owner, runtime):  # noqa: F
     resp = await client.post(f"{url}/reopen", headers=auth)
     assert resp.status_code == 200 and resp.json()["state"] == "open"
     assert slip["id"] in [a["id"] for a in await alerts_of(client, auth)]
+
+
+async def test_ask_and_discuss_reach_commenters_on_the_kinds_they_fit(client, owner, runtime):  # noqa: F811
+    """protects=F2 §3's Ask (date_slip, overdue, ahead) and Discuss (every kind) for
+    commenters and above; fails_when=a commenter gets neither, a viewer gets either, or Ask
+    is offered on a kind it does not fit; no_claim=the Plan card's buttons."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-777", "title": "Refactor cart", "state": "todo",
+         "track_id": track["id"]},
+    )  # fmt: skip
+    by = {a["kind"]: a for a in await alerts_of(client, auth)}
+    assert by["date_slip"]["actions"] == ["accept_date", "replan", "ask", "discuss", "keep"]
+    assert "ask" not in by["unplanned"]["actions"]
+    assert "discuss" in by["unplanned"]["actions"]
+    commenter = await as_user(tenant_id, "commenter")
+    by = {a["kind"]: a for a in await alerts_of(client, commenter)}
+    assert by["date_slip"]["actions"] == ["ask", "discuss"]
+    assert by["unplanned"]["actions"] == ["discuss"]
+    viewer = await as_user(tenant_id, "viewer")
+    assert all(a["actions"] == [] for a in await alerts_of(client, viewer))
+    # A resolved alert offers neither.
+    await importing(client, auth, record(track["id"], BETA))
+    (gone,) = [a for a in await alerts_of(client, auth, "resolved") if a["id"] == slip["id"]]
+    assert gone["actions"] == []
+
+
+async def test_ask_suggests_the_only_engineering_lead(client, owner, runtime):  # noqa: F811
+    """protects=F2 §3's Ask "a question to the engineering lead" (decided 2026-10-25, "Pre-fill
+    the only lead"): with exactly one active lead, an alert the caller may Ask on names that
+    lead as ``suggested_assignee``; with none or several, or for the lead themselves, none;
+    fails_when=the flag of several leads, or of a disabled one, reaches a picker that cannot
+    read it; no_claim=the Ask form's pre-fill (the Plan spec)."""
+    tenant_id, auth = owner
+    track, slip = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-777", "title": "Refactor cart", "state": "todo",
+         "track_id": track["id"]},
+    )  # fmt: skip
+    commenter = await as_user(tenant_id, "commenter")
+    by = {a["kind"]: a for a in await alerts_of(client, commenter)}
+    assert by["date_slip"]["suggested_assignee"] is None
+
+    lead_auth = await as_user(tenant_id, "approver")
+    async with tenant_session(tenant_id) as s:
+        lead = await s.scalar(select(User).where(User.role == "approver"))
+        lead.engineering_lead = True
+        lead_id, lead_email = lead.id, lead.email
+        await s.commit()
+    by = {a["kind"]: a for a in await alerts_of(client, commenter)}
+    assert by["date_slip"]["suggested_assignee"] == {
+        "user_id": str(lead_id), "name": display_name(lead_email), "email": lead_email,
+        "role": "approver", "can_write": True,
+    }  # fmt: skip
+    # Only where the caller may Ask: not on a kind Ask does not fit, nor for a viewer.
+    assert by["unplanned"]["suggested_assignee"] is None
+    viewer = await as_user(tenant_id, "viewer")
+    assert all(a["suggested_assignee"] is None for a in await alerts_of(client, viewer))
+    # The lead is not offered to themselves.
+    mine = {a["kind"]: a for a in await alerts_of(client, lead_auth)}
+    assert "ask" in mine["date_slip"]["actions"] and mine["date_slip"]["suggested_assignee"] is None
+
+    # A second lead: none is suggested, so the flag stays unread.
+    async with tenant_session(tenant_id) as s:
+        await s.execute(update(User).where(User.role == "commenter").values(engineering_lead=True))
+        await s.commit()
+    by = {a["kind"]: a for a in await alerts_of(client, auth)}
+    assert by["date_slip"]["suggested_assignee"] is None
+    # A disabled lead does not count: the one active lead is suggested again.
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(User).where(User.role == "commenter").values(disabled_at=datetime.now(UTC))
+        )
+        await s.commit()
+    by = {a["kind"]: a for a in await alerts_of(client, auth)}
+    assert by["date_slip"]["suggested_assignee"]["user_id"] == str(lead_id)
+
+
+async def test_the_item_history_lists_its_tracker_events(client, owner, runtime):  # noqa: F811
+    """protects=F1 §8 and F2 §2: the Plan item's history carries the tracker history of its
+    issues, oldest first, with the issue's key; fails_when=tracker_events stays empty, or
+    another item's issue shows; no_claim=the Plan's words for them."""
+    tenant_id, auth = owner
+    track, _ = await slipped(client, auth, runtime)
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-413", "state": "todo", "track_id": track["id"],
+         "item_key": "shipping-step", "target_date": BETA},
+    )  # fmt: skip
+    await importing(
+        client, auth,
+        {"external_ref": "ENG-413", "state": "in_progress", "track_id": track["id"],
+         "item_key": "shipping-step", "target_date": BETA},
+    )  # fmt: skip
+    resp = await client.get(
+        "/v1/plan/items/history",
+        params={"roadmap": ROADMAP, "item": "payment-step"},
+        headers=await as_user(tenant_id, "viewer"),
+    )
+    assert resp.status_code == 200, resp.text
+    events = resp.json()["tracker_events"]
+    assert [(e["external_ref"], changed(e)) for e in events] == [
+        ("ENG-405", [("target_date", BETA, SLIPPED)])
+    ]
+    assert events[0]["record_id"] and events[0]["observed_at"]
+    other = await client.get(
+        "/v1/plan/items/history",
+        params={"roadmap": ROADMAP, "item": "shipping-step"},
+        headers=auth,
+    )
+    assert [(e["external_ref"], changed(e)) for e in other.json()["tracker_events"]] == [
+        ("ENG-413", [("state", "todo", "in_progress")])
+    ]
+
+
+def changed(event: dict) -> list[tuple]:
+    return [(c["field"], c["before"], c["after"]) for c in event["changes"]]
+
+
+async def item_history(client, auth, item: str = "payment-step") -> dict:
+    resp = await client.get(
+        "/v1/plan/items/history", params={"roadmap": ROADMAP, "item": item}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_the_item_history_groups_tracker_events_per_import(client, owner, runtime):  # noqa: F811
+    """protects=#577 review MAJOR 1: one entry per import of an issue, naming every field the
+    import changed, in field order; a change to the tracker's own status name alone is no
+    entry; fails_when=one import that moves the state and the date shows as two entries, or
+    a raw-status-only import shows; no_claim=the Plan's words for them (mock spec)."""
+    tenant_id, auth = owner
+    track, _ = await slipped(client, auth, runtime)
+    await importing(client, auth, record(track["id"], BETA, state="todo", raw_status="Backlog"))
+    await importing(client, auth, record(track["id"], BETA, state="todo", raw_status="Todo"))
+    await importing(client, auth, record(track["id"], SLIPPED, estimate=3))
+    events = (await item_history(client, await as_user(tenant_id, "viewer")))["tracker_events"]
+    assert [changed(e) for e in events] == [
+        [("target_date", BETA, SLIPPED)],
+        [("state", "in_progress", "todo"), ("target_date", SLIPPED, BETA)],
+        [("state", "todo", "in_progress"), ("target_date", BETA, SLIPPED), ("estimate", None, "3")],
+    ]
+    assert {e["external_ref"] for e in events} == {"ENG-405"}
+
+
+async def test_the_item_history_shows_the_newest_imports_only(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    monkeypatch,
+):
+    """protects=#577 review MAJOR 1: an issue synced for months lists at most
+    TRACKER_HISTORY_LIMIT imports, the newest, oldest first, and says how many older ones
+    it leaves out; fails_when=every import is listed, the oldest are kept instead, or the
+    count is missing; no_claim=the limit's value (20, plan.service)."""
+    from oracle.plan import service as plan_service
+
+    monkeypatch.setattr(plan_service, "TRACKER_HISTORY_LIMIT", 2)
+    tenant_id, auth = owner
+    track, _ = await slipped(client, auth, runtime)
+    for day in ("2026-12-10", "2026-12-11", "2026-12-12"):
+        await importing(client, auth, record(track["id"], day))
+    body = await item_history(client, auth)
+    assert [changed(e) for e in body["tracker_events"]] == [
+        [("target_date", "2026-12-10", "2026-12-11")],
+        [("target_date", "2026-12-11", "2026-12-12")],
+    ]
+    assert body["tracker_events_older"] == 2
+    monkeypatch.undo()
+    assert (await item_history(client, auth))["tracker_events_older"] == 0
+
+
+async def test_ask_about_a_roadmap_item(client, owner, runtime):  # noqa: F811
+    """protects=C2 Ask from a Plan item (F2 §3 Ask): a commenter asks a named person about a
+    roadmap item, and the Inbox row opens the Plan on it; fails_when=the subject is refused,
+    or names another page; no_claim=who the Plan suggests asking."""
+    tenant_id, auth = owner
+    await slipped(client, auth, runtime)
+    approver_auth = await as_user(tenant_id, "approver")
+    async with tenant_session(tenant_id) as s:
+        prd_id = await s.scalar(select(Document.id).where(Document.slug == PRD))
+        approver = await s.scalar(select(User.id).where(User.role == "approver"))
+    commenter = await as_user(tenant_id, "commenter")
+    subject = {"kind": "roadmap_item", "document_id": str(prd_id), "item_key": "payment-step"}
+    resp = await client.post(
+        "/v1/questions",
+        json={"prompt": "Can ENG-405 still make Beta?", "asked_to": str(approver),
+              "subject": subject},
+        headers=commenter,
+    )  # fmt: skip
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["item_ref"] == "payment-step"
+    rows = (await client.get("/v1/inbox/questions", headers=approver_auth)).json()
+    (row,) = [r for r in rows if r["question"]["id"] == resp.json()["id"]]
+    assert row["subject"]["kind"] == "roadmap_item"
+    assert row["subject"]["title"].endswith(" · Payment step")
+    # The PRD too: two PRDs may both have a "payment-step" (#577 review).
+    assert row["subject"]["href"] == f"/plan?prd={prd_id}&item=payment-step"
+    missing = {**subject, "item_key": "no-such-item"}
+    resp = await client.post(
+        "/v1/questions",
+        json={"prompt": "Who?", "asked_to": str(approver), "subject": missing},
+        headers=commenter,
+    )
+    assert resp.status_code == 422, resp.text
+    # A PRD the asker cannot see is no subject of theirs (#577 review).
+    async with tenant_session(tenant_id) as s:
+        hidden = update(Document).where(Document.id == prd_id).values(visibility="approvers")
+        await s.execute(hidden)
+        await s.commit()
+    resp = await client.post(
+        "/v1/questions",
+        json={"prompt": "Who?", "asked_to": str(approver), "subject": subject},
+        headers=commenter,
+    )
+    assert resp.status_code == 422, resp.text
 
 
 # --- each kind (§1) ---------------------------------------------------------------------------

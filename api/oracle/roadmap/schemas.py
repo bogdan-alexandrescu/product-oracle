@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
+from oracle.members.schemas import PersonOut
 from oracle.v2.schemas import Freshness
 
 Horizon = Literal["now", "next", "later"]
@@ -846,7 +847,16 @@ AlertKind = Literal[
 ]
 AlertState = Literal["open", "kept", "resolved"]
 AlertAction = Literal[
-    "accept_date", "replan", "review", "reconcile", "open_blocker", "link", "keep", "reopen"
+    "accept_date",
+    "replan",
+    "review",
+    "reconcile",
+    "open_blocker",
+    "link",
+    "ask",
+    "discuss",
+    "keep",
+    "reopen",
 ]
 
 
@@ -857,7 +867,11 @@ class TrackAlertPrd(BaseModel):
 
 class TrackAlertOut(BaseModel):
     """One situation on one track. ``actions``: only what the caller may do now.
-    ``inbox_state``: in the Inbox only (new, open, done; C1e)."""
+    ``inbox_state``: in the Inbox only (new, open, done; C1e). ``suggested_assignee``: whom
+    Ask pre-fills (F2 §3, "a question to the engineering lead"; decided 2026-10-25): the
+    company's engineering lead when exactly one active member carries the flag and the
+    caller, not that lead, may Ask; else none. The server decides, so the flag itself never
+    reaches a picker (``GET /v1/people`` does not show it)."""
 
     id: uuid.UUID
     track_id: uuid.UUID
@@ -876,6 +890,7 @@ class TrackAlertOut(BaseModel):
     note: str | None
     resolved_at: datetime | None
     actions: list[AlertAction]
+    suggested_assignee: PersonOut | None = None
 
 
 class TrackAlertKeep(BaseModel):

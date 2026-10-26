@@ -196,9 +196,31 @@ class ItemVersion(BaseModel):
     approved_at: datetime | None
 
 
+class TrackerFieldChange(BaseModel):
+    """One field an import changed: before and after, as the tracker history keeps them."""
+
+    field: Literal["state", "target_date", "estimate"]
+    before: str | None
+    after: str | None
+
+
+class ItemTrackerEvent(BaseModel):
+    """One import's changes to one of the item's tracker issues (F2 §2), in field order.
+    The tracker's own status name is left out: the state says it in Oracle's words."""
+
+    record_id: uuid.UUID
+    tracker: str
+    external_ref: str
+    observed_at: datetime
+    changes: list[TrackerFieldChange]
+
+
 class ItemHistoryOut(BaseModel):
     roadmap: str
     item: str
     versions: list[ItemVersion]
-    # Tracker events for the item (F2 Track health stores them); empty until then.
-    tracker_events: list[dict] = []
+    # The tracker history of the item's issues, one entry per import, oldest first: the
+    # newest TRACKER_HISTORY_LIMIT imports (F2 Track health).
+    tracker_events: list[ItemTrackerEvent] = []
+    # How many older imports tracker_events leaves out.
+    tracker_events_older: int = 0

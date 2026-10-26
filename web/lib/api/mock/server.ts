@@ -103,7 +103,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
@@ -2319,6 +2319,7 @@ function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): 
     role: me.role,
     engineeringLead: engineeringLeads(db).includes(me.id),
     leadNamed: engineeringLeads(db).length > 0,
+    onlyLead: onlyLead(db),
     userName: me.email,
     documents: db.documents,
     versions: db.versions,
@@ -2859,6 +2860,13 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
 }
 
 /** A3, as oracle.members.leads: the active members carrying the engineering lead flag. */
+/** F2 Ask's pre-fill (oracle.roadmap.alerts.lookups): the one active engineering lead, as the people directory shows them. */
+function onlyLead(db: Db): Schemas["PersonOut"] | null {
+  const leads = engineeringLeads(db);
+  const m = leads.length === 1 ? db.members.find((x) => x.id === leads[0]) : undefined;
+  return m ? { user_id: m.id, name: displayName(m.email, m.name), email: m.email, role: m.role, can_write: atLeast(m.role, "commenter") } : null;
+}
+
 function engineeringLeads(db: Db): string[] {
   return db.members.filter((x) => x.engineering_lead && x.status !== "disabled").map((x) => x.id);
 }
@@ -4077,6 +4085,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         };
       },
       entity: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      roadmapItem: (id, key) => {
+        // A PRD the caller cannot see has no items for them (as oracle.intake.questions).
+        const doc = db.documents.find((d) => d.id === id);
+        return doc && canSee(me.role, doc.visibility) ? planItemTitle(doc.slug, key) : null;
+      },
       checkpoint: (id) => {
         for (const run of db.runs?.runs ?? []) {
           const cp = run.checkpoints.find((c) => c.id === id);

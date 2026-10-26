@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
@@ -33,6 +33,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.plan.schemas import (
     ItemChange,
     ItemHistoryOut,
+    ItemTrackerEvent,
     ItemVersion,
     PlanCounts,
     PlanDocument,
@@ -49,6 +50,7 @@ from oracle.plan.schemas import (
     PlanScope,
     PlanTrack,
     PlanWho,
+    TrackerFieldChange,
 )
 from oracle.roadmap import diff, schedule, tracker, views
 from oracle.roadmap.models import (
@@ -56,6 +58,7 @@ from oracle.roadmap.models import (
     RoadmapItem,
     ScheduleBasis,
     TrackerRecord,
+    TrackerRecordEvent,
     TrackMilestone,
 )
 from oracle.runs import flows
@@ -81,6 +84,10 @@ CHECKPOINT_LABEL = {
 # Checkpoints that are a review (journey step 8); the others stop a draft run (step 7).
 REVIEWS = ("prd_review", "roadmap_review")
 SEGMENT_TITLES = {s.name: s.title for f in flows.FLOWS.values() for s in f.segments}
+# The item history lists the newest imports of its tracker issues, this many (#577 review).
+TRACKER_HISTORY_LIMIT = 20
+# The fields the history names, in this order; the tracker's own status name is not one.
+SHOWN_FIELDS = ("state", "target_date", "estimate")
 HEALTH_WORD = {"on_track": "On track", "at_risk": "At risk", "off_track": "Off track"}
 
 
@@ -805,6 +812,8 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
                 DocumentVersion.approved_at,
                 RoadmapItem.horizon,
                 RoadmapItem.prd_version_id,
+                RoadmapItem.track_id,
+                RoadmapItem.prd_document_id,
             )
             .join(RoadmapItem, RoadmapItem.roadmap_version_id == DocumentVersion.id)
             .where(DocumentVersion.document_id == roadmap.id, RoadmapItem.item_key == key)
@@ -823,6 +832,7 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
                 )
             ).all()
         )
+    events, older = await _tracker_events(db, rows, key)
     return ItemHistoryOut(
         roadmap=roadmap.slug,
         item=key,
@@ -835,4 +845,64 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
             )
             for r in rows
         ],
+        tracker_events=events,
+        tracker_events_older=older,
     )
+
+
+async def _tracker_events(
+    db: AsyncSession, rows: list[Any], key: str
+) -> tuple[list[ItemTrackerEvent], int]:
+    """The tracker history of the item's issues (F2 §2): one entry per import of an issue
+    (its events share the record, the observed time and the transaction's ``created_at``),
+    naming every field it changed; the newest TRACKER_HISTORY_LIMIT, oldest first, and how
+    many older ones are left out. The records are those matched to the key on the item's
+    track, or by its PRD (F7), as the Plan matches them. A change of the tracker's own status
+    name alone is no entry: the state says it in Oracle's words."""
+    tracks = {r.track_id for r in rows if r.track_id}
+    prds = {r.prd_document_id for r in rows if r.prd_document_id}
+    if not tracks and not prds:
+        return [], 0
+    matched = []
+    if tracks:
+        matched.append(TrackerRecord.track_id.in_(tracks))
+    if prds:
+        matched.append(TrackerRecord.prd_document_id.in_(prds))
+    E = TrackerRecordEvent  # noqa: N806
+    shown_fields = E.field.in_(SHOWN_FIELDS)
+    imports = (
+        await db.execute(
+            select(E.record_id, E.observed_at, E.created_at, func.count().over().label("total"))
+            .join(TrackerRecord, TrackerRecord.id == E.record_id)
+            .where(TrackerRecord.item_key == key, or_(*matched), shown_fields)
+            .group_by(E.record_id, E.observed_at, E.created_at)
+            .order_by(E.observed_at.desc(), E.created_at.desc(), E.record_id)
+            .limit(TRACKER_HISTORY_LIMIT)
+        )
+    ).all()
+    if not imports:
+        return [], 0
+    found = await db.execute(
+        select(E, TrackerRecord.tracker, TrackerRecord.external_ref)
+        .join(TrackerRecord, TrackerRecord.id == E.record_id)
+        .where(
+            tuple_(E.record_id, E.observed_at, E.created_at).in_(
+                [(i.record_id, i.observed_at, i.created_at) for i in imports]
+            ),
+            shown_fields,
+        )
+    )
+    groups: dict[tuple, ItemTrackerEvent] = {}
+    for e, tracker_name, ref in found.all():
+        group = groups.setdefault(
+            (e.record_id, e.observed_at, e.created_at),
+            ItemTrackerEvent(
+                record_id=e.record_id, tracker=tracker_name, external_ref=ref,
+                observed_at=e.observed_at, changes=[],
+            ),
+        )  # fmt: skip
+        group.changes.append(TrackerFieldChange(field=e.field, before=e.before, after=e.after))  # type: ignore[arg-type]
+    for g in groups.values():
+        g.changes.sort(key=lambda c: SHOWN_FIELDS.index(c.field))
+    ordered = [groups[(i.record_id, i.observed_at, i.created_at)] for i in reversed(imports)]
+    return ordered, imports[0].total - len(imports)
