@@ -9,7 +9,8 @@ item.
 
 Live-safe: nullable columns and columns with constant defaults (no rewrite), one new table.
 
-The downgrade drops the table and the columns (typed and accepted dates are lost).
+The downgrade drops the table, the columns (typed and accepted dates are lost) and the
+internal ``simple_date_suggestions`` setting (the last day the suggestions ran).
 
 Revision ID: 0071_simple_roadmap_dates
 Revises: 0070_brand_assets
@@ -107,6 +108,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(LOCK_TIMEOUT)
+    op.get_bind().execute(
+        sa.text("DELETE FROM tenant_settings WHERE key = 'simple_date_suggestions'")
+    )
     op.drop_table("roadmap_date_suggestions")
     op.drop_constraint(op.f("ck_roadmap_items_date_source"), "roadmap_items", type_="check")
     for column in ("draft", "accepted_risks", "date_source", "end_date", "start_date"):

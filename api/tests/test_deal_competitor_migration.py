@@ -79,7 +79,7 @@ def _key_exists() -> bool:
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0070_brand_assets"]
+    assert script.get_heads() == ["0071_simple_roadmap_dates"]
 
 
 def test_upgrade_adds_the_key_and_downgrade_drops_it(scratch_db):
