@@ -898,7 +898,8 @@ async def test_exports_waiting_for_the_pool_hold_no_database_connection(
     try:
         tasks += await _fill(client, a, b, c)  # four rendering, two queued
         await until(lambda: held.started == 4)
-        await asyncio.sleep(0.1)
+        # Both queued exports wait for a worker (in the pool's queue), not still loading.
+        await until(lambda: offload.POOL._work_queue.qsize() == 2)
         assert get_engine().pool.checkedout() == 0
         other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
         assert other.status_code == 200, other.text
