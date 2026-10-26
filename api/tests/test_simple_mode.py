@@ -2,7 +2,8 @@
 
 GET /v1/me/capabilities says whether Simple is on (``simple_mode``, from
 ORACLE_SIMPLE_MODE, off by default); GET/PATCH /v1/me/preferences keep each person's
-``experience`` ('simple' or 'studio', unset until they switch). Nothing here proves the web
+``experience`` ('simple' or 'studio', unset until they switch); the capabilities name the
+role's ``default_experience`` for when it is unset. Nothing here proves the web
 draws the switch or lands by role (web/e2e/simple-mode.spec.ts).
 """
 
@@ -30,6 +31,20 @@ async def test_simple_mode_on_answers_every_role(client, tenant_id, monkeypatch,
     resp = await client.get("/v1/me/capabilities", headers=headers)
     assert resp.status_code == 200, resp.text
     assert resp.json()["simple_mode"] is True
+
+
+@pytest.mark.parametrize(
+    ("role", "mode"),
+    [("viewer", "simple"), ("commenter", "simple"), ("approver", "studio"), ("owner", "studio")],
+)
+async def test_capabilities_name_the_roles_default_mode(client, tenant_id, role, mode):
+    # protects=the landing without a saved mode (D13: viewers and commenters in Simple,
+    # approvers and owners in Studio) comes from the API, not role names in the web;
+    # fails_when=the field is missing or a role gets the other mode; no_claim=the web landing.
+    headers = await token_with_role(tenant_id, role)
+    resp = await client.get("/v1/me/capabilities", headers=headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["default_experience"] == mode
 
 
 def test_the_environment_variable_names_the_setting(monkeypatch):

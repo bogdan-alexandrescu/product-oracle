@@ -60,6 +60,65 @@ test("the switch is hidden while Simple is off, and everyone stays in Studio", a
   await expectStudio(page, "/company/decisions");
 });
 
+test("while Simple is off, a Simple link never shows Simple's page before it opens Studio's", async ({ page }) => {
+  await page.addInitScript((key) => {
+    localStorage.setItem(key, "off");
+    // Records whether Simple's page or rail was ever drawn, however briefly.
+    new MutationObserver(() => {
+      if (document.querySelector('[data-testid="simple-page"], [data-testid="simple-nav"]')) localStorage.setItem("e2e-saw-simple", "yes");
+    }).observe(document, { childList: true, subtree: true });
+  }, MOCK_SIMPLE_MODE_KEY);
+  await signIn(page, EMAILS.owner);
+  await expectStudio(page, "/home");
+  await page.goto("/simple/decisions");
+  await expectStudio(page, "/company/decisions");
+  expect(await page.evaluate(() => localStorage.getItem("e2e-saw-simple"))).toBeNull();
+});
+
+for (const [role, landing] of [
+  ["viewer", "/simple"],
+  ["owner", "/home"],
+] as const) {
+  test(`signed out, the bare site URL signs a${role === "owner" ? "n" : ""} ${role} in to their role's home`, async ({ page }) => {
+    await page.goto("/");
+    // Plain sign-in, no `next`: the landing rule decides where they go.
+    await expect(page).toHaveURL(/localhost:\d+\/login$/);
+    await page.getByLabel("Email").fill(EMAILS[role]);
+    await page.getByLabel("Password").fill(ADMIN.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    if (landing === "/simple") await expectSimple(page, landing);
+    else await expectStudio(page, landing);
+  });
+}
+
+test("signed out, a deep link signs in and returns to it, in either mode", async ({ page }) => {
+  await page.goto("/simple/one-pagers/checkout-redesign");
+  await expect(page).toHaveURL(/\/login\?next=/);
+  await page.getByLabel("Email").fill(EMAILS.owner);
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expectSimple(page, "/simple/one-pagers/checkout-redesign");
+
+  await signOut(page);
+  await page.goto("/plan");
+  await expect(page).toHaveURL(/\/login\?next=/);
+  await page.getByLabel("Email").fill(EMAILS.viewer);
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expectStudio(page, "/plan");
+});
+
+test("a one-pager link to a document that is not a PRD says so and links it in Studio", async ({ page }) => {
+  await signIn(page, EMAILS.owner);
+  await page.goto("/simple/one-pagers/usage-alerts-roadmap");
+  await expectSimple(page, "/simple/one-pagers/usage-alerts-roadmap");
+  const missing = page.getByTestId("one-pager-not-found");
+  await expect(missing).toContainText("No one-pager here");
+  await expect(page.getByTestId("one-pager-placeholder")).toHaveCount(0);
+  await missing.getByRole("link", { name: "Open it in Studio" }).click();
+  await expectStudio(page, "/documents/usage-alerts-roadmap");
+});
+
 test("the switch shows at the top of the rail while Simple is on", async ({ page }) => {
   await signIn(page, EMAILS.owner);
   await expectStudio(page, "/home");
@@ -233,13 +292,14 @@ test("each placeholder names what arrives and links its Studio page", async ({ p
   }
 });
 
-test("Simple's Home: what waits on me, the next meeting and this quarter's plan", async ({ page }) => {
+test("Simple's Home: what waits on me, the next meeting and the plan's Now", async ({ page }) => {
   await signIn(page, EMAILS.owner);
   await page.goto("/simple");
   await expectSimple(page, "/simple");
   await expect(page.getByRole("heading", { level: 2, name: "Waiting for you" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Next meeting" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "This quarter" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Now", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "This quarter" })).toHaveCount(0);
   await expect(page.getByTestId("simple-quarter").getByTestId("simple-quarter-item").first()).toBeVisible();
 });
 
@@ -258,7 +318,7 @@ test("Simple's Home: each part says when it has nothing", async ({ page }) => {
   await expectSimple(page, "/simple");
   await expect(page.getByTestId("simple-waiting-empty")).toContainText("Nothing waits on you");
   await expect(page.getByTestId("simple-meeting-empty")).toContainText("No meeting scheduled");
-  await expect(page.getByTestId("simple-quarter-empty")).toContainText("Nothing planned for this quarter");
+  await expect(page.getByTestId("simple-quarter-empty")).toContainText("Nothing in the plan's Now yet");
 });
 
 test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 px", async ({ page }) => {
