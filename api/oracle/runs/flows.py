@@ -310,6 +310,10 @@ class FlowDef:
     # map): its run token reads every tool as a commenter would (oracle.auth.deps,
     # oracle.docs.visibility), and its importer checks refs the same way.
     member_output: bool = False
+    # #624 review: what the run writes is private to its creator (Oracle's read of an
+    # intake, from the author's private sources): listing runs, reading the run and its
+    # files show it to its creator only (oracle.runs.service.creator_only_hidden).
+    creator_only: bool = False
 
     def segment(self, name: str) -> SegmentDef:
         return next(s for s in self.segments if s.name == name)
@@ -1195,6 +1199,7 @@ FLOWS: dict[str, FlowDef] = {
             # S6: what the read writes is the author's private findings, so the run reads
             # and writes as its creator (the intake's author), never as a member.
             member_output=False,
+            creator_only=True,
             title="Oracle's read",
             description="Oracle reads a new intake's brief and the author's pinned sources "
             "and adds inferences and open gaps, private to the author (INT2).",
@@ -1269,6 +1274,10 @@ def reads_as_member(flow: str | None) -> bool:
     """Whether a run of ``flow`` reads as a commenter would (``FlowDef.member_output``)."""
     f = FLOWS.get(flow or "")
     return f is not None and f.member_output
+
+
+# #624 review: the flows whose runs only their creator lists and reads.
+CREATOR_ONLY_FLOWS = tuple(k for k, f in FLOWS.items() if f.creator_only)
 
 
 class KnobError(ValueError):
