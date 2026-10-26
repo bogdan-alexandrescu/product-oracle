@@ -120,6 +120,7 @@ from oracle.roadmap.models import (  # noqa: E402
 from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # noqa: E402
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
+from oracle.simple.models import RoadmapDateSuggestion  # noqa: E402
 from oracle.slack.models import (  # noqa: E402
     DiscussionSlackLink,
     SlackEventSeen,
@@ -165,6 +166,7 @@ from oracle.web.models import WebResult, WebSearch  # noqa: E402
 from oracle.webhooks.models import Webhook, WebhookDelivery, WebhookEvent  # noqa: E402
 
 __all__ = [
+    "RoadmapDateSuggestion",
     "Webhook",
     "WebhookDelivery",
     "WebhookEvent",

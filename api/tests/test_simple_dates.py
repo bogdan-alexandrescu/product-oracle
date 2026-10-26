@@ -33,9 +33,8 @@ Test cards (protects / fails_when / no_claim):
 
 from datetime import UTC, date, datetime
 
-from oracle.simple.dates import Candidate, Dated
-
 from oracle.simple import dates
+from oracle.simple.dates import Candidate, Dated
 
 HORIZONS = {"short_quarters": 1, "medium_quarters": 2, "long_from_months": 12,
             "long_to_months": 24}  # fmt: skip

@@ -17,7 +17,8 @@ Test cards (protects / fails_when / no_claim):
   are absent for commenters and viewers and present for approvers and owners;
   fails_when=either way; no_claim=the web.
 - test_grouping_and_filters: protects=group=goal|track|prd groups every shown item once
-  (No goal / No track / No PRD last), filters prd, goal, track and from/to narrow the
+  (No goal / No track / No PRD last; an item without a track takes the track that
+  follows its PRD on its roadmap), filters prd, goal, track and from/to narrow the
   items; fails_when=an item is in two groups or a filter is ignored; no_claim=S4's views.
 - test_500_items_answer_under_300_ms: protects=a company with 500 items (deps, records,
   bases, goals) reads in under 300 ms (the best of 3, after a warm-up);
@@ -36,8 +37,8 @@ Test cards (protects / fails_when / no_claim):
   the decider is refused; no_claim=the web's can_* use.
 - test_accept_edit_dismiss: protects=accept writes the suggestion's dates with
   date_source accepted, edit writes the new dates (accepted, suggestion edited),
-  dismiss leaves the item undated and the next refresh does not re-offer the same
-  dates; a decided suggestion cannot be decided again (409); fails_when=either way;
+  dismiss leaves the item undated and the next refresh offers it nothing (30 days); a
+  decided suggestion cannot be decided again (409); fails_when=either way;
   no_claim=S3's working drafts.
 - test_migration_columns: protects=roadmap_items' new columns' defaults and the
   date_source check; fails_when=a default or the check is missing; no_claim=downgrade
@@ -50,7 +51,6 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
-from oracle.simple.models import RoadmapDateSuggestion
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -66,6 +66,7 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.simple import suggestions
+from oracle.simple.models import RoadmapDateSuggestion
 from oracle.tenancy import tenant_session
 from oracle.v2.models import FeasibilityExperiment
 from tests.baseline_helpers import Ctx, make_ctx
@@ -321,8 +322,8 @@ async def test_grouping_and_filters(client):
 
     body = await get(client, ctx, group="track")
     assert [(g["title"], len(g["item_ids"])) for g in body["groups"]] == [
-        ("Payments track", 1),
-        ("No track", 2),
+        ("Payments track", 2),
+        ("No track", 1),
     ]
 
     body = await get(client, ctx, group="prd")
@@ -333,7 +334,7 @@ async def test_grouping_and_filters(client):
 
     assert set(by_key(await get(client, ctx, prd="payments-prd"))) == {"cards", "refunds"}
     assert set(by_key(await get(client, ctx, goal="grow-revenue"))) == {"cards"}
-    assert set(by_key(await get(client, ctx, track=track_id))) == {"cards"}
+    assert set(by_key(await get(client, ctx, track=track_id))) == {"cards", "refunds"}
     # Now is Q4 2026, Next Q1-Q2 2027, Later from Nov 2027.
     assert set(by_key(await get(client, ctx, **{"from": "2027-01-01", "to": "2027-03-31"}))) == {
         "tour"

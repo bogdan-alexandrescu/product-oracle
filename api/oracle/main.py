@@ -73,6 +73,7 @@ from oracle.runs.router import router as runs_router
 from oracle.runs.scope_router import router as scope_router
 from oracle.safe_yaml import ParseBusy
 from oracle.setup import router as setup_router
+from oracle.simple.router import router as simple_router
 from oracle.slack.events import router as slack_events_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
@@ -280,6 +281,7 @@ def create_app() -> FastAPI:
     app.include_router(pricing_router)
     # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
     app.include_router(plan_router)
+    app.include_router(simple_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)
     app.include_router(metrics_router)
