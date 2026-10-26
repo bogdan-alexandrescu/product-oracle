@@ -897,11 +897,9 @@ def _look_alikes() -> dict[str, list[str]]:
         if len(fields) < 3 or " " in fields[0] or " " in fields[1]:
             continue
         source, target = chr(int(fields[0], 16)), chr(int(fields[1], 16))
-        if target.isascii() and target.isalpha() and not source.isascii():
-            # A capital drawn like "l" (Greek Iota) reads as "I": only a capital stands
-            # in for a capital.
-            if source.isupper() and not target.isupper():
-                continue
+        if target.isascii() and target.isalpha() and source != target:
+            # Capitals stand in for small letters too (Greek Iota, Cyrillic I for "l"):
+            # names match on the strict skeleton as well.
             if source.isalpha() and unicodedata.normalize("NFKC", source) == source:
                 out.setdefault(target, []).append(source)
     return out
@@ -979,3 +977,63 @@ async def test_an_unchanged_page_title_is_not_refused_when_the_intro_changes(cli
         PAGE, json={"public_title": "What Lumen ships"}, headers=ctx.as_("approver")
     )
     assert resp.status_code == 422 and resp.json()["detail"]["code"] == "leak_blocking"
+
+
+# --- #695 re-review: names match on the strict Unicode skeleton too --------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("Built with AIice", "person_name"),
+        ("Faster than RivaICo", "alternative_name"),
+        ("Built with QuiIIfeather", "person_name"),
+        ("Built for Gold PIan users", "pricing"),
+        ("Built with AΙice", "person_name"),  # Greek capital Iota
+        ("Faster than RivaΙCo", "alternative_name"),
+        ("Built with QuiΙΙfeather", "person_name"),
+        ("Built for Gold PΙan users", "pricing"),
+        ("Built with AІice", "person_name"),  # Cyrillic capital Byelorussian-Ukrainian I
+        ("Faster than RivaІCo", "alternative_name"),
+        ("Built with QuiІІfeather", "person_name"),
+        ("Built for Gold PІan users", "pricing"),
+    ],
+)
+def test_a_capital_i_in_place_of_a_small_l_is_found(text, code):
+    """protects=#695 re-review: a name is found on the strict UTS #39 skeleton as well as
+    the case-folded one (capital I, Greek Iota and Cyrillic I map to "l" before case is
+    folded), so "RivaICo" read in a sans-serif font as "RivalCo" is found;
+    fails_when="RivaICo" or "Gold PIan" passes the check."""
+    ctx = _ctx(people=[PERSON, "Alice"], pricing=[PLAN, "Gold Plan"])
+    findings = leak_check.check(text, ctx)
+    assert code in [f.code for f in leak_check.blocking(findings)], findings
+
+
+def test_ordinary_words_with_a_capital_i_still_pass():
+    """protects=#695 re-review: matching on the strict skeleton too raises no finding on
+    ordinary words, accented or holding a capital I; fails_when="In", "Inbox", "API" or
+    "Istanbul" is flagged."""
+    ctx = _ctx(people=[PERSON, "Alice"], pricing=[PLAN, "Gold Plan"])
+    for text in (
+        "A cafe for your resume, not a naive one",
+        "In Istanbul, the Inbox and the API import every account",
+        "IMPORT IN ONE GO: INBOX, API AND ISTANBUL",
+        "I plan to ship it; Ian and Ida said so",
+    ):
+        assert leak_check.check(text, ctx) == [], text
+
+
+def test_the_ogham_space_mark_is_refused_and_does_not_split_a_name():
+    """protects=#695 re-review (minor): U+1680, drawn as a line or a blank, is refused when
+    saved like an invisible character and never splits a name; fails_when=
+    "Quill\\u1680feather" passes the check or is not told."""
+    assert leak_check.format_characters("Quill feather") == ["U+1680"]
+    found = leak_check.check("Built with Quill feather", _ctx())
+    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
+
+
+def test_long_texts_are_not_kept_in_the_skeleton_cache():
+    """protects=#695 re-review (minor): only short strings (names) are cached, so the cache
+    cannot hold thousands of 2,000-character texts; fails_when=a long text is cached."""
+    leak_check.check("word " * 400, _ctx())
+    assert all(len(args[0]) <= leak_check.CACHED_TEXT for args in leak_check.cached_texts())
