@@ -38,6 +38,7 @@ from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion
 from oracle.engineering import check as eng_check
+from oracle.engineering import dates as eng_dates
 from oracle.members.leads import (
     ENGINEERING_KINDS,
     LEAD_ONLY,
@@ -314,6 +315,16 @@ def _eng_review(body: ActionIn, ctx: ValidationContext) -> None:
         _question(body)
 
 
+def _eng_dates(body: ActionIn, ctx: ValidationContext) -> None:
+    """F4 Engineering dates: accept, change or No date per Now item, or a question."""
+    try:
+        eng_dates.validate(body.kind, body.item_key, body.field, body.value, ctx.items)
+    except eng_dates.Invalid as exc:
+        raise InvalidAction(str(exc)) from None
+    if body.kind == "question":
+        _question(body)
+
+
 LOOK_AGAIN_NOTE = 2000
 
 
@@ -350,6 +361,7 @@ VOCABULARY: dict[str, Validator] = {
     "roadmap_items": _roadmap_items,
     "feature_set": _feature_set,
     "eng_review": _eng_review,
+    "eng_dates": _eng_dates,
     "baseline_confirm": _baseline_confirm,
 }
 
@@ -432,6 +444,9 @@ def _gate_context(cp: Checkpoint) -> ValidationContext:
             item_keys=eng_check.item_keys(cp),
             items={k: {"questions": sorted(v)} for k, v in asked.items()},
         )
+    if cp.kind == eng_dates.KIND:
+        items = eng_dates.items_of(cp)
+        return ValidationContext(item_keys=frozenset(items), items=items)
     source = gate.BLOCKING_SOURCES.get(cp.kind)
     reasons = source.read(cp)[0] if source is not None else []
     return ValidationContext(item_keys=frozenset(r["item"] for r in reasons))

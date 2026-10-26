@@ -59,6 +59,7 @@ import {
   ROADMAP_REVIEW_HELD_RUN,
   routeRuns,
   seedEngCheckRun,
+  seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
   seedFeatureSetRun,
@@ -882,6 +883,18 @@ function seedEngCheck(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-check", () => seedEngCheckRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * F4 lane B "eng-dates" scenario: the default company with commenter@example.com named
+ * engineering lead, a Baseline to PRD run waiting at its Engineering dates and one waiting
+ * for its PRD version's roadmap items (./runs.ts).
+ */
+function seedEngDates(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -2010,6 +2023,8 @@ function load(): Db {
             ? seedEngCheck
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
+          : scenario === "eng-dates"
+            ? seedEngDates
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
           : scenario === "run-review"
@@ -2217,6 +2232,7 @@ const CHECKPOINT_NAMES: Record<string, string> = {
   priority_order: "Priority order",
   prd_review: "PRD review",
   eng_review: "Engineering review",
+  eng_dates: "Engineering dates",
   roadmap_items: "Roadmap items",
   roadmap_review: "Roadmap review",
   request_triage: "Request triage",

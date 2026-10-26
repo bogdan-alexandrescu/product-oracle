@@ -341,11 +341,16 @@ test("strategy: phone, the cards stack and the stack table keeps Choice, Goal an
   const strategy = await root.getByTestId("strategy-card").boundingBox();
   expect(vision && strategy).toBeTruthy();
   expect(strategy!.y).toBeGreaterThanOrEqual(vision!.y + vision!.height);
+  // The stack loads after the cards, and evaluateAll does not wait: poll until the row is drawn.
   const row = root.getByTestId("stack-row").filter({ hasText: "Raise activation" });
-  const visibleCols = await row.locator("[data-col]").evaluateAll((cells) =>
-    cells.filter((c) => (c as HTMLElement).checkVisibility()).map((c) => c.getAttribute("data-col")),
-  );
-  expect(visibleCols).toEqual(["choice", "goal", "items"]);
+  await expect(row).toBeVisible();
+  await expect
+    .poll(() =>
+      row.locator("[data-col]").evaluateAll((cells) =>
+        cells.filter((c) => (c as HTMLElement).checkVisibility()).map((c) => c.getAttribute("data-col")),
+      ),
+    )
+    .toEqual(["choice", "goal", "items"]);
   const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   expect(sw).toBeLessThanOrEqual(cw);
 });
