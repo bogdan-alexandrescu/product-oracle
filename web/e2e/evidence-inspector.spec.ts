@@ -9,7 +9,7 @@ import { login } from "./helpers";
  * the main view, A's section table + inspector as the second view). Driven through the UI
  * on the mock as each role would. The "evidence" scenario adds section links to
  * Checkout redesign PRD v2 (evidence, a restricted source item, a stale and a claim link)
- * and one to the approved v1.
+ * and one to the approved Usage alerts PRD v1.
  */
 
 const DOC = "/documents/checkout-redesign";
@@ -23,7 +23,7 @@ async function open(page: Page, email?: string, scenario = "evidence") {
 async function evidenceTab(page: Page, email?: string) {
   await open(page, email);
   await page.goto(`${DOC}/v/2`);
-  await page.getByTestId("version-tab-evidence").click();
+  await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/evidence/);
   await expect(page.getByTestId("evidence-matrix")).toBeVisible();
 }
@@ -34,7 +34,7 @@ const cell = (page: Page, target: string, key: string) =>
 
 test("evidence: the owner reads the coverage matrix and links a target to an unsupported section", async ({ page }) => {
   await evidenceTab(page);
-  const tab = page.getByTestId("version-tab-evidence");
+  const tab = page.getByTestId("version-tab-evidence").filter({ visible: true });
   await expect(tab).toHaveAttribute("aria-current", "page");
   // Sections as columns; a section with neither links nor citations is flagged.
   await expect(column(page, "metrics")).toHaveAttribute("data-gap", "true");
@@ -57,7 +57,7 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
 
   // Link to another section: Metrics is offered first, marked unsupported.
   const form = insp.getByRole("form", { name: "Link to another section" });
-  await form.getByLabel("Section").selectOption({ label: "6. Success metrics (metrics) · unsupported" });
+  await form.getByLabel("Section").selectOption({ label: "7. Success metrics (metrics) · unsupported" });
   await form.getByLabel("Kind").selectOption("implements");
   await form.getByRole("button", { name: "Add link" }).click();
   await expect(page.getByText("Link added.")).toBeVisible();
@@ -87,7 +87,7 @@ test("evidence: the filter chips hide citations and keep only stale links", asyn
 test("evidence: the approver's section view lists links strongest first, the draft's citations, and removes a link", async ({ page }) => {
   await evidenceTab(page, "approver@example.com");
   await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
-  const table = page.getByRole("table", { name: "Sections" });
+  const table = page.getByRole("grid", { name: "Sections" });
   await expect(table).toBeVisible();
   await expect(page).toHaveURL(/view=sections/);
   // No links or citations: the unsupported sections only.
@@ -107,7 +107,7 @@ test("evidence: the approver's section view lists links strongest first, the dra
   expect(scores.indexOf("")).toBeGreaterThanOrEqual(scored.length === scores.length ? -1 : scored.length);
   // The claim link shows its claim; the stale one says so.
   await expect(insp.getByText("“Week-1 activation rises once the cost shows early.”")).toBeVisible();
-  await expect(insp.getByText("Stale link")).toBeVisible();
+  await expect(insp.getByText("Stale link", { exact: true })).toBeVisible();
   // The draft's own citation in this section.
   await expect(insp.getByTestId("evidence-citation")).toContainText("c:c3");
 
@@ -120,9 +120,9 @@ test("evidence: the approver's section view lists links strongest first, the dra
 test("evidence: the approver adds a claim link from an unsupported section", async ({ page }) => {
   await open(page, "approver@example.com");
   await page.goto(`${DOC}/v/2/evidence?view=sections`);
-  const table = page.getByRole("table", { name: "Sections" });
+  const table = page.getByRole("grid", { name: "Sections" });
   await table.getByRole("row", { name: /Success metrics/ }).click();
-  const insp = page.getByRole("complementary", { name: "6. Success metrics" });
+  const insp = page.getByRole("complementary", { name: "7. Success metrics" });
   await expect(insp.getByText("Nothing backs this section yet: no section links and no citations in the draft.")).toBeVisible();
   const form = insp.getByRole("form", { name: "Add a section link" });
   await form.getByLabel("Kind").selectOption("claims");
@@ -150,7 +150,7 @@ test("evidence: partial targets — a restricted source shows its kind only, a r
 
   await page.getByTestId("evidence-matrix").locator("tr[data-target]", { hasText: "Onboarding review" }).locator('td[data-section="risks"]').getByRole("button").click();
   const removed = page.getByRole("complementary", { name: "Onboarding review (meeting)" });
-  await expect(removed.getByText("Source removed")).toBeVisible();
+  await expect(removed.getByText("Source removed", { exact: true })).toBeVisible();
   await expect(removed.getByText("Stale link")).toBeVisible();
 });
 
@@ -171,10 +171,10 @@ for (const who of ["commenter", "viewer"] as const) {
 
 test("evidence: an approved version's links are pinned, read only even for the owner", async ({ page }) => {
   await open(page);
-  await page.goto(`${DOC}/v/1/evidence?view=sections`);
+  await page.goto("/documents/usage-alerts/v/1/evidence?view=sections");
   await expect(page.getByText("v1 is approved: its evidence links are pinned. Read only.")).toBeVisible();
-  await page.getByRole("table", { name: "Sections" }).getByRole("row", { name: /Problem/ }).click();
-  const insp = page.getByRole("complementary", { name: "2. Problem" });
+  await page.getByRole("grid", { name: "Sections" }).getByRole("row", { name: /Behaviour/ }).click();
+  const insp = page.getByRole("complementary", { name: "1. Behaviour" });
   await expect(insp.getByTestId("evidence-link").first()).toBeVisible();
   await expect(insp.getByRole("button", { name: "Remove" })).toHaveCount(0);
   await expect(insp.getByRole("form")).toHaveCount(0);
@@ -200,9 +200,9 @@ test("evidence: a version that does not exist offers the latest", async ({ page 
 
 test("evidence: a version with no links and no citations is empty, with Link a section for the owner", async ({ page }) => {
   await open(page);
-  await page.goto("/documents/usage-alerts/v/1");
-  await page.getByTestId("version-tab-evidence").click();
-  await expect(page.getByText("No section of v1 is linked to evidence yet, and the draft cites nothing.")).toBeVisible();
+  await page.goto("/documents/online-deposits/v/3");
+  await page.getByTestId("version-tab-evidence").filter({ visible: true }).click();
+  await expect(page.getByText("No section of v3 is linked to evidence yet, and the draft cites nothing.")).toBeVisible();
   await page.getByRole("button", { name: "Link a section" }).click();
   await expect(page.getByRole("form", { name: "Add a section link" }).first()).toBeVisible();
 });
@@ -222,7 +222,7 @@ test("evidence: on a phone the matrix is a list per target, a tap opens the shee
   await sheet.getByRole("button", { name: "Close" }).click();
   // The section view on a phone: stacked rows, a sheet per section.
   await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
-  await page.getByRole("table", { name: "Sections" }).getByRole("row", { name: /Goal trace/ }).click();
+  await page.getByRole("grid", { name: "Sections" }).getByRole("row", { name: /Goal trace/ }).click();
   await expect(page.getByRole("dialog", { name: "1. Goal trace" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
