@@ -78,7 +78,9 @@ test("Ask on the slip card pre-fills the engineering lead when there is exactly 
   const slip = cards(page).filter({ hasText: "ENG-405 moved to Dec 9" });
   await slip.getByRole("button", { name: "Ask", exact: true }).click();
   const ask = inspector(page).getByTestId("ask-teammate");
-  await expect(ask).toContainText("approver@example.com");
+  // The person is set (with Change), not a picker to search.
+  await expect(ask.getByRole("button", { name: "Change" })).toBeVisible();
+  await expect(ask).toContainText("Approverapprover@example.com");
   await expect(ask.getByLabel("Find a person")).toHaveCount(0);
   await ask.getByLabel("Question").fill("Does ENG-405's new date hold?");
   await ask.getByRole("button", { name: "Ask", exact: true }).click();
@@ -92,7 +94,7 @@ test("Ask on the slip card pre-fills the engineering lead when there is exactly 
   await cards(page).filter({ hasText: "ENG-405 moved to Dec 9" }).getByRole("button", { name: "Ask", exact: true }).click();
   const again = inspector(page).getByTestId("ask-teammate");
   await expect(again.getByLabel("Find a person")).toBeVisible();
-  await expect(again).not.toContainText("approver@example.com");
+  await expect(again.getByRole("button", { name: "Change" })).toHaveCount(0);
 });
 
 // protects = Discuss on the slip card starts a discussion on the item, titled after it, and a
