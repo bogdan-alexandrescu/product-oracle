@@ -70,7 +70,7 @@ interface TriageRun {
 // H10 Reasoned no: what a no adds to a request (decision, basis, asked again, replies);
 // optional on stored rows, defaulted by out(). Lane 2 fills them in the requests-why-not scenario.
 type H10Fields = "asked_again" | "replies" | "decision_number" | "decision_title" | "decision_status" | "basis" | "no_reply_reason";
-interface Row extends Omit<RequestOut, "theme" | "document" | "mentions" | "source" | H10Fields> {
+interface Row extends Omit<RequestOut, "theme" | "document" | "intake" | "mentions" | "source" | H10Fields> {
   theme_id: string | null;
   document_id: string | null;
   source: RequestOut["source"];
@@ -146,6 +146,8 @@ export interface RequestsContext {
   decisions?: RequestDecisions;
   /** The Company time zone. */
   zone?: () => string;
+  /** C1 lane 2: a brief's title by its id; null when it is gone. */
+  intakeTitle?: (id: string) => string | null;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -452,6 +454,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       loop_closed_on: shown.loop_closed_on ?? null,
       theme: theme ? { id: theme.id, title: theme.title } : null,
       document: doc ? { id: doc.id, slug: doc.slug, title: doc.title } : null,
+      intake: r.intake_id && ctx.intakeTitle?.(r.intake_id) ? { id: r.intake_id, title: ctx.intakeTitle(r.intake_id)! } : null,
       mentions: 1 + descendants(r.id).length,
     };
   };
@@ -590,6 +593,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if (theme) tests.theme = (r) => (theme === "none" ? r.theme_id === null : r.theme_id === theme);
       if (goal) tests.goal = (r) => r.goal_ids.includes(goal);
       if (channel) tests.channel = (r) => r.channel === channel;
+      const intakeId = q.get("intake_id");
+      if (intakeId) tests.intake = (r) => r.intake_id === intakeId;
       if (text) tests.q = (r) => r.title.toLowerCase().includes(text) || (r.body ?? "").toLowerCase().includes(text);
       if (q.get("replies_to_send") === "true") tests.replies = (r) => r.state === "disqualified" && rootReplies(r).some((x) => x.status === "drafted");
       const where = (...but: string[]) =>
@@ -752,7 +757,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if ("goal_ids" in patch) row.goal_ids = [...new Set(patch.goal_ids ?? [])];
       if ("theme_id" in patch) row.theme_id = patch.theme_id ?? null;
       if ("feature_id" in patch) row.feature_id = patch.feature_id ?? null;
-      if ("document_id" in patch) row.document_id = patch.document_id ?? null;
+      if ("document_id" in patch) {
+        const had = row.document_id;
+        row.document_id = patch.document_id ?? null;
+        // C1: unlinking its PRD takes the request off its brief too (the API's _apply_patch).
+        if (had && !row.document_id) row.intake_id = null;
+      }
       if (fields.length) bump(row);
       return json(200, out(row));
     }
@@ -1077,4 +1087,50 @@ export function requestInboxRows(db: RequestsDb | undefined, ctx: Pick<RequestsC
     rows.push({ request_id: x.request_id, title: asked?.title ?? x.asked ?? "", reason: "answer", body: x.body, reply_id: x.id, at: x.notified_at, counts: false });
   }
   return rows;
+}
+
+// --- Start a PRD (C1 lane 2, api/oracle/requests/service.py) ---------------------------------
+
+/** Why the brief cannot take these requests, or null when it can: only qualified ones (422),
+ * none already behind a brief or linked to a PRD (409, naming it), as put_behind_brief. */
+export function behindBriefRefusal(
+  db: RequestsDb,
+  ids: string[],
+  titles: { intake: (id: string) => string | null; document: (id: string) => string | null },
+): { status: number; detail: string } | null {
+  const rows = ids.map((id) => db.requests.find((r) => r.id === id));
+  if (!rows.every((r) => r?.state === "qualified")) return { status: 422, detail: "Only qualified requests can be behind a PRD" };
+  for (const r of rows as Row[]) {
+    if (r.intake_id) return { status: 409, detail: `"${r.title}" is already behind the brief "${titles.intake(r.intake_id) ?? "another brief"}"` };
+    if (r.document_id) return { status: 409, detail: `"${r.title}" is already linked to the PRD "${titles.document(r.document_id) ?? "another PRD"}"` };
+  }
+  return null;
+}
+
+/** The brief's "Requests behind it": each one gets the intake. */
+export function putBehindBrief(db: RequestsDb, intakeId: string, ids: string[]) {
+  for (const r of db.requests.filter((x) => ids.includes(x.id))) {
+    r.intake_id = intakeId;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+}
+
+/** Archiving a brief that made no PRD releases the requests behind it; one a PRD links keeps
+ * both links (the API's release_brief, decided "Release on archive" 2026-10-25). */
+export function releaseBrief(db: RequestsDb, intakeId: string) {
+  for (const r of db.requests.filter((x) => x.intake_id === intakeId && !x.document_id)) {
+    r.intake_id = null;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+}
+
+/** The PRD made for a brief links the requests behind it; one already linked keeps its PRD. */
+export function linkIntakeDocument(db: RequestsDb, intakeId: string, documentId: string) {
+  for (const r of db.requests.filter((x) => x.intake_id === intakeId && !x.document_id)) {
+    r.document_id = documentId;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
 }

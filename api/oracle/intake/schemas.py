@@ -80,6 +80,10 @@ class IntakeCreate(BaseModel):
     theme: str | None = Field(default=None, min_length=1, max_length=100)
     # The O1d answers that suggested the template (as POST /v1/drafts/recommend).
     prd_answers: PrdAnswers | None = None
+    # C1 Requests lane 2, "Requests behind it": qualified requests only (else 422), none
+    # already behind a brief or linked to a PRD (else 409); the intake links them, and the
+    # PRD its run makes links them too.
+    request_ids: list[uuid.UUID] = Field(default=[], max_length=50)
 
     @field_validator("brief")
     @classmethod
@@ -89,7 +93,7 @@ class IntakeCreate(BaseModel):
             raise ValueError("a brief needs at least a sentence")
         return value
 
-    @field_validator("goal_ids")
+    @field_validator("goal_ids", "request_ids")
     @classmethod
     def _unique_goals(cls, value: list[uuid.UUID]) -> list[uuid.UUID]:
         return list(dict.fromkeys(value))

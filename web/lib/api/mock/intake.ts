@@ -78,6 +78,13 @@ export interface IntakeContext {
   /** The approved (locked) section keys of a document's latest version, by its id or slug; a
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
+  /** C1 lane 2, "Requests behind it": why these requests cannot be behind a brief (null when
+   * they can), linking them to the new brief, and releasing them when it is archived. */
+  requests?: {
+    refusal: (ids: string[]) => { status: number; detail: string } | null;
+    link: (intakeId: string, ids: string[]) => void;
+    release: (intakeId: string) => void;
+  };
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -492,8 +499,18 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (!input?.title || !input.brief || input.brief.trim().length < 20 || input.brief.length > 4000) return fail(422, "a brief needs at least a sentence");
     const fields = briefFields(ctx, input);
     if (typeof fields === "string") return fail(422, fields);
+    const raw = input.request_ids ?? [];
+    // IntakeCreate.request_ids has max_length=50: FastAPI's own validation error.
+    if (raw.length > 50) {
+      const msg = `List should have at most 50 items after validation, not ${raw.length}`;
+      return json(422, { detail: [{ type: "too_long", loc: ["body", "request_ids"], msg, input: raw }] });
+    }
+    const requestIds = [...new Set(raw)];
+    const refused = requestIds.length ? ctx.requests?.refusal(requestIds) : null;
+    if (refused) return fail(refused.status, refused.detail);
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
     Object.assign(intake, fields);
+    if (requestIds.length) ctx.requests?.link(intake.id, requestIds);
     applyBriefFields(db, ctx, intake);
     askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
@@ -520,6 +537,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (patch.status && patch.status !== intake.status) {
         intake.status = patch.status;
         retireQuestions(db, intake);
+        // An archived brief that made no PRD releases the requests behind it.
+        if (intake.status === "archived") ctx.requests?.release(intake.id);
       }
       intake.lock_version += 1;
       intake.updated_at = now();

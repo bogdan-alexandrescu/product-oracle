@@ -12,7 +12,8 @@ rules are checked here:
 - only the author sets what others see of a finding (``set_sharing``), audited;
 - archiving an intake retires its open questions (they leave the Inbox and stay on the
   brief as history); restoring it asks them again, a delegated one of its delegate
-  (``retire_questions``, #307).
+  (``retire_questions``, #307); it also releases the requests behind it that no PRD
+  links (``requests_service.release_brief``), and restoring it does not take them back.
 """
 
 import re
@@ -33,6 +34,7 @@ from oracle.intake import engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.schemas import AnswerIn, IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
+from oracle.requests import service as requests_service
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunCreate, RunPatch
 from oracle.sources.models import Snapshot, Source
@@ -201,6 +203,10 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     )
     db.add(intake)
     await db.flush()
+    try:
+        linked = await requests_service.put_behind_brief(db, principal, intake.id, body.request_ids)
+    except requests_service.RequestError as e:
+        raise IntakeError(e.status, str(e)) from e
     await engine.analyze(db, intake)
     # Before the first batch: the brief's goals and out-of-scope lines answer their
     # questions, so neither is asked.
@@ -215,6 +221,7 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
             "snapshot_id": str(snapshot.id),
             "source_ids": [str(i) for i in source_ids],
             "document_id": str(document_id) if document_id else None,
+            "request_ids": [str(i) for i in linked],
         },
     )
     await ask(db, principal, intake, body.batch_size)
@@ -406,6 +413,9 @@ async def patch(
         changes["status"] = [intake.status, body.status]
         intake.status = body.status
         await retire_questions(db, intake)
+        if intake.status == "archived":
+            # A converted brief cannot be archived, so this one made no PRD.
+            await requests_service.release_brief(db, principal, intake.id)
     reanswer = await _patch_brief_fields(db, intake, body, changes)
     await flush_or_conflict(db)
     if reanswer:

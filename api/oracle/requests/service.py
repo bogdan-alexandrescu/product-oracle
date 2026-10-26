@@ -14,7 +14,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -44,6 +44,7 @@ from oracle.requests.schemas import (
     RequestDetail,
     RequestDocumentProgress,
     RequestDocumentRef,
+    RequestIntakeRef,
     RequestList,
     RequestOut,
     RequestPatch,
@@ -58,6 +59,10 @@ from oracle.requests.schemas import (
 )
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.v2.concurrency import expect_version, flush_or_conflict
+from oracle.v2.models import ProductIntake
+
+if TYPE_CHECKING:
+    from oracle.runs.models import Run
 
 NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'"
 INTERVIEW_ONLY = "Interview requests come from interviews"
@@ -284,6 +289,7 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
         return []
     theme_ids = {r.theme_id for r in rows if r.theme_id}
     doc_ids = {r.document_id for r in rows if r.document_id}
+    intake_ids = {r.intake_id for r in rows if r.intake_id}
     item_ids = {r.source_item_id for r in rows if r.source_item_id}
     themes = {}
     if theme_ids:
@@ -292,6 +298,19 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
     docs = (
         {d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(doc_ids)))}
         if doc_ids
+        else {}
+    )
+    intakes = (
+        dict(
+            (
+                await db.execute(
+                    select(ProductIntake.id, ProductIntake.title).where(
+                        ProductIntake.id.in_(intake_ids)
+                    )
+                )
+            ).all()
+        )
+        if intake_ids
         else {}
     )
     gone = (
@@ -371,6 +390,9 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 if doc
                 else None,
                 intake_id=r.intake_id,
+                intake=RequestIntakeRef(id=r.intake_id, title=intakes[r.intake_id])
+                if r.intake_id in intakes
+                else None,
                 interview_id=r.interview_id,
                 source=source,
                 mentions=1 + len(descendants(r.id, children)),
@@ -491,10 +513,14 @@ async def list_requests(
     channel: str | None = None,
     q: str | None = None,
     replies_to_send: bool = False,
+    intake_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> RequestList:
     filters: dict[str, ColumnElement[bool]] = {}
+    if intake_id:
+        # C1 lane 2: the requests behind a brief.
+        filters["intake"] = ProductRequest.intake_id == intake_id
     if replies_to_send:
         # H10: declined requests with replies still Drafted.
         filters["replies"] = (ProductRequest.state == "disqualified") & ProductRequest.id.in_(
@@ -667,7 +693,12 @@ async def _apply_patch(
         if "feature_id" in fields:
             row.feature_id = await _feature(db, body.feature_id) if body.feature_id else None
         if "document_id" in fields:
+            had = row.document_id
             row.document_id = await _document(db, body.document_id) if body.document_id else None
+            if had is not None and row.document_id is None:
+                # C1: unlinking its PRD takes the request off its brief too, so the brief's
+                # run cannot link the PRD back, and another brief may take it.
+                row.intake_id = None
 
 
 def _decided(row: ProductRequest, principal: Principal) -> None:
@@ -1399,3 +1430,116 @@ def _problem_confirmed(theme: RequestTheme, principal: Principal) -> None:
     theme.problem_suggestion = {}
     theme.problem_confirmed_by = principal.id
     theme.problem_confirmed_at = _now()
+
+
+# --- Start a PRD (C1 lane 2) -----------------------------------------------------------
+
+
+NOT_QUALIFIED = "Only qualified requests can be behind a PRD"
+
+
+async def put_behind_brief(
+    db: AsyncSession, principal: Principal, intake_id: uuid.UUID, request_ids: list[uuid.UUID]
+) -> list[uuid.UUID]:
+    """The brief's "Requests behind it": each one, qualified (else 422) and not already
+    behind a brief or linked to a PRD (else 409), gets the intake. Returns the ids linked."""
+    if not request_ids:
+        return []
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.id.in_(request_ids))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    if len(rows) != len(set(request_ids)) or any(r.state != "qualified" for r in rows):
+        raise RequestError(422, NOT_QUALIFIED)
+    await _not_taken(db, rows)
+    for row in rows:
+        row.intake_id = intake_id
+        row.updated_at = _now()
+    await db.flush()
+    for row in rows:
+        await audit.record(
+            db, principal, "request.updated", "request", row.id, {"intake_id": str(intake_id)}
+        )
+    return [r.id for r in rows]
+
+
+async def _not_taken(db: AsyncSession, rows: list[ProductRequest]) -> None:
+    """Rules 2 and 7: a request already behind a brief, or linked to a PRD, stays there; a
+    new brief cannot take it over (409, naming the brief or the PRD)."""
+    for row in rows:
+        if row.intake_id is not None:
+            title = await db.scalar(
+                select(ProductIntake.title).where(ProductIntake.id == row.intake_id)
+            )
+            raise _conflict(
+                f'"{row.title}" is already behind the brief "{title or "another brief"}"'
+            )
+        if row.document_id is not None:
+            title = await db.scalar(select(Document.title).where(Document.id == row.document_id))
+            raise _conflict(
+                f'"{row.title}" is already linked to the PRD "{title or "another PRD"}"'
+            )
+
+
+async def release_brief(db: AsyncSession, principal: Principal, intake_id: uuid.UUID) -> int:
+    """Archiving a brief that made no PRD releases the requests behind it (#599 re-review,
+    decided "Release on archive" 2026-10-25): their brief link is cleared, so another brief
+    may take them. A request whose brief made a PRD keeps both links. Returns how many."""
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.intake_id == intake_id, ProductRequest.document_id.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        row.intake_id = None
+        row.updated_at = _now()
+    await db.flush()
+    for row in rows:
+        await audit.record(
+            db,
+            principal,
+            "request.updated",
+            "request",
+            row.id,
+            {"intake_id": None, "released_from": str(intake_id)},
+        )
+    return len(rows)
+
+
+async def link_intake_document(
+    db: AsyncSession, intake_id: uuid.UUID, document_id: uuid.UUID
+) -> int:
+    """The PRD made for a brief links the requests behind it (rule 7: one PRD each, so a
+    request already linked to a PRD keeps it). Returns how many it linked."""
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.intake_id == intake_id, ProductRequest.document_id.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        row.document_id = document_id
+        row.updated_at = _now()
+    await db.flush()
+    return len(rows)
+
+
+async def link_run_document(db: AsyncSession, run: "Run") -> int:
+    """:func:`link_intake_document` for a run started from a brief, once it has its PRD."""
+    raw = (run.knobs or {}).get("intake_id")
+    if not raw or run.document_id is None:
+        return 0
+    try:
+        intake_id = uuid.UUID(str(raw))
+    except ValueError:
+        return 0
+    return await link_intake_document(db, intake_id, run.document_id)

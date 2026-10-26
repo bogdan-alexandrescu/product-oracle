@@ -164,7 +164,7 @@ export interface RunsContext {
   /** Imports a run's draft as the document's next version. */
   importDraft: (
     slug: string,
-    run: Pick<RunOut, "document_kind" | "source" | "template" | "theme">,
+    run: Pick<RunOut, "id" | "document_kind" | "source" | "template" | "theme">,
   ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;

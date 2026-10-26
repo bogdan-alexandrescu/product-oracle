@@ -4741,6 +4741,7 @@ async def _advance(
                 # document from now on.
                 await feature_set.fill_document(db, run.id, run.document_id)
                 await run_order.fill_document(db, run.id, run.document_id)
+                await _link_requests(db, run)
                 _check_goal_trace(run, art, imported, markdown)
         art["import"] = imported
     if sdef.importer:
@@ -4759,6 +4760,7 @@ async def _advance(
         if imported.get("document_id"):
             run.document_id = uuid.UUID(imported["document_id"])
             _set_knob(run, "document_slug", None)
+            await _link_requests(db, run)
         art["import"] = imported
     attempt["advanced"] = True
     _set_art(segment, art)
@@ -4896,6 +4898,14 @@ async def _advance(
             )
     await _next(db, run, segment, segments)
     return True
+
+
+async def _link_requests(db: AsyncSession, run: Run) -> None:
+    """C1: the PRD a brief's run makes links the requests behind the brief."""
+    # Here, not at the top: oracle.requests reads this module.
+    from oracle.requests import service as requests_service
+
+    await requests_service.link_run_document(db, run)
 
 
 def _check_goal_trace(
@@ -9303,6 +9313,7 @@ async def _retry_draft_import(
         _set_knob(run, "document_slug", None)
         await feature_set.fill_document(db, run.id, run.document_id)
         await run_order.fill_document(db, run.id, run.document_id)
+        await _link_requests(db, run)
         _note_art(
             art,
             f"{who} retried importing {name}{after}: imported as {imported.get('slug')} "

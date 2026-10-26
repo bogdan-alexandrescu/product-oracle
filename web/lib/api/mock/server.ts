@@ -85,7 +85,20 @@ import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackRepl
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
 import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
-import { addInterviewRequest, requestInboxRows, routeRequests, seedRequests, seedWhyNot, WHY_NOT_SCENARIO, type RequestsContext, type RequestsDb } from "./requests";
+import {
+  addInterviewRequest,
+  behindBriefRefusal,
+  linkIntakeDocument,
+  putBehindBrief,
+  releaseBrief,
+  requestInboxRows,
+  routeRequests,
+  seedRequests,
+  seedWhyNot,
+  WHY_NOT_SCENARIO,
+  type RequestsContext,
+  type RequestsDb,
+} from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import {
@@ -1907,7 +1920,7 @@ function importSections(
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   const session = sessionOf(db);
   const member = db.members.find((m) => m.email === session) ?? db.members.find((m) => m.id === db.user_id);
-  return {
+  const ctx: Omit<RunsContext, "db"> & { db?: RunsDb } = {
     db: db.runs,
     userId: db.user_id,
     userName: session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
@@ -2098,6 +2111,16 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     uuid,
     now,
   };
+  // C1 lane 2: the PRD a brief's run imports links the requests behind the brief (the API's
+  // runs._link_requests, at segment end and on retry-draft-import).
+  const importDraft = ctx.importDraft;
+  ctx.importDraft = (slug, run) => {
+    const imp = importDraft(slug, run);
+    const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === run.id) ?? [];
+    if (intakeId && imp.document_id && db.requests) linkIntakeDocument(db.requests, intakeId, imp.document_id);
+    return imp;
+  };
+  return ctx;
 }
 
 function load(): Db {
@@ -3444,6 +3467,7 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     edges: () => db.baseline.edges,
     decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
     people: () => db.members,
@@ -4130,7 +4154,23 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    // C1 lane 2: the brief's "Requests behind it".
+    const requests = {
+      refusal: (ids: string[]) =>
+        behindBriefRefusal(ensureRequests(db), ids, {
+          intake: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+          document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
+        }),
+      link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
+      release: (intakeId: string) => releaseBrief(ensureRequests(db), intakeId),
+    };
+    const intake = await routeIntake(
+      v2db,
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, requests },
+      req,
+      p,
+      q,
+    );
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.
@@ -4281,7 +4321,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
-  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) startedIntakeRun(ensureV2(db), p[2]);
+  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {
+    startedIntakeRun(ensureV2(db), p[2]);
+    // C1 lane 2: a brief's run on a PRD links the requests behind the brief.
+    const [intakeId] = Object.entries(ensureV2(db).intake_runs ?? {}).find(([, r]) => r.run_id === p[2]) ?? [];
+    const documentId = db.runs?.runs.find((r) => r.id === p[2])?.document_id;
+    if (intakeId && documentId) linkIntakeDocument(ensureRequests(db), intakeId, documentId);
+  }
   if (runs && p[1] === "inbox") {
     tick(llm);
     const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");

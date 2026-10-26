@@ -238,6 +238,7 @@ export function IntakeInspector({
       <InspectorSection label="Goals" testId="intake-goals">
         <IntakeGoals summary={s} />
       </InspectorSection>
+      <IntakeRequests intakeId={s.intake.id} />
       <InspectorSection label="Template" testId="intake-template">
         <InspectorRow value={s.template.theme ?? undefined}>{s.template.name}</InspectorRow>
       </InspectorSection>
@@ -254,5 +255,29 @@ export function IntakeInspector({
         </InspectorSection>
       )}
     </Inspector>
+  );
+}
+
+/** The brief's "Requests behind it" (C1 lane 2): each one links to it in Requests. Hidden
+ * when the brief has none. */
+function IntakeRequests({ intakeId }: { intakeId: string }) {
+  const requests = useQuery(`intake-requests:${intakeId}`, () =>
+    unwrap(api.GET("/v1/requests", { params: { query: { intake_id: intakeId, limit: 200 } } })),
+  );
+  const items = requests.data?.items ?? [];
+  if (!requests.error && items.length === 0) return null;
+  return (
+    <InspectorSection label="Requests behind it" testId="intake-requests">
+      {requests.error && <InlineError>{requests.error}</InlineError>}
+      <ul className="flex flex-col gap-1 text-sm">
+        {items.map((r) => (
+          <li key={r.id}>
+            <Link href={`/requests?request=${r.id}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline [overflow-wrap:anywhere]">
+              {r.title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </InspectorSection>
   );
 }

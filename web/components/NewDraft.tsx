@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {
   Button,
@@ -19,6 +19,7 @@ import {
   Panel,
   Split,
 } from "@/components/ds";
+import { RequestsBehind } from "@/components/RequestsBehind";
 import { ThemeThumbnail } from "@/components/ThemePreview";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -746,7 +747,7 @@ export function GoalPicker({
  * the brief and opens Before drafting, where Oracle asks its questions; approvers may still
  * start from an empty skeleton (POST /v1/drafts, unchanged).
  */
-export function NewPrd() {
+export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const kind = "prd" as const;
   const router = useRouter();
   const { can } = useMe();
@@ -758,10 +759,15 @@ export function NewPrd() {
   const [problem, setProblem] = useState("");
   const [goalIds, setGoalIds] = useState<string[]>([]);
   const [outOfScope, setOutOfScope] = useState<string[]>([""]);
+  // C1 lane 2: Start a PRD on requests ticks them here.
+  const [requests, setRequests] = useState<string[]>(requestIds);
   const [busy, setBusy] = useState<"continue" | "skeleton" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const id = useId();
+  // The router keeps this page's state when it is left (cacheComponents): one Continue that
+  // went through must not leave it "Saving…" when Start a PRD opens it again (#599 review).
+  useEffect(() => () => setBusy(null), []);
 
   const choice = useDraftChoice({ kind, prd });
   const { templateKey, themeKey } = choice;
@@ -788,6 +794,7 @@ export function NewPrd() {
       template: templateKey,
       theme: themeKey,
       prd_answers: Object.keys(answers).length ? answers : null,
+      request_ids: requests,
     };
     try {
       const out = await unwrap(api.POST("/v1/intakes", { body }));
@@ -886,6 +893,7 @@ export function NewPrd() {
 
           <Panel as="div" bodyClassName="flex flex-col gap-5 p-4">
             <GoalPicker value={goalIds} onChange={setGoalIds} />
+            <RequestsBehind value={requests} onChange={setRequests} />
             <fieldset className="min-w-0">
               <legend className="mb-2 text-[15px] font-semibold text-text">
                 What is out of scope? <span className="font-normal text-text2">Optional</span>

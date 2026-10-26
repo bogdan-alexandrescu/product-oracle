@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
+import { free, startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDay } from "@/lib/format";
@@ -207,6 +209,11 @@ export function RequestInspector({
           run={run}
         />
       </InspectorSection>
+      {(request.intake || request.document || (free(request) && can("create_intake", true))) && (
+        <InspectorSection label="PRD">
+          <PrdLink request={request} canStart={free(request) && can("create_intake", true)} />
+        </InspectorSection>
+      )}
       {theme && (theme.problem_state !== "none" || theme.problem) && (
         <InspectorSection label={`Problem · ${theme.title}`}>
           <ProblemBlock theme={theme} canChange={can("confirm_request_theme_problem")} onChange={(t) => onTheme?.(t)} />
@@ -249,6 +256,43 @@ function suggestedParts(s: Schemas["Suggestion"]): Part[] {
 }
 
 type Run = (call: () => Promise<Request>) => Promise<boolean>;
+
+/**
+ * Where the request went (C1 lane 2): the brief it is behind and the PRD made for it, each a
+ * link everyone who reads the request follows; Start a PRD on a qualified request opens New
+ * PRD with it ticked under "Requests behind it".
+ */
+function PrdLink({ request, canStart }: { request: Request; canStart: boolean }) {
+  const router = useRouter();
+  const link = "font-semibold text-accent-ink underline-offset-2 hover:underline [overflow-wrap:anywhere]";
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      {(request.intake || request.document) && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+          {request.intake && (
+            <Row label="Brief">
+              <Link href={`/intakes/${request.intake.id}`} className={link}>
+                {request.intake.title}
+              </Link>
+            </Row>
+          )}
+          {request.document && (
+            <Row label="PRD">
+              <Link href={`/documents/${request.document.slug}`} className={link}>
+                {request.document.title}
+              </Link>
+            </Row>
+          )}
+        </dl>
+      )}
+      {canStart && (
+        <Button className="self-start" onClick={() => router.push(startPrdHref([request.id]))}>
+          Start a PRD
+        </Button>
+      )}
+    </div>
+  );
+}
 
 function Words({ request, canEdit, busy, run }: { request: Request; canEdit: boolean; busy: boolean; run: Run }) {
   const [editing, setEditing] = useState(false);
@@ -346,7 +390,6 @@ function Links({
         <Row label="Goals">{request.goal_ids.map((id) => goalTitles.get(id) ?? "A goal").join(", ") || "None"}</Row>
         <Row label="Theme">{request.theme?.title ?? "None"}</Row>
         <Row label="Feature">{featureTitle ?? (request.feature_id ? "A feature" : "None")}</Row>
-        <Row label="PRD">{request.document?.title ?? "None"}</Row>
       </dl>
     );
   }
