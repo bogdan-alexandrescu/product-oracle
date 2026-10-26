@@ -42,7 +42,6 @@ def downgrade() -> None:
     )
     if used:
         raise RuntimeError(
-            f"{used} eng_dates checkpoint(s) exist: cancel or finish those runs before "
-            "downgrading"
+            f"{used} eng_dates checkpoint(s) exist: cancel or finish those runs before downgrading"
         )
     remove_check_values(*KIND_CHECK, KINDS)

@@ -36,10 +36,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import safe_yaml
 from oracle.auth.deps import Principal
+from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
+from oracle.members.leads import date_rights, engineering_leads
 from oracle.roadmap.models import BASIS_KINDS, DraftRoadmap, RoadmapItem, ScheduleBasis
-from oracle.runs.models import Checkpoint, Run
+from oracle.runs.models import Checkpoint, Run, RunSegment
 
 FILE = "eng_dates.yaml"
 KIND = "eng_dates"
@@ -146,15 +148,32 @@ def check(text: str | None, slug: str, version: int, horizons: dict[str, str]) -
 # --------------------------------------------------------------------------- the draft
 
 
+def approved_number(run: Run, segments: Iterable[RunSegment]) -> int | None:
+    """The number of the PRD version the run's review approved: the one its latest PRD
+    draft import recorded (a version saved since, during the wait or the review, is not
+    it)."""
+    numbers = [
+        imported.get("version")
+        for s in sorted(segments, key=lambda s: s.seq)
+        if isinstance(imported := (s.artifacts or {}).get("import"), dict)
+        and imported.get("document_id") == str(run.document_id)
+        and isinstance(imported.get("version"), int)
+    ]
+    return numbers[-1] if numbers else None
+
+
 async def _version(db: AsyncSession, run: Run) -> DocumentVersion | None:
-    """The PRD version the run's review approved: the run's document's latest."""
+    """The PRD version the run's review approved (:func:`approved_number`)."""
     if run.document_id is None:
         return None
+    segments = await db.scalars(select(RunSegment).where(RunSegment.run_id == run.id))
+    number = approved_number(run, segments)
+    if number is None:
+        return None
     return await db.scalar(
-        select(DocumentVersion)
-        .where(DocumentVersion.document_id == run.document_id)
-        .order_by(DocumentVersion.number.desc())
-        .limit(1)
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == run.document_id, DocumentVersion.number == number
+        )
     )
 
 
@@ -186,7 +205,8 @@ async def start_state(
     row = await _draft(db, version)
     if row is None or row.status in NO_ITEMS_YET:
         document = await db.get(Document, version.document_id)
-        if creator is None or document is None:
+        # A person's Derive, as its route asks: the creator's current role is an approver's.
+        if creator is None or document is None or not has_role(creator.role, "approver"):
             return "skip", n, failed_note(n)
         await draft_items.derive(db, creator, document, version)
         return "wait", n, None
@@ -360,7 +380,7 @@ def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, dict[str, 
 
 async def _basis(
     db: AsyncSession, principal: Principal, prd: Document, key: str, est: dict[str, Any], run: Run
-) -> ScheduleBasis:
+) -> ScheduleBasis | None:
     from oracle.roadmap import router as roadmap
 
     when = as_date(est["supports_date"])
@@ -383,8 +403,11 @@ async def _basis(
         prd_document_id=prd.id, item_key=key,
         detail=f"Engineering dates of run {str(run.id)[:8]}",
     )  # fmt: skip
-    # The decider of this stop always holds verify rights (F3 "Who verifies").
-    return await roadmap.record_basis(db, principal, "verify", row, prd)
+    # F3 "Who verifies": the stop's decider holds verify rights; the one rule says so.
+    rights = date_rights(principal, await engineering_leads(db))
+    if rights is None:
+        return None
+    return await roadmap.record_basis(db, principal, rights, row, prd)
 
 
 async def on_approved(
@@ -405,8 +428,9 @@ async def on_approved(
     dated: dict[str, dict[str, Any]] = {}
     for key, choice in recorded.items():
         if choice.get("estimate"):
-            await _basis(db, principal, prd, key, choice["estimate"], run)
-            dated[key] = choice["estimate"]
+            basis = await _basis(db, principal, prd, key, choice["estimate"], run)
+            if basis is not None and basis.status == "verified":
+                dated[key] = choice["estimate"]
     bases = await schedule.verified_bases(db, prd.id)
     for item in await _items(db, row):
         milestone = dict(item.milestone or {})
