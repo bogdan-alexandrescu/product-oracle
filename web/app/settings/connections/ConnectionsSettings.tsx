@@ -6,6 +6,7 @@ import { useId, useState, type FormEvent } from "react";
 
 import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT } from "../_components/fields";
@@ -193,9 +194,11 @@ function ProviderCard({
 }
 
 function ConnectionRow({ connection: c, reload }: { connection: Connection; reload: () => Promise<void> }) {
+  const { can } = useMe();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [changing, setChanging] = useState(false);
 
   async function reconnect() {
     setPending(true);
@@ -249,6 +252,11 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
           </InfoTip>
         )}
         <span className="flex flex-none items-center gap-1">
+          {c.endpoint_url && can("set_connection_endpoint") && !changing && (
+            <Button variant="ghost" onClick={() => setChanging(true)}>
+              Change endpoint
+            </Button>
+          )}
           <Button onClick={reconnect} disabled={pending} variant={c.reconnect_reason ? "solid" : undefined}>
             {c.reconnect_reason ?? "Reconnect"}
           </Button>
@@ -268,6 +276,12 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
           )}
         </span>
       </div>
+      {c.endpoint_url && (
+        <p className="mt-0.5 truncate text-sm text-text2" title={c.endpoint_url}>
+          Endpoint: <span className="font-mono">{c.endpoint_url}</span>
+        </p>
+      )}
+      {changing && <EndpointForm connection={c} reload={reload} close={() => setChanging(false)} />}
       {c.last_error && (
         <p className="mt-1 truncate text-sm text-crit" title={c.last_error}>
           {c.last_error}
@@ -292,8 +306,12 @@ function TokenForm({
   close: () => void;
 }) {
   const id = useId();
+  const { can } = useMe();
+  // Only an Oracle owner sets another GraphQL endpoint (Fireflies only).
+  const takesEndpoint = provider.key === "fireflies" && can("set_connection_endpoint");
   const [token, setToken] = useState("");
   const [label, setLabel] = useState("");
+  const [endpoint, setEndpoint] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -305,7 +323,7 @@ function TokenForm({
       await unwrap(
         api.POST("/v1/connections/{provider}/token", {
           params: { path: { provider: provider.key } },
-          body: { token, label: label.trim() || null },
+          body: { token, label: label.trim() || null, ...(takesEndpoint && endpoint.trim() ? { endpoint_url: endpoint.trim() } : {}) },
         }),
       );
       setToken("");
@@ -351,10 +369,98 @@ function TokenForm({
         <Field label="Label (optional)">
           <input value={label} onChange={(e) => setLabel(e.target.value)} className={INPUT} maxLength={200} />
         </Field>
+        {takesEndpoint && (
+          <Field label="GraphQL endpoint (optional)" htmlFor={`${id}-endpoint`}>
+            <input
+              id={`${id}-endpoint`}
+              type="url"
+              inputMode="url"
+              spellCheck={false}
+              placeholder={FIREFLIES_DEFAULT_ENDPOINT}
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+              className={`${INPUT} font-mono`}
+              maxLength={2048}
+            />
+          </Field>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <Button type="submit" variant="solid" disabled={pending || !token.trim()}>
           {pending ? "Checking…" : "Connect"}
+        </Button>
+        <Button variant="ghost" onClick={close}>
+          Cancel
+        </Button>
+      </div>
+      {error && <Notice tone="error">{error}</Notice>}
+    </form>
+  );
+}
+
+const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
+
+/** Owners only: another GraphQL endpoint for a Fireflies connection, with the key again. */
+function EndpointForm({ connection: c, reload, close }: { connection: Connection; reload: () => Promise<void>; close: () => void }) {
+  const id = useId();
+  const [endpoint, setEndpoint] = useState(c.endpoint_url === FIREFLIES_DEFAULT_ENDPOINT ? "" : (c.endpoint_url ?? ""));
+  const [token, setToken] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.PUT("/v1/connections/{connection_id}/endpoint", {
+          params: { path: { connection_id: c.id } },
+          body: { endpoint_url: endpoint.trim() || null, token },
+        }),
+      );
+      close();
+      await reload();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="mt-2 flex flex-col gap-3 rounded bg-surface2 p-3" aria-label={`${c.account_label ?? c.account_id} endpoint`}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="GraphQL endpoint" htmlFor={`${id}-endpoint`}>
+          <input
+            id={`${id}-endpoint`}
+            type="url"
+            inputMode="url"
+            spellCheck={false}
+            placeholder={FIREFLIES_DEFAULT_ENDPOINT}
+            value={endpoint}
+            onChange={(e) => setEndpoint(e.target.value)}
+            className={`${INPUT} font-mono`}
+            maxLength={2048}
+          />
+        </Field>
+        <Field label="API key, again" htmlFor={`${id}-token`}>
+          <input
+            id={`${id}-token`}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            required
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            className={`${INPUT} font-mono`}
+          />
+        </Field>
+      </div>
+      <p className="text-sm text-text2">Empty reads Fireflies&apos; own API. The key is checked at the new endpoint and never sent elsewhere.</p>
+      <div className="flex items-center gap-2">
+        <Button type="submit" variant="solid" disabled={pending || !token.trim()}>
+          {pending ? "Checking…" : "Save endpoint"}
         </Button>
         <Button variant="ghost" onClick={close}>
           Cancel

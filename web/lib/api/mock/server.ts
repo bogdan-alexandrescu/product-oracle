@@ -3699,7 +3699,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
   if (browse) return browse;
-  const connections = await connectionsRoute(req, p);
+  const connections = await connectionsRoute(req, p, me.role);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));

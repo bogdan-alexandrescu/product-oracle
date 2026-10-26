@@ -3126,6 +3126,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Connection Endpoint
+         * @description Change a Fireflies connection's GraphQL endpoint (null: back to the default).
+         *     Oracle owners only; the API key is entered again and checked at the new endpoint
+         *     (a stored key is never sent to another endpoint). Recorded in the audit log.
+         */
+        put: operations["set_connection_endpoint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections/{provider}/authorize": {
         parameters: {
             query?: never;
@@ -16403,6 +16425,8 @@ export interface components {
             status: string;
             /** Reconnect Reason */
             reconnect_reason?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -16447,6 +16471,8 @@ export interface components {
             updated_at: string;
             /** Reconnect Reason */
             reconnect_reason?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
         };
         /** ConsentDecisionIn */
         ConsentDecisionIn: {
@@ -18747,6 +18773,13 @@ export interface components {
             applied: boolean;
             edge?: components["schemas"]["EdgeOut"] | null;
             proposal?: components["schemas"]["ProposalOut"] | null;
+        };
+        /** EndpointIn */
+        EndpointIn: {
+            /** Endpoint Url */
+            endpoint_url?: string | null;
+            /** Token */
+            token: string;
         };
         /** EntityCreate */
         EntityCreate: {
@@ -34939,6 +34972,8 @@ export interface components {
             token: string;
             /** Label */
             label?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
         };
         /** TokenOut */
         TokenOut: {
@@ -43294,6 +43329,53 @@ export interface operations {
                 content?: never;
             };
             /** @description A token Oracle will not use (a Slack bot token) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_connection_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndpointIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Fireflies rejected the key, or it belongs to another account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only an Oracle owner sets an endpoint */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An endpoint Oracle does not call, or not a Fireflies connection */
             422: {
                 headers: {
                     [name: string]: unknown;
