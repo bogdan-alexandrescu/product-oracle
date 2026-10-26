@@ -1293,6 +1293,15 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     if (r.flow === DRAFT_ITEMS_FLOW) continue;
     out.runs_checked += 1;
     if (ctx.slowAgents && agentsWorking(ctx, r)) continue;
+    if (r.waiting_for) {
+      // F4 lane B, as the API re-checks each tick: the version's roadmap items are ready
+      // now, so the Engineering dates step starts (a workflow of its own).
+      const waiting = r.segments.find((x) => x.status === "pending" && x.name === "eng_dates");
+      r.waiting_for = null;
+      if (waiting) submit(ctx, r, waiting);
+      refresh(r);
+      continue;
+    }
     const done = finishRunning(ctx, r);
     if (done === "none") continue;
     out.segments_finished += 1;
@@ -3230,7 +3239,7 @@ function datesYaml(check: DatesCheck, attempt: number): string {
   const lines = [`# eng_dates (local agent runtime, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
   for (const i of check.items) {
     lines.push(`  - item: ${i.key}`);
-    if (i.proposed) lines.push(`    basis: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`, `    confidence: ${i.confidence}`);
+    if (i.proposed) lines.push(`    estimate: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`, `    confidence: ${i.confidence}`);
     else lines.push(`    no_date_reason: "${i.no_date_reason ?? ""}"`);
     lines.push(`    assumptions: [${i.assumptions.map((a) => `"${a}"`).join(", ")}]`);
   }
@@ -3268,20 +3277,26 @@ function datesInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null 
   return "edit takes the field estimate or no_date";
 }
 
-/** As oracle.engineering.dates.on_approved: each accepted or changed date a verified schedule basis on the PRD. */
+type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string };
+
+/**
+ * As oracle.engineering.dates.decisions, on Approve: each item's last staged choice (a
+ * replaced one stays in the draft), else the architect's own no-date reason; the API makes
+ * each accepted or changed date a verified schedule basis on the PRD.
+ */
 function approveEngDates(cp: CheckpointOut, staged: DraftActionRow[]) {
   const check = datesOf(cp);
   if (!check) return;
-  const bases: Record<string, DateBasis> = {};
-  const noDate: Record<string, string> = {};
+  const dates: Record<string, DateDecision> = {};
   for (const i of check.items) {
     const a = staged.filter((x) => x.item_key === i.key && isDateChoice(x)).pop();
-    if (!a) continue;
-    if (a.kind === "accept" && i.proposed) bases[i.key] = i.proposed;
-    else if (a.field === "estimate") bases[i.key] = a.value as DateBasis;
-    else if (a.field === "no_date") noDate[i.key] = (a.value as { reason: string }).reason;
+    if (!a) {
+      if (i.no_date_reason) dates[i.key] = { decision: "no_date", reason: i.no_date_reason };
+    } else if (a.kind === "accept" && i.proposed) dates[i.key] = { decision: "accepted", estimate: i.proposed };
+    else if (a.field === "estimate") dates[i.key] = { decision: "changed", estimate: a.value as DateBasis };
+    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason };
   }
-  cp.payload = { ...cp.payload, dates: { prd: check.prd, bases, no_date: noDate } };
+  cp.payload = { ...cp.payload, dates };
 }
 
 /** Who stages at the checkpoint (and so decides): A3's rule at an engineering stop, else its role floor. */
@@ -3414,11 +3429,6 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
     }
     draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
-    // F4 lane B: one date choice per item: a new Accept, Change or No date replaces the item's
-    // other choice of the same state (a suggestion replaces suggestions, a staged one staged ones).
-    if (cp.kind === "eng_dates" && isDateChoice(row)) {
-      draft.actions = draft.actions.filter((x) => x === row || x.item_key !== row.item_key || x.state !== row.state || !isDateChoice(x));
-    }
     bump(draft, name);
     return out();
   }
