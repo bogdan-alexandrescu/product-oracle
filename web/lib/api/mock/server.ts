@@ -1567,15 +1567,15 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
   v.approved_at = "2026-10-13T09:00:00Z";
   db.versions.push(v);
   // Its roadmap items (one per card), each traced to a baseline feature: the confirmed goals G1 and G2 as the
-  // Goals section says, and Ops console cleanup's feature supporting no confirmed goal.
+  // Goals section says, and Ops console cleanup's feature supporting no confirmed goal. Falcon alerts rework's feature
+  // reaches both: its best goal is G2 (the later title, at equal contribution), its group G1 (the first by title).
   const goal = (key: string, title: string) => baselineEntity(db, "goal", key, title, created);
   const g1 = goal("g.monthly-churn", "Cut monthly churn to 2%");
   const g2 = goal("g.self-serve", "Grow self-serve sign-ups");
-  const serves: Record<string, BaselineEntity | null> = { "item-falcon": g1, "item-import": g2, "item-ledger": g1, "item-partner": g2, "item-ops": null };
+  const serves: Record<string, BaselineEntity[]> = { "item-falcon": [g2, g1], "item-import": [g2], "item-ledger": [g1], "item-partner": [g2], "item-ops": [] };
   const items = sectionItems(db, v).map((i) => {
     const f = baselineEntity(db, "feature", `f.sharing-${i.item_key.replace(/^item-/, "")}`, i.title, created);
-    const dst = serves[i.item_key];
-    if (dst) {
+    for (const dst of serves[i.item_key] ?? []) {
       db.baseline.edges.push({
         id: uuid(), src_id: f.id, dst_id: dst.id, type: "supports", attrs: {}, status: "confirmed", origin: "user", locked: false,
         locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,

@@ -12,7 +12,9 @@ import pytest
 from sqlalchemy import select, update
 
 from oracle.baseline.models import Edge, Entity
+from oracle.launches import tiers
 from oracle.roadmap import variants
+from oracle.roadmap.models import RoadmapItem
 from oracle.shares import public as share_public
 from oracle.shares import render as share_render
 from oracle.tenancy import tenant_session
@@ -141,6 +143,44 @@ async def test_an_item_reaching_two_goals_sits_under_the_first_by_title_once(cli
         assert out[now + 2].startswith(item), (audience, out)
         assert out[now + 3] == "h3 Retention", (audience, out)
         assert sum(x.startswith(item) for x in out) == 1, (audience, out)
+
+
+def card_goal(html: str, title: str) -> str | None:
+    """The "Goal:" line of the card headed ``title`` (up to the next heading), if any."""
+    m = re.search(
+        rf"<h[1-6]\b[^>]*>\s*{re.escape(title)}\s*</h[1-6]>(.*?)(?=<h[1-6]\b|$)", html, re.S
+    )
+    found = re.search(r"Goal: ([^<]*)", m.group(1)) if m else None
+    return found.group(1).strip() if found else None
+
+
+async def test_an_item_reaching_two_goals_names_its_group_in_the_goal_column(client, ctx):
+    """protects=the owner answer (2026-10-26, "Match the group"): Board's Goal column and
+    Team's card "Goal:" line name the group's goal (the first by title), Engineering's
+    card and the launch tier keep the best goal; fails_when=Board or Team names the best
+    goal under another goal's heading, or Engineering / the launch tier changes;
+    no_claim=a written table row's own goal cell."""
+    await seed_roadmap(ctx, served=())
+    # Retention carries the larger contribution (the best goal), Growth comes first by title.
+    await add_goal_links(
+        ctx, {"bulk-import": [("Retention", 5), ("Growth", 1)], "csv-parser": [("Retention", 1)]}
+    )
+    board = await export(client, ctx, "board")
+    now = board.index("h2 Now")
+    assert board[now + 1] == "h3 Growth", board
+    row = board[now + 2]
+    assert row.startswith("Bulk import") and row.endswith("Growth"), board
+    assert "Retention" not in row, board
+    by_audience = {}
+    for audience in ("team", "engineering"):
+        resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+        assert resp.status_code == 200, resp.text
+        by_audience[audience] = card_goal(resp.text, "Bulk import")
+    assert by_audience == {"team": "Growth", "engineering": "Retention"}
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = list(await s.scalars(select(RoadmapItem)))
+        goal_of = await tiers.item_goals(s, rows)
+    assert goal_of is not None and goal_of["bulk-import"] == ("top", "Retention")
 
 
 async def test_board_with_no_confirmed_goal_groups_everything_under_no_goal(client, ctx):
