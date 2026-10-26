@@ -476,6 +476,48 @@ async def test_72_hours_of_failures_pause_the_webhook_and_tell_creator_and_owner
     assert statuses.count("succeeded") == 1 and statuses.count("failed") == 5
 
 
+async def test_a_resumed_webhook_reads_active_until_its_next_failure_and_gets_72_hours_again(
+    client, tenant_id, owner, approver, receiver
+):
+    """protects=#642 review: resuming a failing webhook starts its failing count afresh: it
+    reads active (no failing_since) until a delivery fails again, and that first failure
+    does not pause it at once; fails_when=a resumed webhook still reads Failing, or the
+    first failure after the resume pauses it again on the old failures."""
+    receiver.answers["hooks.example.test"] = 500
+    hid = (await hook(client, approver.headers))["webhook"]["id"]
+    sub = await subjects(tenant_id)
+    for _ in range(5):
+        await capture(tenant_id, "run.started", None, run_id=sub["run_id"])
+    await outbox.tick(tenant_id, now=datetime.now(UTC))
+    # Three days of failures, and the failing pause they made.
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(WebhookDelivery).values(
+                created_at=WebhookDelivery.created_at - timedelta(hours=73),
+                last_at=WebhookDelivery.last_at - timedelta(hours=73),
+            )
+        )
+        await s.execute(update(Webhook).values(status="paused", paused_reason="failing"))
+        await s.commit()
+    got = await client.get(f"/v1/webhooks/{hid}", headers=approver.headers)
+    assert got.json()["failing_since"] is not None
+
+    resumed = await client.patch(
+        f"/v1/webhooks/{hid}", json={"status": "active"}, headers=approver.headers
+    )
+    assert resumed.status_code == 200
+    assert resumed.json()["status"] == "active" and resumed.json()["failing_since"] is None
+    listed = (await client.get("/v1/webhooks", headers=approver.headers)).json()
+    assert [h["failing_since"] for h in listed if h["id"] == hid] == [None]
+
+    # The next failure reads failing again, but the 72 hours start at the resume.
+    await capture(tenant_id, "run.started", None, run_id=sub["run_id"])
+    await outbox.tick(tenant_id, now=later(minutes=2))
+    assert (await a_hook(tenant_id, hid)).status == "active"
+    got = await client.get(f"/v1/webhooks/{hid}", headers=approver.headers)
+    assert got.json()["failing_since"] is not None
+
+
 async def test_one_webhook_timing_out_does_not_hold_up_another(
     client, tenant_id, owner, receiver, monkeypatch
 ):

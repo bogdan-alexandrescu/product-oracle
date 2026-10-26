@@ -45,7 +45,7 @@ async function createWebhook(page: Page, name: string, url: string, groups: stri
   for (const g of groups) await sheet.getByRole("checkbox", { name: `All ${g}` }).check();
   await sheet.getByRole("button", { name: "Create" }).click();
   await expect(sheet).toContainText("Copy it now. Oracle won't show it again.");
-  const secret = await sheet.getByLabel("Signing secret").inputValue();
+  const secret = await sheet.getByLabel("Signing secret", { exact: true }).inputValue();
   expect(secret).toMatch(/^whsec_/);
   return { sheet, secret };
 }
@@ -126,7 +126,7 @@ test("webhooks: rotate shows a new secret once and both sign for 24 hours; pause
   await confirm.getByRole("button", { name: "Rotate" }).click();
   const shown = page.getByRole("dialog", { name: "New signing secret" });
   await expect(shown).toContainText("Copy it now. Oracle won't show it again.");
-  const rotated = await shown.getByLabel("Signing secret").inputValue();
+  const rotated = await shown.getByLabel("Signing secret", { exact: true }).inputValue();
   expect(rotated).not.toBe(secret);
   await shown.getByRole("button", { name: "Send test event" }).click();
   await expect(shown.getByTestId("test-result")).toContainText("✓ 200");
@@ -157,6 +157,8 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   const deploy = page.getByTestId("webhook-row").filter({ hasText: "Deploy notifier" });
   await expect(deploy).toContainText("Approver");
   await expect(deploy).toContainText("Paused: failing");
+  // Last delivery reads how long ago, not a day.
+  await expect(deploy).toContainText("✕ 500 · 4 h ago");
 
   // The owners-and-approvers switch needs a why.
   await page.getByRole("button", { name: "New webhook" }).click();
@@ -175,6 +177,11 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await deploy.click();
   const inspector = page.getByTestId("webhook-inspector");
   await expect(inspector.getByTestId("delivery-row").first()).toContainText("500");
+  // The log: When · Event · Status · HTTP · Time, its times in Company time.
+  const log = inspector.getByTestId("delivery-log");
+  await expect(log.getByRole("columnheader")).toHaveText(["When", "Event", "Status", "HTTP", "Time"]);
+  await expect(log.getByTestId("delivery-row").first().getByTestId("delivery-http")).toHaveText("500");
+  await expect(log).toContainText("Times are in Company time");
   await inspector.getByLabel("Status").selectOption("failed");
   await expect(inspector.getByTestId("delivery-row")).toHaveCount(2);
   await inspector.getByRole("button", { name: "Take over" }).click();
@@ -184,10 +191,12 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
 
 test("webhooks: an approver sees only their own and gets no owners-and-approvers switch; a commenter has no tab", async ({ page }) => {
   await scenario(page, WEBHOOKS_SCENARIO);
+  // The seed's approver made both of its webhooks; the owner's own (none here) are not listed.
   await openWebhooks(page, "approver@example.com");
-  await expect(page.getByTestId("webhook-row")).toHaveCount(1);
-  await expect(page.getByTestId("webhook-row")).toContainText("Deploy notifier");
-  await page.getByTestId("webhook-row").click();
+  await expect(page.getByTestId("webhook-row")).toHaveCount(2);
+  await expect(page.getByTestId("webhook-row").nth(0)).toContainText("Deploy notifier");
+  await expect(page.getByTestId("webhook-row").nth(1)).toContainText("Release notes");
+  await page.getByTestId("webhook-row").filter({ hasText: "Deploy notifier" }).click();
   await expect(page.getByTestId("webhook-inspector").getByRole("button", { name: "Take over" })).toHaveCount(0);
   await page.getByRole("button", { name: "New webhook" }).click();
   const sheet = page.getByRole("dialog", { name: "New webhook" });
@@ -242,4 +251,113 @@ test("webhooks: on a phone the table shows Name and Status, and the sheet stacks
   const url = await sheet.getByLabel("URL").boundingBox();
   expect(url!.y).toBeGreaterThan(name!.y + name!.height - 1);
   expect(Math.abs(url!.x - name!.x)).toBeLessThan(2);
+});
+
+test("webhooks: the header links to the runbook's verify example", async ({ page }) => {
+  await openWebhooks(page);
+  await expect(page.getByRole("link", { name: "How to verify a signature" })).toHaveAttribute("href", /docs\/ops-webhooks\.md#verify/);
+});
+
+test("webhooks: an owner edits the name, the URL and the events, and turns owners-and-approvers content on and off with a reason", async ({ page }) => {
+  await stubReceiver(page);
+  await openWebhooks(page);
+  const { sheet } = await createWebhook(page, "Leads channel", "https://hooks.example.test/leads");
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await page.getByTestId("webhook-row").filter({ hasText: "Leads channel" }).click();
+  const inspector = page.getByTestId("webhook-inspector");
+  await expect(inspector.getByTestId("approvers-content")).toHaveText("Off");
+
+  await inspector.getByRole("button", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit webhook" });
+  await expect(edit.getByLabel("Name")).toHaveValue("Leads channel");
+  await expect(edit.getByLabel("URL")).toHaveValue("https://hooks.example.test/leads");
+  await expect(edit.getByRole("checkbox", { name: "All Runs" })).toBeChecked();
+  await edit.getByLabel("Name").fill("Leads");
+  await edit.getByLabel("URL").fill("http://relay.example.test/leads");
+  await edit.getByRole("checkbox", { name: "All Approvals" }).check();
+  await edit.getByRole("checkbox", { name: "A run started" }).uncheck();
+  await edit.getByRole("switch", { name: "Include owners-and-approvers content" }).click();
+  await expect(edit.getByRole("button", { name: "Save" })).toBeDisabled();
+  await edit.getByLabel("Why").fill("The leads channel is owners and approvers only");
+  await edit.getByRole("button", { name: "Save" }).click();
+  // The API's refusal shows in the sheet; nothing changed.
+  await expect(edit.getByRole("alert")).toContainText("https://");
+  await edit.getByLabel("URL").fill("https://relay.example.test/leads");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit).toHaveCount(0);
+
+  const row = page.getByTestId("webhook-row").filter({ hasText: "Leads" });
+  await expect(row).toContainText("relay.example.test");
+  await expect(row).toContainText("12");
+  await expect(row.getByTestId("approvers-content-lock")).toBeVisible();
+  await expect(inspector.getByTestId("approvers-content")).toHaveText("On");
+  await expect(inspector).toContainText("12 events:");
+  await expect(inspector).not.toContainText("A run started ·");
+
+  // Off again, with a reason too.
+  await inspector.getByRole("button", { name: "Edit" }).click();
+  await edit.getByRole("switch", { name: "Include owners-and-approvers content" }).click();
+  await expect(edit.getByRole("button", { name: "Save" })).toBeDisabled();
+  await edit.getByLabel("Why").fill("Moved to the approvers' own channel");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(row.getByTestId("approvers-content-lock")).toHaveCount(0);
+  await expect(inspector.getByTestId("approvers-content")).toHaveText("Off");
+});
+
+test("webhooks: an approver re-points their webhook and the owner's Inbox says so", async ({ page }) => {
+  await scenario(page, WEBHOOKS_SCENARIO);
+  await openWebhooks(page, "approver@example.com");
+  await page.getByTestId("webhook-row").filter({ hasText: "Release notes" }).click();
+  const inspector = page.getByTestId("webhook-inspector");
+  await inspector.getByRole("button", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit webhook" });
+  // No owners-and-approvers switch for an approver.
+  await expect(edit.getByRole("switch", { name: "Include owners-and-approvers content" })).toHaveCount(0);
+  await edit.getByLabel("URL").fill("https://relay.example.test/notes");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(page.getByTestId("webhook-row").filter({ hasText: "Release notes" })).toContainText("relay.example.test");
+
+  await login(page);
+  await page.goto("/inbox");
+  const row = page.getByTestId("inbox-webhooks").getByRole("row").filter({ hasText: "Approver changed where webhook Release notes sends" });
+  await expect(row).toBeVisible();
+  await row.getByRole("link", { name: "Open" }).click();
+  await expect(page.getByTestId("webhook-inspector")).toContainText("relay.example.test");
+});
+
+test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding each reach the receiver and the delivery log", async ({ page }) => {
+  const calls = await stubReceiver(page);
+  await openWebhooks(page);
+  const { sheet } = await createWebhook(page, "Run watcher", "https://hooks.example.test/runs");
+  await sheet.getByRole("button", { name: "Done" }).click();
+
+  // Build the baseline: the fake runtime's run waits at Confirm the baseline; approve it.
+  await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
+  await page.getByRole("button", { name: "Build baseline" }).click();
+  const build = page.getByRole("dialog", { name: "Build the baseline" });
+  await build.getByRole("button", { name: "Start" }).click();
+  await expect(build).toHaveCount(0);
+  await page.getByTestId("baseline-build-banner").getByRole("link", { name: "Open run" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  const cp = page.getByTestId("checkpoint-baseline_confirm").filter({ hasText: "Waiting" });
+  await cp.getByRole("button", { name: "Approve and continue" }).click();
+  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Succeeded");
+
+  const sent = calls.map((c) => JSON.parse(c.body).type);
+  expect(sent).toEqual(expect.arrayContaining(["run.started", "run.checkpoint_waiting", "run.checkpoint_decided", "run.succeeded"]));
+  const decided = calls.map((c) => JSON.parse(c.body)).find((b) => b.type === "run.checkpoint_decided");
+  expect(decided.data.checkpoint).toMatchObject({ kind: "baseline_confirm", decision: "approved" });
+
+  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-webhooks").click();
+  await page.getByTestId("webhook-row").filter({ hasText: "Run watcher" }).click();
+  const log = page.getByTestId("webhook-inspector").getByTestId("delivery-log");
+  for (const type of ["run.checkpoint_waiting", "run.checkpoint_decided", "run.succeeded"]) {
+    await expect(log.getByTestId("delivery-row").filter({ hasText: type })).toContainText("✓ 200");
+  }
+  // The newest first: the run's success above its checkpoint's decision.
+  await expect(log.getByTestId("delivery-row").first()).toContainText("run.succeeded");
 });
