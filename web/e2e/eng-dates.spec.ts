@@ -60,7 +60,7 @@ test("change: the dialog opens pre-filled from the proposal and saves another ba
   await row(page, "saved-addresses").getByRole("button", { name: "Change", exact: true }).click();
   const dialog = page.getByTestId("date-change");
   await expect(page.getByRole("dialog", { name: "Change the date: Saved addresses" })).toBeVisible();
-  await expect(dialog.getByRole("combobox", { name: "Kind" })).toHaveValue("capacity_plan");
+  await expect(dialog.getByRole("combobox", { name: "Kind" })).toHaveValue("capacity");
   await expect(dialog.getByRole("textbox", { name: "Reference" })).toHaveValue("cap-q4-checkout");
   await expect(dialog.getByRole("textbox", { name: "Date", exact: true })).toHaveValue("2026-12-11");
   await dialog.getByRole("combobox", { name: "Kind" }).selectOption("estimate");

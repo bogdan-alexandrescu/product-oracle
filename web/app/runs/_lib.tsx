@@ -126,7 +126,7 @@ export type DatesCheck = {
     title: string;
     section: string | null;
     size: string | null;
-    proposed: { kind: "estimate" | "capacity_plan" | "commitment"; reference: string; supports_date: string } | null;
+    proposed: { kind: "estimate" | "capacity" | "commitment"; reference: string; supports_date: string } | null;
     confidence: "low" | "medium" | "high" | null;
     assumptions: string[];
     no_date_reason: string | null;
