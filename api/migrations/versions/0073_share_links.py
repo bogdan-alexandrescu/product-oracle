@@ -9,8 +9,8 @@
 
 Live-safe: new tables only. The downgrade drops them.
 
-Revision ID: 0057_share_links
-Revises: 0056_public_texts
+Revision ID: 0073_share_links
+Revises: 0072_public_texts
 """
 
 from collections.abc import Sequence
@@ -18,8 +18,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0057_share_links"
-down_revision: str | None = "0056_public_texts"
+revision: str = "0073_share_links"
+down_revision: str | None = "0072_public_texts"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

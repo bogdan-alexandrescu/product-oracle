@@ -8,7 +8,7 @@ existing load balancer, as `/mcp`, the OAuth endpoints, the Slack events endpoin
 (owner answer O5-Q2). Every other route stays behind IAP.
 
 An owner applies this runbook after the share-links change (lane 3, migration
-`0057_share_links`) is deployed. The lane that wrote it applied nothing.
+`0073_share_links`) is deployed. The lane that wrote it applied nothing.
 
 | Path | What it serves | Code |
 |---|---|---|
@@ -115,7 +115,7 @@ reload says "This link has ended. Ask the person who sent it for a new one."
 1. Restore the URL map: `gcloud compute url-maps import <URL_MAP> --project="$PROJECT"
    --source=url-map.backup.yaml` (or remove the entries). Every link stops working at
    once, which is the safe failure: `/v1/public/shares/*` (and `/s/*`, once added) fall back to IAP.
-2. Only then revert the share-links change. Its down-migration (`0057_share_links`)
+2. Only then revert the share-links change. Its down-migration (`0073_share_links`)
    drops `share_link_views` and `share_links`: every link and its view log are gone, and
    a revert cannot bring them back. Revoke links you want to end for good before it.
 

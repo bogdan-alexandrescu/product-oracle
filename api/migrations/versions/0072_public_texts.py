@@ -13,8 +13,8 @@ Live-safe: new tables, two nullable columns, one check widened.
 
 The downgrade deletes the ``public_text`` jobs and drops the tables and columns.
 
-Revision ID: 0056_public_texts
-Revises: 0055_roadmap_audience
+Revision ID: 0072_public_texts
+Revises: 0071_roadmap_audience
 """
 
 from collections.abc import Sequence
@@ -25,8 +25,8 @@ from sqlalchemy.dialects import postgresql
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0056_public_texts"
-down_revision: str | None = "0055_roadmap_audience"
+revision: str = "0072_public_texts"
+down_revision: str | None = "0071_roadmap_audience"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

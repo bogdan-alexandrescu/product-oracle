@@ -10,8 +10,8 @@ a value yet).
 
 The downgrade drops the column.
 
-Revision ID: 0055_roadmap_audience
-Revises: 0054_reply_opened
+Revision ID: 0071_roadmap_audience
+Revises: 0070_brand_assets
 """
 
 from collections.abc import Sequence
@@ -19,8 +19,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0055_roadmap_audience"
-down_revision: str | None = "0054_reply_opened"
+revision: str = "0071_roadmap_audience"
+down_revision: str | None = "0070_brand_assets"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

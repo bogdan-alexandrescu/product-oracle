@@ -427,7 +427,7 @@ class TrackerRecordEvent(TenantScoped, Base):
     after: Mapped[str | None] = mapped_column(Text)
 
 
-# --- O5 lane 2: the public-safe variant (migration 0056_public_texts) -----------------
+# --- O5 lane 2: the public-safe variant (migration 0072_public_texts) -----------------
 
 PUBLIC_STAGES = ("exploring", "planned", "in_progress", "shipped")
 PUBLIC_TEXT_STATES = ("draft", "approved", "excluded")

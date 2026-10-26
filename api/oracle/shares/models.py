@@ -1,4 +1,4 @@
-"""Share links and their view log (spec-O5 §3; migration 0057_share_links).
+"""Share links and their view log (spec-O5 §3; migration 0073_share_links).
 
 A share link shows one publication of one roadmap, in one audience, to whoever has its
 address **and its passcode** (owner answer O5-Q5, changed), until it expires or is
