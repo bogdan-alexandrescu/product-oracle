@@ -130,6 +130,9 @@ NOTIFICATION_KINDS = (
     "campaign",
     "patch_proposed",
     "published",
+    # I1: a webhook paused for its creator, and a webhook's address changed (owners).
+    "webhook_paused",
+    "webhook_url_changed",
 )
 PATCH_ORIGINS = ("run", "llm_job", "agent", "person")
 PATCH_STATUSES = ("open", "accepted", "rejected", "superseded")
