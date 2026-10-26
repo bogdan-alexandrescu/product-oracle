@@ -332,3 +332,17 @@ class VisibilityIn(BaseModel):
 
     visibility: DocumentVisibility
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class DraftNewItems(BaseModel):
+    """S4: "N new items since draft k, refresh?". What changed in the draft's author's own
+    sources since the sources the draft was written from (its run's pin, or the moment it
+    was imported when no run made it). Sources are private (S5): anyone but the author gets
+    ``visible: false`` with neither ``as_of`` nor ``count``."""
+
+    version: int
+    # When the sources were read for this draft.
+    as_of: datetime | None = None
+    # Items new, changed or deleted since then.
+    count: int | None = None
+    visible: bool = False

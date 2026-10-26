@@ -1605,6 +1605,67 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/documents/{doc}/versions/{n}/new-items": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Draft New Items",
+        "description": "S4: how many items of the draft's author's own sources are new, changed or deleted\nsince the sources the draft was written from (\"N new items since draft k, refresh?\").\nOnly the author sees the number (``oracle.docs.fresh``).",
+        "operationId": "get_draft_new_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftNewItems"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/documents/{doc}/versions/{n}/markdown": {
       "get": {
         "tags": [
@@ -60620,6 +60681,48 @@
           "job_id"
         ],
         "title": "DraftJobOut"
+      },
+      "DraftNewItems": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "DraftNewItems",
+        "description": "S4: \"N new items since draft k, refresh?\". What changed in the draft's author's own\nsources since the sources the draft was written from (its run's pin, or the moment it\nwas imported when no run made it). Sources are private (S5): anyone but the author gets\n``visible: false`` with neither ``as_of`` nor ``count``."
       },
       "DraftNoteIn": {
         "properties": {

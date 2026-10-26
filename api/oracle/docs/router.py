@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from oracle.auth.deps import Principal, TenantDB, body_type
+from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB, body_type
 from oracle.authz import recheck_caller, require_role, require_role_now
 from oracle.docs import service
 from oracle.docs.parser import DraftError
@@ -17,6 +17,7 @@ from oracle.docs.schemas import (
     DocumentKind,
     DocumentOut,
     DocumentSummary,
+    DraftNewItems,
     ImportErrorResponse,
     ImportProblem,
     VersionOut,
@@ -192,6 +193,27 @@ async def get_version(doc: str, n: int, db: TenantDB) -> VersionOut:
     except service.NotFoundError as exc:
         raise _not_found(exc) from exc
     return await service.read_version(db, version)
+
+
+@router.get(
+    "/{doc}/versions/{n}/new-items",
+    response_model=DraftNewItems,
+    operation_id="get_draft_new_items",
+)
+async def get_draft_new_items(
+    doc: str, n: int, principal: CurrentPrincipal, db: TenantDB
+) -> DraftNewItems:
+    """S4: how many items of the draft's author's own sources are new, changed or deleted
+    since the sources the draft was written from ("N new items since draft k, refresh?").
+    Only the author sees the number (``oracle.docs.fresh``)."""
+    from oracle.docs import fresh
+
+    try:
+        document = await service.get_document_or_404(db, doc)
+        version = await service.get_version_row(db, document, n)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
+    return await fresh.new_items(db, principal, document, version)
 
 
 @router.get(

@@ -451,19 +451,32 @@ async def author_items(
 async def new_since(
     db: AsyncSession, intake: ProductIntake, snapshot: Snapshot | None
 ) -> list[tuple[uuid.UUID, str]]:
-    """(item id, new | changed | deleted) of the author's items since the pinned snapshot.
+    """(item id, new | changed | deleted) of the author's items since the pinned snapshot
+    (:func:`changed_since`), within the sources the intake chose when it chose some."""
+    if snapshot is None or intake.author_id is None:
+        return []
+    return await changed_since(
+        db, intake.author_id, source_ids_of(intake), snapshot.as_of, snapshot.txn_snapshot
+    )
+
+
+async def changed_since(
+    db: AsyncSession,
+    owner_id: uuid.UUID,
+    source_ids: list[uuid.UUID],
+    as_of: datetime,
+    txn: str | None,
+) -> list[tuple[uuid.UUID, str]]:
+    """(item id, new | changed | deleted) of ``owner_id``'s items since a pin (``as_of``
+    and its transaction snapshot ``txn``), in ``source_ids`` when given.
 
     "Since" is what had not committed when the pin was taken (pin stability). An item
     that was not in the pinned set and is deleted now was never seen: it is left out,
     not reported as deleted."""
-    if snapshot is None or intake.author_id is None:
-        return []
-    as_of, txn = snapshot.as_of, snapshot.txn_snapshot
-    owned = select(Source.id).where(Source.owner_user_id == intake.author_id)
-    chosen = source_ids_of(intake)
+    owned = select(Source.id).where(Source.owner_user_id == owner_id)
     stmt = select(SourceItem).where(SourceItem.source_id.in_(owned))
-    if chosen:
-        stmt = stmt.where(SourceItem.source_id.in_(chosen))
+    if source_ids:
+        stmt = stmt.where(SourceItem.source_id.in_(source_ids))
     newer = select(SourceItemVersion.item_id).where(~source_items.version_at_pin(as_of, txn))
     deleted_since = and_(
         SourceItem.deleted_at.is_not(None), ~source_items.deleted_at_pin(as_of, txn)

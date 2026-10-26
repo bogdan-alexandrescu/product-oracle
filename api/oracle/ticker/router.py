@@ -38,6 +38,7 @@ import logging
 import random
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -63,6 +64,7 @@ from oracle.rituals import service as rituals
 from oracle.roadmap import views as track_views
 from oracle.slack import outbox as slack_outbox
 from oracle.slack.outbox import OutboxTick
+from oracle.sources import background as source_sync
 from oracle.strategy import drift as strategy_drift
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.ticker import body, idtoken
@@ -108,6 +110,14 @@ class _LlmJobs(BaseModel):
     retried: int = 0
 
 
+class _Sources(BaseModel):
+    """S4: the background syncs of sources (oracle.sources.background)."""
+
+    synced: int = 0
+    failed: int = 0
+    rate_limited: int = 0
+
+
 class _Companies(BaseModel):
     ticked: int = 0
     # Ticked, but at least one kind of work raised.
@@ -121,6 +131,7 @@ class TickerOut(BaseModel):
     runs: _Runs = Field(default_factory=_Runs)
     claude_accounts: _ClaudeAccounts = Field(default_factory=_ClaudeAccounts)
     llm_jobs: _LlmJobs = Field(default_factory=_LlmJobs)
+    sources: _Sources = Field(default_factory=_Sources)
     # G2: Oracle's replies nobody streamed, completed here; leases that ran out.
     discussion_replies: RepliesTick = Field(default_factory=RepliesTick)
     # G8: mirrored discussions' new messages queued, and the Slack outbox delivered.
@@ -185,7 +196,8 @@ def _count_sweep(result: dict[str, Any] | None, out: TickerOut) -> None:
 async def _tick_company(
     tenant_id: uuid.UUID, out: TickerOut, failures: _Failures, started: float | None = None
 ) -> None:
-    """One company's runs and account sweep (``oracle.ticker.body``), its product
+    """One company's runs and account sweep (``oracle.ticker.body``), its due source syncs
+    (S4, ``oracle.sources.background``), its product
     tracks' monitoring, its rituals (oracle.rituals, the weekly alignment report among
     them), its watched pages, its launches' Ready detection, its interview links' expiry,
     its daily request triage, and the next drafts and questions Oracle starts itself at
@@ -204,6 +216,18 @@ async def _tick_company(
     if company.swept:
         _count_sweep(company.sweep, out)
     if company.errors:
+        failures.add(tenant_id)
+    try:
+        # Sources (S4): each about hourly, a few a tick, the stalest first, none started
+        # past the tick's start budget (oracle.sources.background). A merge it brings in
+        # makes its repo's code map stale (F5-2) without anyone pressing Sync now.
+        async with tenant_session(tenant_id) as db:
+            synced = await source_sync.sync_due(db, datetime.now(UTC), deadline=deadline)
+        out.sources.synced += synced.synced
+        out.sources.failed += synced.failed
+        out.sources.rate_limited += synced.rate_limited
+    except Exception:
+        log.exception("run ticker: source syncs failed for company %s", tenant_id)
         failures.add(tenant_id)
     try:
         # Product tracks (CR-11): an hourly deterministic check, no model call.
