@@ -236,8 +236,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
-    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO)
-      seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO);
+    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO)
+      seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
     return db;
   });
 }
@@ -1115,18 +1115,32 @@ function dateStatus(
   return { date_status: "unverified", basis_ids: [] };
 }
 
+/** As oracle.plan.service: the item history's newest imports, and the fields it names, in order. */
+const TRACKER_HISTORY_LIMIT = 20;
+const SHOWN_FIELDS: Schemas["TrackerFieldChange"]["field"][] = ["state", "target_date", "estimate"];
+
 function planHistory(db: RoadmapDb, q: URLSearchParams): Response {
   const roadmap = q.get("roadmap");
   const key = q.get("item") ?? "";
-  // F2 §2: the tracker history of the item's issues (the Plan's seeded records), oldest first.
+  // F2 §2: the tracker history of the item's issues (the Plan's seeded records), as
+  // oracle.plan.service._tracker_events: one entry per import of an issue (its events share the
+  // observed time), the tracker's own status name left out, the newest TRACKER_HISTORY_LIMIT
+  // oldest first, and how many older ones are left out.
   const refs = new Map(
     (roadmap === ALERTS_ROADMAP_SLUG ? (ALERTS_APPROVED.find((i) => i.key === key)?.records ?? []) : []).map((r) => [stableUuid(`plan:record:${r.ref}#0`), r.ref]),
   );
-  const tracker_events: Schemas["ItemTrackerEvent"][] = (db.recordEvents ?? [])
-    .filter((e) => refs.has(e.record_id))
-    .map((e) => ({ record_id: e.record_id, tracker: "linear", external_ref: refs.get(e.record_id)!, observed_at: e.observed_at, field: e.field, before: e.before ?? null, after: e.after ?? null }))
-    .sort((a, b) => a.observed_at.localeCompare(b.observed_at));
-  const out = (versions: Schemas["ItemVersion"][]): Response => json(200, { roadmap, item: key, versions, tracker_events });
+  const imports = new Map<string, Schemas["ItemTrackerEvent"]>();
+  for (const e of db.recordEvents ?? []) {
+    if (!refs.has(e.record_id) || e.field === "raw_status") continue;
+    const id = `${e.record_id}|${e.observed_at}`;
+    if (!imports.has(id)) imports.set(id, { record_id: e.record_id, tracker: "linear", external_ref: refs.get(e.record_id)!, observed_at: e.observed_at, changes: [] });
+    imports.get(id)!.changes.push({ field: e.field, before: e.before ?? null, after: e.after ?? null });
+  }
+  const all = [...imports.values()].sort((a, b) => a.observed_at.localeCompare(b.observed_at));
+  for (const i of all) i.changes.sort((a, b) => SHOWN_FIELDS.indexOf(a.field) - SHOWN_FIELDS.indexOf(b.field));
+  const tracker_events = all.slice(-TRACKER_HISTORY_LIMIT);
+  const out = (versions: Schemas["ItemVersion"][]): Response =>
+    json(200, { roadmap, item: key, versions, tracker_events, tracker_events_older: all.length - tracker_events.length });
   if (roadmap === ALERTS_ROADMAP_SLUG) {
     const a = ALERTS_APPROVED.find((i) => i.key === key);
     if (!a) return out([]);
@@ -1413,6 +1427,12 @@ export const TRACK_ALERTS_MANY_SCENARIO = "track-alerts-many";
  * the track that no item names (acme/app#425): Open blocker and Link to item.
  */
 export const TRACK_ALERTS_ACTIONS_SCENARIO = "track-alerts-actions";
+/**
+ * "track-alerts" plus ENG-405's earlier imports: one a day from Sep 28 to Oct 19, each raising
+ * its estimate by one, and the slip's import (Oct 20) also moving it from To do to In progress:
+ * 23 imports, more than the item history lists.
+ */
+export const TRACK_ALERTS_HISTORY_SCENARIO = "track-alerts-history";
 const ACTIONS_BLOCKER_ID = stableUuid("track-alert/slack-alerts/blocker");
 type StoredAlert = Omit<TrackAlertOut, "prd" | "actions" | "inbox_state">;
 /** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
@@ -1423,7 +1443,7 @@ const DONE_DAYS = 30;
  * One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests
  * on Nov 30. `many` adds two open "not on the roadmap" alerts on the same track.
  */
-function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = false) {
+function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = false, history = false) {
   db.alerts = [
     {
       id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Daily alert digest email",
@@ -1458,31 +1478,55 @@ function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = fals
     );
   }
   db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
+  if (history) {
+    const earlier = Array.from({ length: 22 }, (_, n) => ({
+      record_id: SLIP_RECORD_ID, observed_at: new Date(Date.UTC(2026, 8, 28 + n, 15)).toISOString(), field: "estimate" as const, before: String(n + 1), after: String(n + 2),
+    }));
+    db.recordEvents = [
+      ...earlier,
+      { record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "state", before: "todo", after: "in_progress" },
+      { record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "raw_status", before: "Todo", after: "In Progress" },
+      ...db.recordEvents,
+    ];
+  }
 }
 
 /** Ask fits a slip, an overdue item and work started early (F2 §3); Discuss fits every kind. */
 const ASK_KINDS: StoredAlert["kind"][] = ["date_slip", "overdue", "ahead"];
+/** As oracle.roadmap.alerts: the kinds that also reach the engineering leads, and those a re-plan answers. */
+const LEAD_KINDS: StoredAlert["kind"][] = ["date_slip", "overdue"];
+const REPLAN_KINDS: StoredAlert["kind"][] = ["date_slip", "overdue", "cancelled", "ahead", "prd_moved"];
+
+/** oracle.roadmap.alerts.in_audience: the track's owner, else every owner; slips and overdue items also the leads. */
+function inAlertAudience(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert): boolean {
+  const t = db.tracks.find((x) => x.id === a.track_id);
+  if (t?.owner_id ? t.owner_id === ctx.userId : ctx.role === "owner") return true;
+  return LEAD_KINDS.includes(a.kind) && !!ctx.engineeringLead;
+}
 
 /**
- * What the caller may do on the alert now: approvers and owners act; commenters ask and
- * discuss; everyone may open a blocker.
+ * What the caller may do on the alert now, as oracle.roadmap.alerts.actions: approvers re-plan;
+ * leads and owners (approvers while no lead is named) accept a slip's date and link an issue;
+ * commenters ask and discuss; everyone may open a blocker; the alert's audience keeps and reopens.
  */
-function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
+function alertActions(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert): TrackAlertAction[] {
   if (a.state === "resolved") return [];
-  const talk: TrackAlertAction[] = RANK[ctx.role] >= RANK.commenter ? [...(ASK_KINDS.includes(a.kind) ? (["ask"] as const) : []), "discuss"] : [];
-  if (RANK[ctx.role] < RANK.approver) return [...(a.kind === "blocked" ? (["open_blocker"] as const) : []), ...talk];
-  if (a.state === "kept") return [...talk, "reopen"];
-  const first: Record<StoredAlert["kind"], TrackAlertAction[]> = {
-    date_slip: ["accept_date", "replan"],
-    overdue: ["replan"],
-    cancelled: ["replan"],
-    ahead: ["replan"],
-    unplanned: ["link"],
-    blocked: ["open_blocker"],
-    stale: ["review"],
-    prd_moved: ["replan"],
-  };
-  return [...first[a.kind], ...talk, "keep"];
+  const approver = RANK[ctx.role] >= RANK.approver;
+  const lead = !!ctx.engineeringLead && RANK[ctx.role] >= RANK.commenter;
+  // oracle.members.leads.date_rights (verify or propose) and may_accept (verify only).
+  const verifies = ctx.role === "owner" || lead || (approver && !ctx.leadNamed);
+  const out: TrackAlertAction[] = [];
+  if (a.kind === "date_slip" && a.state === "open" && verifies) out.push("accept_date");
+  if (approver && REPLAN_KINDS.includes(a.kind)) out.push("replan");
+  if (approver && a.kind === "stale") out.push("review", "reconcile");
+  if (a.kind === "blocked") out.push("open_blocker");
+  if (a.kind === "unplanned" && (verifies || approver)) out.push("link");
+  if (RANK[ctx.role] >= RANK.commenter) {
+    if (ASK_KINDS.includes(a.kind)) out.push("ask");
+    out.push("discuss");
+  }
+  if (inAlertAudience(ctx, db, a)) out.push(a.state === "open" ? "keep" : "reopen");
+  return out;
 }
 
 function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: string | null): TrackAlertOut {
@@ -1490,7 +1534,7 @@ function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: str
   const prd = t && ctx.documents.find((d) => d.id === t.prd_id);
   const inbox: TrackAlertOut["inbox_state"] =
     seen === undefined ? null : a.state !== "open" ? "done" : seen === null || a.opened_at > seen ? "new" : "open";
-  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions: alertActions(ctx, a), inbox_state: inbox };
+  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions: alertActions(ctx, db, a), inbox_state: inbox };
 }
 
 function trackAlerts(
@@ -1520,7 +1564,7 @@ function trackAlerts(
   if (!a) return notFound("Track alert");
   const verb = p[3];
   if (verb === "keep") {
-    if (RANK[ctx.role] < RANK.approver) return json(403, { detail: "Requires the approver role" });
+    if (!inAlertAudience(ctx, db, a)) return json(403, { detail: "Only the people this alert goes to keep or reopen it" });
     if (a.state !== "open") return json(409, { detail: "Only an open alert can be kept" });
     return body<{ note?: string | null } | null>().then((b) => {
       const note = b?.note?.trim() || null;
@@ -1530,7 +1574,7 @@ function trackAlerts(
     });
   }
   if (verb === "reopen") {
-    if (RANK[ctx.role] < RANK.approver) return json(403, { detail: "Requires the approver role" });
+    if (!inAlertAudience(ctx, db, a)) return json(403, { detail: "Only the people this alert goes to keep or reopen it" });
     if (a.state !== "kept") return json(409, { detail: "Only a kept alert can be reopened" });
     Object.assign(a, { state: "open", kept_by: null, kept_by_name: null, kept_at: null, note: null });
     return json(200, alertOut(ctx, db, a));

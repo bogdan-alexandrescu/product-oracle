@@ -32,6 +32,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.intake import engine, sharing, views
 from oracle.intake.schemas import (
@@ -109,8 +110,9 @@ async def check_assignee(
 # --- ask a teammate --------------------------------------------------------------------
 
 
-async def _subject_columns(db: AsyncSession, subject) -> dict:
-    """The question's subject columns; 422 when the subject does not exist."""
+async def _subject_columns(db: AsyncSession, subject, principal: Principal) -> dict:
+    """The question's subject columns; 422 when the subject does not exist (a Plan item's
+    PRD the asker cannot see does not, for them)."""
     if isinstance(subject, IntakeSubject):
         intake = await db.get(ProductIntake, subject.intake_id)
         if intake is None:
@@ -126,7 +128,9 @@ async def _subject_columns(db: AsyncSession, subject) -> dict:
             raise IntakeError(422, "No such checkpoint")
         return {"checkpoint_id": subject.checkpoint_id, "item_ref": subject.item_ref}
     if isinstance(subject, RoadmapItemSubject):
-        if await _item_title(db, subject.document_id, subject.item_key) is None:
+        prd = await db.get(Document, subject.document_id)
+        hidden = prd is None or not visibility.can_see(principal, prd)
+        if hidden or await _item_title(db, subject.document_id, subject.item_key) is None:
             raise IntakeError(422, "No such roadmap item for the PRD")
         # A Plan item: its PRD and its key (no checkpoint, so never a checkpoint item).
         return {"document_id": subject.document_id, "item_ref": subject.item_key}
@@ -140,7 +144,7 @@ async def create(
     db: AsyncSession, principal: Principal, body: QuestionCreate
 ) -> StakeholderQuestion:
     """Ask a named person a question about a subject: asked at once, in no batch."""
-    columns = await _subject_columns(db, body.subject)
+    columns = await _subject_columns(db, body.subject, principal)
     await answerer(db, body.asked_to)
     question = StakeholderQuestion(
         category="general",
@@ -258,11 +262,11 @@ async def subject_of(
         )  # fmt: skip
     doc = await db.get(Document, q.document_id) if q.document_id else None
     if q.item_ref and doc is not None:
-        # A Plan item (F2 Ask): Open selects it on the Plan.
+        # A Plan item (F2 Ask): Open selects it on the Plan, by its PRD and key.
         title = await _item_title(db, doc.id, q.item_ref) or q.item_ref
         return InboxSubject(
             kind="roadmap_item", title=f"{doc.title} · {title}",
-            href=f"/plan?item={quote(q.item_ref, safe='')}",
+            href=f"/plan?prd={doc.id}&item={quote(q.item_ref, safe='')}",
         )  # fmt: skip
     intake = await readers.intake(q.intake_id)
     if intake is not None:

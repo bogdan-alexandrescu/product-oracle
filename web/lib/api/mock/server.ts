@@ -3836,8 +3836,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       },
       entity: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
       roadmapItem: (id, key) => {
+        // A PRD the caller cannot see has no items for them (as oracle.intake.questions).
         const doc = db.documents.find((d) => d.id === id);
-        return doc ? planItemTitle(doc.slug, key) : null;
+        return doc && canSee(me.role, doc.visibility) ? planItemTitle(doc.slug, key) : null;
       },
       checkpoint: (id) => {
         for (const run of db.runs?.runs ?? []) {

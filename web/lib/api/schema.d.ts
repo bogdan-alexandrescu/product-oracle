@@ -23265,6 +23265,11 @@ export interface components {
              * @default []
              */
             tracker_events: components["schemas"]["ItemTrackerEvent"][];
+            /**
+             * Tracker Events Older
+             * @default 0
+             */
+            tracker_events_older: number;
         };
         /** ItemIn */
         ItemIn: {
@@ -23384,7 +23389,8 @@ export interface components {
         };
         /**
          * ItemTrackerEvent
-         * @description One field of one of the item's tracker issues changed by an import (F2 §2).
+         * @description One import's changes to one of the item's tracker issues (F2 §2), in field order.
+         *     The tracker's own status name is left out: the state says it in Oracle's words.
          */
         ItemTrackerEvent: {
             /**
@@ -23401,15 +23407,8 @@ export interface components {
              * Format: date-time
              */
             observed_at: string;
-            /**
-             * Field
-             * @enum {string}
-             */
-            field: "state" | "target_date" | "estimate" | "raw_status";
-            /** Before */
-            before: string | null;
-            /** After */
-            after: string | null;
+            /** Changes */
+            changes: components["schemas"]["TrackerFieldChange"][];
         };
         /** ItemVersion */
         ItemVersion: {
@@ -35689,6 +35688,21 @@ export interface components {
             read_only_alignment: boolean;
             /** Reason */
             reason: string;
+        };
+        /**
+         * TrackerFieldChange
+         * @description One field an import changed: before and after, as the tracker history keeps them.
+         */
+        TrackerFieldChange: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "state" | "target_date" | "estimate";
+            /** Before */
+            before: string | null;
+            /** After */
+            after: string | null;
         };
         /** TrackerImportOut */
         TrackerImportOut: {

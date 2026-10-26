@@ -908,7 +908,7 @@ function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSub
   const doc = q.document_id ? ctx.subjects?.document(q.document_id) : null;
   if (q.item_ref && doc) {
     const title = ctx.subjects?.roadmapItem?.(q.document_id!, q.item_ref) ?? q.item_ref;
-    return { kind: "roadmap_item", title: `${doc.title} · ${title}`, href: `/plan?item=${encodeURIComponent(q.item_ref)}` };
+    return { kind: "roadmap_item", title: `${doc.title} · ${title}`, href: `/plan?prd=${q.document_id}&item=${encodeURIComponent(q.item_ref)}` };
   }
   const intake = q.intake_id ? db.intakes.find((i) => i.id === q.intake_id) : undefined;
   if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: `/intakes/${intake.id}` };

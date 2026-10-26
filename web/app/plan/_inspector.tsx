@@ -25,8 +25,9 @@ function History({ item }: { item: PlanItem }) {
   );
   if (q.error) return <span className="text-text2">{q.error}</span>;
   if (!q.data) return <span className="text-text2">…</span>;
-  // The tracker's own status name is said again by the state line, in Oracle's words.
-  const events = q.data.tracker_events.filter((e) => e.field !== "raw_status");
+  // One line per import (the API groups and limits them; the tracker's own status name is left out).
+  const events = q.data.tracker_events;
+  const older = q.data.tracker_events_older;
   if (q.data.versions.length === 0 && events.length === 0) return <span className="text-text2">—</span>;
   return (
     <div className="flex flex-col gap-2">
@@ -40,10 +41,15 @@ function History({ item }: { item: PlanItem }) {
           ))}
         </ol>
       )}
+      {older > 0 && (
+        <p data-testid="plan-tracker-older" className="text-[15px] text-text2">
+          {older} earlier tracker {older === 1 ? "update isn't" : "updates aren't"} shown.
+        </p>
+      )}
       {events.length > 0 && (
         <ol aria-label="Tracker history" className="flex flex-col gap-1 text-[15px]">
-          {events.map((e, n) => (
-            <li key={n} data-testid="plan-tracker-event" className="tnum">
+          {events.map((e) => (
+            <li key={`${e.record_id}|${e.observed_at}|${e.changes.map((c) => c.field).join()}`} data-testid="plan-tracker-event" className="tnum">
               {trackerEventLine(e)}
               <span className="text-text2"> · {formatDay(e.observed_at)}</span>
             </li>
@@ -54,21 +60,24 @@ function History({ item }: { item: PlanItem }) {
   );
 }
 
-/** F2 §2: one change an import read from the tracker, in plain words ("ENG-405 moved from Nov 30 to Dec 9"). */
+/** F2 §2: what one import changed on an issue, in plain words ("ENG-405: To do → In progress, date Nov 30 → Dec 9"). */
 function trackerEventLine(e: Schemas["ItemTrackerEvent"]): string {
-  const ref = e.external_ref;
-  if (e.field === "target_date") {
-    const from = alertDay(e.before);
-    const to = alertDay(e.after);
-    if (from && to) return `${ref} moved from ${from} to ${to}`;
-    if (to) return `${ref} got the date ${to}`;
-    return from ? `${ref} lost its date (was ${from})` : `${ref} has no date`;
+  return `${e.external_ref}: ${e.changes.map(changeWords).join(", ")}`;
+}
+
+function changeWords(c: Schemas["TrackerFieldChange"]): string {
+  if (c.field === "target_date") {
+    const from = alertDay(c.before);
+    const to = alertDay(c.after);
+    if (from && to) return `date ${from} → ${to}`;
+    if (to) return `date ${to}`;
+    return from ? `date removed (was ${from})` : "no date";
   }
-  if (e.field === "state") {
+  if (c.field === "state") {
     const word = (v: string | null) => (v && v in RECORD_STATE ? RECORD_STATE[v as keyof typeof RECORD_STATE] : (v ?? "none"));
-    return `${ref}: ${word(e.before)} → ${word(e.after)}`;
+    return `${word(c.before)} → ${word(c.after)}`;
   }
-  return `${ref} estimate: ${e.before ?? "none"} → ${e.after ?? "none"}`;
+  return `estimate ${c.before ?? "none"} → ${c.after ?? "none"}`;
 }
 
 /**

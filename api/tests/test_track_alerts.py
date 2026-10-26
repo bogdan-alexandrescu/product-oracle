@@ -341,7 +341,8 @@ async def test_ask_about_a_roadmap_item(client, owner, runtime):  # noqa: F811
     assert resp.status_code == 422, resp.text
     # A PRD the asker cannot see is no subject of theirs (#577 review).
     async with tenant_session(tenant_id) as s:
-        await s.execute(update(Document).where(Document.id == prd_id).values(visibility="approvers"))
+        hidden = update(Document).where(Document.id == prd_id).values(visibility="approvers")
+        await s.execute(hidden)
         await s.commit()
     resp = await client.post(
         "/v1/questions",

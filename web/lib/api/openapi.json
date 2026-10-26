@@ -73023,6 +73023,11 @@
             "type": "array",
             "title": "Tracker Events",
             "default": []
+          },
+          "tracker_events_older": {
+            "type": "integer",
+            "title": "Tracker Events Older",
+            "default": 0
           }
         },
         "type": "object",
@@ -73400,37 +73405,12 @@
             "format": "date-time",
             "title": "Observed At"
           },
-          "field": {
-            "type": "string",
-            "enum": [
-              "state",
-              "target_date",
-              "estimate",
-              "raw_status"
-            ],
-            "title": "Field"
-          },
-          "before": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Before"
-          },
-          "after": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "After"
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerFieldChange"
+            },
+            "type": "array",
+            "title": "Changes"
           }
         },
         "type": "object",
@@ -73439,12 +73419,10 @@
           "tracker",
           "external_ref",
           "observed_at",
-          "field",
-          "before",
-          "after"
+          "changes"
         ],
         "title": "ItemTrackerEvent",
-        "description": "One field of one of the item's tracker issues changed by an import (F2 \u00a72)."
+        "description": "One import's changes to one of the item's tracker issues (F2 \u00a72), in field order.\nThe tracker's own status name is left out: the state says it in Oracle's words."
       },
       "ItemVersion": {
         "properties": {
@@ -108267,6 +108245,49 @@
         ],
         "title": "TrackerConnectorOut",
         "description": "The two-way tracker connector's gate (E1, \u00a711.1): off unless verified."
+      },
+      "TrackerFieldChange": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "state",
+              "target_date",
+              "estimate"
+            ],
+            "title": "Field"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "TrackerFieldChange",
+        "description": "One field an import changed: before and after, as the tracker history keeps them."
       },
       "TrackerImportOut": {
         "properties": {
