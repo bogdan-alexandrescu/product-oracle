@@ -54,7 +54,7 @@ from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes, readiness
+from oracle import audit, changes, readiness, webhooks
 from oracle.baseline.models import Evidence
 from oracle.connections.models import Connection
 from oracle.docs import written
@@ -1274,5 +1274,8 @@ async def publish(
         document_id=locked.id,
         version_number=version.number,
         data={"publication": number},
+    )
+    await webhooks.capture(
+        db, "approval.version_published", principal, document_id=locked.id, version=version.number
     )
     return row

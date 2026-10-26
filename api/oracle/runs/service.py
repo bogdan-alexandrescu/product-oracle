@@ -132,7 +132,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
+from oracle import audit, autonomy, company_time, confidence, safe_yaml, webhooks, wording
 from oracle.auth.deps import Principal
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
@@ -2181,9 +2181,11 @@ async def start(db: AsyncSession, principal: Principal | str, run_id: uuid.UUID)
         await audit.record(
             db, principal, "run.awaiting_approval", "run", run.id, {"usd": str(run.estimate_usd)}
         )
+        await webhooks.capture(db, "run.awaiting_approval", principal, run_id=run.id)
         await db.commit()
         return
     await audit.record(db, principal, "run.started", "run", run.id, {})
+    await webhooks.capture(db, "run.started", principal, run_id=run.id)
     await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
@@ -2208,6 +2210,7 @@ async def approve(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> 
     run.approved_by = principal.id
     run.approved_at = _now()
     await audit.record(db, principal, "run.approved", "run", run.id, {"usd": str(run.estimate_usd)})
+    await webhooks.capture(db, "run.started", principal, run_id=run.id)
     await _launch(db, run, principal)
     await db.commit()  # the router submits it (submit_queued), outside the gate
 
@@ -4003,6 +4006,15 @@ async def _finish(
     await _detach(db, run, cancel=status != "succeeded", state=state, done=done)
     _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
     await revoke_run_tokens(db, run.id)
+    # I1: every ending, from here only; a code on failure, never the error's text.
+    if status in ("succeeded", "failed", "cancelled"):
+        await webhooks.capture(
+            db,
+            f"run.{status}",
+            audit.ORACLE,
+            run_id=run.id,
+            error_kind="run_failed" if status == "failed" else None,
+        )
     if status in ("failed", "cancelled") and _flow(run).stores_draft_items:
         from oracle.roadmap import draft_items
 
@@ -4621,6 +4633,9 @@ async def _advance(
         await _link_scope(db, scope_id, checkpoint_id)
         await _link_order(db, snapshot_id, checkpoint_id)
         run.status = "awaiting_checkpoint"
+        await webhooks.capture(
+            db, "run.checkpoint_waiting", audit.ORACLE, run_id=run.id, checkpoint_id=checkpoint_id
+        )
         return True
     db.add(
         Checkpoint(
@@ -5354,6 +5369,7 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             run.id,
             {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
         )
+        await webhooks.capture(db, "run.paused_overrun", audit.ORACLE, run_id=run.id)
         await db.commit()
         return
     advanced = False
@@ -5434,6 +5450,7 @@ async def _pause_overrun(
         run.id,
         {"spent_usd": str(run.spent_usd), "ceiling_usd": str(ceiling)},
     )
+    await webhooks.capture(db, "run.paused_overrun", audit.ORACLE, run_id=run.id)
 
 
 # Run states the ceiling pauses (a run waiting on a checkpoint can spend too).
@@ -7152,6 +7169,10 @@ async def decide_checkpoint(
     if via == "swarmcloud_console":
         data["via"] = via
     await audit.record(db, principal, f"checkpoint.{decision}", "checkpoint", cp.id, data)
+    await webhooks.capture(
+        db, "run.checkpoint_decided", principal, run_id=run.id, checkpoint_id=cp.id,
+        outcome=decision,
+    )  # fmt: skip
     # H1: the stop's decision is a checkpoint record, in this transaction.
     await decisions_capture.checkpoint(db, principal, run, cp, decided_via=via)
     await _scope_decided(db, principal, run, cp)
@@ -7739,6 +7760,9 @@ async def _void_owed(
         {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by),
          "reason": why, **via},
     )  # fmt: skip
+    await webhooks.capture(
+        db, "run.checkpoint_voided", principal, run_id=run.id, checkpoint_id=cp.id
+    )
 
 
 async def void_owed_decisions(
@@ -7885,6 +7909,8 @@ async def void_decision(
         db, principal, "checkpoint.decision_voided", "checkpoint", cp.id,
         {"run_id": str(run.id), "decision": kind, "decided_by": str(decided_by), **via},
     )  # fmt: skip
+    for event_type in ("run.checkpoint_voided", "run.checkpoint_waiting"):
+        await webhooks.capture(db, event_type, principal, run_id=run.id, checkpoint_id=cp.id)
 
 
 class _PostNotFound(Unavailable):
@@ -9509,12 +9535,18 @@ async def resume(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> N
     _set_knob(run, "spend_ceiling_usd", str(ceiling))
     run.status = "running"
     await audit.record(db, principal, "run.resumed", "run", run.id, {"ceiling_usd": str(ceiling)})
+    await webhooks.capture(db, "run.resumed", principal, run_id=run.id)
     segments = await _segments(db, run.id)
     checkpoints = await _checkpoints(db, [run.id])
     if any(c.status == "pending" or _owes(c) for c in checkpoints):
         # Paused while it waited on a checkpoint: it waits on it again, in the Inbox; or
         # on a decision recorded and not delivered yet, which the tick delivers now.
         run.status = "awaiting_checkpoint"
+        waiting = next((c for c in checkpoints if c.status == "pending"), None)
+        if waiting is not None:
+            await webhooks.capture(
+                db, "run.checkpoint_waiting", principal, run_id=run.id, checkpoint_id=waiting.id
+            )
     elif not any(s.status == "running" for s in segments):
         # A Resume voided before its segment was submitted left that segment unqueued
         # (marked): queue it again; otherwise advance past the last segment that ran.

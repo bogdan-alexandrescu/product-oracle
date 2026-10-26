@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, changes
+from oracle import audit, changes, webhooks
 from oracle.auth.models import ApiToken, User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
@@ -616,6 +616,13 @@ async def lapse_approvals(
         )
         if document is not None and document.status == "approved" and still is None:
             document.status = "in_review"
+            await webhooks.capture(
+                db,
+                "draft.in_review",
+                principal,
+                document_id=document.id,
+                version=max(v.number for v in versions if v.document_id == document_id),
+            )
     policies: dict[uuid.UUID, ReviewPolicyOut] = {}
     for (document_id, key), number in sections.items():
         if document_id not in policies:
@@ -648,6 +655,28 @@ async def lapse_approvals(
             "api_token" if token_id is not None else "oauth_grant" if grant_id else "user",
             token_id or grant_id or reviewer_id,
             {"reason": reason, **out},
+        )
+    # I1: one event per version whose approvals lapsed, with a code, never the text.
+    code = (
+        "token_revoked"
+        if token_id is not None
+        else "grant_revoked"
+        if grant_id is not None
+        else "approver_disabled"
+        if "disabled" in reason
+        else "approver_demoted"
+    )
+    lapsed = {(v.document_id, v.number) for v in versions} | set(
+        (document_id, number) for (document_id, _), number in sections.items()
+    )
+    for document_id, number in sorted(lapsed, key=lambda k: (str(k[0]), k[1])):
+        await webhooks.capture(
+            db,
+            "approval.approvals_invalidated",
+            principal,
+            document_id=document_id,
+            version=number,
+            reason=code,
         )
     return out
 
@@ -925,6 +954,14 @@ async def invalidate_approvals(db: AsyncSession, event: ChangeEvent) -> None:
             "version": data.get("version"),
             "rereview_requested": policy.rereview_on_change,
         },
+    )
+    await webhooks.capture(
+        db,
+        "approval.approvals_invalidated",
+        event.actor,
+        document_id=document.id,
+        version=data.get("version"),
+        reason="edited",
     )
     if policy.rereview_on_change:
         from oracle.review import collab
