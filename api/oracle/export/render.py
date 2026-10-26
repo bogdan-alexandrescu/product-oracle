@@ -253,6 +253,7 @@ def check_audience(ev: ExportVersion, audience: str | None) -> None:
 async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     """A roadmap version's items (and their tracker issues) as plain values, for
     :func:`apply_audience`."""
+    from oracle.launches import tiers
     from oracle.roadmap.models import RoadmapItem, TrackerRecord
     from oracle.roadmap.variants import ItemView
 
@@ -277,6 +278,9 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
             )
     ev.items = []
     for r in rows:
+        # The item's feature-to-goal link, as a launch's tier reads it: serving no
+        # confirmed goal is never read from the card's words.
+        goal, goal_title = await tiers._goal(db, await tiers._feature(db, r))
         rank = (r.priority or {}).get("rank")
         ev.items.append(
             ItemView(
@@ -291,6 +295,8 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 milestone=dict(r.milestone) if r.milestone else None,
                 economics=dict(r.economics or {}),
                 tracker=issues.get((r.track_id, r.item_key), []),
+                goals=[goal_title] if goal_title else [],
+                no_goal=goal == "none",
             )
         )
 

@@ -601,7 +601,7 @@ WHY = "Why: new accounts need data on day one (G1, 12 interviews)."
 TEMPLATE_SECTIONS = {
     "release-plan": (
         "Release",
-        "release",
+        "releases",
         [
             ("roadmap", 1, "Example Labs release plan", "As of October."),
             ("summary", 2, "Summary", "We grow activation this year."),

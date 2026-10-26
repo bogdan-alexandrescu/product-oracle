@@ -9,19 +9,28 @@ it never changes the text. The registry below is the source of truth: the API se
 - it drops the audience's hidden sections, and the template's own (``audiences:
   {board: {hide: [not-doing]}}`` in its front matter), each with its sub-sections. A
   template can only hide more; it can never show what the registry hides;
-- when the version has structured roadmap items, it rebuilds the sections that only hold
-  item rows from them, with the audience's fields: the brief's item table
-  (``brief-items``) and the horizon sections (``now``, ``next``, ``later``) with their item
-  cards. Prose sections are kept or dropped whole and never edited;
-- items that serve no confirmed goal (their card says so) are left out of Board, with
-  the line "N items serve no confirmed goal and are left out", and flagged ⚑ in Team and
-  Engineering.
+- when the version has structured roadmap items, it rebuilds the brief's item table
+  (``brief-items``) from them: the template's own columns (Horizon, Release, Quarter or
+  Cycle; Item or Bet; Goal; Outcome), each written row's milestone, goal and links kept
+  (a link only to a section the rendering has), then the audience's item fields. The
+  horizon sections (``now``, ``next``, ``later``) are rebuilt with a card per item: the
+  audience's fields, then the written card's text (its goal and evidence);
+- the sections where a template writes its items (``ITEM_AREAS``: horizons, releases,
+  timeline lanes, key milestones, cycle bets, pitches and raw ideas) keep their written
+  text without what the audience hides: labelled owner (Board), tracker, estimate or
+  effort and dependency parts (``Owner: …``, ``Tracker: …``), table columns so headed,
+  sentences naming an item's tracker issue, and revenue framing (Engineering);
+- items that serve no confirmed goal (their feature has no confirmed ``supports`` edge
+  to a confirmed goal, oracle.launches.tiers) are left out of Board, their cards and
+  lines included, with the line "N items serve no confirmed goal and are left out", and
+  flagged ⚑ in Team and Engineering.
 
 The Public audience is never made by filtering the internal text: it is built from
 approved public texts (lane 2). Until a version has a public check, asking for it is
 refused (:class:`PublicNotReady`).
 """
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -36,6 +45,20 @@ TEMPLATE_AUDIENCES = ("board", "team", "engineering")
 # The sections that only hold item rows, rebuilt from roadmap_items.
 ITEMS_SECTION = "brief-items"
 HORIZON_SECTIONS = {"now": "Now", "next": "Next", "later": "Later"}
+# Where each built-in template writes its items (and its sub-sections, the cards).
+ITEM_AREAS = frozenset(
+    {"now", "next", "later", "releases", "timeline", "milestones", "current", "candidates"}
+    | {"ideas"}
+)
+# The section an unlisted item's milestone cell links to, per horizon (first that exists):
+# the now-next-later and outcome horizons, else the cycle-bets columns.
+HORIZON_HOMES = {
+    "now": ("now", "current"),
+    "next": ("next", "candidates"),
+    "later": ("later", "ideas"),
+}
+# An item's own card, by template: <horizon>-<key>, bet-<key>, pitch-<key>.
+CARD_PREFIXES = ("bet", "pitch")
 NO_GOAL_PHRASE = "serves no confirmed goal"
 NO_GOAL_FLAG = "\u2691 Serves no confirmed goal."
 # Board-level financial framing, never shown to Engineering.
@@ -138,6 +161,9 @@ class ItemView:
     economics: dict[str, Any] = field(default_factory=dict)
     # [(issue key, url or None)] from the tracker records of the item's track.
     tracker: list[tuple[str, str | None]] = field(default_factory=list)
+    # From the item's feature-to-goal link (oracle.launches.tiers): the goal it serves
+    # best, or none.
+    goals: list[str] = field(default_factory=list)
     no_goal: bool = False
 
 
@@ -201,6 +227,51 @@ def audiences_problems(raw: Any, section_keys: list[str]) -> list[tuple[str, str
 
 # --- rendering ------------------------------------------------------------------------
 
+# Labelled parts of a written card ("Owner: Dana.", "**Tracker**: ENG-1;") and the
+# field each one belongs to; the audience hides the fields it does not show.
+_LABELS = {
+    "owner": "owner",
+    "owners": "owner",
+    "tracker": "tracker",
+    "tracker key": "tracker",
+    "tracker keys": "tracker",
+    "issue": "tracker",
+    "issues": "tracker",
+    "epic": "tracker",
+    "epics": "tracker",
+    "estimate": "effort",
+    "estimates": "effort",
+    "effort": "effort",
+    "depends on": "depends_on",
+    "dependencies": "depends_on",
+}
+_LABELLED = re.compile(
+    r"(?<![\w-])(?:\*\*)?(?P<label>[A-Za-z][A-Za-z ]{1,20}?)(?:\*\*)?\s*:(?:\*\*)?"
+    r"(?:[^.;|\n]|\.(?=\S))*[.;]?[ \t]*"
+)
+_SENTENCE_END = re.compile(r"(?<=[.;!?])\s+")
+_LINK = re.compile(r"\[([^\]]*)\]\(#([^)\s]+)\)")
+_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}")
+
+
+def hidden_fields(variant: Variant) -> set[str]:
+    """The labelled fields an audience hides in written text: owners on Board; tracker,
+    effort and dependencies where the audience does not show them; revenue framing for
+    Engineering (it shows effort, never the board-level money)."""
+    out = {"tracker", "effort", "depends_on"} - set(variant.item_fields)
+    if variant.key == "board":
+        out.add("owner")
+    if "effort" in variant.item_fields:
+        out.add(REVENUE_PREFIX)
+    return out
+
+
+def _label_field(label: str) -> str | None:
+    label = label.strip().lower()
+    if label.startswith(REVENUE_PREFIX):
+        return REVENUE_PREFIX
+    return _LABELS.get(label)
+
 
 def _without(sections: list[Section], hidden: set[str]) -> list[Section]:
     """``sections`` without the hidden ones and the sub-sections under each."""
@@ -218,21 +289,83 @@ def _without(sections: list[Section], hidden: set[str]) -> list[Section]:
     return out
 
 
-def _no_goal_keys(sections: list[Section], items: list[ItemView]) -> set[str]:
-    """Items whose card (``<horizon>-<item key>``, else a level-3 card titled as the
-    item) says it serves no confirmed goal (research "General rules")."""
-    by_key = {s.section_key: s for s in sections}
-    by_title = {s.heading.strip().lower(): s for s in sections if s.level >= 3}
-    out = set()
-    for item in items:
-        card = by_key.get(f"{item.horizon}-{item.key}") or by_title.get(item.title.lower())
-        if card is not None and NO_GOAL_PHRASE in (card.body_md or "").lower():
-            out.add(item.key)
-    return out
-
-
 def _cell(text: str | None) -> str:
     return (text or "").replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _split_row(line: str) -> list[str]:
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|") and not inner.endswith("\\|"):
+        inner = inner[:-1]
+    return [c.strip() for c in re.split(r"(?<!\\)\|", inner)]
+
+
+def _join_row(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
+def _is_row(line: str) -> bool:
+    return line.lstrip().startswith("|")
+
+
+def _drop_columns(text: str, hidden: set[str]) -> str:
+    """Markdown tables in ``text`` without the columns headed by a hidden field."""
+    lines = text.split("\n")
+    out: list[str] = []
+    drop: set[int] | None = None
+    for i, line in enumerate(lines):
+        if not _is_row(line):
+            drop = None
+            out.append(line)
+            continue
+        if drop is None:
+            nxt = lines[i + 1] if i + 1 < len(lines) else ""
+            if not _TABLE_SEP.match(nxt):
+                out.append(line)
+                continue
+            head = _split_row(line)
+            drop = {n for n, h in enumerate(head) if _label_field(h.strip("* ")) in hidden}
+        if drop:
+            cells = [c for n, c in enumerate(_split_row(line)) if n not in drop]
+            line = _join_row(cells) if cells else ""
+        out.append(line)
+    return "\n".join(out)
+
+
+def _mentions(line: str, name: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", line, re.IGNORECASE) is not None
+
+
+def redact(text: str, variant: Variant, items: list[ItemView], drop_titles: list[str]) -> str:
+    """Written item text without what ``variant`` hides (see the module docstring), and
+    without the lines naming an item in ``drop_titles`` (Board's goal-less items)."""
+    hidden = hidden_fields(variant)
+    refs = [ref for i in items for ref, _ in i.tracker] if "tracker" in hidden else []
+    text = _drop_columns(text or "", hidden)
+    out: list[str] = []
+    fence = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        if fence or line.lstrip().startswith("```") or not line.strip():
+            out.append(line)
+            continue
+        if any(_mentions(line, t) for t in drop_titles):
+            continue
+        new = _LABELLED.sub(
+            lambda m: "" if _label_field(m.group("label")) in hidden else m.group(0), line
+        )
+        if refs and any(_mentions(new, r) for r in refs):
+            parts = _SENTENCE_END.split(new)
+            new = " ".join(p for p in parts if not any(_mentions(p, r) for r in refs))
+        if new != line:
+            new = new.rstrip()
+        if not new.strip(" -*+|\t"):
+            continue
+        out.append(new)
+    return "\n".join(out).strip("\n")
 
 
 def _titles(item: ItemView, by_key: dict[str, ItemView]) -> list[str]:
@@ -262,11 +395,15 @@ def _tracker_links(item: ItemView) -> str:
     return ", ".join(f"[{ref}]({url})" if url else ref for ref, url in item.tracker)
 
 
-def _card(item: ItemView, variant: Variant, by_key: dict[str, ItemView]) -> str:
+def _card(item: ItemView, variant: Variant, by_key: dict[str, ItemView], why: str) -> str:
+    """An item's rebuilt card: its outcome, goal and the audience's fields, then the
+    written card's own text (its why: goal and evidence), redacted."""
     fields = variant.item_fields
     lines: list[str] = []
-    if item.outcome:
+    if item.outcome and item.outcome not in why:
         lines.append(item.outcome)
+    if item.goals:
+        lines.append(f"Goal: {', '.join(item.goals)}")
     if "confidence" in fields and item.confidence:
         lines.append(f"Confidence: {item.confidence}")
     deps = _titles(item, by_key)
@@ -280,49 +417,11 @@ def _card(item: ItemView, variant: Variant, by_key: dict[str, ItemView]) -> str:
         lines += _effort(item)
     if "tracker" in fields and item.tracker:
         lines.append(f"Tracker: {_tracker_links(item)}")
-    if item.no_goal:
+    if why:
+        lines.append(why)
+    if item.no_goal and NO_GOAL_PHRASE not in why.lower():
         lines.append(NO_GOAL_FLAG)
     return "\n\n".join(lines)
-
-
-def _table(shown: dict[str, list[ItemView]], variant: Variant, by_key: dict[str, ItemView]) -> str:
-    fields = variant.item_fields
-    cols = ["Horizon", "Item", "Outcome"]
-    if "confidence" in fields:
-        cols.append("Confidence")
-    if "risk" in fields:
-        cols.append("Risk")
-    if "depends_on" in fields:
-        cols.append("Depends on")
-    if "milestone" in fields:
-        cols.append("Milestone")
-    if "effort" in fields:
-        cols.append("Effort")
-    if "tracker" in fields:
-        cols.append("Tracker")
-    rows = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
-    for horizon, items in shown.items():
-        for i, item in enumerate(items):
-            name = HORIZON_SECTIONS[horizon]
-            deps = ", ".join(_titles(item, by_key))
-            title = f"[{_cell(item.title)}](#{horizon}-{item.key})"
-            if item.no_goal:
-                title = f"\u2691 {title}"
-            cells = [f"[{name}](#{horizon})" if i == 0 else "", title, _cell(item.outcome)]
-            if "confidence" in fields:
-                cells.append(_cell(item.confidence))
-            if "risk" in fields:
-                cells.append(_cell(f"after {deps}" if deps else ""))
-            if "depends_on" in fields:
-                cells.append(_cell(deps))
-            if "milestone" in fields:
-                cells.append(_cell(_milestone(item)))
-            if "effort" in fields:
-                cells.append(_cell("; ".join(_effort(item))))
-            if "tracker" in fields:
-                cells.append(_tracker_links(item).replace("|", "\\|"))
-            rows.append("| " + " | ".join(cells) + " |")
-    return "\n".join(rows)
 
 
 def _section(like: Section, key: str, level: int, heading: str, body: str) -> Section:
@@ -367,6 +466,221 @@ def _left_out_line(n: int) -> str:
     return f"{n} items serve no confirmed goal and are left out."
 
 
+def _card_of(s: Section, items: list[ItemView]) -> ItemView | None:
+    """The item a sub-section of an item area is the card of: ``<prefix>-<item key>``
+    (a horizon, bet or pitch), else a card headed with the item's title."""
+    for item in items:
+        if s.section_key.endswith(f"-{item.key}") and s.section_key.split("-", 1)[0] in (
+            *HORIZON_SECTIONS,
+            *CARD_PREFIXES,
+        ):
+            return item
+    heading = s.heading.strip().lower()
+    return next((i for i in items if i.title.strip().lower() == heading), None)
+
+
+def _written_card(horizon: str, item: ItemView, cards: list[Section]) -> Section | None:
+    by_key = {s.section_key: s for s in cards}
+    if (s := by_key.get(f"{horizon}-{item.key}")) is not None:
+        return s
+    title = item.title.strip().lower()
+    return next((s for s in cards if s.level >= 3 and s.heading.strip().lower() == title), None)
+
+
+def _layout(
+    sections: list[Section],
+    variant: Variant,
+    items: list[ItemView],
+    shown: dict[str, list[ItemView]],
+    hidden: set[str],
+    cards: list[Section],
+) -> list[Section]:
+    """``sections`` for ``variant``, the brief table not yet rebuilt (:func:`rebuild`)."""
+    by_key = {i.key: i for i in items}
+    shown_keys = {i.key for rows in shown.values() for i in rows}
+    dropped = [i for i in items if i.key not in shown_keys]
+    drop_titles = [i.title for i in dropped if i.no_goal]
+    out: list[Section] = []
+    area: int | None = None  # the level of the item area being read
+    skip: int | None = None  # the level of a rebuilt horizon, or a dropped card
+    for s in _without(sections, hidden):
+        if skip is not None:
+            if s.level > skip:
+                continue
+            skip = None
+        if area is not None and s.level <= area:
+            area = None
+        if s.section_key in HORIZON_SECTIONS and items:
+            horizon = s.section_key
+            out.append(
+                _section(
+                    s,
+                    s.section_key,
+                    s.level,
+                    s.heading,
+                    redact(s.body_md, variant, items, drop_titles),
+                )
+            )
+            for item in shown[horizon]:
+                written = _written_card(horizon, item, cards)
+                why = redact(written.body_md, variant, items, drop_titles) if written else ""
+                out.append(
+                    _section(
+                        s,
+                        f"{horizon}-{item.key}",
+                        s.level + 1,
+                        item.title,
+                        _card(item, variant, by_key, why),
+                    )
+                )
+            skip = s.level
+            continue
+        in_area = area is not None or s.section_key in ITEM_AREAS
+        if not in_area:
+            out.append(s)
+            continue
+        if area is None:
+            area = s.level
+        body = redact(s.body_md or "", variant, items, drop_titles)
+        if s.level > area and (item := _card_of(s, items)) is not None:
+            if item.key not in shown_keys and item.no_goal and variant.key == "board":
+                skip = s.level  # a goal-less item's card, and what is under it
+                continue
+            if item.no_goal and NO_GOAL_PHRASE not in body.lower():
+                body = f"{body}\n\n{NO_GOAL_FLAG}".strip()
+        if body == (s.body_md or "").strip("\n"):
+            out.append(s)
+        else:
+            out.append(_section(s, s.section_key, s.level, s.heading, body))
+    return out
+
+
+def _parse_table(text: str) -> tuple[list[str], list[list[str]]]:
+    """The first markdown table in ``text``: its header and rows ([], [] when none)."""
+    lines = (text or "").split("\n")
+    for i, line in enumerate(lines[:-1]):
+        if _is_row(line) and _TABLE_SEP.match(lines[i + 1]):
+            rows = []
+            for row in lines[i + 2 :]:
+                if not _is_row(row):
+                    break
+                rows.append(_split_row(row))
+            return _split_row(line), rows
+    return [], []
+
+
+def _plain(cell: str) -> str:
+    return _LINK.sub(lambda m: m.group(1), cell).replace("\u2691", "").strip().lower()
+
+
+def _keep_links(cell: str, known: dict[str, str]) -> str:
+    """``cell`` with in-document links to sections the rendering lacks unlinked."""
+    return _LINK.sub(lambda m: m.group(0) if m.group(2) in known else m.group(1), cell)
+
+
+def _table(
+    written: str,
+    shown: dict[str, list[ItemView]],
+    variant: Variant,
+    by_key: dict[str, ItemView],
+    known: dict[str, str],
+) -> str:
+    """The brief's item table from the items, in the template's own columns: each
+    written row's milestone, item link and goal kept for the item it names, the outcome
+    from the item, then the audience's fields."""
+    fields = variant.item_fields
+    hidden = hidden_fields(variant)
+    head, rows = _parse_table(written)
+    if len(head) < 2:
+        head, rows = ["Horizon", "Item", "Goal", "Outcome"], []
+    names = [h.strip("* ").lower() for h in head]
+    keep = [n for n, h in enumerate(names) if _label_field(h) not in hidden]
+    goal_col = next((n for n, h in enumerate(names) if h.startswith("goal")), None)
+    outcome_col = next((n for n, h in enumerate(names) if h.startswith("outcome")), None)
+    extra = [
+        (field_, label_)
+        for field_, label_ in (
+            ("confidence", "Confidence"),
+            ("risk", "Risk"),
+            ("depends_on", "Depends on"),
+            ("milestone", "Milestone"),
+            ("effort", "Effort"),
+            ("tracker", "Tracker"),
+        )
+        if field_ in fields and label_.lower() not in names
+    ]
+    shown_items = [i for horizon in HORIZON_SECTIONS for i in shown[horizon]]
+    # The written rows, with the milestone each one sits under, by the item they name.
+    written_rows: dict[str, tuple[str, list[str]]] = {}
+    order: list[str] = []
+    group = ""
+    by_title = {i.title.strip().lower(): i for i in shown_items}
+    for row in rows:
+        row = row + [""] * (len(head) - len(row))
+        if row[0].strip():
+            group = row[0]
+        item = by_title.get(_plain(row[1]))
+        if item is None:
+            anchors = [a for _, a in _LINK.findall(row[1])]
+            item = next(
+                (i for i in shown_items if any(a.endswith(f"-{i.key}") for a in anchors)), None
+            )
+        if item is not None and item.key not in written_rows:
+            written_rows[item.key] = (group, row)
+            order.append(item.key)
+    order += [i.key for i in shown_items if i.key not in written_rows]
+
+    def home(item: ItemView) -> str:
+        for key in HORIZON_HOMES.get(item.horizon, ()):
+            if key in known:
+                return f"[{known[key]}](#{key})"
+        return HORIZON_SECTIONS.get(item.horizon, item.horizon)
+
+    def own(item: ItemView) -> str:
+        for prefix in (item.horizon, *CARD_PREFIXES):
+            if f"{prefix}-{item.key}" in known:
+                return f"[{_cell(item.title)}](#{prefix}-{item.key})"
+        return _cell(item.title)
+
+    cols = [head[n] for n in keep] + [label_ for _, label_ in extra]
+    lines = [_join_row(cols), "|" + "---|" * len(cols)]
+    previous = None
+    for key in order:
+        item = by_key[key]
+        group, row = written_rows.get(key, (home(item), None))
+        group = _keep_links(group, known)
+        cells: list[str] = []
+        for n in keep:
+            if n == 0:
+                cells.append(group if _plain(group) != previous else "")
+            elif n == 1:
+                title = _keep_links(row[1], known) if row is not None else own(item)
+                cells.append(f"\u2691 {title}" if item.no_goal and "\u2691" not in title else title)
+            elif n == goal_col:
+                cells.append(_keep_links(row[n], known) if row else _cell(", ".join(item.goals)))
+            elif n == outcome_col:
+                cells.append(_cell(item.outcome))
+            else:
+                cells.append(_keep_links(row[n], known) if row else "")
+        previous = _plain(group)
+        deps = ", ".join(_titles(item, by_key))
+        for field_, _ in extra:
+            if field_ == "confidence":
+                cells.append(_cell(item.confidence))
+            elif field_ == "risk":
+                cells.append(_cell(f"after {deps}" if deps else ""))
+            elif field_ == "depends_on":
+                cells.append(_cell(deps))
+            elif field_ == "milestone":
+                cells.append(_cell(_milestone(item)))
+            elif field_ == "effort":
+                cells.append(_cell("; ".join(_effort(item))))
+            else:
+                cells.append(_tracker_links(item).replace("|", "\\|"))
+        lines.append(_join_row(cells))
+    return "\n".join(lines)
+
+
 def rebuild(
     sections: list[Section],
     audience: str,
@@ -375,48 +689,33 @@ def rebuild(
     cards: list[Section] | None = None,
 ) -> list[Section]:
     """The sections of one rendering in ``audience`` (see the module docstring).
-    ``cards``: every section of the version (where each item's card says whether it
-    serves a goal), when ``sections`` is one layer of it."""
+    ``cards``: every section of the version (the written item cards, and the sections a
+    rebuilt table may link to), when ``sections`` is one layer of it."""
     variant = VARIANTS[audience]
-    kept = _without(sections, set(variant.hidden_sections) | hide)
-    if not items:
-        return kept
-    no_goal = _no_goal_keys(cards if cards is not None else sections, items)
-    items = [ItemView(**{**item.__dict__, "no_goal": item.key in no_goal}) for item in items]
+    hidden = set(variant.hidden_sections) | hide
+    every = cards if cards is not None else sections
     by_key = {i.key: i for i in items}
     shown, left_out = _shown(items, variant)
+    full = _layout(every, variant, items, shown, hidden, every)
+    known = {s.section_key: s.heading for s in full}
+    out = full if sections is every else _layout(sections, variant, items, shown, hidden, every)
     note = _left_out_line(left_out) if left_out else None
     noted = False
-    out: list[Section] = []
-    skip_level: int | None = None
-    for s in kept:
-        if skip_level is not None:
-            if s.level > skip_level:
-                continue  # the old item cards of a rebuilt horizon
-            skip_level = None
+    final: list[Section] = []
+    for s in out:
         if s.section_key == ITEMS_SECTION:
-            body = _table(shown, variant, by_key)
+            if items:
+                body = _table(s.body_md or "", shown, variant, by_key, known)
+            else:
+                body = redact(s.body_md or "", variant, items, [])
             if note:
                 body += f"\n\n{note}"
                 noted = True
-            out.append(_section(s, s.section_key, s.level, s.heading, body))
-        elif s.section_key in HORIZON_SECTIONS:
-            horizon = s.section_key
-            body = ""
-            if note and not noted:
-                body, noted = note, True
-            out.append(_section(s, s.section_key, s.level, s.heading, body))
-            for item in shown[horizon]:
-                out.append(
-                    _section(
-                        s,
-                        f"{horizon}-{item.key}",
-                        s.level + 1,
-                        item.title,
-                        _card(item, variant, by_key),
-                    )
-                )
-            skip_level = s.level
-        else:
-            out.append(s)
-    return out
+            s = _section(s, s.section_key, s.level, s.heading, body)
+        elif note and not noted and s.section_key in ITEM_AREAS and s.level <= 2:
+            s = _section(
+                s, s.section_key, s.level, s.heading, f"{note}\n\n{s.body_md or ''}".strip()
+            )
+            noted = True
+        final.append(s)
+    return final
