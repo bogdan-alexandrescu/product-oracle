@@ -876,6 +876,19 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
     held = Held(monkeypatch)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    # The last two exports read their rows slowly, as on a busy machine: counted in
+    # flight (admitted) while still reading, they hold a connection until they queue.
+    real_load, loads = export_router.load_export_version, []
+
+    async def load(db, slug, n):
+        loads.append(1)
+        slow = len(loads) > 4
+        ev = await real_load(db, slug, n)
+        if slow:
+            await asyncio.sleep(0.5)
+        return ev
+
+    monkeypatch.setattr(export_router, "load_export_version", load)
     reader = await _token(a, "viewer")
     tasks = []
     try:
