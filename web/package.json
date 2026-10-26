@@ -11,6 +11,7 @@
     "start:mock": "NEXT_PUBLIC_API_MOCKS=1 NEXT_DIST_DIR=.next-mock next start",
     "dev:mock": "NEXT_PUBLIC_API_MOCKS=1 next dev",
     "test:e2e": "playwright test",
+    "test:ci": "node --env-file=e2e/ci.env node_modules/@playwright/test/cli.js test",
     "test:e2e:real": "playwright test -c playwright.real.config.ts"
   },
   "dependencies": {
@@ -20,7 +21,7 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
