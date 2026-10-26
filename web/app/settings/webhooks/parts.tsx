@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Button, Chip, type ChipKind } from "@/components/ds";
 import { INPUT } from "@/app/settings/_components/fields";
@@ -23,6 +24,14 @@ const PAUSED: Record<NonNullable<Webhook["paused_reason"]>, string> = {
   creator_disabled: "creator removed",
   creator_demoted: "creator demoted",
 };
+
+/**
+ * A sheet opened from the inspector, rendered at the page's top: inside the inspector's
+ * column the rail stayed above it and covered its left side on a desktop.
+ */
+export function OnTop({ children }: { children: ReactNode }) {
+  return typeof document === "undefined" ? null : createPortal(children, document.body);
+}
 
 /** Active, Paused: <reason>, or Failing (active, every delivery failing). */
 export function WebhookStatus({ hook }: { hook: Webhook }) {

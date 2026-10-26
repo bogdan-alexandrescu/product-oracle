@@ -4,7 +4,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { WEBHOOK_RECEIVER, WEBHOOKS_SCENARIO, type ReceivedCall } from "../lib/api/mock/webhooks";
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /**
  * I1 lane 3: Settings › Webhooks, driven as a person would. The stub receiver is this
@@ -314,6 +314,7 @@ test("webhooks: an approver re-points their webhook and the owner's Inbox says s
   await expect(edit).toHaveCount(0);
   await expect(page.getByTestId("webhook-row").filter({ hasText: "Release notes" })).toContainText("relay.example.test");
 
+  await signOut(page);
   await login(page);
   await page.goto("/inbox");
   const row = page.getByTestId("inbox-webhooks").getByRole("row").filter({ hasText: "Approver changed where webhook Release notes sends" });

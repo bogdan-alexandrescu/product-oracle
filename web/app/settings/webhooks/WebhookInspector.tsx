@@ -14,7 +14,7 @@ import { errorMessage } from "@/lib/use-query";
 import { DeliveryLog } from "./DeliveryLog";
 import { EditWebhookSheet } from "./EditWebhookSheet";
 import { TestEvent } from "./NewWebhookSheet";
-import { SecretOnce, WebhookStatus, type EventType, type Webhook } from "./parts";
+import { OnTop, SecretOnce, WebhookStatus, type EventType, type Webhook } from "./parts";
 
 /**
  * The selected webhook: its settings, with Edit (name, URL, events; an owner's
@@ -195,28 +195,30 @@ export function WebhookInspector({
           <input className={INPUT} value={typed} onChange={(e) => setTyped(e.target.value)} />
         </Field>
       </ConfirmDialog>
-      <EditWebhookSheet
-        hook={hook}
-        open={editing}
-        onClose={() => setEditing(false)}
-        eventTypes={eventTypes}
-        // Owners-and-approvers content is an owner's choice: the owner-only operation says who that is (#370).
-        ownerChoices={can("take_over_webhook")}
-        onSaved={onChanged}
-      />
-      <Sheet open={!!secret} title="New signing secret" onClose={() => setSecret(null)} testId="rotated-secret-sheet">
-        {secret && (
-          <div className="flex flex-col gap-4 p-4">
-            <SecretOnce secret={secret} />
-            <TestEvent hook={hook} onSent={() => setVersion((v) => v + 1)} />
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={() => setSecret(null)}>
-                Done
-              </Button>
+      <OnTop>
+        <EditWebhookSheet
+          hook={hook}
+          open={editing}
+          onClose={() => setEditing(false)}
+          eventTypes={eventTypes}
+          // Owners-and-approvers content is an owner's choice: the owner-only operation says who that is (#370).
+          ownerChoices={can("take_over_webhook")}
+          onSaved={onChanged}
+        />
+        <Sheet open={!!secret} title="New signing secret" onClose={() => setSecret(null)} testId="rotated-secret-sheet">
+          {secret && (
+            <div className="flex flex-col gap-4 p-4">
+              <SecretOnce secret={secret} />
+              <TestEvent hook={hook} onSent={() => setVersion((v) => v + 1)} />
+              <div className="flex justify-end">
+                <Button variant="primary" onClick={() => setSecret(null)}>
+                  Done
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </Sheet>
+          )}
+        </Sheet>
+      </OnTop>
     </Inspector>
   );
 }

@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { Outcome, type Delivery, type EventType, type Webhook } from "./parts";
+import { OnTop, Outcome, type Delivery, type EventType, type Webhook } from "./parts";
 
 const STATUSES: { value: Delivery["status"]; label: string }[] = [
   { value: "succeeded", label: "Succeeded" },
@@ -94,16 +94,18 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
           empty="No deliveries yet"
         />
       )}
-      <DeliverySheet
-        hook={hook}
-        delivery={open}
-        onClose={() => setOpen(null)}
-        onRedelivered={() => {
-          setOpen(null);
-          onChanged();
-          void q.reload();
-        }}
-      />
+      <OnTop>
+        <DeliverySheet
+          hook={hook}
+          delivery={open}
+          onClose={() => setOpen(null)}
+          onRedelivered={() => {
+            setOpen(null);
+            onChanged();
+            void q.reload();
+          }}
+        />
+      </OnTop>
     </div>
   );
 }
