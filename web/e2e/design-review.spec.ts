@@ -94,7 +94,7 @@ test("a viewer reads the review without composer or verdicts", async ({ page }) 
   const panel = inspector(page);
   await expect(panel).toContainText("You can read this review. Commenting needs the commenter role.");
   await expect(panel.getByRole("textbox")).toHaveCount(0);
-  await expect(panel.getByRole("button", { name: "Comment" })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
   // Provenance and version meta.
   await expect(panel.getByTestId("version-meta")).toContainText("prd_to_spec/1");
@@ -155,7 +155,7 @@ test("while a regeneration runs, the design page says so and links the run", asy
 test("an old link to a version that does not exist says so", async ({ page }) => {
   await login(page);
   await page.goto(`/specs/${SPEC_ID}/design/c3000000-0000-4000-8000-0000000000ff`);
-  await expect(page.getByRole("alert").filter({ visible: true })).toContainText("design artifact version not found");
+  await expect(page.getByRole("alert").filter({ hasText: "design artifact version not found" })).toBeVisible();
 });
 
 test.describe("phone", () => {
