@@ -43,7 +43,7 @@ import {
 import { routeEngineering, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, queueJob, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
@@ -119,7 +119,21 @@ import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections,
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience } from "./audience";
-import { emptyShares, routePublicShares, routeShares, seedShares, shareInboxRows, SHARING_ROADMAP_SLUG, SHARING_ROADMAP_TITLE, SHARING_SCENARIO, SHARING_SECTIONS, type SharesContext, type SharesDb } from "./shares";
+import {
+  draftPublicTexts,
+  emptyShares,
+  routePublicShares,
+  routeShares,
+  seedShares,
+  shareInboxRows,
+  SHARING_PUBLIC_SCENARIO,
+  SHARING_ROADMAP_SLUG,
+  SHARING_ROADMAP_TITLE,
+  SHARING_SCENARIO,
+  SHARING_SECTIONS,
+  type SharesContext,
+  type SharesDb,
+} from "./shares";
 
 /**
  * latest_version, approved_version, source and an update's period are read off the versions;
@@ -1391,16 +1405,17 @@ function seed(): Db {
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
   db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   seeded("updates", () => seedUpdates(db));
-  if (localStorage.getItem(MOCK_SCENARIO_KEY) === SHARING_SCENARIO) seeded("sharing", () => seedSharingRoadmap(db));
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO) seeded("sharing", () => seedSharingRoadmap(db, scenario === SHARING_PUBLIC_SCENARIO ? "public" : "team"));
   return db;
 }
 
-/** O5 "sharing": an approved roadmap (v1, published when the review state is seeded). */
-function seedSharingRoadmap(db: Db) {
+/** O5 "sharing": an approved roadmap (v1, published when the review state is seeded); "sharing-public" defaults it to Public. */
+function seedSharingRoadmap(db: Db, audience: "team" | "public") {
   const created = "2026-10-12T09:00:00Z";
   const doc: DocumentRow = {
     id: uuid(), slug: SHARING_ROADMAP_SLUG, title: SHARING_ROADMAP_TITLE, status: "approved", kind: "roadmap", template: "now-next-later",
-    template_version: "1", theme: null, audience: "team", created_at: created, updated_at: created,
+    template_version: "1", theme: null, audience, created_at: created, updated_at: created,
   };
   db.documents.push(doc);
   const v = buildVersion(doc, { number: 1, created_at: created, sections: SHARING_SECTIONS, citations: [], brief: ["summary", "brief-items"] });
@@ -1440,13 +1455,20 @@ function ensureReviewV2(db: Db): ReviewV2Db {
 function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
   const publications = ensureReviewV2(db).publications;
   const base = { documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now };
-  db.shares ??= localStorage.getItem(MOCK_SCENARIO_KEY) === SHARING_SCENARIO
-    ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null))
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
+    ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null, scenario === SHARING_SCENARIO))
     : emptyShares();
+  const shares = db.shares;
   return {
     ...base,
-    db: db.shares,
+    db: shares,
     me,
+    observesOutside: () => levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") === "observe",
+    queueDraft: (doc, v) => {
+      db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
+      return queueJob(llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"), doc.id, "public_text", v.number);
+    },
     renderAudience: (doc, v, audience) => {
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
@@ -1512,6 +1534,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
     },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
+    // O5: the public_text job drafts into the share mock's texts.
+    publicText: (job) => draftPublicTexts(sharesContext(db, null), job.document_id!, job.version_number!),
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));

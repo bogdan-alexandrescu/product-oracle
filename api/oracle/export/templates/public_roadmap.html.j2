@@ -45,7 +45,7 @@ footer { font-size: .75rem; color: #64748b; }
 <h3>{{ card.title }}</h3>
 {% if card.description %}<p>{{ card.description }}</p>{% endif %}
 {% if card.quarter %}<p class="quarter">Announced for {{ card.quarter }}</p>{% endif %}
-{% if card.changelog_url %}<p><a href="{{ card.changelog_url }}" rel="noopener noreferrer nofollow">Read the changelog</a></p>{% endif %}
+{% if card.changelog_url %}<p><a href="{{ card.changelog_url }}" target="_blank" rel="noopener noreferrer nofollow">Read the changelog</a></p>{% endif %}
 </article>
 {% else %}
 <p class="empty">Nothing here yet.</p>

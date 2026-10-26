@@ -93,7 +93,7 @@ export function SharedRoadmap({ token }: { token: string }) {
           )}
           <Button onClick={pdf}>Download PDF</Button>
         </div>
-        <iframe title="Shared roadmap" sandbox="" srcDoc={view.html} className="w-full flex-1 border-0 bg-white" style={{ minHeight: "80dvh" }} />
+        <iframe title="Shared roadmap" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={view.html} className="w-full flex-1 border-0 bg-white" style={{ minHeight: "80dvh" }} />
       </main>
     );
   }

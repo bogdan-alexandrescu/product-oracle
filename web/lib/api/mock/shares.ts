@@ -19,6 +19,8 @@ type Stage = Schemas["PublicTextOut"]["stage"];
 type Finding = Schemas["LeakFindingOut"];
 
 export const SHARING_SCENARIO = "sharing";
+/** The "sharing" roadmap with Public as its default audience and no public texts yet. */
+export const SHARING_PUBLIC_SCENARIO = "sharing-public";
 export const SHARING_ROADMAP_SLUG = "example-labs-roadmap";
 export const SHARING_ROADMAP_TITLE = "Platform roadmap, autumn";
 /** Win/loss account labels and request askers' company labels the leak check knows. */
@@ -126,6 +128,10 @@ export interface SharesContext {
   now: () => string;
   /** The export's HTML of `v` rendered for `audience` (./audience.ts), as the export route. */
   renderAudience: (doc: DocLike, v: VersionLike, audience: Audience) => string;
+  /** Whether Oracle only observes "Words for people outside" (H11 external_messages). */
+  observesOutside?: () => boolean;
+  /** Queues the public_text job for `v` (./llm-jobs.ts queueJob): the job, or why it was refused. */
+  queueDraft?: (doc: DocLike, v: VersionLike) => Schemas["LlmJobOut"] | string;
 }
 
 export const emptyShares = (): SharesDb => ({ links: [], views: [], texts: [], checks: [], pages: {}, opened: {} });
@@ -258,7 +264,7 @@ function renderPublic(r: Review, footer: string): string {
     const cards = r.cards[stage]
       .map(
         (c) =>
-          `<article class="card"><h3>${esc(c.title)}</h3>${c.description ? `<p>${esc(c.description)}</p>` : ""}${c.quarter ? `<p class="quarter">Announced for ${esc(c.quarter)}</p>` : ""}${c.url ? `<p><a href="${esc(c.url)}" rel="noopener noreferrer nofollow">Read the changelog</a></p>` : ""}</article>`,
+          `<article class="card"><h3>${esc(c.title)}</h3>${c.description ? `<p>${esc(c.description)}</p>` : ""}${c.quarter ? `<p class="quarter">Announced for ${esc(c.quarter)}</p>` : ""}${c.url ? `<p><a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">Read the changelog</a></p>` : ""}</article>`,
       )
       .join("");
     return `<section class="column"><h2>${label}</h2>${cards || '<p class="empty">Nothing here yet.</p>'}</section>`;
@@ -268,10 +274,34 @@ function renderPublic(r: Review, footer: string): string {
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
+const HORIZON_STAGE: Record<string, Stage> = { now: "in_progress", next: "planned", later: "exploring" };
+
+/**
+ * The public_text job (api/oracle/roadmap/public.py run_job): a draft for each goal-serving
+ * item with no text, never with a quarter. The mock's "model" offers the item's own title,
+ * which the leak check then flags for the person who approves it.
+ */
+export function draftPublicTexts(ctx: Omit<SharesContext, "me" | "renderAudience">, documentId: string, number: number): Record<string, unknown> {
+  const v = ctx.versions.find((x) => x.document_id === documentId && x.number === number);
+  if (!v) return { drafted: 0, item_keys: [] };
+  const have = new Set(ctx.db.texts.filter((t) => t.document_id === documentId).map((t) => t.item_key));
+  const drafted: string[] = [];
+  for (const item of items(v)) {
+    if (!item.serves || have.has(item.key)) continue;
+    ctx.db.texts.push({
+      document_id: documentId, item_key: item.key, title: item.title.slice(0, 80), description: "", stage: HORIZON_STAGE[item.horizon] ?? "exploring",
+      announced_quarter: null, changelog_url: null, state: "draft", drafted_by: "oracle", approved_by: null, approved_at: null, checked_warnings: [],
+      updated_at: ctx.now(), source_hash: sourceHash(item.title),
+    });
+    drafted.push(item.key);
+  }
+  return { drafted: drafted.length, item_keys: drafted };
+}
+
 // --------------------------------------------------------------------------- seeds
 
 /** The "sharing" scenario: the Team link with two views, and two links revoked when their creator left. */
-export function seedShares(ctx: Omit<SharesContext, "db" | "me" | "renderAudience">, ownerId: string, removedId: string | null): SharesDb {
+export function seedShares(ctx: Omit<SharesContext, "db" | "me" | "renderAudience">, ownerId: string, removedId: string | null, texts = true): SharesDb {
   const db = emptyShares();
   const doc = ctx.documents.find((d) => d.slug === SHARING_ROADMAP_SLUG);
   const pub = doc && ctx.publications.find((p) => p.document_id === doc.id);
@@ -294,6 +324,7 @@ export function seedShares(ctx: Omit<SharesContext, "db" | "me" | "renderAudienc
       db.links.push(link({ audience, label, created_by: removedId, created_at: iso(-10), revoked_at: iso(-4), revoked_reason: "creator removed" }));
     }
   }
+  if (!texts) return db;
   const v = ctx.versions.find((x) => x.id === pub.version_id)!;
   const titleOf = (key: string) => items(v).find((i) => i.key === key)!.title;
   const text = (item_key: string, over: Partial<TextRow>): TextRow => ({
@@ -435,7 +466,13 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       return json(200, out);
     }
     if (p[3] === "public-texts" && p[4] === "draft" && m === "POST") {
-      return json(409, { detail: "Oracle is set to observe words for people outside (Settings, Autonomy); write the public texts yourself" });
+      const v = pick(q.get("version") ? Number(q.get("version")) : null);
+      if (!v) return json(404, { detail: "Version not found" });
+      if (ctx.observesOutside?.() ?? true) {
+        return json(409, { detail: "Oracle is set to observe words for people outside (Settings, Autonomy); write the public texts yourself" });
+      }
+      const job = ctx.queueDraft!(doc, v);
+      return typeof job === "string" ? json(409, { detail: job }) : json(202, job);
     }
     if (p[3] === "public-texts" && p[4] && m === "PUT") {
       const v = pick(q.get("version") ? Number(q.get("version")) : null)!;

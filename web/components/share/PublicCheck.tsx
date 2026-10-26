@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 
+import { usePolling } from "@/components/JobsPanel";
 import { peopleByIds } from "@/components/PersonPicker";
 import { Button, Chip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { api, unwrap, type LlmJob, type Schemas } from "@/lib/api/client";
+import { formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -483,6 +484,65 @@ function CheckState({ doc, data, onChecked }: { doc: string; data: Texts; onChec
   );
 }
 
+/** What a public_text job came to, as the approver reads it. */
+function draftOutcome(job: LlmJob): string {
+  if (job.status === "queued" || job.status === "running") return "Oracle is drafting public texts…";
+  if (job.status === "cancelled") return "The draft was cancelled.";
+  if (job.status === "failed") {
+    const why = (job.error_reason && NO_ACCOUNT_REASON[job.error_reason]) || job.error || "Oracle could not draft the public texts.";
+    return `${why} Write the public texts yourself, or try again.`;
+  }
+  const n = Number((job.output as { drafted?: number } | null)?.drafted ?? 0);
+  if (n === 0) return "Every item that serves a goal already has a public text.";
+  return `Oracle drafted ${n} public ${n === 1 ? "text" : "texts"}. Check each one before you approve it.`;
+}
+
+/**
+ * Draft public texts (O5-Q7): one public_text job writes a draft for each goal-serving item
+ * with none; a person still edits and approves each text.
+ */
+function DraftTexts({ doc, version, onDrafted }: { doc: string; version: number; onDrafted: () => void }) {
+  const [job, setJob] = useState<LlmJob | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const running = job?.status === "queued" || job?.status === "running";
+  usePolling(running, async () => {
+    if (!job) return;
+    const next = await unwrap(api.GET("/v1/llm-jobs/{job_id}", { params: { path: { job_id: job.id } } }));
+    setJob(next);
+    if (next.status === "succeeded") onDrafted();
+  });
+
+  const draft = async () => {
+    setBusy(true);
+    setError(null);
+    setJob(null);
+    try {
+      setJob(await unwrap(api.POST("/v1/roadmaps/{doc}/public-texts/draft", { params: { path: { doc }, query: { version } } })));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button disabled={busy || running} onClick={() => void draft()}>
+          Draft public texts
+        </Button>
+        {job && (
+          <p data-testid="public-draft" role="status" className="text-sm text-text2">
+            {draftOutcome(job)}
+          </p>
+        )}
+      </div>
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </div>
+  );
+}
+
 function Preview({ doc, version, rev }: { doc: string; version: number; rev: number }) {
   const q = useQuery(
     `public-preview|${doc}|${version}|${rev}`,
@@ -491,7 +551,8 @@ function Preview({ doc, version, rev }: { doc: string; version: number; rev: num
   );
   if (q.error) return <div className="p-4"><ErrorNote>{q.error}</ErrorNote></div>;
   if (q.data == null) return <div className="p-4"><Loading /></div>;
-  return <iframe title="Public page preview" sandbox="" srcDoc={q.data} className="block h-[75vh] w-full rounded-b-panel bg-white" />;
+  // Changelog links (target=_blank) open in a new tab outside the sandbox; nothing else runs.
+  return <iframe title="Public page preview" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={q.data} className="block h-[75vh] w-full rounded-b-panel bg-white" />;
 }
 
 /**
@@ -571,6 +632,7 @@ export function PublicCheck({ doc }: { doc: string }) {
       <div className="flex flex-col gap-4">
         <Summary data={data} />
         <CheckState doc={doc} data={data} onChecked={changed} />
+        <DraftTexts doc={doc} version={data.version} onDrafted={changed} />
         <Radios<Pane>
           label="Pane"
           className="min-[640px]:hidden"

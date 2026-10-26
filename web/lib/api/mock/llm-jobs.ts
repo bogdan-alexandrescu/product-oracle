@@ -68,6 +68,8 @@ export type LlmContext = {
   runEstimateUsd?: () => number | null;
   /** D12: starts the agents' feedback-loop run for Build next draft. */
   startRun?: StartRun;
+  /** O5: runs a queued public_text job (./shares.ts draftPublicTexts) and returns its output. */
+  publicText?: (job: Job) => Record<string, unknown>;
 };
 
 /** The per-document switches; the next-draft batch is refinement and shares its switch. */
@@ -325,6 +327,20 @@ export function onFeedback(ctx: LlmContext, documentId: string, number: number) 
   if (!queued) ctx.db.jobs.push(makeJob(ctx, doc, "review_comments", v, { requested_by: null }));
 }
 
+/**
+ * Queues a job for a person (oracle.jobs.service.enqueue with coalesce): refused while its
+ * switch is off, and a queued job of the same kind and version is reused.
+ */
+export function queueJob(ctx: LlmContext, documentId: string, kind: Job["kind"], number: number): Job | string {
+  const doc = ctx.documents.find((d) => d.id === documentId)!;
+  if ((ctx.db.disabled[doc.id] ?? []).includes(switchOf(kind))) return turnedOff(switchOf(kind));
+  const queued = ctx.db.jobs.find((j) => j.document_id === doc.id && j.kind === kind && j.status === "queued" && j.version_number === number);
+  if (queued) return queued;
+  const job = makeJob(ctx, doc, kind, versionsOf(ctx, doc).find((v) => v.number === number) ?? null);
+  ctx.db.jobs.push(job);
+  return job;
+}
+
 /** Runs every queued job (one per document, in order): the mock's `oracle tick`. */
 export function tick(ctx: LlmContext) {
   for (const job of ctx.db.jobs.filter((j) => j.status === "queued").sort((a, b) => a.created_at.localeCompare(b.created_at))) {
@@ -337,7 +353,9 @@ export function tick(ctx: LlmContext) {
       const since = (job.input.since as number | undefined) ?? (v.number > 1 ? v.number - 1 : null);
       finish(ctx, job, runReports(ctx, doc, v, since));
     } else if (job.kind === BATCH) finish(ctx, job, runBatch(ctx, job, v));
-    else finish(ctx, job, runRefinement(ctx, job, doc, v));
+    else if (job.kind === "public_text") {
+      if (ctx.publicText) finish(ctx, job, ctx.publicText(job));
+    } else finish(ctx, job, runRefinement(ctx, job, doc, v));
   }
 }
 

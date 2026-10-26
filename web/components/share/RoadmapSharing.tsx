@@ -166,7 +166,7 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
       {q.data && (
         <iframe
           title={`Roadmap for ${audienceLabel(audience)}`}
-          sandbox=""
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
           srcDoc={q.data}
           className="h-[560px] w-full rounded-lg border border-line bg-white max-[600px]:h-[420px]"
         />
@@ -187,7 +187,9 @@ export function RoadmapSharing({ d }: { d: Doc }) {
   const params = useSearchParams();
   const fromUrl = params.get("audience");
   const showPublic = can("get_public_preview");
-  const audience: Audience = isAudience(fromUrl) && (fromUrl !== "public" || showPublic) ? fromUrl : (d.audience ?? "team");
+  // The Public preview is for approvers: anyone else starts on Team, whatever the roadmap's default.
+  const fallback: Audience = d.audience && (d.audience !== "public" || showPublic) ? d.audience : "team";
+  const audience: Audience = isAudience(fromUrl) && (fromUrl !== "public" || showPublic) ? fromUrl : fallback;
   const shareParam = params.get("share");
   const [sharing, setSharing] = useState<Audience | null>(isAudience(shareParam) ? shareParam : null);
   const [linksKey, setLinksKey] = useState(0);
