@@ -610,6 +610,25 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
 }
 
 /**
+ * As the API (gate.OWNER_WAIVES, H4 §5): the reasons of the roadmap items review only an owner
+ * waives. A waiver names them, never covers them by naming none, and is its own action (field
+ * "owner"), so an approver's waiver on the same item neither replaces it nor is replaced by it.
+ */
+const OWNER_WAIVES = ["stopped_but_planned"];
+
+/** As the API: an action answers a reason it names, every reason of its item when it names none, but a waiver naming none never an owner's. */
+const answersCode = (a: { kind: string; answers?: string[] | null }, code: string) =>
+  a.kind !== "question" && (a.answers?.length ? a.answers.includes(code) : a.kind !== "waive" || !OWNER_WAIVES.includes(code));
+
+/** As the API: waiving another reason of the item adds it to the staged waiver before (naming none covers them all). */
+function mergedAnswers(a: { kind: string; answers?: string[] | null }, existing?: { state: string; answers?: string[] | null }): string[] {
+  const named = a.answers ?? [];
+  if (a.kind !== "waive" || existing?.state !== "staged") return named;
+  const before = existing.answers ?? [];
+  return before.length && named.length ? [...before, ...named.filter((c) => !before.includes(c))] : [];
+}
+
+/**
  * As oracle.runs.gate.approve_gate: the stored blocking reasons a staged waiver does not
  * answer. D7: with `edits`, the gate Approve with edits re-checks: in the mock a staged edit
  * fixes the reasons it is a fix of (Remove date, Move to Later) and a drop the item's reasons.
@@ -3285,7 +3304,9 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
         if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
       }
     }
-    const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
+    // As the API: an owner's waiver of Stopped in the strategy is its own action.
+    const field = a.kind === "waive" && cp.kind === "roadmap_items" ? ((a.answers ?? []).some((c) => OWNER_WAIVES.includes(c)) ? "owner" : null) : (a.field ?? null);
+    const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
     if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
       // C7, as the API: an approver's own edit or add changes the row at once (nothing staged).
@@ -3299,9 +3320,9 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       id: existing?.id ?? ctx.uuid(),
       item_key: a.item_key,
       kind: a.kind,
-      field: a.field ?? null,
+      field,
       value: a.value ?? null,
-      answers: a.answers ?? [],
+      answers: mergedAnswers(a, existing),
       note: a.note ?? null,
       state: stages ? "staged" : "suggested",
       created_by: who,
@@ -3389,7 +3410,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     const mine = draft.actions.filter((a) => a.item_key === key);
     const theirs = reasons.filter((x) => x.item === key);
     const answered = (x: (typeof reasons)[number]) =>
-      mine.some((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code)));
+      mine.some((a) => a.state === "staged" && answersCode(a, x.code));
     const open = theirs.filter((x) => !answered(x));
     const asked = mine.map(questionOf).filter((q): q is Schemas["ReviewQuestion"] => q?.status === "open");
     for (const q of asked) {
@@ -3487,7 +3508,7 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
       const edits = mine.filter((a) => a.kind === "edit");
       for (const a of mine) {
         if (a.kind === "waive") {
-          const codes = a.answers?.length ? a.answers : reasons.filter((x) => x.item === key).map((x) => x.code);
+          const codes = a.answers?.length ? a.answers : reasons.filter((x) => x.item === key && !OWNER_WAIVES.includes(x.code)).map((x) => x.code);
           for (const code of codes.length ? codes : [null]) waived.push({ id: key, code, reason: (a.value as { reason?: string } | null)?.reason ?? null });
           continue;
         }
@@ -3513,8 +3534,7 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
       }
     }
   }
-  const answers = (a: DraftActionRow, code: string) => a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(code));
-  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answers(a, x.code)));
+  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code)));
   const entered = new Set([...entries, ...waived].map((e) => e.id));
   return {
     version: 1,
@@ -3617,7 +3637,7 @@ function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["
     return { ...t, ...none, wait: review.wait, console_held: cp.console?.needs === "confirm" && t.blocking > 0 };
   }
   const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
-    a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code));
+    a.state === "staged" && answersCode(a, x.code);
   const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
   const rows: { order: [number, number]; child: Schemas["InboxChild"] }[] = [];
   for (const it of review.items) {

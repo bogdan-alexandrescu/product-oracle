@@ -57,10 +57,14 @@ export function describe(a: Action, item: Item | undefined, title: (key: string)
   return doneText(a, title);
 }
 
-export const openReasons = (it: Item, actions: Action[] = it.actions): Reason[] =>
-  it.reasons.filter(
-    (r) => !actions.some((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers.length || a.answers.includes(r.code))),
-  );
+/**
+ * As the API: a staged action answers a reason it names and every reason of its item when it
+ * names none, but a waiver naming none never one only an owner waives (H4 §5). Questions answer nothing.
+ */
+export const answersReason = (a: Action, r: Reason) =>
+  a.state === "staged" && a.kind !== "question" && (a.answers.length ? a.answers.includes(r.code) : a.kind !== "waive" || r.code !== "stopped_but_planned");
+
+export const openReasons = (it: Item, actions: Action[] = it.actions): Reason[] => it.reasons.filter((r) => !actions.some((a) => answersReason(a, r)));
 
 /** The reasons that may be waived (D3): blocking, never a date. */
 export const DATE_CODES = ["unverified_date", "date_without_basis", "date_refused"];

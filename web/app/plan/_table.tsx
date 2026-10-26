@@ -9,7 +9,6 @@ import { driftMarker, engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, stateC
 export type GroupBy = "horizon" | "goal" | "prd";
 const NO_GOAL = "No goal";
 
-/** The state chip; a draft's item has a dashed outline. */
 /** H4 §5: "Stopped in the strategy" or "Outside the strategy" on the row, while a finding is open. */
 function DriftMarker({ item }: { item: PlanItem }) {
   const m = driftMarker(item);
@@ -21,6 +20,7 @@ function DriftMarker({ item }: { item: PlanItem }) {
   );
 }
 
+/** The state chip; a draft's item has a dashed outline. */
 export function StateChip({ item, hero = false }: { item: PlanItem; hero?: boolean }) {
   const s = stateChip(item);
   return (

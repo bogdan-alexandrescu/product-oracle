@@ -17,6 +17,7 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import {
   AGENT_KINDS,
+  answersReason,
   day,
   describe,
   doneText,
@@ -804,7 +805,7 @@ function ReviewInspector({
           <ul className="flex flex-col gap-2">
             {item.reasons.map((r) => {
               const isOpen = open.includes(r);
-              const by = item.actions.find((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers.length || a.answers.includes(r.code)));
+              const by = item.actions.find((a) => answersReason(a, r));
               return (
                 <li key={r.code} className="rounded-button border border-line p-2.5" data-testid="reason-card">
                   <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
