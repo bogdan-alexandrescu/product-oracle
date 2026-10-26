@@ -471,7 +471,7 @@ async def test_72_hours_of_failures_pause_the_webhook_and_tell_creator_and_owner
         f"/v1/webhooks/{hid}", json={"status": "active"}, headers=approver.headers
     )
     assert resumed.status_code == 200
-    await outbox.tick(tenant_id, now=datetime.now(UTC) + timedelta(hours=2))
+    await outbox.tick(tenant_id, now=start + timedelta(hours=74))
     statuses = sorted(d.status for d in await deliveries(tenant_id, hid))
     assert statuses.count("succeeded") == 1 and statuses.count("failed") == 5
 

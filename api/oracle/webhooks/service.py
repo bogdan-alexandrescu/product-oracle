@@ -200,9 +200,14 @@ async def outs(db: AsyncSession, principal: "Principal", hooks: list[Webhook]) -
             .where(ranked.c.n == 1)
         ):
             last[d.webhook_id] = d
+    from oracle.webhooks.outbox import failing_since
+
     out = []
     for h in hooks:
         d = last.get(h.id)
+        failing = None
+        if d is not None and d.status in ("failed", "retrying"):
+            failing = (await failing_since(db, h.id))[0]
         out.append(
             WebhookOut(
                 id=h.id,
@@ -223,6 +228,7 @@ async def outs(db: AsyncSession, principal: "Principal", hooks: list[Webhook]) -
                     if d is not None
                     else None
                 ),
+                failing_since=failing,
                 can_take_over=(
                     principal.role == "owner"
                     and h.status == "paused"

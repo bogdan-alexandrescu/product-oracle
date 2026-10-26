@@ -5,20 +5,21 @@ Every route is absent (404) below approver, as H8's owners-and-approvers areas a
 refused (403) to a run's token (``not_for_runs``) before the role is read. Writes re-check
 the caller under the review gate (C2). Create and rotate return the signing secret once,
 to any write credential (Q4 as changed 2026-10-25); a read-only credential is refused
-every write by oracle.auth.deps. Sending a test event and redelivering belong to the
-delivery lane (lane 2).
+every write by oracle.auth.deps. Sending a test event and redelivering send at once, within
+the outbox's 10 s cap, and are logged as any delivery (oracle.webhooks.outbox).
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
+from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, recheck_caller
-from oracle.webhooks import service
+from oracle.webhooks import outbox, service
 from oracle.webhooks.events import EVENT_TYPES
 from oracle.webhooks.models import Webhook, WebhookDelivery, WebhookEvent
 from oracle.webhooks.schemas import (
@@ -269,3 +270,68 @@ async def get_webhook_delivery(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     return _delivery_out(*row)
+
+
+@router.post(
+    "/webhooks/{webhook_id}/test",
+    response_model=DeliveryOut,
+)
+async def test_webhook(webhook_id: uuid.UUID, principal: Approver, db: TenantDB) -> DeliveryOut:
+    """Send a ``webhook.test`` event to this webhook only, now; the answer is its log row."""
+    await _write(db, principal)
+    hook = await _load(db, principal, webhook_id)
+    now = datetime.now(UTC)
+    event = WebhookEvent(
+        public_id=service.new_public_id(),
+        type=outbox.TEST_TYPE,
+        occurred_at=now,
+        subject={"actor": service._actor(principal)},
+        approvers_only=False,
+        fanned_out_at=now,
+    )
+    db.add(event)
+    await db.flush()
+    delivery = WebhookDelivery(webhook_id=hook.id, event_id=event.id, status="pending")
+    db.add(delivery)
+    await db.flush()
+    await audit.record(db, principal, "webhook.test", "webhook", hook.id, {"name": hook.name})
+    await outbox.send_now(db, delivery, now)
+    out = _delivery_out(delivery, event)
+    await db.commit()
+    return out
+
+
+@router.post(
+    "/webhooks/{webhook_id}/deliveries/{delivery_id}/redeliver",
+    response_model=DeliveryOut,
+)
+async def redeliver_webhook_delivery(
+    webhook_id: uuid.UUID, delivery_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> DeliveryOut:
+    """Send a delivery's event again, now: a new delivery with the same ``webhook-id``, so
+    receivers dedupe it. An owners-and-approvers event is checked again first."""
+    await _write(db, principal)
+    hook = await _load(db, principal, webhook_id)
+    row = (
+        await db.execute(_deliveries(principal, hook).where(WebhookDelivery.id == delivery_id))
+    ).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    _, event = row
+    again = WebhookDelivery(
+        webhook_id=hook.id, event_id=event.id, status="pending", redelivery_of=delivery_id
+    )
+    db.add(again)
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "webhook.redeliver",
+        "webhook",
+        hook.id,
+        {"name": hook.name, "event_id": event.public_id, "delivery_id": str(delivery_id)},
+    )
+    await outbox.send_now(db, again)
+    out = _delivery_out(again, event)
+    await db.commit()
+    return out
