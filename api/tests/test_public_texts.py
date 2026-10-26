@@ -155,6 +155,9 @@ async def approve_both(client, ctx) -> None:
 
 # --- the leak check (unit) -------------------------------------------------------------
 
+# Owner decision (2026-10-26): these four are warnings the approver ticks, not blocking.
+TICKED_KINDS = ("internal_document", "decision", "pricing", "internal_note")
+
 
 def _ctx(**over) -> leak_check.LeakContext:
     base = dict(
@@ -201,7 +204,7 @@ def test_each_blocking_finding(text, code, word):
     findings = leak_check.check(text, _ctx())
     match = [f for f in findings if f.code == code]
     assert match, findings
-    assert match[0].severity == "blocking"
+    assert match[0].severity == ("warning" if code in TICKED_KINDS else "blocking")
     if word is not None:
         assert any(word.lower() in w.lower() for w in match[0].words)
 
@@ -304,10 +307,6 @@ async def test_the_review_list_counts_shown_and_left_out(client, ctx):
         ({"description": f"Owned by {PERSON}."}, "person_name"),
         ({"description": f"Better than {RIVAL_ALIAS}."}, "alternative_name"),
         ({"description": "Closes ENG-412."}, "internal_code"),
-        ({"description": f"From {HIDDEN_DOC}."}, "internal_document"),
-        ({"description": f"We decided to {DECISION.lower()}."}, "decision"),
-        ({"description": f"Part of {PLAN}."}, "pricing"),
-        ({"description": f"Waits: {NOTE}."}, "internal_note"),
         ({"changelog_url": "https://localhost:3000/changelog"}, "internal_host"),
     ],
 )
@@ -325,6 +324,45 @@ async def test_a_text_with_a_blocking_finding_cannot_be_approved(client, ctx, ov
     resp = await put_text(client, ctx, "bulk-import", state="draft", **over)
     assert resp.status_code == 200, resp.text
     assert code in {f["code"] for f in resp.json()["findings"]}
+
+
+@pytest.mark.parametrize(
+    ("over", "code"),
+    [
+        ({"description": f"From {HIDDEN_DOC}."}, "internal_document"),
+        ({"description": f"We decided to {DECISION.lower()}."}, "decision"),
+        ({"description": f"Part of {PLAN}."}, "pricing"),
+        ({"description": f"Waits: {NOTE}."}, "internal_note"),
+    ],
+)
+async def test_the_four_ticked_kinds_are_approved_once_ticked(client, ctx, over, code):
+    """protects=owner decision (2026-10-26): an approvers-only document's name, a decision's
+    title, a win/loss plan or price and five words of an internal note are warnings the
+    approver ticks ("I checked this"), not blocking; fails_when=approving is 422
+    leak_blocking, or passes without the tick; no_claim=people's names (still blocking)."""
+    await seed(ctx)
+    resp = await put_text(client, ctx, "bulk-import", **over)
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "warnings_unchecked"
+    assert detail["warnings"] == [code]
+    resp = await put_text(client, ctx, "bulk-import", checked_warnings=[code], **over)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["state"] == "approved" and body["checked_warnings"] == [code]
+    assert [(f["code"], f["severity"]) for f in body["findings"]] == [(code, "warning")]
+
+
+def test_the_four_ticked_kinds_are_warnings_and_names_still_block():
+    """protects=owner decision (2026-10-26): exactly the four kinds moved to the warnings;
+    people's names and the spec's other findings still block; fails_when=a kind is in the
+    wrong list."""
+    assert set(TICKED_KINDS) <= set(leak_check.WARNINGS)
+    assert not set(TICKED_KINDS) & set(leak_check.BLOCKING)
+    assert set(leak_check.BLOCKING) == {
+        "person_name", "email_or_phone", "customer_name", "alternative_name",
+        "internal_code", "internal_host",
+    }  # fmt: skip
 
 
 async def test_a_warning_needs_a_tick(client, ctx):
@@ -609,7 +647,7 @@ def test_look_alike_and_invisible_characters_are_still_found(text, code):
     stripped, look-alike letters and dashes mapped) before matching; fails_when=a name
     spelled with invisible or look-alike characters passes; no_claim=every confusable."""
     findings = leak_check.check(text, _ctx())
-    assert code in [f.code for f in findings if f.severity == "blocking"], findings
+    assert code in [f.code for f in findings], findings
 
 
 def test_a_customer_is_found_by_its_distinctive_part():
@@ -690,9 +728,9 @@ def test_every_invisible_character_is_stripped_told_and_found(hidden):
     is stripped before matching, told by format_characters and stripped from a draft;
     fails_when="Nort\\u034fhwind" passes the check or is kept; no_claim=other look-alikes."""
     found = leak_check.check(f"As Nort{hidden}hwind Traders asked", _ctx())
-    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
+    assert "customer_name" in [f.code for f in found], found
     found = leak_check.check(f"Built with Quill{hidden}feather", _ctx())
-    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
+    assert "person_name" in [f.code for f in found], found
     assert leak_check.format_characters(f"Nort{hidden}hwind") == [f"U+{ord(hidden):04X}"]
     assert leak_check.strip_format(f"Nort{hidden}hwind") == "Northwind"
 
@@ -769,10 +807,10 @@ def test_only_the_three_subdivision_flags_pass():
     assert leak_check.format_characters(SPLIT_NAME)
     assert leak_check.strip_format(SPLIT_NAME) == "Visit \U0001f3f4\U0001f3f4d soon"
     found = leak_check.check(SPLIT_NAME, _ctx())
-    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
+    assert "customer_name" in [f.code for f in found], found
     assert leak_check.format_characters(SPLIT_PHONE)
     found = leak_check.check(SPLIT_PHONE, _ctx())
-    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    assert "email_or_phone" in [f.code for f in found], found
     # A name right beside a real flag is still read on its own.
     found = leak_check.check(f"Built for Northwind{_flag('gbsct')}", _ctx())
     assert [f.code for f in found] == ["customer_name"]
@@ -797,7 +835,7 @@ def test_blank_characters_read_as_spaces(blank):
     space, so a phone number or a full name spaced with it is found; fails_when="555⠀012⠀3456"
     passes; no_claim=a word split by a visible gap (the approver sees the gap)."""
     found = leak_check.check(f"Call 555{blank}012{blank}3456", _ctx())
-    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    assert "email_or_phone" in [f.code for f in found], found
     found = leak_check.check(f"Built with Priya{blank}Quillfeather", _ctx())
     assert PERSON in found[0].words, found
 
@@ -872,7 +910,7 @@ def test_combining_marks_and_look_alikes_never_split_or_hide_a_name(text, code):
     confusables.txt), so a mark on or inside a name, U+0130 and mixed-script look-alikes
     are found; fails_when="Northwi\u0307nd" or "N\u00f6rthwind" passes."""
     findings = leak_check.check(text, _ctx())
-    assert code in [f.code for f in leak_check.blocking(findings)], findings
+    assert code in [f.code for f in findings], findings
 
 
 def test_ordinary_accented_words_still_pass():
@@ -941,7 +979,7 @@ def test_seeded_names_with_random_marks_and_look_alikes_are_still_found():
             variant = "".join(chars)
             text = f"Built for {variant} soon"
             found = leak_check.check(text, ctx)
-            if code not in [f.code for f in leak_check.blocking(found)]:
+            if code not in [f.code for f in found]:
                 missed.append(variant)
     assert missed == [], [ascii(m) for m in missed[:10]]
 
@@ -952,7 +990,7 @@ def test_a_phone_number_in_keycap_emoji_is_found():
     keycaps = "".join(f"{d}\ufe0f\u20e3" for d in "4155550134")
     assert leak_check.format_characters(keycaps) == []
     found = leak_check.check(f"Call {keycaps} today", _ctx())
-    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    assert "email_or_phone" in [f.code for f in found], found
 
 
 async def test_an_unchanged_page_title_is_not_refused_when_the_intro_changes(client, ctx):
@@ -1006,7 +1044,7 @@ def test_a_capital_i_in_place_of_a_small_l_is_found(text, code):
     fails_when="RivaICo" or "Gold PIan" passes the check."""
     ctx = _ctx(people=[PERSON, "Alice"], pricing=[PLAN, "Gold Plan"])
     findings = leak_check.check(text, ctx)
-    assert code in [f.code for f in leak_check.blocking(findings)], findings
+    assert code in [f.code for f in findings], findings
 
 
 def test_ordinary_words_with_a_capital_i_still_pass():
@@ -1029,7 +1067,7 @@ def test_the_ogham_space_mark_is_refused_and_does_not_split_a_name():
     "Quill\\u1680feather" passes the check or is not told."""
     assert leak_check.format_characters("Quill feather") == ["U+1680"]
     found = leak_check.check("Built with Quill feather", _ctx())
-    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
+    assert "person_name" in [f.code for f in found], found
 
 
 def test_long_texts_are_not_kept_in_the_skeleton_cache():
@@ -1058,7 +1096,7 @@ def test_a_name_in_another_case_with_a_capital_i_for_a_small_l_is_found(ctx_over
     nothing changes, so a stored "M" and a written "m" both reach "rn" while a capital I
     still reads as "l"; fails_when="maIIory", "goId mine" or "miIestone-plan" passes."""
     findings = leak_check.check(text, _ctx(**ctx_over))
-    assert code in [f.code for f in leak_check.blocking(findings)], findings
+    assert code in [f.code for f in findings], findings
 
 
 def test_the_strict_skeleton_is_a_fixed_point():
@@ -1118,7 +1156,7 @@ def test_seeded_names_in_any_case_with_look_alikes_are_still_found():
                     chars.append(rng.choice(MARKS))
             variant = "".join(chars)
             found = leak_check.check(f"Built for {variant} soon", ctx)
-            if code not in [f.code for f in leak_check.blocking(found)]:
+            if code not in [f.code for f in found]:
                 missed.append((stored, variant))
     assert missed == [], [ascii(m) for m in missed[:10]]
 
@@ -1151,7 +1189,7 @@ def test_a_small_l_in_place_of_a_stored_capital_i_is_found(ctx_over, text, code)
     skeleton after case folding), letter by letter; fails_when="lvy Labs", "lngrid" or
     "lnbox-plan" passes the check."""
     findings = leak_check.check(text, _ctx(**ctx_over))
-    assert code in [f.code for f in leak_check.blocking(findings)], findings
+    assert code in [f.code for f in findings], findings
 
 
 def _glyph_partners() -> dict[str, list[str]]:
@@ -1202,7 +1240,7 @@ def test_seeded_names_written_in_the_other_case_s_look_alikes_are_still_found():
                     chars.append(rng.choice(MARKS))
             variant = "".join(chars)
             found = leak_check.check(f"Built for {variant} soon", ctx)
-            if code not in [f.code for f in leak_check.blocking(found)]:
+            if code not in [f.code for f in found]:
                 missed.append((stored, variant))
     assert missed == [], [ascii(m) for m in missed[:10]]
 
@@ -1258,3 +1296,29 @@ def test_every_letter_with_several_readings_has_a_stand_in():
             if len(forms) > 1 and words and forms not in leak_check._STAND_INS:
                 missing.append(char)
     assert missing == [], ascii("".join(missing[:20]))
+
+
+@pytest.mark.timing
+def test_the_note_check_keeps_up_with_many_notes():
+    """protects=#703 re-review (major): a company's notes from every roadmap version (300
+    notes of 40 words) are checked in well under a second, each time; fails_when=the
+    note runs are rebuilt on every check once there are more than 256 notes (about 10 s
+    each)."""
+    import random
+    import time
+
+    rng = random.Random(703)
+
+    def word() -> str:
+        return "".join(rng.choice("abcdefghijklmnoprstuvwyIM") for _ in range(rng.randint(3, 9)))
+
+    notes = [" ".join(word() for _ in range(40)) for _ in range(300)]
+    copied = " ".join(notes[-1].split()[10:15])
+    text = " ".join(word() for _ in range(120)) + f". It waits on {copied} for now."
+    ctx = _ctx(notes=notes)
+    for _ in range(3):
+        start = time.perf_counter()
+        found = leak_check.check(text, ctx)
+        took = time.perf_counter() - start
+        assert took < 1.0, took
+        assert [f.code for f in found] == ["internal_note"], found
