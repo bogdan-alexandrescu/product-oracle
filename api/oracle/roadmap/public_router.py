@@ -147,8 +147,9 @@ class PublicPageOut(BaseModel):
 
 def _refuse_format_characters(*texts: str | None) -> None:
     """422 ``format_characters`` when a public text holds an invisible character (a
-    zero-width space, soft hyphen or word joiner): it could hide a name from the leak
-    check and from the person approving it."""
+    zero-width space, soft hyphen, combining grapheme joiner, variation selector or Hangul
+    filler; an ordinary emoji sequence's joiners are fine): it could hide a name from the
+    leak check and from the person approving it."""
     found = list(dict.fromkeys(c for t in texts for c in leak_check.format_characters(t or "")))
     if found:
         raise HTTPException(

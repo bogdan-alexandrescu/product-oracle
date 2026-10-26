@@ -9,11 +9,15 @@ members' names and emails, win/loss accounts and plans, request askers' and inte
 companies, H7 alternatives and their aliases, document slugs, approvers-only documents,
 decisions, the items' internal notes, the app's own host and the company's email domains.
 
-Text is normalised before matching (:func:`normalize`): NFKC (fullwidth letters), format
-characters stripped (zero-width spaces, soft hyphens, word joiners), look-alike Greek and
-Cyrillic letters and dashes mapped to their Latin and ASCII forms; names then match
-casefolded. A public text holding a format character is refused when saved
-(:func:`format_characters`), so what an approver reads is what was checked.
+Text is normalised before matching (:func:`normalize`): NFKC (fullwidth letters), every
+invisible character stripped (Unicode's Default_Ignorable_Code_Point and category Cf:
+zero-width spaces, soft hyphens, word joiners, the combining grapheme joiner, variation
+selectors, Hangul fillers), look-alike letters (Unicode's confusables, via
+:mod:`oracle.specs.confusables`) and dashes mapped to their Latin and ASCII forms; names
+then match casefolded. A public text holding an invisible character is refused when saved
+(:func:`format_characters`), so what an approver reads is what was checked; only the
+joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, a
+subdivision flag) are kept, and the letters a flag's tags spell are checked too.
 
 Every pattern reads untrusted text and stays linear (no nested quantifiers).
 """
@@ -26,6 +30,8 @@ from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from oracle.specs.confusables import CONFUSABLES
 
 BLOCKING = (
     "person_name",
@@ -72,12 +78,37 @@ _WORD = re.compile(r"\w+")
 
 # Dashes and minus signs that read as "-" (NFKC keeps them apart).
 _DASHES = "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2043\ufe58\ufe63\uff0d"
-# Greek and Cyrillic letters drawn like a Latin one (a subset of Unicode's confusables).
-_LOOK_ALIKE = "ΑΒΕΖΗΙΚΜΝΟΡΤΥΧαοιρνκАВЕКМНОРСТХУаеорсухіѕјԁԛԝЅІЈ"
-_AS_LATIN = "ABEZHIKMNOPTYXaoipvkABEKMHOPCTXYaeopcyxisjdqwSIJ"
-_FOLD = str.maketrans(
-    {**dict.fromkeys(_DASHES, "-"), **dict(zip(_LOOK_ALIKE, _AS_LATIN, strict=True))}
+
+
+def _as_latin(char: str, prototype: str) -> str:
+    """A confusable's Latin form in its own case: the prototype is lower case, and a
+    capital drawn like "l" (Greek Iota, Cyrillic I) reads as "I"."""
+    if not char.isupper():
+        return prototype
+    return "I" if prototype == "l" else prototype.upper()
+
+
+# Every letter Unicode's confusables.txt draws like one or two Latin letters (Greek,
+# Cyrillic, Cherokee, Armenian, IPA, small capitals...); Greek kappa is the one look-alike
+# the file maps elsewhere.
+_LOOK_ALIKE = {
+    cp: _as_latin(chr(cp), prototype)
+    for cp, prototype in CONFUSABLES.items()
+    if prototype.isalpha()
+}
+_FOLD = str.maketrans({**dict.fromkeys(map(ord, _DASHES), "-"), **_LOOK_ALIKE, ord("κ"): "k"})
+# Default_Ignorable_Code_Point (DerivedCoreProperties.txt): what renders as nothing,
+# whatever its category (Cf, but also the marks U+034F, U+17B4/5 and the variation
+# selectors, and the Hangul fillers, which are letters).
+_IGNORABLE = re.compile(
+    "[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f"
+    "\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8"
+    "\U0001bca0-\U0001bca3\U0001d173-\U0001d17a\U000e0000-\U000e0fff]"
 )
+# A subdivision flag: the black flag, two to six tag letters or digits, the cancel tag.
+_FLAG_TAGS = re.compile("\U0001f3f4([\U000e0030-\U000e0039\U000e0061-\U000e007a]{2,6}\U000e007f)")
+_TAG_RUN = re.compile("[\U000e0020-\U000e007e]+")
+_KEYCAP = "\u20e3"
 # Words in a company's name that do not tell it apart ("Northwind Traders" is named by
 # "Northwind" alone; "Traders" is anyone's).
 GENERIC_COMPANY_WORDS = frozenset(
@@ -117,22 +148,73 @@ class LeakContext:
     company_domains: list[str] = field(default_factory=list)
 
 
+def _invisible(char: str) -> bool:
+    return bool(_IGNORABLE.match(char)) or unicodedata.category(char) == "Cf"
+
+
+def _strip_invisible(text: str) -> str:
+    return "".join(c for c in text if not _invisible(c))
+
+
+def _pictographic(char: str) -> bool:
+    """An emoji or other symbol (a skin tone is Sk), never a letter or digit."""
+    return ord(char) > 0x7F and unicodedata.category(char) in ("So", "Sk")
+
+
+def _emoji_parts(text: str) -> set[int]:
+    """Where ``text``'s invisible characters belong to an ordinary emoji sequence: a ZWJ
+    between two emoji, a variation selector after an emoji or in a keycap, and a
+    subdivision flag's tags. None of them can split a word."""
+    keep: set[int] = set()
+    for m in _FLAG_TAGS.finditer(text):
+        keep.update(range(m.start(1), m.end(1)))
+    for i, char in enumerate(text):
+        if char not in "\u200d\ufe0e\ufe0f":
+            continue
+        before = text[i - 1] if i else " "
+        after = text[i + 1] if i + 1 < len(text) else " "
+        if char == "\u200d":
+            if before in "\ufe0e\ufe0f" and i - 1 in keep:
+                before = text[i - 2]
+            ok = _pictographic(before) and _pictographic(after)
+        else:
+            ok = _pictographic(before) or (before in "0123456789#*" and after == _KEYCAP)
+        if ok:
+            keep.add(i)
+    return keep
+
+
+def _hidden(text: str) -> list[int]:
+    """Where ``text`` holds an invisible character outside an emoji sequence."""
+    keep = _emoji_parts(text)
+    return [i for i, c in enumerate(text) if _invisible(c) and i not in keep]
+
+
+def _tag_letters(m: re.Match[str]) -> str:
+    return " " + "".join(chr(ord(c) - 0xE0000) for c in m.group(0)) + " "
+
+
 def normalize(text: str) -> str:
-    """``text`` as a reader sees it: NFKC, no format characters, look-alike letters and
-    dashes mapped. Case is kept (tracker keys and "May" read it)."""
-    text = unicodedata.normalize("NFKC", text or "")
-    text = "".join(c for c in text if unicodedata.category(c) != "Cf")
+    """``text`` as a reader sees it: NFKC, no invisible characters, look-alike letters and
+    dashes mapped. Tag characters are read as the ASCII they spell, so a name hidden in
+    a flag is found. Case is kept (tracker keys and "May" read it)."""
+    text = _strip_invisible(_TAG_RUN.sub(_tag_letters, text or ""))
+    text = _strip_invisible(unicodedata.normalize("NFKC", text))
     return text.translate(_FOLD)
 
 
 def format_characters(text: str) -> list[str]:
-    """The invisible format characters ``text`` holds ("U+200B", ...), each once."""
-    found = (f"U+{ord(c):04X}" for c in text or "" if unicodedata.category(c) == "Cf")
-    return list(dict.fromkeys(found))
+    """The invisible characters ``text`` holds outside an ordinary emoji sequence
+    ("U+200B", "U+034F", ...), each once."""
+    text = text or ""
+    return list(dict.fromkeys(f"U+{ord(text[i]):04X}" for i in _hidden(text)))
 
 
 def strip_format(text: str) -> str:
-    return "".join(c for c in text or "" if unicodedata.category(c) != "Cf")
+    """``text`` without the characters :func:`format_characters` tells."""
+    text = text or ""
+    hidden = set(_hidden(text))
+    return "".join(c for i, c in enumerate(text) if i not in hidden)
 
 
 def _norm(text: str) -> str:
