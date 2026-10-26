@@ -103,7 +103,7 @@ test("a retired learning stops counting", async ({ page }) => {
 const askedPrompts = (page: Page) => page.getByTestId("intake-thread").getByTestId("question").locator("article");
 
 test("a viewer reads the asked questions in the author's order after learnings come and go", async ({ page }) => {
-  // protects=03b §5 "asked questions are never re-ranked": after the owner asks five questions
+  // protects=03b §5 "asked questions are never re-ranked": after the owner asks the next five questions
   // and an approver adds learnings (one lifting the last asked question, one lifting a draft),
   // retires one and Re-analyse runs, a viewer reads the asked questions in the order the
   // author does, and the asked question's "Why Oracle asks" is the one it was asked with;
@@ -111,10 +111,13 @@ test("a viewer reads the asked questions in the author's order after learnings c
   // learnings in force now; no_claim=private facts (api tests/test_intake_sharing_round3.py).
   await login(page);
   await openIntake(page);
-  await next(page).getByRole("button", { name: "Ask these" }).click();
+  // The scenario has five questions asked already; Ask these appends the next five, the
+  // differentiation question last. Wait for that drawn state before reading the order.
   await expect(askedPrompts(page)).toHaveCount(5);
+  await next(page).getByRole("button", { name: "Ask these" }).click();
+  await expect(askedPrompts(page)).toHaveCount(10);
+  await expect(askedPrompts(page).last()).toHaveAttribute("aria-label", DIFFERENTIATION);
   const order = await askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
-  expect(order[4]).toBe(DIFFERENTIATION);
 
   await signOut(page);
   await login(page, "approver@example.com");
@@ -128,14 +131,14 @@ test("a viewer reads the asked questions in the author's order after learnings c
   await openIntake(page);
   await reanalyse(page);
   await expect(nextPrompts(page).first()).toBeVisible();
-  await expect(askedPrompts(page)).toHaveCount(5);
-  expect(await askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(order);
+  await expect(askedPrompts(page)).toHaveCount(10);
+  await expect.poll(() => askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(order);
   await signOut(page);
 
   await login(page, "viewer@example.com");
   await openIntake(page);
-  await expect(askedPrompts(page)).toHaveCount(5);
-  expect(await askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(order);
+  await expect(askedPrompts(page)).toHaveCount(10);
+  await expect.poll(() => askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(order);
   const asked = page.getByTestId("intake-thread").getByTestId("question").filter({ hasText: DIFFERENTIATION });
   await asked.getByRole("button", { name: "About why Oracle asks" }).click();
   await expect(asked.locator('[role="tooltip"]')).not.toContainText("Recommended");
