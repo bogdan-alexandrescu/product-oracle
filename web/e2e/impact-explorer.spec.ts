@@ -30,14 +30,12 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
   const graph = page.getByRole("region", { name: "Lineage" });
   await expect(graph.getByTestId("lineage-subject")).toContainText("checkout-redesign@2");
   await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "scope" })).toBeVisible();
-  // The deleted baseline item stands out.
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("R-90");
-  await expect(graph.getByTestId("lineage-output")).toHaveCount(6);
+  await expect(graph.getByTestId("lineage-output")).toHaveCount(7);
 
   // The plan: counts, one row per proposal, and the superseded output with no proposal.
-  await expect(plan(page).getByTestId("plan-stat-affected")).toContainText("6");
-  await expect(plan(page).getByTestId("plan-stat-in-plan")).toContainText("5");
-  await expect(plan(page).getByTestId("plan-row")).toHaveCount(5);
+  await expect(plan(page).getByTestId("plan-stat-affected")).toContainText("7");
+  await expect(plan(page).getByTestId("plan-stat-in-plan")).toContainText("6");
+  await expect(plan(page).getByTestId("plan-row")).toHaveCount(6);
   await expect(plan(page).getByTestId("plan-not-in-plan")).toContainText("Checkout prototype");
   // No action runs the whole plan: the API has none.
   await expect(page.getByRole("button", { name: /run (the whole|all)/i })).toHaveCount(0);
@@ -91,11 +89,23 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await expect(table).toContainText("Wireframe");
   await table.getByText("Acceptance tests", { exact: false }).first().click();
   const inspector = page.getByRole("complementary", { name: /Acceptance tests/ });
-  await expect(inspector.getByTestId("dependency").filter({ hasText: "R-90" })).toContainText("Deleted");
-  await expect(inspector.getByText("requirement R-90 was deleted")).toBeVisible();
+  await expect(inspector.getByTestId("dependency").filter({ hasText: "risks" })).toBeVisible();
   // The table view keeps the plan list below the table, and C's stages in the inspector.
-  await expect(page.getByRole("region", { name: "Regeneration plan" }).getByRole("listitem")).toHaveCount(6);
+  await expect(page.getByRole("region", { name: "Regeneration plan" }).getByRole("listitem")).toHaveCount(7);
   await expect(inspector.getByText("1 · Settle staleness")).toBeVisible();
+
+  // The deleted baseline item behind it stands out in its recorded change's lineage.
+  await inspector.getByRole("link", { name: "Recorded change" }).first().click();
+  await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
+  const graph = page.getByRole("region", { name: "Lineage" });
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("R-90");
+  await page.getByRole("button", { name: "Table" }).click();
+  await page.getByRole("table", { name: "Affected outputs" }).getByText("Acceptance tests").first().click();
+  const tests = page.getByRole("complementary", { name: /Acceptance tests/ });
+  await expect(tests.getByTestId("dependency").filter({ hasText: "R-90" })).toContainText("Deleted");
+  await expect(tests.getByText("requirement R-90 was deleted")).toBeVisible();
+  await page.goBack();
+  await page.getByRole("button", { name: "Table" }).click();
 
   // A dependency's recorded change opens that change's impact.
   await page.getByRole("table", { name: "Affected outputs" }).getByText("Saved addresses tech brief").click();
@@ -105,13 +115,14 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await expect(page.getByTestId("lineage-subject")).toContainText("checkout-redesign@2#metrics");
 });
 
-test("impact: a what-if from a baseline item reached from the lineage", async ({ page }) => {
+test("impact: a what-if from a baseline item's drawer", async ({ page }) => {
   await scenario(page, "impact");
-  await openImpact(page);
-  const graph = page.getByRole("region", { name: "Lineage" });
-  await graph.getByRole("link", { name: /What if .+ changed\?/ }).first().click();
+  await login(page);
+  await page.goto("/baseline");
+  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
-  await expect(page.getByText(/What if .+ changed\? Preview only; nothing is marked stale\./)).toBeVisible();
+  await expect(page.getByText("What if Guided setup changed? Preview only; nothing is marked stale.")).toBeVisible();
   await expect(page.getByTestId("lineage-output").filter({ hasText: "Checkout flow" })).toBeVisible();
 });
 

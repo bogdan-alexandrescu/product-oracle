@@ -111,6 +111,8 @@ function upstreamOf(ctx: TraceContext, dep: Schemas["ArtifactDependencyOut"]): S
   const v = ctx.versions.find((x) => x.id === dep.upstream_version_id);
   const d = v && ctx.documents.find((x) => x.id === v.document_id);
   const e = ctx.entities.find((x) => x.id === dep.upstream_entity_id);
+  // A deleted item: what it was when it went (oracle.trace keeps it).
+  const gone = e ? undefined : ctx.v2.deleted_entities?.find((x) => x.id === dep.upstream_entity_id);
   return {
     document_id: d?.id ?? null,
     document_slug: d?.slug ?? null,
@@ -120,9 +122,9 @@ function upstreamOf(ctx: TraceContext, dep: Schemas["ArtifactDependencyOut"]): S
     section_key: dep.upstream_section_key ?? null,
     section_hash: dep.upstream_section_hash ?? null,
     composition_revision: dep.composition_revision ?? null,
-    entity: e ? entityRef(e) : null,
-    deleted: false,
-    deleted_at: null,
+    entity: e ? entityRef(e) : gone ? entityRef(gone) : null,
+    deleted: Boolean(gone),
+    deleted_at: gone?.deleted_at ?? null,
   };
 }
 
@@ -130,7 +132,7 @@ function reasonOf(ctx: TraceContext, dep: Schemas["ArtifactDependencyOut"]): str
   if (dep.freshness !== "potentially_stale") return [];
   const up = upstreamOf(ctx, dep);
   if (up.section_key) return [`section ${up.section_key} changed in ${up.document_slug ?? "the PRD"}`];
-  if (up.entity) return [`${up.entity.type.replace("_", " ")} ${up.entity.key} changed`];
+  if (up.entity) return [`${up.entity.type.replace("_", " ")} ${up.entity.key} ${up.deleted ? "was deleted" : "changed"}`];
   return [`${up.document_slug ?? "the PRD"} has a newer version (depends on all of it)`];
 }
 
@@ -205,7 +207,7 @@ function report(
   const affected = describe(ctx, deps, true);
   const counts: Record<string, number> = { total: affected.length, approved: affected.filter((a) => a.approved).length };
   for (const a of affected) counts[a.category] = (counts[a.category] ?? 0) + 1;
-  return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected), counts, truncated: false };
+  return { subject, change: extra.change ?? null, changes: extra.changes ?? [], preview: extra.preview, affected, affected_entities: [], plan: plan(affected), counts, truncated: Boolean(ctx.v2.walk_truncated) };
 }
 
 function linkViews(ctx: TraceContext, version: TraceVersion, key: string): Schemas["SectionLinkView"][] {

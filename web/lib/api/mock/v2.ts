@@ -5,6 +5,7 @@
  * One linked row per entity, synthetic placeholders only. Lanes add their writes here.
  */
 import type { Schemas } from "@/lib/api/client";
+import type { DeletedEntity } from "./impact";
 
 export interface V2Db {
   modules: Schemas["ModuleDefinitionOut"][];
@@ -40,6 +41,10 @@ export interface V2Db {
   /** Each intake's draft run (C5): its id and the answers that existed when it was made
    * (the mock's stand-in for the run's start); absent before any. */
   intake_runs?: Record<string, { run_id: string; answer_ids: string[] }>;
+  /** Baseline items deleted after outputs were built on them (the "impact" scenario, ./impact.ts). */
+  deleted_entities?: DeletedEntity[];
+  /** The impact walk stops at its limit (the "impact-large" scenario): reports say truncated. */
+  walk_truncated?: boolean;
 }
 
 /** URL segment after /v1 -> the table it lists. */
