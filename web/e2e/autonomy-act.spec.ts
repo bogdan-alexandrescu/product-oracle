@@ -53,7 +53,9 @@ test("autonomy: at Act Oracle decides a reversible call and Undo hands it back",
   const did = page.getByRole("button", { name: /^Undo Decided D-\d+: Take the smallest reversible step$/ });
   await expect(did).toBeVisible();
   await did.click();
-  await expect(page.getByText("Undone", { exact: true })).toBeVisible();
+  // The question is the approver's again: a new proposal waits on them.
+  await expect(page.getByText(/^Decision needs you · D-\d+ Ship usage caps before anomaly detection$/)).toBeVisible();
+  await expect(did).toHaveCount(0);
 
   await page.goto("/company/decisions");
   await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
