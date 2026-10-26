@@ -38,7 +38,8 @@ Test cards (protects / fails_when / no_claim):
   no_claim=S3a's undo rules (its tests).
 - test_resume_rules: protects=an idle-closed session's draft stays a working draft, listed
   by GET /v1/simple/drafts; its old changes no longer undo; only its author or the
-  decider resumes it (others 403), into a session whose changes join the same draft;
+  decider resumes it (an owner who is neither 403, those who may not see it
+  404), into a session whose changes join the same draft;
   fails_when=closing drops the draft, someone else resumes it, or a resumed change opens a
   second draft; no_claim=meeting sessions' resume (S8).
 """
