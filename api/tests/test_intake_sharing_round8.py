@@ -23,7 +23,14 @@ from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ProductIntake
 from tests.test_intake_sharing import EXCERPT_A, TITLE_A, share_all
-from tests.test_intake_sharing_round5 import ANSWER, _baseline_proposals, _blocker_gap, share, world
+from tests.test_intake_sharing_round5 import (
+    ANSWER,
+    _baseline_proposals,
+    _blocker_gap,
+    _intake_read_on_the_job,  # noqa: F401 (autouse fixture: INT2's job path)
+    share,
+    world,
+)
 from tests.test_intake_sharing_round6 import (
     RUNS,
     _answer_model_gap,

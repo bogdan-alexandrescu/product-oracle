@@ -32,7 +32,12 @@ from oracle.tenancy import tenant_session
 from tests.baseline_helpers import entity, make_item
 from tests.test_intake import _document
 from tests.test_intake_sharing import TITLE_A, share_all
-from tests.test_intake_sharing_round5 import world
+from tests.test_intake_sharing_round5 import (
+    # INT2: world() drives the built-in intake_analysis job; without round 5's autouse
+    # fixture the intake read is a SwarmCloud run and no job is queued.
+    _intake_read_on_the_job,  # noqa: F401 (autouse fixture)
+    world,
+)
 from tests.test_intake_sharing_round6 import (
     as_run_of,
     fake,  # noqa: F401 (fixture)

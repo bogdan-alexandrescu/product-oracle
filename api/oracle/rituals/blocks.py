@@ -27,6 +27,7 @@ from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
 from oracle.rituals import rebuild
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
+from oracle.runs import flows
 from oracle.runs.models import Checkpoint, Run
 from oracle.v2.models import BlockerResolutionEvent
 
@@ -296,8 +297,12 @@ async def needs_decision(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
         rows.append({"kind": "decision", "id": str(d.id), "decision_id": str(d.id),
                      "title": d.title, "href": f"/company/decisions?d={d.number}",
                      "text": f"D-{d.number} {d.title}"})  # fmt: skip
+    # #689 review: never a run of a flow private to its creator (Oracle's read of an
+    # intake): the block is built once and read by every attendee.
     for r in await db.scalars(
-        select(Run).where(Run.status == "awaiting_approval").order_by(Run.created_at)
+        select(Run)
+        .where(Run.status == "awaiting_approval", Run.flow.not_in(flows.CREATOR_ONLY_FLOWS))
+        .order_by(Run.created_at)
     ):
         rows.append({"kind": "cost_approval", "id": str(r.id), "title": r.flow,
                      "run_id": str(r.id), "document_id": _str(r.document_id),

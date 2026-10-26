@@ -647,3 +647,12 @@ async def test_b4_a_critical_gaps_risk_is_reviewed_within_the_company_setting(cl
     review_at = datetime.fromisoformat(resp.json()["decision"]["review_at"])
     assert review_at <= datetime.now(UTC) + timedelta(days=30, minutes=1)
     assert review_at >= datetime.now(UTC) + timedelta(days=29)
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")

@@ -1644,6 +1644,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     access_requests: [],
     // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).
     requests: [],
+    // INT2: intakes Oracle couldn't read twice in a row; none in the mock yet (lane 2 adds them).
+    intake_reads: [],
     dates: [],
     // Track rows (F2) are added by the server (./roadmap.ts).
     tracks: [],

@@ -105,6 +105,9 @@ class Settings(BaseSettings):
     # a loopback address (http or https), sent without the guarded transport; every other
     # address still goes through it. Refused in a real deployment, as the switch above is.
     webhooks_allow_loopback_for_tests: bool = False
+    # INT2: where Oracle's read of a new intake runs: a SwarmCloud intake_analysis run, or
+    # (the rollback, without a deploy) the built-in intake_analysis pool job as before.
+    intake_read_runtime: Literal["swarmcloud", "job"] = "swarmcloud"
 
     @model_validator(mode="after")
     def _no_reserved_domains_in_production(self) -> "Settings":

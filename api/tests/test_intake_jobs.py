@@ -345,3 +345,12 @@ def _answer_no_source(payload):
                   "statement": "Is the rollout gated by region?", "evidence_refs": []}],
         "category": "feature",
     }  # fmt: skip
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")

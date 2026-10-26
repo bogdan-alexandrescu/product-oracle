@@ -498,3 +498,12 @@ async def test_a_long_hidden_list_never_exceeds_the_bind_parameter_limit(client,
                  "/v1/change-events"):  # fmt: skip
         resp = await client.get(path, headers=ctx.as_("viewer"))
         assert resp.status_code == 200, (path, resp.text[:300])
+
+
+@pytest.fixture(autouse=True)
+def _intake_read_on_the_job(monkeypatch):
+    """INT2: these cases drive the built-in intake_analysis job, now the SwarmCloud read's
+    fallback and the rollback (ORACLE_INTAKE_READ_RUNTIME=job): run them on that path."""
+    from oracle.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")
