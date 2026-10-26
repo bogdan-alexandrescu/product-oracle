@@ -49,7 +49,7 @@ import {
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { nudges } from "./learned";
@@ -122,6 +122,8 @@ import {
   seedOutcomes,
   seedQuality,
   addDecisionOutcome,
+  seedQualityScenario,
+  storeModelReview,
   type QualityContext,
   type QualityDb,
 } from "./quality";
@@ -1565,6 +1567,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       const min = Number(a.stored.next_drafts?.limits?.min_staged);
       return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
     },
+    runQualityReview: (job, versionId) => storeModelReview(ensureV2(db), job, versionId),
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -3561,6 +3564,23 @@ function itemUses(db: Db): Schemas["UsedIn"][] {
   return uses;
 }
 
+/** The quality data, seeded once; a "quality…" scenario adds its reports and jobs (./quality.ts). */
+function ensureQuality(db: Db): QualityDb {
+  if (db.quality) return db.quality;
+  db.quality = seedQuality();
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY) ?? "";
+  const doc = findDocument(db, "team-workspaces");
+  const v = doc && findVersion(db, doc, 2);
+  const id = (email: string) => db.members.find((m) => m.email === email)?.id ?? db.user_id;
+  if (scenario.startsWith("quality") && doc && v && db.llm) {
+    seedQualityScenario(scenario, {
+      quality: db.quality, v2: ensureV2(db), jobs: db.llm.jobs, disabled: db.llm.disabled, documentId: doc.id, versionId: v.id,
+      owner: db.user_id, approver: id("approver@example.com"), commenter: id("commenter@example.com"),
+    });
+  }
+  return db.quality;
+}
+
 function ensureV2(db: Db): V2Db {
   if (!db.v2) {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -4164,6 +4184,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   const llm = llmContext(db, me.id, me.role);
+  ensureQuality(db);
   // C7: a scope_enhance job lives with the run's scope (./scope.ts).
   const scopeJob = scopeJobRoute(db.runs, p, now);
   if (scopeJob) return scopeJob;
@@ -4188,9 +4209,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // PRD quality and readiness, outcomes and learnings (./quality.ts) check roles themselves.
   const v2db = ensureV2(db);
-  db.quality ??= seedQuality();
+  const qualityDb = ensureQuality(db);
   const qualityCtx: QualityContext = {
-    db: db.quality,
+    db: qualityDb,
     v2: v2db,
     userId: me.id,
     role: me.role,
@@ -4200,6 +4221,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
+    queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
+    job: (id) => llm.db.jobs.find((j) => j.id === id),
   };
   passOutcomes(db);
   const quality = await routeQuality(qualityCtx, req, p, q);

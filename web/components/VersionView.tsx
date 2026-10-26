@@ -1112,6 +1112,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             <HeldRewritesButton open={held.open} active={heldOpen} onClick={() => setHeldOpen((o) => !o)} />
           )}
           <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+          {document_?.kind === "prd" && (
+            <LinkButton icon="priorities" href={`/documents/${doc}/v/${n}/quality`} data-testid="quality-link">
+              Quality
+            </LinkButton>
+          )}
           {document_?.kind === "prd" && n === latest && !canDecide && (
             <LinkButton icon="check" href={`/documents/${doc}/publish`}>
               Check readiness
