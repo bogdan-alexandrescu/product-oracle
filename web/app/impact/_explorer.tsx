@@ -21,6 +21,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
+import { shownDay } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -721,7 +722,7 @@ function OutputInspector({ report, output, ...steps }: { report: Report; output:
       }
       stats={[
         { label: "Dependencies stale", value: stale, of: deps.length },
-        { label: "Stale since", value: since ? formatDate(since) : "—" },
+        { label: "Stale since", value: since ? shownDay(since, { month: "short", day: "numeric" }) : "—" },
       ]}
     >
       <OutputSections report={report} output={output} {...steps} />
