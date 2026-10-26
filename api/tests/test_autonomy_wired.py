@@ -99,6 +99,8 @@ async def test_the_roadmap_level_sets_which_fixes_a_slip_offers(
     tenant_id, auth = owner
     await set_level(tenant_id, "roadmap_watch", level)
     _, alert = await slipped(client, auth, runtime)
+    # Ask and Discuss are a person's own actions, not Oracle's fixes: offered at every level.
+    want = want | {"ask", "discuss"}
     assert set(alert["actions"]) == want
     inbox = (await client.get("/v1/inbox", headers=auth)).json()
     (row,) = [a for t in inbox["tracks"] for a in t["alerts"] if a["id"] == alert["id"]]

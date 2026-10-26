@@ -645,7 +645,16 @@ def check_endpoint(url: str | None) -> str | None:
     try:
         normalized, host = check_url(url)
     except LinkError as exc:
-        raise EndpointRefused("The endpoint is not a valid URL.") from exc
+        if exc.code != "blocked_address":
+            raise EndpointRefused("The endpoint is not a valid URL.") from exc
+        # check_url refuses a private or local host itself: say which, as below.
+        host = (parts.hostname or "").rstrip(".").lower()
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            if _NUMERIC_LABEL.fullmatch(host.rsplit(".", 1)[-1]):
+                raise _odd_ipv4(host) from None
+        raise EndpointRefused(_PRIVATE) from None
     try:
         ipaddress.ip_address(host)
     except ValueError:

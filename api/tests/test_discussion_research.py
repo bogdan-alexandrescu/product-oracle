@@ -13,7 +13,8 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
-from oracle.auth.deps import RUN_TOKEN_HEADER
+from oracle.auth.deps import RUN_HEADER, RUN_TOKEN_HEADER
+from oracle.auth.service import sign_run_binding
 from oracle.discussions import research
 from oracle.discussions.models import DiscussionMessage
 from oracle.docs.models import Document
@@ -413,7 +414,9 @@ async def test_the_research_token_searches_the_web_within_the_allowance(client):
                              for x in seg.scopes})  # fmt: skip
             raw = await mint_run_token(s, run.id, scopes, ttl_seconds=600)
             await s.commit()
-        headers = {**ctx.as_("approver"), RUN_TOKEN_HEADER: raw}
+        # The token and the run binding, as Oracle's MCP server sends them (#614).
+        binding = sign_run_binding(ctx.users["approver"].id, run.id)
+        headers = {**ctx.as_("approver"), RUN_TOKEN_HEADER: raw, RUN_HEADER: binding}
         net, fake = Net(), FakeProvider()
         app.dependency_overrides[get_search_provider] = lambda: fake
         app.dependency_overrides[get_link_fetcher] = net.fetcher
