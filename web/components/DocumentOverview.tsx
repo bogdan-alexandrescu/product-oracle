@@ -10,6 +10,7 @@ import { DocToolbar } from "@/components/DocToolbar";
 import { PricingDecide } from "@/components/PricingDecide";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import {
+  Button,
   Chip,
   DataTable,
   Inspector,
@@ -23,6 +24,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { ORACLE_WORK } from "@/components/JobsPanel";
+import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs } from "@/components/RequestSpec";
 import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -204,6 +206,66 @@ function TechBriefs({ doc }: { doc: string }) {
   );
 }
 
+/**
+ * F5 lane 3: the PRD's engineering specs, newest first, each with its state, freshness and
+ * Open; Request spec (approvers and owners, once a version is approved) picks one of the
+ * PRD's approved roadmap items and opens the Request spec dialog.
+ */
+function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean }) {
+  const { can } = useMe();
+  const q = useSpecs(doc);
+  const [open, setOpen] = useState(false);
+  const may = approved && can("create_spec_request");
+  const plan = useQuery(`plan|approved|specs|${doc}|${open}`, () =>
+    open ? unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })) : Promise.resolve(null),
+  );
+  const items = (plan.data?.items ?? []).filter((i) => i.prd?.slug === doc && i.origin === "approved");
+  const specs = q.data ?? [];
+  return (
+    <Panel
+      title="Engineering specs"
+      count={specs.length || undefined}
+      testId="engineering-specs"
+      tools={may ? <Button onClick={() => setOpen(true)}>Request spec</Button> : undefined}
+    >
+      {q.error ? (
+        <div className="p-4">
+          <ErrorNote>{q.error}</ErrorNote>
+        </div>
+      ) : !q.data ? (
+        <div className="px-4">
+          <Loading />
+        </div>
+      ) : specs.length === 0 ? (
+        <p className="px-4 py-3 text-text2">No engineering spec yet</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {specs.map((s) => {
+            const state = SPEC_STATE[s.state];
+            const fresh = s.freshness && s.freshness !== "fresh" && s.state !== "stale" ? FRESHNESS[s.freshness as keyof typeof FRESHNESS] : null;
+            return (
+              <li key={s.request.id} data-testid="engineering-spec" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+                <span className="min-w-0 font-semibold break-words">{s.request.title}</span>
+                <span className="text-sm text-text2">{s.depth === "full" ? "Full engineering spec" : "Tech brief"}</span>
+                <span className="flex-1" />
+                <Chip kind={state.kind} dot>
+                  {state.label}
+                </Chip>
+                {fresh && <Chip kind={fresh.kind}>{fresh.label}</Chip>}
+                <Link href={specHref(s)} className="text-sm font-medium text-accent-ink hover:underline">
+                  Open
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {open && plan.data && <RequestSpecDialog prd={doc} items={items} onClose={() => setOpen(false)} />}
+      {open && plan.error && <ErrorNote>{plan.error}</ErrorNote>}
+    </Panel>
+  );
+}
+
 export function DocumentOverview({ doc }: { doc: string }) {
   const router = useRouter();
   const q = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
@@ -281,6 +343,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 />
               </Panel>
               {d.kind === "prd" && <TechBriefs doc={doc} />}
+              {d.kind === "prd" && <EngineeringSpecs doc={doc} approved={d.versions.some((v) => v.approved_at)} />}
               {statesQ.error && <ErrorNote>{statesQ.error}</ErrorNote>}
               {statesQ.data && <SectionAssignments doc={doc} states={states} onSaved={statesQ.reload} />}
               {latest != null && <Campaigns doc={doc} />}

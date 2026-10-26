@@ -26498,6 +26498,12 @@ export interface components {
             track_id: string | null;
             /** Goal Ids */
             goal_ids: string[];
+            feature?: components["schemas"]["EntityRef"] | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["EntityRef"][];
             /**
              * State
              * @enum {string}
@@ -33095,6 +33101,16 @@ export interface components {
             approach_status?: ("proposed" | "approved") | null;
             /** Freshness */
             freshness?: string | null;
+            /**
+             * State
+             * @default requested
+             * @enum {string}
+             */
+            state: "requested" | "drafting" | "in_review" | "approved" | "stale" | "failed";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Tech Brief Version Id */
+            tech_brief_version_id?: string | null;
             /** Requirements */
             requirements: components["schemas"]["RequirementOut"][];
             /** Section Keys */
@@ -33182,7 +33198,9 @@ export interface components {
              */
             screens: number;
             /** Engineering Approver Ids */
-            engineering_approver_ids?: string[];
+            engineering_approver_ids?: string[] | null;
+            /** Tech Brief Version Id */
+            tech_brief_version_id?: string | null;
             /** Title */
             title?: string | null;
             /** Document */
@@ -33249,6 +33267,16 @@ export interface components {
             approach_status?: ("proposed" | "approved") | null;
             /** Freshness */
             freshness?: string | null;
+            /**
+             * State
+             * @default requested
+             * @enum {string}
+             */
+            state: "requested" | "drafting" | "in_review" | "approved" | "stale" | "failed";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Tech Brief Version Id */
+            tech_brief_version_id?: string | null;
         };
         /** SpecVersionOut */
         SpecVersionOut: {

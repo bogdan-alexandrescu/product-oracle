@@ -128,7 +128,7 @@ async def version_items(db: AsyncSession, version: DocumentVersion | None) -> li
 # --- items -------------------------------------------------------------------------------
 
 
-def _entity_ref(e: Entity) -> EntityRef:
+def entity_ref(e: Entity) -> EntityRef:
     return EntityRef(id=e.id, type=e.type, key=e.key, title=e.title, status=e.status)
 
 
@@ -137,13 +137,13 @@ def blocker_dependency(e: Entity) -> BlockerDependency:
     if not isinstance(spec, dict):
         # A plain constraint, with no blocker strategy: shown, but it blocks nothing.
         return BlockerDependency(
-            **_entity_ref(e).model_dump(), blocker_status="constraint", resolved=True,
+            **entity_ref(e).model_dump(), blocker_status="constraint", resolved=True,
             critical=False,
         )  # fmt: skip
     status = str(spec.get("status") or "open")
     resolved = status in RESOLVED or e.status == "rejected"
     return BlockerDependency(
-        **_entity_ref(e).model_dump(),
+        **entity_ref(e).model_dump(),
         blocker_status=status,
         severity=spec.get("severity"),
         blocker_type=spec.get("type"),
@@ -275,11 +275,9 @@ def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> Roadmap
     feature = ctx.entities.get(item.feature_id) if item.feature_id else None
     return out.model_copy(
         update={
-            "feature": _entity_ref(feature) if feature else None,
+            "feature": entity_ref(feature) if feature else None,
             "requirements": [
-                _entity_ref(ctx.entities[r])
-                for r in item.requirement_ids or []
-                if r in ctx.entities
+                entity_ref(ctx.entities[r]) for r in item.requirement_ids or [] if r in ctx.entities
             ],
             "blockers": [blocker_dependency(e) for e in ctx.blockers.get(item.id, [])],
             "trace": [TraceLink.model_validate(t) for t in item.trace or []],

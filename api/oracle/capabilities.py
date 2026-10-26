@@ -160,7 +160,6 @@ PER_ITEM: dict[str, Role | None] = {
     "create_interview_link": "approver",
     "create_request": "owner",
     "create_run": "owner",
-    "create_spec_request": "owner",
     "create_track_roadmap_run": "owner",
     "decide_checkpoint": "owner",
     "decide_decision": None,

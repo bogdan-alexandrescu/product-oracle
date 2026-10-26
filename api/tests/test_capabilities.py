@@ -202,6 +202,9 @@ NOT_PER_ITEM = {
     "start_goal_interviews",
     # The 403 refuses a run's token; the role check picks whom the daily run acts as.
     "set_request_triage_daily",
+    # A spec's run is a prd_to_spec run: create_run's owner check is update_draft's alone, so
+    # an approver the route lets in requests a spec on any approved PRD (#580 review).
+    "create_spec_request",
     # F3: the route's own date rights (min_role and lead_role), re-read at write time.
     "create_schedule_basis",
     "reject_schedule_basis",

@@ -7,10 +7,11 @@ import { useEffect, useId, useState } from "react";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
 import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
+import { RequestSpecDialog, SPEC_STATE, specFor, specHref, useSpecs } from "@/components/RequestSpec";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
-import { acceptTrackAlertDate, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
 import { useMe } from "@/lib/me";
+import { acceptTrackAlertDate, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
@@ -335,6 +336,49 @@ function DriftCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Pro
   );
 }
 
+/**
+ * F5 lane 3: an approved item's engineering spec: its state and Open, or Request spec for
+ * those who may (approvers and owners).
+ */
+function SpecLine({ item }: { item: PlanItem }) {
+  const { can } = useMe();
+  const q = useSpecs(item.prd?.slug);
+  const [open, setOpen] = useState(false);
+  if (!item.prd) return null;
+  const spec = q.data ? specFor(q.data, item) : null;
+  const state = spec ? SPEC_STATE[spec.state] : null;
+  return (
+    <InspectorSection label="Engineering spec" testId="plan-spec">
+      {q.error ? (
+        <span className="text-[15px] text-text2">{q.error}</span>
+      ) : !q.data ? (
+        <span className="text-text2">…</span>
+      ) : spec && state ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[15px]">
+          <Chip kind={state.kind} dot>
+            {state.label}
+          </Chip>
+          <span className="min-w-0 flex-1 break-words">{spec.request.title}</span>
+          <LinkButton href={specHref(spec)}>Open</LinkButton>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-[15px]">
+          <span className="flex-1 text-text2">No engineering spec yet</span>
+          {can("create_spec_request") && <Button onClick={() => setOpen(true)}>Request spec</Button>}
+        </div>
+      )}
+      {open && (
+        <RequestSpecDialog
+          prd={item.prd.slug}
+          items={[{ key: item.key, title: item.title, feature: item.feature, requirements: item.requirements }]}
+          initialKey={item.key}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </InspectorSection>
+  );
+}
+
 function DriftCard({ d, onChanged }: { d: PlanDrift; onChanged?: () => Promise<void> | void }) {
   const { can } = useMe();
   const [waiving, setWaiving] = useState(false);
@@ -433,6 +477,7 @@ export function PlanInspector({
       <InspectorSection label="Engineering" testId="plan-item-engineering">
         <Engineering item={item} links={links} />
       </InspectorSection>
+      {item.origin === "approved" && item.prd?.approved && <SpecLine key={`${item.roadmap.slug}|${item.key}`} item={item} />}
       <DateLine item={item} onChanged={onChanged} />
       <InspectorSection label="History" testId="plan-history">
         <History key={`${item.roadmap.slug}|${item.key}`} item={item} />

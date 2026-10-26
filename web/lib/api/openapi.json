@@ -30942,8 +30942,7 @@
             }
           }
         },
-        "x-min-role": "approver",
-        "x-per-item": "owner"
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -81843,6 +81842,24 @@
             "type": "array",
             "title": "Goal Ids"
           },
+          "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/EntityRef"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "default": []
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -100756,6 +100773,43 @@
             ],
             "title": "Freshness"
           },
+          "state": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "drafting",
+              "in_review",
+              "approved",
+              "stale",
+              "failed"
+            ],
+            "title": "State",
+            "default": "requested"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "tech_brief_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tech Brief Version Id"
+          },
           "requirements": {
             "items": {
               "$ref": "#/components/schemas/RequirementOut"
@@ -100987,13 +101041,32 @@
             "default": 3
           },
           "engineering_approver_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "maxItems": 20,
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Engineering Approver Ids"
+          },
+          "tech_brief_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tech Brief Version Id"
           },
           "title": {
             "anyOf": [
@@ -101203,6 +101276,43 @@
               }
             ],
             "title": "Freshness"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "drafting",
+              "in_review",
+              "approved",
+              "stale",
+              "failed"
+            ],
+            "title": "State",
+            "default": "requested"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "tech_brief_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tech Brief Version Id"
           }
         },
         "type": "object",

@@ -277,6 +277,23 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       ],
     },
     {
+      // F5 lane 3: requested from an approved item in the Plan's inspector or from a PRD's
+      // overview (POST /v1/spec-requests), never from the New run dialog.
+      key: "prd_to_spec",
+      title: "Engineering spec from an approved PRD",
+      description: "A technical brief or full engineering spec for a feature's requirements, with SVG user flows and low-fidelity wireframes of 2-4 key screens, each linked to its PRD sections and requirement ids.",
+      requires_document: false,
+      target_kind: "spec",
+      source_kind: "prd",
+      entry: "POST /v1/spec-requests",
+      in_new_run_dialog: false,
+      starts_from: { label: "Request spec · Plan, an approved item, or a PRD's overview", href: "/plan" },
+      writes_document: true,
+      segments: [
+        { name: "spec_draft", title: "Spec, flows and wireframes", roles: ["architect", "designer", "critic"], scopes: [...READ, "read:documents"], outputs: ["spec.md", "design.json"], checkpoint: "eng_review", approver_role: "approver", decider: "role" },
+      ],
+    },
+    {
       key: "strategy_draft",
       title: "Vision or strategy draft",
       description: "Oracle drafts the product vision or the product strategy from the confirmed goals, approved documents, decisions and outcomes; an owner reviews it.",
