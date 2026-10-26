@@ -79,7 +79,10 @@ def _table(rnd: random.Random) -> str:
         dash = "-" * rnd.randint(1, 4)
         return rnd.choice(["", ":"]) + dash + rnd.choice(["", ":"])
 
-    rows = [row(heads), row([sep() for _ in heads])]
+    seps = [sep() for _ in heads]
+    if not outer and seps[0] == "-":
+        seps[0] = "--"  # "- | --" starts a list, not a table (GFM, markdown-it)
+    rows = [row(heads), row(seps)]
     for _ in range(rnd.randint(1, 3)):
         cells = []
         for h in heads:
