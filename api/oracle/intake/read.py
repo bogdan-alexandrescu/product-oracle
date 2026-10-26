@@ -30,7 +30,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Integer, select
+from sqlalchemy import ColumnElement, Integer, exists, false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
@@ -582,21 +582,33 @@ async def _live_state(db: AsyncSession, read: dict[str, Any]) -> str:
     return "running" if submitted else "queued"
 
 
+def _inbox_filter(principal: Principal) -> list[ColumnElement[bool]]:
+    failures = ProductIntake.analysis["extraction"]["failures"].astext.cast(Integer)
+    return [
+        ProductIntake.author_id == principal.user_id,
+        ProductIntake.status.not_in(intake_job.CLOSED_INTAKE),
+        ProductIntake.analysis["extraction"].has_key("failures"),
+        failures >= INBOX_AFTER,
+    ]
+
+
+def inbox_due(principal: Principal) -> ColumnElement[bool]:
+    """Whether :func:`inbox_rows` has a row for me, as a clause the Inbox reads in a query
+    it makes anyway (#689 review: a reader with none pays no read for them)."""
+    if principal.is_run or principal.user_id is None:
+        return false()
+    return exists(select(ProductIntake.id).where(*_inbox_filter(principal)))
+
+
 async def inbox_rows(db: AsyncSession, principal: Principal):
     """One row per open intake of mine whose last reads failed twice or more in a row."""
     from oracle.runs.schemas import InboxIntakeRead
 
     if principal.is_run or principal.user_id is None:
         return []
-    failures = ProductIntake.analysis["extraction"]["failures"].astext.cast(Integer)
     rows = await db.scalars(
         select(ProductIntake)
-        .where(
-            ProductIntake.author_id == principal.user_id,
-            ProductIntake.status.not_in(intake_job.CLOSED_INTAKE),
-            ProductIntake.analysis["extraction"].has_key("failures"),
-            failures >= INBOX_AFTER,
-        )
+        .where(*_inbox_filter(principal))
         .order_by(ProductIntake.updated_at.desc())
     )
     out = []

@@ -30,6 +30,7 @@ from oracle import audit
 from oracle.auth.deps import Principal
 from oracle.docs.models import Document, DocumentVersion
 from oracle.runs.models import Run
+from oracle.runs.service import creator_only_visible
 from oracle.trash.filter import INCLUDE_TRASHED
 from oracle.trash.models import RETENTION_DAYS, TrashEntry
 from oracle.v2.models import ProductIntake
@@ -186,6 +187,10 @@ async def find_root(db: AsyncSession, root_type: str, ref: str, *, trashed: bool
         stmt = select(ProductIntake).where(ProductIntake.id == uuid.UUID(ref))
     else:
         stmt = select(Run).where(Run.id == uuid.UUID(ref))
+        # #689 review: as the run routes, another member's run of a flow private to its
+        # creator (Oracle's read of an intake) is not found.
+        if (private := creator_only_visible(db)) is not None:
+            stmt = stmt.where(private)
     model = stmt.column_descriptions[0]["entity"]
     if trashed:
         stmt = stmt.where(model.deleted_at.is_not(None)).execution_options(**ALL)
@@ -303,9 +308,19 @@ def _models() -> tuple[type, ...]:
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
     entry = await db.get(TrashEntry, entry_id)
-    if entry is None:
+    if entry is None or entry.root_id in await _hidden_runs(db, [entry]):
         raise NotFound("Not in Trash")
     return entry
+
+
+async def _hidden_runs(db: AsyncSession, entries: list[TrashEntry]) -> set[uuid.UUID]:
+    """The entries' root runs the session's principal may not see (#689 review: another
+    member's run of a flow private to its creator), as :func:`find_root` does."""
+    ids = [e.root_id for e in entries if e.root_type == "run"]
+    if not ids or (private := creator_only_visible(db)) is None:
+        return set()
+    stmt = select(Run.id).where(Run.id.in_(ids), ~private).execution_options(**ALL)
+    return set(await db.scalars(stmt))
 
 
 async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, Any]]:
@@ -454,4 +469,6 @@ def days_left(entry: TrashEntry) -> int:
 
 async def list_entries(db: AsyncSession) -> list[TrashEntry]:
     stmt = select(TrashEntry).order_by(TrashEntry.created_at.desc(), TrashEntry.id)
-    return list(await db.scalars(stmt))
+    entries = list(await db.scalars(stmt))
+    hidden = await _hidden_runs(db, entries)
+    return [e for e in entries if e.root_id not in hidden]

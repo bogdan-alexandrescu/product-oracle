@@ -9747,7 +9747,12 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     states: list[InboxFeedbackItem] = []
     counts = InboxCounts()
     staged: list[InboxStaged] = []
-    seen = await inbox_states.last_seen(db, principal.id)
+    from oracle.intake.read import inbox_due as intake_reads_due
+
+    # INT2's intake-read rows, read below only for a reader who has one.
+    seen, (has_intake_reads,) = await inbox_states.last_seen_and(
+        db, principal.id, intake_reads_due(principal)
+    )
     if has_role(principal.role, "approver"):
         states, counts = await inbox_states.feedback_states(db, seen)
         staged = await inbox_states.staged_rows(db)
@@ -9902,7 +9907,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     # INT2: intakes of mine Oracle couldn't read twice in a row.
     from oracle.intake.read import inbox_rows as intake_read_rows
 
-    intake_reads = await intake_read_rows(db, principal)
+    intake_reads = await intake_read_rows(db, principal) if has_intake_reads else []
     counted += len(intake_reads)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
