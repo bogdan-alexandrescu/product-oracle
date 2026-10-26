@@ -159,6 +159,10 @@ async def approve_both(client, ctx) -> None:
 TICKED_KINDS = ("internal_document", "decision", "pricing", "internal_note")
 
 
+def _severity(code: str) -> str:
+    return "warning" if code in TICKED_KINDS else "blocking"
+
+
 def _ctx(**over) -> leak_check.LeakContext:
     base = dict(
         people=[PERSON],
@@ -668,7 +672,7 @@ def test_look_alike_and_invisible_characters_are_still_found(text, code):
     stripped, look-alike letters and dashes mapped) before matching; fails_when=a name
     spelled with invisible or look-alike characters passes; no_claim=every confusable."""
     findings = leak_check.check(text, _ctx())
-    assert code in [f.code for f in findings], findings
+    assert (code, _severity(code)) in [(f.code, f.severity) for f in findings], findings
 
 
 def test_a_customer_is_found_by_its_distinctive_part():
@@ -729,6 +733,74 @@ async def test_a_page_title_and_intro_that_now_leak_are_dropped(client, ctx):
     assert {"item_key": None, "reason": "page_findings"} in body["not_ready"]
 
 
+# --- #708 re-review: the page's own title and intro keep the four kinds blocking --------
+
+
+@pytest.mark.parametrize(
+    ("field", "words", "code"),
+    [
+        ("public_intro", f"From {HIDDEN_DOC}.", "internal_document"),
+        ("public_intro", f"We decided to {DECISION.lower()}.", "decision"),
+        ("public_title", f"Part of {PLAN}", "pricing"),
+        ("public_intro", f"Waits: {NOTE}.", "internal_note"),
+    ],
+)
+async def test_the_page_title_and_intro_refuse_the_four_ticked_kinds(
+    client, ctx, field, words, code
+):
+    """protects=#708 re-review (major), owner decision 1 (2026-10-26): an approvers-only
+    document, a decision, a plan or price and an internal note's words still block the
+    Public page's own title and intro, which nobody ticks; fails_when=the save is 200
+    and the page shows them."""
+    await seed(ctx)
+    resp = await client.put(PAGE, json={field: words}, headers=ctx.as_("approver"))
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "leak_blocking"
+    assert [(f["code"], f["severity"]) for f in detail["findings"]] == [(code, "blocking")]
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert words not in text
+
+
+async def test_a_page_title_and_intro_that_later_hold_the_four_kinds_are_dropped(client, ctx):
+    """protects=#708 re-review (major), owner decision 1 (2026-10-26): a decision recorded,
+    or a plan quoted, after the page's intro or title was saved leaves it out at render,
+    is listed by not_ready and lapses the check, though item texts only warn for those
+    kinds; fails_when=the intro or title stays on the page with nothing ticked."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    resp = await client.put(
+        PAGE,
+        json={"public_title": "Plans for Harbor Tier", "public_intro": "We simplify setup."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await client.post(CHECK, headers=ctx.as_("approver"))).status_code == 201
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Plans for Harbor Tier" in text and "We simplify setup." in text
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Decision(number=8, title="Simplify setup", approver_id=ctx.users["owner"].id,
+                       driver="oracle", origin="manual"))  # fmt: skip
+        s.add(DealOutcome(result="won", account="Willowbrook Example Co", plan="Harbor Tier",
+                          decided_on=date(2026, 9, 2), reason="price",
+                          recorded_by=ctx.users["owner"].id))  # fmt: skip
+        await s.commit()
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "We simplify setup." not in text and "Harbor Tier" not in text
+    assert "Example Labs roadmap" in text
+    # The items' texts are untouched: the four kinds only warn there.
+    assert "Import your accounts in one go" in text
+    body = (await client.get(TEXTS, headers=ctx.as_("approver"))).json()
+    assert body["check"]["state"] != "checked"
+    assert {(f["code"], f["severity"]) for f in body["page_findings"]} == {
+        ("decision", "blocking"), ("pricing", "blocking")
+    }  # fmt: skip
+    assert {"item_key": None, "reason": "page_findings"} in body["not_ready"]
+    resp = await client.post(CHECK, headers=ctx.as_("approver"))
+    assert resp.status_code == 409, resp.text
+    assert {"item_key": None, "reason": "page_findings"} in resp.json()["detail"]["left"]
+
+
 # --- #660 re-review: every Default_Ignorable_Code_Point, and emoji sequences -----------
 
 # Invisible characters outside category Cf: marks (U+034F, variation selectors, U+17B4)
@@ -749,9 +821,9 @@ def test_every_invisible_character_is_stripped_told_and_found(hidden):
     is stripped before matching, told by format_characters and stripped from a draft;
     fails_when="Nort\\u034fhwind" passes the check or is kept; no_claim=other look-alikes."""
     found = leak_check.check(f"As Nort{hidden}hwind Traders asked", _ctx())
-    assert "customer_name" in [f.code for f in found], found
+    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
     found = leak_check.check(f"Built with Quill{hidden}feather", _ctx())
-    assert "person_name" in [f.code for f in found], found
+    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
     assert leak_check.format_characters(f"Nort{hidden}hwind") == [f"U+{ord(hidden):04X}"]
     assert leak_check.strip_format(f"Nort{hidden}hwind") == "Northwind"
 
@@ -828,10 +900,10 @@ def test_only_the_three_subdivision_flags_pass():
     assert leak_check.format_characters(SPLIT_NAME)
     assert leak_check.strip_format(SPLIT_NAME) == "Visit \U0001f3f4\U0001f3f4d soon"
     found = leak_check.check(SPLIT_NAME, _ctx())
-    assert "customer_name" in [f.code for f in found], found
+    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
     assert leak_check.format_characters(SPLIT_PHONE)
     found = leak_check.check(SPLIT_PHONE, _ctx())
-    assert "email_or_phone" in [f.code for f in found], found
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
     # A name right beside a real flag is still read on its own.
     found = leak_check.check(f"Built for Northwind{_flag('gbsct')}", _ctx())
     assert [f.code for f in found] == ["customer_name"]
@@ -856,7 +928,7 @@ def test_blank_characters_read_as_spaces(blank):
     space, so a phone number or a full name spaced with it is found; fails_when="555⠀012⠀3456"
     passes; no_claim=a word split by a visible gap (the approver sees the gap)."""
     found = leak_check.check(f"Call 555{blank}012{blank}3456", _ctx())
-    assert "email_or_phone" in [f.code for f in found], found
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
     found = leak_check.check(f"Built with Priya{blank}Quillfeather", _ctx())
     assert PERSON in found[0].words, found
 
@@ -931,7 +1003,7 @@ def test_combining_marks_and_look_alikes_never_split_or_hide_a_name(text, code):
     confusables.txt), so a mark on or inside a name, U+0130 and mixed-script look-alikes
     are found; fails_when="Northwi\u0307nd" or "N\u00f6rthwind" passes."""
     findings = leak_check.check(text, _ctx())
-    assert code in [f.code for f in findings], findings
+    assert (code, _severity(code)) in [(f.code, f.severity) for f in findings], findings
 
 
 def test_ordinary_accented_words_still_pass():
@@ -1011,7 +1083,7 @@ def test_a_phone_number_in_keycap_emoji_is_found():
     keycaps = "".join(f"{d}\ufe0f\u20e3" for d in "4155550134")
     assert leak_check.format_characters(keycaps) == []
     found = leak_check.check(f"Call {keycaps} today", _ctx())
-    assert "email_or_phone" in [f.code for f in found], found
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
 
 
 async def test_an_unchanged_page_title_is_not_refused_when_the_intro_changes(client, ctx):
@@ -1088,7 +1160,7 @@ def test_the_ogham_space_mark_is_refused_and_does_not_split_a_name():
     "Quill\\u1680feather" passes the check or is not told."""
     assert leak_check.format_characters("Quill feather") == ["U+1680"]
     found = leak_check.check("Built with Quill feather", _ctx())
-    assert "person_name" in [f.code for f in found], found
+    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
 
 
 def test_long_texts_are_not_kept_in_the_skeleton_cache():
