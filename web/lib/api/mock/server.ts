@@ -1627,7 +1627,7 @@ async function routePricing(db: Db, me: MemberRow, req: Request, p: string[], q:
     if (p.length === 4 && p[3] === "decide" && req.method === "POST") return decideMemo(db, me, p[2]);
     return null;
   }
-  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q);
+  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q, ensureMarket(db).competitors);
   if (p[1] === "settings" && p[2] === "pricing_owner" && req.method === "PUT" && me.role === "owner") {
     const { value } = (JSON.parse((await req.clone().text()) || "{}") ?? {}) as { value?: unknown };
     if (value != null && !db.members.some((m) => m.id === value && m.role === "owner" && m.status === "active")) {
@@ -1650,6 +1650,22 @@ function seedPricingScenario(db: Db) {
   };
   db.members.push(second);
   db.pricing = { deals: seedDeals(pricingContext(db.members.find((m) => m.id === db.user_id)!), db.user_id) };
+  // H7's alternatives the deals name: Account 9 was lost to Competitor A; Old Rival is archived.
+  const market = emptyMarket();
+  const alternative = (key: string, name: string, kind: MarketDb["competitors"][number]["kind"], aliases: string[], status: "active" | "archived" = "active") => ({
+    id: uuid(),
+    name,
+    kind,
+    website: kind === "status_quo" ? null : `https://${key}.example`,
+    aliases,
+    description: null,
+    status,
+    lock_version: 1,
+  });
+  const rival = alternative("competitor-a", "Competitor A", "direct", ["CompA"]);
+  market.competitors.push(rival, alternative("spreadsheets", "Spreadsheets", "status_quo", ["a spreadsheet"]), alternative("old-rival", "Old Rival", "direct", [], "archived"));
+  db.market = market;
+  db.pricing.deals.find((d) => d.account === "Account 9")!.competitor_id = rival.id;
   const window: EvidenceWindow = { from: "2026-04-24", to: "2026-10-23" };
   const memo = (slug: string, title: string, question: string, approvedAt: string) => {
     const doc: DocumentRow = {

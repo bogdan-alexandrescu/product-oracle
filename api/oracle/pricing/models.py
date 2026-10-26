@@ -51,8 +51,8 @@ class DealOutcome(TenantScoped, Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     reason_note: Mapped[str | None] = mapped_column(Text)
     price_quoted: Mapped[str | None] = mapped_column(Text)
-    # H7's competitor; its foreign key comes with whichever of H7 and H9 lands second.
-    competitor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # H7's alternative (oracle.market), when the record names one of the company's.
+    competitor_id: Mapped[uuid.UUID | None] = _fk("competitors", "SET NULL")
     source_item_id: Mapped[uuid.UUID | None] = _fk("source_items", "SET NULL")
     # User or API token id, no FK, as elsewhere.
     recorded_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
