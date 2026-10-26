@@ -3306,7 +3306,11 @@ function ensureRequests(db: Db): RequestsDb {
 
 /** The interviews, seeded on first use with the fixture's invited interview (`i-mock-token`). */
 function ensureInterviews(db: Db): InterviewsDb {
-  db.interviews ??= seeded("interviews", () => seedInterviews({ ownerId: db.user_id }));
+  db.interviews ??= seeded("interviews", () => ({
+    ...seedInterviews({ ownerId: db.user_id }),
+    // #604 re-review: the "stored-refusals" scenario's pool refuses every guide job.
+    ...(localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO && { refuse: true }),
+  }));
   return db.interviews;
 }
 

@@ -22853,6 +22853,8 @@ export interface components {
             status: string;
             /** Error */
             error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
         };
         /**
          * InterviewLinkOut

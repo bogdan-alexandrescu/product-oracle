@@ -78,8 +78,8 @@ _ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\
 # on something that failed: what was so then, not now (#561 review).
 _PAST = (
     (
-        re.compile(r"^No (other )?Claude account can take this call"),
-        r"No \1Claude account could take this call",
+        re.compile(r"(^|: )No (other )?Claude account can take this call"),
+        r"\1No \2Claude account could take this call",
     ),
     (re.compile(r"\bevery Claude account is spent\b"), "every Claude account was spent"),
     (
@@ -93,7 +93,8 @@ _PAST = (
     ),
     (re.compile(r"\bthe earliest window clears\b"), "the earliest window was due to clear"),
 )
-_LEAD = re.compile(r"^No (other )?Claude account can take this call")
+# A refusal, alone or after a lead-in ("{segment}: {error}", runs.service).
+_LEAD = re.compile(r"(?:^|: )No (other )?Claude account can take this call")
 
 
 def _in_words(match: re.Match[str], zone: str) -> str:
@@ -113,7 +114,7 @@ def readable_refusal(
     if not text:
         return text
     out = _ISO.sub(lambda m: _in_words(m, zone), text)
-    if not _LEAD.match(out):
+    if not _LEAD.search(out):
         return out
     if past:
         for pattern, then in _PAST:

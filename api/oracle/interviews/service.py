@@ -18,10 +18,11 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.claude_accounts.pool import readable_refusal
 from oracle.export.render import app_url
 from oracle.interviews.models import Interview, InterviewMessage
 from oracle.interviews.schemas import (
@@ -150,8 +151,16 @@ async def _jobs(db: AsyncSession, ids: list[uuid.UUID | None]) -> dict[uuid.UUID
     return {j.id: j for j in await db.scalars(select(LlmJob).where(LlmJob.id.in_(wanted)))}
 
 
-def _state(job: LlmJob | None) -> InterviewJobState | None:
-    return InterviewJobState(id=job.id, status=job.status, error=job.error) if job else None
+def _state(job: LlmJob | None, zone: str) -> InterviewJobState | None:
+    """A job's state; its stored error read as the jobs list reads one (#556, #604 re-review)."""
+    if job is None:
+        return None
+    return InterviewJobState(
+        id=job.id,
+        status=job.status,
+        error=readable_refusal(job.error, zone, past=job.status == "failed"),
+        finished_at=job.finished_at,
+    )
 
 
 async def _names(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
@@ -174,6 +183,11 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
 
         messages = await visible(db, principal, messages)
     jobs = await _jobs(db, [row.guide_job_id, row.snapshot_job_id])
+    zone = (
+        await company_time.company_time_zone(db)
+        if any(j.error for j in jobs.values())
+        else company_time.DEFAULT_ZONE
+    )
     request_ids = list(
         await db.scalars(
             select(ProductRequest.id)
@@ -193,7 +207,7 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
         topic=row.topic,
         intro=row.intro,
         guide=[InterviewGuideItem(**q) for q in row.guide or []],
-        guide_job=_state(jobs.get(row.guide_job_id)) if row.guide_job_id else None,
+        guide_job=_state(jobs.get(row.guide_job_id), zone) if row.guide_job_id else None,
         interviewee_name=row.interviewee_name,
         interviewee_company=row.interviewee_company,
         link_expires_at=row.link_expires_at,
@@ -216,7 +230,7 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
             for m in messages
         ],
         snapshot=row.snapshot or {},
-        snapshot_job=_state(jobs.get(row.snapshot_job_id)) if row.snapshot_job_id else None,
+        snapshot_job=_state(jobs.get(row.snapshot_job_id), zone) if row.snapshot_job_id else None,
         request_ids=request_ids,
         can_manage=can_manage(principal, row),
     )
