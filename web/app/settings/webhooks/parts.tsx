@@ -33,12 +33,19 @@ export function OnTop({ children }: { children: ReactNode }) {
   return typeof document === "undefined" ? null : createPortal(children, document.body);
 }
 
+/** The pause's reason in words: a revoked API token's reads as such, not "creator removed". */
+function pausedWhy(hook: Webhook): string {
+  if (hook.paused_reason === "creator_disabled" && hook.created_by_kind === "api_token") return "API token revoked";
+  return hook.paused_reason ? PAUSED[hook.paused_reason] : "";
+}
+
 /** Active, Paused: <reason>, or Failing (active, every delivery failing). */
 export function WebhookStatus({ hook }: { hook: Webhook }) {
   if (hook.status === "paused") {
+    const why = pausedWhy(hook);
     return (
       <Chip kind="warn" dot data-state="paused">
-        Paused{hook.paused_reason ? `: ${PAUSED[hook.paused_reason]}` : ""}
+        Paused{why ? `: ${why}` : ""}
       </Chip>
     );
   }

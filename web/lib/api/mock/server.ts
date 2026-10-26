@@ -152,7 +152,7 @@ import {
 } from "./pricing";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
-import { captureRunChanges, runMarks, seedWebhooks, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
+import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /**
@@ -3502,6 +3502,9 @@ function webhooksContext(db: Db, me: { id: string; role: Role }): WebhooksContex
   const base = {
     me: { id: me.id, role: me.role },
     members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.id === me.id ? me.role : x.role })),
+    tokens: (db.account ??= seedAccount(db.members, uuid)).tokens
+      .filter((t) => !t.user_id && (t.kind === "personal" || t.kind === "service"))
+      .map((t) => ({ id: t.id, name: t.name })),
     notifications: db.review_v2!.notifications,
     company: { id: "c0000000-0000-4000-8000-00000000c0de", name: "Example Co" },
     uuid,
@@ -4063,6 +4066,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
+  // I1: revoking a live user-less API token pauses the webhooks it made (members.service.revoke_api_token).
+  const revoking = m === "DELETE" && p[1] === "api-tokens" && !p[3] && me.role === "owner"
+    ? (db.account ??= seedAccount(db.members, uuid)).tokens.find((t) => t.id === p[2] && !t.user_id && !t.revoked_at && (t.kind === "personal" || t.kind === "service"))
+    : undefined;
   const accountOut = await accountRoute(
     {
       db: (db.account ??= seedAccount(db.members, uuid)),
@@ -4082,6 +4089,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     p,
     q,
   );
+  if (revoking && accountOut?.status === 204) tokenRevoked(webhooksContext(db, me), revoking.id);
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "discussions" || p[1] === "discussion-changes") {

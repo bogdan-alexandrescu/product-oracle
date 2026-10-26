@@ -179,6 +179,9 @@ async def get(db: AsyncSession, principal: "Principal", webhook_id: uuid.UUID) -
 
 async def outs(db: AsyncSession, principal: "Principal", hooks: list[Webhook]) -> list[WebhookOut]:
     who = await names(db, {h.created_by for h in hooks})
+    tokens = set(
+        await db.scalars(select(ApiToken.id).where(ApiToken.id.in_({h.created_by for h in hooks})))
+    )
     last: dict[uuid.UUID, WebhookDelivery] = {}
     if hooks:
         ranked = (
@@ -222,6 +225,7 @@ async def outs(db: AsyncSession, principal: "Principal", hooks: list[Webhook]) -
                 secret_hint=h.secret_hint,
                 secret_rotated_at=h.secret_rotated_at,
                 created_by=PersonName(name=who.get(h.created_by, "Someone removed")),
+                created_by_kind="api_token" if h.created_by in tokens else "member",
                 created_at=h.created_at,
                 last_delivery=(
                     LastDelivery(status=d.status, at=d.last_at, http_status=d.http_status)
@@ -459,11 +463,16 @@ _MEMBER_CHANGE = {
 
 
 async def _pause_creators(
-    db: AsyncSession, principal: Any, creators: set[uuid.UUID], reason: str
+    db: AsyncSession,
+    principal: Any,
+    creators: set[uuid.UUID],
+    reason: str,
+    why: str | None = None,
 ) -> None:
     """Pause the creators' active webhooks, and give every owner one Inbox row for each,
     with Resume and Take over. The owner who made the change gets it too: the pause is
-    Oracle's (C2), and they may not know the person had a webhook."""
+    Oracle's (C2), and they may not know the person had a webhook. ``why`` words the
+    row's reason instead of ``_MEMBER_CHANGE``'s."""
     hooks = list(
         await db.scalars(
             select(Webhook).where(Webhook.created_by.in_(creators), Webhook.status == "active")
@@ -487,12 +496,12 @@ async def _pause_creators(
             {"name": hook.name, "reason": reason},
         )
         creator = who.get(hook.created_by, "Its creator")
-        why = _MEMBER_CHANGE[reason].format(creator=creator)
+        said = why or _MEMBER_CHANGE[reason].format(creator=creator)
         await collab.notify(
             db,
             owners,
             kind="webhook_paused",
-            title=f"Webhook {hook.name} paused: {why}",
+            title=f"Webhook {hook.name} paused: {said}",
             actor="system",
             data={
                 "webhook_id": str(hook.id),
@@ -527,6 +536,15 @@ async def creator_disabled(db: AsyncSession, principal: Any, user_id: uuid.UUID)
     them: the creator or an owner resumes each one."""
     await _content_off(db, principal, {user_id}, "creator_disabled")
     await _pause_creators(db, principal, {user_id}, "creator_disabled")
+
+
+async def token_revoked(db: AsyncSession, principal: Any, token_id: uuid.UUID) -> None:
+    """A revoked user-less API token's webhooks pause as a disabled member's do
+    (``creator_disabled``; owner decision 2026-10-26); nothing resumes them but a person."""
+    await _content_off(db, principal, {token_id}, "creator_disabled")
+    await _pause_creators(
+        db, principal, {token_id}, "creator_disabled", why="its API token was revoked"
+    )
 
 
 async def creator_role_changed(

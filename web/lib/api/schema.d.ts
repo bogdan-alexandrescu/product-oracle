@@ -38260,6 +38260,12 @@ export interface components {
             secret_rotated_at: string;
             created_by: components["schemas"]["PersonName"];
             /**
+             * Created By Kind
+             * @default member
+             * @enum {string}
+             */
+            created_by_kind: "member" | "api_token";
+            /**
              * Created At
              * Format: date-time
              */
