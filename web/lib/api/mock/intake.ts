@@ -20,7 +20,7 @@
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
-import { applyNudge, nudgeReason, type Nudges } from "./learned";
+import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { displayName } from "@/lib/names";
 import { baselineReviewStatus } from "./baseline";
 import type { V2Db } from "./v2";
@@ -133,13 +133,15 @@ const score = (g: Gap) =>
 const group = (g: Gap) => (OPEN.has(g.status) ? 0 : g.status === "deferred" ? 1 : 2);
 /** Kept learnings about question categories, read as each request starts (./learned.ts). */
 let learned: Nudges = {};
-const tunedScore = (g: Gap) => applyNudge(score(g), learned[g.category]);
 function ranked(gaps: Gap[]): Gap[] {
-  return [...gaps].sort((a, b) => group(a) - group(b) || tunedScore(b) - tunedScore(a));
+  return [...gaps].sort((a, b) => group(a) - group(b) || score(b) - score(a));
 }
+/** The nudge each gap was last ranked with, by gap id (the API's analysis["learned"]): a gap
+ * whose question was asked keeps its own, so asked questions are never re-ranked. */
+const synced = new Map<string, Nudge | undefined>();
 /** A drafted question's why, and the learning that moved it ("Recommended because ..."). */
 function rationaleOf(g: Gap): string {
-  const n = learned[g.category];
+  const n = synced.get(g.id);
   return `${LABEL[g.category]} gap, ${g.importance}.${n ? ` ${nudgeReason(n)}` : ""}`;
 }
 
@@ -375,7 +377,11 @@ function addIntake(db: V2Db, authorId: string, title: string, brief: string, sou
 
 /** Keep one question per open gap, drafted in rank order. */
 function syncQuestions(db: V2Db, intake: Intake, at = now()) {
-  ranked(db.gaps.filter((g) => g.intake_id === intake.id)).forEach((g, i) => {
+  const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
+  const asked = (g: Gap) => db.questions.some((q) => q.gap_id === g.id && q.status !== "draft" && q.status !== "withdrawn");
+  for (const g of gaps) if (!asked(g)) synced.set(g.id, learned[g.category]);
+  const tuned = (g: Gap) => applyNudge(score(g), synced.get(g.id));
+  [...gaps].sort((a, b) => group(a) - group(b) || tuned(b) - tuned(a)).forEach((g, i) => {
     const mine = db.questions.filter((q) => q.gap_id === g.id && q.status !== "withdrawn");
     if (!OPEN.has(g.status)) {
       mine.filter((q) => q.status === "draft").forEach((q) => (q.status = "withdrawn"));

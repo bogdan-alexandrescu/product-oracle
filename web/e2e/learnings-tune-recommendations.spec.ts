@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /*
  * Build prompt §10: learnings kept from outcomes tune later question recommendations, driven
@@ -33,19 +33,27 @@ const next = (page: Page) => page.getByTestId("next-questions");
 const nextPrompts = (page: Page) => next(page).getByTestId("next-prompt");
 
 /** Plan > Outcomes > Add learning, as a person keeps one. */
-async function addLearning(page: Page) {
+async function addLearning(page: Page, key = "effort_cost", text = LEARNT) {
   await page.goto("/plan");
   await page.getByTestId("plan-tabs").filter({ visible: true }).getByTestId("plan-tab-outcomes").click();
   await expect(page).toHaveURL(/\/plan\/outcomes$/);
   await page.getByTestId("learnings-panel").getByRole("button", { name: "Add learning" }).click();
   const form = page.getByTestId("learning-form");
-  await form.getByLabel("Learning").fill(LEARNT);
+  await form.getByLabel("Learning").fill(text);
   await form.getByLabel("Applies to").selectOption("question_category");
-  await form.getByLabel("Key").fill("effort_cost");
+  await form.getByLabel("Key").fill(key);
   await form.getByLabel("Direction").selectOption("recommend_more");
   await form.getByRole("button", { name: "Add learning" }).click();
   await expect(form).toHaveCount(0);
-  return page.getByTestId("learning-row").filter({ hasText: LEARNT });
+  return page.getByTestId("learning-row").filter({ hasText: text });
+}
+
+/** Retire a learning on Plan > Outcomes, with a reason. */
+async function retire(row: Locator) {
+  await row.getByRole("button", { name: "Retire" }).click();
+  await row.getByLabel("Reason").fill("Effort is in the template now");
+  await row.getByRole("button", { name: "Retire learning" }).click();
+  await expect(row.getByTestId("learning-status")).toHaveText("Retired");
 }
 
 /** More actions > Re-analyse: Oracle ranks the questions not asked yet again. */
@@ -83,15 +91,52 @@ test("a retired learning stops counting", async ({ page }) => {
   // order at the next Re-analyse; fails_when=a retired learning still moves the effort
   // question; no_claim=questions already asked (never re-ranked).
   await login(page);
-  const row = await addLearning(page);
-  await row.getByRole("button", { name: "Retire" }).click();
-  await row.getByLabel("Reason").fill("Effort is in the template now");
-  await row.getByRole("button", { name: "Retire learning" }).click();
-  await expect(row.getByTestId("learning-status")).toHaveText("Retired");
+  await retire(await addLearning(page));
 
   await openIntake(page);
   await reanalyse(page);
   await expect(nextPrompts(page)).toHaveCount(5);
   await expect(nextPrompts(page).nth(4)).toHaveText(DIFFERENTIATION);
   await expect(next(page)).not.toContainText(EFFORT);
+});
+
+const askedPrompts = (page: Page) => page.getByTestId("intake-thread").getByTestId("question").locator("article");
+
+test("a viewer reads the asked questions in the author's order after learnings come and go", async ({ page }) => {
+  // protects=03b §5 "asked questions are never re-ranked": after the owner asks five questions
+  // and an approver adds learnings (one lifting the last asked question, one lifting a draft),
+  // retires one and Re-analyse runs, a viewer reads the asked questions in the order the
+  // author does, and the asked question's "Why Oracle asks" is the one it was asked with;
+  // fails_when=a reader other than the author sees the asked questions re-ranked by the
+  // learnings in force now; no_claim=private facts (api tests/test_intake_sharing_round3.py).
+  await login(page);
+  await openIntake(page);
+  await next(page).getByRole("button", { name: "Ask these" }).click();
+  await expect(askedPrompts(page)).toHaveCount(5);
+  const order = await askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+  expect(order[4]).toBe(DIFFERENTIATION);
+
+  await signOut(page);
+  await login(page, "approver@example.com");
+  const lift = await addLearning(page, "differentiation", "Differentiation settled the pitch early");
+  await addLearning(page);
+  await retire(lift);
+  await addLearning(page, "differentiation", "Buyers asked how it differs first");
+  await signOut(page);
+
+  await login(page);
+  await openIntake(page);
+  await reanalyse(page);
+  await expect(nextPrompts(page).first()).toBeVisible();
+  await expect(askedPrompts(page)).toHaveCount(5);
+  expect(await askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(order);
+  await signOut(page);
+
+  await login(page, "viewer@example.com");
+  await openIntake(page);
+  await expect(askedPrompts(page)).toHaveCount(5);
+  expect(await askedPrompts(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual(order);
+  const asked = page.getByTestId("intake-thread").getByTestId("question").filter({ hasText: DIFFERENTIATION });
+  await asked.getByRole("button", { name: "About why Oracle asks" }).click();
+  await expect(asked.locator('[role="tooltip"]')).not.toContainText("Recommended");
 });
