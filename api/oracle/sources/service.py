@@ -127,6 +127,8 @@ def _connector_credential(credential: connections.Credential) -> dict[str, Any]:
     bundle: dict[str, Any] = {**credential.extra, "access_token": token, "token": token}
     if credential.provider == "fireflies":
         bundle["api_key"] = token
+        if credential.endpoint_url:
+            bundle["endpoint"] = credential.endpoint_url
     return bundle
 
 

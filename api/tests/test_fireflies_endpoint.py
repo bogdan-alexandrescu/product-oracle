@@ -59,7 +59,8 @@ NEW_KEY = "ff-new-key-2"
         ("https://[::ffff:10.0.0.5]/graphql", "private"),
         ("https://[::ffff:127.0.0.1]/graphql", "private"),
         ("https://100.64.0.1/graphql", "private"),
-        ("not a url", "valid"),
+        ("not a url", "https://"),
+        ("https://[nope/graphql", "valid"),
     ],
 )
 def test_the_endpoint_rule_refuses(url, words):
@@ -619,3 +620,33 @@ async def test_a_run_token_cannot_set_an_endpoint(tenant_id, identify):
     assert identify == []
     async with tenant_session(tenant_id) as s:
         assert (await s.get(Connection, conn)).endpoint_url is None
+
+
+async def test_connecting_again_keeps_an_owner_set_endpoint_from_others(
+    client, tenant_id, identify
+):
+    """A member demoted after their owner-set endpoint pastes the key again: the
+    endpoint is not reset by them; an owner's paste resets it, recorded."""
+    person = await make_person(tenant_id, "pm@example.com", "approver")
+    conn = await _fireflies_connection(tenant_id, person.id, CUSTOM)
+    async with tenant_session(tenant_id) as s:
+        (await s.get(Connection, conn)).account_id = "u1"
+        await s.commit()
+    resp = await client.post(
+        "/v1/connections/fireflies/token", json={"token": API_KEY}, headers=person.headers
+    )
+    assert resp.status_code == 403, resp.text
+    async with tenant_session(tenant_id) as s:
+        assert (await s.get(Connection, conn)).endpoint_url == CUSTOM
+        (await s.get(type(person.user), person.id)).role = "owner"
+        await s.commit()
+    resp = await client.post(
+        "/v1/connections/fireflies/token", json={"token": API_KEY}, headers=person.headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["endpoint_url"] == DEFAULT_ENDPOINT
+    async with tenant_session(tenant_id) as s:
+        events = list(
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "connection.endpoint"))
+        )
+    assert [(e.data["from"], e.data["to"]) for e in events] == [(CUSTOM, DEFAULT_ENDPOINT)]

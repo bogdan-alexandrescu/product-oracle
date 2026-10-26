@@ -12,7 +12,7 @@ from oracle.auth.models import User
 from oracle.auth.service import create_user, make_session_cookie
 from oracle.config import get_settings
 from oracle.connections.models import Connection
-from oracle.connections.router import provider_http
+from oracle.connections.router import fireflies_http, provider_http
 from oracle.main import app
 from oracle.tenancy import tenant_session
 
@@ -52,11 +52,13 @@ def use_provider_http(handler: Handler) -> list[httpx.Request]:
             yield client
 
     app.dependency_overrides[provider_http] = override
+    app.dependency_overrides[fireflies_http] = override
     return seen
 
 
 def clear_provider_http() -> None:
     app.dependency_overrides.pop(provider_http, None)
+    app.dependency_overrides.pop(fireflies_http, None)
 
 
 async def add_connection(

@@ -21,7 +21,7 @@ from oracle import audit
 from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.auth.models import User
 from oracle.auth.service import may_sign_in
-from oracle.authz import require_role
+from oracle.authz import has_role, require_role
 from oracle.config import get_settings
 from oracle.connections import oauth, service
 from oracle.connections.models import Connection
@@ -34,6 +34,7 @@ from oracle.connections.providers import (
     get_provider,
     reconnect_reason,
 )
+from oracle.sources.connectors import fireflies
 from oracle.tenancy import tenant_session
 
 router = APIRouter(prefix="/v1", tags=["connections"])
@@ -48,6 +49,16 @@ async def provider_http() -> AsyncIterator[httpx.AsyncClient]:
 
 
 ProviderHttp = Annotated[httpx.AsyncClient, Depends(provider_http)]
+
+
+async def fireflies_http() -> AsyncIterator[httpx.AsyncClient]:
+    """HTTP client for Fireflies calls (its configured endpoint, the default included):
+    the guarded transport. Tests override it with an httpx.MockTransport."""
+    async with fireflies.guarded_client() as client:
+        yield client
+
+
+FirefliesHttp = Annotated[httpx.AsyncClient, Depends(fireflies_http)]
 
 
 async def require_user(principal: CurrentPrincipal) -> Principal:
@@ -81,6 +92,9 @@ class ConnectionOut(BaseModel):
     # Set when the connection works but should be signed in again: a Google grant
     # without drive.readonly cannot read picked folders, "Reconnect to choose files".
     reconnect_reason: str | None = None
+    # Fireflies: the GraphQL endpoint it reads (the default when no owner set one);
+    # null for other providers. Only the URL, never the key.
+    endpoint_url: str | None = None
 
 
 class ProviderOut(BaseModel):
@@ -95,6 +109,16 @@ class ProviderOut(BaseModel):
 class TokenIn(BaseModel):
     token: str = Field(min_length=1, max_length=4096)
     label: str | None = Field(default=None, max_length=200)
+    # Fireflies only, Oracle owners only: another GraphQL endpoint (https, default port,
+    # no user info, query or fragment, not a private address). Omit for the default.
+    endpoint_url: str | None = Field(default=None, max_length=2048)
+
+
+class EndpointIn(BaseModel):
+    # null: back to the default (https://api.fireflies.ai/graphql).
+    endpoint_url: str | None = Field(default=None, max_length=2048)
+    # The API key, entered again: a key is never carried over to another endpoint.
+    token: str = Field(min_length=1, max_length=4096)
 
 
 class ReconnectIn(BaseModel):
@@ -139,7 +163,31 @@ def _out(conn: Connection) -> ConnectionOut:
         created_at=conn.created_at,
         updated_at=conn.updated_at,
         reconnect_reason=reconnect_reason(conn.provider, list(conn.scopes or [])),
+        endpoint_url=endpoint_url(conn),
     )
+
+
+def endpoint_url(conn: Connection) -> str | None:
+    if conn.provider != "fireflies":
+        return None
+    return conn.endpoint_url or fireflies.DEFAULT_ENDPOINT
+
+
+OWNER_ONLY = "Only an Oracle owner can set or change a Fireflies endpoint"
+
+
+def _endpoint(provider: Provider, url: str | None, principal: Principal) -> str | None:
+    """The checked endpoint for ``provider`` (None for the default), or 403 / 422."""
+    if not has_role(principal.role, "owner"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, OWNER_ONLY)
+    if provider.key != "fireflies":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Only a Fireflies connection takes an endpoint"
+        )
+    try:
+        return fireflies.check_endpoint(url)
+    except fireflies.EndpointRefused as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
 
 
 def _provider(key: str) -> Provider:
@@ -248,19 +296,33 @@ async def google_picker_config(principal: UserPrincipal, _: Viewer) -> PickerCon
     },
 )
 async def connect_with_token(
-    provider: str, body: TokenIn, principal: UserPrincipal, db: TenantDB, http: ProviderHttp
+    provider: str,
+    body: TokenIn,
+    principal: UserPrincipal,
+    db: TenantDB,
+    http: ProviderHttp,
+    ff_http: FirefliesHttp,
 ) -> ConnectionOut:
     p = _provider(provider)
     assert principal.user_id is not None
+    endpoint = _endpoint(p, body.endpoint_url, principal) if body.endpoint_url else None
+    before = None
+    if p.key == "fireflies":
+        before = {c.account_id: endpoint_url(c) for c in await service.list_for_user(
+            db, principal.user_id) if c.provider == "fireflies"}  # fmt: skip
     try:
         conn = await service.connect_token(
             db,
-            http,
+            ff_http if p.key == "fireflies" else http,
             user_id=principal.user_id,
             provider=p,
             token=body.token.strip(),
             label=body.label.strip() if body.label and body.label.strip() else None,
+            endpoint=endpoint,
+            may_change_endpoint=has_role(principal.role, "owner"),
         )
+    except service.EndpointChangeRefused as e:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
     except CredentialRejected as e:
         raise _rejected(e) from None
     except ProviderUnavailable as e:
@@ -269,7 +331,71 @@ async def connect_with_token(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
     await audit.record(
         db, principal, "connection.connect", "connection", conn.id,
-        {"provider": p.key, "auth_mode": "token", "account": conn.account_label},
+        {"provider": p.key, "auth_mode": "token", "account": conn.account_label,
+         **({"endpoint": endpoint} if endpoint else {})},
+    )  # fmt: skip
+    if before and conn.account_id in before and before[conn.account_id] != endpoint_url(conn):
+        await audit.record(
+            db, principal, "connection.endpoint", "connection", conn.id,
+            {"provider": p.key, "from": before[conn.account_id], "to": endpoint_url(conn)},
+        )  # fmt: skip
+    await db.commit()
+    return _out(conn)
+
+
+@router.put(
+    "/connections/{connection_id}/endpoint",
+    response_model=ConnectionOut,
+    responses={
+        400: {"description": "Fireflies rejected the key, or it belongs to another account"},
+        403: {"description": "Only an Oracle owner sets an endpoint"},
+        422: {"description": "An endpoint Oracle does not call, or not a Fireflies connection"},
+    },
+)
+async def set_connection_endpoint(
+    connection_id: uuid.UUID,
+    body: EndpointIn,
+    principal: UserPrincipal,
+    _: Annotated[Principal, Depends(require_role("owner"))],
+    db: TenantDB,
+    http: FirefliesHttp,
+) -> ConnectionOut:
+    """Change a Fireflies connection's GraphQL endpoint (null: back to the default).
+    Oracle owners only; the API key is entered again and checked at the new endpoint
+    (a stored key is never sent to another endpoint). Recorded in the audit log."""
+    conn = await _own(db, connection_id, principal)
+    p = _provider(conn.provider)
+    endpoint = _endpoint(p, body.endpoint_url, principal)
+    token = body.token.strip()
+    try:
+        identity = await service.identify(p, http, token, endpoint)
+    except CredentialRejected as e:
+        raise _rejected(e) from None
+    except ProviderUnavailable as e:
+        raise _unavailable(e) from None
+    if identity.account_id != conn.account_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"That key belongs to {identity.label}, not {conn.account_label}; "
+            "connect it as a new connection",
+        )
+    before = endpoint_url(conn)
+    try:
+        conn = await service.save(
+            db,
+            user_id=conn.user_id,
+            provider=p,
+            auth_mode="token",
+            identity=identity,
+            bundle={"access_token": token},
+            label=conn.account_label,
+            endpoint_url=endpoint,
+        )
+    except service.MemberDisabled as e:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None
+    await audit.record(
+        db, principal, "connection.endpoint", "connection", conn.id,
+        {"provider": p.key, "from": before, "to": endpoint_url(conn)},
     )  # fmt: skip
     await db.commit()
     return _out(conn)
@@ -380,15 +506,18 @@ async def reconnect_connection(
     principal: UserPrincipal,
     db: TenantDB,
     http: ProviderHttp,
+    ff_http: FirefliesHttp,
     body: ReconnectIn | None = None,
 ) -> ReconnectOut:
     """New token: replace it (same account only). No token: refresh or re-check; when
     the provider needs a fresh sign-in, returns ``authorize_url`` instead."""
     conn = await _own(db, connection_id, principal)
     p = _provider(conn.provider)
+    if p.key == "fireflies":
+        http = ff_http
     if body is not None and body.token:
         try:
-            identity = await p.identify(http, body.token.strip())
+            identity = await service.identify(p, http, body.token.strip(), conn.endpoint_url)
         except CredentialRejected as e:
             raise _rejected(e) from None
         except ProviderUnavailable as e:
@@ -408,6 +537,7 @@ async def reconnect_connection(
                 identity=identity,
                 bundle={"access_token": body.token.strip()},
                 label=conn.account_label if conn.auth_mode == "token" else None,
+                endpoint_url=conn.endpoint_url,
             )
         except service.MemberDisabled as e:
             raise HTTPException(status.HTTP_403_FORBIDDEN, str(e)) from None

@@ -188,14 +188,28 @@ async def identify_notion(client: httpx.AsyncClient, token: str) -> Identity:
 # --- Fireflies ----------------------------------------------------------------------
 
 
-async def identify_fireflies(client: httpx.AsyncClient, token: str) -> Identity:
-    resp = await _get(
-        client,
-        "POST",
-        "https://api.fireflies.ai/graphql",
-        headers=_bearer(token),
-        json={"query": "query { user { user_id email name } }"},
-    )
+async def identify_fireflies(
+    client: httpx.AsyncClient, token: str, endpoint: str | None = None
+) -> Identity:
+    """The key's user, asked at ``endpoint`` (the default when None). ``client`` is the
+    guarded one in the API (oracle.connections.router.fireflies_http); a redirect to
+    another host is refused before the key is sent there."""
+    from oracle.sources.connectors import fireflies
+
+    try:
+        resp = await fireflies.post(
+            client,
+            endpoint or fireflies.DEFAULT_ENDPOINT,
+            token,
+            {"query": "query { user { user_id email name } }"},
+        )
+    except fireflies.EndpointRefused as e:
+        raise CredentialRefused(str(e)) from None
+    except httpx.HTTPError as e:
+        if fireflies.address_refused(e):
+            raise CredentialRefused(fireflies._PRIVATE) from None
+        host = httpx.URL(endpoint or fireflies.DEFAULT_ENDPOINT).host
+        raise ProviderUnavailable(f"cannot reach {host}") from None
     _check(resp, "Fireflies")
     data = resp.json()
     user = (data.get("data") or {}).get("user")

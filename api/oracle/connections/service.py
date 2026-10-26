@@ -26,6 +26,7 @@ from oracle.connections.providers import (
     Provider,
     ProviderUnavailable,
     get_provider,
+    identify_fireflies,
 )
 
 # OAuth access tokens are refreshed this long before they expire.
@@ -35,6 +36,11 @@ HTTP_TIMEOUT = httpx.Timeout(20.0)
 
 class MemberDisabled(Exception):
     """The connection's member was removed (disabled): nothing is stored for them."""
+
+
+class EndpointChangeRefused(Exception):
+    """Connecting again would change a Fireflies connection's endpoint, and the caller
+    may not (only an Oracle owner sets or changes one)."""
 
 
 class ConnectionUnavailable(Exception):
@@ -53,6 +59,8 @@ class Credential:
     access_token: str
     # Non-secret extras kept with the token.
     extra: dict[str, Any] = field(default_factory=dict)
+    # Fireflies: the GraphQL endpoint an owner set; None for the default.
+    endpoint_url: str | None = None
 
 
 @asynccontextmanager
@@ -102,8 +110,12 @@ async def save(
     expires_at: datetime | None = None,
     scopes: list[str] | None = None,
     label: str | None = None,
+    endpoint_url: str | None = None,
+    may_change_endpoint: bool = True,
 ) -> Connection:
     """Create the connection, or replace the credential of the same account (reconnect).
+    A Fireflies connection takes ``endpoint_url`` (None: the default); a reconnect passes
+    the stored one.
 
     The member's row is locked (shared) first and they must still be an active member: a
     request that authenticated before a disable never stores a credential for them
@@ -124,6 +136,15 @@ async def save(
     if conn is None:
         conn = Connection(user_id=user_id, provider=provider.key, account_id=identity.account_id)
         session.add(conn)
+    elif (
+        provider.key == "fireflies"
+        and conn.endpoint_url != endpoint_url
+        and not may_change_endpoint
+    ):
+        raise EndpointChangeRefused(
+            "This Fireflies account is connected through an endpoint an owner set; only "
+            "an Oracle owner can change it"
+        )
     conn.auth_mode = auth_mode
     conn.account_label = label or identity.label
     conn.ciphertext = _seal({**identity.extra, **bundle})
@@ -132,9 +153,20 @@ async def save(
     conn.status = "active"
     conn.last_error = None
     conn.expires_at = expires_at
+    if provider.key == "fireflies":
+        conn.endpoint_url = endpoint_url
     conn.updated_at = _now()
     await session.flush()
     return conn
+
+
+async def identify(
+    provider: Provider, http: httpx.AsyncClient, token: str, endpoint: str | None = None
+) -> Identity:
+    """The account a token belongs to; Fireflies is asked at the connection's endpoint."""
+    if provider.key == "fireflies":
+        return await identify_fireflies(http, token, endpoint)
+    return await provider.identify(http, token)
 
 
 async def connect_token(
@@ -145,9 +177,12 @@ async def connect_token(
     provider: Provider,
     token: str,
     label: str | None = None,
+    endpoint: str | None = None,
+    may_change_endpoint: bool = True,
 ) -> Connection:
-    """Validate a pasted token with the provider, read the account, store it encrypted."""
-    identity = await provider.identify(http, token)
+    """Validate a pasted token with the provider, read the account, store it encrypted.
+    ``endpoint`` (Fireflies, checked and owner-only in the router) is stored with it."""
+    identity = await identify(provider, http, token, endpoint)
     return await save(
         session,
         user_id=user_id,
@@ -156,6 +191,8 @@ async def connect_token(
         identity=identity,
         bundle={"access_token": token},
         label=label,
+        endpoint_url=endpoint,
+        may_change_endpoint=may_change_endpoint,
     )
 
 
@@ -268,6 +305,7 @@ async def credential_for(
         auth_mode=conn.auth_mode,
         access_token=bundle["access_token"],
         extra=extra,
+        endpoint_url=conn.endpoint_url,
     )
 
 
@@ -332,7 +370,7 @@ async def recheck(session: AsyncSession, http: httpx.AsyncClient, conn: Connecti
     else:
         token = bundle["access_token"]
     try:
-        identity = await provider.identify(http, token)
+        identity = await identify(provider, http, token, conn.endpoint_url)
     except CredentialRejected as e:
         await mark_failure(session, conn, "expired", str(e))
         raise ConnectionUnavailable(f"{e}; paste a new token", "expired") from e

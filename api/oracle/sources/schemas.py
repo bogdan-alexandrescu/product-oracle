@@ -90,6 +90,8 @@ class ConnectionChoice(BaseModel):
     status: str
     # "Reconnect to choose files" for a Google connection without drive.readonly.
     reconnect_reason: str | None = None
+    # Fireflies: the GraphQL endpoint the connection reads (never the key).
+    endpoint_url: str | None = None
 
 
 class SourceKindOut(BaseModel):
