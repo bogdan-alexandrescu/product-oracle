@@ -434,12 +434,30 @@ async def take_over(db: AsyncSession, principal: "Principal", hook: Webhook) -> 
 # --- C2: member changes -----------------------------------------------------------------
 
 
+_MEMBER_CHANGE = {
+    "creator_disabled": "{creator} was disabled",
+    "creator_demoted": "{creator} is no longer an approver",
+}
+
+
 async def _pause_creators(
     db: AsyncSession, principal: Any, creators: set[uuid.UUID], reason: str
 ) -> None:
-    for hook in await db.scalars(
-        select(Webhook).where(Webhook.created_by.in_(creators), Webhook.status == "active")
-    ):
+    """Pause the creators' active webhooks, and give every owner one Inbox row for each,
+    with Resume and Take over. The owner who made the change gets it too: the pause is
+    Oracle's (C2), and they may not know the person had a webhook."""
+    hooks = list(
+        await db.scalars(
+            select(Webhook).where(Webhook.created_by.in_(creators), Webhook.status == "active")
+        )
+    )
+    if not hooks:
+        return
+    from oracle.review import collab
+
+    who = await names(db, {h.created_by for h in hooks})
+    owners = await _owners(db)
+    for hook in hooks:
         hook.status = "paused"
         hook.paused_reason = reason
         await audit.record(
@@ -449,6 +467,21 @@ async def _pause_creators(
             "webhook",
             hook.id,
             {"name": hook.name, "reason": reason},
+        )
+        creator = who.get(hook.created_by, "Its creator")
+        why = _MEMBER_CHANGE[reason].format(creator=creator)
+        await collab.notify(
+            db,
+            owners,
+            kind="webhook_paused",
+            title=f"Webhook {hook.name} paused: {why}",
+            actor="system",
+            data={
+                "webhook_id": str(hook.id),
+                "href": "/settings/webhooks",
+                "reason": reason,
+                "actions": ["resume", "take_over"],
+            },
         )
 
 
