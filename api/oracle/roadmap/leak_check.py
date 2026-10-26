@@ -19,13 +19,17 @@ on their confusable skeleton (:func:`skeleton`, UTS #39 §4): NFD, every combini
 (Mn, Mc, Me) and Default_Ignorable dropped, casefolded and mapped through Unicode's own
 confusables.txt (vendored in ``unicode/`` for the Unicode version Python reports), so a
 mark on or inside a name ("Northwi\u0307nd", "N\u00f6rthwind", U+0130) and mixed-script
-look-alikes are found. A public text holding an invisible character is refused when saved
+look-alikes are found. They also match on the strict skeleton (:func:`strict_skeleton`:
+the same, but every character mapped before case is folded, so a capital I, Greek Iota or
+Cyrillic I stands in for a small l as Unicode says); a name is found when either form
+matches. A public text holding an invisible character is refused when saved
 (:func:`format_characters`), so what an approver reads is what was checked; only the
 joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, the
 England, Scotland or Wales flag) are kept. Any other tag run is refused, and the check
 reads it as the ASCII it spells, in place, so a name split across two flags is found.
 Characters that render blank without being Default_Ignorable (a braille blank, the
-ideographic space) read as spaces.
+ideographic space) read as spaces; the Ogham space mark, drawn as a line or a blank, is
+refused like an invisible character.
 
 Every pattern reads untrusted text and stays linear (no nested quantifiers).
 """
@@ -134,6 +138,9 @@ _FLAG_TAGS = re.compile(
 # Any other run of tags, with the black flag before it and the cancel tag after it.
 _TAG_RUN = re.compile("\U0001f3f4?([\U000e0020-\U000e007e]+)\U000e007f?|\U000e007f")
 _KEYCAP = "\u20e3"
+# Not Default_Ignorable, but drawn as a line or a blank depending on the font: refused and
+# read as nothing, so it cannot split a name.
+_REFUSED = "\u1680"
 
 # Unicode's confusables.txt (UTS #39) for the Unicode version Python's unicodedata reports,
 # vendored with its licence; a missing file fails at import.
@@ -197,7 +204,7 @@ class LeakContext:
 
 
 def _invisible(char: str) -> bool:
-    return bool(_IGNORABLE.match(char)) or unicodedata.category(char) == "Cf"
+    return char in _REFUSED or bool(_IGNORABLE.match(char)) or unicodedata.category(char) == "Cf"
 
 
 def _strip_invisible(text: str) -> str:
@@ -211,7 +218,23 @@ def _drop_marks(text: str, marks: tuple[str, ...]) -> str:
     )
 
 
-@functools.lru_cache(maxsize=4096)
+# Only strings this short (names, titles, slugs) are cached: a 2,000-character text is
+# checked once per save and render.
+CACHED_TEXT = 256
+
+
+def _cached(fn):
+    cached = functools.lru_cache(maxsize=4096)(fn)
+
+    @functools.wraps(fn)
+    def wrapper(text: str) -> str:
+        return cached(text) if len(text) <= CACHED_TEXT else fn(text)
+
+    wrapper.cache = cached
+    return wrapper
+
+
+@_cached
 def skeleton(text: str) -> str:
     """``text``'s confusable skeleton (UTS #39 §4, casefolded): NFD, every combining mark and
     Default_Ignorable dropped, casefolded, each character mapped through confusables.txt
@@ -236,6 +259,17 @@ def _prototype(char: str) -> str:
     if prototype is None:
         return char.casefold().translate(SKELETON_MAP)
     return "i" if prototype == "l" and char.isupper() else prototype
+
+
+@_cached
+def strict_skeleton(text: str) -> str:
+    """``text``'s skeleton exactly as UTS #39 §4 defines it, then casefolded: NFD, every
+    combining mark and Default_Ignorable dropped, each character mapped through
+    confusables.txt as it is (capital I, Greek Iota and Cyrillic I to "l"; "m" to "rn"),
+    NFD again and casefolded. Unlike :func:`skeleton`, case is folded last, so a capital I
+    stands in for a small l ("RivaICo" is "RivalCo")."""
+    text = _strip_invisible(_drop_marks(text, _MARKS)).translate(SKELETON_MAP)
+    return _drop_marks(text, _MARKS).casefold()
 
 
 _GENERIC_SKELETONS = frozenset(map(skeleton, GENERIC_COMPANY_WORDS))
@@ -318,6 +352,15 @@ def _norm(text: str) -> str:
     return " ".join(_WORD.findall(skeleton(_read(text))))
 
 
+# The few texts a check is reading (each name list is matched against the same text).
+@functools.lru_cache(maxsize=8)
+def _forms(text: str) -> tuple[str, str]:
+    """``text``'s words on each skeleton (:func:`skeleton`, :func:`strict_skeleton`), one
+    space apart: a name is found when either form holds it."""
+    read = _read(text)
+    return tuple(" ".join(_WORD.findall(fn(read))) for fn in (skeleton, strict_skeleton))
+
+
 def _plain(text: str) -> str:
     """``text`` without its combining marks, for splitting a name into its parts."""
     return unicodedata.normalize("NFC", _drop_marks(_read(text), _MARKS))
@@ -325,14 +368,14 @@ def _plain(text: str) -> str:
 
 def _names(text: str, names: list[str]) -> list[str]:
     """Each of ``names`` that ``text`` holds as whole words, both on their confusable
-    skeleton."""
-    padded = f" {_norm(text)} "
+    skeleton or both on their strict one."""
+    padded = [f" {form} " for form in _forms(text)]
     out: list[str] = []
     for name in names:
-        n = _norm(name or "")
-        if len(n) < MIN_NAME or name in out:
+        forms = _forms(name or "")
+        if len(forms[0]) < MIN_NAME or name in out:
             continue
-        if f" {n} " in padded:
+        if any(f" {n} " in p for n, p in zip(forms, padded, strict=True)):
             out.append(name)
     return out
 
@@ -418,13 +461,14 @@ def _hosts(text: str, ctx: LeakContext) -> list[str]:
 
 
 def _note_copies(text: str, notes: list[str]) -> list[str]:
-    words = f" {_norm(text)} "
+    texts = [f" {form} " for form in _forms(text)]
     out: list[str] = []
     for note in notes:
-        parts = _norm(note or "").split()
-        for i in range(len(parts) - NOTE_WORDS + 1):
-            run = " ".join(parts[i : i + NOTE_WORDS])
-            if f" {run} " in words:
+        for form, words in zip(_forms(note or ""), texts, strict=True):
+            parts = form.split()
+            runs = (" ".join(parts[i : i + NOTE_WORDS]) for i in range(len(parts) - NOTE_WORDS + 1))
+            run = next((r for r in runs if f" {r} " in words), None)
+            if run:
                 out.append(run)
                 break
     return out
@@ -466,7 +510,12 @@ def check(
     add("alternative_name", _names(raw, ctx.alternatives))
     codes = [m.group(0) for p in (_TRACKER, _GOAL, _DECISION) for m in p.finditer(text)]
     skel = skeleton(_read(raw))
-    codes += [s for s in ctx.slugs if _slug_in(skeleton(_read(s)), skel)]
+    strict = strict_skeleton(_read(raw))
+    codes += [
+        s
+        for s in ctx.slugs
+        if _slug_in(skeleton(_read(s)), skel) or _slug_in(strict_skeleton(_read(s)), strict)
+    ]
     add("internal_code", codes)
     add("internal_host", _hosts(text, ctx))
     add("internal_document", _names(raw, ctx.hidden_documents))

@@ -1035,5 +1035,8 @@ def test_the_ogham_space_mark_is_refused_and_does_not_split_a_name():
 def test_long_texts_are_not_kept_in_the_skeleton_cache():
     """protects=#695 re-review (minor): only short strings (names) are cached, so the cache
     cannot hold thousands of 2,000-character texts; fails_when=a long text is cached."""
-    leak_check.check("word " * 400, _ctx())
-    assert all(len(args[0]) <= leak_check.CACHED_TEXT for args in leak_check.cached_texts())
+    long = "word " * 400
+    for fn in (leak_check.skeleton, leak_check.strict_skeleton):
+        before = fn.cache.cache_info().currsize
+        assert fn(long) == fn(long)
+        assert fn.cache.cache_info().currsize == before
