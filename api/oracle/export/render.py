@@ -168,6 +168,13 @@ class ExportVersion:
         return LAYER_LABEL.get(self.layer, self.layer)
 
     @property
+    def audience_appendix(self) -> bool:
+        """Whether the rendering has the Sources appendix (not Board's)."""
+        from oracle.roadmap import variants
+
+        return variants.VARIANTS[self.audience].appendix if self.audience else True
+
+    @property
     def audience_label(self) -> str | None:
         from oracle.roadmap import variants
 
@@ -341,7 +348,8 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
 def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
     """O5: render the (layered) export for an audience (oracle.roadmap.variants): its
     hidden sections and the template's dropped, the item rows rebuilt from the version's
-    items with the audience's fields. Call :func:`load_audience` first."""
+    items with the audience's fields; Board is the items' rows alone. Call
+    :func:`load_audience` first."""
     from oracle.roadmap import variants
 
     check_audience(ev, audience)
@@ -352,6 +360,10 @@ def apply_audience(ev: ExportVersion, audience: str | None) -> ExportVersion:
     cards = list(ev.all_sections)
     ev.sections = variants.rebuild(ev.sections, audience, ev.items, hide, cards)
     ev.all_sections = variants.rebuild(cards, audience, ev.items, hide, cards)
+    if audience == "board":
+        # Board carries its rows, the title and the banner only (owner decision
+        # 2026-10-26): no citation excerpt, evidence link or source document's title.
+        ev.citations, ev.evidence_links, ev.source = [], [], None
     return ev
 
 
@@ -1167,6 +1179,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "audience_label": ev.audience_label,
         "source_label": ev.source_label,
         "source_url": ev.source_url,
+        "appendix": ev.audience_appendix,
     }
 
 

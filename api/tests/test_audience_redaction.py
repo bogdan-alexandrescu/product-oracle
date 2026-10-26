@@ -45,7 +45,7 @@ def test_team_and_engineering_redaction_cases(case):
     a line is lost; no_claim=Board (built from items only, below)."""
     items = _items(case)
     for audience in ("team", "engineering"):
-        got = variants.redact(case["text"], variants.VARIANTS[audience], items, [])
+        got = variants.redact(case["text"], variants.VARIANTS[audience], items)
         assert got == case[audience], audience
 
 
@@ -57,7 +57,7 @@ BOARD_WORDS = {"now", "next", "later", "item", "items", "outcome", "confidence",
 BOARD_WORDS |= {"serve", "serves", "no", "confirmed", "and", "is", "are", "left", "out"}
 BOARD_WORDS |= {"this", "roadmap", "version", "has", "structured", "so", "board", "rows"}
 BOARD_WORDS |= {"to", "show", "built", "from", "its", "only", "never", "written", "text"}
-BOARD_WORDS |= {"yet", "the", "a", "of"}
+BOARD_WORDS |= {"yet", "the", "a", "of"} | {str(n) for n in range(10)}
 
 
 def _words(text: str) -> set[str]:
@@ -158,7 +158,7 @@ def test_board_of_a_version_without_items_says_so_in_words():
     out = variants.rebuild(_sections("| Item | Owner |\n|---|---|\n| CSV | Dana |", []),
                            "board", [], set())  # fmt: skip
     assert [s.body_md for s in out] == [variants.BOARD_NO_ITEMS]
-    assert _words(out[0].heading + out[0].body_md) <= BOARD_WORDS
+    assert _words(f"{out[0].heading} {out[0].body_md}") <= BOARD_WORDS
 
 
 def test_board_rows_are_grouped_by_horizon_and_capped():

@@ -9,30 +9,32 @@ it never changes the text. The registry below is the source of truth: the API se
 - it drops the audience's hidden sections, and the template's own (``audiences:
   {board: {hide: [not-doing]}}`` in its front matter), each with its sub-sections. A
   template can only hide more; it can never show what the registry hides;
-- when the version has structured roadmap items, it rebuilds the brief's item table
-  (``brief-items``) from them: the template's own columns (Horizon, Release, Quarter or
-  Cycle; Item or Bet; Goal; Outcome), each written row's milestone, goal and links kept
-  (a link only to a section the rendering has), then the audience's item fields. The
-  horizon sections (``now``, ``next``, ``later``) are rebuilt with a card per item: the
-  audience's fields, then the written card's text (its goal and evidence);
+- Board (owner decision 2026-10-26) renders from the roadmap items alone: per horizon
+  (Now, Next, Later; at most 7, best ranked first) a row per item with its title,
+  outcome, confidence and goal (where it has one). No section, card, paragraph, list,
+  table, heading or release note of the written text reaches it, so nothing is scrubbed.
+  Items that serve no confirmed goal (their feature has no confirmed ``supports`` edge
+  to a confirmed goal, oracle.launches.tiers) are left out, with the line "N items
+  serve no confirmed goal and are left out"; a tenant with no confirmed goal has nothing
+  to serve, so none is. A version without items says so (:data:`BOARD_NO_ITEMS`);
+- for Team and Engineering, when the version has structured roadmap items, it rebuilds
+  the brief's item table (``brief-items``) from them: the template's own columns
+  (Horizon, Release, Quarter or Cycle; Item or Bet; Goal; Outcome), each written row's
+  milestone, goal and links kept (a link only to a section the rendering has), then the
+  audience's item fields. The horizon sections (``now``, ``next``, ``later``) are
+  rebuilt with a card per item: the audience's fields, then the written card's text (its
+  goal and evidence);
 - the sections where a template writes its items (``ITEM_AREAS``: horizons, releases,
   timeline lanes, key milestones, cycle bets, pitches and raw ideas) keep their written
-  text without what the audience hides: labelled owner (Board), tracker, estimate or
-  effort and dependency parts in their common written forms (``Owner: …``, ``Lead:``,
-  ``DRI:``, ``Owner (PM):``, ``Owned by …``, ``Owner — …``, ``Tech lead:``, ``PM:``,
-  ``Owner / PM:``, ``Who:``, ``*Owner*:``, ``Story points:``, ``Est.:``, ``Jira:``,
-  ``Tracker: …``; a name runs on past an initial's or a title's full stop; the sentence
-  keeps its spacing, punctuation and HTML tags), table columns so headed (``Owner(s)``,
-  ``Est.``, ``Tech lead``), sentences naming an item's tracker issue, and revenue
-  framing (Engineering). Tables are read as GFM reads them (one-dash separators, rows
-  with or without outer pipes); a table keeps its header and delimiter rows;
-- items that serve no confirmed goal (their feature has no confirmed ``supports`` edge
-  to a confirmed goal, oracle.launches.tiers) are left out of Board, their cards and
-  their entries (a bullet, line or table row keyed by the item's whole title, never a
-  line that merely contains the word, and a dropped bullet's wrapped lines) included, with
-  the line "N items serve no confirmed goal and are left out", and flagged ⚑ in Team
-  and Engineering. A tenant with no confirmed goal has nothing to serve: no item is left
-  out or flagged.
+  text without what the audience hides: labelled tracker, estimate or effort and
+  dependency parts in their common written forms (``Story points:``, ``Est.:``,
+  ``Jira:``, ``Tracker: …``; the sentence keeps its spacing, punctuation and HTML
+  tags), table columns so headed (``Est.``, ``Tracker``), sentences naming an item's
+  tracker issue, and revenue framing (Engineering). Tables are read as GFM reads them
+  (one-dash separators, rows with or without outer pipes); a table keeps its header and
+  delimiter rows;
+- items that serve no confirmed goal are flagged ⚑ in Team and Engineering. A tenant
+  with no confirmed goal has nothing to serve: no item is flagged.
 
 The Public audience is never made by filtering the internal text: it is built from
 approved public texts (lane 2). Until a version has a public check, asking for it is
@@ -70,12 +72,18 @@ HORIZON_HOMES = {
 CARD_PREFIXES = ("bet", "pitch")
 NO_GOAL_PHRASE = "serves no confirmed goal"
 NO_GOAL_FLAG = "\u2691 Serves no confirmed goal."
+# Board's own words: its row columns, and what it says when a version has no items.
+BOARD_COLUMNS = ("Item", "Outcome", "Confidence", "Goal")
+BOARD_ITEMS_HEADING = "Roadmap items"
+BOARD_NO_ITEMS = (
+    "This roadmap version has no structured items yet, so Board has no rows to show: "
+    "Board is built from its items only, never its written text."
+)
 # Board-level financial framing, never shown to Engineering.
 REVENUE_PREFIX = "revenue"
 # Every item field a variant may render.
 ITEM_FIELDS = frozenset(
-    {"title", "outcome", "horizon", "confidence", "risk", "depends_on", "milestone", "effort"}
-    | {"tracker"}
+    {"title", "outcome", "horizon", "confidence", "depends_on", "milestone", "effort"} | {"tracker"}
 )
 
 
@@ -100,7 +108,8 @@ VARIANTS: dict[str, Variant] = {
         hidden_sections=_ALWAYS_HIDDEN
         | {"sources", "changes", "risks", "dependencies", "capacity", "drift", "launch"}
         | {"no-goal"},
-        item_fields=frozenset({"title", "outcome", "horizon", "confidence", "risk"}),
+        # Board's rows (its goal column comes from the item's goal link).
+        item_fields=frozenset({"title", "outcome", "horizon", "confidence"}),
         group_by="goal",
         max_items_per_horizon=7,
         appendix=False,
@@ -236,24 +245,10 @@ def audiences_problems(raw: Any, section_keys: list[str]) -> list[tuple[str, str
 
 # --- rendering ------------------------------------------------------------------------
 
-# Labelled parts of a written card ("Owner: Dana.", "**Tracker**: ENG-1;", "Owned by
-# Dana", "Owner (PM) — Dana") and the field each one belongs to; the audience hides the
-# fields it does not show. The same words head the table columns it drops.
+# Labelled parts of a written card ("**Tracker**: ENG-1;", "Estimate — 3w") and the
+# field each one belongs to; the audience hides the fields it does not show. The same
+# words head the table columns it drops.
 _LABELS = {
-    "owner": "owner",
-    "owners": "owner",
-    "owned by": "owner",
-    "lead": "owner",
-    "leads": "owner",
-    "dri": "owner",
-    "assignee": "owner",
-    "assignees": "owner",
-    "assigned to": "owner",
-    "pm": "owner",
-    "pms": "owner",
-    "who": "owner",
-    "product manager": "owner",
-    "product owner": "owner",
     "tracker": "tracker",
     "tracker key": "tracker",
     "tracker keys": "tracker",
@@ -274,31 +269,20 @@ _LABELS = {
     "depends on": "depends_on",
     "dependencies": "depends_on",
 }
-# Labels written without a separator ("Owned by Dana").
-_BARE_LABELS = ("owned by", "assigned to")
-# Words that qualify an owner label ("Tech lead", "Eng lead", "Lead PM"); only owner
-# labels take them, so "Team size:" stays prose.
-_QUALIFIERS = ("tech", "technical", "eng", "engineering", "product", "design", "project")
-_QUALIFIERS += ("program", "delivery", "team", "lead", "co")
-_OWNER_CORE = ("lead", "leads", "owner", "owners", "pm", "pms", "dri", "manager")
 _EMPH = r"(?:\*\*|__|\*|_)?"
 _ONE_LABEL = (
-    rf"(?:(?:{'|'.join(_QUALIFIERS)})\s+)+(?:{'|'.join(_OWNER_CORE)})|"
-    + "|".join(re.escape(k) for k in sorted(set(_LABELS) - set(_BARE_LABELS), key=len)[::-1])
+    "|".join(re.escape(k) for k in sorted(_LABELS, key=len)[::-1])
     + rf"|{REVENUE_PREFIX}[\w ]{{0,20}}?"
 )
-# One label, or several joined by "/" ("Owner / PM"), each with its "(s)" or full stop.
+# One label, or several joined by "/" ("Est. / Jira"), each with its "(s)" or full stop.
 _LABEL = (
     rf"(?:{_ONE_LABEL})(?![^\W_])(?:\(s\))?\.?(?:\s*/\s*(?:{_ONE_LABEL})(?![^\W_])(?:\(s\))?\.?)*"
 )
 _PART = re.compile(
     rf"(?<![\w-]){_EMPH}(?:(?P<label>{_LABEL}){_EMPH}(?:\s*\((?P<role>[^()\n]{{1,24}})\))?"
-    rf"{_EMPH}\s*(?::|—|–|\s-\s){_EMPH}"
-    r"|(?P<bare>" + "|".join(_BARE_LABELS) + r")\s+)[ \t]*",
+    rf"{_EMPH}\s*(?::|—|–|\s-\s){_EMPH})[ \t]*",
     re.IGNORECASE,
 )
-# A full stop inside a name: an initial ("Dana M. Markerson") or a title ("Dr. Markerson").
-_NAME_STOPS = frozenset({"dr", "mr", "mrs", "ms", "mx", "prof", "jr", "sr", "st"})
 _SENTENCE_END = re.compile(r"(?<=[.;!?])\s+")
 _LINK = re.compile(r"\[([^\]]*)\]\(#([^)\s]+)\)")
 # A table's delimiter row (GFM): cells of one or more dashes with optional colons.
@@ -309,27 +293,22 @@ _BLOCK_START = re.compile(
     r"^ {0,3}(?:#{1,6}(?:\s|$)|>|```|~~~|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)"
     r"|(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$)"
 )
-# A table's key column: the first so headed, else the first column.
-_KEY_HEADERS = frozenset({"item", "items", "bet", "bets", "title", "feature", "features"})
-_KEY_HEADERS |= {"pitch", "pitches", "idea", "ideas", "initiative", "project", "name"}
-_LIST_ITEM = re.compile(r"^(?P<indent>\s*)(?:[-*+]|\d+[.)])\s+")
 
 
 def hidden_fields(variant: Variant) -> set[str]:
-    """The labelled fields an audience hides in written text: owners on Board; tracker,
-    effort and dependencies where the audience does not show them; revenue framing for
-    Engineering (it shows effort, never the board-level money)."""
+    """The labelled fields an audience hides in written text (Team and Engineering;
+    Board shows none): tracker, effort and dependencies where the audience does not show
+    them; revenue framing for Engineering (it shows effort, never the board-level
+    money)."""
     out = {"tracker", "effort", "depends_on"} - set(variant.item_fields)
-    if variant.key == "board":
-        out.add("owner")
     if "effort" in variant.item_fields:
         out.add(REVENUE_PREFIX)
     return out
 
 
 def _label_fields(label: str) -> set[str]:
-    """The fields a label or column header names: "Owner(s)", "Owner (PM)", "Est.",
-    "**Jira**", "Tech lead", "Lead PM" and "Owner / PM" included."""
+    """The fields a label or column header names: "Est.", "Estimate (days)", "**Jira**",
+    "Ticket(s)" and "Est. / Jira" included."""
     label = re.sub(r"\(s\)|\([^()]*\)\s*$|[*_]", "", label)
     out: set[str] = set()
     for part in label.split("/"):
@@ -337,14 +316,8 @@ def _label_fields(label: str) -> set[str]:
         if words[0].startswith(REVENUE_PREFIX):
             out.add(REVENUE_PREFIX)
             continue
-        qualified = False
-        while len(words) > 1 and " ".join(words) not in _LABELS and words[0] in _QUALIFIERS:
-            words, qualified = words[1:], True
-        field_ = _LABELS.get(" ".join(words))
-        if field_ and (not qualified or " ".join(words) in _OWNER_CORE):
+        if field_ := _LABELS.get(" ".join(words)):
             out.add(field_)
-        elif qualified and words == ["manager"]:
-            out.add("owner")
     return out
 
 
@@ -421,30 +394,21 @@ def _table_rows(lines: list[str]) -> list[tuple[str, list[str]] | None]:
     return out
 
 
-def _key_column(head: list[str]) -> int:
-    names = [re.sub(r"[*_]", "", h).strip(" .:").lower() for h in head]
-    return next((n for n, h in enumerate(names) if h in _KEY_HEADERS), 0)
-
-
 def _mentions(line: str, name: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", line, re.IGNORECASE) is not None
 
 
-def _value_end(text: str, i: int, field_: str, closer: str | None) -> int:
+def _value_end(text: str, i: int, closer: str | None) -> int:
     """Where a labelled part's value that starts at ``i`` ends: at ``;``, ``|``, the
-    line's end, ``closer`` (the ``)`` of "(Owner: Dana)") or a full stop ending the
-    sentence; an owner's name runs on past an initial's or a title's full stop."""
+    line's end, ``closer`` (the ``)`` of "(Est.: 3w)") or a full stop ending the
+    sentence."""
     n = len(text)
     while i < n:
         c = text[i]
         if c in ";|\n" or c == closer or (c == "<" and re.match(r"</?[A-Za-z]", text[i : i + 3])):
             return i
         if c == "." and (i + 1 == n or text[i + 1].isspace()):
-            word = re.search(r"([A-Za-z]+)$", text[:i])
-            w = word.group(1) if word else ""
-            name_stop = (len(w) == 1 and w.isupper()) or w.lower() in _NAME_STOPS
-            if not (field_ == "owner" and name_stop and i + 1 < n):
-                return i
+            return i
         i += 1
     return n
 
@@ -456,18 +420,16 @@ def _strip_parts(text: str, hidden: set[str]) -> str:
     out: list[str] = []
     pos = 0
     while (m := _PART.search(text, pos)) is not None:
-        label_ = m.group("label") or m.group("bare")
-        fields = _label_fields(label_) & hidden
+        fields = _label_fields(m.group("label")) & hidden
         before = text[: m.start()].rstrip(" \t")
         if not fields or (before and before[-1].isalnum()):
             out.append(text[pos : m.end()])
             pos = m.end()
             continue
-        field_ = "owner" if "owner" in fields else min(fields)
         closer = ")" if before.endswith("(") else None
-        end = _value_end(text, m.end(), field_, closer)
+        end = _value_end(text, m.end(), closer)
         if closer and end < len(text) and text[end] == ")":
-            # "(Owner: Dana)": the brackets go with it, the space after them stays.
+            # "(Est.: 3w)": the brackets go with it, the space after them stays.
             out.append(text[pos : m.start()].rstrip(" \t")[:-1].rstrip(" \t"))
             pos = end + 1
             continue
@@ -480,7 +442,7 @@ def _strip_parts(text: str, hidden: set[str]) -> str:
         rest = text[end:]
         if not rest.strip() or rest.startswith(("|", "<")):
             # The part ended the line, cell or element: no dangling space or dash
-            # ("CSV parser — Owner: Dana." reads "CSV parser.").
+            # ("CSV parser — Est.: 3w." reads "CSV parser.").
             trimmed = re.sub(r"[ \t]*(?:[—–:,]|\s-)?[ \t]*$", "", head)
             if trimmed != head.rstrip(" \t") and stop == ".":
                 trimmed += "."
@@ -501,51 +463,22 @@ def _redact_part(text: str, hidden: set[str], refs: list[str]) -> str:
     return new.rstrip() if new != text else text
 
 
-def _lead(line: str) -> str:
-    """A line's text after its bullet, emphasis or link bracket."""
-    text = _LIST_ITEM.sub("", line, count=1).lstrip()
-    return re.sub(r"^(?:\*\*|__|\[)+", "", text)
-
-
-# What may follow an item's title in its own entry: nothing, or a closing emphasis or
-# link, then a separator (":", ".", "(", a dash) — never another word ("Import wizard").
-_ENTRY_END = re.compile(r"^(?:[*_]+|\](?:\([^)]*\))?)*(?:\s*$|\s*[:.(]|\s+[—–-](?:\s|$))")
-
-
-def _names_dropped(text: str, drop_titles: list[str]) -> bool:
-    """Whether a line (or a table's key cell) is an entry of an item in ``drop_titles``:
-    it is keyed by that item's whole title ("- Import: …", "**Import** — …", "Import"),
-    not a line that merely contains the word ("- Import wizard: …", "Import is slow")."""
-    lead = _lead(text).lower()
-    for title in drop_titles:
-        t = title.strip().lower()
-        if t and lead.startswith(t) and _ENTRY_END.match(lead[len(t) :]):
-            return True
-    return False
-
-
-def redact(text: str, variant: Variant, items: list[ItemView], drop_titles: list[str]) -> str:
-    """Written item text without what ``variant`` hides (see the module docstring), and
-    without the lines naming an item in ``drop_titles`` (Board's goal-less items) and a
-    dropped bullet's wrapped lines. A table keeps its header and separator rows; only
-    hidden columns, cells' hidden parts and a dropped item's rows go."""
+def redact(text: str, variant: Variant, items: list[ItemView]) -> str:
+    """Written item text without what ``variant`` (Team, Engineering) hides (see the
+    module docstring). A table keeps its header and separator rows; only hidden columns
+    and cells' hidden parts go."""
     hidden = hidden_fields(variant)
     refs = [ref for i in items for ref, _ in i.tracker] if "tracker" in hidden else []
     lines = (text or "").split("\n")
     rows = _table_rows(lines)
     out: list[str] = []
     fence = False
-    dropped: int | None = None  # the indent of a dropped bullet, while its lines run on
     for line, row in zip(lines, rows, strict=True):
         if row is not None:
-            dropped = None
             kind, head = row
             drop = {n for n, h in enumerate(head) if _label_fields(h) & hidden}
             cells = _split_row(line)
             if kind == "body":
-                key = _key_column(head)
-                if key < len(cells) and _names_dropped(cells[key], drop_titles):
-                    continue
                 cells = [_redact_part(c, hidden, refs) for c in cells]
             new_cells = [c for n, c in enumerate(cells) if n not in drop]
             if len(drop) == len(head):
@@ -556,17 +489,7 @@ def redact(text: str, variant: Variant, items: list[ItemView], drop_titles: list
         if line.lstrip().startswith(("```", "~~~")):
             fence = not fence
         if fence or line.lstrip().startswith(("```", "~~~")) or not line.strip():
-            dropped = None
             out.append(line)
-            continue
-        bullet = _LIST_ITEM.match(line)
-        if dropped is not None:
-            if not (bullet and len(bullet.group("indent")) <= dropped):
-                continue
-            dropped = None
-        if _names_dropped(line, drop_titles):
-            if bullet:
-                dropped = len(bullet.group("indent"))
             continue
         new = _redact_part(line, hidden, refs)
         if new != line and not new.strip(" -*+\t"):
@@ -614,8 +537,6 @@ def _card(item: ItemView, variant: Variant, by_key: dict[str, ItemView], why: st
     if "confidence" in fields and item.confidence:
         lines.append(f"Confidence: {item.confidence}")
     deps = _titles(item, by_key)
-    if "risk" in fields and deps:
-        lines.append(f"Risk: after {', '.join(deps)}")
     if "depends_on" in fields and deps:
         lines.append(f"Depends on: {', '.join(deps)}")
     if "milestone" in fields and (m := _milestone(item)):
@@ -649,7 +570,7 @@ def _section(like: Section, key: str, level: int, heading: str, body: str) -> Se
 
 def _shown(items: list[ItemView], variant: Variant) -> tuple[dict[str, list[ItemView]], int]:
     """Items by horizon as the audience shows them, and how many serve no goal and are
-    left out (Board)."""
+    left out (Board's rows)."""
     left_out = 0
     shown: dict[str, list[ItemView]] = {h: [] for h in HORIZON_SECTIONS}
     for item in sorted(items, key=lambda i: i.position):
@@ -704,12 +625,9 @@ def _layout(
 ) -> list[Section]:
     """``sections`` for ``variant``, the brief table not yet rebuilt (:func:`rebuild`)."""
     by_key = {i.key: i for i in items}
-    shown_keys = {i.key for rows in shown.values() for i in rows}
-    dropped = [i for i in items if i.key not in shown_keys]
-    drop_titles = [i.title for i in dropped if i.no_goal]
     out: list[Section] = []
     area: int | None = None  # the level of the item area being read
-    skip: int | None = None  # the level of a rebuilt horizon, or a dropped card
+    skip: int | None = None  # the level of a rebuilt horizon
     for s in _without(sections, hidden):
         if skip is not None:
             if s.level > skip:
@@ -725,12 +643,12 @@ def _layout(
                     s.section_key,
                     s.level,
                     s.heading,
-                    redact(s.body_md, variant, items, drop_titles),
+                    redact(s.body_md, variant, items),
                 )
             )
             for item in shown[horizon]:
                 written = _written_card(horizon, item, cards)
-                why = redact(written.body_md, variant, items, drop_titles) if written else ""
+                why = redact(written.body_md, variant, items) if written else ""
                 out.append(
                     _section(
                         s,
@@ -748,11 +666,8 @@ def _layout(
             continue
         if area is None:
             area = s.level
-        body = redact(s.body_md or "", variant, items, drop_titles)
+        body = redact(s.body_md or "", variant, items)
         if s.level > area and (item := _card_of(s, items)) is not None:
-            if item.key not in shown_keys and item.no_goal and variant.key == "board":
-                skip = s.level  # a goal-less item's card, and what is under it
-                continue
             if item.no_goal and NO_GOAL_PHRASE not in body.lower():
                 body = f"{body}\n\n{NO_GOAL_FLAG}".strip()
         if body == (s.body_md or "").strip("\n"):
@@ -889,6 +804,37 @@ def _table(
     return "\n".join(lines)
 
 
+def _board(sections: list[Section], items: list[ItemView], every: list[Section]) -> list[Section]:
+    """Board's sections, from the items alone: a section per horizon holding a row per
+    shown item (title, outcome, confidence, goal), the left-out line before the first;
+    a version without items says so. Nothing of the written text is read."""
+    like = next(iter(sections or every), None)
+    if like is None:
+        return []
+    if not items:
+        return [_section(like, ITEMS_SECTION, 2, BOARD_ITEMS_HEADING, BOARD_NO_ITEMS)]
+    shown, left_out = _shown(items, VARIANTS["board"])
+    out: list[Section] = []
+    for horizon, heading in HORIZON_SECTIONS.items():
+        if not shown[horizon]:
+            continue
+        lines = [_join_row(list(BOARD_COLUMNS)), "|" + "---|" * len(BOARD_COLUMNS)]
+        for i in shown[horizon]:
+            cells = [i.title, i.outcome, i.confidence, ", ".join(i.goals)]
+            lines.append(_join_row([_cell(c) for c in cells]))
+        out.append(_section(like, horizon, 2, heading, "\n".join(lines)))
+    if left_out:
+        note = _left_out_line(left_out)
+        if out:
+            first = out[0]
+            out[0] = _section(
+                like, first.section_key, 2, first.heading, f"{note}\n\n{first.body_md}"
+            )
+        else:
+            out.append(_section(like, ITEMS_SECTION, 2, BOARD_ITEMS_HEADING, note))
+    return out
+
+
 def rebuild(
     sections: list[Section],
     audience: str,
@@ -900,8 +846,10 @@ def rebuild(
     ``cards``: every section of the version (the written item cards, and the sections a
     rebuilt table may link to), when ``sections`` is one layer of it."""
     variant = VARIANTS[audience]
-    hidden = set(variant.hidden_sections) | hide
     every = cards if cards is not None else sections
+    if audience == "board":
+        return _board(sections, items, every)
+    hidden = set(variant.hidden_sections) | hide
     by_key = {i.key: i for i in items}
     shown, left_out = _shown(items, variant)
     full = _layout(every, variant, items, shown, hidden, every)
@@ -915,7 +863,7 @@ def rebuild(
             if items:
                 body = _table(s.body_md or "", shown, variant, by_key, known)
             else:
-                body = redact(s.body_md or "", variant, items, [])
+                body = redact(s.body_md or "", variant, items)
             if note:
                 body += f"\n\n{note}"
                 noted = True

@@ -262,8 +262,11 @@ def board_rows(html: str) -> list[str]:
 
 def assert_board_rows_only(html: str) -> None:
     """A Board export (HTML, a deck's slides) holds the shown items' rows, the title and
-    the banner, and no written text of the roadmap (the stylesheet is not text)."""
-    text = _text(re.sub(r"<style\b.*?</style>", "", html, flags=re.S))
+    the banner (its status rows name the template and theme), and no written text of
+    the roadmap (the stylesheet is not text)."""
+    page = re.sub(r"<style\b.*?</style>|<header\b.*?</header>", "", html, flags=re.S)
+    text = _text(page)
+    assert "Sources and data points" not in text, text
     for mark in WRITTEN + ["Markerson", REVENUE_MARK, "ENG-412", "ENG-413", ESTIMATE_MARK]:
         assert mark not in text, (mark, text)
     rows = board_rows(html)
@@ -790,7 +793,9 @@ async def test_board_hides_internal_item_detail_in_every_template(client, ctx, t
     assert "items serve no confirmed goal and are left out" in text
     # Owner decision 2026-10-26: whatever the template, Board is the items' rows only.
     assert_board_rows_only(html)
-    assert not re.search(r'href="#', html), html
+    ids = set(re.findall(r'id="([^"]+)"', html))
+    for anchor in re.findall(r'href="#([^"]+)"', html):
+        assert anchor in ids, anchor
     assert f'id="{container}"' not in html
     # Team keeps the goal-less item, flagged, and its tracker keys stay hidden.
     team = await client.get(EXPORT, params={"audience": "team"}, headers=ctx.as_("viewer"))
@@ -927,7 +932,7 @@ def test_every_written_form_of_owner_estimate_and_tracker(part, field_, audience
     is lost; no_claim=Board (built from the items only)."""
     variant = variants.VARIANTS[audience]
     line = f"- Bulk import (must). {part} Why: day one (G1)."
-    out = variants.redact(line, variant, [], [])
+    out = variants.redact(line, variant, [])
     hidden = field_ in variants.hidden_fields(variant)
     assert (SECRET[field_] not in out) is hidden, out
     assert out.startswith("- Bulk import (must).") and out.endswith("Why: day one (G1)."), out
@@ -959,7 +964,7 @@ def test_table_columns_headed_by_any_form_are_dropped(header, field_, audience):
     fails_when=the column shows, or the separator row is lost; no_claim=prose."""
     variant = variants.VARIANTS[audience]
     table = f"| Item | {header} | Goal |\n|---|---|---|\n| Bulk import | est-marker | G1 |"
-    out = variants.redact(table, variant, [], []).split("\n")
+    out = variants.redact(table, variant, []).split("\n")
     hidden = field_ in variants.hidden_fields(variant)
     assert len(out) == 3 and variants._TABLE_SEP.match(out[1]), out
     assert ("est-marker" not in "\n".join(out)) is hidden, out
@@ -971,7 +976,7 @@ def test_prose_that_only_looks_like_a_label_is_kept():
     fails_when=a sentence is cut; no_claim=labelled parts."""
     team = variants.VARIANTS["team"]
     line = "Key points: imports lead to reports. Sizes vary by plan."
-    assert variants.redact(line, team, [], []) == line
+    assert variants.redact(line, team, []) == line
 
 
 async def test_a_tenant_with_no_confirmed_goals_shows_board_as_before(client, ctx):
