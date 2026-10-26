@@ -9879,6 +9879,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/roadmaps/{doc}/public-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Public Texts
+         * @description The Public check's review list: one row per item of the version with its public
+         *     text, state (Approved, Draft, Excluded, Missing, Internal item changed) and leak
+         *     findings, the shown and left-out counts, what is removed, and the check's state.
+         */
+        get: operations["list_public_texts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/public-texts/{item_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Public Text
+         * @description Edit, approve or exclude one item's public text. Approving is refused (422
+         *     ``leak_blocking``) while the text has a blocking leak finding, and (422
+         *     ``warnings_unchecked``) until every warning is ticked in ``checked_warnings``.
+         */
+        put: operations["put_public_text"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/public-page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Public Page
+         * @description The Public page's own title and intro (the internal title is never shown). A
+         *     blocking leak finding is 422 ``leak_blocking``; a change lapses the public check.
+         */
+        put: operations["put_public_page"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/public-texts/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Public Texts
+         * @description Draft public texts (O5-Q7): one ``public_text`` job on Oracle's Claude account
+         *     pool writes a draft for each item with none. It only ever drafts (H11
+         *     ``external_messages``, ceiling Draft); a person approves each text.
+         */
+        post: operations["draft_public_texts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/versions/{n}/public-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Preview
+         * @description Exactly the page a Public link holder sees, rendered by the same code
+         *     (``render_public``) from the same rows; only the footer's dates are a link's.
+         */
+        get: operations["get_public_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/roadmaps/{doc}/publications/{p}/public-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Public Check
+         * @description Mark as checked: a person looked at the exact Public page of this publication.
+         *     409 ``not_ready`` while any item that serves a goal and is not excluded lacks an
+         *     approved, current text, or has a blocking finding.
+         */
+        post: operations["post_public_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/alignment-reports": {
         parameters: {
             query?: never;
@@ -23663,6 +23793,11 @@ export interface components {
              * @default true
              */
             quality_review: boolean;
+            /**
+             * Public Text
+             * @default true
+             */
+            public_text: boolean;
         };
         /** JoinedOut */
         JoinedOut: {
@@ -24006,6 +24141,18 @@ export interface components {
              */
             absent_template_sections: string[];
         };
+        /** LeakFindingOut */
+        LeakFindingOut: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "warning";
+            /** Words */
+            words: string[];
+        };
         /** LearningCreate */
         LearningCreate: {
             /** Outcome Id */
@@ -24242,7 +24389,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -27535,6 +27682,49 @@ export interface components {
             /** Token Help */
             token_help: string;
         };
+        /** PublicCheckOut */
+        PublicCheckOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Publication Id
+             * Format: uuid
+             */
+            publication_id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Checked By
+             * Format: uuid
+             */
+            checked_by: string;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Shown Item Keys */
+            shown_item_keys: string[];
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "checked" | "lapsed";
+        };
+        /** PublicCheckState */
+        PublicCheckState: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "checked" | "lapsed";
+            check?: components["schemas"]["PublicCheckOut"] | null;
+        };
         /** PublicInterview */
         PublicInterview: {
             /** Company */
@@ -27599,6 +27789,152 @@ export interface components {
             progress: components["schemas"]["PublicInterviewProgress"];
             /** Done */
             done: boolean;
+        };
+        /** PublicPageIn */
+        PublicPageIn: {
+            /** Public Title */
+            public_title?: string | null;
+            /** Public Intro */
+            public_intro?: string | null;
+        };
+        /** PublicPageOut */
+        PublicPageOut: {
+            /** Public Title */
+            public_title?: string | null;
+            /** Public Intro */
+            public_intro?: string | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LeakFindingOut"][];
+        };
+        /** PublicRowOut */
+        PublicRowOut: {
+            /** Item Key */
+            item_key: string;
+            /** Internal Title */
+            internal_title: string;
+            /** Horizon */
+            horizon: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "approved" | "draft" | "excluded" | "missing" | "changed";
+            text?: components["schemas"]["PublicTextOut"] | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LeakFindingOut"][];
+            /** Shown */
+            shown: boolean;
+            /** Left Out Reason */
+            left_out_reason?: ("no_approved_text" | "excluded" | "no_goal") | null;
+        };
+        /** PublicTextIn */
+        PublicTextIn: {
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "exploring" | "planned" | "in_progress" | "shipped";
+            /** Announced Quarter */
+            announced_quarter?: string | null;
+            /** Changelog Url */
+            changelog_url?: string | null;
+            /**
+             * State
+             * @default draft
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "excluded";
+            /** Checked Warnings */
+            checked_warnings?: string[];
+        };
+        /** PublicTextOut */
+        PublicTextOut: {
+            /** Item Key */
+            item_key: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "exploring" | "planned" | "in_progress" | "shipped";
+            /** Announced Quarter */
+            announced_quarter?: string | null;
+            /** Changelog Url */
+            changelog_url?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "approved" | "excluded";
+            /** Drafted By */
+            drafted_by: string;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /**
+             * Checked Warnings
+             * @default []
+             */
+            checked_warnings: string[];
+            /** Updated At */
+            updated_at?: string | null;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["LeakFindingOut"][];
+        };
+        /** PublicTextsOut */
+        PublicTextsOut: {
+            /** Document */
+            document: string;
+            /** Version */
+            version: number;
+            /** Public Title */
+            public_title?: string | null;
+            /** Public Intro */
+            public_intro?: string | null;
+            /**
+             * Page Findings
+             * @default []
+             */
+            page_findings: components["schemas"]["LeakFindingOut"][];
+            /** Rows */
+            rows: components["schemas"]["PublicRowOut"][];
+            /** Shown */
+            shown: number;
+            /** Left Out */
+            left_out: {
+                [key: string]: number;
+            };
+            /** Removed */
+            removed: {
+                [key: string]: number;
+            };
+            /** Content Hash */
+            content_hash: string;
+            check: components["schemas"]["PublicCheckState"];
+            /** Not Ready */
+            not_ready: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * PublicationOut
@@ -56347,6 +56683,223 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TrackerRecordEventOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_public_texts: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTextsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_public_text: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+                item_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicTextIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTextOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_public_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicPageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_public_texts: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmJobOut"];
+                };
+            };
+            /** @description the job is turned off, or Oracle only observes */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_public_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                p: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCheckOut"];
+                };
+            };
+            /** @description not_ready: what is left before the check */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

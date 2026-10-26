@@ -285,11 +285,11 @@ async def test_the_review_list_counts_shown_and_left_out(client, ctx):
     assert body["shown"] == 0
     assert body["left_out"] == {"no_approved_text": 2, "excluded": 0, "no_goal": 2}
     await approve_both(client, ctx)
-    resp = await put_text(client, ctx, "stickers", state="excluded")
+    resp = await put_text(client, ctx, "csv-parser", state="excluded")
     assert resp.status_code == 200
     body = (await client.get(TEXTS, headers=ctx.as_("approver"))).json()
-    assert body["shown"] == 2
-    assert body["left_out"] == {"no_approved_text": 0, "excluded": 1, "no_goal": 1}
+    assert body["shown"] == 1, body["rows"]
+    assert body["left_out"] == {"no_approved_text": 0, "excluded": 1, "no_goal": 2}
     assert body["removed"]["owners"] >= 0 and body["removed"]["tracker_links"] == 2
 
 
@@ -304,7 +304,7 @@ async def test_the_review_list_counts_shown_and_left_out(client, ctx):
         ({"description": f"We decided to {DECISION.lower()}."}, "decision"),
         ({"description": f"Part of {PLAN}."}, "pricing"),
         ({"description": f"Waits: {NOTE}."}, "internal_note"),
-        ({"changelog_url": "http://localhost:3000/changelog"}, "internal_host"),
+        ({"changelog_url": "https://localhost:3000/changelog"}, "internal_host"),
     ],
 )
 async def test_a_text_with_a_blocking_finding_cannot_be_approved(client, ctx, over, code):

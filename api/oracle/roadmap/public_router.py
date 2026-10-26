@@ -46,7 +46,7 @@ Approver = Annotated[Principal, Depends(public_approver)]
 Stage = Literal["exploring", "planned", "in_progress", "shipped"]
 
 
-class FindingOut(BaseModel):
+class LeakFindingOut(BaseModel):
     code: str
     severity: Literal["blocking", "warning"]
     words: list[str]
@@ -87,7 +87,7 @@ class PublicTextOut(BaseModel):
     approved_at: datetime | None = None
     checked_warnings: list[str] = []
     updated_at: datetime | None = None
-    findings: list[FindingOut] = []
+    findings: list[LeakFindingOut] = []
 
 
 class PublicRowOut(BaseModel):
@@ -96,7 +96,7 @@ class PublicRowOut(BaseModel):
     horizon: str
     state: Literal["approved", "draft", "excluded", "missing", "changed"]
     text: PublicTextOut | None = None
-    findings: list[FindingOut] = []
+    findings: list[LeakFindingOut] = []
     shown: bool
     left_out_reason: Literal["no_approved_text", "excluded", "no_goal"] | None = None
 
@@ -122,7 +122,7 @@ class PublicTextsOut(BaseModel):
     version: int
     public_title: str | None = None
     public_intro: str | None = None
-    page_findings: list[FindingOut] = []
+    page_findings: list[LeakFindingOut] = []
     rows: list[PublicRowOut]
     shown: int
     left_out: dict[str, int]
@@ -142,11 +142,11 @@ class PublicPageIn(BaseModel):
 class PublicPageOut(BaseModel):
     public_title: str | None = None
     public_intro: str | None = None
-    findings: list[FindingOut] = []
+    findings: list[LeakFindingOut] = []
 
 
-def _findings(found: list[leak_check.Finding]) -> list[FindingOut]:
-    return [FindingOut(code=f.code, severity=f.severity, words=f.words) for f in found]  # type: ignore[arg-type]
+def _findings(found: list[leak_check.Finding]) -> list[LeakFindingOut]:
+    return [LeakFindingOut(code=f.code, severity=f.severity, words=f.words) for f in found]  # type: ignore[arg-type]
 
 
 def _text_out(t: RoadmapPublicText, found: list[leak_check.Finding]) -> PublicTextOut:
@@ -342,6 +342,7 @@ async def put_public_text(
         {"item_key": item_key, "version": v.number, "before": before,
          "findings": [f.code for f in found]},
     )  # fmt: skip
+    await db.commit()
     await db.refresh(row)
     return _text_out(row, found)
 
@@ -375,6 +376,7 @@ async def put_public_page(
         db, principal, "roadmap.public_page.edited", "document", document.id,
         {"before": before, "after": {"public_title": title, "public_intro": intro}},
     )  # fmt: skip
+    await db.commit()
     return PublicPageOut(public_title=title, public_intro=intro, findings=_findings(found))
 
 
@@ -409,6 +411,8 @@ async def draft_public_texts(
         )
     except jobs_service.JobError as e:
         raise HTTPException(e.status, str(e)) from None
+    await db.commit()
+    await db.refresh(job)
     return await jobs_service.job_out(db, job)
 
 
@@ -478,4 +482,7 @@ async def post_public_check(doc: str, p: int, principal: Approver, db: TenantDB)
         {"publication": p, "version": v.number, "shown": len(r.shown_keys),
          "content_hash": current},
     )  # fmt: skip
-    return _check_out(check, v.number, current)
+    number = v.number
+    await db.commit()
+    await db.refresh(check)
+    return _check_out(check, number, current)

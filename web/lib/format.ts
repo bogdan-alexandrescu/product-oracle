@@ -68,6 +68,7 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   decision_options: "Decision options",
   scope_enhance: "Requirement deepened",
   why_not_reply: "Why-not replies",
+  public_text: "Public texts",
 };
 
 /** Each per-document switch in plain words (History > Oracle's work); the keys stay the API's JobSettings. */
@@ -76,6 +77,7 @@ export const JOB_SETTING_LABEL: Record<keyof JobSettings, string> = {
   reporting: "Write reports",
   refinement: "Rewrite sections and build drafts",
   quality_review: "Quality review",
+  public_text: "Draft public texts",
 };
 
 /** Why a job is refused while its switch is off; the API's words (oracle.jobs.service.turned_off). */

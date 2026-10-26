@@ -34496,6 +34496,418 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/roadmaps/{doc}/public-texts": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "List Public Texts",
+        "description": "The Public check's review list: one row per item of the version with its public\ntext, state (Approved, Draft, Excluded, Missing, Internal item changed) and leak\nfindings, the shown and left-out counts, what is removed, and the check's state.",
+        "operationId": "list_public_texts",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTextsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/public-texts/{item_key}": {
+      "put": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Put Public Text",
+        "description": "Edit, approve or exclude one item's public text. Approving is refused (422\n``leak_blocking``) while the text has a blocking leak finding, and (422\n``warnings_unchecked``) until every warning is ticked in ``checked_warnings``.",
+        "operationId": "put_public_text",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "item_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Key"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicTextIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTextOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/public-page": {
+      "put": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Put Public Page",
+        "description": "The Public page's own title and intro (the internal title is never shown). A\nblocking leak finding is 422 ``leak_blocking``; a change lapses the public check.",
+        "operationId": "put_public_page",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicPageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/public-texts/draft": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Draft Public Texts",
+        "description": "Draft public texts (O5-Q7): one ``public_text`` job on Oracle's Claude account\npool writes a draft for each item with none. It only ever drafts (H11\n``external_messages``, ceiling Draft); a person approves each text.",
+        "operationId": "draft_public_texts",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmJobOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "the job is turned off, or Oracle only observes"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/versions/{n}/public-preview": {
+      "get": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Get Public Preview",
+        "description": "Exactly the page a Public link holder sees, rendered by the same code\n(``render_public``) from the same rows; only the footer's dates are a link's.",
+        "operationId": "get_public_preview",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/roadmaps/{doc}/publications/{p}/public-check": {
+      "post": {
+        "tags": [
+          "roadmaps"
+        ],
+        "summary": "Post Public Check",
+        "description": "Mark as checked: a person looked at the exact Public page of this publication.\n409 ``not_ready`` while any item that serves a goal and is not excluded lacks an\napproved, current text, or has a blocking finding.",
+        "operationId": "post_public_check",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "P"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCheckOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_ready: what is left before the check"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/alignment-reports": {
       "get": {
         "tags": [
@@ -74140,6 +74552,11 @@
             "type": "boolean",
             "title": "Quality Review",
             "default": true
+          },
+          "public_text": {
+            "type": "boolean",
+            "title": "Public Text",
+            "default": true
           }
         },
         "type": "object",
@@ -75237,6 +75654,36 @@
         "title": "LayerImpact",
         "description": "Where the module shows up in the document (O1f brief and full layers)."
       },
+      "LeakFindingOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "words"
+        ],
+        "title": "LeakFindingOut"
+      },
       "LearningCreate": {
         "properties": {
           "outcome_id": {
@@ -75781,6 +76228,7 @@
               "refinement",
               "quality_review",
               "refinement_batch",
+              "public_text",
               "intake_analysis",
               "decision_options",
               "scope_enhance",
@@ -84977,6 +85425,93 @@
         ],
         "title": "ProviderOut"
       },
+      "PublicCheckOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "publication_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Publication Id"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "checked_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checked By"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          },
+          "shown_item_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shown Item Keys"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "checked",
+              "lapsed"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "publication_id",
+          "version_number",
+          "checked_by",
+          "checked_at",
+          "shown_item_keys",
+          "content_hash",
+          "state"
+        ],
+        "title": "PublicCheckOut"
+      },
+      "PublicCheckState": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "checked",
+              "lapsed"
+            ],
+            "title": "State"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "PublicCheckState"
+      },
       "PublicInterview": {
         "properties": {
           "company": {
@@ -85136,6 +85671,439 @@
           "done"
         ],
         "title": "PublicInterviewTurn"
+      },
+      "PublicPageIn": {
+        "properties": {
+          "public_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Title"
+          },
+          "public_intro": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Intro"
+          }
+        },
+        "type": "object",
+        "title": "PublicPageIn"
+      },
+      "PublicPageOut": {
+        "properties": {
+          "public_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Title"
+          },
+          "public_intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Intro"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PublicPageOut"
+      },
+      "PublicRowOut": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "internal_title": {
+            "type": "string",
+            "title": "Internal Title"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "draft",
+              "excluded",
+              "missing",
+              "changed"
+            ],
+            "title": "State"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicTextOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          },
+          "shown": {
+            "type": "boolean",
+            "title": "Shown"
+          },
+          "left_out_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_approved_text",
+                  "excluded",
+                  "no_goal"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left Out Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "internal_title",
+          "horizon",
+          "state",
+          "shown"
+        ],
+        "title": "PublicRowOut"
+      },
+      "PublicTextIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 280,
+            "title": "Description",
+            "default": ""
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "exploring",
+              "planned",
+              "in_progress",
+              "shipped"
+            ],
+            "title": "Stage"
+          },
+          "announced_quarter": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{4}-Q[1-4]$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Announced Quarter"
+          },
+          "changelog_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changelog Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved",
+              "excluded"
+            ],
+            "title": "State",
+            "default": "draft"
+          },
+          "checked_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Checked Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "stage"
+        ],
+        "title": "PublicTextIn"
+      },
+      "PublicTextOut": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "exploring",
+              "planned",
+              "in_progress",
+              "shipped"
+            ],
+            "title": "Stage"
+          },
+          "announced_quarter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Announced Quarter"
+          },
+          "changelog_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changelog Url"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved",
+              "excluded"
+            ],
+            "title": "State"
+          },
+          "drafted_by": {
+            "type": "string",
+            "title": "Drafted By"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "checked_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checked Warnings",
+            "default": []
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "title",
+          "description",
+          "stage",
+          "state",
+          "drafted_by"
+        ],
+        "title": "PublicTextOut"
+      },
+      "PublicTextsOut": {
+        "properties": {
+          "document": {
+            "type": "string",
+            "title": "Document"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "public_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Title"
+          },
+          "public_intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Intro"
+          },
+          "page_findings": {
+            "items": {
+              "$ref": "#/components/schemas/LeakFindingOut"
+            },
+            "type": "array",
+            "title": "Page Findings",
+            "default": []
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PublicRowOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "shown": {
+            "type": "integer",
+            "title": "Shown"
+          },
+          "left_out": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Left Out"
+          },
+          "removed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Removed"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "check": {
+            "$ref": "#/components/schemas/PublicCheckState"
+          },
+          "not_ready": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Not Ready"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "version",
+          "rows",
+          "shown",
+          "left_out",
+          "removed",
+          "content_hash",
+          "check",
+          "not_ready"
+        ],
+        "title": "PublicTextsOut"
       },
       "PublicationOut": {
         "properties": {

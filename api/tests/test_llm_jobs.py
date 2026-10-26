@@ -999,6 +999,7 @@ async def test_an_owner_turns_job_kinds_off_per_document(client, ctx, pool, fake
         "reporting": True,
         "refinement": True,
         "quality_review": True,
+        "public_text": True,
     }
     resp = await client.put(
         url,
@@ -1041,7 +1042,7 @@ async def test_retrying_a_job_whose_switch_is_off_names_the_switch_plainly(clien
 
 
 # D15: the History fold names these four switches in plain words; the keys stay the API's.
-SETTING_KEYS = {"review_comments", "reporting", "refinement", "quality_review"}
+SETTING_KEYS = {"review_comments", "reporting", "refinement", "quality_review", "public_text"}
 MOCK_LLM_JOBS = Path(__file__).resolve().parents[2] / "web" / "lib" / "api" / "mock" / "llm-jobs.ts"
 
 
