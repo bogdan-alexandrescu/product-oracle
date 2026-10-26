@@ -85,13 +85,25 @@ async def test_board_goal_tables_are_marked_full_width_and_the_theme_spans_them(
     assert rule and re.search(r"grid-column:\s*1\s*/\s*span 3\b", rule.group(1)), "theme rule"
 
 
-@pytest.mark.parametrize("audience", ["team", "engineering"])
-async def test_ordinary_item_cards_keep_the_card_board(client, ctx, audience):
-    """protects=Team's and Engineering's item cards (and Team's goal headings, which hold
-    no table) stay cards in the three-column board; fails_when=any of their sections is
-    marked full width; no_claim=Board."""
+async def test_team_goal_headings_span_the_board_and_its_item_cards_do_not(client, ctx):
+    """protects=Team's goal headings (its goal-group sections, which hold no table) are
+    marked full width, so they span the card grid as row headings, and its item cards stay
+    cards in the three-column grid under them (owner decision, 2026-10-26);
+    fails_when=a goal heading is laid out as one card column, or an item card is marked full
+    width; no_claim=the measured width (the PDF test and the Playwright spec)."""
     await two_goal_roadmap(ctx)
-    found = sections(await render(client, ctx, audience))
+    found = sections(await render(client, ctx, "team"))
+    assert "now-csv-parser" in found and "now-bulk-import" in found, sorted(found)
+    heads = [k for k in found if re.fullmatch(r"(now|next|later)-group-\d+", k)]
+    assert heads[:2] == ["now-group-1", "now-group-2"], list(found)
+    assert [k for k, (c, _) in found.items() if "section-wide" in c] == heads
+
+
+async def test_engineering_item_cards_keep_the_card_board(client, ctx):
+    """protects=Engineering's item cards stay cards in the three-column board;
+    fails_when=any of its sections is marked full width; no_claim=Board and Team."""
+    await two_goal_roadmap(ctx)
+    found = sections(await render(client, ctx, "engineering"))
     assert "now-csv-parser" in found and "now-bulk-import" in found, sorted(found)
     assert not [k for k, (c, _) in found.items() if "section-wide" in c]
 
@@ -174,3 +186,42 @@ async def test_the_board_pdf_table_spans_the_text_width(client, ctx):
         section_right = section.position_x + section.margin_width()
         table_right = table.position_x + table.margin_width()
         assert section_right - table_right < 2, (section_right, table_right)
+
+
+def _sections(box, out=None) -> list:
+    """Each section box on a page, by its section key."""
+    out = [] if out is None else out
+    if getattr(box, "element_tag", "") == "section":
+        out.append(box)
+    for child in getattr(box, "children", []):
+        _sections(child, out)
+    return out
+
+
+@requires_pdf
+async def test_the_team_pdf_goal_heading_spans_the_text_width(client, ctx):
+    """protects=in the Team PDF each goal heading spans at least 90% of the text width (a
+    row heading over its item cards), and an item card stays narrower than half of it;
+    fails_when=the PDF lays a goal heading out as one card column, or an item card spans
+    the row; no_claim=the HTML preview (the Playwright spec)."""
+    await two_goal_roadmap(ctx)
+    html = await render(client, ctx, "team")
+    resp = await client.get(
+        EXPORT, params={"audience": "team", "format": "pdf"}, headers=ctx.as_("viewer")
+    )
+    assert resp.status_code == 200 and resp.content.startswith(b"%PDF")
+    document = pdf._document(html)
+    heads, cards = [], []
+    for page in document.pages:
+        main = _main(page._page_box)
+        for box in _sections(page._page_box) if main is not None else []:
+            key = box.element.get("data-section-key", "")
+            if key.startswith("now-group-"):
+                heads.append((main, box))
+            elif key in ("now-csv-parser", "now-bulk-import"):
+                cards.append((main, box))
+    assert len(heads) >= 2 and len(cards) >= 2, (heads, cards)
+    for main, head in heads:
+        assert head.margin_width() >= 0.9 * main.width, (head.margin_width(), main.width)
+    for main, card in cards:
+        assert card.margin_width() < 0.5 * main.width, (card.margin_width(), main.width)
