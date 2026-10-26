@@ -8,16 +8,26 @@ goal, with its line; a goal renamed or unconfirmed changes the next render.
 
 import re
 
+import pytest
 from sqlalchemy import select, update
 
 from oracle.baseline.models import Edge, Entity
 from oracle.roadmap import variants
+from oracle.shares import public as share_public
 from oracle.shares import render as share_render
 from oracle.tenancy import tenant_session
-from tests.test_export_audience import EXPORT, ITEMS, _text, ctx, seed_roadmap  # noqa: F401
+from tests.baseline_helpers import make_ctx
+from tests.test_export_audience import EXPORT, ITEMS, _text, seed_roadmap
 from tests.test_share_links import create, opened, token_of
 
 PUBLIC = "/v1/public/shares"
+
+
+@pytest.fixture
+async def ctx():
+    share_public.reset_limits()
+    return await make_ctx("Example Labs")
+
 
 # A fifth item in Now with no feature at all (nothing in the baseline keyed so).
 AUDIT = ("audit-log", "now", "Audit log", "Every admin action is kept", {"confidence": "high"})
@@ -40,9 +50,7 @@ async def add_goal_links(ctx, links: dict[str, list[tuple[str, int]]]) -> None:
     """Per item key, a confirmed feature keyed as the item with a confirmed ``supports``
     edge (and contribution) to each named confirmed goal; a goal not yet there is made."""
     async with tenant_session(ctx.tenant_id) as s:
-        goals = {
-            g.title: g for g in await s.scalars(select(Entity).where(Entity.type == "goal"))
-        }
+        goals = {g.title: g for g in await s.scalars(select(Entity).where(Entity.type == "goal"))}
         for key, served in links.items():
             feature = Entity(type="feature", key=key, title=key, status="confirmed", origin="user")
             s.add(feature)
@@ -92,7 +100,9 @@ async def test_team_puts_items_with_no_feature_under_no_goal_at_the_end(client, 
     feature-less item is dropped from Team, sits under a goal or before one;
     no_claim=Engineering's grouping (by team)."""
     await seed_roadmap(ctx, items=[*ITEMS, AUDIT], served=())
-    await add_goal_links(ctx, {"csv-parser": [("Activation", 2)], "bulk-import": [("Retention", 2)]})
+    await add_goal_links(
+        ctx, {"csv-parser": [("Activation", 2)], "bulk-import": [("Retention", 2)]}
+    )
     out = await export(client, ctx, "team")
     now = out.index("h2 Now")
     later = out.index("h2 Next")

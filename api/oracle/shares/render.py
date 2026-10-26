@@ -16,8 +16,9 @@ renders one of two things:
   §3: no outbound links but the Public version's changelog links).
 
 Renders take an export place under the company's limits on the export pool (a busy pool
-is 503); each one is cached per (publication, audience, format, content), so a busy link
-does not take export places. The footer is the link's own and is added after the cache.
+is 503); each one is cached per (publication, audience, format, content: the items' goal
+groups as read at render time, ``variants.render_key``), so a busy link does not take
+export places. The footer is the link's own and is added after the cache.
 """
 
 import html as html_lib
@@ -36,7 +37,7 @@ from oracle.docs.parser import strip_citations
 from oracle.export import offload
 from oracle.export.pdf import html_to_pdf
 from oracle.review.models import DocumentPublication
-from oracle.roadmap import public
+from oracle.roadmap import public, variants
 from oracle.roadmap.models import RoadmapPublicCheck
 from oracle.tenancy import tenant_session
 
@@ -201,14 +202,17 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
                 _remember(key, await _on_pool(ctx, _render_public, review.page, fmt,
                                               shared_on, expires_on))  # fmt: skip
             return _cache[key]
-        key = (ctx.publication_id, ctx.audience, fmt)
         footer = _footer(company, ctx, zone)
-        if key in _cache and fmt == "html":
-            await db.commit()
-            return _with_footer(str(_cache[key]), footer)
         ev = await load_export_version(db, str(document.id), version.number)
         ev = apply_layer(ev, "full")
         ev = await exports.with_audience(db, ev, ctx.audience)
+        # The items' goal groups are read from the baseline at render time: a goal renamed
+        # or unconfirmed since makes a new key, so the page regroups (owner decision
+        # 2026-10-26).
+        key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items))
+        if key in _cache and fmt == "html":
+            await db.commit()
+            return _with_footer(str(_cache[key]), footer)
         ev = _for_link_holder(detached(ev))
         await db.commit()  # no connection held while it waits for the pool
     if fmt == "html":

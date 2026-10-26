@@ -157,9 +157,19 @@ async def item_goals(
     ``("none", None)`` for an item that serves none. ``None`` when the tenant has no
     confirmed goal, so nothing is measured against one. Loaded once for all ``rows``; never
     read from a card's words (O5: Board rows, the public check and the leak check)."""
+    return (await item_goal_links(db, rows))[0]
+
+
+async def item_goal_links(
+    db: AsyncSession, rows: list[RoadmapItem]
+) -> tuple[dict[str, tuple[str, str | None]] | None, dict[str, str | None]]:
+    """:func:`item_goals`, and each item's goal group (O5 owner decision 2026-10-26): the
+    title of the first, by title, of the confirmed goals its feature reaches through
+    confirmed ``supports`` edges (the edges :func:`best_goal` counts), or ``None`` (no
+    feature, no goal reached, or no confirmed goal in the tenant). One read for both."""
     goals = await confirmed_goals(db)
     if not goals:
-        return None
+        return None, {r.item_key: None for r in rows}
     features: dict[str, Entity] = {}
     if rows:
         by_id = {
@@ -191,14 +201,22 @@ async def item_goals(
             )
         ):
             edges.setdefault(edge.src_id, []).append(edge)
-    return {
-        r.item_key: (
-            best_goal(goals, edges.get(features[r.item_key].id, []))
-            if r.item_key in features
-            else ("none", None)
+    best: dict[str, tuple[str, str | None]] = {}
+    groups: dict[str, str | None] = {}
+    for r in rows:
+        feature = features.get(r.item_key)
+        mine = edges.get(feature.id, []) if feature is not None else []
+        best[r.item_key] = best_goal(goals, mine) if feature is not None else ("none", None)
+        titles = sorted(
+            {
+                goals[e.dst_id].title
+                for e in mine
+                if _number((e.attrs or {}).get("contribution"), DEFAULT_CONTRIBUTION) > 0
+            },
+            key=lambda t: (t.casefold(), t),
         )
-        for r in rows
-    }
+        groups[r.item_key] = titles[0] if titles else None
+    return best, groups
 
 
 async def _goal(db: AsyncSession, feature: Entity | None) -> tuple[str, str | None]:
