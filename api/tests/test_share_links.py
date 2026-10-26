@@ -765,7 +765,8 @@ async def test_a_link_holder_sees_no_other_document_status_or_version(client, ct
     assert "We grow activation" in body_text
     assert "the PRD" in body_text  # the link's words stay, the link goes
     for leak in ("Example Labs PRD", "example-labs-prd", "/documents/", "Approved",
-                 "Superseded", "Version 1", "banner-source", "banner-status"):  # fmt: skip
+                 "Superseded", "Version 1", 'class="banner-source"',
+                 'class="banner-status"', 'class="banner-version"'):  # fmt: skip
         assert leak not in page.text, leak
     hrefs = re.findall(r'href="([^"]*)"', page.text)
     assert all(h.startswith("#") for h in hrefs), hrefs

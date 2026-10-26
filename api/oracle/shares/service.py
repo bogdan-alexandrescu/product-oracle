@@ -137,17 +137,24 @@ async def revoke(
 
 
 async def revoke_created_by(
-    db: AsyncSession, actor: Any, creators: set[uuid.UUID], reason: str
+    db: AsyncSession,
+    actor: Any,
+    creators: set[uuid.UUID],
+    reason: str,
+    audiences: set[str] | None = None,
 ) -> int:
     """A member's disable or demotion below approver (O5-Q10): revoke the live links
-    they (or their API tokens) created; owners see them in the Inbox to re-share."""
+    they (or their API tokens) created; owners see them in the Inbox to re-share. An
+    owner demoted to approver passes ``audiences={"public"}``: a Public link is an
+    owner's, the others stay theirs."""
     if not creators:
         return 0
-    links = await db.scalars(
-        select(ShareLink)
-        .where(ShareLink.created_by.in_(creators), ShareLink.revoked_at.is_(None))
-        .with_for_update()
+    query = select(ShareLink).where(
+        ShareLink.created_by.in_(creators), ShareLink.revoked_at.is_(None)
     )
+    if audiences is not None:
+        query = query.where(ShareLink.audience.in_(audiences))
+    links = await db.scalars(query.with_for_update())
     by = getattr(actor, "user_id", None) or getattr(actor, "id", None)
     return sum([await revoke(db, actor, link, reason, by) for link in links])
 

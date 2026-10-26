@@ -21,7 +21,11 @@ No member credential, and never MCP tools (``oracle.mcp.tools.PUBLIC_OPERATIONS`
    these routes, held in memory and never stored. Guessing: :data:`PASSCODE_TRIES` wrong
    passcodes in :data:`LOCK_SECONDS` lock the link for as long (on its row, so across
    instances); :data:`CLIENT_PASSCODE_TRIES` wrong ones from one client address lock that
-   client out of every link (in memory).
+   client out of every link (in memory). Each try is counted, under the row's lock and
+   in the client's window, *before* the slow passcode check and taken back when right, so
+   a burst of parallel guesses meets the same limits. Anyone with the address can keep a
+   link locked by guessing once a window (accepted with the lock-out, O5-Q5). The
+   in-memory windows drop an address or link once its window is empty.
 5. **Audit.** Refused requests on a known link at most :data:`REFUSED_AUDITS` a minute
    (counted on its row); the first view and every lock-out, with the link id and never
    the token. Each view goes into ``share_link_views``, not the audit log.
@@ -88,6 +92,8 @@ WRONG_PAGE = render.page(
 _client_hits: dict[str, deque[float]] = defaultdict(deque)
 _client_misses: dict[str, deque[float]] = defaultdict(deque)
 _link_pages: dict[uuid.UUID, deque[float]] = defaultdict(deque)
+_swept = [0.0]
+SWEEP_SECONDS = 60
 
 
 def reset_limits() -> None:
@@ -95,6 +101,7 @@ def reset_limits() -> None:
     _client_hits.clear()
     _client_misses.clear()
     _link_pages.clear()
+    _swept[0] = 0.0
     render.clear_cache()
 
 
@@ -104,6 +111,26 @@ def _window(store: dict, key: Any, seconds: float) -> deque[float]:
     while hits and hits[0] <= cutoff:
         hits.popleft()
     return hits
+
+
+def _sweep() -> None:
+    """Drop the keys whose window has emptied (at most once a minute), so the tables
+    hold only the addresses and links seen lately."""
+    at = time.monotonic()
+    if at - _swept[0] < SWEEP_SECONDS:
+        return
+    _swept[0] = at
+    for store, seconds in ((_client_hits, 60), (_client_misses, LOCK_SECONDS),
+                           (_link_pages, 60)):  # fmt: skip
+        for key in [k for k, hits in store.items() if not hits or hits[-1] <= at - seconds]:
+            del store[key]
+
+
+def _drop(hits: deque[float], mark: float) -> None:
+    try:
+        hits.remove(mark)
+    except ValueError:
+        pass
 
 
 def _retry_after(hits: deque[float], seconds: float) -> int:
@@ -172,6 +199,7 @@ def _cookie(request: Request, link: ShareLink | None) -> dict | None:
 
 
 def _client_allowed(request: Request) -> Response | None:
+    _sweep()
     key = _client(request)
     hits = _window(_client_hits, key, 60)
     if len(hits) >= CLIENT_PER_MINUTE:
@@ -294,23 +322,44 @@ async def _passcode_of(request: Request) -> str:
     return value[:PASSCODE_FORM_MAX] if isinstance(value, str) else ""
 
 
-async def _missed(link: ShareLink | None, client: str) -> bool:
-    """Count a wrong passcode against the client and the link; True when it locked the
-    link (audited ``share_link.passcode_locked``)."""
-    _window(_client_misses, client, LOCK_SECONDS).append(time.monotonic())
-    if link is None:
-        return False
+async def _try(link: ShareLink) -> int | None:
+    """Count a passcode try on the link's locked row *before* the slow check, so tries
+    sent at the same time queue on the row and no more than :data:`PASSCODE_TRIES` are
+    checked in a window. None: go on and check it; else the seconds the link is locked
+    for (or its window is full of tries in flight)."""
     async with tenant_session(link.tenant_id) as db:
         row = await db.get(ShareLink, link.id, with_for_update=True)
         if row is None:
-            return False
+            return None
         at = service.now()
+        if row.locked_until is not None and row.locked_until > at:
+            await db.commit()
+            return int((row.locked_until - at).total_seconds()) + 1
         start = row.passcode_window_start
         if start is None or at - start >= timedelta(seconds=LOCK_SECONDS):
             row.passcode_window_start, row.passcode_failures = at, 0
+        if row.passcode_failures >= PASSCODE_TRIES:
+            left = row.passcode_window_start + timedelta(seconds=LOCK_SECONDS) - at
+            await db.commit()
+            return int(left.total_seconds()) + 1
         row.passcode_failures += 1
-        locked = row.passcode_failures >= PASSCODE_TRIES
-        if locked:
+        await db.commit()
+        return None
+
+
+async def _missed(link: ShareLink | None) -> None:
+    """A try :func:`_try` counted was wrong: the one that fills the window locks the link
+    (audited ``share_link.passcode_locked``)."""
+    if link is None:
+        return
+    async with tenant_session(link.tenant_id) as db:
+        row = await db.get(ShareLink, link.id, with_for_update=True)
+        if row is None:
+            return
+        at = service.now()
+        if row.passcode_failures >= PASSCODE_TRIES and not (
+            row.locked_until is not None and row.locked_until > at
+        ):
             row.locked_until = at + timedelta(seconds=LOCK_SECONDS)
             row.passcode_failures, row.passcode_window_start = 0, None
             await audit.record(
@@ -320,7 +369,15 @@ async def _missed(link: ShareLink | None, client: str) -> bool:
         else:
             await _audit_refusal(db, row, "passcode")
         await db.commit()
-        return locked
+
+
+async def _right(link: ShareLink) -> None:
+    """The right passcode: the window's count starts again."""
+    async with tenant_session(link.tenant_id) as db:
+        row = await db.get(ShareLink, link.id, with_for_update=True)
+        if row is not None:
+            row.passcode_failures, row.passcode_window_start = 0, None
+        await db.commit()
 
 
 @router.post(
@@ -344,25 +401,27 @@ async def unlock_public_share(token: str, request: Request) -> Response:
     misses = _window(_client_misses, client, LOCK_SECONDS)
     if len(misses) >= CLIENT_PASSCODE_TRIES:
         return _too_many(_retry_after(misses, LOCK_SECONDS), html=True)
+    # Counted as a miss before the check (no await in between, so a burst can not pass
+    # the limit), taken back when it is right.
+    mark = time.monotonic()
+    misses.append(mark)
     passcode = await _passcode_of(request)
     link = await _locate(token)
-    at = service.now()
-    if link is not None and link.locked_until is not None and link.locked_until > at:
-        retry = int((link.locked_until - at).total_seconds()) + 1
+    if link is not None and (retry := await _try(link)) is not None:
+        _drop(misses, mark)
         return _too_many(retry, html=True)
+    at = service.now()
     stored = link.passcode_hash if link is not None else None
     right = bool(passcode) and await asyncio.to_thread(service.verify_or_waste, stored, passcode)
-    if link is None or not right or service.state(link, at) != "active":
-        if not right:
-            # The try that locks the link answers like any wrong one; the next is 429.
-            await _missed(link, client)
+    if not right:
+        # The try that locks the link answers like any wrong one; the next is 429.
+        await _missed(link)
         return _html(WRONG_PAGE, 404)
-    if link.passcode_failures:
-        async with tenant_session(link.tenant_id) as db:
-            row = await db.get(ShareLink, link.id, with_for_update=True)
-            if row is not None:
-                row.passcode_failures, row.passcode_window_start = 0, None
-            await db.commit()
+    _drop(misses, mark)
+    assert link is not None
+    await _right(link)
+    if service.state(link, at) != "active":
+        return _html(WRONG_PAGE, 404)
     # The same browser keeps its id across a re-entry (it counts once in the view log).
     before = None
     raw = request.cookies.get(COOKIE)

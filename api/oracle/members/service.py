@@ -231,6 +231,13 @@ async def set_role(
             from oracle.shares import service as shares
 
             await shares.revoke_created_by(session, principal, acted_as, shares.CREATOR_DEMOTED)
+        elif has_role(before, "owner") and not has_role(role, "owner"):
+            # A Public link is an owner's (O5-Q2): an owner demoted to approver loses theirs.
+            from oracle.shares import service as shares
+
+            await shares.revoke_created_by(
+                session, principal, acted_as, shares.CREATOR_DEMOTED, {"public"}
+            )
         if has_role(before, "owner"):
             await _void_spend_approvals(session, principal, acted_as, None, via)
         await _void_checkpoint_decisions(session, principal, acted_as, via, keep_role=role)

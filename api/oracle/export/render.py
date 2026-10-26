@@ -115,6 +115,9 @@ class ExportVersion:
     audience: str | None = None
     items: list = field(default_factory=list)
     template_hides: dict[str, set[str]] = field(default_factory=dict)
+    # O5 share links: a signed-out link holder's render (oracle.shares.render) names no
+    # other document, no review status and no version, and links nothing into the app.
+    link_holder: bool = False
 
     @property
     def title(self) -> str:
@@ -131,13 +134,13 @@ class ExportVersion:
     @property
     def source_label(self) -> str | None:
         """ "From <PRD title> v<n>" for a version built from another document's."""
-        if self.source is None:
+        if self.source is None or self.link_holder:
             return None
         return f"From {self.source.title} v{self.source.version}"
 
     @property
     def source_url(self) -> str | None:
-        if self.source is None:
+        if self.source is None or self.link_holder:
             return None
         return app_url(f"/documents/{self.source.slug}/v/{self.source.version}")
 
@@ -813,6 +816,7 @@ def build_context(ev: ExportVersion) -> dict:
         "audience_label": ev.audience_label,
         "source_label": ev.source_label,
         "source_url": ev.source_url,
+        "link_holder": ev.link_holder,
     }
 
 
@@ -1098,7 +1102,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "theme_name": theme.name,
         "body_class": " ".join(body_classes),
         "toc": toc if features.get("toc") else [],
-        "status_header": bool(features.get("status_header")),
+        "status_header": bool(features.get("status_header")) and not ev.link_holder,
         "legend": bool(features.get("legend")),
         "page_fit": features.get("page_fit"),
         "has_title_section": has_title_section,
@@ -1118,12 +1122,15 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # for the page's top margin (stored theme copies included, so it lives here).
         "running_header": running,
         "header_title": _cap(ev.title, HEADER_TEXT_MAX) if running else None,
-        "header_source_label": _header_source(ev.source) if running else None,
+        "header_source_label": _header_source(ev.source)
+        if running and not ev.link_holder
+        else None,
         "layer": ev.layer,
         "layer_label": ev.layer_label,
         "audience_label": ev.audience_label,
         "source_label": ev.source_label,
         "source_url": ev.source_url,
+        "link_holder": ev.link_holder,
     }
 
 

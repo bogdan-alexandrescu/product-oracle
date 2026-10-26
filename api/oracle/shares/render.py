@@ -10,7 +10,10 @@ renders one of two things:
 - **Board, Team, Engineering**: the publication's version in that audience
   (``oracle.export.render.apply_audience``), with what a link holder never sees taken out
   first: citation markers (plain text), citations, the Sources and data points appendix,
-  evidence links and every HTML comment (the export banner names the internal slug).
+  evidence links and every HTML comment (the export banner names the internal slug); the
+  banner names no other document (the PRD it was built from), no review status and no
+  version, and every link that leaves the page keeps its words but not the link (spec-O5
+  §3: no outbound links but the Public version's changelog links).
 
 Renders take an export place under the company's limits on the export pool (a busy pool
 is 503); each one is cached per (publication, audience, format, content), so a busy link
@@ -41,6 +44,8 @@ UPDATING = "This page is being updated"
 ENDED = "This link has ended. Ask the person who sent it for a new one."
 CACHE_SIZE = 64
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
+# A link that leaves the page (into the app or anywhere else): its words stay.
+_OUTBOUND = re.compile(r"<a\b[^>]*?\bhref=\"(?!#)[^\"]*\"[^>]*>(.*?)</a>", re.S | re.I)
 _cache: OrderedDict[tuple, str | bytes] = OrderedDict()
 
 
@@ -133,6 +138,7 @@ def _for_link_holder(ev):
         citations=[],
         evidence_links=[],
         added_citations=set(),
+        link_holder=True,
     )
 
 
@@ -140,7 +146,7 @@ def _render_audience(ev, fmt: str) -> str | bytes:
     """CPU-bound: on the export pool."""
     from oracle.export.render import render_html
 
-    html = _COMMENT.sub("", render_html(ev))
+    html = _OUTBOUND.sub(r"\1", _COMMENT.sub("", render_html(ev)))
     return html_to_pdf(html) if fmt == "pdf" else html
 
 
