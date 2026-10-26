@@ -118,3 +118,54 @@ test("a late answer leaves the PRD's feedback when its finding goes back to priv
   await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
   await expect(await listed()).toHaveCount(1);
 });
+
+/*
+ * #595 re-review: a late answer someone acted on stays on the PRD when its finding goes
+ * back to private: it keeps its triage (here a Decline with a note) and only its quote is
+ * withheld; shared again, it reads in full.
+ *
+ * Test card: protects=what others did on a late answer survives a change of level;
+ * fails_when=the declined item disappears, or still quotes the answer while private, or
+ * does not read in full once shared again; no_claim=suggestions on it (api
+ * tests/test_late_answers_feedback.py covers the rule).
+ */
+test("a late answer someone declined stays, its quote withheld, while its finding is private", async ({ page }) => {
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  const mine = bubble(page, ANSWER_ME);
+  await mine.getByRole("button", { name: "Answer", exact: true }).click();
+  await mine.getByTestId("answer-question").getByLabel("Your answer").fill(REPLY);
+  await mine.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
+  await expect(drafting(page).getByTestId("late-answers-feedback")).toContainText("1 became feedback for the next draft");
+
+  await page.goto("/inbox");
+  const late = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: REPLY });
+  await late.getByRole("button", { name: "Decline", exact: true }).click();
+  await late.getByLabel("Why? (optional)").fill("Settled in the security review.");
+  await late.getByRole("button", { name: "Decline", exact: true }).click();
+  await expect(page.getByTestId("inbox-acted")).toContainText("Declined");
+
+  const level = async (name: "Private" | "Full") => {
+    await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+    await page.getByRole("tab", { name: /^Findings/ }).click();
+    const finding = page.getByTestId("intake-findings").getByTestId("finding").filter({ hasText: "checkout timing export" });
+    await finding.getByRole("group", { name: "Who sees this finding" }).getByRole("button", { name }).click();
+    await expect(finding.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+  };
+  const declined = async () => {
+    await page.goto("/documents/checkout-redesign/v/2");
+    await openTab(page, "Feedback");
+    await feedbackState(page, "Declined");
+    await showAll(page);
+    return page.getByTestId("feedback-item").filter({ visible: true }).filter({ hasText: "Settled in the security review." });
+  };
+
+  await level("Private");
+  const kept = await declined();
+  await expect(kept).toHaveCount(1);
+  await expect(kept).toContainText("withheld while its finding is not shared in full");
+  await expect(kept).not.toContainText(REPLY);
+
+  await level("Full");
+  await expect(await declined()).toContainText(REPLY);
+});
