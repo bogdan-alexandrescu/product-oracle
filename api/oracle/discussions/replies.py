@@ -26,7 +26,9 @@ connection (v1: Fireflies) gets a run that may read it: an ``olt_`` token for th
 (oracle.live.tokens), Oracle's ``/mcp`` as the run's one MCP server (Claude Code only),
 and a "Live sources" block in the prompt; ``[l:n]`` markers cite the reads
 (``live_reads``). The token is revoked when the reply ends. With others in it the
-prompt says live reads are off; an asker with no live connection gets one line (C6).
+prompt says live reads are off; an asker with no live connection gets one line (C6), on
+Claude Code only. The token is minted only when the gateway runs the reply on Claude Code
+(never for the Messages API).
 """
 
 import asyncio
@@ -39,7 +41,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -255,12 +257,17 @@ async def opening(
 class LivePlan:
     """What a reply gets of its asker's live sources."""
 
-    # The reply's live token: the run may read live (Claude Code only).
+    # Live on Claude Code: only the asker in the private chat, a live connection, the
+    # switch on (section 2.1; the transport is the gateway's to know).
+    live: bool = False
+    # The reply's live token, when minted: the run may read live (Claude Code only).
     token: str | None = None
-    # The prompt's "Live sources" block, with the token.
+    # The prompt's "Live sources" block, when live.
     block: str = ""
-    # Without one: the one prompt line saying why not (others read it; no connection).
+    # A prompt line for any transport: live reads are off because others read it (2.4).
     line: str = ""
+    # A prompt line for Claude Code only: the asker has no live connection (C6).
+    mcp_line: str = ""
 
 
 async def asker_of(db: AsyncSession, d: Discussion, reply: DiscussionMessage) -> uuid.UUID | None:
@@ -287,11 +294,15 @@ def live_block(sources: list[Any]) -> str:
     return "\n".join(lines)
 
 
-async def live_plan(db: AsyncSession, d: Discussion, reply: DiscussionMessage) -> LivePlan:
+async def live_plan(
+    db: AsyncSession, d: Discussion, reply: DiscussionMessage, *, mint: bool = True
+) -> LivePlan:
     """Section 2.1: live when only the asker is in the (private) discussion, the asker has
-    an active live connection and ``ORACLE_LIVE_READS`` is not off; the token is minted
-    with the discussion row ``FOR SHARE`` (C3), so a join either came first (and is seen
-    here) or comes after the token (and is refused). The caller commits."""
+    an active live connection and ``ORACLE_LIVE_READS`` is not off (and the transport is
+    Claude Code: the caller asks with ``mint`` only for a run on it). Minting, the token
+    is made with the discussion row ``FOR SHARE`` (C3), so a join either came first (and
+    is seen here) or comes after the token (and is refused). C6's line goes only where a
+    live read could happen but for the connection. The caller commits."""
     if get_settings().live_reads == "off":
         return LivePlan()
     asker = await asker_of(db, d, reply)
@@ -302,15 +313,36 @@ async def live_plan(db: AsyncSession, d: Discussion, reply: DiscussionMessage) -
         for c in await connections.list_for_user(db, asker)
         if c.provider in LIVE_PROVIDERS and c.status == "active"
     ]
+    visibility_now = select(Discussion.visibility).where(Discussion.id == d.id)
+    if mint:
+        visibility_now = visibility_now.with_for_update(read=True)
+    if await db.scalar(visibility_now) != "private" or await people_in(db, d) != {asker}:
+        return LivePlan(line=OFF_HERE if sources else "")
     if not sources:
-        return LivePlan(line=NO_LIVE_CONNECTION)
-    visibility_now = await db.scalar(
-        select(Discussion.visibility).where(Discussion.id == d.id).with_for_update(read=True)
-    )
-    if visibility_now != "private" or await people_in(db, d) != {asker}:
-        return LivePlan(line=OFF_HERE)
+        return LivePlan(mcp_line=NO_LIVE_CONNECTION)
+    block = live_block(sources)
+    if not mint:
+        return LivePlan(live=True, block=block)
     raw = await tokens.mint(db, asker, reply.id)
-    return LivePlan(token=raw, block=live_block(sources))
+    return LivePlan(live=True, token=raw, block=block)
+
+
+async def _for_claude_code(
+    tenant_id: uuid.UUID, reply_id: uuid.UUID, system: str
+) -> tuple[str, McpServer | None]:
+    """A Claude Code run's system prompt and MCP server: the live decision taken again,
+    minting the token, when the gateway is about to run the reply on Claude Code (2.1)."""
+    async with tenant_session(tenant_id) as db:
+        reply = await db.get(DiscussionMessage, reply_id)
+        d = await db.get(Discussion, reply.discussion_id) if reply is not None else None
+        plan = await live_plan(db, d, reply) if d is not None else LivePlan()
+        await db.commit()
+    extra = "\n\n".join(x for x in (plan.line, plan.mcp_line, plan.block) if x)
+    system = f"{system.rstrip()}\n\n{extra}" if extra else system
+    if plan.token is None:
+        return system, None
+    url = get_runtime_settings().public_url.rstrip("/") + "/mcp"
+    return system, McpServer(url=url, token=plan.token)
 
 
 async def live_citations(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> dict[int, dict[str, Any]]:
@@ -514,15 +546,15 @@ async def _produce(
             # H11 Shape goals: ask for as many versions as the level keeps (#586 review).
             offer = goal_interview.offer_line(await autonomy.level(db, "goals"))
         reply.prompt = name
-        plan = await live_plan(db, d, reply)
+        plan = await live_plan(db, d, reply, mint=False)
         await db.commit()
         notes = await changes.prompt_notes(db, d)
+    mcp = None
+    if plan.live or plan.mcp_line:
+        # Only a run on Claude Code asks: its token is minted then (2.1).
+        mcp = partial(_for_claude_code, tenant_id, reply_id, system)
     if plan.line:
         system = f"{system.rstrip()}\n\n{plan.line}"
-    mcp = None
-    if plan.token is not None:
-        url = get_runtime_settings().public_url.rstrip("/") + "/mcp"
-        mcp = McpServer(url=url, token=plan.token)
     asked = "Open the interview." if ctx.opening else "Reply to the last person's message."
     asked = f"{offer} {asked}" if offer else asked
     user = (
@@ -568,7 +600,6 @@ async def _produce(
                 s, system, [{"role": "user", "content": user}], MAX_TOKENS,
                 job=JOB, on_text=on_text, model=settings.chat_model or None,
                 transports=transports, mcp=mcp,
-                mcp_system=f"{system.rstrip()}\n\n{plan.block}" if mcp else None,
             )  # fmt: skip
 
     call = asyncio.ensure_future(asyncio.wait_for(run(), timeout or settings.chat_timeout_seconds))

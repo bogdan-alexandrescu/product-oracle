@@ -207,8 +207,7 @@ async def stream(
     transports: Transports | None = None,
     deadline: float | None = None,
     on_call: Callable[[str | None, str], None] | None = None,
-    mcp: McpServer | None = None,
-    mcp_system: str | None = None,
+    mcp: Callable[[], Awaitable[tuple[str, McpServer | None]]] | None = None,
 ) -> Completion:
     """As :func:`complete`, telling ``on_text`` each piece of the answer as it arrives.
 
@@ -216,15 +215,12 @@ async def stream(
     piece of text: once text was sent, a rate limit or a refused credential ends the
     call (:class:`LlmRateLimited`, :class:`LlmAuthError`), so no answer repeats text.
 
-    ``mcp`` (#710): an MCP server for a transport that takes one (Claude Code), whose
-    system prompt is then ``mcp_system``; any other transport (the Messages API) gets
-    neither, and ``system`` as it is."""
+    ``mcp`` (#710): asked, once, only when a transport that takes an MCP server (Claude
+    Code) is about to run the call, for that run's system prompt and server (None: no
+    server); so nothing it makes, a live token, exists for a call the Messages API runs.
+    Any other transport gets ``system`` as it is and no server."""
     request = _request(system, messages, max_tokens, job, model)
-    with_mcp = (
-        dataclasses.replace(request, mcp=mcp, system=mcp_system or system)
-        if mcp is not None
-        else request
-    )
+    with_mcp: LlmRequest | None = None
     sent = False
 
     async def told(text: str) -> None:
@@ -233,8 +229,13 @@ async def stream(
         await on_text(text)
 
     async def call(transport: Transport, token: str) -> TransportResult:
-        takes = getattr(transport, "takes_mcp", False)
-        return await transport.stream(token, with_mcp if takes else request, told)
+        nonlocal with_mcp
+        if mcp is None or not getattr(transport, "takes_mcp", False):
+            return await transport.stream(token, request, told)
+        if with_mcp is None:
+            mcp_system, server = await mcp()
+            with_mcp = dataclasses.replace(request, system=mcp_system, mcp=server)
+        return await transport.stream(token, with_mcp, told)
 
     return await _run(session, job, call, transports, deadline, on_call, lambda: sent)
 

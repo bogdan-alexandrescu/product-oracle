@@ -369,16 +369,17 @@ async def test_no_connection_line_only_where_live_could_read(client):
     assert request.system == base
 
 
-# protects=amendment C6 and AC12: an asker with no live connection gets exactly one more
-# prompt line, telling the model the no-connection sentence, and no token; fails_when=the
+# protects=amendment C6 and AC12: an asker with no live connection, in a private chat on a
+# transport that takes MCP (as Claude Code), gets exactly one more prompt line, telling the
+# model the no-connection sentence, and no token; fails_when=the
 # line is missing, worded otherwise, or anything else in the prompt changes;
 # no_claim=-.
 async def test_no_connection_adds_one_line(client):
-    model = Fake()
-    previous = gateway.set_transports(gateway.Transports(plan=model, api_key=model))
+    model = McpFake()
+    previous = gateway.set_transports(gateway.Transports(plan=model, api_key=Fake()))
     try:
         ctx, doc = await company(client)
-        await with_key(ctx)
+        await with_key(ctx, PLAN)
         d = await private_chat(client, ctx, doc)
         await say(client, ctx, d["id"], "commenter", ASK, params={"wait": "true"})
     finally:
