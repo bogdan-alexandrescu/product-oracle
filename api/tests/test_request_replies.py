@@ -319,8 +319,10 @@ async def test_each_askers_reply_is_drafted_from_their_own_words_only(client, ct
     for _ in range(2):
         fake.script["why_not_reply"].append(
             lambda payload: {
-                "replies": [{"id": r["id"], "body": f"Thanks, {r['asker']}: not now."}
-                            for r in payload["replies"]]  # fmt: skip
+                "replies": [
+                    {"id": r["id"], "body": f"Thanks, {r['asker']}: not now."}
+                    for r in payload["replies"]
+                ]  # fmt: skip
             }
         )
     await worker.run_pending(ctx.tenant_id)
