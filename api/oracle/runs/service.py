@@ -129,7 +129,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
@@ -625,7 +625,11 @@ def _sent_back(run: Run, segment: RunSegment) -> bool:
 def _refused(run: Run, segments: list[RunSegment], sent_back: bool) -> str | None:
     """The summary of a draft the run's segments left that Oracle refused to import, else
     None: one Oracle sent back to the writer and is being revised (``sent_back``, the
-    runs list's "Revising"), or one that is not (the runs list's "Draft rejected")."""
+    runs list's "Revising"), or one that is not (the runs list's "Draft rejected"). A run
+    that succeeded past the refusal reads neither (owner, 2026-10-25): if it finished with
+    no document, its owners' Inbox says so (:func:`_no_document_text`)."""
+    if run.status == "succeeded":
+        return None
     for s in segments:
         imp = (s.artifacts or {}).get("import")
         if isinstance(imp, dict) and imp.get("error") and _sent_back(run, s) is sent_back:
@@ -983,6 +987,7 @@ def _segment_out(
     knobs: flows.Knobs,
     kind: str = "prd",
     can_retry_draft_import: bool = False,
+    draft_retry_refused: str | None = None,
 ) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
@@ -1012,6 +1017,7 @@ def _segment_out(
         reused=art.get("reused") if segment.status == "skipped" else None,
         note=art.get("note") if segment.status == "skipped" or art.get("reused_items") else None,
         can_retry_draft_import=can_retry_draft_import,
+        draft_retry_refused=draft_retry_refused,
         items_check=ItemsCheck(**check) if check else None,
         previous_attempt=PreviousAttempt(
             attempt=previous["attempt"], artifacts=sorted(previous.get("files") or {})
@@ -1153,6 +1159,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     waiting = next((c for c in checkpoints if c.status == "pending"), None)
     retries = _draft_retries(run, segments, checkpoints, kind, principal)
+    version = _run_version(segments, checkpoints)
     runtime = get_runtime()
     notes: list[str] = []
     note_refs: list[RunNoteRefs] = []
@@ -1191,7 +1198,10 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
         runtime=runtime.name,
         notes=notes,
         note_refs=note_refs,
-        segments=[_segment_out(run, s, knobs, kind, s.seq in retries) for s in segments],
+        segments=[
+            _segment_out(run, s, knobs, kind, s.seq in retries, _retry_refused(run, s, version))
+            for s in segments
+        ],
         checkpoints=[
             _checkpoint_out(
                 c,
@@ -8905,6 +8915,15 @@ def _run_version(segments: list[RunSegment], checkpoints: list[Checkpoint]) -> s
     return None
 
 
+def one_version(version: str) -> str:
+    """Why a finished run's refused draft is not imported once the run imported a version
+    (owner, 2026-10-25), in plain words, with what to do instead."""
+    return (
+        f"this run already imported {version}, and a finished run imports one version only, "
+        "so this draft is not imported. Start a new run to draft it again."
+    )
+
+
 def _draft_retry_refusal(
     run: Run,
     segment: RunSegment,
@@ -8931,7 +8950,7 @@ def _draft_retry_refusal(
         if review is None or review.status == "pending":
             return f"{segment.name} has no decided review"
         if version is not None:
-            return f"a version from this run exists ({version})"
+            return one_version(version)
     elif review is not None and review.status != "pending":
         return f"{segment.name}'s review was decided ({review.status}); it is not waiting"
     elif review is None or run.status != "awaiting_checkpoint":
@@ -8939,6 +8958,18 @@ def _draft_retry_refusal(
     if (art.get("files") or {}).get(name) is None:
         return f"the segment left no {name} to import"
     return None
+
+
+def _retry_refused(run: Run, segment: RunSegment, version: str | None) -> str | None:
+    """The run page's plain why for a finished run's refused draft that stays refused
+    because the run imported a version (owner, 2026-10-25): :func:`one_version`."""
+    imp = (segment.artifacts or {}).get("import")
+    if run.status != "succeeded" or version is None:
+        return None
+    if not isinstance(imp, dict) or not imp.get("error"):
+        return None
+    why = one_version(version)
+    return why[:1].upper() + why[1:]
 
 
 def _draft_retry_role(review: Checkpoint | None) -> str:
@@ -9577,6 +9608,146 @@ async def _date_rows(db: AsyncSession, principal: Principal, leads: frozenset[uu
     ]
 
 
+# Runs that finished before the No document row shipped get none (#583 review): the Inbox
+# does not fill with every past refused run at once. Their run pages still offer Retry
+# import; the row is for runs that finish from here on.
+NO_DOCUMENT_SINCE = datetime(2026, 10, 25, tzinfo=UTC)
+
+
+async def _no_documents(db: AsyncSession) -> list[RunSummary]:
+    """The owners' Inbox rows for runs that finished with no document (owner, 2026-10-25):
+    a segment's draft was refused at import, the run succeeded past it (its review
+    approved, e.g. by a console MERGE) and no attempt imported a version. Each carries
+    ``no_document``: why, and the action (Retry import, else a new run).
+
+    A row clears itself (#583 review): on a successful Retry import (the run imported a
+    version), and once the run's document has a version made after the run finished (a
+    later run imported it). Only runs that finished since :data:`NO_DOCUMENT_SINCE`.
+    Filtered in SQL, reading only the refused import and the names of the kept files,
+    never the drafts."""
+    imp = RunSegment.artifacts["import"]
+    imported_segment = (
+        select(RunSegment.id)
+        .where(
+            RunSegment.run_id == Run.id,
+            RunSegment.artifacts["import"]["version"].astext.is_not(None),
+            func.coalesce(RunSegment.artifacts["import"]["error"].astext, "") == "",
+        )
+        .correlate(Run)
+        .exists()
+    )
+    imported_review = (
+        select(Checkpoint.id)
+        .where(
+            Checkpoint.run_id == Run.id,
+            Checkpoint.payload["import"]["version"].astext.is_not(None),
+            func.coalesce(Checkpoint.payload["import"]["error"].astext, "") == "",
+        )
+        .correlate(Run)
+        .exists()
+    )
+    later_version = (
+        select(DocumentVersion.id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(
+            or_(
+                Document.id == Run.document_id,
+                Document.slug == Run.knobs["document_slug"].astext,
+            ),
+            DocumentVersion.created_at > Run.finished_at,
+        )
+        .correlate(Run)
+        .exists()
+    )
+    rows = (
+        await db.execute(
+            select(
+                Run,
+                RunSegment.seq,
+                RunSegment.name,
+                imp,
+                func.jsonb_path_query_array(
+                    RunSegment.artifacts["files"], literal_column("'$.keyvalue().key'::jsonpath")
+                ),
+            )
+            .join(RunSegment, RunSegment.run_id == Run.id)
+            .where(
+                Run.status == "succeeded",
+                Run.finished_at >= NO_DOCUMENT_SINCE,
+                func.coalesce(imp["error"].astext, "") != "",
+                ~imported_segment,
+                ~imported_review,
+                ~later_version,
+            )
+            .order_by(Run.created_at, Run.id, RunSegment.seq)
+        )
+    ).all()
+    refused: dict[uuid.UUID, tuple[Run, RunSegment]] = {}
+    for run, seq, name, refusal, files in rows:
+        # Only what the retry check reads: the refusal, and which files were kept.
+        light = RunSegment(
+            seq=seq,
+            name=name,
+            artifacts={"import": refusal, "files": dict.fromkeys(files or [], "")},
+        )
+        refused.setdefault(run.id, (run, light))
+    if not refused:
+        return []
+    # Each segment's review: its latest checkpoint's status, nothing else.
+    reviews: dict[tuple[uuid.UUID, int], Checkpoint] = {}
+    for run_id, seq, status in (
+        await db.execute(
+            select(
+                Checkpoint.run_id, Checkpoint.payload["segment_seq"].as_integer(), Checkpoint.status
+            )
+            .where(Checkpoint.run_id.in_(refused))
+            .order_by(Checkpoint.created_at)
+        )
+    ).all():
+        reviews[(run_id, seq)] = Checkpoint(status=status)
+    runs = [run for run, _ in refused.values()]
+    kinds = dict(
+        (
+            await db.execute(
+                select(Document.id, Document.kind).where(
+                    Document.id.in_({r.document_id for r in runs if r.document_id})
+                )
+            )
+        ).all()
+    )
+    refs = await _refs(db, runs)
+    out: list[RunSummary] = []
+    for run, segment in refused.values():
+        kind = _flow(run).target_kind or kinds.get(run.document_id) or "prd"
+        review = reviews.get((run.id, segment.seq))
+        retry = _draft_retry_refusal(run, segment, review, kind, None) is None
+        out.append(
+            _summary(run, refs, None).model_copy(
+                update={"no_document": _no_document_text(run, refs, segment, retry)}
+            )
+        )
+    return out
+
+
+def _no_document_text(run: Run, refs: "_Refs", segment: RunSegment, retry: bool) -> str:
+    """Why a run finished with no document, in plain words, and what to do."""
+    name = (refs.get(run.document_id) if run.document_id else None) or (run.knobs or {}).get(
+        "document_slug"
+    )
+    what = f"{name}" if name else f"The {_flow(run).title} run"
+    imp = (segment.artifacts or {}).get("import") or {}
+    why = imp.get("summary") or imp.get("error")
+    action = (
+        "Open the run and use Retry import once the problems are fixed, or start a new run."
+        if retry
+        else "Start a new run to draft it again."
+    )
+    return (
+        f"{what} finished without a document: Oracle refused its draft ({why}) and the run "
+        f"was approved past it. {action}"
+    )
+
+
 async def _revising(db: AsyncSession, principal: Principal) -> list[RunSummary]:
     """The Inbox's Revising rows (owner, 2026-10-20): runs whose refused draft Oracle sent
     back to the writer itself (:func:`_sent_back`), for those with that review's approver
@@ -9809,6 +9980,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         ]
         failed_refs = await _refs(db, failed_runs)
         imports = [_summary(r, failed_refs, None) for r in failed_runs]
+    no_documents = await _no_documents(db) if owner else []
     revising = await _revising(db, principal)
     from oracle.decisions.service import inbox_rows as decision_rows
     from oracle.reports.service import inbox_rows
@@ -9860,6 +10032,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         searches=searches,
         revising=revising,
         imports=imports,
+        no_documents=no_documents,
         feedback=feedback,
         revoke_failures=revoke_failures,
         access_failures=access_failures,
@@ -9876,6 +10049,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + len(overruns)
         + len(lookups)
         + len(imports)
+        + len(no_documents)
         + counts.new
         + counts.open
         + len(revoke_failures)

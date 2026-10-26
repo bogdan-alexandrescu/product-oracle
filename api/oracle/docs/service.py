@@ -288,11 +288,13 @@ async def list_versions(db: AsyncSession, document: Document) -> list[VersionSum
     )
     sources = await version_sources(db, [v.source_version_id for v in rows])
     names = await importer_names(db, rows)
+    again = await imported_again(db, document.id, rows)
     return [
         VersionSummary.model_validate(v).model_copy(
             update={
                 "source": sources.get(v.source_version_id),  # type: ignore[arg-type]
                 "imported_by_name": names.get(v.id),
+                "imported_again": again.get(v.id),
             }
         )
         for v in rows
@@ -334,6 +336,59 @@ async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> d
             out[v.id] = "Oracle"
         elif v.imported_by in names:
             out[v.id] = names[v.imported_by]
+    return out
+
+
+async def imported_again(
+    db: AsyncSession, document_id: uuid.UUID, versions: list[DocumentVersion]
+) -> dict[uuid.UUID, str]:
+    """Versions a person imported again from a run's refused draft (Retry import), keyed by
+    version id: "imported again by <name> on <stamp>", the retry's audit event (its actor
+    and time) in the Company time zone (owner, 2026-10-25)."""
+    from oracle.company_time import company_time_zone, stamp
+
+    numbers = {v.number: v.id for v in versions}
+    events = [
+        e
+        for e in await db.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.action == "run.draft_import_retried",
+                AuditEvent.data["document_id"].astext == str(document_id),
+            )
+            .order_by(AuditEvent.created_at)
+        )
+        if (e.data or {}).get("version") in numbers
+    ]
+    if not events:
+        return {}
+    # The actor names a member or an API token by id, else Oracle or the system.
+    ids = {
+        uuid.UUID(e.actor.partition(":")[2])
+        for e in events
+        if e.actor.partition(":")[0] in ("user", "token")
+    }
+    people = {
+        uid: display_name(email, name)
+        for uid, email, name in (
+            await db.execute(select(User.id, User.email, User.name).where(User.id.in_(ids)))
+        ).all()
+    }
+    tokens = dict(
+        (await db.execute(select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(ids)))).all()
+    )
+    zone = await company_time_zone(db)
+    out: dict[uuid.UUID, str] = {}
+    for e in events:
+        who = e.actor.split(":", 1)[-1]
+        try:
+            name = people.get(uuid.UUID(who)) or tokens.get(uuid.UUID(who))
+        except ValueError:
+            # Not a member or a token: Oracle's or the system's own retry (#583 review).
+            name = {audit.ORACLE: "Oracle", "system": "the system"}.get(e.actor)
+        out[numbers[e.data["version"]]] = (
+            f"imported again by {name or 'a former member'} on {stamp(e.created_at, zone)}"
+        )
     return out
 
 
@@ -533,9 +588,12 @@ async def read_version(
             marks = []
         date_marks = [m.as_json() for m in doc_dates.per_section(marks)]
     return VersionOut(
-        **VersionSummary.model_validate(version).model_dump(exclude={"source", "imported_by_name"}),
+        **VersionSummary.model_validate(version).model_dump(
+            exclude={"source", "imported_by_name", "imported_again"}
+        ),
         source=source,
         imported_by_name=(await importer_names(db, [version])).get(version.id),
+        imported_again=(await imported_again(db, version.document_id, [version])).get(version.id),
         approval_lapses=version.approval_lapses or [],
         front_matter=version.front_matter,
         sections=[

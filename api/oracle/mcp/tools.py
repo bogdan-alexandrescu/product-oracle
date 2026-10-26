@@ -371,7 +371,12 @@ async def call_operation(
         if caller.scopes is None:
             reason = f"is for run tokens holding {needed} only"
         else:
-            reason = f"needs the {needed} scope" if needed else "is not available to run tokens"
+            lacking = scopes.missing(caller.scopes, op.method, op.path)
+            reason = (
+                f"needs the {' and '.join(lacking)} scope{'s' if len(lacking) > 1 else ''}"
+                if needed
+                else "is not available to run tokens"
+            )
         raise ToolError(f"Refused: {op.method} {op.path} {reason}.")
     if caller.read_only and op.method.upper() not in ("GET", "HEAD"):
         raise ToolError(f"Refused (HTTP 403): {op.method} {op.path}: {READ_ONLY}.")
