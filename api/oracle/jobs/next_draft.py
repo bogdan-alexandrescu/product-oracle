@@ -269,7 +269,8 @@ async def staged_changes(
                 section_key=key,
                 section_heading=heading,
                 feedback_summary=item.summary if item else "",
-                text=r.edited_text or r.text or "",
+                # #636 re-review: none of a withheld item's text (the next draft still takes it).
+                text="" if item and item.withheld_at else r.edited_text or r.text or "",
                 accepted_by=r.decided_by,
                 accepted_by_name=who.get(r.decided_by) if r.decided_by else None,
                 accepted_at=r.decided_at,

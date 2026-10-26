@@ -11,7 +11,11 @@ The run writes ``summary.md`` (the occurrence's summary, as ``ritual_summary``) 
 Each draft (at most 80 words) goes on its variance, if the occurrence's pre-read lists
 it. A ref the run could not read is dropped: an id of none of the company's launches,
 changelog entries, decisions or roadmap items, or a source item outside the sources of
-the person the run acts for. What was dropped is counted in the import's notes.
+the person the run acts for. The drafts are shown to every member, so the run reads as a
+commenter (oracle.runs.flows ``member_output``) and its refs are checked the same way,
+whoever started it: a decision, or a roadmap item of a document, a commenter may not see
+is dropped too (oracle.docs.visibility). What was dropped is counted in the import's
+notes.
 """
 
 import uuid
@@ -23,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import safe_yaml
 from oracle.auth.deps import Principal
+from oracle.docs import visibility
 from oracle.metrics import review
 from oracle.metrics.models import CONFIDENCES, Metric, MetricVariance
 from oracle.rituals.models import RitualOccurrence
@@ -84,7 +89,22 @@ async def _readable(db: AsyncSession, refs: list[tuple[str, uuid.UUID]], reader)
     for kind, model in tables.items():
         ids = [i for k, i in refs if k == kind]
         if ids:
-            out |= {(kind, i) for i in await db.scalars(select(model.id).where(model.id.in_(ids)))}
+            found = set(await db.scalars(select(model.id).where(model.id.in_(ids))))
+            if kind == "decision":
+                found -= await visibility.hidden_decision_ids(db, found, as_member=True)
+            elif kind == "roadmap_item" and found:
+                docs = dict(
+                    (
+                        await db.execute(
+                            select(RoadmapItem.id, RoadmapItem.roadmap_document_id).where(
+                                RoadmapItem.id.in_(found)
+                            )
+                        )
+                    ).all()
+                )
+                hidden = await visibility.hidden_document_ids(db, docs.values(), as_member=True)
+                found = {i for i in found if docs.get(i) not in hidden}
+            out |= {(kind, i) for i in found}
     items = [i for k, i in refs if k == "source_item"]
     if items and reader is not None:
         found = await db.scalars(

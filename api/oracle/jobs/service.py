@@ -9,11 +9,12 @@ decide suggestions and refine sections; owners turn job kinds on or off per docu
 """
 
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -361,6 +362,60 @@ async def latest_suggestions(
     return {r.feedback_item_id: r for r in rows}
 
 
+#: A withheld item's suggestion: what its pushback says instead of its reason (#636 re-review).
+WITHHELD_REASON = "Withheld while its finding is not shared in full"
+
+
+async def withheld_items(db: AsyncSession, feedback_ids: Iterable[uuid.UUID]) -> set[uuid.UUID]:
+    """The items among ``feedback_ids`` withholding their quote (``withheld_at``)."""
+    ids = set(feedback_ids)
+    if not ids:
+        return set()
+    return set(
+        await db.scalars(
+            select(FeedbackItem.id).where(
+                FeedbackItem.id.in_(ids), FeedbackItem.withheld_at.is_not(None)
+            )
+        )
+    )
+
+
+def suggestion_out(row: LlmSuggestion, withheld: bool) -> SuggestionOut:
+    """A suggestion as every output serves it. On a withheld item (a late answer whose
+    finding is not shared in full) the model wrote its text and rationale from the summary
+    that quoted the answer, and an approver's edit may restate it: they are left out, and
+    its pushback keeps its sources but not its reason (#636 re-review)."""
+    out = SuggestionOut.model_validate(row)
+    if not withheld:
+        return out
+    pushback = out.pushback.model_copy(update={"reason": WITHHELD_REASON}) if out.pushback else None
+    return out.model_copy(
+        update={"text": None, "edited_text": None, "rationale": None, "pushback": pushback}
+    )
+
+
+async def suggestions_out(db: AsyncSession, rows: Iterable[LlmSuggestion]) -> list[SuggestionOut]:
+    rows = list(rows)
+    withheld = await withheld_items(db, {r.feedback_item_id for r in rows})
+    return [suggestion_out(r, r.feedback_item_id in withheld) for r in rows]
+
+
+def shown_note(item: FeedbackItem, suggestion: LlmSuggestion | None) -> str | None:
+    """The item's resolution note as outputs serve it: on a withheld item, a note Oracle
+    wrote from its suggestion (Accept: an answer's text, a "nothing to change" rationale;
+    Dismiss and decline: its pushback reason) is withheld with it. A note a person wrote is
+    shown as written: they wrote it while they could read the answer, and it may quote it
+    (#636 re-review)."""
+    note = item.resolution_note
+    if item.withheld_at is None or note is None or suggestion is None:
+        return note
+    final = suggestion.edited_text or suggestion.text
+    pushback = (suggestion.pushback or {}).get("reason")
+    if note in {f"Answered: {final}", suggestion.rationale, pushback}:
+        return WITHHELD_REASON
+    return note
+
+
 async def list_suggestions(
     db: AsyncSession, doc: str, status: str | None = None, section_key: str | None = None
 ) -> list[SuggestionOut]:
@@ -371,7 +426,7 @@ async def list_suggestions(
     if section_key:
         stmt = stmt.where(LlmSuggestion.section_key == section_key)
     rows = await db.scalars(stmt.order_by(LlmSuggestion.created_at, LlmSuggestion.id))
-    return [SuggestionOut.model_validate(r) for r in rows]
+    return await suggestions_out(db, rows)
 
 
 async def _suggestion(db: AsyncSession, suggestion_id: uuid.UUID) -> LlmSuggestion:
@@ -446,6 +501,9 @@ async def accept_suggestion(
     item = await db.get(FeedbackItem, row.feedback_item_id)
     final = row.edited_text or row.text
     latest = await latest_number(db, row.document_id)
+    # Whether this Accept closes the item (an item closed before stays as it was): Undo
+    # re-opens only what Accept closed.
+    closes = item is not None and item.status == "open"
     if item is not None and item.status == "open":
         if row.kind == "answer" and final:
             if item.comment_id:
@@ -477,7 +535,7 @@ async def accept_suggestion(
         "suggestion.accept",
         "llm_suggestion",
         row.id,
-        {"kind": row.kind, "edited": row.edited_text is not None},
+        {"kind": row.kind, "edited": row.edited_text is not None, "closed_item": closes},
     )
     if row.pushback:
         # C1b: an override of Oracle's pushback is logged with its reason for review.
@@ -493,6 +551,103 @@ async def accept_suggestion(
         from oracle.decisions import capture
 
         await capture.pushback_overridden(db, principal, row, reason or "")
+    return row
+
+
+async def _in_use(db: AsyncSession, row: LlmSuggestion) -> str | None:
+    """Why an accepted change cannot go back to open: a draft is being built from it (the
+    next-draft build not applied or discarded, a section refinement that can still be
+    applied, or the agents' run sent it), or None. A section refinement has no discard: its
+    preview stops holding the change once a newer version exists or a newer refinement of
+    the section replaced it (#587 review)."""
+    sid = str(row.id)
+    jobs = await db.scalars(
+        select(LlmJob)
+        .where(
+            LlmJob.document_id == row.document_id,
+            LlmJob.kind.in_(("refinement", "refinement_batch")),
+            LlmJob.status.in_(("queued", "running", "succeeded")),
+        )
+        .order_by(LlmJob.created_at.desc(), LlmJob.id.desc())
+    )
+    latest = await latest_number(db, row.document_id)
+    newest: set[str] = set()
+    for job in jobs:
+        out = job.output or {}
+        replaced = job.kind == "refinement" and (job.section_key or "") in newest
+        if job.kind == "refinement":
+            newest.add(job.section_key or "")
+        if out.get("applied_version") or out.get("discarded_at") or replaced:
+            continue
+        if job.kind == "refinement" and out.get("base_version") not in (None, latest):
+            continue
+        if sid not in [str(i) for i in (job.input or {}).get("suggestion_ids") or []]:
+            continue
+        if job.kind == "refinement":
+            return "a refinement of its section uses it: apply it or refine the section again"
+        return "the next draft being built uses it: discard that build first"
+    from oracle.runs.models import Run
+
+    runs = await db.scalars(
+        select(Run).where(
+            Run.document_id == row.document_id,
+            Run.status.not_in(("succeeded", "failed", "cancelled")),
+        )
+    )
+    for run in runs:
+        if sid in [str(i) for i in (run.knobs or {}).get("suggestion_ids") or []]:
+            return "the agents' next draft uses it: cancel that run first"
+    return None
+
+
+async def _accept_closed_item(db: AsyncSession, row: LlmSuggestion) -> bool:
+    """Whether the Accept being undone closed the suggestion's item (its audit says so;
+    an Accept recorded without it is taken to have closed it)."""
+    from oracle.models import AuditEvent
+
+    data = await db.scalar(
+        select(AuditEvent.data)
+        .where(
+            AuditEvent.action == "suggestion.accept",
+            AuditEvent.entity == "llm_suggestion",
+            AuditEvent.entity_id == row.id,
+        )
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(1)
+    )
+    return bool((data or {}).get("closed_item", True))
+
+
+async def undo_accept(
+    db: AsyncSession, principal: "Principal", suggestion_id: uuid.UUID
+) -> LlmSuggestion:
+    """Undo Accept (D14): the suggestion is open again and its item as it was before.
+    Refused, with the reason, when Accept cannot be reverted: the answer is posted on the
+    thread, a draft applied the change or is being built from it, or the item changed since.
+    An item that was closed before Accept stays closed; text edited on Accept is dropped.
+    The decision log keeps an override of Oracle's pushback (the audit records the undo)."""
+    row = await _suggestion(db, suggestion_id)
+    if row.status == "applied":
+        raise JobError(409, f"draft {row.applied_in_version} already applied it; it stays")
+    if row.status != "accepted":
+        raise JobError(409, f"an {row.status} suggestion has no accept to undo")
+    item = await db.get(FeedbackItem, row.feedback_item_id)
+    if row.kind == "answer":
+        raise JobError(409, "the answer is posted on the comment thread: reply there to correct it")
+    if row.kind == "section_text":
+        if why := await _in_use(db, row):
+            raise JobError(409, why)
+    elif item is not None and await _accept_closed_item(db, row):
+        closed = {"none": "addressed", "duplicate": "superseded"}[row.kind]
+        if item.status != closed:
+            raise JobError(409, f"the item is {item.status} since; open it to change it")
+        item.status, item.resolution_note, item.addressed_in_version = "open", None, None
+    row.status = "open"
+    row.decided_by = row.decided_at = row.override_reason = row.edited_text = None
+    await db.flush()
+    await audit.record(
+        db, principal, "suggestion.undo_accept", "llm_suggestion", row.id, {"kind": row.kind}
+    )
     return row
 
 
@@ -678,6 +833,22 @@ async def apply_refinement(
     if base.number != await latest_number(db, document.id):
         raise JobError(409, "a newer version exists; refine the section again")
     key = out["section_key"]
+    # A newer refinement of the section replaced this preview: Undo no longer waits on it
+    # (_in_use), so applying it could mark a re-opened suggestion applied (#595 re-review).
+    newer = await db.scalar(
+        select(LlmJob.id)
+        .where(
+            LlmJob.document_id == job.document_id,
+            LlmJob.kind == "refinement",
+            # As _in_use: a refinement with no section key is the section "".
+            func.coalesce(LlmJob.section_key, "") == (job.section_key or ""),
+            LlmJob.status.in_(("queued", "running", "succeeded")),
+            tuple_(LlmJob.created_at, LlmJob.id) > tuple_(job.created_at, job.id),
+        )
+        .limit(1)
+    )
+    if newer is not None:
+        raise JobError(409, "a newer refinement of this section replaced it; apply that one")
     locked = await locked_section_keys(db, base.id)
     if key in locked:
         raise JobError(409, f"section {key!r} is approved and locked; it is never changed")
@@ -819,6 +990,14 @@ async def version_reports(db: AsyncSession, doc: str, n: int) -> VersionReports:
         out.report_job_id = done.id
         out.generated_at = done.finished_at
         out.resolution = ResolutionNarrative.model_validate(done.output["resolution"])
+        # The report was written when the item read in full: while it is withheld its line
+        # reads the withheld summary, without the note and explanation (#636 re-review).
+        from oracle.intake.late_answers import WITHHELD
+
+        withheld = await withheld_items(db, [i.feedback_id for i in out.resolution.items])
+        for line in out.resolution.items:
+            if line.feedback_id in withheld:
+                line.summary, line.resolution_note, line.explanation = WITHHELD, None, ""
         out.changes = ChangesReport.model_validate(done.output["changes"])
     return out
 

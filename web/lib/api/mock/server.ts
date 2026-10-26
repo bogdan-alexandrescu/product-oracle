@@ -74,7 +74,7 @@ import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -137,6 +137,8 @@ type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_versio
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
   staged_for_agents_by?: string | null;
+  /** #636 re-review: a kept late-answer item withholding its quote (feedback_items.withheld_at). */
+  withheld_at?: string | null;
 };
 type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
@@ -419,6 +421,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * with three rows that need a person, attempt 2, and a held console approval);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
+ * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
+ * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
@@ -649,6 +654,39 @@ function seedBeforeDraftingScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
+  return db;
+}
+
+/**
+ * C5 late answers: the "before-drafting" brief, drafting since 22 Oct into the Checkout
+ * redesign PRD; the answers given by then are the draft run's, the questions still asked
+ * (Pain evidence of the approver, Success metric and Goal alignment of the owner) are not.
+ */
+function seedLateAnswersScenario(): Db {
+  const db = seedBeforeDraftingScenario();
+  const v2 = ensureV2(db);
+  const intake = v2.intakes.find((i) => i.id === BEFORE_DRAFTING.intakeId)!;
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  Object.assign(intake, { status: "converted", document_id: prd.id });
+  const mine = new Set(v2.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
+  v2.intake_runs = {
+    ...v2.intake_runs,
+    [intake.id]: { run_id: "c5000000-0000-4000-8000-0000000000d1", answer_ids: v2.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id), document: prd.slug },
+  };
+  // The owner's success-metric gap is also a finding from their own sources, shared in full:
+  // an answer to it is quoted in feedback only while it stays shared from summary up (S6).
+  const metric = v2.gaps.find((g) => g.intake_id === intake.id && g.category === "success_metric")!;
+  v2.intake_findings = {
+    ...v2.intake_findings,
+    [intake.id]: [
+      ...(v2.intake_findings?.[intake.id] ?? []),
+      {
+        id: "c5000000-0000-4000-8000-0000000000f1", kind: "gap", origin: "rules", category: "success_metric", sharing: "full",
+        summary: "A gap about success metric", summary_confirmed: false, draft_summary: "The checkout timing export sits in a private dashboard.",
+        gap_id: metric.id, source_item_ids: ["c5000000-0000-4000-8000-0000000000f2"], unshared_item_ids: [],
+      },
+    ],
+  };
   return db;
 }
 
@@ -1430,6 +1468,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     uuid,
     now,
     lockedKeys: (v) => lockedKeys(db, v as VersionRow),
+    sentToAgents: (sid) =>
+      (db.runs?.runs ?? []).some((r) => !["succeeded", "failed", "cancelled"].includes(r.status) && !!(r as SentRun).sent?.suggestion_ids.includes(sid)),
     reply: (feedbackId, body) => {
       const parent = db.comments.find((c) => c.id === db.feedback.find((f) => f.id === feedbackId)?.comment_id);
       if (!parent) return;
@@ -2022,6 +2062,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "late-answers"
+            ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
             ? seedBriefGoalRejectedScenario
           : scenario === "questions"
@@ -3859,7 +3901,56 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    // C5 late answers: a whole-draft item on the PRD's latest version, as late_answers._raise.
+    const raiseFeedback = (ref: string, input: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string }) => {
+      const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
+      const latest = doc ? docVersions(db, doc).pop() : undefined;
+      if (!doc || !latest) return null;
+      const at = now();
+      // An item kept with its quote withheld reads in full again.
+      const kept = db.feedback.find((f) => f.intake_answer_id === input.intake_answer_id);
+      if (kept) {
+        Object.assign(kept, { summary: input.summary, withheld_at: null, updated_at: at });
+        touch(db, kept.document_id);
+        return { slug: doc.slug, version: kept.raised_on_version };
+      }
+      db.feedback.push({
+        id: uuid(), document_id: doc.id, raised_on_version: latest.number, kind: "general", comment_id: null, section_review_id: null,
+        section_key: null, summary: input.summary, author_id: input.author_id, anchor: null, verdict: null, status: "open",
+        addressed_in_version: null, resolution_note: null, severity: null, created_at: at, updated_at: at,
+        intake_id: v2db.questions.find((x) => x.id === input.intake_question_id)?.intake_id ?? null,
+        intake_question_id: input.intake_question_id, intake_answer_id: input.intake_answer_id,
+      });
+      touch(db, doc.id);
+      onFeedback(llm, doc.id, latest.number);
+      return { slug: doc.slug, version: latest.number };
+    };
+    // As late_answers.on_sharing: an item nobody acted on goes, with its suggestions (the
+    // API's cascade); one someone triaged, staged or decided a suggestion on stays, its quote withheld.
+    const withdrawFeedback = (answerIds: string[]) => {
+      const kept: string[] = [];
+      for (let i = db.feedback.length - 1; i >= 0; i--) {
+        const f = db.feedback[i];
+        if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id)) continue;
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
+          if (!f.withheld_at) Object.assign(f, { summary: LATE_ANSWER_WITHHELD, withheld_at: now(), updated_at: now() });
+          kept.push(f.intake_answer_id);
+        } else {
+          db.feedback.splice(i, 1);
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        }
+        touch(db, f.document_id);
+      }
+      return kept;
+    };
+    const intake = await routeIntake(
+      v2db,
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, raiseFeedback, withdrawFeedback },
+      req,
+      p,
+      q,
+    );
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.

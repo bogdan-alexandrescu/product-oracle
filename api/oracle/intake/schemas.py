@@ -468,6 +468,11 @@ class IntakeSummary(BaseModel):
     # Answers given after that run started (it reads the ones before, C5); 0 unless
     # the intake is converted. The next draft takes them as feedback.
     answers_since_run: int = 0
+    # Of those, the ones that became feedback items on the PRD (C5 late answers), and
+    # the PRD's slug and latest version, whose Feedback lists them.
+    late_answers_as_feedback: int = 0
+    draft_document: str | None = None
+    draft_version: int | None = None
 
 
 class QuestionCard(BaseModel):
