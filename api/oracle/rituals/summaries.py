@@ -138,11 +138,13 @@ async def sync_state(db: AsyncSession, occ: RitualOccurrence) -> None:
     rebuild's build: ready once it succeeded)."""
     if occ.summary_state != "running" or occ.summary_run_id is None:
         return
-    flow, status = (
-        await db.execute(select(Run.flow, Run.status).where(Run.id == occ.summary_run_id))
-    ).one_or_none() or (None, None)
+    flow, status, usd = (
+        await db.execute(
+            select(Run.flow, Run.status, Run.estimate_usd).where(Run.id == occ.summary_run_id)
+        )
+    ).one_or_none() or (None, None, None)
     if flow == rebuild.FLOW:
-        await rebuild.sync_state(db, occ, status)
+        await rebuild.sync_state(db, occ, status, usd)
         return
     if status in ("failed", "cancelled") or (status == "succeeded" and not occ.summary):
         occ.summary_state = "failed"

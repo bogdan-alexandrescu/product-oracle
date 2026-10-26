@@ -29,8 +29,8 @@ import pytest
 from sqlalchemy import select
 
 from oracle.autonomy_models import OracleAction
-from oracle.runs import flows
 from oracle.rituals.kinds import KINDS
+from oracle.runs import flows
 from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
